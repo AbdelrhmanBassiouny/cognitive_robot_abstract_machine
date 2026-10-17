@@ -55,11 +55,12 @@ class KeepTheTorsoUprightWhileUsingATool(InsertionTransformation[ToolMotionActio
 
     def anchor(self, plan_node: ToolMotionAction) -> StatechartNode:
         """
-        :return: The goal holding the tool on its path, beside which the torso is held.
+        :return: The goal holding the tool on its path, beside which the torso is held,
+            which is the action itself where it runs its tool path side by side.
         :raises ToolPathNotFound: If the action holds no goal moving the tool along a
             path.
         """
-        for node in plan_node.descendants:
+        for node in [plan_node, *plan_node.descendants]:
             if isinstance(node, Parallel) and any(
                 isinstance(child, CartesianPositionTrajectory) for child in node.nodes
             ):

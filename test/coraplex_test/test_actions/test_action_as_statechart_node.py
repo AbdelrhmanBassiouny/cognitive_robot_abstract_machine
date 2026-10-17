@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -19,7 +20,14 @@ from coraplex.robot_plans.actions.base import (
 from coraplex.robot_plans.actions.core.exceptions import WidthBeyondGripperOpening
 from coraplex.datastructures.enums import MovementType
 from coraplex.datastructures.trajectory import PoseTrajectory
+from coraplex.robot_plans.actions.core.container import OpenAction
 from coraplex.robot_plans.actions.core.navigation import LookAtAction, NavigateAction
+from coraplex.robot_plans.actions.core.pick_up import (
+    GraspingAction,
+    PickUpAction,
+    ReachAction,
+)
+from coraplex.robot_plans.actions.core.placing import PlaceAction
 from coraplex.robot_plans.actions.core.robot_body import (
     FollowToolCenterPointPathAction,
     MoveFingersToWidthAction,
@@ -61,9 +69,19 @@ from giskardpy.motion_statechart.tasks.joint_tasks import (
     JointPositionList,
     JointVelocityLimit,
 )
+from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
+    WorldEntityWithIDKwargsTracker,
+)
+from semantic_digital_twin.collision_checking.collision_matrix import CollisionRule
+from semantic_digital_twin.collision_checking.collision_rules import (
+    AllowCollisionForEndEffector,
+)
 from semantic_digital_twin.datastructures.definitions import GripperState, TorsoState
+from semantic_digital_twin.robots.robot_parts import EndEffector
+from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from ..conftest import physically_simulated_executor
+from ..test_designator.test_multi_robot_action_designator import _handle_annotation
 from ...plan_running import (
     robot_executor,
     run_plan,
@@ -505,6 +523,190 @@ def test_a_field_marked_as_no_parameter_is_left_out():
     assert action.designator_parameter == {"steps": []}
 
 
+# %% an action keeps its collision allowances in force while it runs
+
+
+@dataclass(eq=False, repr=False, kw_only=True)
+class ActionLettingAGripperTouch(ActionRunningHandedInSteps):
+    """
+    An action running the steps handed to it while a gripper may touch its
+    surroundings.
+    """
+
+    end_effector: EndEffector
+    """
+    The end effector that may touch its surroundings while this action runs.
+    """
+
+    def create_temporary_collision_rules(self) -> List[CollisionRule]:
+        return [AllowCollisionForEndEffector(end_effector=self.end_effector)]
+
+
+def _in_force(statechart: Statechart, action: Action) -> bool:
+    """
+    :return: Whether the collision rules of `action` are in force in the world of
+        `statechart` now. Compared by identity, because the shared world may hold equal
+        rules of its own.
+    """
+    in_force = statechart.context.world.collision_manager.temporary_rules
+    return bool(action.temporary_collision_rules) and all(
+        any(rule is rule_in_force for rule_in_force in in_force)
+        for rule in action.temporary_collision_rules
+    )
+
+
+def _away(name: str) -> NodeObservingAFixedValue:
+    """
+    :return: A step that never arrives, so the action running it keeps running.
+    """
+    return NodeObservingAFixedValue(name=name, observation=ObservationStateValues.FALSE)
+
+
+def test_an_action_keeps_its_collision_allowances_in_force_while_it_runs(
+    simple_pr2_context,
+):
+    _, robot, extensions = simple_pr2_context
+    end_effector = robot.left_arm.end_effector
+    action = ActionLettingAGripperTouch(
+        steps=[_away("step")], end_effector=end_effector
+    )
+    statechart = _expanded(action, extensions)
+    statechart.add_node(EndStatechart.when_true(action))
+    executor = StatechartExecutor(context=statechart.context)
+
+    assert not _in_force(statechart, action)
+    executor.compile(statechart)
+    for _ in range(3):
+        executor.tick()
+
+    assert action.life_cycle_state == LifeCycleValues.RUNNING
+    assert _in_force(statechart, action)
+
+
+def test_an_action_takes_its_collision_allowances_out_once_it_ended(
+    simple_pr2_context,
+):
+    _, robot, extensions = simple_pr2_context
+    end_effector = robot.left_arm.end_effector
+    action = ActionLettingAGripperTouch(
+        steps=[_succeeding("step")], end_effector=end_effector
+    )
+    statechart = _expanded(action, extensions)
+
+    _run_until(statechart, EndStatechart.when_true(action))
+
+    assert action.life_cycle_state == LifeCycleValues.SUCCEEDED
+    assert not _in_force(statechart, action)
+
+
+def test_a_reset_action_takes_its_collision_allowances_out(simple_pr2_context):
+    """
+    A reset ends a run without the action ending, so the allowances go then as well.
+    """
+    _, robot, extensions = simple_pr2_context
+    end_effector = robot.left_arm.end_effector
+    action = ActionLettingAGripperTouch(
+        steps=[_away("step")], end_effector=end_effector
+    )
+    action.reset_condition = action.is_running
+    statechart = _expanded(action, extensions)
+    statechart.add_node(EndStatechart.when_true(action))
+    executor = StatechartExecutor(context=statechart.context)
+    executor.compile(statechart)
+    assert action.life_cycle_state == LifeCycleValues.RUNNING
+    assert _in_force(statechart, action)
+
+    executor.tick()
+
+    assert action.life_cycle_state == LifeCycleValues.NOT_STARTED
+    assert not _in_force(statechart, action)
+
+
+def test_an_action_is_sent_with_its_collision_allowances(simple_pr2_context):
+    """
+    A receiver does not expand an action again, so its allowances have to arrive with
+    it.
+    """
+    world, robot, extensions = simple_pr2_context
+    end_effector = robot.left_arm.end_effector
+    sent = _expanded(
+        action := ActionLettingAGripperTouch(
+            steps=[_succeeding("step")], end_effector=end_effector
+        ),
+        extensions,
+    )
+
+    received = Statechart.from_json(
+        json.loads(json.dumps(sent.to_json())),
+        context=simulated_executor(extensions).context,
+        **WorldEntityWithIDKwargsTracker.from_world(world).create_kwargs(),
+    )
+
+    [rule] = received.get_node_by_index(action.index).temporary_collision_rules
+    assert isinstance(rule, AllowCollisionForEndEffector)
+    assert rule.end_effector is end_effector
+
+
+# %% actions touching their surroundings with a gripper allow it themselves
+
+
+def test_a_pick_up_and_its_grasp_and_reach_let_the_gripper_touch(
+    pr2_apartment_context,
+):
+    """
+    The allowance is the action's own rather than a node beside each of its goals.
+    """
+    world, robot, extensions = pr2_apartment_context
+    milk = world.get_semantic_annotations_by_type(Milk)[0]
+    pick_up = PickUpAction(grasp=milk.grasp_candidates()[0], arm=robot.left_arm)
+
+    _expanded(pick_up, extensions)
+
+    [grasping] = _nodes_of_type(pick_up, GraspingAction)
+    [reach] = _nodes_of_type(pick_up, ReachAction)
+    for action in (pick_up, grasping, reach):
+        [rule] = action.temporary_collision_rules
+        assert rule.end_effector is robot.left_arm.end_effector
+    assert _nodes_of_type(pick_up, UpdateTemporaryCollisionRules) == []
+
+
+def test_a_place_lets_the_gripper_holding_its_object_touch(pr2_apartment_context):
+    world, robot, extensions = pr2_apartment_context
+    milk = world.get_semantic_annotations_by_type(Milk)[0]
+    pick_up = PickUpAction(grasp=milk.grasp_candidates()[0], arm=robot.left_arm)
+    place = PlaceAction(
+        object_designator=milk,
+        target_location=Pose.from_xyz_rpy(0.8, -1.9, 0.7, reference_frame=world.root),
+    )
+
+    statechart_of(simulated_executor(extensions), Sequence(nodes=[pick_up, place]))
+
+    [rule] = place.temporary_collision_rules
+    assert rule.end_effector is robot.left_arm.end_effector
+    assert _nodes_of_type(place, UpdateTemporaryCollisionRules) == []
+
+
+def test_opening_lets_the_gripper_on_the_handle_touch(pr2_apartment_context):
+    world, robot, extensions = pr2_apartment_context
+    handle = _handle_annotation(world, "handle_cab10_m")
+    action = OpenAction(grasp=handle.grasp_candidates()[0], arm=robot.right_arm)
+
+    _expanded(action, extensions)
+
+    [rule] = action.temporary_collision_rules
+    assert rule.end_effector is robot.right_arm.end_effector
+    assert _nodes_of_type(action, UpdateTemporaryCollisionRules) == []
+
+
+def test_an_action_lets_nothing_touch_unless_it_says_so(simple_pr2_context):
+    _, _, extensions = simple_pr2_context
+    action = ActionRunningHandedInSteps(steps=[_succeeding("step")])
+
+    _expanded(action, extensions)
+
+    assert action.temporary_collision_rules == []
+
+
 # %% the converted actions
 
 
@@ -619,8 +821,10 @@ def test_moving_the_manipulator_relaxes_collisions_only_when_allowed(
     _expanded(allowed, extensions)
     _expanded(forbidden, extensions)
 
-    assert len(_nodes_of_type(allowed, UpdateTemporaryCollisionRules)) == 1
-    assert _nodes_of_type(forbidden, UpdateTemporaryCollisionRules) == []
+    [rule] = allowed.temporary_collision_rules
+    assert rule.end_effector is end_effector
+    assert forbidden.temporary_collision_rules == []
+    assert _nodes_of_type(allowed, UpdateTemporaryCollisionRules) == []
     assert len(_nodes_of_type(forbidden, CartesianPose)) == 1
 
 
@@ -628,8 +832,8 @@ def test_moving_the_manipulator_hands_what_accompanies_it_to_its_pose(
     simple_pr2_context,
 ):
     """
-    The collision allowance and the hold on the base run in the pose itself, rather
-    than in another parallel around it, so that the motion is a level shallower.
+    The hold on the base runs in the pose itself, rather than in another parallel
+    around it, so that the motion is a level shallower.
     """
     _, robot, extensions = simple_pr2_context
     action = MoveManipulatorAction(
@@ -641,9 +845,7 @@ def test_moving_the_manipulator_hands_what_accompanies_it_to_its_pose(
     _expanded(action, extensions)
 
     [pose] = _nodes_of_type(action, CartesianPose)
-    [allowance] = _nodes_of_type(action, UpdateTemporaryCollisionRules)
     [hold_base] = _nodes_of_type(action, HoldPose)
-    assert allowance.parent_node is pose
     assert hold_base.parent_node is pose
     assert _nodes_of_type(action, Parallel) == [pose]
 
@@ -664,13 +866,12 @@ def test_a_pose_of_the_tool_center_point_holds_what_accompanies_it(
     _expanded(action, extensions)
 
     goal = action.tool_center_point_goal(
-        Pose(), robot.left_arm, allow_gripper_collision=True, max_linear_velocity=0.1
+        Pose(), robot.left_arm, max_linear_velocity=0.1
     )
 
     assert isinstance(goal, CartesianPose)
     assert [type(node) for node in goal.nodes] == [
         CartesianPositionVelocityLimit,
-        UpdateTemporaryCollisionRules,
         HoldPose,
     ]
 
@@ -693,16 +894,11 @@ def test_a_position_of_the_tool_center_point_runs_beside_what_accompanies_it(
     goal = action.tool_center_point_goal(
         Pose(),
         robot.left_arm,
-        allow_gripper_collision=True,
         movement_type=MovementType.TRANSLATION,
     )
 
     assert isinstance(goal, Parallel)
-    assert [type(node) for node in goal.nodes] == [
-        CartesianPosition,
-        UpdateTemporaryCollisionRules,
-        HoldPose,
-    ]
+    assert [type(node) for node in goal.nodes] == [CartesianPosition, HoldPose]
 
 
 def test_navigating_drives_the_base_towards_what_it_should_face(

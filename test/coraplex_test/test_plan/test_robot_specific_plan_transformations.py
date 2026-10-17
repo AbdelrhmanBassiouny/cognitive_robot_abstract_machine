@@ -442,10 +442,12 @@ def reaching_goals_of(action: ReachAction) -> List[StatechartNode]:
 
 def lifting_goal_of(action: PickUpAction) -> StatechartNode:
     """
-    :return: The goal of an expanded pick up action lifting the grasped object.
+    :return: The goal of an expanded pick up action lifting the grasped object, which
+        runs in a parallel only where something accompanies it, such as the hold on the
+        base of a robot that stands still.
     """
     grasp_attempt, lift = action.nodes
-    return lift.nodes[0]
+    return lift.nodes[0] if type(lift) is Parallel else lift
 
 
 @pytest.mark.parametrize("build_executor", [simulated_executor, robot_executor])

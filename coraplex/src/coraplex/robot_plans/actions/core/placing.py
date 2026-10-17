@@ -24,6 +24,10 @@ from coraplex.robot_plans.mixins import (
     MovesToolCenterPoint,
     PlaceTuningParameters,
 )
+from semantic_digital_twin.collision_checking.collision_matrix import CollisionRule
+from semantic_digital_twin.collision_checking.collision_rules import (
+    AllowCollisionForEndEffector,
+)
 from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.grasping.grasp_candidates import (
     GraspCandidate,
@@ -65,6 +69,16 @@ class PlaceAction(
     :func:`~semantic_digital_twin.reasoning.robot_predicates.is_body_gripped`).
     """
 
+    def create_temporary_collision_rules(self) -> List[CollisionRule]:
+        """
+        :return: An allowance for the gripper holding :attr:`object_designator` to
+            touch the surroundings of the object, which it is around from setting it down
+            until it has retracted, the moment the object is put back under the world
+            included.
+        """
+        arm, _ = self._holding_arm_and_grasp()
+        return [AllowCollisionForEndEffector(end_effector=arm.end_effector)]
+
     def create_steps(self) -> List[StatechartNode]:
         arm, grasp = self._holding_arm_and_grasp()
         # A release runs the grasp backwards: down from above the target, then out
@@ -77,13 +91,11 @@ class PlaceAction(
             self.tool_center_point_goal(
                 poses.retreat,
                 arm,
-                allow_gripper_collision=True,
                 max_linear_velocity=self.transport_linear_velocity,
             ),
             self.tool_center_point_goal(
                 poses.grasp,
                 arm,
-                allow_gripper_collision=True,
                 max_linear_velocity=self.placing_linear_velocity,
             ),
             Parallel(
@@ -91,14 +103,11 @@ class PlaceAction(
                     self.gripper_goal(
                         GripperState.OPEN,
                         arm.end_effector,
-                        allow_gripper_collision=True,
                         finger_velocity=self.release_opening_velocity,
                     ),
                     # Keeps the gripper in place while it opens, whatever else
                     # moves the robot meanwhile.
-                    self.tool_center_point_goal(
-                        poses.grasp, arm, allow_gripper_collision=True
-                    ),
+                    self.tool_center_point_goal(poses.grasp, arm),
                 ]
             ),
             self._retract(arm, poses.pre_grasp),
@@ -117,13 +126,11 @@ class PlaceAction(
                 *self.reattach(
                     self.object_designator.root,
                     self.world.root,
-                    holding_end_effector=arm.end_effector,
                 ),
                 # The gripper starts out around the object it has just let go of.
                 self.tool_center_point_goal(
                     retract_pose,
                     arm,
-                    allow_gripper_collision=True,
                     max_linear_velocity=self.retract_linear_velocity,
                 ),
             ],

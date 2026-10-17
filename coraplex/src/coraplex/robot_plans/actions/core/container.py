@@ -20,6 +20,10 @@ from coraplex.robot_plans.mixins import HasApproachesGraspPoses, MovesToolCenter
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from giskardpy.motion_statechart.goals.open_close import Open, Close
+from semantic_digital_twin.collision_checking.collision_matrix import CollisionRule
+from semantic_digital_twin.collision_checking.collision_rules import (
+    AllowCollisionForEndEffector,
+)
 from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.robots.robot_parts import Arm, EndEffector
@@ -84,6 +88,13 @@ class MovesHandle(MovesToolCenterPoint, SequentialAction, HasGraspChoice, ABC):
             grasp_pose, end_effector, self.release_clearance
         )
 
+    def create_temporary_collision_rules(self) -> List[CollisionRule]:
+        """
+        :return: An allowance for the gripper on the handle to touch its surroundings,
+            from taking hold of the handle until it has backed off it.
+        """
+        return [AllowCollisionForEndEffector(end_effector=self.arm.end_effector)]
+
     def create_steps(self) -> List[StatechartNode]:
         end_effector = self.arm.end_effector
         return [
@@ -96,12 +107,10 @@ class MovesHandle(MovesToolCenterPoint, SequentialAction, HasGraspChoice, ABC):
             MoveGripper(
                 end_effector=end_effector,
                 state=GripperState.OPEN,
-                allow_gripper_collision=True,
             ),
             self.tool_center_point_goal(
                 self.back_off_pose(self.grasp.grasp_pose, end_effector),
                 self.arm,
-                allow_gripper_collision=True,
             ),
         ]
 
@@ -116,11 +125,9 @@ class OpenAction(MovesHandle):
     """
 
     def create_mechanism_goal(self) -> MotionStatechartNode:
-        end_effector = self.arm.end_effector
         return Open(
-            tip_link=end_effector.tool_frame,
+            tip_link=self.arm.end_effector.tool_frame,
             environment_link=self.grasp.graspable.root,
-            grasping_end_effector=end_effector,
         )
 
 
@@ -131,10 +138,8 @@ class CloseAction(MovesHandle):
     """
 
     def create_mechanism_goal(self) -> MotionStatechartNode:
-        end_effector = self.arm.end_effector
         return Close(
-            tip_link=end_effector.tool_frame,
+            tip_link=self.arm.end_effector.tool_frame,
             environment_link=self.grasp.graspable.root,
             goal_joint_state=ActionConfig.closed_container_joint_state,
-            grasping_end_effector=end_effector,
         )

@@ -12,9 +12,6 @@ from krrood.ormatic.utils import classproperty
 from cramph.composites import Parallel
 from giskardpy.motion_statechart.binding_policy import GoalBindingPolicy
 from giskardpy.motion_statechart.goals.cartesian_goals import CartesianPoseStraight
-from giskardpy.motion_statechart.goals.collision_avoidance import (
-    UpdateTemporaryCollisionRules,
-)
 from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
@@ -201,7 +198,6 @@ class MovesGripper:
         self,
         state: GripperState,
         end_effector: EndEffector,
-        allow_gripper_collision: bool = False,
         finger_velocity: Optional[float] = None,
         stall_minimum_time: Optional[float] = None,
         tolerate_stall: bool = False,
@@ -209,8 +205,6 @@ class MovesGripper:
         """
         :param state: The state to drive the gripper to.
         :param end_effector: The gripper that is driven.
-        :param allow_gripper_collision: Whether that gripper, and whatever it holds, may
-            touch its surroundings while the fingers move.
         :param finger_velocity: Cap on the speed of the finger joints, in m/s.
         :param stall_minimum_time: How long the fingers must stand still before a stall
             counts, in seconds.
@@ -221,7 +215,6 @@ class MovesGripper:
         return MoveGripper(
             end_effector=end_effector,
             state=state,
-            allow_gripper_collision=allow_gripper_collision,
             finger_velocity=finger_velocity,
             stall_minimum_time=stall_minimum_time,
             tolerate_stall=tolerate_stall,
@@ -285,7 +278,6 @@ class MovesToolCenterPoint(Action, ABC):
         self,
         target: Pose,
         arm: Arm,
-        allow_gripper_collision: bool = False,
         movement_type: MovementType = MovementType.CARTESIAN,
         max_linear_velocity: Optional[float] = None,
         max_angular_velocity: Optional[float] = None,
@@ -293,29 +285,21 @@ class MovesToolCenterPoint(Action, ABC):
         """
         :param target: Where the tool center point should end up.
         :param arm: The arm whose tool center point is moved.
-        :param allow_gripper_collision: Whether that arm's manipulator, and whatever it
-            holds, may touch its surroundings on the way.
         :param movement_type: Whether the orientation of the tool center point is
             commanded alongside its position.
         :param max_linear_velocity: Cap on the speed of the tool center point, in m/s.
         :param max_angular_velocity: Cap on how fast it turns, in rad/s. Only meaningful
             when the orientation is commanded.
         :return: The goal moving the tool center point there, together with whatever
-            speed caps and collision allowances were asked for, and the task keeping the
-            base still, see :meth:`~coraplex.robot_plans.actions.base.Action.keep_base_still`.
+            speed caps were asked for, and the task keeping the base still, see :meth:`~coraplex.robot_plans.actions.base.Action.keep_base_still`.
             A goal that is a parallel of its tasks holds them itself; any other is put in
             a parallel with them.
         """
-        end_effector = arm.end_effector
         root = self.controlled_root
-        tip = end_effector.tool_frame
+        tip = arm.end_effector.tool_frame
         accompanying: List[MotionStatechartNode] = self._velocity_limits(
             root, tip, movement_type, max_linear_velocity, max_angular_velocity
         )
-        if allow_gripper_collision:
-            accompanying.append(
-                UpdateTemporaryCollisionRules.for_end_effector(end_effector)
-            )
         accompanying.extend(self.keep_base_still())
         goal = self._reach_target(target, root, tip, movement_type)
         if not accompanying:
@@ -419,32 +403,16 @@ class ReattachesBodies(Action, ABC):
         self,
         body: KinematicStructureEntity,
         new_parent: KinematicStructureEntity,
-        holding_end_effector: EndEffector | None = None,
     ) -> List[StatechartNode]:
         """
         :param body: The root of the branch to move.
         :param new_parent: The body the branch is moved under.
-        :param holding_end_effector: The end effector around `body` while it is moved,
-            which may keep touching its surroundings meanwhile, or None if there is none.
-        :return: The node moving `body` under `new_parent`, together with the collision
-            allowance of `holding_end_effector`; none unless this action
+        :return: The node moving `body` under `new_parent`, none unless this action
             :attr:`reattaches_in_world_model`.
         """
         if not self.reattaches_in_world_model:
             return []
-        moving = MoveBranch(body=body, new_parent=new_parent)
-        if holding_end_effector is None:
-            return [moving]
-        return [
-            Parallel(
-                nodes=[
-                    moving,
-                    UpdateTemporaryCollisionRules.for_end_effector(
-                        holding_end_effector
-                    ),
-                ]
-            )
-        ]
+        return [MoveBranch(body=body, new_parent=new_parent)]
 
 
 @dataclass

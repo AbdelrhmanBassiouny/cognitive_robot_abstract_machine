@@ -5,6 +5,10 @@ from datetime import timedelta
 
 from typing_extensions import Optional, Any, List
 
+from semantic_digital_twin.collision_checking.collision_matrix import CollisionRule
+from semantic_digital_twin.collision_checking.collision_rules import (
+    AllowCollisionForEndEffector,
+)
 from semantic_digital_twin.robots.robot_part_mixins import HasTwoFingers
 from semantic_digital_twin.robots.robot_parts import Arm, EndEffector
 from semantic_digital_twin.spatial_types.spatial_types import Pose
@@ -24,9 +28,6 @@ from coraplex.robot_plans.mixins import (
 from cramph.composites import Sequence
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.binding_policy import GoalBindingPolicy
-from giskardpy.motion_statechart.goals.collision_avoidance import (
-    UpdateTemporaryCollisionRules,
-)
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
     DistanceAlongAxis,
@@ -245,6 +246,15 @@ class MoveManipulatorAction(MovesToolCenterPoint, GoalAction):
     If the gripper can collide with something.
     """
 
+    def create_temporary_collision_rules(self) -> List[CollisionRule]:
+        """
+        :return: An allowance for :attr:`end_effector` to touch its surroundings if
+            :attr:`allow_gripper_collision`, none otherwise.
+        """
+        if not self.allow_gripper_collision:
+            return []
+        return [AllowCollisionForEndEffector(end_effector=self.end_effector)]
+
     def create_goal(self) -> StatechartNode:
         goal = CartesianPose(
             root_link=self.controlled_root,
@@ -254,11 +264,6 @@ class MoveManipulatorAction(MovesToolCenterPoint, GoalAction):
             orientation_threshold=self.resolved_orientation_threshold(),
             binding_policy=GoalBindingPolicy.Bind_on_start,
         )
-        accompanying = self.keep_base_still()
-        if self.allow_gripper_collision:
-            accompanying.append(
-                UpdateTemporaryCollisionRules.for_end_effector(self.end_effector)
-            )
-        for node in accompanying:
+        for node in self.keep_base_still():
             goal.add_node(node)
         return goal

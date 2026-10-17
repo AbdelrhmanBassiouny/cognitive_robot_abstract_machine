@@ -9,6 +9,10 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 from typing_extensions import Any, List, Optional, Tuple, Union
 
+from semantic_digital_twin.collision_checking.collision_matrix import CollisionRule
+from semantic_digital_twin.collision_checking.collision_rules import (
+    AllowCollisionForEndEffector,
+)
 from semantic_digital_twin.datastructures.alignment import AlignmentPair
 from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
 from semantic_digital_twin.robots.robot_parts import Arm
@@ -46,9 +50,6 @@ from coraplex.robot_plans.actions.base import (
 from coraplex.robot_plans.mixins import MovesToolCenterPoint
 from cramph.composites import Parallel
 from giskardpy.motion_statechart.data_types import DefaultWeights
-from giskardpy.motion_statechart.goals.collision_avoidance import (
-    UpdateTemporaryCollisionRules,
-)
 from giskardpy.motion_statechart.monitors.cartesian_monitors import PositionReached
 from giskardpy.motion_statechart.tasks.align_planes import AlignPlanes
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
@@ -157,6 +158,13 @@ class ToolMotionAction(FullBodyControlledAction, MovesToolCenterPoint, ABC):
             return []
         return self.tool.tool_alignment(target)
 
+    def create_temporary_collision_rules(self) -> List[CollisionRule]:
+        """
+        :return: An allowance for the manipulator holding the tool to touch what the
+            tool works on, for the whole stroke.
+        """
+        return [AllowCollisionForEndEffector(end_effector=self.arm.end_effector)]
+
     def create_steps(self) -> List[StatechartNode]:
         """
         :return: The nodes moving the tool along the sampled waypoints while keeping it
@@ -167,8 +175,8 @@ class ToolMotionAction(FullBodyControlledAction, MovesToolCenterPoint, ABC):
     def _tool_path_steps(self) -> List[StatechartNode]:
         """
         :return: The nodes following the sampled waypoints with the tool together,
-            holding every alignment the tool asks for while it moves and letting the
-            manipulator touch what it works on.
+            holding every alignment the tool asks for while it moves, to be run side by
+            side.
         """
         root = self.controlled_root
         tip = self.tool.get_tool_frame()
@@ -191,15 +199,7 @@ class ToolMotionAction(FullBodyControlledAction, MovesToolCenterPoint, ABC):
             )
             for pair in self._alignment_pairs
         ]
-        return [
-            UpdateTemporaryCollisionRules.for_end_effector(self.arm.end_effector),
-            Parallel(
-                nodes=[
-                    CartesianPositionTrajectory(**trajectory_arguments),
-                    *alignments,
-                ]
-            ),
-        ]
+        return [CartesianPositionTrajectory(**trajectory_arguments), *alignments]
 
 
 @dataclass(kw_only=True, eq=False, repr=False)
@@ -584,6 +584,13 @@ class PouringAction(FullBodyControlledAction, MovesToolCenterPoint, SequentialAc
             reference_frame=self.world.root,
         )
 
+    def create_temporary_collision_rules(self) -> List[CollisionRule]:
+        """
+        :return: An allowance for the manipulator holding the source container to touch
+            the rim it pours over.
+        """
+        return [AllowCollisionForEndEffector(end_effector=self.arm.end_effector)]
+
     def create_steps(self) -> List[StatechartNode]:
         """
         :return: The goals moving the source container to the pre-pour pose and then
@@ -594,11 +601,9 @@ class PouringAction(FullBodyControlledAction, MovesToolCenterPoint, SequentialAc
             self.tool_center_point_goal(
                 pre_pour_pose,
                 self.arm,
-                allow_gripper_collision=True,
             ),
             self.tool_center_point_goal(
                 pour_pose,
                 self.arm,
-                allow_gripper_collision=True,
             ),
         ]

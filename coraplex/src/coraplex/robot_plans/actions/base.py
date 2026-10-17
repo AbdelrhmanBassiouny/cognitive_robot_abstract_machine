@@ -19,7 +19,9 @@ from cramph.context import ContextExtension, StatechartContext
 from cramph.node import CompositeNode, NodeArtifacts, StatechartNode
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from giskardpy.motion_statechart.tasks.cartesian_tasks import HoldPose
+from krrood.patterns.field_metadata import JSONMetadata
 from krrood.symbolic_math.symbolic_math import Scalar, trinary_if_cases
+from semantic_digital_twin.collision_checking.collision_matrix import CollisionRule
 from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.world_description.world_entity import (
@@ -49,6 +51,22 @@ class Action(
         base, because ORMatic resolves a data access object's parent by walking the
         method resolution order and taking the first mapped class, and an action is
         stored as the statechart node it is.
+    """
+
+    temporary_collision_rules: List[CollisionRule] = field(
+        default_factory=list,
+        init=False,
+        repr=False,
+        metadata=JSONMetadata(serialize=True).as_dict(),
+    )
+    """
+    The collision rules in force while this action runs, next to the temporary rules of
+    everything else running at the same time, as created by
+    :meth:`create_temporary_collision_rules` when the action is expanded.
+
+    They belong to the action rather than to a node beside each of its steps, so they
+    also hold between two steps. Sent along with the action, because a receiver does
+    not expand it again.
     """
 
     @classproperty
@@ -108,7 +126,44 @@ class Action(
         rewriting = context.get_extension(PlanRewriting)
         if rewriting is not None:
             rewriting.configure(self)
+        self.temporary_collision_rules = self.create_temporary_collision_rules()
         self._create_what_it_does(context)
+
+    def create_temporary_collision_rules(self) -> List[CollisionRule]:
+        """
+        :return: New collision rules to keep in force while this action runs, none by
+            default. New ones for each action, because rules are taken out of force by
+            identity, so an action inside another one with equal rules takes out only its
+            own.
+        """
+        return []
+
+    def on_start(self, context: StatechartContext):
+        super().on_start(context)
+        if self.temporary_collision_rules:
+            context.world.collision_manager.put_temporary_rules_in_force(
+                self.temporary_collision_rules
+            )
+
+    def on_end(self, context: StatechartContext):
+        self._take_temporary_collision_rules_out_of_force(context)
+        super().on_end(context)
+
+    def on_reset(self, context: StatechartContext):
+        self._take_temporary_collision_rules_out_of_force(context)
+        super().on_reset(context)
+
+    def _take_temporary_collision_rules_out_of_force(
+        self, context: StatechartContext
+    ) -> None:
+        """
+        Takes :attr:`temporary_collision_rules` out of force, which skips those that are
+        not in force, so a reset that ends no run changes nothing.
+        """
+        if self.temporary_collision_rules:
+            context.world.collision_manager.take_temporary_rules_out_of_force(
+                self.temporary_collision_rules
+            )
 
     @abstractmethod
     def _create_what_it_does(self, context: StatechartContext) -> None:
