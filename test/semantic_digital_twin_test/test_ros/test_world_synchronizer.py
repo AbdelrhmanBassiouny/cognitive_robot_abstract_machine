@@ -34,6 +34,7 @@ from semantic_digital_twin.adapters.ros.world_synchronizer import (
     Synchronizer,
     WorldSynchronizer,
 )
+from semantic_digital_twin.adapters.ros.exceptions import WorldUpdatesLostError
 from semantic_digital_twin.adapters.ros.world_fetcher import FetchWorldServer
 from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.callbacks.callback import StateChangeCallback
@@ -3083,6 +3084,150 @@ def test_all_blocks_received_when_subscribed_before_publishing(rclpy_node):
     finally:
         sender_synchronizer.close()
         receiver_synchronizer.close()
+
+
+# %% updates a receiver could not keep up with
+
+
+def add_prismatic_connection(world: World, name: str) -> PrismaticConnection:
+    """
+    :param world: The world the connection is added to.
+    :param name: Names the body the connection moves.
+    :return: A new prismatic connection moving a new body of `world` along its root.
+    """
+    with world.modify_world():
+        child_body = Body(name=PrefixedName(name))
+        world.add_body(child_body)
+        connection = PrismaticConnection.create_with_dofs(
+            world=world, parent=world.root, child=child_body, axis=Vector3.X()
+        )
+        world.add_connection(connection)
+    return connection
+
+
+def move_connection(world: World, connection: PrismaticConnection, position: float):
+    """
+    Move `connection` of `world` and announce the change.
+    """
+    world.state[connection.dof.id].position = position
+    world.notify_state_change()
+
+
+def test_updates_published_while_a_receiver_is_busy_are_not_lost(rclpy_node):
+    """
+    Only what changed is published, so an update that is lost while the receiver is busy
+    applying another one leaves a degree of freedom that does not move again stale for
+    good.
+    """
+    (
+        publisher_world,
+        receiver_world,
+        publisher_synchronizer,
+        receiver_synchronizer,
+    ) = create_connected_worlds(rclpy_node, "busy_receiver")
+    try:
+        moving = publisher_world.get_connections_by_type(PrismaticConnection)[0]
+        moved_once = add_prismatic_connection(publisher_world, "busy_receiver_once")
+        assert wait_for_condition(
+            lambda: receiver_synchronizer.has_applied(
+                publisher_synchronizer.latest_published_position
+            )
+        ), "the receiver never caught up with the second connection"
+
+        with receiver_world._world_lock:
+            move_connection(publisher_world, moving, 0.1)
+            move_connection(publisher_world, moved_once, 0.5)
+            for step in range(100):
+                move_connection(publisher_world, moving, 0.2 + 0.001 * step)
+
+        assert wait_for_condition(
+            lambda: receiver_synchronizer.has_applied(
+                publisher_synchronizer.latest_published_position
+            )
+        ), "the receiver never caught up with the burst"
+        assert receiver_world.state[moved_once.dof.id].position == pytest.approx(
+            publisher_world.state[moved_once.dof.id].position
+        )
+    finally:
+        publisher_synchronizer.close()
+        receiver_synchronizer.close()
+
+
+def empty_update_message(
+    publisher: MetaData, sequence_number: int
+) -> std_msgs.msg.String:
+    """
+    :return: The ros message of an update of `publisher` that changes nothing, at
+        `sequence_number` in its stream.
+    """
+    update = WorldUpdate(
+        meta_data=publisher,
+        sequence_number=sequence_number,
+        state_update=WorldStateUpdate(meta_data=publisher, ids=[], states=[]),
+    )
+    return std_msgs.msg.String(data=json.dumps(to_json(update)))
+
+
+@pytest.fixture()
+def receiving_synchronizer(rclpy_node) -> WorldSynchronizer:
+    """
+    :return: A synchronizer of an empty world, on a topic nobody else publishes on.
+    """
+    synchronizer = WorldSynchronizer(
+        node=rclpy_node,
+        _world=World(name="receiving"),
+        topic_name=unique_topic("receiving"),
+    )
+    yield synchronizer
+    synchronizer.close()
+
+
+def test_a_receiver_that_lost_updates_says_so_when_asked_how_far_it_caught_up(
+    receiving_synchronizer: WorldSynchronizer,
+):
+    """
+    Its world may differ from the publisher's in what the lost updates carried, which
+    catching up with a later position does not repair.
+    """
+    publisher = MetaData(node_name="publisher", process_id=1)
+    receiving_synchronizer.subscription_callback(empty_update_message(publisher, 1))
+    receiving_synchronizer.subscription_callback(empty_update_message(publisher, 4))
+
+    with pytest.raises(WorldUpdatesLostError) as raised:
+        receiving_synchronizer.has_applied(
+            StreamPosition(origin=publisher, sequence_number=4)
+        )
+
+    assert raised.value.publisher == publisher
+    assert raised.value.last_received_sequence_number == 1
+    assert raised.value.received_sequence_number == 4
+
+
+def test_updates_received_in_sequence_are_not_lost(
+    receiving_synchronizer: WorldSynchronizer,
+):
+    publisher = MetaData(node_name="publisher", process_id=1)
+    receiving_synchronizer.subscription_callback(empty_update_message(publisher, 1))
+    receiving_synchronizer.subscription_callback(empty_update_message(publisher, 2))
+
+    assert receiving_synchronizer.has_applied(
+        StreamPosition(origin=publisher, sequence_number=2)
+    )
+
+
+def test_a_publisher_heard_from_for_the_first_time_has_lost_nothing(
+    receiving_synchronizer: WorldSynchronizer,
+):
+    """
+    A receiver that joins late starts somewhere in the middle of the stream, having
+    fetched what was published before.
+    """
+    publisher = MetaData(node_name="publisher", process_id=1)
+    receiving_synchronizer.subscription_callback(empty_update_message(publisher, 7))
+
+    assert receiving_synchronizer.has_applied(
+        StreamPosition(origin=publisher, sequence_number=7)
+    )
 
 
 if __name__ == "__main__":

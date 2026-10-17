@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from krrood.adapters.json_serializer import from_json, to_json
 from krrood.ormatic.data_access_objects.helper import to_dao
+from semantic_digital_twin.adapters.ros.exceptions import WorldUpdatesLostError
 from semantic_digital_twin.adapters.ros.messages import (
     MessageField,
     MetaData,
@@ -92,6 +93,8 @@ class Synchronizer(WorldEntityWithClassBasedID, PublicationProgress):
     Every published message carries its position in this synchronizer's stream, and
     every applied message is remembered per publisher, so that two processes can tell
     each other what to catch up with without comparing world models they cannot compare.
+    A message that does not follow the one received from its publisher before reveals
+    that messages in between were lost.
     """
 
     node: RosNode = field(kw_only=True)
@@ -99,7 +102,7 @@ class Synchronizer(WorldEntityWithClassBasedID, PublicationProgress):
     The rclpy node used to create the publishers and subscribers.
     """
 
-    topic_name: Optional[str] = None
+    topic_name: str | None = None
     """
     The topic name of the publisher and subscriber.
     """
@@ -119,17 +122,23 @@ class Synchronizer(WorldEntityWithClassBasedID, PublicationProgress):
     How long to wait between two looks at the subscribers of the topic while connecting.
     """
 
-    publisher: Optional[Publisher] = field(init=False, default=None)
+    message_queue_depth: int = 1000
+    """
+    How many messages the publisher and the subscriber keep for a receiver that has not
+    taken them yet; once more are waiting, the oldest are lost.
+    """
+
+    publisher: Publisher | None = field(init=False, default=None)
     """
     The publisher used to publish the world state.
     """
 
-    subscriber: Optional[Subscription] = field(default=None, init=False)
+    subscriber: Subscription | None = field(default=None, init=False)
     """
     The subscriber to the world state.
     """
 
-    message_type: ClassVar[Optional[Type[Message]]] = None
+    message_type: ClassVar[type[Message] | None] = None
     """
     The type of the message that is sent and received.
     """
@@ -139,11 +148,25 @@ class Synchronizer(WorldEntityWithClassBasedID, PublicationProgress):
     Position of the message this synchronizer published last.
     """
 
-    _applied_sequence_numbers: Dict[MetaData, int] = field(
+    _applied_sequence_numbers: dict[MetaData, int] = field(
         default_factory=dict, init=False, repr=False
     )
     """
     The highest position applied so far, per publisher.
+    """
+
+    _received_sequence_numbers: dict[MetaData, int] = field(
+        default_factory=dict, init=False, repr=False
+    )
+    """
+    The position of the message received last, per publisher.
+    """
+
+    _lost_updates: dict[MetaData, WorldUpdatesLostError] = field(
+        default_factory=dict, init=False, repr=False
+    )
+    """
+    The first loss of messages noticed, per publisher whose messages were lost.
     """
 
     _sequence_number_lock: threading.Lock = field(
@@ -161,10 +184,12 @@ class Synchronizer(WorldEntityWithClassBasedID, PublicationProgress):
             std_msgs.msg.String,
             topic=self.topic_name,
             callback=self.subscription_callback,
-            qos_profile=10,
+            qos_profile=self.message_queue_depth,
         )
         self.publisher = self.node.create_publisher(
-            std_msgs.msg.String, topic=self.topic_name, qos_profile=10
+            std_msgs.msg.String,
+            topic=self.topic_name,
+            qos_profile=self.message_queue_depth,
         )
         self.wait_until_connected()
 
@@ -238,7 +263,29 @@ class Synchronizer(WorldEntityWithClassBasedID, PublicationProgress):
             if deserialized_message.meta_data == self.meta_data:
                 return
 
+            self._notice_lost_messages(deserialized_message)
             self._subscription_callback(deserialized_message)
+
+    def _notice_lost_messages(self, message: Message) -> None:
+        """
+        Remember, and report, that messages of the publisher of `message` were lost if
+        `message` does not follow the one received from it before.
+
+        :param message: A message just received from another synchronizer.
+        """
+        publisher = message.meta_data
+        with self._sequence_number_lock:
+            last_received = self._received_sequence_numbers.get(publisher)
+            self._received_sequence_numbers[publisher] = message.sequence_number
+            if last_received is None or message.sequence_number == last_received + 1:
+                return
+            lost_updates = WorldUpdatesLostError(
+                publisher=publisher,
+                last_received_sequence_number=last_received,
+                received_sequence_number=message.sequence_number,
+            )
+            self._lost_updates.setdefault(publisher, lost_updates)
+        self.node.get_logger().error(str(lost_updates))
 
     @property
     def published_sequence_number(self) -> int:
@@ -257,9 +304,15 @@ class Synchronizer(WorldEntityWithClassBasedID, PublicationProgress):
 
         A publisher this world never heard from is treated as being at the start of its
         stream, so its first message is still awaited.
+
+        :raises WorldUpdatesLostError: If messages of the publisher of ``position`` were
+            lost.
         """
         with self._sequence_number_lock:
+            lost_updates = self._lost_updates.get(position.origin)
             applied = self._applied_sequence_numbers.get(position.origin, 0)
+        if lost_updates is not None:
+            raise lost_updates
         return applied >= position.sequence_number
 
     def record_applied(self, message: Message):
