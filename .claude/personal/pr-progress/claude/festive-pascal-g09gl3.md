@@ -4,7 +4,7 @@ Plan
 - Package (format, agents-md, generic AGENTS.md), hooks, CI, PyPI publish.
 
 Done
-- Pushed through 5778f03fab: own version, krrood-style publish-on-main workflow.
+- Pushed through 7d65a9084e: own version, shared publish workflow, version-bump CI check.
 
 Next
 - User: PyPI pending trusted publisher before merge (merge publishes 0.1.0).
