@@ -10,8 +10,8 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "LGPL-3.0-only"
 # The authors are everyone who edited the docstring formatter or AGENTS.md before they
-# moved into this package; the maintainers are those of them who are collaborators of
-# the repository.
+# moved into this package; the maintainers are the repository's code owners and the
+# authors who are collaborators of the repository.
 authors = [
     {name = "Abdelrhman Bassiouny", email = "abassiou@uni-bremen.de"},
     {name = "LucaKro", email = "luc_kro@uni-bremen.de"},
@@ -31,6 +31,8 @@ maintainers = [
     {name = "Tom Schierenbeck", email = "tom_sch@uni-bremen.de"},
     {name = "Jonas Dech", email = "j.dech@gmx.net"},
     {name = "Sanic", email = "pmania@tzi.de"},
+    {name = "maltehue", email = "huerkamp@uni-bremen.de"},
+    {name = "Vanessa Hassouna", email = "hassouna@uni-bremen.de"},
 ]
 keywords = ["developer-tooling", "pre-commit", "black", "docformatter", "agents"]
 classifiers = [
