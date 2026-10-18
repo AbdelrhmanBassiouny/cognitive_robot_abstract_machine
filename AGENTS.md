@@ -135,6 +135,8 @@
 - Author commits as the human user running the tool, with their own configured git `user.name` and `user.email`. Never author or amend a commit as an assistant, and never credit one as author or co-author: no `Co-Authored-By:` trailer for an assistant, no `noreply@anthropic.com` or similar as author or committer
 - A short plain line in the commit message body acknowledging assistant help, such as `Made with AI assistance`, is encouraged. Never name the model or the AI service
 - These rules apply to every contributor and every tool
+- When you work in a fork, never push to the upstream repository - no branch, no tag, whatever the reason. Push only to the fork; work reaches upstream only through a pull request opened from the fork. Before any push, read the full, untruncated `git remote -v` output and confirm the target remote is the fork
+- Never comment on or modify pull requests on the upstream repository unless the user has explicitly allowed it - through existing personal notes or instructions, or by accepting when you ask
 
 ## Misc
 - Always use the project's configured Python interpreter for tests and commands
@@ -159,7 +161,3 @@
 
 ## Domain-Specific Conventions
 - For spatial types and connections, follow `semantic_digital_twin/doc/style_guide.md`
-
-## Version Control
-- Never push to the upstream `cram2/cognitive_robot_abstract_machine` repository - no branch, no tag, whatever the reason. Push only to your fork; work reaches upstream only through a pull request opened from the fork. Before any push, read the full, untruncated `git remote -v` output and confirm the target remote is the fork
-- Never comment on or modify pull requests on the upstream repository, unless you work in a fork and the user has explicitly allowed it - through existing personal notes or instructions, or by accepting when you ask

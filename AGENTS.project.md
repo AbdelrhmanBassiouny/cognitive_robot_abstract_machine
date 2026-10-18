@@ -17,7 +17,3 @@
 
 ## Domain-Specific Conventions
 - For spatial types and connections, follow `semantic_digital_twin/doc/style_guide.md`
-
-## Version Control
-- Never push to the upstream `cram2/cognitive_robot_abstract_machine` repository - no branch, no tag, whatever the reason. Push only to your fork; work reaches upstream only through a pull request opened from the fork. Before any push, read the full, untruncated `git remote -v` output and confirm the target remote is the fork
-- Never comment on or modify pull requests on the upstream repository, unless you work in a fork and the user has explicitly allowed it - through existing personal notes or instructions, or by accepting when you ask
