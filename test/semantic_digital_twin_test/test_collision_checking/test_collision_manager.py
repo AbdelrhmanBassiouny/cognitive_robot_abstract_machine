@@ -179,33 +179,35 @@ class TestSelfCollisionExpressionManager:
 
         # test point on a
         point1 = self_collisions.get_group_a_P_point_on_a_symbol(
-            group_a, group_b
+            group_a, group_b, 0
         ).evaluate()
         assert np.allclose(point1, expected_body_a_point)
         point2 = self_collisions.get_group_b_P_point_on_b_symbol(
-            group_a, group_b
+            group_a, group_b, 0
         ).evaluate()
         assert np.allclose(point2, expected_body_b_point)
 
         # test contact normal
         contact_normal1 = self_collisions.get_group_b_V_contact_normal_symbol(
-            group_a, group_b
+            group_a, group_b, 0
         )
         assert np.allclose(contact_normal1.evaluate(), expected_normal)
 
         # test buffer distance
-        buffer_distance1 = self_collisions.get_buffer_distance_symbol(group_a, group_b)
+        buffer_distance1 = self_collisions.get_buffer_distance_symbol(
+            group_a, group_b, 0
+        )
         assert np.allclose(buffer_distance1.evaluate()[0], 10)
 
         # test contact distance
         contact_distance1 = self_collisions.get_contact_distance_symbol(
-            group_a, group_b
+            group_a, group_b, 0
         )
         assert np.allclose(contact_distance1.evaluate()[0], 0.1)
 
         # test violated distance
         violated_distance1 = self_collisions.get_violated_distance_symbol(
-            group_a, group_b
+            group_a, group_b, 0
         )
         assert np.allclose(violated_distance1.evaluate()[0], 0.23)
 
@@ -221,10 +223,10 @@ class TestSelfCollisionExpressionManager:
 
         # test specific expression
         group_b_P_point_on_b = self_collisions.get_group_b_P_point_on_b_symbol(
-            group_a, group_b
+            group_a, group_b, 0
         )
         group_b_V_contact_normal = self_collisions.get_group_b_V_contact_normal_symbol(
-            group_a, group_b
+            group_a, group_b, 0
         )
         expr = group_b_V_contact_normal @ group_b_P_point_on_b.vector3
         compiled_expression = expr.compile(VariableParameters.from_lists(variables))
@@ -272,7 +274,7 @@ class TestSelfCollisionExpressionManager:
         group_a, group_b = list(self_collisions.registered_group_combinations.keys())[1]
 
         contact_distance1 = self_collisions.get_contact_distance_symbol(
-            group_a, group_b
+            group_a, group_b, 0
         )
         assert np.allclose(contact_distance1.evaluate()[0], 100)
 
