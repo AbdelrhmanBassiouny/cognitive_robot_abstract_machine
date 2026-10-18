@@ -52,6 +52,9 @@ from semantic_digital_twin.collision_checking.collision_detector import (
     CollisionCheckingResult,
 )
 from semantic_digital_twin.collision_checking.collision_manager import CollisionConsumer
+from semantic_digital_twin.collision_checking.collision_matrix import (
+    MaxAvoidedCollisionsOverride,
+)
 from semantic_digital_twin.collision_checking.collision_rules import (
     AllowCollisionBetweenGroups,
 )
@@ -841,8 +844,74 @@ def test_self_collision_avoidance_avoids_every_checked_combination_in_one_task(
         MotionControlContext
     ).self_collision_manager
     assert task.checked_combinations == list(manager.registered_group_combinations)
+    assert task.avoided_contacts == [
+        (group_a, group_b, index)
+        for group_a, group_b in manager.registered_group_combinations
+        for index in range(manager.avoided_contacts_of(group_a, group_b))
+    ]
     assert len(task.constraint_collection.inequality_constraints) == len(
-        task.checked_combinations
+        task.avoided_contacts
+    )
+
+
+def test_self_collision_avoidance_avoids_the_closest_contacts_of_a_combination(
+    self_collision_bot_world: World,
+) -> None:
+    """
+    Each hand holds a tip and a thumb, so the two hands touch in several places at once.
+
+    Avoiding only the closest of them leaves the next closest free to close the gap
+    within one control cycle.
+    """
+    world = self_collision_bot_world
+    robot = world.get_semantic_annotations_by_type(AbstractRobot)[0]
+    left_hand = {
+        world.get_kinematic_structure_entity_by_name("l_tip"),
+        world.get_kinematic_structure_entity_by_name("l_thumb"),
+    }
+    right_hand = {
+        world.get_kinematic_structure_entity_by_name("r_tip"),
+        world.get_kinematic_structure_entity_by_name("r_thumb"),
+    }
+    world.collision_manager.max_avoided_bodies_rules.append(
+        MaxAvoidedCollisionsOverride(2, left_hand | right_hand)
+    )
+    goal = SelfCollisionAvoidance(robot=robot)
+    executor = _compile_collision_avoidance(
+        world,
+        goal,
+        UpdateTemporaryCollisionRules(
+            temporary_rules=[
+                AvoidCollisionBetweenGroups(
+                    buffer_zone_distance=1.0,
+                    violated_distance=0.0,
+                    body_group_a=left_hand,
+                    body_group_b=right_hand,
+                ),
+            ]
+        ),
+    )
+
+    executor.tick()
+
+    task = goal.nodes[0]
+    manager = executor.context.require_extension(
+        MotionControlContext
+    ).self_collision_manager
+    (hands,) = [
+        (group_a, group_b)
+        for group_a, group_b in task.checked_combinations
+        if group_a.root in left_hand | right_hand
+        and group_b.root in left_hand | right_hand
+    ]
+    contacts = manager.last_closest_contacts[hands]
+    assert len(contacts) == 4
+    avoided_distances = [
+        manager.get_contact_distance_symbol(*hands, index).evaluate()[0]
+        for index in range(manager.avoided_contacts_of(*hands))
+    ]
+    assert avoided_distances == pytest.approx(
+        sorted(contact.distance for contact in contacts)[:2]
     )
 
 

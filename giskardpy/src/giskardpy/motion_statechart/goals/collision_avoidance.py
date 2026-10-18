@@ -506,8 +506,10 @@ class _SelfCollisionAvoidanceTask(_CollisionAvoidanceTask):
     Avoids self collisions between every checked combination of two collision groups of
     :attr:`robot`.
 
-    For every combination, moves `group_a_P_point_on_a @ group_b_P_point_on_b` in the
-    direction of its contact normal until the distance is larger than its buffer zone.
+    For every combination, moves `group_a_P_point_on_a @ group_b_P_point_on_b` of each
+    of its closest contacts in the direction of the contact's normal until the distance
+    is larger than its buffer zone, see
+    :meth:`~semantic_digital_twin.collision_checking.collision_variable_managers.SelfCollisionVariableManager.avoided_contacts_of`.
     Its observation turns false once a distance drops below its violated distance.
     """
 
@@ -528,9 +530,23 @@ class _SelfCollisionAvoidanceTask(_CollisionAvoidanceTask):
     @property
     def checked_combinations(self) -> list[tuple[CollisionGroup, CollisionGroup]]:
         """
-        :return: One combination of collision groups per constraint, in order.
+        :return: Every combination of collision groups this task avoids contacts of,
+            in order.
         """
         return self._checked_combinations
+
+    @property
+    def avoided_contacts(self) -> list[tuple[CollisionGroup, CollisionGroup, int]]:
+        """
+        :return: One combination of collision groups and rank of its contact per
+            constraint, in order.
+        """
+        manager = self._self_collision_manager
+        return [
+            (group_a, group_b, index)
+            for group_a, group_b in self.checked_combinations
+            for index in range(manager.avoided_contacts_of(group_a, group_b))
+        ]
 
     def create_self_collision_matrix(
         self, context: StatechartContext
@@ -591,26 +607,26 @@ class _SelfCollisionAvoidanceTask(_CollisionAvoidanceTask):
     def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
         artifacts = MotionNodeArtifacts()
         manager = self._self_collision_manager
-        for group_a, group_b in self.checked_combinations:
+        for group_a, group_b, index in self.avoided_contacts:
             group_b_T_group_a = context.world.compose_forward_kinematics_expression(
                 group_b.root, group_a.root
             )
             group_b_P_point_on_a = (
                 group_b_T_group_a
-                @ manager.get_group_a_P_point_on_a_symbol(group_a, group_b)
+                @ manager.get_group_a_P_point_on_a_symbol(group_a, group_b, index)
             )
             group_b_V_point_on_b_to_point_on_a = (
                 group_b_P_point_on_a
-                - manager.get_group_b_P_point_on_b_symbol(group_a, group_b)
+                - manager.get_group_b_P_point_on_b_symbol(group_a, group_b, index)
             )
             group_b_V_contact_normal = manager.get_group_b_V_contact_normal_symbol(
-                group_a, group_b
+                group_a, group_b, index
             )
             artifacts.constraints.add_inequality_constraint(
-                name=f"{group_a.root.name}/{group_b.root.name}",
+                name=f"{group_a.root.name}/{group_b.root.name}/{index}",
                 reference_velocity=self.max_velocity,
-                lower_error=manager.get_buffer_distance_symbol(group_a, group_b)
-                - manager.get_contact_distance_symbol(group_a, group_b),
+                lower_error=manager.get_buffer_distance_symbol(group_a, group_b, index)
+                - manager.get_contact_distance_symbol(group_a, group_b, index),
                 upper_error=float("inf"),
                 quadratic_weight=self._weight_while_close(group_b_V_contact_normal),
                 task_expression=group_b_V_contact_normal
@@ -619,10 +635,10 @@ class _SelfCollisionAvoidanceTask(_CollisionAvoidanceTask):
         artifacts.observation = self._none_violated(
             [
                 (
-                    manager.get_contact_distance_symbol(group_a, group_b),
-                    manager.get_violated_distance_symbol(group_a, group_b),
+                    manager.get_contact_distance_symbol(group_a, group_b, index),
+                    manager.get_violated_distance_symbol(group_a, group_b, index),
                 )
-                for group_a, group_b in self.checked_combinations
+                for group_a, group_b, index in self.avoided_contacts
             ]
         )
         return artifacts
@@ -630,16 +646,16 @@ class _SelfCollisionAvoidanceTask(_CollisionAvoidanceTask):
     def violated_collisions(self) -> list[tuple[ClosestPoints, float]]:
         manager = self._self_collision_manager
         violated = []
-        for group_a, group_b in self.checked_combinations:
+        for group_a, group_b, index in self.avoided_contacts:
             contact_distance = manager.get_contact_distance_symbol(
-                group_a, group_b
+                group_a, group_b, index
             ).evaluate()[0]
             violated_distance = manager.get_violated_distance_symbol(
-                group_a, group_b
+                group_a, group_b, index
             ).evaluate()[0]
             if contact_distance < violated_distance:
-                closest = manager.last_closest_contacts[group_a, group_b][0]
-                violated.append((closest, violated_distance))
+                contact = manager.last_closest_contacts[group_a, group_b][index]
+                violated.append((contact, violated_distance))
         return violated
 
 
@@ -744,6 +760,7 @@ class SelfCollisionDistanceMonitor(EndedByOwner, MotionStatechartNode):
         manager.register_groups_of_body_combination(self.body_a, self.body_b)
         group_a, group_b = manager.body_pair_to_group_pair(self.body_a, self.body_b)
 
-        distance_symbol = manager.get_contact_distance_symbol(group_a, group_b)
+        # The contacts of a combination are ranked, so the first is the closest.
+        distance_symbol = manager.get_contact_distance_symbol(group_a, group_b, 0)
 
         return MotionNodeArtifacts(observation=distance_symbol < self.threshold)
