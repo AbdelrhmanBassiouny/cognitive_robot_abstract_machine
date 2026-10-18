@@ -9,7 +9,7 @@ from robokudo.exceptions import PointCloudCameraModelMissing
 from robokudo.utils.o3d_helper import (
     put_obb_on_target_obb,
     transform_obb_relative_to_obb_center,
-    get_obb_from_size_and_transform,
+    create_oriented_bounding_box,
     get_2d_corner_points_from_3d_bb,
     get_2d_bounding_rect_from_3d_bb,
     draw_wireframe_of_obb_into_image,
@@ -180,28 +180,28 @@ class TestUtilsO3DHelper(object):
         with pytest.raises(ValueError):
             transform_obb_relative_to_obb_center(input_obb, target_obb, transform)
 
-    def test_get_obb_from_size_and_transform_basic(self):
+    def test_create_oriented_bounding_box_basic(self):
         bb_size = np.array([1.0, 1.0, 1.0])
         transform = np.eye(4)
-        obb = get_obb_from_size_and_transform(bb_size, transform)
+        obb = create_oriented_bounding_box(bb_size, transform)
 
         assert isinstance(obb, o3d.geometry.OrientedBoundingBox)
         assert np.allclose(obb.center, [0.0, 0.0, 0.0])
         assert np.allclose(obb.R, np.eye(3))
         assert np.allclose(obb.extent, bb_size)
 
-    def test_get_obb_from_size_and_transform_translated(self):
+    def test_create_oriented_bounding_box_translated(self):
         bb_size = np.array([2.0, 3.0, 4.0])
         transform = np.eye(4)
         transform[:3, 3] = [1.0, 2.0, 3.0]
-        obb = get_obb_from_size_and_transform(bb_size, transform)
+        obb = create_oriented_bounding_box(bb_size, transform)
 
         assert isinstance(obb, o3d.geometry.OrientedBoundingBox)
         assert np.allclose(obb.center, [1.0, 2.0, 3.0])
         assert np.allclose(obb.R, np.eye(3))
         assert np.allclose(obb.extent, bb_size)
 
-    def test_get_obb_from_size_and_transform_rotated(self):
+    def test_create_oriented_bounding_box_rotated(self):
         bb_size = np.array([1.0, 1.0, 1.0])
         # Rotated 90 degrees around Z-axis
         rotation = np.array(
@@ -212,24 +212,24 @@ class TestUtilsO3DHelper(object):
                 [0.0, 0.0, 0.0, 1.0],
             ]
         )
-        obb = get_obb_from_size_and_transform(bb_size, rotation)
+        obb = create_oriented_bounding_box(bb_size, rotation)
 
         assert isinstance(obb, o3d.geometry.OrientedBoundingBox)
         assert np.allclose(obb.center, [0.0, 0.0, 0.0])
         assert np.allclose(obb.R, rotation[:3, :3])
         assert np.allclose(obb.extent, bb_size)
 
-    def test_get_obb_from_size_and_transform_invalid_size(self):
+    def test_create_oriented_bounding_box_invalid_size(self):
         bb_size = np.array([1.0, 1.0])
         transform = np.eye(4)
         with pytest.raises(TypeError):
-            get_obb_from_size_and_transform(bb_size, transform)
+            create_oriented_bounding_box(bb_size, transform)
 
-    def test_get_obb_from_size_and_transform_invalid_transform(self):
+    def test_create_oriented_bounding_box_invalid_transform(self):
         bb_size = np.array([1.0, 1.0, 1.0])
         transform = np.eye(3)
         with pytest.raises(IndexError):
-            get_obb_from_size_and_transform(bb_size, transform)
+            create_oriented_bounding_box(bb_size, transform)
 
     def test_get_2d_corner_points_from_3d_bb_basic_case(self, cas: CAS):
         obb = o3d.geometry.OrientedBoundingBox(

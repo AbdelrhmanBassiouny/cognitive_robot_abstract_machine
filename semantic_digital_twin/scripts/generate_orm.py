@@ -1,10 +1,12 @@
-"""
-Generate persistence mappings for Semantic Digital Twin dataclasses.
-"""
-
+# ----------------------------------------------------------------------------------------------------------------------
+# This script generates the ORM classes for the semantic_digital_twin package.
+# Dataclasses can be mapped automatically to the ORM model
+# using the ORMatic library, they just have to be registered in the classes list.
+# Classes that are self_mapped and explicitly_mapped are already mapped in the model.py file. Look there for more
+# information on how to map them.
+# ----------------------------------------------------------------------------------------------------------------------
 from __future__ import annotations
 
-# %% Imports
 import logging
 from pathlib import Path
 
@@ -36,32 +38,33 @@ from semantic_digital_twin.world import (
 )
 from semantic_digital_twin.world_description.mesh_file_storage import MeshFileStorage
 
+# remove classes that should not be mapped
+ignore_classes = {
+    ResetStateContextManager,
+    WorldModelUpdateContextManager,
+    WorldStateBatchContextManager,
+    WorldEntityRebinding,
+    StateChangeCounter,
+    ForwardKinematicsManager,
+    RayTracer,
+    MeshFileStorage,
+    semantic_digital_twin.adapters.procthor.procthor_resolver.ProcthorResolver,
+    SemanticDirection,
+    SubclassJSONSerializer,
+    # A symbolic operation is a step of a query, not something a world stores, so none of
+    # them is mapped. The modules defining them are imported above so that they are all
+    # declared by the time this is read.
+    *recursive_subclasses(SymbolicCallable),
+}
+
 
 # %% Interface generation
-def generate_orm() -> None:
+def generate_orm():
     """
-    Generate the ORM classes for the Semantic Digital Twin package.
+    Generate the ORM classes for the coraplex package.
     """
     logging.basicConfig(level=logging.INFO)  # Or your preferred config
     logging.getLogger("krrood").setLevel(logging.DEBUG)
-
-    ignore_classes = {
-        ResetStateContextManager,
-        WorldModelUpdateContextManager,
-        WorldStateBatchContextManager,
-        WorldEntityRebinding,
-        StateChangeCounter,
-        ForwardKinematicsManager,
-        RayTracer,
-        MeshFileStorage,
-        semantic_digital_twin.adapters.procthor.procthor_resolver.ProcthorResolver,
-        SemanticDirection,
-        SubclassJSONSerializer,
-        # A symbolic operation is a step of a query, not something a world stores, so none of
-        # them is mapped. The modules defining them are imported above so that they are all
-        # declared by the time this is read.
-        *recursive_subclasses(SymbolicCallable),
-    }
 
     ormatic = ORMatic.from_package(
         [semantic_digital_twin],

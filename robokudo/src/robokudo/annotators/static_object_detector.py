@@ -54,7 +54,7 @@ from robokudo.utils.error_handling import catch_and_raise_to_blackboard
 from robokudo.utils.o3d_helper import (
     get_2d_bounding_rect_from_3d_bb,
     get_cloud_from_rgb_depth_and_mask,
-    get_obb_from_size_and_transform,
+    create_oriented_bounding_box,
 )
 from robokudo.utils.transform import (
     get_quaternion_from_rotation_matrix,
@@ -179,7 +179,7 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
 
     def detect_from_bb_descriptor(self, color_rgb: npt.NDArray) -> ObjectHypothesis:
         """
-        Detect only based on the BB.
+        Detect objects using the configured bounding box.
 
         :param color_rgb: Image in RGB order
         """
@@ -188,7 +188,7 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
         object_hypothesis.source = self.name
 
         object_hypothesis.points = self.get_cloud_from_2d_bb_roi(color_rgb)
-        # Use the non-scaled BB coordinates relative to the color image
+        # Use bounding box coordinates relative to the color image.
         object_hypothesis.roi.roi.pos.x = self.descriptor.parameters.bounding_box_x
         object_hypothesis.roi.roi.pos.y = self.descriptor.parameters.bounding_box_y
         object_hypothesis.roi.roi.width = self.descriptor.parameters.bounding_box_width
@@ -232,15 +232,22 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
             )
             return None
 
-        bb = shape_collection.as_bounding_box_collection_in_frame(body).bounding_box()
+        bounding_box = shape_collection.as_bounding_box_collection_in_frame(
+            body
+        ).bounding_box()
         size = np.array(
-            [bb.max_x - bb.min_x, bb.max_y - bb.min_y, bb.max_z - bb.min_z], dtype=float
+            [
+                bounding_box.max_x - bounding_box.min_x,
+                bounding_box.max_y - bounding_box.min_y,
+                bounding_box.max_z - bounding_box.min_z,
+            ],
+            dtype=float,
         )
         center = np.array(
             [
-                (bb.min_x + bb.max_x) / 2.0,
-                (bb.min_y + bb.max_y) / 2.0,
-                (bb.min_z + bb.max_z) / 2.0,
+                (bounding_box.min_x + bounding_box.max_x) / 2.0,
+                (bounding_box.min_y + bounding_box.max_y) / 2.0,
+                (bounding_box.min_z + bounding_box.max_z) / 2.0,
             ],
             dtype=float,
         )
@@ -253,7 +260,7 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
         world_to_camera_transform_matrix: np.ndarray | None = None,
     ) -> ObjectHypothesis | None:
         """
-        Detect from singular, passed SDT Body instance
+        Detect an object represented by a :class:`~semantic_digital_twin.world_description.world_entity.Body`.
         """
         object_hypothesis = ObjectHypothesis()
         object_hypothesis.id = str(object_id)
@@ -265,20 +272,29 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
                 self.get_cas()
             )
 
-        body_bb = self._get_body_bb_size_and_center(body)
-        if body_bb is None:
+        body_bounding_box = self._get_body_bb_size_and_center(body)
+        if body_bounding_box is None:
             return None
-        bb_size, bb_center_body = body_bb
+        bounding_box_size, bounding_box_center_body = body_bounding_box
 
-        world_T_body = body.global_pose.to_np()
-        body_T_bb_center = get_transform_matrix_from_translation(bb_center_body)
-        world_T_bb = world_T_body @ body_T_bb_center
-        bb_transform_in_camera = world_to_camera_transform_matrix @ world_T_bb
+        body_to_world_transform = body.global_pose.to_np()
+        bounding_box_center_to_body_transform = get_transform_matrix_from_translation(
+            bounding_box_center_body
+        )
+        bounding_box_to_world_transform = (
+            body_to_world_transform @ bounding_box_center_to_body_transform
+        )
+        bounding_box_transform_in_camera = (
+            world_to_camera_transform_matrix @ bounding_box_to_world_transform
+        )
 
         # Calculate Bounding Box and resulting 2D Image Corner points based on pose in camera coordinates
-
-        obb = get_obb_from_size_and_transform(bb_size, bb_transform_in_camera)
-        corner_points = get_2d_bounding_rect_from_3d_bb(self.get_cas(), obb)
+        oriented_bounding_box = create_oriented_bounding_box(
+            bounding_box_size, bounding_box_transform_in_camera
+        )
+        corner_points = get_2d_bounding_rect_from_3d_bb(
+            self.get_cas(), oriented_bounding_box
+        )
 
         image_height = self.get_cas().get(CASViews.COLOR_IMAGE).shape[0]
         image_width = self.get_cas().get(CASViews.COLOR_IMAGE).shape[1]
@@ -299,13 +315,13 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
         roi.roi.width = corner_points[2]
         roi.roi.height = corner_points[3]
         object_hypothesis.roi = roi
-        object_hypothesis.points = self.cloud.crop(obb)
+        object_hypothesis.points = self.cloud.crop(oriented_bounding_box)
 
         object_translation_in_camera = list(
-            get_translation_from_transform_matrix(bb_transform_in_camera)
+            get_translation_from_transform_matrix(bounding_box_transform_in_camera)
         )
         object_rotation_in_camera = list(
-            get_quaternion_from_transform_matrix(bb_transform_in_camera)
+            get_quaternion_from_transform_matrix(bounding_box_transform_in_camera)
         )
 
         if self.descriptor.parameters.create_pose_annotation:
@@ -317,17 +333,17 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
             object_hypothesis.annotations.append(pose_annotation)
 
         if self.descriptor.parameters.create_bounding_box_annotation:
-            bb_annotation = BoundingBox3DAnnotation()
-            bb_annotation.source = "StaticObjectDetectorAnnotator"
-            bb_annotation.pose = Pose()
-            bb_annotation.pose.translation = object_translation_in_camera
-            bb_annotation.pose.rotation = object_rotation_in_camera
+            bounding_box_annotation = BoundingBox3DAnnotation()
+            bounding_box_annotation.source = "StaticObjectDetectorAnnotator"
+            bounding_box_annotation.pose = Pose()
+            bounding_box_annotation.pose.translation = object_translation_in_camera
+            bounding_box_annotation.pose.rotation = object_rotation_in_camera
 
-            bb_annotation.x_length = float(bb_size[0])
-            bb_annotation.y_length = float(bb_size[1])
-            bb_annotation.z_length = float(bb_size[2])
+            bounding_box_annotation.x_length = float(bounding_box_size[0])
+            bounding_box_annotation.y_length = float(bounding_box_size[1])
+            bounding_box_annotation.z_length = float(bounding_box_size[2])
 
-            object_hypothesis.annotations.append(bb_annotation)
+            object_hypothesis.annotations.append(bounding_box_annotation)
 
         StaticObjectDetectorAnnotator.add_classification_annotation(
             object_hypothesis=object_hypothesis, class_name=self._body_name(body)
@@ -429,13 +445,13 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
         resized_color = get_scaled_color_image_for_depth_image(
             self.get_cas(), self.color
         )
-        color2depth_ratio = self.get_cas().color2depth_ratio
+        color_to_depth_ratio = self.get_cas().color2depth_ratio
         pointcloud_camera_model = (
             self.get_cas()
             .require_camera_observation()
             .effective_camera_model.scaled(
-                scale_x=color2depth_ratio[0],
-                scale_y=color2depth_ratio[1],
+                scale_x=color_to_depth_ratio[0],
+                scale_y=color_to_depth_ratio[1],
             )
         )
         self.camera_intrinsics = Open3DCameraModelAdapter.to_intrinsic(
@@ -469,21 +485,24 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
         #
         # Create visualization Output
         #
-        visualization_img = copy.deepcopy(self.color)
+        visualization_image = copy.deepcopy(self.color)
 
-        for oh in object_hypotheses:
-            if not isinstance(oh, ObjectHypothesis):
+        for object_hypothesis in object_hypotheses:
+            if not isinstance(object_hypothesis, ObjectHypothesis):
                 raise InvalidAnalysisData(
-                    expected_type=ObjectHypothesis, actual_type=type(oh)
+                    expected_type=ObjectHypothesis, actual_type=type(object_hypothesis)
                 )
-            oh_roi = oh.roi.roi
-            upper_left = (oh_roi.pos.x, oh_roi.pos.y)
-            upper_left_text = (oh_roi.pos.x, oh_roi.pos.y - 5)
+            object_hypothesis_roi = object_hypothesis.roi.roi
+            upper_left = (object_hypothesis_roi.pos.x, object_hypothesis_roi.pos.y)
+            upper_left_text = (
+                object_hypothesis_roi.pos.x,
+                object_hypothesis_roi.pos.y - 5,
+            )
 
             font = cv2.FONT_HERSHEY_COMPLEX
-            visualization_img = cv2.putText(
-                visualization_img,
-                f"ROI-{oh.id}({len(oh.points.points)})",
+            visualization_image = cv2.putText(
+                visualization_image,
+                f"ROI-{object_hypothesis.id}({len(object_hypothesis.points.points)})",
                 upper_left_text,
                 font,
                 0.5,
@@ -491,17 +510,20 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
                 1,
                 2,
             )
-            visualization_img = cv2.rectangle(
-                visualization_img,
+            visualization_image = cv2.rectangle(
+                visualization_image,
                 upper_left,
-                (oh_roi.pos.x + oh_roi.width, oh_roi.pos.y + oh_roi.height),
+                (
+                    object_hypothesis_roi.pos.x + object_hypothesis_roi.width,
+                    object_hypothesis_roi.pos.y + object_hypothesis_roi.height,
+                ),
                 (0, 0, 255),
                 2,
             )
 
-            self.get_annotator_output_struct().set_geometries(oh.points)
+            self.get_annotator_output_struct().set_geometries(object_hypothesis.points)
 
-        self.get_annotator_output_struct().set_image(visualization_img)
+        self.get_annotator_output_struct().set_image(visualization_image)
 
         end_timer = default_timer()
         self.feedback_message = f"Processing took {(end_timer - start_timer):.4f}s"
@@ -536,10 +558,10 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
         :return: 4-dim list with Quaternion
         """
         if self.descriptor.parameters.pose_use_euler_angles:
-            rot_matrix = get_rotation_matrix_from_euler_angles(
+            rotation_matrix = get_rotation_matrix_from_euler_angles(
                 rotation_x, rotation_y, rotation_z
             )
-            rotation_list = list(get_quaternion_from_rotation_matrix(rot_matrix))
+            rotation_list = list(get_quaternion_from_rotation_matrix(rotation_matrix))
         else:
             # Interpret values directly as a quaternion
             rotation_list = [rotation_x, rotation_y, rotation_z, rotation_w]
@@ -549,21 +571,28 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
         self, color_rgb: npt.NDArray
     ) -> o3d.geometry.PointCloud:
         mask = np.zeros_like(self.depth, dtype=np.uint8)
-        x1 = self.descriptor.parameters.bounding_box_x
-        x2 = (
+        bounding_box_left = self.descriptor.parameters.bounding_box_x
+        bounding_box_right = (
             self.descriptor.parameters.bounding_box_x
             + self.descriptor.parameters.bounding_box_width
         )
-        y1 = self.descriptor.parameters.bounding_box_y
-        y2 = (
+        bounding_box_top = self.descriptor.parameters.bounding_box_y
+        bounding_box_bottom = (
             self.descriptor.parameters.bounding_box_y
             + self.descriptor.parameters.bounding_box_height
         )
-        # Respect possible color2depth scaling also for BoundingBox coordinates
-        color2depth_ratio = self.get_cas().color2depth_ratio
-        sx1, sy1 = get_scale_coordinates(color2depth_ratio, (x1, y1))
-        sx2, sy2 = get_scale_coordinates(color2depth_ratio, (x2, y2))
-        mask[int(sy1) : int(sy2), int(sx1) : int(sx2)] = 255
+        # Scale bounding box coordinates from the color image to the depth image.
+        color_to_depth_ratio = self.get_cas().color2depth_ratio
+        scaled_bounding_box_left, scaled_bounding_box_top = get_scale_coordinates(
+            color_to_depth_ratio, (bounding_box_left, bounding_box_top)
+        )
+        scaled_bounding_box_right, scaled_bounding_box_bottom = get_scale_coordinates(
+            color_to_depth_ratio, (bounding_box_right, bounding_box_bottom)
+        )
+        mask[
+            int(scaled_bounding_box_top) : int(scaled_bounding_box_bottom),
+            int(scaled_bounding_box_left) : int(scaled_bounding_box_right),
+        ] = 255
         cloud = get_cloud_from_rgb_depth_and_mask(
             color_rgb, self.depth, mask, self.camera_intrinsics, mask_true_val=255
         )

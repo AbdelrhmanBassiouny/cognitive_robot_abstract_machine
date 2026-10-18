@@ -253,20 +253,10 @@ class BaseAnnotator(Behaviour):
         annotator_output_pipeline_map_buffer = blackboard.get(
             "annotator_output_pipeline_map_buffer"
         )
-        if not isinstance(
-            annotator_output_pipeline_map_buffer, AnnotatorOutputPerPipelineMap
-        ):
-            raise InvalidAnalysisData(
-                expected_type=AnnotatorOutputPerPipelineMap,
-                actual_type=type(annotator_output_pipeline_map_buffer),
-            )
 
         pipeline = self.get_parent_pipeline()
         annotator_outputs = annotator_output_pipeline_map_buffer.map[pipeline.name]
-        if not isinstance(annotator_outputs, AnnotatorOutputs):
-            raise InvalidAnalysisData(
-                expected_type=AnnotatorOutputs, actual_type=type(annotator_outputs)
-            )
+
         return annotator_outputs
 
     def get_annotator_output_struct(

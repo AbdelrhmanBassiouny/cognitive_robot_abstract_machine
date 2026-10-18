@@ -92,20 +92,20 @@ def transform_obb_relative_to_obb_center(
     return transformed_obb
 
 
-def get_obb_from_size_and_transform(
-    bb_size: npt.NDArray, transform_matrix: npt.NDArray
+def create_oriented_bounding_box(
+    bounding_box_extent: npt.NDArray, transform_matrix: npt.NDArray
 ) -> o3d.geometry.OrientedBoundingBox:
     """
     Create an oriented bounding box from size and transform.
 
-    :param bb_size: Numpy array with 3 elements for BoundingBox size in X,Y,Z
+    :param bounding_box_extent: Side lengths along the box's local axes
     :param transform_matrix: 4x4 numpy array
     :return: Oriented bounding box
     """
     return o3d.geometry.OrientedBoundingBox(
         center=get_translation_from_transform_matrix(transform_matrix),
         R=get_rotation_from_transform_matrix(transform_matrix),
-        extent=bb_size,
+        extent=bounding_box_extent,
     )
 
 

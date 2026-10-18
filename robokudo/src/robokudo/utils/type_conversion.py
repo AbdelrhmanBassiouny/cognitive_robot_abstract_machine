@@ -23,7 +23,7 @@ from std_msgs.msg import Header
 from typing_extensions import TYPE_CHECKING
 
 from robokudo.utils.cv_bridge_workaround import CVBridgeWorkaround
-from robokudo.utils.o3d_helper import get_obb_from_size_and_transform
+from robokudo.utils.o3d_helper import create_oriented_bounding_box
 from robokudo.utils.transform import get_transform_matrix, get_rotation_matrix_from_q
 
 if TYPE_CHECKING:
@@ -177,7 +177,7 @@ def get_o3d_obb_from_bounding_box_annotation(
     transform_matrix = get_transform_matrix_from_pose_annotation(
         bounding_box_annotation.pose
     )
-    return get_obb_from_size_and_transform(bb_size, transform_matrix)
+    return create_oriented_bounding_box(bb_size, transform_matrix)
 
 
 def convert_ros_to_cv_image(ros_image: Image) -> npt.NDArray:
