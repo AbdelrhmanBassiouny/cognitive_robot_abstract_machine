@@ -82,7 +82,7 @@ class CameraInterface(object):
     """
 
     @classproperty
-    def STANDALONE_MOUNT_PREFIX(cls) -> str:
+    def standalone_mount_prefix(cls) -> str:
         """
         Connection-name prefix reserved for camera bodies created by RoboKudo.
         """
@@ -198,7 +198,7 @@ class CameraInterface(object):
         Identify the adjustable mount created for one standalone camera.
         """
         return PrefixedName(
-            name=f"{CameraInterface.STANDALONE_MOUNT_PREFIX}{camera_body.id}"
+            name=f"{CameraInterface.standalone_mount_prefix}{camera_body.id}"
         )
 
     def static_world_T_camera_if_configured(
