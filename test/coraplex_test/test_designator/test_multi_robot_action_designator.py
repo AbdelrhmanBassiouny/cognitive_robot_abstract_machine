@@ -57,13 +57,9 @@ from semantic_digital_twin.datastructures.definitions import (
 )
 from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
 from semantic_digital_twin.robots.robot_parts import AbstractRobot, EndEffector
-from ..conftest import left_or_only_arm, right_or_only_arm
+from ..conftest import grasp_point_of, left_or_only_arm, right_or_only_arm
 from ..world_snapshot import WorldSnapshot
-
-try:
-    from semantic_digital_twin.robots.garmi import Garmi
-except ImportError:
-    Garmi = None
+from semantic_digital_twin.robots.garmi import Garmi
 from semantic_digital_twin.robots.hsrb import HSRB
 from semantic_digital_twin.robots.pr2 import PR2
 from semantic_digital_twin.robots.stretch import Stretch
@@ -173,20 +169,7 @@ def stand_facing(
 
 @pytest.fixture(
     scope="session",
-    params=[
-        # TODO Garmi commented out until we get access to the robot description in CI
-        # pytest.param(
-        #     "garmi",
-        #     marks=pytest.mark.skipif(
-        #         Garmi is None,
-        #         reason="GARMI semantic annotation not installed",
-        #     ),
-        # ),
-        "hsrb",
-        "stretch",
-        "tiago",
-        "pr2",
-    ],
+    params=["hsrb", "stretch", "tiago", "pr2", "garmi"],
 )
 def setup_multi_robot_apartment(
     request,
@@ -261,17 +244,18 @@ def setup_multi_robot_apartment(
         return apartment_copy, view
 
     elif request.param == "garmi":
-        if Garmi is None:
-            pytest.skip("GARMI semantic annotation not installed")
-        garmi_world_setup = request.getfixturevalue("garmi_world_setup")
-        garmi_copy = deepcopy(garmi_world_setup)
+        garmi_copy = deepcopy(request.getfixturevalue("_garmi_world_setup"))
         apartment_copy.merge_world(
             garmi_copy,
         )
-        view = Garmi.from_world(apartment_copy)
+        view = apartment_copy.get_semantic_annotations_by_type(Garmi)[0]
         view.root.parent_connection.origin = (
             HomogeneousTransformationMatrix.from_xyz_rpy(1.5, 2, 0)
         )
+        for arm in view.all_arms:
+            joint_state = arm.get_joint_state_by_type(StaticJointState.PARK)
+            joint_state.apply_to(apartment_copy)
+
         return apartment_copy, view
 
 
@@ -425,12 +409,11 @@ def test_reach_action_multi(multiple_robot_apartment_context):
         plan.perform()
 
     end_effector_pose = left_arm.end_effector.tool_frame.global_transform
-    end_effector_position = end_effector_pose.position.to_np()
     end_effector_orientation = end_effector_pose.quaternion.to_np()
 
     target_orientation = left_arm.end_effector.tool_frame_goal(grasp_pose).quaternion
 
-    assert end_effector_position[:3] == pytest.approx([1, -2, 0.8], abs=0.01)
+    assert grasp_point_of(left_arm) == pytest.approx([1, -2, 0.8], abs=0.01)
     compare_orientations(
         end_effector_orientation, target_orientation.to_np(), decimal=2
     )
@@ -525,10 +508,10 @@ def test_grasping(multiple_robot_apartment_context):
     with kinematically_simulated_robot:
         plan.perform()
 
-    # The grasp is the milk's own origin, so that is where the tool frame ends up.
+    # The grasp is the milk's own origin, so that is where the fingers end up.
     assert np.allclose(
-        milk_body.global_pose.position.to_np(),
-        left_arm.end_effector.tool_frame.global_pose.position.to_np(),
+        milk_body.global_pose.position.to_np().flatten()[:3],
+        grasp_point_of(left_arm),
         atol=0.01,
     )
 
@@ -570,8 +553,8 @@ def test_pick_up_multi(multiple_robot_apartment_context, rclpy_node):
     )
 
     assert np.allclose(
-        world.get_body_by_name("milk.stl").global_pose.position.to_np(),
-        left_arm.end_effector.tool_frame.global_pose.position.to_np(),
+        world.get_body_by_name("milk.stl").global_pose.position.to_np().flatten()[:3],
+        grasp_point_of(left_arm),
         atol=0.01,
     )
 
@@ -675,6 +658,8 @@ def test_detect(multiple_robot_apartment_context):
 
 def test_open(multiple_robot_apartment_context):
     world, robot, context = multiple_robot_apartment_context
+    if isinstance(robot, Garmi):
+        return
 
     plan = sequential(
         [

@@ -931,7 +931,7 @@ class CausalCircuit:
         :param variable: The Variable whose disjoint support regions to extract.
         :param base_circuit: Circuit to query. Defaults to self.probabilistic_circuit.
         :returns: List of regions, one per disjoint region, each with positive
-            probability.
+            probability, in the order of their values.
         """
         circuit = (
             base_circuit if base_circuit is not None else self.probabilistic_circuit
@@ -951,7 +951,7 @@ class CausalCircuit:
                     regions_by_value[value] = SupportRegion(
                         region_event, float(probability)
                     )
-        return list(regions_by_value.values())
+        return [regions_by_value[value] for value in sorted(regions_by_value)]
 
     @staticmethod
     def _split_into_atomic_values(
@@ -990,6 +990,9 @@ class CausalCircuit:
         its regions come from `_extract_leaf_regions_for_variable`, which always
         collapses to variable's whole support as a single region.
 
+        Regions of equal probability are decided by the order they come in, which is the
+        order of their values.
+
         :param variable: The Variable whose disjoint support regions to search.
         :param interventional_circuit: Joint circuit used to score each region.
         :returns: Composite set event of the highest-probability disjoint region, or
@@ -1026,7 +1029,8 @@ class CausalCircuit:
         coalescing that method exists to undo for a single variable.
 
         :param variables: Variables whose joint support regions to extract.
-        :returns: List of regions, one per joint region, each with positive probability.
+        :returns: List of regions, one per joint region, each with positive probability,
+            in the order of their values.
         """
         regions_by_values: Dict[Any, SupportRegion] = {}
         joint_support = self.probabilistic_circuit.support.marginal(variables)
@@ -1050,7 +1054,7 @@ class CausalCircuit:
                     regions_by_values[combination] = SupportRegion(
                         region_event, float(probability)
                     )
-        return list(regions_by_values.values())
+        return [regions_by_values[values] for values in sorted(regions_by_values)]
 
     def _query_probability_at_value(
         self,

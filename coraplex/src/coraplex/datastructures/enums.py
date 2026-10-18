@@ -17,7 +17,7 @@ class ReachFraction(float, Enum):
     How far the robot stands off what it reaches for, as a fraction of the arm's length.
     """
 
-    GRASPING = 0.5
+    GRASPING = 0.6
     """
     Reaching something that stays where it is.
     """
@@ -144,6 +144,14 @@ class ExecutionType(Enum):
     Not performed at all: the motion state chart is built but never run, which leaves a
     plan to be inspected rather than carried out.
     """
+
+    @property
+    def objects_push_back(self) -> bool:
+        """
+        Whether a body the robot touches resists it, so that contact rather than the
+        world model decides what is held.
+        """
+        return self in (ExecutionType.REAL, ExecutionType.PHYSICALLY_SIMULATED)
 
 
 class VisualizationBackend(StrEnum):
