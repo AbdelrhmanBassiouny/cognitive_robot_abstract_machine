@@ -4,9 +4,9 @@ Plan
 - Package (format, agents-md, generic AGENTS.md), hooks, CI, PyPI publish.
 
 Done
-- Pushed through 6f59655261: review round 1, incl. fork/upstream rules made generic.
+- Pushed through 46d05e0f62: review rounds 1-2 (maintainers = authors who are collaborators).
 
 Next
-- Open threads: authors/maintainers (confirm @Tigul=Jonas Dech, @ichumuh=Simon Stelter).
+- Open threads: confirm @Tigul=Jonas Dech, @ichumuh=Simon Stelter; which of Jeroen Schäfer, David Prüser, AbdElRahmanFarhan, rinaalo are cram2 collaborators.
 - Merge upstream publishes 0.1.0; fork-main publish job fails, expected.
 - basstler PR replacing its format_docstrings.py and AGENTS.md (after release).
