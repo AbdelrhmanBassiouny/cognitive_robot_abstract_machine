@@ -82,4 +82,6 @@ One-time set-up: on PyPI, add a trusted publisher for the project
 release, as a pending publisher).
 
 To release, raise `version` in `cram_development_tools/pyproject.toml`, together with the
-`additional_dependencies` pins in this README, and merge the change into `main`.
+`additional_dependencies` pins in this README, and merge the change into `main`. A pull
+request that changes the package's source or metadata without raising its version fails
+CI, so no change is merged that would never be released.
