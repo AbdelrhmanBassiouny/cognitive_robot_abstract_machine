@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from typing_extensions import List
 
 from coraplex.plans.context_extensions import RobotAccess, StatementGrounding
 from coraplex.plans.executors import (
@@ -24,7 +23,10 @@ from semantic_digital_twin.world import World
 from .sampling import SAMPLING_SEED
 
 
-def robot_extensions(robot: AbstractRobot) -> List[ContextExtension]:
+# %% building executors
+
+
+def robot_extensions(robot: AbstractRobot) -> list[ContextExtension]:
     """
     :param robot: The robot performing the plans.
     :return: The context extensions a plan of `robot` reads, sampling with
@@ -34,8 +36,8 @@ def robot_extensions(robot: AbstractRobot) -> List[ContextExtension]:
 
 
 def with_grounding(
-    extensions: List[ContextExtension], **changes
-) -> List[ContextExtension]:
+    extensions: list[ContextExtension], **changes
+) -> list[ContextExtension]:
     """
     :param extensions: The context extensions of a plan.
     :param changes: The fields of its
@@ -53,7 +55,7 @@ def with_grounding(
 
 
 def simulated_executor(
-    extensions: List[ContextExtension], **options
+    extensions: list[ContextExtension], **options
 ) -> SimulatedPlanExecutor:
     """
     :param extensions: The context extensions of the plan, holding a
@@ -67,7 +69,7 @@ def simulated_executor(
 
 
 def robot_executor(
-    extensions: List[ContextExtension], **options
+    extensions: list[ContextExtension], **options
 ) -> RealRobotPlanExecutor:
     """
     :param extensions: The context extensions of the plan, holding a
@@ -80,7 +82,10 @@ def robot_executor(
     )
 
 
-def robot_of(extensions: List[ContextExtension]) -> AbstractRobot:
+# %% reading context extensions
+
+
+def robot_of(extensions: list[ContextExtension]) -> AbstractRobot:
     """
     :param extensions: The context extensions of a plan, holding a
         :class:`~coraplex.plans.context_extensions.RobotAccess`.
@@ -93,7 +98,7 @@ def robot_of(extensions: List[ContextExtension]) -> AbstractRobot:
     )
 
 
-def world_of(extensions: List[ContextExtension]) -> World:
+def world_of(extensions: list[ContextExtension]) -> World:
     """
     :param extensions: The context extensions of a plan, holding a
         :class:`~coraplex.plans.context_extensions.RobotAccess`.
@@ -102,7 +107,7 @@ def world_of(extensions: List[ContextExtension]) -> World:
     return robot_of(extensions)._world
 
 
-def context_of(extensions: List[ContextExtension]) -> StatechartContext:
+def context_of(extensions: list[ContextExtension]) -> StatechartContext:
     """
     :param extensions: The context extensions of a plan, holding a
         :class:`~coraplex.plans.context_extensions.RobotAccess`.
@@ -113,6 +118,9 @@ def context_of(extensions: List[ContextExtension]) -> StatechartContext:
     for extension in extensions:
         context.add_extension(extension)
     return context
+
+
+# %% running plans
 
 
 def statechart_of(executor: PlanExecutor, *plan_nodes: StatechartNode) -> Statechart:
@@ -127,7 +135,7 @@ def statechart_of(executor: PlanExecutor, *plan_nodes: StatechartNode) -> Statec
     return statechart
 
 
-def expand(plan: StatechartNode, extensions: List[ContextExtension]) -> StatechartNode:
+def expand(plan: StatechartNode, extensions: list[ContextExtension]) -> StatechartNode:
     """
     Expand `plan` in a statechart of its own, without running it, so a test can read the
     nodes its steps expand into.
@@ -141,7 +149,7 @@ def expand(plan: StatechartNode, extensions: List[ContextExtension]) -> Statecha
 
 
 def run_plan(
-    plan: StatechartNode, extensions: List[ContextExtension], **options
+    plan: StatechartNode, extensions: list[ContextExtension], **options
 ) -> SimulatedPlanExecutor:
     """
     Run `plan` simulated until it succeeded.

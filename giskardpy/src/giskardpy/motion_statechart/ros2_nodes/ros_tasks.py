@@ -22,7 +22,7 @@ from typing_extensions import Type, TypeVar, Generic
 import krrood.symbolic_math.symbolic_math as sm
 from krrood.ormatic.utils import classproperty
 from cramph.node import EndedByOwner
-from cramph.context import StatechartContext
+from cramph.context import ContextExtension, StatechartContext
 from cramph.data_types import ObservationStateValues
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from cramph.node import NodeArtifacts
@@ -80,9 +80,9 @@ class ActionServerTask(
         return super().required_context_extensions + (RosContextExtension,)
 
     @abstractmethod
-    def build_msg(self, context: StatechartContext):
+    def build_msg(self, context: StatechartContext) -> None:
         """
-        Build the action server message and returns it.
+        Build the goal message this node sends to the action server.
         """
         ...
 
@@ -99,7 +99,7 @@ class ActionServerTask(
         logger.info(f"Waiting for action server {self.action_topic}")
         self._action_client.wait_for_server()
 
-    def on_start(self, context: StatechartContext):
+    def on_start(self, context: StatechartContext) -> None:
         """
         Creates a goal and sends it to the action server asynchronously.
         """
@@ -151,7 +151,7 @@ class NavigateActionServerTask(
     Base link of the robot, used for estimating the distance to the goal.
     """
 
-    def build_msg(self, context: StatechartContext):
+    def build_msg(self, context: StatechartContext) -> None:
         root_p_goal = context.world.transform(
             target_frame=context.world.root, spatial_object=self.target_pose
         )

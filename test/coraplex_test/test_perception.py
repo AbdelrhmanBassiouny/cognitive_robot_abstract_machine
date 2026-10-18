@@ -103,7 +103,7 @@ class SpecializedMilk(Milk):
 )
 def test_each_kind_of_perception_source_answers_through_its_own_interface(
     source_kind, expected_source
-):
+) -> None:
     """
     The plan does not change between sim and real; the kind of source alone decides
     where detections come from.
@@ -778,7 +778,7 @@ def run_perception_task(task: PerceptionTask, context: StatechartContext) -> Non
 
 def test_perception_task_is_a_plain_statechart_node(
     pr2_apartment_context, whole_scene_region
-):
+) -> None:
     """
     Answering a query moves nothing, so the node adds no motion constraints and needs no
     motion control to be built.
@@ -791,7 +791,9 @@ def test_perception_task_is_a_plain_statechart_node(
     assert not isinstance(task, MotionStatechartNode)
 
 
-def test_perception_task_needs_ros_access(pr2_apartment_context, whole_scene_region):
+def test_perception_task_needs_ros_access(
+    pr2_apartment_context, whole_scene_region
+) -> None:
     world, view, extensions = pr2_apartment_context
     query = PerceptionQuery(Milk, whole_scene_region, view, world)
     statechart = Statechart(context=StatechartContext(world=world))
@@ -827,7 +829,7 @@ def test_perception_task_moves_the_detected_body(
 
 def test_a_source_that_sees_nothing_leaves_the_task_observing_false(
     pr2_apartment_context, empty_region, rclpy_node
-):
+) -> None:
     """
     Seeing nothing is an answer the plan can act on, so it has to reach the chart as a
     failed observation rather than as a raise that unwinds it.
@@ -979,7 +981,7 @@ def test_detect_action_reads_the_world_model_when_the_robot_is_physically_simula
     assert task.answered_by is PerceptionSource.WORLD_MODEL
 
 
-def test_detect_action_asks_robokudo_on_the_real_robot(pr2_apartment_context):
+def test_detect_action_asks_robokudo_on_the_real_robot(pr2_apartment_context) -> None:
     """
     Only the real robot does not know what is in front of it, so only it asks its
     perception pipeline.
@@ -1066,7 +1068,7 @@ def test_detection_in_a_chart_corrects_a_reach_planned_before_it(
 
 def test_a_detection_that_sees_nothing_lets_the_next_alternative_run(
     pr2_apartment_context,
-):
+) -> None:
     """
     What a search is built on: a look that found nothing has to leave the plan able to
     run the next alternative, so the object is still found by the one that does see it.
@@ -1091,7 +1093,7 @@ def test_a_detection_that_sees_nothing_lets_the_next_alternative_run(
 
 def test_a_detection_looks_only_inside_the_box_it_is_given(
     pr2_apartment_context, empty_region
-):
+) -> None:
     """
     A box handed to the detection replaces the robot's default view of the scene, so the
     milk the robot sees otherwise is not found outside it.
@@ -1111,7 +1113,7 @@ def test_a_detection_looks_only_inside_the_box_it_is_given(
 
 def test_a_detection_without_a_box_looks_as_far_to_every_side_of_the_robot(
     pr2_apartment_context,
-):
+) -> None:
     """
     A camera may face any way from the base, so what it sees beside or behind the robot
     is not cut off by the box a detection looks in by default.
@@ -1135,7 +1137,7 @@ def test_a_detection_without_a_box_looks_as_far_to_every_side_of_the_robot(
         )
 
 
-def test_a_detection_needs_an_object_type_or_a_box(pr2_apartment_context):
+def test_a_detection_needs_an_object_type_or_a_box(pr2_apartment_context) -> None:
     """
     Without either, nothing says what the detection is looking for.
     """

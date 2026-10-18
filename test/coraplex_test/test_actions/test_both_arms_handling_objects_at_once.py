@@ -157,7 +157,7 @@ def cup_for_each_arm(pr2_world_copy: World) -> CupForEachArm:
 
 def test_a_gripper_closes_at_its_grasp_although_the_other_arm_is_moving(
     cup_for_each_arm: CupForEachArm,
-):
+) -> None:
     run_plan(
         Parallel(nodes=cup_for_each_arm.pick_ups), cup_for_each_arm.context_extensions
     )
@@ -176,7 +176,7 @@ def test_a_gripper_closes_at_its_grasp_although_the_other_arm_is_moving(
 
 def test_a_gripper_opens_at_its_place_target_although_the_other_arm_is_moving(
     cup_for_each_arm: CupForEachArm,
-):
+) -> None:
     # One after the other, so that both cups sit in their grippers at their grasps.
     run_plan(
         Sequence(nodes=cup_for_each_arm.pick_ups), cup_for_each_arm.context_extensions

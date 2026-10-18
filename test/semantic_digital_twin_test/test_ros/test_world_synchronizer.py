@@ -9,7 +9,7 @@ import uuid
 from dataclasses import dataclass, field
 from multiprocessing.synchronize import RLock
 from time import sleep
-from typing import Callable, Dict, Optional, Set, Tuple, List
+from typing_extensions import Dict, Optional, Set, Tuple, List
 from uuid import uuid4
 
 import numpy as np
@@ -3156,7 +3156,9 @@ def add_prismatic_connection(world: World, name: str) -> PrismaticConnection:
     return connection
 
 
-def move_connection(world: World, connection: PrismaticConnection, position: float):
+def move_connection(
+    world: World, connection: PrismaticConnection, position: float
+) -> None:
     """
     Move `connection` of `world` and announce the change.
     """
@@ -3164,7 +3166,7 @@ def move_connection(world: World, connection: PrismaticConnection, position: flo
     world.notify_state_change()
 
 
-def test_updates_published_while_a_receiver_is_busy_are_not_lost(rclpy_node):
+def test_updates_published_while_a_receiver_is_busy_are_not_lost(rclpy_node) -> None:
     """
     Only what changed is published, so an update that is lost while the receiver is busy
     applying another one leaves a degree of freedom that does not move again stale for
@@ -3210,7 +3212,7 @@ class LoggerRecordingWarnings:
     Stands in for the logger of a ros node, recording every warning it is given.
     """
 
-    warnings: List[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
     """
     Every warning given, in order.
     """
@@ -3266,7 +3268,7 @@ def receiving(rclpy_node, monkeypatch) -> ReceivingSynchronizer:
 
 def test_a_receiver_that_lost_updates_warns_about_it(
     receiving: ReceivingSynchronizer,
-):
+) -> None:
     """
     Its world may differ from the publisher's in what the lost updates carried.
     """
@@ -3277,7 +3279,9 @@ def test_a_receiver_that_lost_updates_warns_about_it(
     assert len(receiving.logger.warnings) == 1
 
 
-def test_updates_received_in_sequence_are_not_lost(receiving: ReceivingSynchronizer):
+def test_updates_received_in_sequence_are_not_lost(
+    receiving: ReceivingSynchronizer,
+) -> None:
     publisher = MetaData(node_name="publisher", process_id=1)
     receiving.receive(publisher, 1)
     receiving.receive(publisher, 2)
@@ -3287,7 +3291,7 @@ def test_updates_received_in_sequence_are_not_lost(receiving: ReceivingSynchroni
 
 def test_a_publisher_heard_from_for_the_first_time_has_lost_nothing(
     receiving: ReceivingSynchronizer,
-):
+) -> None:
     """
     A receiver that joins late starts somewhere in the middle of the stream, having
     fetched what was published before.

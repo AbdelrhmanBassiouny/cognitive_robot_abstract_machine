@@ -62,7 +62,7 @@ def node_named(statechart: Statechart, name: str) -> StatechartNode:
 
 def test_layers_hold_the_nodes_at_each_depth_in_order(
     two_tree_statechart: Statechart,
-):
+) -> None:
     names = [[node.name for node in layer] for layer in two_tree_statechart.layers]
 
     assert names == [
@@ -72,7 +72,9 @@ def test_layers_hold_the_nodes_at_each_depth_in_order(
     ]
 
 
-def test_an_empty_statechart_has_no_layers(statechart_executor: StatechartExecutor):
+def test_an_empty_statechart_has_no_layers(
+    statechart_executor: StatechartExecutor,
+) -> None:
     assert Statechart(context=statechart_executor.context).layers == []
 
 
@@ -81,7 +83,7 @@ def test_an_empty_statechart_has_no_layers(statechart_executor: StatechartExecut
 
 def test_the_drawing_connects_each_node_to_the_nodes_it_runs(
     two_tree_statechart: Statechart,
-):
+) -> None:
     visualizer = StatechartGraphVisualizer(two_tree_statechart).create_visualizer(
         backend=GraphVisualizerBackend.CYTOSCAPE, layout=GraphLayout.LAYERED
     )
@@ -96,7 +98,7 @@ def test_the_drawing_connects_each_node_to_the_nodes_it_runs(
 
 def test_a_node_is_drawn_labelled_by_its_unique_name(
     two_tree_statechart: Statechart,
-):
+) -> None:
     middle = node_named(two_tree_statechart, "middle")
     visualizer = StatechartGraphVisualizer(two_tree_statechart).create_visualizer(
         backend=GraphVisualizerBackend.CYTOSCAPE, layout=GraphLayout.LAYERED
@@ -107,7 +109,7 @@ def test_a_node_is_drawn_labelled_by_its_unique_name(
 
 def test_a_node_is_drawn_in_the_color_of_its_current_state(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     node = NodeSucceedingOnObservingTrue(
         name="node", observation=ObservationStateValues.TRUE

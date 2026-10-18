@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing_extensions import List
 
 import krrood.symbolic_math.symbolic_math as sm
 from cramph.context import StatechartContext
@@ -107,7 +106,7 @@ class JointVelocityLimit(Task):
     for each given joint, not by tuning a reference/normalization velocity.
     """
 
-    connections: List[ActiveConnection1DOF]
+    connections: list[ActiveConnection1DOF]
     """
     The joints whose velocity is constrained.
     """

@@ -8,7 +8,6 @@ from __future__ import annotations
 from abc import ABC
 from dataclasses import dataclass
 
-from typing_extensions import List
 
 from coraplex.datastructures.enums import InsertionPosition
 from coraplex.exceptions import ClosingGoalNotFound, ToolPathNotFound
@@ -67,7 +66,7 @@ class KeepTheTorsoUprightWhileUsingATool(InsertionTransformation[ToolMotionActio
                 return node
         raise ToolPathNotFound(plan_node)
 
-    def nodes_to_insert(self, plan_node: ToolMotionAction) -> List[StatechartNode]:
+    def nodes_to_insert(self, plan_node: ToolMotionAction) -> list[StatechartNode]:
         root = plan_node.controlled_root
         torso_tip = plan_node.robot.mobile_base.torso.tip
         return [

@@ -152,7 +152,7 @@ class Handle(HasGraspCandidates):
             name, handle_event, connection_specification=connection_specification
         )
 
-    def grasp_candidates(self) -> List[GraspCandidate]:
+    def grasp_candidates(self) -> list[GraspCandidate]:
         """
         The grasps at the centre of the handle's bar that close around it, one
         approaching from each of the four sides around it.

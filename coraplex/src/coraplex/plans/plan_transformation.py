@@ -6,11 +6,7 @@ from dataclasses import dataclass, field
 
 from typing_extensions import (
     Any,
-    Dict,
     Generic,
-    List,
-    Optional,
-    Set,
     Type,
     TypeVar,
 )
@@ -124,7 +120,7 @@ class InsertionTransformation(
         """
 
     @abstractmethod
-    def nodes_to_insert(self, plan_node: MatchedType) -> List[StatechartNode]:
+    def nodes_to_insert(self, plan_node: MatchedType) -> list[StatechartNode]:
         """
         :param plan_node: The node this transformation is applied to
         :return: The nodes to insert, in the order they take.
@@ -172,25 +168,25 @@ class PlanRewriting(ContextExtension):
     rewritten too.
     """
 
-    transformations: List[PlanTransformation] = field(default_factory=list)
+    transformations: list[PlanTransformation] = field(default_factory=list)
     """
     The transformations the nodes are offered to.
     """
 
-    _offered: Set[StatechartNode] = field(default_factory=set, init=False, repr=False)
+    _offered: set[StatechartNode] = field(default_factory=set, init=False, repr=False)
     """
     The nodes offered already, so that rewriting a part of the plan again offers only
     what is new.
     """
 
-    def __deepcopy__(self, memo: Dict[int, Any]) -> PlanRewriting:
+    def __deepcopy__(self, memo: dict[int, Any]) -> PlanRewriting:
         """
         :return: A rewriting by the same transformations that has offered nothing yet,
             since the nodes offered so far belong to the statechart this one rewrites.
         """
         return PlanRewriting(transformations=list(self.transformations))
 
-    def preceded_by(self, transformations: List[PlanTransformation]) -> PlanRewriting:
+    def preceded_by(self, transformations: list[PlanTransformation]) -> PlanRewriting:
         """
         :param transformations: The transformations to offer every node to first.
         :return: A new rewriting by `transformations` and then this one's, which has
@@ -226,7 +222,7 @@ class PlanRewriting(ContextExtension):
             self._offered.add(node)
             self._apply_to(node)
 
-    def _next_node_to_offer(self, root: StatechartNode) -> Optional[StatechartNode]:
+    def _next_node_to_offer(self, root: StatechartNode) -> StatechartNode | None:
         """
         :param root: The part of the plan being rewritten.
         :return: The first node of `root` in the order the plan runs its nodes that has

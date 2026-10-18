@@ -177,7 +177,9 @@ def test_cart_goal_simple(pr2_world_state_reset: World):
     assert np.allclose(fk, tip_goal, atol=cart_goal.translation_threshold)
 
 
-def test_structure_copy_of_a_plain_statechart_keeps_the_motion_node_kinds(mini_world):
+def test_structure_copy_of_a_plain_statechart_keeps_the_motion_node_kinds(
+    mini_world,
+) -> None:
     connection = mini_world.connections[0]
     statechart = Statechart(context=_create_executor(mini_world).context)
     statechart.add_nodes(
@@ -199,7 +201,7 @@ def test_structure_copy_of_a_plain_statechart_keeps_the_motion_node_kinds(mini_w
     assert type(statechart_copy.get_node_by_index(end.index)) is EndMotion
 
 
-def test_nested_sequence_goal_json_round_trip_compilation():
+def test_nested_sequence_goal_json_round_trip_compilation() -> None:
     """
     A statechart with nested goals watched by a progress monitor can be deserialized and
     compiled.
@@ -227,7 +229,7 @@ def test_nested_sequence_goal_json_round_trip_compilation():
 
 def test_an_expanded_differential_drive_goal_reaches_its_pose_after_a_json_round_trip(
     cylinder_bot_diff_world: World,
-):
+) -> None:
     """
     A goal expands when it joins, so what is sent is its expanded steps, whose
     orientations are expressions over the base's forward kinematics.
@@ -256,7 +258,7 @@ def test_an_expanded_differential_drive_goal_reaches_its_pose_after_a_json_round
 
 def test_an_expanded_differential_drive_goal_binds_its_goal_frame_after_a_json_round_trip(
     cylinder_bot_diff_world: World,
-):
+) -> None:
     """
     The second leg is given relative to the base, so it ends where it should only if the
     receiver binds the goal frame when the leg starts, after the first leg moved the

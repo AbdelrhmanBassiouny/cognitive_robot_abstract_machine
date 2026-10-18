@@ -83,7 +83,7 @@ def executor_with_a_statechart(
 def test_an_extension_is_told_that_the_statechart_compiled(
     executor_with_a_statechart: GiskardClientExecutor,
     extension: ExtensionCountingCompilesAndRuns,
-):
+) -> None:
     assert extension.compile_count == 1
 
 
@@ -91,7 +91,7 @@ def test_an_extension_is_told_that_an_aborted_goal_stopped(
     giskard_command_server: ActionServerHandler,
     executor_with_a_statechart: GiskardClientExecutor,
     extension: ExtensionCountingCompilesAndRuns,
-):
+) -> None:
     ServerAnsweringOneGoal(
         action_server=giskard_command_server,
         outcome_unless_canceled=GoalOutcome.ABORTED,

@@ -55,7 +55,7 @@ class DesignatorParameters:
         return {f.name: getattr(self, f.name) for f in self.fields}
 
     @classmethod
-    def get_type_hints(cls) -> Dict[str, Any]:
+    def get_type_hints(cls) -> dict[str, Any]:
         """
         Returns the type hints of the __init__ method of this designator_description
         description.

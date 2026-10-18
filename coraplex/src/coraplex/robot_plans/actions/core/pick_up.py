@@ -3,8 +3,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from typing_extensions import List
-
 
 from coraplex.robot_plans.actions.base import SequentialAction
 from cramph.composites import Parallel
@@ -87,14 +85,14 @@ class ReachAction(
     :class:`PickUpAction` to open before its slower final approach.
     """
 
-    def create_temporary_collision_rules(self) -> List[CollisionRule]:
+    def create_temporary_collision_rules(self) -> list[CollisionRule]:
         """
         :return: An allowance for the gripper to touch the surroundings of the grasp it
             comes down onto.
         """
         return [AllowCollisionForEndEffector(end_effector=self.arm.end_effector)]
 
-    def create_steps(self) -> List[StatechartNode]:
+    def create_steps(self) -> list[StatechartNode]:
         poses = self.grasp_pose_sequence(
             self.grasp.grasp_pose, self.arm.end_effector, self.grasp
         )
@@ -144,7 +142,7 @@ class PickUpAction(
     one.
     """
 
-    def _grasp_steps(self) -> List[StatechartNode]:
+    def _grasp_steps(self) -> list[StatechartNode]:
         """
         A pick-up is a grasp the world is then told about: the object hangs off the tool
         frame afterwards, which is what makes it move with the arm.
@@ -172,7 +170,7 @@ class PickUpAction(
             ),
         ]
 
-    def create_temporary_collision_rules(self) -> List[CollisionRule]:
+    def create_temporary_collision_rules(self) -> list[CollisionRule]:
         """
         :return: An allowance for the gripper to touch the surroundings of its object,
             which it is around from reaching for it until it has lifted it clear, the
@@ -180,7 +178,7 @@ class PickUpAction(
         """
         return [AllowCollisionForEndEffector(end_effector=self.arm.end_effector)]
 
-    def create_steps(self) -> List[StatechartNode]:
+    def create_steps(self) -> list[StatechartNode]:
         lift_to_pose = self.grasp_pose_sequence(
             self.grasp.grasp_pose, self.arm.end_effector, self.grasp
         ).retreat
@@ -217,14 +215,14 @@ class GraspingAction(
     :attr:`~giskardpy.motion_statechart.goals.gripper.MoveGripper.tolerate_stall`).
     """
 
-    def create_temporary_collision_rules(self) -> List[CollisionRule]:
+    def create_temporary_collision_rules(self) -> list[CollisionRule]:
         """
         :return: An allowance for the gripper to touch the surroundings of the grasp it
             reaches and closes on.
         """
         return [AllowCollisionForEndEffector(end_effector=self.arm.end_effector)]
 
-    def create_steps(self) -> List[StatechartNode]:
+    def create_steps(self) -> list[StatechartNode]:
         return [
             ReachAction(
                 grasp=self.grasp,

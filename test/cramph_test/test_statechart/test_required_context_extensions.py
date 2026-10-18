@@ -114,18 +114,20 @@ class CompositeReadingAnExtensionWhileExpanding(SucceedsOnObservingTrue, Composi
 # %% declaring
 
 
-def test_a_node_requires_no_extension_unless_it_declares_one():
+def test_a_node_requires_no_extension_unless_it_declares_one() -> None:
     assert NodeSucceedingOnObservingTrue.required_context_extensions == ()
 
 
-def test_a_node_requires_what_its_base_class_requires():
+def test_a_node_requires_what_its_base_class_requires() -> None:
     assert SpecializedNodeRequiringAnotherExtension.required_context_extensions == (
         ExtensionANodeRequires,
         ExtensionASpecializedNodeRequires,
     )
 
 
-def test_a_composite_node_requires_no_extension_to_expand_unless_it_declares_one():
+def test_a_composite_node_requires_no_extension_to_expand_unless_it_declares_one() -> (
+    None
+):
     assert CompositeRequiringAnExtension.context_extensions_required_to_expand == ()
 
 
@@ -134,7 +136,7 @@ def test_a_composite_node_requires_no_extension_to_expand_unless_it_declares_one
 
 def test_compiling_raises_for_a_node_missing_a_required_extension(
     statechart_context: StatechartContext,
-):
+) -> None:
     statechart = Statechart(context=statechart_context)
     statechart.add_node(
         node := NodeRequiringAnExtension(
@@ -150,7 +152,7 @@ def test_compiling_raises_for_a_node_missing_a_required_extension(
 
 def test_compiling_reports_every_missing_extension_at_once(
     statechart_context: StatechartContext,
-):
+) -> None:
     statechart = Statechart(context=statechart_context)
     statechart.add_node(
         first := NodeRequiringAnExtension(
@@ -174,7 +176,7 @@ def test_compiling_reports_every_missing_extension_at_once(
 
 def test_compiling_succeeds_once_the_required_extension_is_registered(
     statechart_context: StatechartContext,
-):
+) -> None:
     statechart_context.add_extension(ExtensionANodeRequires())
     statechart = Statechart(context=statechart_context)
     statechart.add_node(
@@ -190,7 +192,7 @@ def test_compiling_succeeds_once_the_required_extension_is_registered(
 
 def test_a_node_joining_a_compiled_statechart_is_checked(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(
         NodeSucceedingOnObservingTrue(
@@ -214,7 +216,7 @@ def test_a_node_joining_a_compiled_statechart_is_checked(
 
 def test_a_composite_node_is_checked_before_it_expands(
     statechart_context: StatechartContext,
-):
+) -> None:
     statechart = Statechart(context=statechart_context)
     composite = CompositeRequiringAnExtension(name="composite")
 
@@ -229,7 +231,7 @@ def test_a_composite_node_is_checked_before_it_expands(
 
 def test_a_composite_node_is_checked_for_what_it_reads_while_expanding(
     statechart_context: StatechartContext,
-):
+) -> None:
     statechart = Statechart(context=statechart_context)
     composite = CompositeReadingAnExtensionWhileExpanding(name="composite")
 
@@ -244,7 +246,7 @@ def test_a_composite_node_is_checked_for_what_it_reads_while_expanding(
 
 def test_a_composite_node_expanded_elsewhere_compiles_without_what_it_read_to_expand(
     statechart_context: StatechartContext,
-):
+) -> None:
     context_it_expands_in = StatechartContext(world=statechart_context.world)
     context_it_expands_in.add_extension(ExtensionACompositeReadsWhileExpanding())
     expanded_elsewhere = Statechart(context=context_it_expands_in)

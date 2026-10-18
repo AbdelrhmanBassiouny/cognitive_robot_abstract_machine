@@ -16,7 +16,7 @@ from ...sampling import SAMPLING_SEED
 # %% debug validation
 
 
-def test_debug_requires_a_ros_node(pr2_apartment_context):
+def test_debug_requires_a_ros_node(pr2_apartment_context) -> None:
     """
     Debug output is visualized over ROS, so an executor created in debug mode without a
     node is rejected at creation rather than failing later during execution.
@@ -27,7 +27,7 @@ def test_debug_requires_a_ros_node(pr2_apartment_context):
         SimulatedPlanExecutor(world, context_extensions=extensions, debug=True)
 
 
-def test_debug_raises_the_coraplex_log_level(pr2_apartment_context, rclpy_node):
+def test_debug_raises_the_coraplex_log_level(pr2_apartment_context, rclpy_node) -> None:
     """
     Creating an executor in debug mode lowers the package's log level, so debug messages
     are emitted without the caller touching logging.
@@ -45,7 +45,7 @@ def test_debug_raises_the_coraplex_log_level(pr2_apartment_context, rclpy_node):
         coraplex_logger.setLevel(previous_level)
 
 
-def test_default_executor_logs_at_info(pr2_apartment_context):
+def test_default_executor_logs_at_info(pr2_apartment_context) -> None:
     """
     Without debug mode the package logs at info level.
     """
@@ -64,7 +64,9 @@ def test_default_executor_logs_at_info(pr2_apartment_context):
 # %% the root Cartesian goals are expressed in
 
 
-def test_controlled_root_is_the_robot_when_the_base_stands_still(pr2_apartment_context):
+def test_controlled_root_is_the_robot_when_the_base_stands_still(
+    pr2_apartment_context,
+) -> None:
     """
     A robot that keeps its base still can only move what hangs below its own root, so
     that is what a Cartesian goal is expressed relative to.
@@ -75,7 +77,9 @@ def test_controlled_root_is_the_robot_when_the_base_stands_still(pr2_apartment_c
     assert RobotAccess(robot).controlled_root is robot.root
 
 
-def test_controlled_root_is_the_world_when_the_base_may_drive(pr2_apartment_context):
+def test_controlled_root_is_the_world_when_the_base_may_drive(
+    pr2_apartment_context,
+) -> None:
     """
     A robot that drives its base while it manipulates moves relative to the world, so
     the world root is what a Cartesian goal is expressed relative to.
@@ -93,7 +97,7 @@ def test_controlled_root_is_the_world_when_the_base_may_drive(pr2_apartment_cont
 # %% carrying the extensions over to a copy of the world
 
 
-def test_the_robot_of_a_copied_world_is_its_own_copy(pr2_apartment_context):
+def test_the_robot_of_a_copied_world_is_its_own_copy(pr2_apartment_context) -> None:
     """
     A trial runs a candidate in a copy of the world, where the robot is the copy's.
     """
@@ -125,7 +129,7 @@ class TransformationCountingItsApplications(PlanTransformation[MoveTorsoAction])
 
 def test_a_copied_plan_rewriting_offers_the_nodes_offered_already_again(
     pr2_apartment_context,
-):
+) -> None:
     """
     A trial rewrites its candidate in a statechart of its own, so what the plan's
     rewriting offered already must not keep the copy from offering it again.
@@ -145,7 +149,7 @@ def test_a_copied_plan_rewriting_offers_the_nodes_offered_already_again(
 # %% the seed an action samples its locations with
 
 
-def test_an_action_samples_with_the_seed_of_its_plan(pr2_apartment_context):
+def test_an_action_samples_with_the_seed_of_its_plan(pr2_apartment_context) -> None:
     """
     The locations an action samples, for instance those a plan transformation adds, take
     the plan's seed, so a run repeats.
@@ -174,7 +178,9 @@ The shared fixtures that hand a test the context extensions to run its actions w
 
 
 @pytest.mark.parametrize("world_fixture", WORLD_FIXTURES_WITH_EXTENSIONS)
-def test_a_shared_fixture_fixes_the_samples_its_plans_make(world_fixture, request):
+def test_a_shared_fixture_fixes_the_samples_its_plans_make(
+    world_fixture, request
+) -> None:
     """
     A location samples its candidates from a costmap rather than ranking it, so a test
     handed an unseeded plan would stand somewhere else every run.

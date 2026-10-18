@@ -8,7 +8,6 @@ from typing_extensions import (
     List,
     Dict,
     Optional,
-    Tuple,
     Union,
     TYPE_CHECKING,
 )
@@ -48,7 +47,7 @@ class ConditionDependency:
     The node those conditions read.
     """
 
-    conditions: List[TransitionCondition] = field(default_factory=list)
+    conditions: list[TransitionCondition] = field(default_factory=list)
     """
     The conditions of :attr:`condition_owner` that read :attr:`observed_node`.
     """
@@ -121,7 +120,7 @@ class StatechartGraphviz:
     Whether nodes are drawn without their conditions and with tighter spacing.
     """
 
-    _cluster_map: Dict[StatechartNode, pydot.Cluster] = field(
+    _cluster_map: dict[StatechartNode, pydot.Cluster] = field(
         init=False, default_factory=dict
     )
     """
@@ -215,7 +214,9 @@ class StatechartGraphviz:
             f"</TR>"
         )
 
-    def _build_condition_block(self, node: StatechartNode, line_color="black") -> str:
+    def _build_condition_block(
+        self, node: StatechartNode, line_color: str = "black"
+    ) -> str:
         """
         Builds the label rows listing the transition conditions of a node.
 
@@ -440,8 +441,8 @@ class StatechartGraphviz:
 
     def _add_nodes(
         self,
-        parent_cluster: Union[pydot.Graph, pydot.Cluster],
-        nodes: List[StatechartNode],
+        parent_cluster: pydot.Graph | pydot.Cluster,
+        nodes: list[StatechartNode],
     ):
         """
         Draws the given nodes, recursing into the children of every goal that does not
@@ -512,8 +513,8 @@ class StatechartGraphviz:
             of the owner's conditions read it, leaving out those with an endpoint that is
             not drawn or that sits in another cluster.
         """
-        dependencies: Dict[
-            Tuple[StatechartNode, StatechartNode], ConditionDependency
+        dependencies: dict[
+            tuple[StatechartNode, StatechartNode], ConditionDependency
         ] = {}
         condition: TransitionCondition
         for (

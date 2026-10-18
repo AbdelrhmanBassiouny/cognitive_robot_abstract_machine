@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 
 import numpy as np
-from typing_extensions import List, Optional
+from typing_extensions import List
 
 import krrood.symbolic_math.symbolic_math as sm
 from krrood.symbolic_math.symbolic_math import (
@@ -56,7 +56,7 @@ class NoMonitoredTaskApproachingItsGoal(EndedByOwner, MotionStatechartNode):
         :class:`StillProgressing` requires it to hold for a while.
     """
 
-    monitored_tasks: List[ConvergingTask]
+    monitored_tasks: list[ConvergingTask]
     """
     The tasks whose progress towards their goals is watched.
     """
@@ -124,7 +124,7 @@ class NoMonitoredTaskApproachingItsGoal(EndedByOwner, MotionStatechartNode):
         return list(self.monitored_tasks)
 
     @property
-    def stalled_tasks(self) -> List[ConvergingTask]:
+    def stalled_tasks(self) -> list[ConvergingTask]:
         """
         :return: The monitored tasks that are running but did not approach their goal
             on the last control cycle, leaving out those that already hold it.
@@ -279,7 +279,7 @@ class NoMonitoredTaskApproachingItsGoal(EndedByOwner, MotionStatechartNode):
             dtype=bool,
         )
 
-    def on_start(self, context: StatechartContext):
+    def on_start(self, context: StatechartContext) -> None:
         self._forget_progress(np.ones(len(self.monitored_tasks), dtype=bool))
         self._store_progress(context)
 
@@ -348,7 +348,7 @@ class AnyMonitoredTaskShortOfItsGoal(EndedByOwner, MotionStatechartNode):
     of the motion and make the first wait after the last goal was reached a stall.
     """
 
-    monitored_tasks: List[ConvergingTask]
+    monitored_tasks: list[ConvergingTask]
     """
     The tasks whose life cycle states and goals are watched.
     """
@@ -422,7 +422,7 @@ class StillProgressing(EndedByOwner, CompositeNode):
         return self._not_approaching.monitored_tasks
 
     @property
-    def _not_approaching(self) -> Optional[NoMonitoredTaskApproachingItsGoal]:
+    def _not_approaching(self) -> NoMonitoredTaskApproachingItsGoal | None:
         """
         :return: The child watching every converging task found under
             :attr:`monitored_node`, or None if nothing converges beneath it.
@@ -481,8 +481,8 @@ class StillProgressing(EndedByOwner, CompositeNode):
         )
 
     def _expand_stall_detection(
-        self, monitored_tasks: List[ConvergingTask]
-    ) -> List[MotionStatechartNode]:
+        self, monitored_tasks: list[ConvergingTask]
+    ) -> list[MotionStatechartNode]:
         """
         Adds one monitor watching every converging task, next to one observing whether
         any of them is still short of its goal.

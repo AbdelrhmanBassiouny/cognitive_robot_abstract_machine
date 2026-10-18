@@ -7,7 +7,7 @@ from functools import cached_property
 
 import numpy as np
 from scipy.spatial.transform import Rotation
-from typing_extensions import Any, List, Optional, Tuple, Union
+from typing_extensions import List, Optional, Tuple, Union
 
 from semantic_digital_twin.collision_checking.collision_matrix import CollisionRule
 from semantic_digital_twin.collision_checking.collision_rules import (
@@ -161,21 +161,21 @@ class ToolMotionAction(
             return []
         return self.tool.tool_alignment(target)
 
-    def create_temporary_collision_rules(self) -> List[CollisionRule]:
+    def create_temporary_collision_rules(self) -> list[CollisionRule]:
         """
         :return: An allowance for the manipulator holding the tool to touch what the
             tool works on, for the whole stroke.
         """
         return [AllowCollisionForEndEffector(end_effector=self.arm.end_effector)]
 
-    def create_steps(self) -> List[StatechartNode]:
+    def create_steps(self) -> list[StatechartNode]:
         """
         :return: The nodes moving the tool along the sampled waypoints while keeping it
             aligned with its target, see :meth:`_tool_path_steps`.
         """
         return self._tool_path_steps()
 
-    def _tool_path_steps(self) -> List[StatechartNode]:
+    def _tool_path_steps(self) -> list[StatechartNode]:
         """
         :return: The nodes following the sampled waypoints with the tool together,
             holding every alignment the tool asks for while it moves, to be run side by
@@ -384,7 +384,7 @@ class WipingAction(ToolMotionAction, TryAllAction):
             return self.surface
         return self.target_pose
 
-    def create_steps(self) -> List[StatechartNode]:
+    def create_steps(self) -> list[StatechartNode]:
         """
         :return: The goal moving the tool along the sampled waypoints, and as an
             alternative to it, the tool having reached the final waypoint, since the
@@ -587,14 +587,14 @@ class PouringAction(FullBodyControlledAction, MovesToolCenterPoint, SequentialAc
             reference_frame=self.world.root,
         )
 
-    def create_temporary_collision_rules(self) -> List[CollisionRule]:
+    def create_temporary_collision_rules(self) -> list[CollisionRule]:
         """
         :return: An allowance for the manipulator holding the source container to touch
             the rim it pours over.
         """
         return [AllowCollisionForEndEffector(end_effector=self.arm.end_effector)]
 
-    def create_steps(self) -> List[StatechartNode]:
+    def create_steps(self) -> list[StatechartNode]:
         """
         :return: The goals moving the source container to the pre-pour pose and then
             tilting it into the pouring pose.

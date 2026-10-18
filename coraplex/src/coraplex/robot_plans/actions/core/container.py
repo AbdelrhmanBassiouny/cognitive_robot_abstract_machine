@@ -3,8 +3,6 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from typing_extensions import List
-
 
 from krrood.entity_query_language.factories import (
     a,
@@ -88,14 +86,14 @@ class MovesHandle(MovesToolCenterPoint, SequentialAction, HasGraspChoice, ABC):
             grasp_pose, end_effector, self.release_clearance
         )
 
-    def create_temporary_collision_rules(self) -> List[CollisionRule]:
+    def create_temporary_collision_rules(self) -> list[CollisionRule]:
         """
         :return: An allowance for the gripper on the handle to touch its surroundings,
             from taking hold of the handle until it has backed off it.
         """
         return [AllowCollisionForEndEffector(end_effector=self.arm.end_effector)]
 
-    def create_steps(self) -> List[StatechartNode]:
+    def create_steps(self) -> list[StatechartNode]:
         end_effector = self.arm.end_effector
         return [
             GraspingAction(

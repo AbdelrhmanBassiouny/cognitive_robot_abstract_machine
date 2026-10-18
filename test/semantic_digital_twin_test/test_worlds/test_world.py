@@ -1972,7 +1972,7 @@ def test_world_state_trajectory(world_setup, tmp_path):
 
 def test_world_state_trajectory_goes_on_after_adopting_a_model_with_its_degrees_of_freedom(
     world_setup,
-):
+) -> None:
     world = world_setup[0]
     trajectory = WorldStateTrajectory.from_world_state(world.state, time=0.0)
     world._notify_model_change()
@@ -1986,7 +1986,7 @@ def test_world_state_trajectory_goes_on_after_adopting_a_model_with_its_degrees_
 
 def test_world_state_trajectory_rejects_a_model_with_other_degrees_of_freedom(
     world_setup,
-):
+) -> None:
     world = world_setup[0]
     trajectory = WorldStateTrajectory.from_world_state(world.state, time=0.0)
     with world.modify_world():

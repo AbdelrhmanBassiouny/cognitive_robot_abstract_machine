@@ -3,8 +3,6 @@ Tests for what holds a body an action moves under a new parent, see
 :class:`~coraplex.robot_plans.mixins.ReattachesBodies`.
 """
 
-from typing_extensions import List
-
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.robot_plans.actions.core.placing import PlaceAction
 from cramph.composites import Sequence
@@ -26,7 +24,7 @@ from .test_both_arms_handling_objects_at_once import CupForEachArm, cup_for_each
 # %% reading the expanded plan
 
 
-def branch_moves_of(nodes: List[StatechartNode]) -> List[MoveBranch]:
+def branch_moves_of(nodes: list[StatechartNode]) -> list[MoveBranch]:
     """
     :return: The nodes among `nodes` that move a body under a new parent.
     """
@@ -36,7 +34,9 @@ def branch_moves_of(nodes: List[StatechartNode]) -> List[MoveBranch]:
 # %% what holds a picked object
 
 
-def test_a_kinematically_simulated_pick_is_held_by_the_world(pr2_apartment_context):
+def test_a_kinematically_simulated_pick_is_held_by_the_world(
+    pr2_apartment_context,
+) -> None:
     """
     Nothing in a world moved kinematically holds an object, so the object is put under
     the gripper for it to be held at all.
@@ -51,7 +51,9 @@ def test_a_kinematically_simulated_pick_is_held_by_the_world(pr2_apartment_conte
     assert attaching.new_parent is view.right_arm.end_effector.tool_frame
 
 
-def test_a_physically_simulated_pick_is_held_by_its_own_grip(pr2_apartment_context):
+def test_a_physically_simulated_pick_is_held_by_its_own_grip(
+    pr2_apartment_context,
+) -> None:
     """
     The pads hold the object in physics, so putting it under the gripper as well would
     hold it whether or not the grasp did.
@@ -65,7 +67,7 @@ def test_a_physically_simulated_pick_is_held_by_its_own_grip(pr2_apartment_conte
 
 def test_a_physically_simulated_place_is_released_by_its_own_grip(
     pr2_apartment_context,
-):
+) -> None:
     """
     Releasing is the same move the other way, and in physics the pads opening is what
     lets the object go, so the model is left alone here too.
@@ -92,10 +94,10 @@ def test_a_physically_simulated_place_is_released_by_its_own_grip(
 
 def allowances_while_reattaching(
     plan: StatechartNode,
-    extensions: List[ContextExtension],
+    extensions: list[ContextExtension],
     end_effector: EndEffector,
     max_ticks: int = 5000,
-) -> List[bool]:
+) -> list[bool]:
     """
     Run `plan` simulated, tick by tick, until it succeeded.
 
@@ -129,7 +131,7 @@ def allowances_while_reattaching(
 
 def test_a_gripper_may_touch_its_surroundings_while_its_grasp_is_reattached(
     cup_for_each_arm: CupForEachArm,
-):
+) -> None:
     """
     The gripper is closed around the object, touching whatever the object rests on, from
     closing to lifting, so the moment the object is put under it is no exception.
@@ -145,7 +147,7 @@ def test_a_gripper_may_touch_its_surroundings_while_its_grasp_is_reattached(
 
 def test_a_gripper_may_touch_its_surroundings_while_its_release_is_reattached(
     cup_for_each_arm: CupForEachArm,
-):
+) -> None:
     """
     The gripper still surrounds the object it has just let go of when the object is put
     back under the world.

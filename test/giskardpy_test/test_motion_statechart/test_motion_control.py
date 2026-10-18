@@ -29,7 +29,7 @@ from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFr
 # %% context
 
 
-def test_motion_control_ticks_at_the_control_rate():
+def test_motion_control_ticks_at_the_control_rate() -> None:
     motion_control = MotionControl()
     context = StatechartContext(world=World())
 
@@ -41,7 +41,7 @@ def test_motion_control_ticks_at_the_control_rate():
     )
 
 
-def test_motion_control_hands_its_controller_configuration_to_the_nodes():
+def test_motion_control_hands_its_controller_configuration_to_the_nodes() -> None:
     motion_control = MotionControl()
     context = StatechartContext(world=World())
 
@@ -53,7 +53,7 @@ def test_motion_control_hands_its_controller_configuration_to_the_nodes():
     )
 
 
-def test_motion_control_rejects_a_context_ticking_at_another_rate():
+def test_motion_control_rejects_a_context_ticking_at_another_rate() -> None:
     motion_control = MotionControl()
     context = StatechartContext(
         world=World(),
@@ -65,7 +65,7 @@ def test_motion_control_rejects_a_context_ticking_at_another_rate():
         motion_control.extend_context(context)
 
 
-def test_a_node_reading_the_controller_configuration_needs_motion_control():
+def test_a_node_reading_the_controller_configuration_needs_motion_control() -> None:
     statechart = Statechart(context=StatechartContext(world=World()))
     statechart.add_node(node := LocalMinimumReached())
 
@@ -95,7 +95,7 @@ class ExtensionCountingTicks(TickingExecutorExtension):
 
 def test_motion_nodes_and_nodes_of_other_modules_run_in_one_statechart(
     cylinder_bot_world: World,
-):
+) -> None:
     root = cylinder_bot_world.root
     tip = cylinder_bot_world.get_kinematic_structure_entity_by_name("bot")
     goal = CartesianPosition(
@@ -194,7 +194,9 @@ def run_one_joint_goal_after_another(
     return recording
 
 
-def test_a_joint_at_its_limit_stays_put_until_its_node_runs(prismatic_bot2: World):
+def test_a_joint_at_its_limit_stays_put_until_its_node_runs(
+    prismatic_bot2: World,
+) -> None:
     moved_first, waiting = prismatic_bot2.controlled_connections
     lower_limit = waiting.raw_dof.limits.lower.position
     waiting.position = lower_limit
@@ -208,7 +210,7 @@ def test_a_joint_at_its_limit_stays_put_until_its_node_runs(prismatic_bot2: Worl
     assert recording.positions == [lower_limit] * len(recording.positions)
 
 
-def test_a_joint_is_at_rest_once_its_node_ended(prismatic_bot2: World):
+def test_a_joint_is_at_rest_once_its_node_ended(prismatic_bot2: World) -> None:
     moved_second, moved_first = prismatic_bot2.controlled_connections
     upper_limit = moved_first.raw_dof.limits.upper.position
     first = JointPositionList(

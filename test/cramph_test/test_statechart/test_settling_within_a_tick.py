@@ -1,4 +1,4 @@
-from typing_extensions import Callable, List, Optional
+from typing_extensions import Callable
 
 import pytest
 
@@ -66,15 +66,15 @@ def _tick_until(executor: StatechartExecutor, happened: Callable[[], bool]) -> N
 
 
 def _first_ticks(
-    executor: StatechartExecutor, events: List[Callable[[], bool]]
-) -> List[Optional[int]]:
+    executor: StatechartExecutor, events: list[Callable[[], bool]]
+) -> list[int | None]:
     """
     :param executor: The executor to tick, whose compile tick counts as tick 0.
     :param events: Whether each awaited event has happened by now.
     :return: Per event, the first tick after which it had happened, or None if
         it did not within :data:`TICKS_TO_WATCH`.
     """
-    first_ticks: List[Optional[int]] = [None] * len(events)
+    first_ticks: list[int | None] = [None] * len(events)
     for tick in range(TICKS_TO_WATCH + 1):
         if tick > 0:
             executor.tick()
@@ -123,7 +123,7 @@ class TestReactionTimeAcrossNesting:
     )
     def test_a_node_waiting_on_a_step_starts_on_the_tick_its_task_reaches_its_goal(
         self, make_step: Callable[[ConstTrueNode], StatechartNode]
-    ):
+    ) -> None:
         statechart = Statechart(context=StatechartContext(world=World()))
         task = ConstTrueNode()
         step = make_step(task)
@@ -150,7 +150,7 @@ class TestReactionTimeAcrossNesting:
     )
     def test_the_statechart_ends_on_the_tick_after_a_step_reaches_its_goal(
         self, make_step: Callable[[ConstTrueNode], StatechartNode]
-    ):
+    ) -> None:
         """
         The EndStatechart node starts on the tick the step's task reaches its goal and,
         like any node started during a tick, first observes on the next one.
@@ -172,7 +172,9 @@ class TestReactionTimeAcrossNesting:
 
         assert end_tick == goal_reached_tick + 1
 
-    def test_a_parent_reads_the_outcome_its_child_reaches_on_the_same_tick(self):
+    def test_a_parent_reads_the_outcome_its_child_reaches_on_the_same_tick(
+        self,
+    ) -> None:
         statechart = Statechart(context=StatechartContext(world=World()))
         child = ConstTrueNode()
         parallel = Parallel(nodes=[child])
@@ -187,7 +189,7 @@ class TestReactionTimeAcrossNesting:
 
         assert parallel.life_cycle_state == LifeCycleValues.SUCCEEDED
 
-    def test_a_parent_reads_what_its_child_observes_on_the_same_tick(self):
+    def test_a_parent_reads_what_its_child_observes_on_the_same_tick(self) -> None:
         statechart = Statechart(context=StatechartContext(world=World()))
         child = ConstTrueNode()
         parallel = Parallel(nodes=[child])
@@ -204,7 +206,7 @@ class TestReactionTimeAcrossNesting:
 
     def test_an_observation_reads_the_outcome_another_node_reaches_on_the_same_tick(
         self,
-    ):
+    ) -> None:
         statechart = Statechart(context=StatechartContext(world=World()))
         watched = ConstTrueNode()
         observer = NodeObservingAPredicate(watched_node=watched)
@@ -228,7 +230,7 @@ class TestOncePerTick:
     evaluated before that tick settles.
     """
 
-    def test_on_tick_is_called_once_per_tick(self):
+    def test_on_tick_is_called_once_per_tick(self) -> None:
         statechart = _nested_sequence_chart()
         statechart.add_node(ticked := NodeObservingTrueOnlyOnTick())
         executor = _compile(statechart)
@@ -238,7 +240,9 @@ class TestOncePerTick:
 
         assert ticked.on_tick_calls == TICKS_TO_WATCH
 
-    def test_what_on_tick_returns_is_the_observation_a_settled_tick_ends_with(self):
+    def test_what_on_tick_returns_is_the_observation_a_settled_tick_ends_with(
+        self,
+    ) -> None:
         statechart = _nested_sequence_chart()
         statechart.add_node(ticked := NodeObservingTrueOnlyOnTick())
         executor = _compile(statechart)
@@ -250,7 +254,7 @@ class TestOncePerTick:
 
         assert observations == [ObservationStateValues.TRUE] * TICKS_TO_WATCH
 
-    def test_a_node_started_this_tick_first_observes_on_the_next_one(self):
+    def test_a_node_started_this_tick_first_observes_on_the_next_one(self) -> None:
         statechart = Statechart(context=StatechartContext(world=World()))
         statechart.add_nodes(
             [trigger := ConstTrueNode(), started_late := ConstTrueNode()]
@@ -267,7 +271,7 @@ class TestOncePerTick:
         executor.tick()
         assert statechart.observation_state[started_late] == ObservationStateValues.TRUE
 
-    def test_what_a_start_callback_writes_is_observed_from_the_next_tick(self):
+    def test_what_a_start_callback_writes_is_observed_from_the_next_tick(self) -> None:
         statechart = Statechart(context=StatechartContext(world=World()))
         writer = NodeWritingAVariableOnStart()
         reader = NodeObservingAWrittenVariable(writer=writer)
@@ -292,7 +296,7 @@ class TestUnsettledTick:
     control loop.
     """
 
-    def test_observations_contradicting_each_other_stop_the_tick(self):
+    def test_observations_contradicting_each_other_stop_the_tick(self) -> None:
         statechart = Statechart(context=StatechartContext(world=World()))
         first = NodeObservingTheOppositeOfAnObservationPredicate()
         second = NodeObservingTheOppositeOfAnObservationPredicate(watched_node=first)
@@ -306,7 +310,9 @@ class TestUnsettledTick:
         assert error.value.pass_limit == statechart.pass_limit
         assert error.value.unsettled_nodes == [first, second]
 
-    def test_observations_contradicting_each_other_are_stopped_once_they_repeat(self):
+    def test_observations_contradicting_each_other_are_stopped_once_they_repeat(
+        self,
+    ) -> None:
         """
         A tick that returns to a state it already had can never settle, so it is stopped
         right away instead of using up the passes a tick may take.
@@ -323,7 +329,7 @@ class TestUnsettledTick:
 
         assert error.value.passes_taken < error.value.pass_limit
 
-    def test_deeply_nested_steps_settle_within_one_tick(self):
+    def test_deeply_nested_steps_settle_within_one_tick(self) -> None:
         """
         Every nesting level may need its own passes to pass an outcome on, which is no
         reason to stop a tick that does settle.
@@ -341,7 +347,7 @@ class TestUnsettledTick:
 
     def test_a_pass_limit_given_to_a_statechart_still_applies_after_it_compiled_again(
         self,
-    ):
+    ) -> None:
         statechart = Statechart(context=StatechartContext(world=World()), pass_limit=7)
         first = NodeObservingTheOppositeOfAnObservationPredicate()
         second = NodeObservingTheOppositeOfAnObservationPredicate(watched_node=first)
@@ -357,7 +363,7 @@ class TestUnsettledTick:
 
     def test_a_statechart_given_no_passes_per_nesting_level_stops_deeply_nested_steps(
         self,
-    ):
+    ) -> None:
         """
         The passes a tick may take grow with the nesting only by what the statechart was
         given per nesting level.
@@ -385,7 +391,7 @@ class TestUnsettledTick:
 
 def _callbacks_per_tick(
     executor: StatechartExecutor, node: NodeRecordingItsCallbacks
-) -> List[List[LifeCycleCallback]]:
+) -> list[list[LifeCycleCallback]]:
     """
     :param executor: The executor to tick, which has compiled but not ticked since.
     :param node: The node whose callbacks to record.
@@ -405,7 +411,9 @@ class TestLifeCycleCallbacks:
     the same tick.
     """
 
-    def test_a_node_cut_off_right_after_starting_runs_its_start_then_its_end(self):
+    def test_a_node_cut_off_right_after_starting_runs_its_start_then_its_end(
+        self,
+    ) -> None:
         statechart = Statechart(context=StatechartContext(world=World()))
         statechart.add_node(composite := CompositeNodeObservingItsSecondChildRun())
         composite.success_condition = composite.observes_true
@@ -422,7 +430,7 @@ class TestLifeCycleCallbacks:
 
     def test_a_cancel_statechart_cut_off_right_after_starting_still_cancels_the_statechart(
         self,
-    ):
+    ) -> None:
         statechart = Statechart(context=StatechartContext(world=World()))
         statechart.add_node(composite := CompositeNodeObservingItsCancellingChildRun())
         composite.success_condition = composite.observes_true
@@ -434,7 +442,7 @@ class TestLifeCycleCallbacks:
 
         assert error.value is composite.cancel.exception
 
-    def test_a_cancel_statechart_lets_the_tick_it_starts_in_complete(self):
+    def test_a_cancel_statechart_lets_the_tick_it_starts_in_complete(self) -> None:
         """
         Cancelling the statechart ends it after the tick, so every callback of that tick
         still runs and the tick is still recorded.
@@ -462,7 +470,9 @@ class TestLifeCycleCallbacks:
         assert last_snapshot.tick_count == executor.tick_count
         assert last_snapshot.life_cycle_state[cancel] == LifeCycleValues.RUNNING
 
-    def test_a_node_starting_while_its_pause_condition_holds_starts_paused(self):
+    def test_a_node_starting_while_its_pause_condition_holds_starts_paused(
+        self,
+    ) -> None:
         """
         A node that would be paused right away never runs, not even for the control tick
         it starts in, and still gets both callbacks in order.
@@ -483,7 +493,7 @@ class TestLifeCycleCallbacks:
             + [[]] * TICKS_TO_WATCH
         )
 
-    def test_a_node_that_restarts_after_failing_takes_one_step_per_tick(self):
+    def test_a_node_that_restarts_after_failing_takes_one_step_per_tick(self) -> None:
         statechart = Statechart(context=StatechartContext(world=World()))
         statechart.add_nodes(
             [trigger := ConstTrueNode(), restarting := NodeRecordingItsCallbacks()]
@@ -501,7 +511,9 @@ class TestLifeCycleCallbacks:
         ]
         assert callbacks == (restart_loop * TICKS_TO_WATCH)[: TICKS_TO_WATCH + 1]
 
-    def test_a_child_reset_by_its_parent_starts_again_only_on_the_next_tick(self):
+    def test_a_child_reset_by_its_parent_starts_again_only_on_the_next_tick(
+        self,
+    ) -> None:
         statechart = Statechart(context=StatechartContext(world=World()))
         statechart.add_nodes(
             [
@@ -520,7 +532,9 @@ class TestLifeCycleCallbacks:
             [LifeCycleCallback.START],
         ] + [[]] * (TICKS_TO_WATCH - 2)
 
-    def test_a_child_forced_through_pause_end_and_reset_runs_each_callback_once(self):
+    def test_a_child_forced_through_pause_end_and_reset_runs_each_callback_once(
+        self,
+    ) -> None:
         """
         Each ancestor of the child takes one transition of its own, triggered by what
         the level below it did on the previous pass, so the child is paused, ended and
@@ -550,7 +564,7 @@ class TestLifeCycleCallbacks:
             + (forced_through_and_restarted * TICKS_TO_WATCH)[:TICKS_TO_WATCH]
         )
 
-    def test_nodes_pausing_each_other_alternate_once_per_tick(self):
+    def test_nodes_pausing_each_other_alternate_once_per_tick(self) -> None:
         """
         Each node pauses while the other runs, which no single consistent state
         satisfies, so each node takes one step per tick rather than the chart being

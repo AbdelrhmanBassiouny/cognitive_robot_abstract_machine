@@ -2,7 +2,7 @@ import json
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import ClassVar, Optional
+from typing_extensions import Any, ClassVar, Optional
 
 from krrood.adapters.json_serializer import from_json
 from krrood.entity_query_language.backends import ProbabilisticBackend
@@ -103,7 +103,7 @@ class TrainingEnvironment(ABC):
         """
 
     @abstractmethod
-    def setup_episode(self, limit: int = 10, **kwargs) -> TrainingEpisode:
+    def setup_episode(self, limit: int = 10, **kwargs: Any) -> TrainingEpisode:
         """
         Create an underspecified action, in a world of its own, whose grounded variants
         the episode tries.
@@ -205,7 +205,7 @@ class MoveToReachTrainingEnvironment(TrainingEnvironment):
 
         return world_with_urdf
 
-    def setup_episode(self, limit: int = 10, **kwargs) -> TrainingEpisode:
+    def setup_episode(self, limit: int = 10, **kwargs: Any) -> TrainingEpisode:
 
         world = self.setup_world()
         [robot] = world.get_semantic_annotations_by_type(AbstractRobot)

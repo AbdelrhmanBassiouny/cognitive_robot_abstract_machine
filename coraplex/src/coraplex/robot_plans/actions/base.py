@@ -132,18 +132,18 @@ class Action(
         """
         return []
 
-    def on_start(self, context: StatechartContext):
+    def on_start(self, context: StatechartContext) -> None:
         super().on_start(context)
         if self.temporary_collision_rules:
             context.world.collision_manager.put_temporary_rules_in_force(
                 self.temporary_collision_rules
             )
 
-    def on_end(self, context: StatechartContext):
+    def on_end(self, context: StatechartContext) -> None:
         self._take_temporary_collision_rules_out_of_force(context)
         super().on_end(context)
 
-    def on_reset(self, context: StatechartContext):
+    def on_reset(self, context: StatechartContext) -> None:
         self._take_temporary_collision_rules_out_of_force(context)
         super().on_reset(context)
 

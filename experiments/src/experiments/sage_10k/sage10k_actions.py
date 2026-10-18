@@ -1,7 +1,6 @@
 from cramph.composites import StatementNode
 from dataclasses import dataclass
 
-from typing_extensions import List
 
 import rustworkx
 
@@ -30,7 +29,7 @@ class Sage10kOpenDoor(SequentialAction):
 
     door: Door
 
-    def create_steps(self) -> List[StatechartNode]:
+    def create_steps(self) -> list[StatechartNode]:
         """
         Build the steps for reaching the handle and opening the door.
 

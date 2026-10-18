@@ -273,12 +273,12 @@ class TestControlLoopPacing:
 
     def test_the_control_loop_is_paced_in_real_time(
         self, benchmark_robot: BenchmarkRobot
-    ):
+    ) -> None:
         assert isinstance(benchmark_robot.giskard.executor.pacer, RealTimePacer)
 
     def test_the_control_loop_is_paced_at_one_cycle_per_control_time_step(
         self, benchmark_robot: BenchmarkRobot
-    ):
+    ) -> None:
         pacer = benchmark_robot.giskard.executor.pacer
 
         assert pacer.cycle_duration == pytest.approx(benchmark_robot.control_delta_time)
@@ -323,7 +323,7 @@ class TestDeeplyNestedCascade:
 
     def test_slowest_settling_stays_within_the_control_budget(
         self, deeply_nested_cascade_profile: CallTreeProfile
-    ):
+    ) -> None:
         slowest_settling = max(
             samples.inclusive_maximum
             for samples in deeply_nested_cascade_profile.phases.values()

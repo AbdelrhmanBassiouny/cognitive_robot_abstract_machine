@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pytest
 from rustworkx.rustworkx import NoEdgeBetweenNodes
-from typing_extensions import Generator, Iterable, List, Tuple
+from typing_extensions import Generator, Iterable
 
 from coraplex.datastructures.enums import (
     AxisIdentifier,
@@ -266,7 +266,7 @@ def setup_multi_robot_apartment(
 @pytest.fixture
 def multiple_robot_apartment_context(
     setup_multi_robot_apartment,
-) -> Generator[Tuple[World, AbstractRobot, List[ContextExtension]]]:
+) -> Generator[tuple[World, AbstractRobot, list[ContextExtension]]]:
     """
     The shared apartment world with one robot, the robot and the context extensions of
     its plans, returned to its initial model, state and full body control setting after
@@ -1034,7 +1034,7 @@ def test_elevator_navigation(multiple_robot_apartment_context, rclpy_node):
 # %% searching for an object
 
 
-def test_search_action(multiple_robot_apartment_context):
+def test_search_action(multiple_robot_apartment_context) -> None:
     """
     Searching where the object stands ends with the robot standing where it can see the
     object, having detected it on the first look.

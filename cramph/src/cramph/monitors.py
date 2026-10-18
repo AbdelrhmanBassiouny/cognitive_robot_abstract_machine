@@ -2,7 +2,7 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from dataclasses import field, dataclass
-from typing import Optional, Callable
+from typing_extensions import Callable
 
 from cramph.node import EndedByOwner
 from cramph.context import StatechartContext
@@ -11,6 +11,9 @@ from cramph.node import StatechartNode, NodeArtifacts
 from cramph.threaded_nodes import ThreadedNode
 
 logger = logging.getLogger(__name__)
+
+
+# %% tick count check
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
@@ -30,6 +33,9 @@ class CheckTickCount(EndedByOwner, StatechartNode):
         return artifacts
 
 
+# %% printing
+
+
 @dataclass(eq=False, repr=False, kw_only=True)
 class Print(EndedByOwner, StatechartNode):
     """
@@ -41,6 +47,9 @@ class Print(EndedByOwner, StatechartNode):
     def on_tick(self, context: StatechartContext) -> ObservationStateValues:
         print(self.message)
         return ObservationStateValues.TRUE
+
+
+# %% counting time and ticks
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
@@ -56,13 +65,13 @@ class CountSeconds(EndedByOwner, StatechartNode):
     _now: Callable[[], float] = field(default=time.monotonic, repr=False)
     _start_time: float = field(init=False)
 
-    def on_tick(self, context: StatechartContext) -> Optional[ObservationStateValues]:
+    def on_tick(self, context: StatechartContext) -> ObservationStateValues | None:
         difference = self._now() - self._start_time
         if difference >= self.seconds - 1e-5:
             return ObservationStateValues.TRUE
         return None
 
-    def on_start(self, context: StatechartContext):
+    def on_start(self, context: StatechartContext) -> None:
         self._start_time = self._now()
 
 
@@ -81,10 +90,10 @@ class TickCounter(EndedByOwner, StatechartNode, ABC):
     Number of ticks counted since the last start/reset.
     """
 
-    def on_start(self, context: StatechartContext):
+    def on_start(self, context: StatechartContext) -> None:
         self._counter = 0
 
-    def on_tick(self, context: StatechartContext) -> Optional[ObservationStateValues]:
+    def on_tick(self, context: StatechartContext) -> ObservationStateValues | None:
         self._counter += 1
         if self._reached_target(context):
             return ObservationStateValues.TRUE
@@ -132,6 +141,9 @@ class CountTicks(TickCounter):
         return self._counter >= self.ticks
 
 
+# %% threaded predicates
+
+
 @dataclass(eq=False, repr=False, kw_only=True)
 class ThreadedPredicateMonitor(EndedByOwner, ThreadedNode):
     """
@@ -146,7 +158,7 @@ class ThreadedPredicateMonitor(EndedByOwner, ThreadedNode):
     whatever produces it (e.g. an EQL condition is wrapped in a lambda by the caller).
     """
 
-    predicate: Optional[Callable[[], bool]]
+    predicate: Callable[[], bool] | None
     """
     The predicate to evaluate, passed as a constructor argument.
     """
@@ -166,7 +178,7 @@ class ThreadedPredicateMonitor(EndedByOwner, ThreadedNode):
             return
         super().on_start(context)
 
-    def on_tick(self, context: StatechartContext) -> Optional[ObservationStateValues]:
+    def on_tick(self, context: StatechartContext) -> ObservationStateValues | None:
         """
         :raises BaseException: What the predicate raised, if it raised.
         """
@@ -186,6 +198,9 @@ class ThreadedPredicateMonitor(EndedByOwner, ThreadedNode):
         )
 
 
+# %% pulses
+
+
 @dataclass(eq=False, repr=False, kw_only=True)
 class Pulse(EndedByOwner, StatechartNode):
     """
@@ -202,15 +217,18 @@ class Pulse(EndedByOwner, StatechartNode):
     Number of ticks to stay True.
     """
 
-    def on_start(self, context: StatechartContext):
+    def on_start(self, context: StatechartContext) -> None:
         self._counter = 0
 
-    def on_tick(self, context: StatechartContext) -> Optional[ObservationStateValues]:
+    def on_tick(self, context: StatechartContext) -> ObservationStateValues | None:
         if self._counter < self.length:
             self._triggered = True
             self._counter += 1
             return ObservationStateValues.TRUE
         return ObservationStateValues.FALSE
+
+
+# %% counting resets
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
@@ -238,14 +256,14 @@ class CountNodeResets(EndedByOwner, StatechartNode):
     Resets of :attr:`node` seen so far.
     """
 
-    _previous_life_cycle: Optional[LifeCycleValues] = field(
+    _previous_life_cycle: LifeCycleValues | None = field(
         default=None, init=False, repr=False
     )
     """
     Life cycle state of :attr:`node` on the previous tick.
     """
 
-    def on_tick(self, context: StatechartContext) -> Optional[ObservationStateValues]:
+    def on_tick(self, context: StatechartContext) -> ObservationStateValues | None:
         current_life_cycle = self.node.life_cycle_state
         if (
             self._previous_life_cycle is not None

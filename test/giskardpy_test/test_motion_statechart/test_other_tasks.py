@@ -662,7 +662,7 @@ def test_pointing_lowers_the_torso_when_the_head_cannot_tilt_far_enough(
 
 def test_pointing_beside_a_goal_takes_sideways_from_where_the_viewpoint_stands_at_start(
     pr2_world_state_reset: World,
-):
+) -> None:
     """
     Sideways is across the line of sight from the viewpoint as it stands when the task
     starts, so a base moved by an earlier step of the chart changes the point aimed at.

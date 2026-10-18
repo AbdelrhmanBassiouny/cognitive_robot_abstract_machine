@@ -56,7 +56,7 @@ def _render_and_capture_axes(plotter: HistoryGanttChartPlotter, monkeypatch):
 
 
 @pytest.mark.parametrize("ticks", [3, 50])
-def test_main_and_final_widths_ticks(monkeypatch, ticks):
+def test_main_and_final_widths_ticks(monkeypatch, ticks) -> None:
     # Build a small statechart that runs for `ticks` ticks
     kin = StatechartExecutor(context=StatechartContext(world=World()))
     msc = Statechart(context=kin.context)
@@ -143,7 +143,7 @@ def test_long_labels_not_clipped_on_right(monkeypatch):
 
 def test_x_axis_units_ticks_vs_seconds(
     monkeypatch, statechart_executor: StatechartExecutor
-):
+) -> None:
     msc = Statechart(context=statechart_executor.context)
     counter = CountTicks(ticks=5)
     msc.add_nodes([counter])
@@ -178,7 +178,7 @@ def test_x_axis_units_ticks_vs_seconds(
 
 def test_seconds_cannot_be_plotted_without_a_tick_duration(
     monkeypatch, statechart_context_without_tick_duration: StatechartContext
-):
+) -> None:
     executor = StatechartExecutor(context=statechart_context_without_tick_duration)
     msc = Statechart(context=executor.context)
     counter = CountTicks(ticks=2)

@@ -624,7 +624,7 @@ def test_constraint_collection(pr2_world_state_reset: World):
 
 
 class TestMaxManipulability:
-    def test_MaxManipulability(self, pr2_world_state_reset: World):
+    def test_MaxManipulability(self, pr2_world_state_reset: World) -> None:
         root = pr2_world_state_reset.get_body_by_name("base_footprint")
         tip = pr2_world_state_reset.get_body_by_name("r_gripper_tool_frame")
 

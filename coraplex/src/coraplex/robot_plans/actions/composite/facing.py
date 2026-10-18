@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import List
 
 from cramph.node import StatechartNode
 from coraplex.robot_plans.actions.base import SequentialAction
@@ -25,5 +24,5 @@ class FaceAndLookAtAction(SequentialAction):
     The look at the target once the base faces it.
     """
 
-    def create_steps(self) -> List[StatechartNode]:
+    def create_steps(self) -> list[StatechartNode]:
         return [self.face_at, self.look_at]

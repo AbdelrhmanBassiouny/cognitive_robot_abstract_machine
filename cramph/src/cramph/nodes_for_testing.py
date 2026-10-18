@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum, auto
 
-from typing_extensions import List
 
 import krrood.symbolic_math.symbolic_math as sm
 from cramph.node import EndedByOwner, SucceedsOnObservingTrue, FailsOnObservingFalse
@@ -98,22 +97,28 @@ class SpecializedNodeWithOwnStructureCopy(NodeWithOwnStructureCopy):
 
 @dataclass(repr=False, eq=False, kw_only=True)
 class ChangeStateOnEvents(EndedByOwner, StatechartNode):
+    """
+    Records the name of the life cycle hook that ran last.
+    """
 
     state: str | None = None
+    """
+    The name of the life cycle hook that ran last, or None before any ran.
+    """
 
-    def on_start(self, context: StatechartContext):
+    def on_start(self, context: StatechartContext) -> None:
         self.state = "on_start"
 
-    def on_pause(self, context: StatechartContext):
+    def on_pause(self, context: StatechartContext) -> None:
         self.state = "on_pause"
 
-    def on_unpause(self, context: StatechartContext):
+    def on_unpause(self, context: StatechartContext) -> None:
         self.state = "on_unpause"
 
-    def on_end(self, context: StatechartContext):
+    def on_end(self, context: StatechartContext) -> None:
         self.state = "on_end"
 
-    def on_reset(self, context: StatechartContext):
+    def on_reset(self, context: StatechartContext) -> None:
         self.state = "on_reset"
 
 
@@ -667,7 +672,7 @@ class NodeRecordingItsCallbacks(EndedByOwner, StatechartNode):
     A node that never reaches its goal and records every life cycle callback run on it.
     """
 
-    callbacks: List[LifeCycleCallback] = field(default_factory=list, init=False)
+    callbacks: list[LifeCycleCallback] = field(default_factory=list, init=False)
     """
     The callbacks run on this node since :meth:`take_callbacks` was last called, in the
     order they ran.
@@ -676,7 +681,7 @@ class NodeRecordingItsCallbacks(EndedByOwner, StatechartNode):
     def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
         return NodeArtifacts(observation=sm.Scalar.const_false())
 
-    def take_callbacks(self) -> List[LifeCycleCallback]:
+    def take_callbacks(self) -> list[LifeCycleCallback]:
         """
         :return: The callbacks recorded so far, which are forgotten afterwards.
         """
@@ -684,19 +689,19 @@ class NodeRecordingItsCallbacks(EndedByOwner, StatechartNode):
         self.callbacks = []
         return callbacks
 
-    def on_start(self, context: StatechartContext):
+    def on_start(self, context: StatechartContext) -> None:
         self.callbacks.append(LifeCycleCallback.START)
 
-    def on_pause(self, context: StatechartContext):
+    def on_pause(self, context: StatechartContext) -> None:
         self.callbacks.append(LifeCycleCallback.PAUSE)
 
-    def on_unpause(self, context: StatechartContext):
+    def on_unpause(self, context: StatechartContext) -> None:
         self.callbacks.append(LifeCycleCallback.UNPAUSE)
 
-    def on_end(self, context: StatechartContext):
+    def on_end(self, context: StatechartContext) -> None:
         self.callbacks.append(LifeCycleCallback.END)
 
-    def on_reset(self, context: StatechartContext):
+    def on_reset(self, context: StatechartContext) -> None:
         self.callbacks.append(LifeCycleCallback.RESET)
 
 
@@ -740,7 +745,7 @@ class NodeWritingAVariableOnStart(EndedByOwner, StatechartNode):
     def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
         return NodeArtifacts(observation=sm.Scalar.const_trinary_unknown())
 
-    def on_start(self, context: StatechartContext):
+    def on_start(self, context: StatechartContext) -> None:
         context.float_variable_data.set_value(
             self.variable, float(ObservationStateValues.TRUE)
         )
@@ -758,7 +763,7 @@ class NodeObservingAWrittenVariable(EndedByOwner, StatechartNode):
     """
 
     @property
-    def prerequisite_nodes(self) -> List[StatechartNode]:
+    def prerequisite_nodes(self) -> list[StatechartNode]:
         """
         :return: :attr:`writer`, which creates the variable this node reads.
         """

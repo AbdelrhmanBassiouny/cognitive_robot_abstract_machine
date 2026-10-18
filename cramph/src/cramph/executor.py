@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import timedelta
 
-from typing_extensions import TYPE_CHECKING, List, Type, TypeVar
+from typing_extensions import TYPE_CHECKING, TypeVar
 
 from cramph.context import ContextExtension, StatechartContext
 from cramph.exceptions import (
@@ -130,7 +130,7 @@ class SimulationPacer(ScheduledPacer):
     How much faster than real time the loop runs; ``2.0`` is twice as fast.
     """
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.real_time_factor <= 0:
             raise NonPositiveRealTimeFactorError(self.real_time_factor)
 
@@ -299,7 +299,7 @@ class Executor(ABC):
     The context handed to every node of the statechart.
     """
 
-    extensions: List[ExecutorExtension] = field(default_factory=list, kw_only=True)
+    extensions: list[ExecutorExtension] = field(default_factory=list, kw_only=True)
     """
     Add behaviour around compiling and running, called in the order they are listed.
     """
@@ -310,7 +310,7 @@ class Executor(ABC):
     The statechart that is executed, set by :meth:`compile`.
     """
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """
         Adds the :meth:`default_context_extensions` to :attr:`context` and the
         :meth:`default_executor_extensions` to :attr:`extensions`, keeping any
@@ -343,7 +343,7 @@ class Executor(ABC):
         """
 
     def require_extension(
-        self, extension_type: Type[GenericExecutorExtension]
+        self, extension_type: type[GenericExecutorExtension]
     ) -> GenericExecutorExtension:
         """
         :param extension_type: The exact type of the requested extension.
@@ -403,7 +403,7 @@ class StatechartExecutor(Executor, RecompileCallback):
     Paces the loop that ticks this executor.
     """
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         super().__post_init__()
         self.pacer.pace_ticks_of(self.context)
         self._create_tick_variable()
@@ -426,7 +426,7 @@ class StatechartExecutor(Executor, RecompileCallback):
             if isinstance(extension, TickingExecutorExtension)
         ]
 
-    def _create_tick_variable(self):
+    def _create_tick_variable(self) -> None:
         """
         Registers the variable counting the ticks in the context.
         """
@@ -448,7 +448,7 @@ class StatechartExecutor(Executor, RecompileCallback):
         return self.context.tick_count
 
     @tick_count.setter
-    def tick_count(self, value: int):
+    def tick_count(self, value: int) -> None:
         self.context.float_variable_data.set_value(self.context.tick_variable, value)
 
     def compile(self, statechart: Statechart) -> None:
@@ -486,7 +486,7 @@ class StatechartExecutor(Executor, RecompileCallback):
         for extension in self.ticking_extensions:
             extension.after_recompile(self)
 
-    def tick(self):
+    def tick(self) -> None:
         """
         Advances the statechart by one tick.
         """
@@ -504,7 +504,7 @@ class StatechartExecutor(Executor, RecompileCallback):
         """
         self.tick_until_end()
 
-    def tick_until_end(self, timeout: int = 1_000):
+    def tick_until_end(self, timeout: int = 1_000) -> None:
         """
         Calls tick until
         :meth:`~cramph.statechart.Statechart.is_ended`

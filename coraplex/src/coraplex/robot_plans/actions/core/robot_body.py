@@ -55,7 +55,7 @@ class MoveTorsoAction(SequentialAction):
     The state of the torso that should be set.
     """
 
-    def create_steps(self) -> List[StatechartNode]:
+    def create_steps(self) -> list[StatechartNode]:
         joint_state = self.robot.get_torso().get_joint_state_by_type(self.torso_state)
         return [JointPositionList(goal_state=joint_state)]
 
@@ -149,7 +149,7 @@ class ParkArmsAction(ParallelAction, HasMaxJointVelocity):
     The arms that should be parked.
     """
 
-    def create_steps(self) -> List[StatechartNode]:
+    def create_steps(self) -> list[StatechartNode]:
         park_state = self.park_joint_state()
         joint_goal = JointPositionList(goal_state=park_state)
         if self.max_joint_velocity is None:
@@ -193,7 +193,7 @@ class FollowToolCenterPointPathAction(MovesToolCenterPoint, ParallelAction):
     The arm to use.
     """
 
-    def create_steps(self) -> List[StatechartNode]:
+    def create_steps(self) -> list[StatechartNode]:
         waypoints = Sequence(
             nodes=[self._waypoint_goal(pose) for pose in self.target_locations.poses]
         )
@@ -246,7 +246,7 @@ class MoveManipulatorAction(MovesToolCenterPoint, GoalAction):
     If the gripper can collide with something.
     """
 
-    def create_temporary_collision_rules(self) -> List[CollisionRule]:
+    def create_temporary_collision_rules(self) -> list[CollisionRule]:
         """
         :return: An allowance for :attr:`end_effector` to touch its surroundings if
             :attr:`allow_gripper_collision`, none otherwise.

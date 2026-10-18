@@ -131,7 +131,7 @@ def test_a_containment_that_lasts_is_not_reported_lost_by_another_bodys_detector
 # %% the context detectors report to
 
 
-def test_a_detector_needs_the_segmind_context(milk_in_the_apartment):
+def test_a_detector_needs_the_segmind_context(milk_in_the_apartment) -> None:
     world, milk, box = milk_in_the_apartment
     statechart = Statechart(context=StatechartContext(world=world))
     statechart.add_node(detector := ContactDetector(tracked_object=milk))
@@ -144,7 +144,7 @@ def test_a_detector_needs_the_segmind_context(milk_in_the_apartment):
 
 def test_episode_segmentation_keeps_the_segmind_context_already_there(
     milk_in_the_apartment,
-):
+) -> None:
     world, milk, box = milk_in_the_apartment
     context = StatechartContext(world=world)
     context.add_extension(segmind_context := SegmindContext())

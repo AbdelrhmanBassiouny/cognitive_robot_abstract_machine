@@ -2,6 +2,7 @@ import threading
 
 import numpy as np
 import pytest
+from typing_extensions import Never
 
 from cramph.data_types import LifeCycleValues, ObservationStateValues
 
@@ -200,7 +201,7 @@ def test_exception_try_in_order(pr2_apartment_context):
 def test_exception_try_all(pr2_apartment_context):
     world, robot_view, extensions = pr2_apartment_context
 
-    def raise_except():
+    def raise_except() -> Never:
         raise PlanFailure()
 
     act = NavigateAction(
@@ -218,7 +219,7 @@ def test_exception_try_all(pr2_apartment_context):
 # %% children run only as part of the chart
 
 
-def test_try_in_order_recovers_from_a_failing_code_step(pr2_apartment_context):
+def test_try_in_order_recovers_from_a_failing_code_step(pr2_apartment_context) -> None:
     """
     A code step that fails is one failed alternative, so the next one is tried.
     """
@@ -242,7 +243,9 @@ def test_try_in_order_recovers_from_a_failing_code_step(pr2_apartment_context):
     assert plan.life_cycle_state == LifeCycleValues.SUCCEEDED
 
 
-def test_children_report_the_outcome_of_the_chart_they_ran_in(pr2_apartment_context):
+def test_children_report_the_outcome_of_the_chart_they_ran_in(
+    pr2_apartment_context,
+) -> None:
     """
     A child is only run as part of its parent's chart, and reports how it ended there.
     """
@@ -351,5 +354,3 @@ def test_never_firing_cancel_monitor_leaves_the_motion_alone(pr2_apartment_conte
 
     assert _torso_position(world) == pytest.approx(0.3, abs=0.05)
     assert plan.last_observation_state == ObservationStateValues.TRUE
-
-

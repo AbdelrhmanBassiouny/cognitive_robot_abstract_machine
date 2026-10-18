@@ -56,7 +56,7 @@ def build_align_planes_task(world: World) -> AlignPlanes:
     return task
 
 
-def test_ros_node_access_importable_without_rclpy(monkeypatch):
+def test_ros_node_access_importable_without_rclpy(monkeypatch) -> None:
     """
     giskardpy.motion_statechart.ros_context must stay importable when rclpy is not
     installed.

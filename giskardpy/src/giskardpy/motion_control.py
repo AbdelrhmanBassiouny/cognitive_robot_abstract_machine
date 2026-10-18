@@ -142,7 +142,7 @@ class MotionControl(TickingExecutorExtension):
         self.set_velocity_acceleration_jerk_to_zero(executor.context.world)
 
     @staticmethod
-    def set_velocity_acceleration_jerk_to_zero(world: World):
+    def set_velocity_acceleration_jerk_to_zero(world: World) -> None:
         """
         Clear all commanded derivatives of the world state.
 
@@ -152,7 +152,7 @@ class MotionControl(TickingExecutorExtension):
         world.state.accelerations[:] = 0
         world.state.jerks[:] = 0
 
-    def _raise_if_world_state_array_was_replaced(self, world: World):
+    def _raise_if_world_state_array_was_replaced(self, world: World) -> None:
         """
         Ensures the world still holds the state array the motion statechart compiled
         against.
@@ -170,7 +170,7 @@ class MotionControl(TickingExecutorExtension):
             current_degrees_of_freedom=world.state._data.shape[1],
         )
 
-    def _compile_qp_controller(self, executor: StatechartExecutor):
+    def _compile_qp_controller(self, executor: StatechartExecutor) -> None:
         """
         Builds :attr:`qp_controller` from the constraints of the compiled statechart.
 

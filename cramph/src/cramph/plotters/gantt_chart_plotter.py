@@ -93,12 +93,19 @@ class HistoryGanttChartPlotter:
 
     @property
     def x_width_per_tick(self) -> float:
+        """
+        :return: The width of one tick on the time axis, which is the tick duration of
+            the context, or 1 without a context.
+        """
         if self.context is None:
             return 1
         return self.context.require_tick_duration()
 
     @property
     def total_ticks(self) -> int:
+        """
+        :return: The number of ticks the history of the statechart covers.
+        """
         return self.statechart.history.history[-1].tick_count
 
     @property
@@ -225,7 +232,7 @@ class HistoryGanttChartPlotter:
         self._save_figure(file_name=file_name)
 
     def _build_subplots(
-        self, ordered_nodes: List[StatechartNode]
+        self, ordered_nodes: list[StatechartNode]
     ) -> tuple[plt.Axes, plt.Axes]:
         """
         Builds a subplot layout with a main axis and a fixed-width final-state axis for
@@ -301,7 +308,7 @@ class HistoryGanttChartPlotter:
         )
         return ax_main, ax_final
 
-    def _sort_nodes_by_parents(self) -> List[StatechartNode]:
+    def _sort_nodes_by_parents(self) -> list[StatechartNode]:
         """
         Orders the nodes of the statechart so that each one is followed by its own
         subtree, reversed because bars are plotted bottom to top.
@@ -414,7 +421,7 @@ class HistoryGanttChartPlotter:
         self,
         main_axis: plt.Axes,
         final_state_axis: plt.Axes,
-        ordered_nodes: List[StatechartNode],
+        ordered_nodes: list[StatechartNode],
     ):
         """
         Configure and format axes for visualizing statechart nodes.

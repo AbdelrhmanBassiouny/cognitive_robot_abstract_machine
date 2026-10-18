@@ -129,7 +129,7 @@ class AbstractDetector(EndedByOwner, StatechartNode, ABC):
     def required_context_extensions(cls) -> tuple[type[ContextExtension], ...]:
         return super().required_context_extensions + (SegmindContext,)
 
-    def on_tick(self, context: StatechartContext) -> Optional[ObservationStateValues]:
+    def on_tick(self, context: StatechartContext) -> ObservationStateValues | None:
         """
         Executes one update cycle of the detector.
 

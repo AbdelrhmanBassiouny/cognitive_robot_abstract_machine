@@ -6,7 +6,7 @@ import itertools
 
 import numpy as np
 import pytest
-from typing_extensions import Callable, List, Type
+from typing_extensions import Callable, List
 
 from krrood.entity_query_language.factories import a, variable
 from krrood.entity_query_language.query.match import Match
@@ -59,14 +59,14 @@ from krrood.entity_query_language.backends import EntityQueryLanguageGenerativeB
 # %% where the robot stands is tried together with what it does there
 
 
-def _steps_of(action: Action) -> List[StatechartNode]:
+def _steps_of(action: Action) -> list[StatechartNode]:
     """
     :return: The steps the expanded `action` runs, in order.
     """
     return action.nodes
 
 
-def _underspecified_steps(transport: TransportAction) -> List[Type[Action]]:
+def _underspecified_steps(transport: TransportAction) -> list[type[Action]]:
     """
     :return: The action types of the steps the transport leaves to be grounded, in
         order.
@@ -79,7 +79,7 @@ def _underspecified_steps(transport: TransportAction) -> List[Type[Action]]:
 
 
 def _pick_up_the_milk(
-    world: World, extensions: List[ContextExtension]
+    world: World, extensions: list[ContextExtension]
 ) -> MoveAndPickUpAction:
     """
     :return: A pick-up of the milk, standing wherever its trial finds one that works.
@@ -108,7 +108,7 @@ def _pick_up_the_milk(
 
 
 def _place_at(
-    target: Pose, placed: HasGraspCandidates, extensions: List[ContextExtension]
+    target: Pose, placed: HasGraspCandidates, extensions: list[ContextExtension]
 ) -> MoveAndPlaceAction:
     """
     :return: A place of `placed` at `target`, standing wherever its trial finds one
@@ -143,7 +143,7 @@ def _standing_positions(step: Match) -> ReachabilityLocation:
 
 
 def _transport_of_the_milk(
-    world: World, extensions: List[ContextExtension]
+    world: World, extensions: list[ContextExtension]
 ) -> TransportAction:
     return TransportAction(
         pick_up=_pick_up_the_milk(world, extensions),
@@ -396,7 +396,7 @@ def _assert_each_standing_pose_keeps_the_closest_grasps(
 
 
 def _assert_each_standing_pose_tries_its_grasps_closest_first(
-    steps: List[MoveAndPickUpAction | MoveAndOpenAction],
+    steps: list[MoveAndPickUpAction | MoveAndOpenAction],
     grasp_of: Callable[[MoveAndPickUpAction | MoveAndOpenAction], GraspCandidate],
     graspable: HasGraspCandidates,
 ) -> None:
@@ -784,7 +784,7 @@ def test_a_move_and_open_from_a_standing_position_opens_the_given_handle(
 
 def test_an_opening_of_a_handle_is_grounded_by_every_grasp_the_handle_offers(
     pr2_apartment_context,
-):
+) -> None:
     world, robot, extensions = pr2_apartment_context
     handle = Handle(root=world.get_body_by_name(DRAWER_HANDLE))
 
@@ -803,7 +803,7 @@ def test_an_opening_of_a_handle_is_grounded_by_every_grasp_the_handle_offers(
 @pytest.mark.parametrize("facing_grasp_index", [0, 1], ids=["first", "second"])
 def test_an_opening_of_a_handle_first_tries_the_grasp_facing_the_robot(
     pr2_apartment_context, facing_grasp_index
-):
+) -> None:
     """
     Which side of a handle faces out of the furniture differs between models, so of the
     grasps approached horizontally, the one approached straight from where the robot
@@ -831,7 +831,7 @@ def test_an_opening_of_a_handle_first_tries_the_grasp_facing_the_robot(
 
 def test_a_move_and_open_tries_the_grasps_from_each_standing_pose_closest_first(
     pr2_apartment_context,
-):
+) -> None:
     """
     Which side of a handle faces out of the furniture differs between models, so each
     standing pose tries the grasp facing it first.
@@ -863,7 +863,7 @@ Where the move-and-act steps are sent, away from where the robot starts.
 """
 
 
-def _navigation_targets(action: Action) -> List[Pose]:
+def _navigation_targets(action: Action) -> list[Pose]:
     """
     :return: Every standing pose the expanded `action` navigates to, including the ones
         of the actions it is built from.
@@ -879,7 +879,7 @@ def _standing_pose(world: World) -> Pose:
 
 
 def _placing_the_held_milk(
-    world: World, extensions: List[ContextExtension]
+    world: World, extensions: list[ContextExtension]
 ) -> MoveAndPlaceAction:
     robot = robot_of(extensions)
     milk = _hold_the_milk(world, robot.left_arm)
@@ -902,7 +902,7 @@ MOVE_AND_ACT_STEPS = {
 
 @pytest.mark.parametrize("build", MOVE_AND_ACT_STEPS.values(), ids=MOVE_AND_ACT_STEPS)
 def test_a_move_and_act_step_only_ever_stands_where_it_was_sent(
-    pr2_apartment_context, build: Callable[[World, List[ContextExtension]], Action]
+    pr2_apartment_context, build: Callable[[World, list[ContextExtension]], Action]
 ):
     """
     Its plan is built before the robot moves, so turning to face the target has to be

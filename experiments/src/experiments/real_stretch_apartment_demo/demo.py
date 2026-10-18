@@ -32,7 +32,6 @@ classifying annotator to that engine removes both without changing this demo.
 from dataclasses import dataclass, field
 
 import numpy as np
-from typing_extensions import List, Type
 
 from coraplex.plans.context_extensions import RobotAccess
 from coraplex.plans.plan_transformation import PlanRewriting
@@ -147,7 +146,7 @@ class StretchApartmentDemonstration(RobotDemonstration):
             parent_connection_specification=Connection6DoFSpecification(),
         ).spawn(world, parent=world.get_body_by_name(CEREAL_SHELF_LAYER_NAME))
 
-    def build_context_extensions(self, world: World) -> List[ContextExtension]:
+    def build_context_extensions(self, world: World) -> list[ContextExtension]:
         """
         Give the plan the Stretch in ``world``, detecting an object before grasping it.
         """
@@ -271,7 +270,7 @@ class StretchApartmentDemonstration(RobotDemonstration):
 
 
 def main(
-    executor_type: Type[PlanExecutor] = SimulatedPlanExecutor, repetitions: int = 1
+    executor_type: type[PlanExecutor] = SimulatedPlanExecutor, repetitions: int = 1
 ) -> None:
     """
     Run the demonstration.

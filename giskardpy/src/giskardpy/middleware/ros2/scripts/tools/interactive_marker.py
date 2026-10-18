@@ -44,7 +44,7 @@ class RootTipPair:
     """
 
     @classmethod
-    def pair_up(cls, root_links: List[str], tip_links: List[str]) -> List[RootTipPair]:
+    def pair_up(cls, root_links: list[str], tip_links: list[str]) -> list[RootTipPair]:
         """
         Pair each root link with the tip link at the same index.
 

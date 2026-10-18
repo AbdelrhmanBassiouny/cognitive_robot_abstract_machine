@@ -59,7 +59,7 @@ class ServerAnsweringOneGoal:
     The thread serving the goal.
     """
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.thread = Thread(target=self._serve, daemon=True)
         self.thread.start()
 
@@ -128,7 +128,7 @@ def server_sending_feedback(giskard_command_server) -> ServerAnsweringOneGoal:
 
 def test_an_error_of_the_feedback_callback_is_raised_to_the_sender_of_the_goal(
     server_sending_feedback: ServerAnsweringOneGoal,
-):
+) -> None:
     client = MyActionClient(rospy.get_node(), JsonAction, "giskard/command")
 
     with pytest.raises(FeedbackDeliberatelyRejected):
@@ -137,7 +137,7 @@ def test_an_error_of_the_feedback_callback_is_raised_to_the_sender_of_the_goal(
 
 def test_a_goal_whose_feedback_callback_failed_is_canceled(
     server_sending_feedback: ServerAnsweringOneGoal,
-):
+) -> None:
     client = MyActionClient(rospy.get_node(), JsonAction, "giskard/command")
 
     with pytest.raises(FeedbackDeliberatelyRejected):

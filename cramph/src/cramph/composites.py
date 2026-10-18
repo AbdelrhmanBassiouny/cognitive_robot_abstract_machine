@@ -3,9 +3,8 @@ from __future__ import annotations, division
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from itertools import combinations, takewhile
-from typing import List
 
-from typing_extensions import Any, Callable, Generator, Optional
+from typing_extensions import Any, Callable, Generator
 
 from krrood.adapters.json_serializer import JSONField
 from krrood.entity_query_language.backends import QueryBackend
@@ -115,7 +114,7 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
     for which it takes a :class:`StatementNode` as its child.
     """
 
-    nodes: List[StatechartNode] = field(default_factory=list, init=True)
+    nodes: list[StatechartNode] = field(default_factory=list, init=True)
     """
     The children of this goal, in order.
     """
@@ -335,7 +334,7 @@ class CramLanguageNodeRunningItsChildrenInTurn(
         A child whose owner decides its success ends once it observes True.
         """
         self._succeed_children_at_their_goals()
-        previous: Optional[StatechartNode] = None
+        previous: StatechartNode | None = None
         for child in self.nodes:
             child.start_condition = (
                 Scalar.const_true()
@@ -417,7 +416,7 @@ class Parallel(EndedByOwner, CramLanguageNode):
     what it reached. For the same reason its own owner decides when it succeeded.
     """
 
-    minimum_success: Optional[int] = None
+    minimum_success: int | None = None
     """
     How many nodes must have reached their goals for this goal to be achieved.
 
@@ -531,7 +530,7 @@ class RepeatUntil(CompositeNodeEndingItsChildren):
     Stops the retrying once it observes True, which makes this goal observe False.
     """
 
-    exception: Optional[DataclassException] = None
+    exception: DataclassException | None = None
     """
     The failure that ends the statechart once :attr:`stop_retry_monitor` calls the
     retrying off, or None to only observe False then.
@@ -742,7 +741,7 @@ class MonitoredCompositeNode(EndedByOwner, CompositeNode, ABC):
     The node whose observation controls the monitored node.
     """
 
-    monitored_node: Optional[StatechartNode] = None
+    monitored_node: StatechartNode | None = None
     """
     The node placed under the monitor's control.
     """
@@ -922,7 +921,7 @@ class ChildChooser(ABC):
     @abstractmethod
     def choose_child(
         self, node: CompositeNodeChoosingItsChild, context: StatechartContext
-    ) -> Optional[StatechartNode]:
+    ) -> StatechartNode | None:
         """
         :param node: The node asking for its next child.
         :param context: The context the statechart runs in.
@@ -949,7 +948,7 @@ class ChildChooser(ABC):
         node: CompositeNodeChoosingItsChild,
         child: StatechartNode,
         context: StatechartContext,
-    ) -> List[StatechartNode]:
+    ) -> list[StatechartNode]:
         """
         :param node: The node that chose `child`.
         :param child: The child just chosen and prepared, see
@@ -1018,7 +1017,7 @@ class CompositeNodeChoosingItsChild(SucceedsOnObservingTrue, CompositeNode):
     How many of :attr:`nodes` were added before the latest reset.
     """
 
-    _chosen_children: List[StatechartNode] = field(
+    _chosen_children: list[StatechartNode] = field(
         default_factory=list, init=False, repr=False
     )
     """
@@ -1063,7 +1062,7 @@ class CompositeNodeChoosingItsChild(SucceedsOnObservingTrue, CompositeNode):
         return True
 
     @property
-    def chosen_children(self) -> List[StatechartNode]:
+    def chosen_children(self) -> list[StatechartNode]:
         """
         :return: The children the chooser chose, in the order it chose them, without
             their failure monitors.
@@ -1071,7 +1070,7 @@ class CompositeNodeChoosingItsChild(SucceedsOnObservingTrue, CompositeNode):
         return list(self._chosen_children)
 
     @property
-    def latest_child(self) -> Optional[StatechartNode]:
+    def latest_child(self) -> StatechartNode | None:
         """
         :return: The child chosen last since the latest reset, or None before the first
             such choice.
@@ -1080,7 +1079,7 @@ class CompositeNodeChoosingItsChild(SucceedsOnObservingTrue, CompositeNode):
             return None
         return self._chosen_children[-1]
 
-    def failure_monitors_of(self, child: StatechartNode) -> List[StatechartNode]:
+    def failure_monitors_of(self, child: StatechartNode) -> list[StatechartNode]:
         """
         :param child: One of :attr:`chosen_children`.
         :return: The failure monitors the chooser handed `child`, which follow it among
@@ -1091,7 +1090,7 @@ class CompositeNodeChoosingItsChild(SucceedsOnObservingTrue, CompositeNode):
             takewhile(lambda node: node not in self._chosen_children, following)
         )
 
-    def failure_reasons_of(self, child: StatechartNode) -> List[StatechartNode]:
+    def failure_reasons_of(self, child: StatechartNode) -> list[StatechartNode]:
         """
         Which failure monitors gave up on `child`, which is what turns its failure into
         a reason.
@@ -1113,7 +1112,7 @@ class CompositeNodeChoosingItsChild(SucceedsOnObservingTrue, CompositeNode):
         ]
 
     @property
-    def failure_reasons(self) -> List[StatechartNode]:
+    def failure_reasons(self) -> list[StatechartNode]:
         """
         :return: The failure monitors that gave up on any of :attr:`chosen_children`,
             child by child, see :meth:`failure_reasons_of`.
@@ -1180,7 +1179,7 @@ class CompositeNodeChoosingItsChild(SucceedsOnObservingTrue, CompositeNode):
         self.statechart.request_rebuild(self)
 
     def give_up_on_child_when(
-        self, child: StatechartNode, failure_monitors: List[StatechartNode]
+        self, child: StatechartNode, failure_monitors: list[StatechartNode]
     ) -> None:
         """
         Run `failure_monitors` beside `child`, failing it once one of them observes True
@@ -1350,7 +1349,7 @@ class StatementNode(CompositeNodeChoosingItsChild):
             for child in self.chosen_children
         ]
 
-    def to_json(self, **kwargs) -> dict[str, Any]:
+    def to_json(self, **kwargs: Any) -> dict[str, Any]:
         """
         :return: The JSON representation of the node choosing its child that this is,
             since the statement is not sent.

@@ -13,7 +13,7 @@ from ...cramph_test.test_statechart.keyword_only_constructors import (
 # %% keyword-only constructors
 
 
-def test_every_detector_takes_keyword_arguments_only():
+def test_every_detector_takes_keyword_arguments_only() -> None:
     audit = KeywordOnlyConstructorAudit(
         [
             segmind.detectors.base,

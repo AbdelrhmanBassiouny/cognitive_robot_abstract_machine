@@ -32,7 +32,7 @@ from semantic_digital_twin.world_description.world_entity import (
     SemanticAnnotation,
     Body,
 )
-from typing_extensions import Any, Dict, Optional, Self, Type, List, TYPE_CHECKING
+from typing_extensions import Any, Dict, Self, Type, List, TYPE_CHECKING
 
 from coraplex.datastructures.enums import PerceptionSource
 from coraplex.exceptions import (
@@ -289,7 +289,7 @@ class PerceptionInterface(ABC):
 
     @staticmethod
     def for_source(
-        source: PerceptionSource, ros_node: Optional[Node] = None
+        source: PerceptionSource, ros_node: Node | None = None
     ) -> PerceptionInterface:
         """
         :param source: The kind of source that answers the queries.
@@ -442,7 +442,7 @@ class PerceptionTask(EndedByOwner, FailsOnObservingFalse, StatechartNode):
     nothing makes it observe ``FALSE``, which fails it, so a surrounding
     :class:`~cramph.composites.TryInOrder` can go and look somewhere else.
 
-    ..warning:: That tick blocks until the source replies, which on the real robot holds
+    .. warning:: That tick blocks until the source replies, which on the real robot holds
         up the control loop for as long as the pipeline takes to answer.
     """
 
@@ -460,7 +460,7 @@ class PerceptionTask(EndedByOwner, FailsOnObservingFalse, StatechartNode):
     plan is executed.
     """
 
-    perception_source: Optional[PerceptionInterface] = field(init=False, default=None)
+    perception_source: PerceptionInterface | None = field(init=False, default=None)
     """
     The source answering the query, resolved during :meth:`set_up`.
     """

@@ -7,7 +7,6 @@ from time import perf_counter
 import numpy as np
 
 import pytest
-from typing_extensions import Dict, List
 
 from cramph.exceptions import NonPositiveRealTimeFactorError
 from cramph.executor import (
@@ -34,7 +33,7 @@ from semantic_digital_twin.world_description.world_entity import Body, PositionS
 from ...pytest_environment import runs_in_continuous_integration
 
 
-def test_simulation_pacer_timing_real_time(monkeypatch):
+def test_simulation_pacer_timing_real_time(monkeypatch) -> None:
     pacer = SimulationPacer(real_time_factor=1.0)
     pacer.target_frequency = 50
     start_time = perf_counter()
@@ -43,7 +42,7 @@ def test_simulation_pacer_timing_real_time(monkeypatch):
     assert np.isclose(perf_counter() - start_time, 1.0, rtol=0.01)
 
 
-def test_simulation_pacer_timing_2x(monkeypatch):
+def test_simulation_pacer_timing_2x(monkeypatch) -> None:
     pacer = SimulationPacer(real_time_factor=2.0)
     pacer.target_frequency = 50
     start_time = perf_counter()
@@ -53,7 +52,7 @@ def test_simulation_pacer_timing_2x(monkeypatch):
     assert np.isclose(actual, 0.5, rtol=0.01)
 
 
-def test_simulation_pacer_timing_halfx(monkeypatch):
+def test_simulation_pacer_timing_halfx(monkeypatch) -> None:
     pacer = SimulationPacer(real_time_factor=0.5)
     pacer.target_frequency = 50
     start_time = perf_counter()
@@ -62,7 +61,7 @@ def test_simulation_pacer_timing_halfx(monkeypatch):
     assert np.isclose(perf_counter() - start_time, 2.0, rtol=0.01)
 
 
-def test_no_pacing_does_not_wait():
+def test_no_pacing_does_not_wait() -> None:
     pacer = NoPacing()
     pacer.target_frequency = 50
     start_time = perf_counter()
@@ -71,11 +70,11 @@ def test_no_pacing_does_not_wait():
     assert perf_counter() - start_time < 0.01
 
 
-def test_a_pacer_has_no_target_frequency_before_it_paces_a_loop():
+def test_a_pacer_has_no_target_frequency_before_it_paces_a_loop() -> None:
     assert NoPacing().target_frequency is None
 
 
-def test_real_time_pacer_holds_the_target_frequency():
+def test_real_time_pacer_holds_the_target_frequency() -> None:
     pacer = RealTimePacer()
     pacer.target_frequency = 50
     start_time = perf_counter()
@@ -84,7 +83,7 @@ def test_real_time_pacer_holds_the_target_frequency():
     assert np.isclose(perf_counter() - start_time, 1.0, rtol=0.01)
 
 
-def test_a_simulation_cannot_be_configured_to_stand_still():
+def test_a_simulation_cannot_be_configured_to_stand_still() -> None:
     with pytest.raises(NonPositiveRealTimeFactorError):
         SimulationPacer(real_time_factor=0.0)
 
@@ -92,7 +91,7 @@ def test_a_simulation_cannot_be_configured_to_stand_still():
 @pytest.mark.skipif(
     not runs_in_continuous_integration(), reason="MuJoCo tests only run in CI"
 )
-def test_stepped_simulation_pacer_advances_the_physics_one_cycle_per_sleep():
+def test_stepped_simulation_pacer_advances_the_physics_one_cycle_per_sleep() -> None:
     """
     A box dropped from a metre falls under the simulation's gravity exactly as far as
     the paced cycles add up to, so the physics and the loop stay in lockstep.
@@ -174,7 +173,7 @@ class ActuatorLengthsRead:
     What a simulator answers a bulk read of actuator lengths with.
     """
 
-    result: Dict[str, float]
+    result: dict[str, float]
     """
     The length read per actuator name.
     """
@@ -187,7 +186,7 @@ class SimulationOfSettlingJoints:
     without any physics being computed.
     """
 
-    joints: Dict[str, JointThatStopsAfterAWhile]
+    joints: dict[str, JointThatStopsAfterAWhile]
     """
     The joints it reports, by name.
     """
@@ -227,7 +226,7 @@ class SimulationOfSettlingJoints:
         for joint in self.joints.values():
             joint.step()
 
-    def get_actuators_lengths(self, actuator_names: List[str]) -> ActuatorLengthsRead:
+    def get_actuators_lengths(self, actuator_names: list[str]) -> ActuatorLengthsRead:
         """
         :param actuator_names: The servos to read, each named after its joint.
         :return: Where the joint of each of them stands.
@@ -258,7 +257,7 @@ def settling_pacer(
     return pacer
 
 
-def test_waiting_ends_once_the_slowest_joint_has_stopped_moving():
+def test_waiting_ends_once_the_slowest_joint_has_stopped_moving() -> None:
     """
     The physics is stepped while anything is still travelling, and one step further,
     which is the step that shows nothing moved.
@@ -276,7 +275,7 @@ def test_waiting_ends_once_the_slowest_joint_has_stopped_moving():
     assert simulation.joints["slow_joint"].position == pytest.approx(0.3)
 
 
-def test_a_robot_that_never_stops_moving_is_waited_for_only_so_long(caplog):
+def test_a_robot_that_never_stops_moving_is_waited_for_only_so_long(caplog) -> None:
     simulation = SimulationOfSettlingJoints(
         joints={"restless_joint": JointThatStopsAfterAWhile(steps_still_moving=1000)}
     )
@@ -287,7 +286,7 @@ def test_a_robot_that_never_stops_moving_is_waited_for_only_so_long(caplog):
     assert "still moving" in caplog.text
 
 
-def test_a_simulation_without_servos_is_not_stepped_at_all():
+def test_a_simulation_without_servos_is_not_stepped_at_all() -> None:
     """
     A joint written straight into the world is already where it was put, so there is
     nothing to wait for.
@@ -302,7 +301,7 @@ def test_a_simulation_without_servos_is_not_stepped_at_all():
 @pytest.mark.skipif(
     not runs_in_continuous_integration(), reason="MuJoCo tests only run in CI"
 )
-def test_waiting_covers_the_servos_moving_a_robots_base():
+def test_waiting_covers_the_servos_moving_a_robots_base() -> None:
     """
     A base still rolling when its commanded velocity drops to zero is waited for like
     any other servoed joint, so the robot stands still once the wait is over.

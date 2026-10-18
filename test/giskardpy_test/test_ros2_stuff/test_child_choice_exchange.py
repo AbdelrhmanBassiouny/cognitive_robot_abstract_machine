@@ -368,7 +368,7 @@ def exchange(
 
 def test_choices_are_taken_in_the_order_the_client_made_them(
     exchange: ClientAndRunningStatechart,
-):
+) -> None:
     exchange.let_both_nodes_be_answered_before_any_choice_is_taken()
 
     exchange.executor.tick()
@@ -387,7 +387,7 @@ def test_choices_are_taken_in_the_order_the_client_made_them(
 
 def test_a_choice_made_later_waits_for_the_one_made_before_it(
     exchange: ClientAndRunningStatechart,
-):
+) -> None:
     exchange.let_both_nodes_be_answered_before_any_choice_is_taken()
 
     assert not exchange.receiving_chooser.has_choice_for(exchange.running.starting_late)
@@ -398,7 +398,7 @@ def test_a_choice_made_later_waits_for_the_one_made_before_it(
 
 def test_a_choice_skipping_nodes_the_statechart_never_got_is_rejected(
     exchange: ClientAndRunningStatechart,
-):
+) -> None:
     waiting_node = exchange.running.starting_first
     exchange.receiving_chooser.receive(
         ChildChoiceMessage(
@@ -415,7 +415,7 @@ def test_a_choice_skipping_nodes_the_statechart_never_got_is_rejected(
 
 def test_a_choice_made_after_one_whose_node_ended_untaken_is_rejected(
     exchange_before_start: ClientAndRunningStatechart,
-):
+) -> None:
     exchange = exchange_before_start
     ended_node = exchange.running.starting_first
     ended_node.interrupt_condition = exchange.running.delay.is_succeeded
@@ -430,7 +430,9 @@ def test_a_choice_made_after_one_whose_node_ended_untaken_is_rejected(
 # %% the failure monitors of a child travel with it
 
 
-def test_the_running_side_gives_up_on_a_child_the_client_handed_failure_monitors():
+def test_the_running_side_gives_up_on_a_child_the_client_handed_failure_monitors() -> (
+    None
+):
     exchange = ClientAndRunningStatechart(
         client_chooser=ChooserGivingUpOnItsFirstChild()
     )
@@ -452,7 +454,7 @@ def test_the_running_side_gives_up_on_a_child_the_client_handed_failure_monitors
 
 def test_the_client_chooses_only_once_its_world_holds_the_changes_of_the_goal(
     exchange: ClientAndRunningStatechart,
-):
+) -> None:
     """
     A choice reads the client's world, which learns of a change of the running side, a
     body attached to a gripper, say, on another channel than the request to choose.
@@ -469,7 +471,7 @@ def test_the_client_chooses_only_once_its_world_holds_the_changes_of_the_goal(
 
 def test_the_client_does_not_wait_for_changes_published_before_the_goal(
     exchange_before_start: ClientAndRunningStatechart,
-):
+) -> None:
     """
     A client that fetched the world instead of receiving these changes would never catch
     up with them.
@@ -485,7 +487,7 @@ def test_the_client_does_not_wait_for_changes_published_before_the_goal(
 
 def test_a_client_whose_world_does_not_catch_up_reports_it(
     exchange: ClientAndRunningStatechart,
-):
+) -> None:
     exchange.client_world_updates.timeout = 0.0
     exchange.running_side_publications.publish_one_update()
 
@@ -502,7 +504,7 @@ def test_a_client_whose_world_does_not_catch_up_reports_it(
 
 def test_the_running_side_asks_again_while_a_node_waits_for_a_child(
     exchange: ClientAndRunningStatechart,
-):
+) -> None:
     """
     A client that could not answer yet is only asked again by another feedback, which is
     otherwise sent only when the states change.
@@ -517,7 +519,7 @@ def test_the_running_side_asks_again_while_a_node_waits_for_a_child(
 
 def test_the_running_side_asks_again_only_once_the_repeat_period_passed(
     exchange: ClientAndRunningStatechart,
-):
+) -> None:
     exchange.feedback_publisher.child_request_repeat_period = 60.0
 
     exchange.feedback_publisher.publish_if_changed()
@@ -526,7 +528,7 @@ def test_the_running_side_asks_again_only_once_the_repeat_period_passed(
     assert len(exchange.action_server.sent_feedback) == 1
 
 
-def test_the_running_side_repeats_nothing_while_no_node_waits_for_a_child():
+def test_the_running_side_repeats_nothing_while_no_node_waits_for_a_child() -> None:
     action_server = ActionServerRunningOneGoal()
     executor = StatechartExecutor(context=StatechartContext(world=World()))
     statechart = Statechart(context=executor.context)

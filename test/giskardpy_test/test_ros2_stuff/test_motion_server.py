@@ -151,7 +151,7 @@ class WorldUpdatesMimic:
     recording what the server had already done whenever it asked about a position.
     """
 
-    executor: Optional[StatechartExecutor] = None
+    executor: StatechartExecutor | None = None
     """
     The executor whose compiled motion statechart is observed while a goal waits.
     """
@@ -869,7 +869,7 @@ class TestGoalResult:
 
     def test_result_contains_the_last_observation_state(
         self, motion_server: MotionServerFixture
-    ):
+    ) -> None:
         motion_server.action_server.goal_json = create_goal_json()
 
         motion_server.motion_server.run_idle_cycle()
@@ -892,7 +892,7 @@ class TestStatesOfAFailedGoal:
 
     def test_a_goal_failing_before_it_compiled_reports_no_states(
         self, motion_server: MotionServerFixture
-    ):
+    ) -> None:
         motion_server.action_server.goal_json = create_goal_json()
         motion_server.motion_server.run_idle_cycle()
         motion_server.action_server.goal_json = "not a goal"
@@ -1003,7 +1003,7 @@ class TestStateFeedback:
 
     def test_the_last_feedback_carries_the_tick_the_goal_ended_on(
         self, motion_server: MotionServerFixture
-    ):
+    ) -> None:
         motion_server.action_server.goal_json = create_goal_json()
 
         motion_server.motion_server.run_idle_cycle()

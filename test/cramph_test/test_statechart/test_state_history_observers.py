@@ -278,7 +278,7 @@ def _compiled_with(
 
 def test_a_node_that_just_started_is_among_those_started_in_the_newest_snapshot(
     statechart_context: StatechartContext,
-):
+) -> None:
     running = ConstTrueNode(name="running")
 
     history = _compiled_with(statechart_context, running).statechart.history
@@ -291,7 +291,7 @@ def test_a_node_that_just_started_is_among_those_started_in_the_newest_snapshot(
 
 def test_a_node_that_just_ended_is_among_those_ended_in_the_newest_snapshot(
     statechart_context: StatechartContext,
-):
+) -> None:
     succeeding = NodeSucceedingOnObservingTrue(
         name="succeeding", observation=ObservationStateValues.TRUE
     )

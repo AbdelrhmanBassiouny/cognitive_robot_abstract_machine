@@ -10,6 +10,9 @@ from giskardpy.data_types.exceptions import SetupException
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 
 
+# %% setup errors
+
+
 @dataclass
 class RobotDescriptionMissingError(SetupException):
     """

@@ -53,7 +53,7 @@ from cramph.context import ContextExtension
 # %% helpers
 
 
-def _compile(plan: StatechartNode, extensions: List[ContextExtension]) -> Statechart:
+def _compile(plan: StatechartNode, extensions: list[ContextExtension]) -> Statechart:
     """
     Build the statechart that executing `plan` runs, and compile it without ticking.
 
@@ -68,7 +68,7 @@ def _compile(plan: StatechartNode, extensions: List[ContextExtension]) -> Statec
     return statechart
 
 
-def _nodes_of_type(root: StatechartNode, node_type: type) -> List[StatechartNode]:
+def _nodes_of_type(root: StatechartNode, node_type: type) -> list[StatechartNode]:
     """
     :return: Every node of `node_type` at or below `root`, in depth first order.
     """
@@ -78,7 +78,7 @@ def _nodes_of_type(root: StatechartNode, node_type: type) -> List[StatechartNode
 # %% an action expands into its motions
 
 
-def test_an_action_expands_into_its_motion(pr2_apartment_context):
+def test_an_action_expands_into_its_motion(pr2_apartment_context) -> None:
     world, view, extensions = pr2_apartment_context
 
     root = expand(MoveTorsoAction(torso_state=TorsoState.HIGH), extensions)
@@ -91,7 +91,9 @@ def test_an_action_expands_into_its_motion(pr2_apartment_context):
 # %% a sequence holds its steps
 
 
-def test_a_sequence_holds_each_action_with_its_own_motion(pr2_apartment_context):
+def test_a_sequence_holds_each_action_with_its_own_motion(
+    pr2_apartment_context,
+) -> None:
     world, view, extensions = pr2_apartment_context
 
     root = expand(
@@ -114,7 +116,9 @@ def test_a_sequence_holds_each_action_with_its_own_motion(pr2_apartment_context)
 # %% monitored subtrees
 
 
-def test_pause_monitor_pauses_the_children_goal(pr2_apartment_context, rclpy_node):
+def test_pause_monitor_pauses_the_children_goal(
+    pr2_apartment_context, rclpy_node
+) -> None:
     """
     The monitor and the children's goal are siblings inside the monitored goal, which is
     what makes the pause condition legal: it may only reference a sibling.
@@ -138,7 +142,7 @@ def test_pause_monitor_pauses_the_children_goal(pr2_apartment_context, rclpy_nod
 
 def test_pause_until_monitor_pauses_the_children_goal(
     pr2_apartment_context, rclpy_node
-):
+) -> None:
     """
     The children's goal is paused on the negated monitor observation, so it is held
     until the monitor turns True rather than while it is True.
@@ -160,7 +164,9 @@ def test_pause_until_monitor_pauses_the_children_goal(
     ]
 
 
-def test_cancel_monitor_ends_the_children_goal(pr2_apartment_context, rclpy_node):
+def test_cancel_monitor_ends_the_children_goal(
+    pr2_apartment_context, rclpy_node
+) -> None:
     world, view, extensions = pr2_apartment_context
     monitor = ConstFalseNode(name="never")
 
@@ -184,7 +190,7 @@ def test_cancel_monitor_ends_the_children_goal(pr2_apartment_context, rclpy_node
 
 def test_cancel_monitor_ends_the_motion_when_the_monitor_fires(
     pr2_apartment_context, rclpy_node
-):
+) -> None:
     """
     The monitored goal holds a node that ends the motion, so giving up on the subtree
     gives up on the plan rather than leaving the rest of it waiting.
@@ -209,7 +215,7 @@ def test_cancel_monitor_ends_the_motion_when_the_monitor_fires(
 
 def test_monitored_subtree_nested_in_a_sequence_compiles(
     pr2_apartment_context, rclpy_node
-):
+) -> None:
     """
     A monitored subtree is a node like any other in the surrounding sequence.
 
@@ -240,7 +246,7 @@ def test_monitored_subtree_nested_in_a_sequence_compiles(
 # %% running actions
 
 
-def test_a_reach_runs_to_its_target(pr2_apartment_context, rclpy_node):
+def test_a_reach_runs_to_its_target(pr2_apartment_context, rclpy_node) -> None:
     world, view, extensions = pr2_apartment_context
 
     milk_connection = world.get_body_by_name("milk.stl").parent_connection
@@ -261,7 +267,7 @@ def test_a_reach_runs_to_its_target(pr2_apartment_context, rclpy_node):
 
 def test_a_pick_up_moves_the_object_to_the_gripper_between_closing_and_lifting(
     pr2_apartment_context,
-):
+) -> None:
     """
     The object only follows the gripper once it belongs to it, and has to before the
     lift, so the branch moves between the two inside the pick-up's own statechart.
@@ -296,7 +302,7 @@ def test_a_pick_up_moves_the_object_to_the_gripper_between_closing_and_lifting(
 
 def test_a_transport_runs_with_its_underspecified_steps(
     pr2_apartment_context, rclpy_node
-):
+) -> None:
     world, view, extensions = pr2_apartment_context
 
     plan = Sequence(
@@ -321,7 +327,7 @@ def test_a_transport_runs_with_its_underspecified_steps(
 # %% perception
 
 
-def test_perceiving_runs_between_the_motions_around_it(pr2_apartment_context):
+def test_perceiving_runs_between_the_motions_around_it(pr2_apartment_context) -> None:
     """
     Perception is a step like any other, so it runs in the same statechart as the
     motions around it, in the order the plan gives.
@@ -362,7 +368,7 @@ def test_perceiving_runs_between_the_motions_around_it(pr2_apartment_context):
     ]
 
 
-def test_a_detect_action_expands_into_a_perception_task(pr2_apartment_context):
+def test_a_detect_action_expands_into_a_perception_task(pr2_apartment_context) -> None:
     world, view, extensions = pr2_apartment_context
 
     root = expand(
@@ -379,8 +385,8 @@ def test_a_detect_action_expands_into_a_perception_task(pr2_apartment_context):
 
 
 def detect_actions_of(
-    plan: StatechartNode, extensions: List[ContextExtension]
-) -> List[DetectAction]:
+    plan: StatechartNode, extensions: list[ContextExtension]
+) -> list[DetectAction]:
     """
     :param plan: The plan to search.
     :param extensions: The extensions the plan is expanded in.
@@ -402,7 +408,7 @@ def reach_action(milk: Milk, view) -> ReachAction:
     return ReachAction(grasp=GraspCandidate.from_body_origin(milk), arm=view.right_arm)
 
 
-def test_a_reach_does_not_perceive_by_default(pr2_apartment_context):
+def test_a_reach_does_not_perceive_by_default(pr2_apartment_context) -> None:
     """
     A reach acts on the pose the world already holds, so it must not spend a detection
     the caller did not ask for.
@@ -418,7 +424,9 @@ def test_a_reach_does_not_perceive_by_default(pr2_apartment_context):
 # %% expansion-time pose capture
 
 
-def test_pick_up_motions_follow_the_object_moved_after_expansion(pr2_apartment_context):
+def test_pick_up_motions_follow_the_object_moved_after_expansion(
+    pr2_apartment_context,
+) -> None:
     """
     A pick-up expands when its plan starts, before the first motion runs, so one that
     captured the object's pose in world coordinates could never act on a pose corrected

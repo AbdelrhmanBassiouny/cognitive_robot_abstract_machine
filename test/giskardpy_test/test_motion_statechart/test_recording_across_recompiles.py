@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-from typing_extensions import List
 
 from cramph.context import StatechartContext
 from cramph.executor import StatechartExecutor
@@ -57,7 +56,7 @@ class TicksAroundARecompile:
         """
         return 1 + self.before
 
-    def recorded_times(self, executor: StatechartExecutor) -> List[float]:
+    def recorded_times(self, executor: StatechartExecutor) -> list[float]:
         """
         :param executor: The executor that ran the ticks.
         :return: The time of every point recorded over the whole run.
@@ -80,7 +79,7 @@ def _position_goal(world: World, tip: Body, name: str) -> CartesianPosition:
     )
 
 
-def _compile_recorded(world: World, tips: List[Body]) -> StatechartExecutor:
+def _compile_recorded(world: World, tips: list[Body]) -> StatechartExecutor:
     """
     :return: An executor recording the world state and the debug expressions, whose
         compiled statechart moves each of `tips`, with a goal named after it, towards a
@@ -188,7 +187,7 @@ def _add_box_next_to_the_robot(world: World) -> Body:
 
 def test_the_world_state_recorded_before_a_node_joined_is_kept(
     cylinder_bot_world: World,
-):
+) -> None:
     ticks = TicksAroundARecompile()
     executor = _compile_a_recorded_drive(cylinder_bot_world)
     state_at_compile = cylinder_bot_world.state._data.copy()
@@ -204,7 +203,7 @@ def test_the_world_state_recorded_before_a_node_joined_is_kept(
 
 def test_the_debug_expressions_recorded_before_a_node_joined_are_kept(
     cylinder_bot_world: World,
-):
+) -> None:
     ticks = TicksAroundARecompile()
     executor = _compile_a_recorded_drive(cylinder_bot_world)
     position_at_compile = (
@@ -226,7 +225,7 @@ def test_the_debug_expressions_recorded_before_a_node_joined_are_kept(
 
 def test_a_debug_expression_of_a_joined_node_has_no_value_before_it_joined(
     cylinder_bot_world: World,
-):
+) -> None:
     ticks = TicksAroundARecompile()
     world = cylinder_bot_world
     executor = _compile_a_recorded_drive(world)
@@ -248,7 +247,7 @@ def test_a_debug_expression_of_a_joined_node_has_no_value_before_it_joined(
 
 def test_the_world_state_recorded_before_a_branch_moved_is_kept(
     cylinder_bot_world: World,
-):
+) -> None:
     ticks = TicksAroundARecompile(after=60)
     world = cylinder_bot_world
     box = _add_box_next_to_the_robot(world)
@@ -266,7 +265,7 @@ def test_the_world_state_recorded_before_a_branch_moved_is_kept(
 
 def test_a_debug_expression_is_recorded_along_the_moved_branch(
     cylinder_bot_world: World,
-):
+) -> None:
     ticks = TicksAroundARecompile(after=60)
     world = cylinder_bot_world
     box = _add_box_next_to_the_robot(world)

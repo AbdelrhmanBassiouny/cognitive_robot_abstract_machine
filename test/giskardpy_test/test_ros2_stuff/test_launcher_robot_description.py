@@ -7,7 +7,7 @@ from __future__ import annotations
 import inspect
 from importlib.resources import files
 from types import ModuleType
-from typing import Iterator
+from typing_extensions import Iterator
 
 import pytest
 from rclpy.qos import QoSDurabilityPolicy, QoSProfile
@@ -72,7 +72,7 @@ def published_robot_description(init_rospy) -> Iterator[str]:
 )
 def test_a_velocity_launcher_uses_the_description_the_robot_publishes(
     launcher: ModuleType, published_robot_description: str
-):
+) -> None:
     giskard = launcher.create_giskard()
 
     assert giskard.world_config.urdf == published_robot_description
@@ -105,7 +105,7 @@ def test_a_velocity_launcher_uses_the_description_the_robot_publishes(
 )
 def test_a_standalone_launcher_uses_the_description_its_robot_class_declares(
     launcher: ModuleType, robot_class: type[AbstractRobot]
-):
+) -> None:
     giskard = launcher.create_giskard()
 
     assert giskard.world_config.urdf is None

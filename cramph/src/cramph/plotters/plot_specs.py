@@ -51,6 +51,9 @@ class NodePlotSpec:
 
     @classmethod
     def create_composite_node_style(cls) -> Self:
+        """
+        :return: The style of a composite node.
+        """
         return cls(
             visible=True,
             style=NodeDrawingStyle.COMPOSITE.style,

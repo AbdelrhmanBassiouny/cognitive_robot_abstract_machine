@@ -165,7 +165,7 @@ class TfPublisherModelCallback(ModelChangeCallback, HasROS2Node):
     The tf frame name of every entity published so far.
     """
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         super().__post_init__()
         self.static_tf_pub = self.node.create_publisher(
             TFMessage,
@@ -179,7 +179,7 @@ class TfPublisherModelCallback(ModelChangeCallback, HasROS2Node):
         self.init_tf_message()
         self.static_tf_pub.publish(self.static_tf_message)
 
-    def stop(self):
+    def stop(self) -> None:
         self.node.destroy_publisher(self.static_tf_pub)
         super().stop()
 

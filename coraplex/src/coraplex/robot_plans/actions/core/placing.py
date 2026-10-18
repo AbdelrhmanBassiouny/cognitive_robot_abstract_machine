@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import Any, Dict, List, Tuple
+from typing_extensions import Any, Tuple
 
 from krrood.entity_query_language.factories import (
     variable_from,
@@ -69,7 +69,7 @@ class PlaceAction(
     :func:`~semantic_digital_twin.reasoning.robot_predicates.is_body_gripped`).
     """
 
-    def create_temporary_collision_rules(self) -> List[CollisionRule]:
+    def create_temporary_collision_rules(self) -> list[CollisionRule]:
         """
         :return: An allowance for the gripper holding :attr:`object_designator` to
             touch the surroundings of the object, which it is around from setting it down
@@ -79,7 +79,7 @@ class PlaceAction(
         arm, _ = self._holding_arm_and_grasp()
         return [AllowCollisionForEndEffector(end_effector=arm.end_effector)]
 
-    def create_steps(self) -> List[StatechartNode]:
+    def create_steps(self) -> list[StatechartNode]:
         arm, grasp = self._holding_arm_and_grasp()
         # A release runs the grasp backwards: down from above the target, then out
         # along the way the grasp was approached.
@@ -113,7 +113,7 @@ class PlaceAction(
             *self._retract_steps(arm, poses.pre_grasp),
         ]
 
-    def _retract_steps(self, arm: Arm, retract_pose: Pose) -> List[StatechartNode]:
+    def _retract_steps(self, arm: Arm, retract_pose: Pose) -> list[StatechartNode]:
         """
         :param arm: The arm that placed the object.
         :param retract_pose: Where its tool frame withdraws to.
@@ -167,8 +167,8 @@ class PlaceAction(
 
     @staticmethod
     def _grips_of_every_arm(
-        context: StatechartContext, kwargs: Dict[str, Any], threshold: float
-    ) -> List[ConditionType]:
+        context: StatechartContext, kwargs: dict[str, Any], threshold: float
+    ) -> list[ConditionType]:
         """
         :param threshold: The fraction of rays between the fingers that has to hit the
             object for it to count as gripped.

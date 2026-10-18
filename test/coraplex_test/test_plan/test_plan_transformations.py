@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import pytest
-from typing_extensions import Callable, Iterable, List, Optional
+from typing_extensions import Callable, Iterable, List
 
 from coraplex.datastructures.enums import InsertionPosition, ReachFraction
 from coraplex.exceptions import (
@@ -96,9 +96,9 @@ from ...sampling import SAMPLING_SEED
 
 def rewritten(
     plan: StatechartNode,
-    extensions: List[ContextExtension],
+    extensions: list[ContextExtension],
     plan_transformations: Iterable[PlanTransformation] = (),
-    executor_for: Callable[[List[ContextExtension]], PlanExecutor] = simulated_executor,
+    executor_for: Callable[[list[ContextExtension]], PlanExecutor] = simulated_executor,
 ) -> StatechartNode:
     """
     Expand `plan` in the statechart that would run it, which also rewrites it with
@@ -115,7 +115,7 @@ def rewritten(
     return plan
 
 
-def steps_of(node: StatechartNode) -> List[StatechartNode]:
+def steps_of(node: StatechartNode) -> list[StatechartNode]:
     """
     :param node: An expanded action, or a plan language node.
     :return: The steps it runs, in order, which is its goal alone for an action reaching
@@ -138,7 +138,7 @@ def kind_of(step: StatechartNode) -> type:
     return type(step)
 
 
-def kinds_of_the_steps_of(node: StatechartNode) -> List[type]:
+def kinds_of_the_steps_of(node: StatechartNode) -> list[type]:
     """
     :return: What every step of `node` does, see :func:`kind_of`.
     """
@@ -180,7 +180,7 @@ class MoveGrippersBeforeTorsoMotion(InsertionTransformation[MoveTorsoAction]):
     def anchor(self, plan_node: MoveTorsoAction) -> StatechartNode:
         return joint_goal_of(plan_node)
 
-    def nodes_to_insert(self, plan_node: MoveTorsoAction) -> List[StatechartNode]:
+    def nodes_to_insert(self, plan_node: MoveTorsoAction) -> list[StatechartNode]:
         return [
             gripper_goal(plan_node.robot.left_arm.end_effector, GripperState.OPEN),
             gripper_goal(plan_node.robot.right_arm.end_effector, GripperState.CLOSE),
@@ -215,7 +215,7 @@ class ParkArmsBeforeTorsoMotion(InsertionTransformation[MoveTorsoAction]):
     def anchor(self, plan_node: MoveTorsoAction) -> StatechartNode:
         return joint_goal_of(plan_node)
 
-    def nodes_to_insert(self, plan_node: MoveTorsoAction) -> List[StatechartNode]:
+    def nodes_to_insert(self, plan_node: MoveTorsoAction) -> list[StatechartNode]:
         return [ParkArmsAction(arms=plan_node.robot.all_arms)]
 
 
@@ -235,7 +235,7 @@ class MoveGripperLastInTheReachBody(InsertionTransformation[ReachAction]):
     def anchor(self, plan_node: ReachAction) -> StatechartNode:
         return plan_node
 
-    def nodes_to_insert(self, plan_node: ReachAction) -> List[StatechartNode]:
+    def nodes_to_insert(self, plan_node: ReachAction) -> list[StatechartNode]:
         return [
             gripper_goal(plan_node.robot.right_arm.end_effector, GripperState.CLOSE)
         ]
@@ -250,7 +250,7 @@ def reach_action(milk: Milk, view) -> ReachAction:
     return ReachAction(grasp=GraspCandidate.from_body_origin(milk), arm=view.right_arm)
 
 
-def detect_actions_of(plan: StatechartNode) -> List[DetectAction]:
+def detect_actions_of(plan: StatechartNode) -> list[DetectAction]:
     """
     :return: The detections the expanded `plan` performs.
     """
@@ -296,7 +296,7 @@ class MoveGripperBeforeEveryAction(InsertionTransformation[Action]):
     def anchor(self, plan_node: Action) -> StatechartNode:
         return plan_node
 
-    def nodes_to_insert(self, plan_node: Action) -> List[StatechartNode]:
+    def nodes_to_insert(self, plan_node: Action) -> list[StatechartNode]:
         return [
             gripper_goal(plan_node.robot.right_arm.end_effector, GripperState.CLOSE)
         ]
@@ -311,7 +311,7 @@ class TransformationWithoutPosition(InsertionTransformation[MoveTorsoAction]):
     def anchor(self, plan_node: MoveTorsoAction) -> StatechartNode:
         return plan_node
 
-    def nodes_to_insert(self, plan_node: MoveTorsoAction) -> List[StatechartNode]:
+    def nodes_to_insert(self, plan_node: MoveTorsoAction) -> list[StatechartNode]:
         return [gripper_goal(plan_node.robot.left_arm.end_effector, GripperState.OPEN)]
 
 
@@ -350,7 +350,7 @@ def test_a_transformation_that_binds_no_type_cannot_say_what_it_matches():
         TransformationWithoutMatchedType().matched_type
 
 
-def test_a_transformation_bound_to_an_unmatchable_type_is_rejected():
+def test_a_transformation_bound_to_an_unmatchable_type_is_rejected() -> None:
     """
     A transformation selects its nodes by their type, so a type that is no statechart
     node leaves no rule to select by.
@@ -404,7 +404,7 @@ class MoveGripperBeforeHighTorso(InsertionTransformation[MoveTorsoAction]):
     def anchor(self, plan_node: MoveTorsoAction) -> StatechartNode:
         return joint_goal_of(plan_node)
 
-    def nodes_to_insert(self, plan_node: MoveTorsoAction) -> List[StatechartNode]:
+    def nodes_to_insert(self, plan_node: MoveTorsoAction) -> list[StatechartNode]:
         return [gripper_goal(plan_node.robot.left_arm.end_effector, GripperState.OPEN)]
 
 
@@ -598,7 +598,7 @@ def test_an_inserted_action_is_expanded(pr2_apartment_context):
 
 def test_a_neighbour_of_a_node_without_a_language_node_above_it_is_rejected(
     pr2_apartment_context,
-):
+) -> None:
     """
     Only a plan language node can hold a new neighbour, so a plan that is a single
     action has no place for one in front of it.
@@ -653,7 +653,7 @@ def test_the_perception_precedes_the_final_approach(pr2_apartment_context):
 
 def test_the_perception_precedes_the_final_approach_a_step_was_put_behind(
     pr2_apartment_context,
-):
+) -> None:
     """
     The final approach is the last step moving the tool center point, so a step another
     transformation put behind it does not take its place.
@@ -675,7 +675,7 @@ def test_the_perception_precedes_the_final_approach_a_step_was_put_behind(
 
 def test_the_perception_precedes_the_final_approach_of_a_straight_reach(
     stretch_apartment_context,
-):
+) -> None:
     """
     A reach moving its tool center point in a straight line approaches the object with a
     different goal, which still counts as its final approach, also where the Stretch
@@ -711,7 +711,9 @@ def test_a_reach_not_yet_expanded_has_no_final_approach(pr2_apartment_context):
         DetectBeforeGrasp().final_approach(reach_action(milk, view))
 
 
-def test_a_reach_does_not_perceive_without_the_transformation(pr2_apartment_context):
+def test_a_reach_does_not_perceive_without_the_transformation(
+    pr2_apartment_context,
+) -> None:
     """
     A reach acts on the pose the world already holds, so it must not spend a detection
     the caller did not ask for.
@@ -1032,18 +1034,18 @@ def test_an_object_that_lies_in_no_drawer_is_picked_up_unchanged(pr2_apartment_c
 @dataclass
 class ChoosesTheGivenChild(PlanChildChooser):
     """
-    Answers a node choosing its child with the child it was given, once, and prepares
-    it as a plan's child.
+    Answers a node choosing its child with the child it was given, once, and prepares it
+    as a plan's child.
     """
 
-    child: Optional[StatechartNode] = field(default=None)
+    child: StatechartNode | None = field(default=None)
     """
     The child handed over, None once it was.
     """
 
     def choose_child(
         self, node: StatementNode, context: StatechartContext
-    ) -> Optional[StatechartNode]:
+    ) -> StatechartNode | None:
         child, self.child = self.child, None
         return child
 
@@ -1088,7 +1090,9 @@ def test_the_opening_joins_the_sequence_a_grounded_pick_up_is_a_child_of(
     assert is_grounding(drive_to_the_spoon, NavigateAction)
 
 
-def test_the_first_action_of_a_plan_is_preceded_by_parking(pr2_apartment_context):
+def test_the_first_action_of_a_plan_is_preceded_by_parking(
+    pr2_apartment_context,
+) -> None:
     world, view, extensions = pr2_apartment_context
     plan_transformations = [ParkArmsBeforeFirstAction()]
 
@@ -1259,7 +1263,7 @@ def test_a_transport_of_an_object_in_no_drawer_is_left_alone(pr2_apartment_conte
 # %% parking around a pick-and-place
 
 
-def step_types_of(action: Action) -> List[type]:
+def step_types_of(action: Action) -> list[type]:
     """
     :param action: An expanded composite action.
     :return: The type of each step the action runs, in the order they are run, the type
@@ -1317,7 +1321,7 @@ class MoveLeftGripperBeforeTorso(InsertionTransformation[MoveTorsoAction]):
     def anchor(self, plan_node: MoveTorsoAction) -> StatechartNode:
         return plan_node
 
-    def nodes_to_insert(self, plan_node: MoveTorsoAction) -> List[StatechartNode]:
+    def nodes_to_insert(self, plan_node: MoveTorsoAction) -> list[StatechartNode]:
         return [gripper_goal(plan_node.robot.left_arm.end_effector, GripperState.OPEN)]
 
 
@@ -1327,7 +1331,7 @@ class MoveRightGripperBeforeTorso(MoveLeftGripperBeforeTorso):
     Puts a right gripper goal there instead.
     """
 
-    def nodes_to_insert(self, plan_node: MoveTorsoAction) -> List[StatechartNode]:
+    def nodes_to_insert(self, plan_node: MoveTorsoAction) -> list[StatechartNode]:
         return [
             gripper_goal(plan_node.robot.right_arm.end_effector, GripperState.CLOSE)
         ]
@@ -1414,7 +1418,7 @@ def test_a_transformation_the_case_does_not_need_is_no_collision(
 # %% holding an object at its own width
 
 
-def width_actions_of(plan: StatechartNode) -> List[MoveFingersToWidthAction]:
+def width_actions_of(plan: StatechartNode) -> list[MoveFingersToWidthAction]:
     """
     :return: The actions of `plan` that send the fingers to a width.
     """
@@ -1423,7 +1427,7 @@ def width_actions_of(plan: StatechartNode) -> List[MoveFingersToWidthAction]:
     ]
 
 
-def shutting_goals_of(plan: StatechartNode) -> List[MoveGripper]:
+def shutting_goals_of(plan: StatechartNode) -> list[MoveGripper]:
     """
     :return: The goals of `plan` that shut the gripper.
     """
@@ -1483,7 +1487,7 @@ def test_a_grasp_still_shuts_the_gripper_where_nothing_pushes_back(
 
 def test_a_gripper_whose_fingers_are_not_modelled_like_the_real_ones_still_shuts(
     stretch_apartment_context,
-):
+) -> None:
     """
     A Stretch's description does not match its real fingers closely enough to send them
     to an object's width, so its grasp is left shutting the gripper.

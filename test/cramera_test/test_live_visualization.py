@@ -229,12 +229,14 @@ class ActionNamingTheChart(ConstTrueNode, DesignatorParameters):
 
 
 class TestStatechartPublishing:
-    def test_compiling_publishes_the_plan_tree(self, motion_execution):
+    def test_compiling_publishes_the_plan_tree(self, motion_execution) -> None:
         motion_execution.compile()
 
         assert nodes_by_kind(motion_execution.bridge)["Sequence"] is not None
 
-    def test_a_started_action_names_the_chart(self, world, finalized_recordings):
+    def test_a_started_action_names_the_chart(
+        self, world, finalized_recordings
+    ) -> None:
         bridge = Bridge()
         live = LiveVisualization(bridge=bridge)
         statechart = Statechart(context=StatechartContext(world=world))
@@ -246,14 +248,14 @@ class TestStatechartPublishing:
         assert bridge._chart_title == type(action).__name__
         live.stop()
 
-    def test_a_history_change_publishes_the_statechart(self, motion_execution):
+    def test_a_history_change_publishes_the_statechart(self, motion_execution) -> None:
         motion_execution.compile()
 
         motion_execution.record(LifeCycleValues.RUNNING)
 
         assert motion_execution.bridge.get_chart()["nodes"] != []
 
-    def test_a_started_node_republishes_the_plan(self, motion_execution):
+    def test_a_started_node_republishes_the_plan(self, motion_execution) -> None:
         motion_execution.compile()
 
         motion_execution.record(LifeCycleValues.RUNNING)
@@ -396,7 +398,7 @@ class TestLiveVisualization:
 
     def test_an_executor_run_is_published_from_compile_to_its_end(
         self, world, finalized_recordings
-    ):
+    ) -> None:
         bridge = Bridge()
         live = LiveVisualization(bridge=bridge)
         statechart = an_ending_statechart(world)
@@ -415,7 +417,7 @@ class TestLiveVisualization:
 
     def test_the_viewer_keeps_showing_a_run_once_it_ended(
         self, world, finalized_recordings
-    ):
+    ) -> None:
         """
         What the run left stays inspectable in the viewer until the visualization is
         stopped.
@@ -436,7 +438,7 @@ class TestLiveVisualization:
 
     def test_stopping_after_a_run_finalizes_its_recording(
         self, world, finalized_recordings
-    ):
+    ) -> None:
         bridge = Bridge()
         live = LiveVisualization(bridge=bridge)
         statechart = an_ending_statechart(world)
@@ -453,7 +455,7 @@ class TestLiveVisualization:
 
     def test_later_runs_in_the_same_world_continue_the_recording(
         self, world, finalized_recordings
-    ):
+    ) -> None:
         bridge = Bridge()
         live = LiveVisualization(bridge=bridge)
         first = an_ending_statechart(world)
@@ -475,7 +477,7 @@ class TestLiveVisualization:
 
     def test_a_run_in_another_world_is_served_by_the_same_server(
         self, world, finalized_recordings
-    ):
+    ) -> None:
         bridge = Bridge()
         live = LiveVisualization(bridge=bridge)
         first = an_ending_statechart(world)

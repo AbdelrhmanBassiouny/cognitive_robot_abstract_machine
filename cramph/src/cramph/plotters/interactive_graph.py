@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import rustworkx as rx
-from typing_extensions import ClassVar, Dict, List, Type, TYPE_CHECKING
+from typing_extensions import ClassVar, TYPE_CHECKING
 
 from cramph.node import StatechartNode
 from krrood.rustworkx_utils.graph_visualizer_base import (
@@ -28,6 +28,9 @@ if TYPE_CHECKING:
     from cramph.statechart import Statechart
 
 
+# %% interactive statechart graph
+
+
 @dataclass
 class StatechartGraphVisualizer:
     """
@@ -47,7 +50,7 @@ class StatechartGraphVisualizer:
     """
 
     visualizer_classes: ClassVar[
-        Dict[GraphVisualizerBackend, Type[GraphVisualizerBase]]
+        dict[GraphVisualizerBackend, type[GraphVisualizerBase]]
     ] = {
         GraphVisualizerBackend.PLOTLY: InteractiveGraphVisualizer,
         GraphVisualizerBackend.CYTOSCAPE: CytoscapeGraphVisualizer,
@@ -94,7 +97,7 @@ class StatechartGraphVisualizer:
         )
         return graph
 
-    def _node_details(self, node: StatechartNode) -> List[str]:
+    def _node_details(self, node: StatechartNode) -> list[str]:
         """
         :param node: The node to describe.
         :return: The state of the node and the ticks of its current run as detail lines.

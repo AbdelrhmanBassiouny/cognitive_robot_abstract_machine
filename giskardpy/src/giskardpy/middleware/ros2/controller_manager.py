@@ -27,6 +27,9 @@ if TYPE_CHECKING:
     from controller_manager_msgs.msg import ControllerState as ControllerStateMessage
 
 
+# %% controller vocabulary
+
+
 class ControllerType(StrEnum):
     """
     The kinds of ros2_control controllers Giskard can talk to, as the controller manager
@@ -56,6 +59,9 @@ class ControllerParameter(StrEnum):
     """
     The joints a controller commands, in the order of its command layout.
     """
+
+
+# %% controller manager
 
 
 @dataclass

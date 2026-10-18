@@ -43,7 +43,7 @@ def _two_node_statechart() -> Statechart:
 # %% sending the nodes from an index on
 
 
-def test_only_the_nodes_from_the_index_on_are_sent():
+def test_only_the_nodes_from_the_index_on_are_sent() -> None:
     statechart = _two_node_statechart()
 
     data = statechart.nodes_from_to_json(first_node_index=1)
@@ -52,7 +52,7 @@ def test_only_the_nodes_from_the_index_on_are_sent():
     assert sent_names == [statechart.nodes[1].name]
 
 
-def test_only_the_conditions_of_the_sent_nodes_are_sent():
+def test_only_the_conditions_of_the_sent_nodes_are_sent() -> None:
     statechart = _two_node_statechart()
     second = statechart.nodes[1]
 
@@ -68,7 +68,7 @@ def test_only_the_conditions_of_the_sent_nodes_are_sent():
 
 def test_sent_nodes_join_a_running_statechart_and_read_its_nodes(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     sender = _two_node_statechart()
     receiver = Statechart.from_json(
         _sent_through_json(sender.to_json()), context=statechart_executor.context

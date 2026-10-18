@@ -151,7 +151,7 @@ class DebugExpressionTrajectory:
             ]
         )
 
-    def follow(self, debug_expressions: List[DebugExpression]) -> None:
+    def follow(self, debug_expressions: list[DebugExpression]) -> None:
         """
         Record `debug_expressions` from now on, keeping everything recorded so far.
 

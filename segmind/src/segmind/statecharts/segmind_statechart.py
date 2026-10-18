@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List
 
 from cramph.context import StatechartContext
 from cramph.statechart import Statechart
@@ -28,7 +27,7 @@ class DetectorStatechartBuilder:
     :class:`~segmind.detectors.base.SegmindContext`.
     """
 
-    detectors: List[AbstractDetector] = field(
+    detectors: list[AbstractDetector] = field(
         default_factory=lambda: [
             ContactDetector(),
             SupportDetector(),

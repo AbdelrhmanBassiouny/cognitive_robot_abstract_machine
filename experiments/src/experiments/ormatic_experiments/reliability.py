@@ -209,7 +209,7 @@ class ORMaticReliabilityAggregateResult(ExperimentResult):
 def reliability_experiment(
     plan_size: int,
     world: World,
-    extensions: List[ContextExtension],
+    extensions: list[ContextExtension],
     world_building_duration: float,
 ) -> ORMaticReliabilityExperimentResult:
     """

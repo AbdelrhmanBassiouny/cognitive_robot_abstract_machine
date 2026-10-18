@@ -548,7 +548,7 @@ class CommandPublisherRecordingCalls(CommandPublisher):
     order.
     """
 
-    calls: List[str] = field(default_factory=list)
+    calls: list[str] = field(default_factory=list)
     """
     The methods that ran, each by its name.
     """
@@ -606,7 +606,7 @@ class TestModelChangesOfTheMotionItself:
 
     def test_commands_keep_being_published_while_the_motion_is_built_again(
         self, local_control_loop: ControlLoop
-    ):
+    ) -> None:
         """
         The controller slows the robot down while the motion statechart is built again
         after the motion changed the model, so the command publishers are not stopped

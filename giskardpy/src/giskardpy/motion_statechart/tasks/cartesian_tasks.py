@@ -5,7 +5,7 @@ from dataclasses import field, dataclass
 from functools import cached_property
 
 import numpy as np
-from typing_extensions import ClassVar, List
+from typing_extensions import ClassVar
 
 import krrood.symbolic_math.symbolic_math as sm
 from cramph.composites import Parallel
@@ -91,7 +91,7 @@ class CartesianTask(ConvergingTask, ABC):
         self._forward_kinematics_binding.bind(context.world)
         self.root_T_goal_reference_frame = self._forward_kinematics_binding.root_T_tip
 
-    def on_start(self, context: StatechartContext):
+    def on_start(self, context: StatechartContext) -> None:
         if self.binding_policy == GoalBindingPolicy.Bind_on_start:
             self._forward_kinematics_binding.bind(context.world)
 
@@ -393,7 +393,7 @@ class CartesianPositionTrajectory(CartesianTask):
         )
         return float(distance_to_path + segment_lengths.sum())
 
-    def compile_current_point_on_tick(self, context: StatechartContext):
+    def compile_current_point_on_tick(self, context: StatechartContext) -> None:
         """
         Computing the current point relative to the goal reference frame is expensive, this method turns it into
         a compiled expression.
@@ -750,7 +750,7 @@ class CartesianPose(Parallel):
         self.nodes[:0] = self._create_tasks()
         super().expand(context)
 
-    def _create_tasks(self) -> List[MotionStatechartNode]:
+    def _create_tasks(self) -> list[MotionStatechartNode]:
         """
         :return: The position and the orientation task.
         """
@@ -1045,7 +1045,7 @@ class CartesianVelocityLimit(Parallel):
     limits are enforced. Higher weights give these constraints soft priority
     over lower weighted constraints when conflicts occur."""
 
-    nodes: List[StatechartNode] = field(default_factory=list, init=False)
+    nodes: list[StatechartNode] = field(default_factory=list, init=False)
     """
     The linear and the angular velocity limit.
     """

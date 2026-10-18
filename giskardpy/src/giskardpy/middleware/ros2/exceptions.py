@@ -70,7 +70,7 @@ class ControllersNotLoadedError(SetupException):
     The controller manager that was asked.
     """
 
-    missing_controllers: List[str]
+    missing_controllers: list[str]
     """
     The requested controllers the manager does not report.
     """
@@ -97,7 +97,7 @@ class ControllersNotActiveError(SetupException):
     The controller manager that was asked.
     """
 
-    inactive_controllers: List[str]
+    inactive_controllers: list[str]
     """
     The requested controllers the manager reports in another state than active.
     """

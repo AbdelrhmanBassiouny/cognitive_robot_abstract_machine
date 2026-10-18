@@ -84,7 +84,7 @@ class DebugExpression:
         return self.expression.evaluate()
 
     @classmethod
-    def collect_from(cls, statechart: Statechart) -> List[DebugExpression]:
+    def collect_from(cls, statechart: Statechart) -> list[DebugExpression]:
         """
         :param statechart: The statechart whose nodes registered debug expressions.
         :return: The debug expressions of every motion node of `statechart`, in node
@@ -108,7 +108,7 @@ class MotionNodeArtifacts(NodeArtifacts):
     A collection of constraints that describe a motion task.
     """
 
-    error: Optional[Scalar] = field(default=None)
+    error: Scalar | None = field(default=None)
     """
     How far this node is from its goal.
 
@@ -116,7 +116,7 @@ class MotionNodeArtifacts(NodeArtifacts):
     to watch whether the node is still converging.
     """
 
-    debug_expressions: List[DebugExpression] = field(default_factory=list)
+    debug_expressions: list[DebugExpression] = field(default_factory=list)
     """
     A list of symbolic expressions used for debugging only.
 
@@ -183,14 +183,14 @@ class MotionStatechartNode(StatechartNode):
         return self.artifacts.constraints
 
     @property
-    def debug_expressions(self) -> List[DebugExpression]:
+    def debug_expressions(self) -> list[DebugExpression]:
         """
         :return: The debug expressions registered by this node during build.
         """
         return self.artifacts.debug_expressions
 
     @property
-    def error_signal(self) -> Optional[Scalar]:
+    def error_signal(self) -> Scalar | None:
         """
         :return: The error signal produced during build, if any.
         """
