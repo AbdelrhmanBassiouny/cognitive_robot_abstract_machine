@@ -88,3 +88,29 @@ jobs:
       - run: |
           source .claude/hooks/resolve-personal-notes-config.sh
           python -m pytest "${BASSTLER_TESTS_DIRECTORY}" --confcutdir="${BASSTLER_TESTS_DIRECTORY}"
+
+  test_cram_development_tools:
+    # cram-development-tools is a standalone, dependency-light package; like basstler it
+    # needs none of the docker-based robotics environment.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pytest ./cram_development_tools
+      # --confcutdir stops pytest walking up to the repository-root test/conftest.py,
+      # which imports the robotics stack this job does not install.
+      - run: python -m pytest test/cram_development_tools_test --confcutdir=test/cram_development_tools_test
+
+  check_agents_md_is_generated:
+    # AGENTS.md is generated from the rules cram-development-tools ships and
+    # AGENTS.project.md; a hand edit or a forgotten regeneration fails here.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install ./cram_development_tools
+      - run: cram-development-tools agents-md --check

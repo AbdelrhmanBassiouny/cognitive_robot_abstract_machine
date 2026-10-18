@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cram-development-tools"
+version = "0.1.0"
+description = "Development tooling for Python repositories: a black-compatible docstring formatter and a generator for agent instruction files (AGENTS.md)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "LGPL-3.0-only"
+authors = [
+    {name = "Abdelrhman Bassiouny", email = "abassiou@uni-bremen.de"}
+]
+maintainers = [
+    {name = "Abdelrhman Bassiouny", email = "abassiou@uni-bremen.de"}
+]
+keywords = ["developer-tooling", "pre-commit", "black", "docformatter", "agents"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Utilities",
+]
+# black and docformatter are pinned because the formatter's output depends on their
+# versions, and every repository using a given release must format identically.
+dependencies = [
+    "black==25.11.0",
+    "docformatter==1.7.8",
+    "tqdm",
+    "typing_extensions",
+]
+
+[project.urls]
+Repository = "https://github.com/cram2/cognitive_robot_abstract_machine"
+
+[project.scripts]
+cram-development-tools = "cram_development_tools.command_line:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+cram_development_tools = ["AGENTS.md"]
