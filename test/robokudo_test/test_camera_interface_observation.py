@@ -1,6 +1,6 @@
 from __future__ import annotations
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from unittest.mock import Mock
 from geometry_msgs.msg import TransformStamped
 from rclpy.time import Time as ROSClockTime
@@ -17,6 +17,7 @@ from sensor_msgs.msg import CameraInfo
 
 import robokudo.world as robokudo_world
 from robokudo.annotators.static_camera_transform import StaticCameraTransformAnnotator
+from robokudo.types.cv import ColorToDepthRatio
 from robokudo.cas import CAS
 from robokudo.types.image import ImageRotation
 from robokudo.descriptors.camera_configs.base_camera_config import BaseCameraConfig
@@ -65,7 +66,7 @@ class SynchronizedImageConfiguration:
     Whether the legacy high-resolution crop is active.
     """
 
-    color2depth_ratio: tuple[float, float] = (1.0, 1.0)
+    color_to_depth_ratio: ColorToDepthRatio = field(default_factory=ColorToDepthRatio)
     """
     Scale from color resolution to aligned depth resolution.
     """
@@ -119,7 +120,7 @@ class OpenCVCameraTestConfig:
     Legacy intrinsic value replaced from the declared calibration.
     """
 
-    color2depth_ratio: tuple[float, float] = (1.0, 1.0)
+    color_to_depth_ratio: ColorToDepthRatio = field(default_factory=ColorToDepthRatio)
     """
     Scale from color resolution to optional depth resolution.
     """
@@ -643,7 +644,7 @@ def test_rgbd_reader_stores_camera_observation(
     )
     interface.depth = np.zeros((camera_info.height, camera_info.width), dtype=np.uint16)
     interface.camera_info = camera_info
-    interface.color2depth_ratio = None
+    interface.color_to_depth_ratio = None
     interface.timestamp = Time(sec=10, nanosec=20)
     interface.lock = Lock()
     cas = CAS()
@@ -779,7 +780,7 @@ def test_rgbd_high_resolution_crop_updates_effective_resolution(
     interface.color = np.zeros((1024, 1280, 3), dtype=np.uint8)
     interface.depth = np.zeros((480, 640), dtype=np.uint16)
     interface.camera_info = camera_info
-    interface.color2depth_ratio = None
+    interface.color_to_depth_ratio = None
     interface.timestamp = Time(sec=70, nanosec=80)
     interface.lock = Lock()
     cas = CAS()

@@ -98,7 +98,7 @@ class StorageReaderInterface(CameraInterface):
             {
                 CASViews.COLOR_IMAGE,
                 CASViews.DEPTH_IMAGE,
-                CASViews.COLOR2DEPTH_RATIO,
+                CASViews.COLOR_TO_DEPTH_RATIO,
                 CASViews.CAMERA_OBSERVATION,
             }
         )

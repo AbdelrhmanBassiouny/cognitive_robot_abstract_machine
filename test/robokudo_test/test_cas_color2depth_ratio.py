@@ -9,6 +9,7 @@ import pytest
 from py_trees.common import Status
 from robokudo.annotators.core import Worker
 from robokudo.annotators.sift_annotator import SIFTAnnotator
+from robokudo.types.cv import ColorToDepthRatio
 from robokudo.cas import CAS, CASViews
 from robokudo.exceptions import ColorToDepthRatioMissing
 from robokudo.types.scene import ObjectHypothesis
@@ -18,26 +19,26 @@ import numpy as np
 
 
 # %% Required ratio
-@pytest.mark.parametrize("views", [{}, {CASViews.COLOR2DEPTH_RATIO: None}])
-def test_missing_color2depth_ratio_raises(views: dict[CASViews, None]) -> None:
+@pytest.mark.parametrize("views", [{}, {CASViews.COLOR_TO_DEPTH_RATIO: None}])
+def test_missing_color_to_depth_ratio_raises(views: dict[CASViews, None]) -> None:
     """
     Absent and unset scaling raise the same precondition exception.
     """
     with pytest.raises(ColorToDepthRatioMissing):
-        _ = CAS(views=views).color2depth_ratio
+        _ = CAS(views=views).color_to_depth_ratio
 
 
-def test_color2depth_ratio_returns_stored_value() -> None:
+def test_color_to_depth_ratio_returns_stored_value() -> None:
     """
     Scaling access preserves the value assigned by the producer.
     """
     cas = CAS()
-    cas.color2depth_ratio = (0.5, 0.5)
-    assert cas.color2depth_ratio == cas.views[CASViews.COLOR2DEPTH_RATIO]
+    cas.color_to_depth_ratio = ColorToDepthRatio(horizontal=0.5, vertical=0.5)
+    assert cas.color_to_depth_ratio == cas.views[CASViews.COLOR_TO_DEPTH_RATIO]
 
 
 # %% Annotator failure
-@pytest.mark.parametrize("views", [{}, {CASViews.COLOR2DEPTH_RATIO: None}])
+@pytest.mark.parametrize("views", [{}, {CASViews.COLOR_TO_DEPTH_RATIO: None}])
 def test_sift_missing_ratio_records_failure(
     views: dict[CASViews, None],
     monkeypatch: pytest.MonkeyPatch,
@@ -53,7 +54,7 @@ def test_sift_missing_ratio_records_failure(
     assert isinstance(get_blackboard_exception(), ColorToDepthRatioMissing)
 
 
-@pytest.mark.parametrize("views", [{}, {CASViews.COLOR2DEPTH_RATIO: None}])
+@pytest.mark.parametrize("views", [{}, {CASViews.COLOR_TO_DEPTH_RATIO: None}])
 def test_image_scaling_missing_ratio_raises(views: dict[CASViews, None]) -> None:
     """
     Image scaling reports missing scaling through the CAS exception.

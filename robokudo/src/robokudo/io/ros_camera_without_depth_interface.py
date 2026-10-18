@@ -32,6 +32,7 @@ from typing_extensions import Any, TYPE_CHECKING
 
 from robokudo.cas import CASViews
 from robokudo.exceptions import InvalidCameraObservation
+from robokudo.types.cv import ColorToDepthRatio
 from robokudo.types.image import ImageRotation
 from robokudo.io.camera_interface import ROSCameraInterface
 from robokudo.io.exceptions import UnsupportedImageRotation
@@ -100,7 +101,7 @@ class ROSCameraWithoutDepthInterface(ROSCameraInterface):
         """
         Latest camera calibration info.
         """
-        self.color2depth_ratio: tuple[float, float] | None = (1.0, 1.0)
+        self.color_to_depth_ratio: ColorToDepthRatio = ColorToDepthRatio()
         """
         Always (1.0, 1.0) since no depth data.
         """
@@ -354,7 +355,7 @@ class ROSCameraWithoutDepthInterface(ROSCameraInterface):
 
         cas.set(CASViews.COLOR_IMAGE, self.color)
         cas.set(CASViews.DEPTH_IMAGE, None)
-        cas.set(CASViews.COLOR2DEPTH_RATIO, (1, 1))
+        cas.set(CASViews.COLOR_TO_DEPTH_RATIO, ColorToDepthRatio())
         camera_frame = self.camera_info.header.frame_id or self.camera_config.tf_from
         self.validate_camera_frame_for_tf(camera_frame)
         world_T_camera = self.world_T_camera_from_tf(self.timestamp)

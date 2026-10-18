@@ -577,6 +577,34 @@ class TestRotationMatrix:
 
 
 class TestPoint3:
+    def test_the_midpoint_lies_halfway_between_both_points(self):
+        near = Point3(x=0, y=2, z=4)
+        far = Point3(x=2, y=6, z=-4)
+
+        np.testing.assert_allclose(
+            near.midpoint(far).to_np(), Point3(x=1, y=4, z=0).to_np()
+        )
+
+    def test_the_midpoint_is_the_same_whichever_point_it_is_asked_of(self):
+        near = Point3(x=0, y=2, z=4)
+        far = Point3(x=2, y=6, z=-4)
+
+        np.testing.assert_allclose(
+            near.midpoint(far).to_np(), far.midpoint(near).to_np()
+        )
+
+    def test_a_point_meets_itself_where_it_already_is(self):
+        point = Point3(x=1, y=-2, z=3)
+
+        np.testing.assert_allclose(point.midpoint(point).to_np(), point.to_np())
+
+    def test_the_midpoint_stays_in_the_frame_the_points_were_given_in(self):
+        reference_frame = Body(name=PrefixedName("muh"))
+        near = Point3(x=0, y=0, z=0, reference_frame=reference_frame)
+        far = Point3(x=2, y=0, z=0, reference_frame=reference_frame)
+
+        assert near.midpoint(far).reference_frame is reference_frame
+
     def test_distance_point_to_line_segment1(self):
         p = Point3(x=0, y=0, z=0)
         start = Point3(x=0, y=0, z=-1)

@@ -94,7 +94,7 @@ class SemDTRayTracerCameraInterface(CameraInterface):
 
         cas.set(CASViews.COLOR_IMAGE, frame.color_bgr.swapaxes(0, 1).copy())
         cas.set(CASViews.DEPTH_IMAGE, frame.depth_in_millimeters.swapaxes(0, 1).copy())
-        cas.set(CASViews.COLOR2DEPTH_RATIO, self.camera_config.color2depth_ratio)
+        cas.set(CASViews.COLOR_TO_DEPTH_RATIO, self.camera_config.color_to_depth_ratio)
         cas.set(CASViews.OBJECT_IMAGE, frame.segmentation.swapaxes(0, 1).copy())
         cas.set(CASViews.OBJECT_COLOR_MAP, frame.object_color_map)
         cas.set_ref(CASViews.GROUND_TRUTH_WORLD_REFERENCE, world)

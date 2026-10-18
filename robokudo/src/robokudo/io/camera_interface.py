@@ -69,6 +69,8 @@ from semantic_digital_twin.world_description.world_entity import Body
 if TYPE_CHECKING:
     import numpy.typing as npt
 
+    from robokudo.types.cv import ColorToDepthRatio
+
 
 # %% Camera definitions
 
@@ -607,7 +609,7 @@ class KinectCameraInterface(ROSCameraInterface):
         Latest camera info message
         """
 
-        self.color2depth_ratio: tuple[float, float] | None = None
+        self.color_to_depth_ratio: ColorToDepthRatio | None = None
         """
         Ratio between color and depth image sizes
         """
@@ -758,11 +760,11 @@ class KinectCameraInterface(ROSCameraInterface):
         self.camera_info.width = width
         self.camera_info.height = height
 
-        self.color2depth_ratio = self.camera_config.color2depth_ratio
+        self.color_to_depth_ratio = self.camera_config.color_to_depth_ratio
 
         cas.set(CASViews.COLOR_IMAGE, self.color)
         cas.set(CASViews.DEPTH_IMAGE, self.depth)
-        cas.set(CASViews.COLOR2DEPTH_RATIO, self.color2depth_ratio)
+        cas.set(CASViews.COLOR_TO_DEPTH_RATIO, self.color_to_depth_ratio)
 
         camera_frame = self.camera_info.header.frame_id or self.camera_config.tf_from
         self.validate_camera_frame_for_tf(camera_frame)

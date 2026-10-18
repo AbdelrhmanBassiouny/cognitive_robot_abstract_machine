@@ -4,7 +4,10 @@ import pytest
 from std_msgs.msg import String
 
 from robokudo.types.camera import CameraObservation
+
+from robokudo.cas import CASViews
 from robokudo.io.cas_view_codecs import CASViewCodecRegistry
+from robokudo.types.cv import ColorToDepthRatio
 from robokudo.types.tf import StampedTransform
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
     WorldEntityWithIDKwargsTracker,
@@ -127,6 +130,15 @@ def test_camera_observation_codec_resolves_camera_and_preserves_pose_state(
     assert (
         decoded_observation.timestamp_nanoseconds == observation.timestamp_nanoseconds
     )
+
+
+def test_color_to_depth_ratio_roundtrip():
+    registry = CASViewCodecRegistry()
+    ratio = ColorToDepthRatio(horizontal=0.5, vertical=0.25)
+
+    encoded = registry.encode_view(CASViews.COLOR_TO_DEPTH_RATIO, ratio)
+
+    assert registry.decode_view(encoded) == (CASViews.COLOR_TO_DEPTH_RATIO, ratio)
 
 
 def test_decode_view_unknown_serializer_raises():

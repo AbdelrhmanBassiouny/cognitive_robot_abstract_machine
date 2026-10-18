@@ -2,13 +2,14 @@ from __future__ import annotations
 
 # %% Imports
 from krrood.ormatic.utils import classproperty
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 from robokudo.descriptors.camera_configs.base_camera_config import BaseCameraConfig
 from robokudo.descriptors.camera_configs.components import (
     StaticCameraTransformComponent,
 )
+from robokudo.types.cv import ColorToDepthRatio
 
 
 @dataclass(slots=True)
@@ -63,12 +64,12 @@ class FileReaderCameraConfig(BaseCameraConfig, StaticCameraTransformComponent):
 
     Otherwise, append target_dir to target_ros_package and load the files from there.
     """
-    color2depth_ratio: tuple[float, float] = (0.5, 0.5)
+    color_to_depth_ratio: ColorToDepthRatio | None = field(
+        default_factory=lambda: ColorToDepthRatio(horizontal=0.5, vertical=0.5)
+    )
     """
-    If you have depth data to read from, please set the ratio in x,y here If it's not
-    set, (1,1) will be the default.
-
-    Set to None if you don't have that.
+    Size of the recorded depth image relative to the recorded color image, or None
+    without depth data.
     """
     filename_prefix: str = "rk_"
     """

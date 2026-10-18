@@ -97,7 +97,7 @@ def test_the_atom_count_is_how_many_atoms_the_molecule_holds(
     molecule's own atom list.
     """
     for molecule in molecules:
-        assert MutagenesisMoleculeAggregations(instance=molecule).atom_count() == len(
+        assert MutagenesisMoleculeAggregations(role_taker=molecule).atom_count() == len(
             molecule.atoms
         )
 
@@ -170,7 +170,7 @@ def test_one_region_per_value_the_molecules_take(
     off the same statistic the circuit was fitted on.
     """
     taken = {
-        MutagenesisMoleculeAggregations(instance=molecule).branching_atom_count()
+        MutagenesisMoleculeAggregations(role_taker=molecule).branching_atom_count()
         for molecule in molecules
     }
 

@@ -310,7 +310,7 @@ class RGBDFileReaderInterface(FileReaderInterface):
         cas.set(CASViews.DEPTH_IMAGE, data[CASViews.DEPTH_IMAGE])
 
         recorded_observation = data[CASViews.CAMERA_OBSERVATION]
-        cas.set(CASViews.COLOR2DEPTH_RATIO, self.camera_config.color2depth_ratio)
+        cas.set(CASViews.COLOR_TO_DEPTH_RATIO, self.camera_config.color_to_depth_ratio)
         camera_frame = recorded_observation["camera_frame"]
         world_T_camera = self.static_world_T_camera_if_configured(camera_frame)
         self.store_camera_observation(

@@ -6,13 +6,14 @@ from __future__ import annotations
 
 # %% Imports
 from krrood.ormatic.utils import classproperty
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import cv2
 from sensor_msgs.msg import CameraInfo
 from typing_extensions import TYPE_CHECKING
 
 from robokudo.descriptors.camera_configs.base_camera_config import BaseCameraConfig
+from robokudo.types.cv import ColorToDepthRatio
 
 if TYPE_CHECKING:
     import numpy.typing as npt
@@ -96,10 +97,9 @@ class OpenCVCameraConfig(BaseCameraConfig):
     """
     Camera intrinsic parameters.
     """
-    color2depth_ratio: tuple[float, float] = (1.0, 1.0)
+    color_to_depth_ratio: ColorToDepthRatio = field(default_factory=ColorToDepthRatio)
     """
-    If the resolution of the depth image differs from the color image, we need to define
-    the factor for (x, y).
+    Size of the depth image relative to the color image.
     """
     viewpoint_camera_to_world = None
     """

@@ -38,7 +38,7 @@ from robokudo.types.annotation import (
     Classification,
     PoseAnnotation,
 )
-from robokudo.types.cv import ImageROI
+from robokudo.types.cv import ImageROI, Point2D, Rect
 from robokudo.types.scene import ObjectHypothesis
 from robokudo.types.tf import Pose
 from robokudo.utils.annotator_helper import (
@@ -46,7 +46,6 @@ from robokudo.utils.annotator_helper import (
 )
 from robokudo.utils.cv_helper import (
     clamp_bounding_rect,
-    get_scale_coordinates,
     get_scaled_color_image_for_depth_image,
     rect_outside_image,
 )
@@ -445,13 +444,13 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
         resized_color = get_scaled_color_image_for_depth_image(
             self.get_cas(), self.color
         )
-        color_to_depth_ratio = self.get_cas().color2depth_ratio
+        color_to_depth_ratio = self.get_cas().color_to_depth_ratio
         pointcloud_camera_model = (
             self.get_cas()
             .require_camera_observation()
             .effective_camera_model.scaled(
-                scale_x=color_to_depth_ratio[0],
-                scale_y=color_to_depth_ratio[1],
+                scale_x=color_to_depth_ratio.horizontal,
+                scale_y=color_to_depth_ratio.vertical,
             )
         )
         self.camera_intrinsics = Open3DCameraModelAdapter.to_intrinsic(
@@ -566,30 +565,25 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
     def get_cloud_from_2d_bb_roi(
         self, color_rgb: npt.NDArray
     ) -> o3d.geometry.PointCloud:
+        """
+        Build the point cloud of the depth measurements inside the configured bounding
+        box.
+
+        :param color_rgb: The color image in RGB order, scaled to the depth image
+            resolution.
+        :return: The colored point cloud of the depth measurements inside the box.
+        """
+        parameters = self.descriptor.parameters
+        box = Rect(
+            pos=Point2D(x=parameters.bounding_box_x, y=parameters.bounding_box_y),
+            width=parameters.bounding_box_width,
+            height=parameters.bounding_box_height,
+        )
+        left, top, right, bottom = (
+            self.get_cas().color_to_depth_ratio.depth_region(box).get_corner_points()
+        )
         mask = np.zeros_like(self.depth, dtype=np.uint8)
-        bounding_box_left = self.descriptor.parameters.bounding_box_x
-        bounding_box_right = (
-            self.descriptor.parameters.bounding_box_x
-            + self.descriptor.parameters.bounding_box_width
+        mask[top:bottom, left:right] = 255
+        return get_cloud_from_rgb_depth_and_mask(
+            color_rgb, self.depth, mask, self.camera_intrinsics, mask_true_value=255
         )
-        bounding_box_top = self.descriptor.parameters.bounding_box_y
-        bounding_box_bottom = (
-            self.descriptor.parameters.bounding_box_y
-            + self.descriptor.parameters.bounding_box_height
-        )
-        # Scale bounding box coordinates from the color image to the depth image.
-        color_to_depth_ratio = self.get_cas().color2depth_ratio
-        scaled_bounding_box_left, scaled_bounding_box_top = get_scale_coordinates(
-            color_to_depth_ratio, (bounding_box_left, bounding_box_top)
-        )
-        scaled_bounding_box_right, scaled_bounding_box_bottom = get_scale_coordinates(
-            color_to_depth_ratio, (bounding_box_right, bounding_box_bottom)
-        )
-        mask[
-            int(scaled_bounding_box_top) : int(scaled_bounding_box_bottom),
-            int(scaled_bounding_box_left) : int(scaled_bounding_box_right),
-        ] = 255
-        cloud = get_cloud_from_rgb_depth_and_mask(
-            color_rgb, self.depth, mask, self.camera_intrinsics, mask_true_val=255
-        )
-        return cloud

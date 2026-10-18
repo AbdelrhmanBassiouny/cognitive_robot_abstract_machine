@@ -15,7 +15,7 @@ from robokudo.annotators.core import BaseAnnotator, ThreadedAnnotator
 from robokudo.cas import CASViews
 from robokudo.io.camera_model_adapters import Open3DCameraModelAdapter
 from robokudo.types.annotation import PoseAnnotation, TSDFAnnotation
-from robokudo.types.cv import Point2D, Rect
+from robokudo.types.cv import Rect
 from robokudo.types.scene import ObjectHypothesis
 from robokudo.utils.comparators import TranslationComparator
 from robokudo.utils.cv_helper import get_scaled_color_image_for_depth_image
@@ -23,6 +23,8 @@ from robokudo.utils.transform import get_transform_matrix_from_q
 
 if TYPE_CHECKING:
     import numpy.typing as npt
+
+    from robokudo.types.cv import ColorToDepthRatio
 
 
 # %% Volume integration inputs
@@ -160,7 +162,7 @@ class TSDFAnnotator(ThreadedAnnotator):
         if len(object_hypotheses) == 0:
             return Status.FAILURE
 
-        color2depth_ratio: tuple[float, float] = cas.color2depth_ratio
+        color_to_depth_ratio: ColorToDepthRatio = cas.color_to_depth_ratio
 
         volume_integration_inputs: list[VolumeIntegrationInput] = []
         for object_hypothesis in object_hypotheses:
@@ -171,16 +173,7 @@ class TSDFAnnotator(ThreadedAnnotator):
                 )
                 continue
 
-            left, top, right, bottom = object_hypothesis.roi.roi.get_corner_points()
-            scaled_left = int(left * color2depth_ratio[0])
-            scaled_top = int(top * color2depth_ratio[1])
-            scaled_right = int(right * color2depth_ratio[0])
-            scaled_bottom = int(bottom * color2depth_ratio[1])
-            roi = Rect(
-                pos=Point2D(x=scaled_left, y=scaled_top),
-                width=scaled_right - scaled_left,
-                height=scaled_bottom - scaled_top,
-            )
+            roi = color_to_depth_ratio.depth_region(object_hypothesis.roi.roi)
             volume_integration_inputs.append(
                 VolumeIntegrationInput(
                     object_hypothesis=object_hypothesis, pose=poses[0], roi=roi
@@ -192,8 +185,8 @@ class TSDFAnnotator(ThreadedAnnotator):
 
         camera_intrinsic = Open3DCameraModelAdapter.to_intrinsic(
             cas.require_camera_observation().effective_camera_model.scaled(
-                scale_x=color2depth_ratio[0],
-                scale_y=color2depth_ratio[1],
+                scale_x=color_to_depth_ratio.horizontal,
+                scale_y=color_to_depth_ratio.vertical,
             )
         )
         color_image: npt.NDArray[np.uint8] = get_scaled_color_image_for_depth_image(

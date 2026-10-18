@@ -13,7 +13,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from .constants import DatasetLocation
+from .constants import DatasetLocation, EnvironmentVariable, FileMode
 
 
 @dataclass(frozen=True)
@@ -38,15 +38,23 @@ class ExecutableStubDirectory:
         path.mkdir()
         return cls(path)
 
+    @staticmethod
+    def stub_for(executable_name: str) -> Path:
+        """
+        :param executable_name: The executable to stand in for.
+        :return: The script standing in for it, ``dataset/stubs/<name>.sh``.
+        """
+        return DatasetLocation.STUBS / f"{executable_name}.sh"
+
     def install(self, executable_name: str) -> None:
         """
-        Copy the stub backing *executable_name*, from ``dataset/stubs/<name>.sh``.
+        Copy the stub backing *executable_name* into this directory.
 
-        :param executable_name: The executable to stand in for, e.g. ``"gh"``.
+        :param executable_name: The executable to stand in for.
         """
         destination = self.path / executable_name
-        shutil.copy(DatasetLocation.STUBS / f"{executable_name}.sh", destination)
-        destination.chmod(0o755)
+        shutil.copy(self.stub_for(executable_name), destination)
+        destination.chmod(FileMode.EXECUTABLE)
 
     def ahead_of(self, search_path: str) -> str:
         """
@@ -55,33 +63,44 @@ class ExecutableStubDirectory:
         """
         return os.pathsep.join([str(self.path), search_path])
 
+    def ahead_of_inherited_path(self) -> str:
+        """
+        :return: This process's own ``PATH`` with this directory first.
+        """
+        return self.ahead_of(
+            os.environ.get(EnvironmentVariable.EXECUTABLE_SEARCH_PATH, "")
+        )
 
-def path_hiding_executable(executable_name: str, mirror_parent: Path) -> str:
+
+def path_hiding_executables(mirror_parent: Path, *executable_names: str) -> str:
     """
-    Build a ``PATH`` string equivalent to the current one but with *executable_name*
-    unfindable through it.
+    Build a ``PATH`` string equivalent to the current one but with every one of
+    *executable_names* unfindable through it.
 
-    Mirrors (via symlinks) any directory that provides *executable_name* into a copy
-    missing just that one file, rather than dropping the whole directory from `PATH` -
-    the directory providing it (typically ``/usr/bin``) also provides ``bash``, ``git``
-    and ``python3``, which the script under test still needs to run at all.
+    Mirrors (via symlinks) any directory that provides one of them into a copy missing
+    just those files, rather than dropping the whole directory from `PATH` - the
+    directory providing them (typically ``/usr/bin``) also provides ``bash``, ``git`` and
+    ``python3``, which the script under test still needs to run at all.
 
-    :param executable_name: The executable to hide, e.g. ``"gh"``.
     :param mirror_parent: Where to create mirror directories.
+    :param executable_names: The executables to hide.
     :return: The adjusted ``PATH`` string.
     """
+    hidden = frozenset(executable_names)
     entries = []
-    mirror_index = 0
-    for entry in os.environ.get("PATH", "").split(os.pathsep):
+    for mirror_index, entry in enumerate(
+        os.environ.get(EnvironmentVariable.EXECUTABLE_SEARCH_PATH, "").split(os.pathsep)
+    ):
         directory = Path(entry)
-        if not directory.is_dir() or not (directory / executable_name).exists():
+        if not directory.is_dir() or not any(
+            (directory / name).exists() for name in hidden
+        ):
             entries.append(entry)
             continue
-        mirror = mirror_parent / f"hide-{executable_name}-{mirror_index}"
-        mirror_index += 1
+        mirror = mirror_parent / f"hidden-executables-{mirror_index}"
         mirror.mkdir()
         for item in directory.iterdir():
-            if item.name == executable_name:
+            if item.name in hidden:
                 continue
             try:
                 (mirror / item.name).symlink_to(item)

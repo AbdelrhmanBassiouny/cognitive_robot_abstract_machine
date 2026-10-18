@@ -1520,19 +1520,16 @@ def test_a_whole_pass_leaves_no_board_behind(fork_checkout: ForkCheckout):
     stale one is worse than one finding none - so a pass that has finished with it
     removes it, and the next pass starts by exporting a fresh one.
 
-    The board written here is the real one, which ``board_snapshot_set_aside`` has moved
-    out of the way and puts back afterwards.
+    The board is the one the pass was given, in the scratch checkout, so the run touches
+    no board outside it.
     """
     a_parent_and_child(fork_checkout)
-    board_path = PackageLocation.BOARD.value
-    board_path.write_text("{}")
+    maintenance = AlreadyResolvedPass.over(fork_checkout, the_board())
+    maintenance.board.write_text("{}")
 
-    RunReportCommand().run(
-        AlreadyResolvedPass.over(fork_checkout, the_board()),
-        argparse.Namespace(json=True),
-    )
+    RunReportCommand().run(maintenance, argparse.Namespace(json=True))
 
-    assert not board_path.exists()
+    assert not maintenance.board.exists()
 
 
 # %% the exit status every command derives from what it left behind
@@ -1695,6 +1692,7 @@ class AlreadyResolvedPass(MaintenancePass):
         return cls(
             configuration=make_configuration(),
             git=checkout.git,
+            board=checkout.project_root / PackageLocation.BOARD.value.name,
             resolved_stack=a_stack(checkout, pull_requests),
         )
 

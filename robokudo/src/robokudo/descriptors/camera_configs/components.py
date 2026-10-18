@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 
+from robokudo.types.cv import ColorToDepthRatio
+
 
 @dataclass(kw_only=True)
 class DepthComponent:
@@ -141,12 +143,10 @@ class RGBDComponent(DepthComponent, ColorComponent):
     Camera component with configuration for RGB-D input data.
     """
 
-    color2depth_ratio: tuple[float, float] = (1.0, 1.0)
+    color_to_depth_ratio: ColorToDepthRatio = field(default_factory=ColorToDepthRatio)
     """
-    If the resolution of the depth image differs from the color image,
-    we need to define the factor for (x, y).
-    Example: (0.5,0.5) for a 640x480 depth image compared to a
-    1280x960 rgb image Otherwise, just put (1,1) here
+    Size of the depth image relative to the color image, for example half along both
+    axes for a 640x480 depth image next to a 1280x960 color image.
     """
 
     hi_res_mode: bool = False

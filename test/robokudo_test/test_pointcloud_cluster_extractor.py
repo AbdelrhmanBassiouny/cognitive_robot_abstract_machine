@@ -10,6 +10,7 @@ from robokudo.annotators.pointcloud_cluster_extractor import (
     NaivePointCloudClusterExtractor,
     PointCloudClusterExtractor,
 )
+from robokudo.types.cv import ColorToDepthRatio
 from robokudo.cas import CAS, CASViews
 from robokudo.exceptions import PointCloudCameraModelMissing
 
@@ -28,7 +29,7 @@ def test_cluster_extractor_requires_pointcloud_camera_model(
     """
     cas = CAS()
     cas.set_ref(CASViews.CLOUD, o3d.geometry.PointCloud())
-    cas.set_ref(CASViews.COLOR2DEPTH_RATIO, (1.0, 1.0))
+    cas.set_ref(CASViews.COLOR_TO_DEPTH_RATIO, ColorToDepthRatio())
     extractor = extractor_type()
     monkeypatch.setattr(extractor, "get_cas", lambda: cas)
 

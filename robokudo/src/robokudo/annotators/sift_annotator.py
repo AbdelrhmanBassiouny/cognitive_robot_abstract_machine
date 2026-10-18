@@ -19,6 +19,8 @@ from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
 if TYPE_CHECKING:
     import numpy.typing as numpy_types
 
+    from robokudo.types.cv import ColorToDepthRatio
+
 
 # %% Feature extraction
 class SIFTAnnotator(ThreadedAnnotator):
@@ -52,7 +54,7 @@ class SIFTAnnotator(ThreadedAnnotator):
         if len(object_hypotheses) == 0:
             return Status.FAILURE
 
-        depth_ratio = cas.color2depth_ratio
+        color_to_depth_ratio = cas.color_to_depth_ratio
         camera_model = cas.require_camera_observation().effective_camera_model
 
         color_image = cas.get_copy(CASViews.COLOR_IMAGE)
@@ -103,7 +105,7 @@ class SIFTAnnotator(ThreadedAnnotator):
             )
 
         point_cloud = self._keypoints_to_point_cloud(
-            all_keypoints, depth_image, camera_model, depth_ratio
+            all_keypoints, depth_image, camera_model, color_to_depth_ratio
         )
         self.get_annotator_output_struct().set_image(visualization_image)
         self.get_annotator_output_struct().set_geometries(point_cloud)
@@ -136,7 +138,7 @@ class SIFTAnnotator(ThreadedAnnotator):
         keypoints: list[cv2.KeyPoint],
         depth_image: numpy_types.NDArray,
         intrinsics: PinholeCameraModel,
-        depth_ratio: tuple[float, float] = (1.0, 1.0),
+        color_to_depth_ratio: ColorToDepthRatio,
         depth_scale: float = 1000.0,
         maximum_depth: float = 3.0,
     ) -> open3d.geometry.PointCloud:
@@ -146,7 +148,8 @@ class SIFTAnnotator(ThreadedAnnotator):
         :param keypoints: The keypoints to project to 3D.
         :param depth_image: The depth image used for projection.
         :param intrinsics: The camera intrinsics used for projection.
-        :param depth_ratio: The ratio of the depth image to the color image.
+        :param color_to_depth_ratio: Size of the depth image relative to the color
+            image.
         :param depth_scale: The depth scale of the depth image.
         :param maximum_depth: The maximum depth to project.
         :return: The 3D point cloud.
@@ -161,9 +164,9 @@ class SIFTAnnotator(ThreadedAnnotator):
         spatial_points = []
         responses = []
         for keypoint in keypoints:
-            pixel_column, pixel_row = round(keypoint.pt[0] * depth_ratio[0]), round(
-                keypoint.pt[1] * depth_ratio[1]
-            )
+            pixel_column, pixel_row = round(
+                keypoint.pt[0] * color_to_depth_ratio.horizontal
+            ), round(keypoint.pt[1] * color_to_depth_ratio.vertical)
             if not (
                 0 <= pixel_row < depth_image.shape[0]
                 and 0 <= pixel_column < depth_image.shape[1]

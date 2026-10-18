@@ -103,10 +103,14 @@ class LookingMotion(BaseMotion):
         return
 
     @property
-    def _motion_chart(self) -> Pointing:
-        return Pointing(
+    def _motion_chart(self) -> Pointing | Parallel:
+        task = Pointing(
             root_link=self.robot.get_torso().root,
             tip_link=self.camera.root,
             goal_point=self.target.position,
             pointing_axis=self.camera.viewing_direction,
         )
+        hold_base = self.keep_base_still()
+        if not hold_base:
+            return task
+        return Parallel([task, *hold_base])

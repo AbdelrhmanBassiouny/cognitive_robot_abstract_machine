@@ -125,11 +125,11 @@ class ImagePreprocessorAnnotator(BaseAnnotator):
         self.depth = self.get_cas().get(CASViews.DEPTH_IMAGE)
         self.color = self.get_cas().get(CASViews.COLOR_IMAGE)
         cas = self.get_cas()
-        color2depth_ratio = cas.color2depth_ratio
+        color_to_depth_ratio = cas.color_to_depth_ratio
         pointcloud_camera_model = (
             cas.require_camera_observation().effective_camera_model.scaled(
-                scale_x=color2depth_ratio[0],
-                scale_y=color2depth_ratio[1],
+                scale_x=color_to_depth_ratio.horizontal,
+                scale_y=color_to_depth_ratio.vertical,
             )
         )
         self.camera_intrinsics = Open3DCameraModelAdapter.to_intrinsic(

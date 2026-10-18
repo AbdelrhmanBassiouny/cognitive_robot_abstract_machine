@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC
 from dataclasses import dataclass
-from typing_extensions import TYPE_CHECKING, Type
+from typing_extensions import Optional, TYPE_CHECKING, Type
 
 from krrood.entity_query_language.factories import ConditionType, get_false_statements
 from krrood.exceptions import DataclassException
@@ -190,6 +190,25 @@ class ReachHasNoFinalApproach(DataclassException):
 
 
 @dataclass
+class GraspHasNoClosingMotion(DataclassException):
+    """
+    Raised when the motion a grasp closes with is asked for, but no gripper motion that
+    shuts the gripper lies below the grasp's node.
+    """
+
+    plan_node: PlanNode
+    """
+    The node of the grasp.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.plan_node} has no motion closing the gripper below it."
+
+    def suggest_correction(self) -> str:
+        return "ask for the closing motion only once the grasp has been expanded"
+
+
+@dataclass
 class MissingWaypoints(DataclassException):
     """
     Raised when a waypoint motion or tool action produced no waypoints to follow.
@@ -283,6 +302,33 @@ class ObjectIsNotHeld(DataclassException):
 
     def suggest_correction(self) -> str:
         return "place the object after a pick-up of it."
+
+
+@dataclass
+class FingerWidthNeedsPhysics(DataclassException):
+    """
+    Raised when fingers are sent to a width while the execution is not physically
+    simulated.
+    """
+
+    execution_type: Optional[ExecutionType]
+    """
+    The execution type the motion was performed under.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"closing the fingers to a width has no effect under "
+            f"{self.execution_type}"
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Perform the plan inside a PhysicallySimulatedRobot or on the real robot, "
+            "where the fingers meet the object. Where the world is only moved "
+            "kinematically, a held object hangs off the tool frame and a gripper state "
+            "of its own is enough: use MoveGripperMotion instead."
+        )
 
 
 @dataclass

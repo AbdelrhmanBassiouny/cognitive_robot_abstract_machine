@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 
 from typing_extensions import TYPE_CHECKING
 
+from robokudo.types.cv import ColorToDepthRatio
 from robokudo.descriptors.camera_configs.base_camera_config import BaseCameraConfig
 from semantic_digital_twin.datastructures.camera_rendering import SemDTRGBMode
 
@@ -91,7 +92,7 @@ class SemDTRayTracerCameraConfig(BaseCameraConfig):
     World source and camera-selection policy used for rendering.
     """
 
-    color2depth_ratio: tuple[float, float] = (1.0, 1.0)
+    color_to_depth_ratio: ColorToDepthRatio = field(default_factory=ColorToDepthRatio)
     """
     Scale factor from RGB image to depth image resolution.
     """

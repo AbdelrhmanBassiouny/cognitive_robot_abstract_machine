@@ -264,11 +264,11 @@ class ImageClusterExtractor(BaseAnnotator):
         cas = self.get_cas()
 
         resized_color = get_scaled_color_image_for_depth_image(cas, self.color)
-        color_to_depth_ratio = cas.color2depth_ratio
+        color_to_depth_ratio = cas.color_to_depth_ratio
         pointcloud_camera_model = (
             cas.require_camera_observation().effective_camera_model.scaled(
-                scale_x=color_to_depth_ratio[0],
-                scale_y=color_to_depth_ratio[1],
+                scale_x=color_to_depth_ratio.horizontal,
+                scale_y=color_to_depth_ratio.vertical,
             )
         )
         self.camera_intrinsics = Open3DCameraModelAdapter.to_intrinsic(

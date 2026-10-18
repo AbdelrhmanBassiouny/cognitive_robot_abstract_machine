@@ -1,6 +1,8 @@
 # %% Imports
 import logging
 
+
+from robokudo.types.cv import ColorToDepthRatio
 from robokudo.descriptors.factories.cr_descriptor_factory import (
     CollectionReaderDescriptorFactory,
 )
@@ -52,7 +54,7 @@ def query_simple_pipeline(node):
         "file_reader",
         loop=True,
         target_dir=robokudo.utils.data_downloader.test_data_path() / Path("data"),
-        color2depth_ratio=(0.5, 0.5),
+        color_to_depth_ratio=ColorToDepthRatio(horizontal=0.5, vertical=0.5),
     )
 
     # Restrict FOV of pointcloud to robustly get only one object

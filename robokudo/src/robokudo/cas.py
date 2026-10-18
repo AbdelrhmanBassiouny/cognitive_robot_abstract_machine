@@ -49,6 +49,8 @@ if TYPE_CHECKING:
     from robokudo.types.core import Annotation
     from robokudo.types.camera import CameraObservation
 
+    from robokudo.types.cv import ColorToDepthRatio
+
 
 # %% View definitions
 class CASViews(StrEnum):
@@ -70,11 +72,10 @@ class CASViews(StrEnum):
     Depth image data
     """
 
-    COLOR2DEPTH_RATIO = "color2depth_ratio"
+    COLOR_TO_DEPTH_RATIO = "color_to_depth_ratio"
     """
-    Scale factor to scale the `COLOR_IMAGE` to the resolution of the `DEPTH_IMAGE` in x, y format.
-
-    Example: 1280x960 RGB, 640x480 DEPTH -> 0.5 along X and Y
+    Size of the :attr:`DEPTH_IMAGE` relative to the :attr:`COLOR_IMAGE`, as a
+    :class:`~robokudo.types.cv.ColorToDepthRatio`.
     """
 
     CAMERA_OBSERVATION = "camera_observation"
@@ -185,20 +186,20 @@ class CAS:
         self.views[CASViews.DEPTH_IMAGE] = value
 
     @property
-    def color2depth_ratio(self) -> tuple[float, float]:
+    def color_to_depth_ratio(self) -> ColorToDepthRatio:
         """
         Return required color-to-depth scaling.
 
         :raises ColorToDepthRatioMissing: If scaling is absent or unset.
         """
-        ratio = self.views.get(CASViews.COLOR2DEPTH_RATIO)
+        ratio = self.views.get(CASViews.COLOR_TO_DEPTH_RATIO)
         if ratio is None:
             raise ColorToDepthRatioMissing()
         return ratio
 
-    @color2depth_ratio.setter
-    def color2depth_ratio(self, value: Tuple[float, float]) -> None:
-        self.views[CASViews.COLOR2DEPTH_RATIO] = value
+    @color_to_depth_ratio.setter
+    def color_to_depth_ratio(self, value: ColorToDepthRatio | None) -> None:
+        self.views[CASViews.COLOR_TO_DEPTH_RATIO] = value
 
     @property
     def camera_observation(self) -> Optional[CameraObservation]:

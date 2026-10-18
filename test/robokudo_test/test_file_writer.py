@@ -8,6 +8,7 @@ from py_trees.common import Status
 
 from krrood.adapters.json_serializer import from_json
 from robokudo.annotators.file_writer import FileWriter
+from robokudo.types.cv import ColorToDepthRatio
 from robokudo.cas import CAS, CASViews
 from robokudo.descriptors.camera_configs.config_filereader_playback import (
     FileReaderCameraConfig,
@@ -99,7 +100,7 @@ def test_file_writer_and_reader_roundtrip_recorded_camera_metadata(
         FileReaderCameraConfig(
             target_dir=str(tmp_path),
             loop=False,
-            color2depth_ratio=(1.0, 1.0),
+            color_to_depth_ratio=ColorToDepthRatio(),
         )
     )
     replayed_cas = CAS()

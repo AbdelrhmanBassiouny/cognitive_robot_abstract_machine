@@ -31,6 +31,7 @@ from semantic_digital_twin.semantic_annotations.mixins import (
     HasDrawers,
     HasDoors,
     HasHandle,
+    HasHandles,
     HasCaseAsRootBody,
     HasMovableJoint,
     HasApertures,
@@ -902,9 +903,9 @@ class Cup(DrinkingContainer, IsPerceivable):
 
 
 @dataclass(eq=False)
-class Mug(DrinkingContainer):
+class Mug(DrinkingContainer, HasHandle):
     """
-    A mug.
+    A mug, held by its handle.
     """
 
 
@@ -931,7 +932,7 @@ class PanLid(Lid):
 
 
 @dataclass(eq=False)
-class Pot(CookingContainer):
+class Pot(CookingContainer, HasHandles):
     """
     A pot.
     """

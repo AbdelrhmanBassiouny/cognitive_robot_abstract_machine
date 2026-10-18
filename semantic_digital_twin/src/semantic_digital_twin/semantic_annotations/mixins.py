@@ -527,6 +527,23 @@ class PartWholeRelationship(HasRootKinematicStructureEntity):
         else:
             setattr(self, match.field.name, part)
 
+    @property
+    def parts(self) -> List[HasRootKinematicStructureEntity]:
+        """
+        :return: The structural parts of this annotation, from all of its part-whole
+            relationship fields.
+        """
+        parts = []
+        for wrapped_part_whole_relationship_field in WrappedClass(
+            type(self)
+        ).fields_with_metadata(IsPartWholeRelationship):
+            value = getattr(self, wrapped_part_whole_relationship_field.field.name)
+            if wrapped_part_whole_relationship_field.is_many_to_many_relationship:
+                parts.extend(value)
+            elif value is not None:
+                parts.append(value)
+        return parts
+
 
 @dataclass(eq=False)
 class HasApertures(HasRootBody, PartWholeRelationship):
@@ -669,6 +686,23 @@ class HasHandle(HasRootBody, PartWholeRelationship):
     )
     """
     The handle of the semantic annotation.
+    """
+
+
+@dataclass(eq=False)
+class HasHandles(HasRootBody, PartWholeRelationship):
+    """
+    A mixin class for semantic annotations that may have more than one handle.
+    """
+
+    handles: List[Handle] = field(
+        default_factory=list,
+        hash=False,
+        kw_only=True,
+        metadata=IsPartWholeRelationship().as_dict(),
+    )
+    """
+    The handles of the semantic annotation.
     """
 
 
