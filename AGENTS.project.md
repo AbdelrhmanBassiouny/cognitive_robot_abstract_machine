@@ -17,3 +17,4 @@
 
 ## Domain-Specific Conventions
 - For spatial types and connections, follow `semantic_digital_twin/doc/style_guide.md`
+- A path enum derives from `basstler.locations.PathEnumeration` instead of repeating its `with_segments` and `__hash__` overrides
