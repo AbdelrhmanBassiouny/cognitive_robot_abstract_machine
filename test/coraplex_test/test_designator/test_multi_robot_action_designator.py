@@ -65,6 +65,7 @@ from giskardpy.motion_statechart.goals.collision_avoidance import (
 from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from giskardpy.motion_statechart.monitors.overwrite_state_monitors import SetOdometry
 from giskardpy.motion_statechart.goals.cartesian_goals import CartesianPoseStraight
+from giskardpy.motion_statechart.goals.open_close import Close
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
     CartesianPositionVelocityLimit,
@@ -1207,6 +1208,23 @@ def test_park_arms_caps_joint_velocity_only_when_asked(
     assert limit.max_velocity == capped.max_joint_velocity
     assert limit in capped.nodes
     assert nodes_of_type(uncapped, JointVelocityLimit) == []
+
+
+def test_closing_drives_the_mechanism_to_the_closed_joint_position(
+    multiple_robot_apartment_context,
+) -> None:
+    world, robot, extensions = multiple_robot_apartment_context
+    handle = _handle_annotation(world, "handle_cab10_m")
+    action = CloseAction(
+        grasp=handle.grasp_candidates()[0],
+        arm=left_or_only_arm(robot),
+        closed_joint_position=0.02,
+    )
+
+    expand(action, extensions)
+
+    [closing] = nodes_of_type(action, Close)
+    assert closing.goal_joint_state == action.closed_joint_position
 
 
 def test_look_at_points_the_default_camera(multiple_robot_apartment_context):
