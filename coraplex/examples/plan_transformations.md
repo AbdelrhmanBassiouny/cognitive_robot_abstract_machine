@@ -339,7 +339,7 @@ plan_transformations = [LookAtTheGoalWhileNavigating()]
 
 navigate = expand(
     Sequence(
-        [NavigateAction(Pose.from_xyz_rpy(1.5, 2.4, 0.0, reference_frame=world.root))]
+        nodes=[NavigateAction(target_location=Pose.from_xyz_rpy(1.5, 2.4, 0.0, reference_frame=world.root))]
     )
 )
 
