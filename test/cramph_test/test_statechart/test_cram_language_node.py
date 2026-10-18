@@ -17,7 +17,6 @@ from cramph.exceptions import (
     NodeIsNotAChildError,
     NotHeldByLanguageNodeError,
     NoLanguageNodeAboveError,
-    NotATopLevelNodeError,
     StatechartAlreadyCompiledError,
 )
 from cramph.executor import StatechartExecutor
@@ -148,7 +147,7 @@ def test_a_replaced_step_leaves_the_statechart_and_its_replacement_runs_in_its_p
     second = _succeeding("2")
     statechart.add_node(sequence := Sequence(nodes=[first, replaced, third]))
 
-    sequence.replace(replaced, second)
+    statechart.replace(replaced, second)
     _run(statechart_executor, statechart, sequence)
 
     assert replaced not in statechart.nodes
@@ -253,7 +252,7 @@ def test_a_step_replaced_by_a_node_holding_it_stays_in_the_statechart_below_that
     beside = _at_goal("beside")
     statechart.add_node(sequence := Sequence(nodes=[first, held, third]))
 
-    sequence.replace(held, replacement := Parallel(nodes=[beside, held]))
+    statechart.replace(held, replacement := Parallel(nodes=[beside, held]))
     _run(statechart_executor, statechart, sequence)
 
     assert sequence.nodes == [first, replacement, third]
@@ -279,7 +278,7 @@ def test_a_held_step_keeps_its_position_among_the_children_of_its_new_parent(
     )
     statechart.add_node(sequence := Sequence(nodes=[held]))
 
-    sequence.replace(held, replacement := Sequence(nodes=[before, held, after]))
+    statechart.replace(held, replacement := Sequence(nodes=[before, held, after]))
     _run(statechart_executor, statechart, sequence)
 
     assert replacement.nodes == [before, held, after]
@@ -295,8 +294,8 @@ def test_a_held_step_is_no_longer_ended_by_its_former_parent(
     """
     statechart = Statechart(context=statechart_executor.context)
     held = _at_goal("held")
-    statechart.add_node(sequence := Sequence(nodes=[held]))
-    sequence.replace(
+    statechart.add_node(Sequence(nodes=[held]))
+    statechart.replace(
         held,
         Parallel(
             nodes=[
@@ -324,7 +323,7 @@ def test_replacing_a_step_of_a_compiled_statechart_is_rejected_and_changes_nothi
     replacement = Parallel(nodes=[_at_goal("beside"), held])
 
     with pytest.raises(StatechartAlreadyCompiledError):
-        sequence.replace(held, replacement)
+        statechart.replace(held, replacement)
 
     assert sequence.nodes == [held]
     assert replacement.nodes[1] is held
@@ -360,16 +359,6 @@ def test_a_replaced_top_level_node_leaves_the_statechart(
 
     assert statechart.nodes == [replacement]
     assert not replaced.belongs_to_statechart()
-
-
-def test_only_a_top_level_node_is_replaced_by_the_statechart(
-    statechart_executor: StatechartExecutor,
-) -> None:
-    statechart = Statechart(context=statechart_executor.context)
-    statechart.add_node(Sequence(nodes=[step := _succeeding("step")]))
-
-    with pytest.raises(NotATopLevelNodeError):
-        statechart.replace(step, _succeeding("instead"))
 
 
 def test_replacing_a_top_level_node_of_a_compiled_statechart_is_rejected(
@@ -429,111 +418,57 @@ def test_a_node_without_a_language_node_above_it_has_none_closest_above_it(
         CramLanguageNode.closest_above(top_level)
 
 
-# %% a language node taking the place of another node
+# %% a failed replacement
 
 
-def test_a_node_taking_the_place_of_a_step_runs_it_where_the_step_ran(
+def test_a_failed_replacement_by_a_node_holding_the_step_leaves_it_where_it_was(
     statechart_executor: StatechartExecutor,
-):
-    statechart = Statechart(context=statechart_executor.context)
-    first, second, third = _succeeding("1"), _succeeding("2"), _succeeding("3")
-    statechart.add_node(sequence := Sequence(nodes=[first, third]))
-    wrapper = Sequence(nodes=[second, third])
-
-    wrapper.take_place_of(third)
-    _run(statechart_executor, statechart, sequence)
-
-    assert sequence.nodes == [first, wrapper]
-    assert third.parent_node is wrapper
-    assert _start_order(statechart, [third, second, first]) == [first, second, third]
-    assert sequence.life_cycle_state == LifeCycleValues.SUCCEEDED
-
-
-def test_a_node_taking_the_place_of_a_top_level_node_runs_on_the_top_level(
-    statechart_executor: StatechartExecutor,
-):
-    statechart = Statechart(context=statechart_executor.context)
-    first, top_level = _succeeding("1"), _succeeding("top level")
-    statechart.add_node(top_level)
-    wrapper = Sequence(nodes=[first, top_level])
-
-    wrapper.take_place_of(top_level)
-    _run(statechart_executor, statechart, wrapper)
-
-    assert statechart.top_level_nodes[0] is wrapper
-    assert top_level.parent_node is wrapper
-    assert _start_order(statechart, [top_level, first]) == [first, top_level]
-
-
-def test_a_step_moved_into_a_parallel_is_no_longer_ended_at_its_goal(
-    statechart_executor: StatechartExecutor,
-):
-    """
-    A sequence ends a step at its goal, which a parallel never does, so the step keeps
-    nothing of how the sequence ran it.
-    """
-    statechart = Statechart(context=statechart_executor.context)
-    at_goal = NodeObservingAFixedValue(observation=ObservationStateValues.TRUE)
-    statechart.add_node(Sequence(nodes=[at_goal]))
-    not_at_goal = NodeObservingAFixedValue(observation=ObservationStateValues.FALSE)
-
-    Parallel(nodes=[at_goal, not_at_goal]).take_place_of(at_goal)
-    statechart_executor.compile(statechart)
-    statechart_executor.tick()
-    statechart_executor.tick()
-
-    assert at_goal.life_cycle_state == LifeCycleValues.RUNNING
-
-
-def test_a_node_that_failed_to_take_a_place_leaves_the_step_where_it_was(
-    statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     first, second = _succeeding("1"), _succeeding("2")
     statechart.add_node(sequence := Sequence(nodes=[first, second]))
-    wrapper = Sequence(nodes=[first, second])
+    replacement = Sequence(nodes=[first, second])
 
     with pytest.raises(NodeAlreadyBelongsToDifferentNodeError):
-        wrapper.take_place_of(second)
+        statechart.replace(second, replacement)
     _run(statechart_executor, statechart, sequence)
 
-    assert not wrapper.belongs_to_statechart()
+    assert not replacement.belongs_to_statechart()
     assert sequence.nodes == [first, second]
     assert second.parent_node is sequence
     assert _start_order(statechart, [second, first]) == [first, second]
 
 
-def test_only_a_node_a_language_node_holds_can_hand_over_its_place(
+def test_a_failed_replacement_by_another_node_leaves_the_step_where_it_was(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
+    statechart = Statechart(context=statechart_executor.context)
+    first, second = _succeeding("1"), _succeeding("2")
+    statechart.add_node(sequence := Sequence(nodes=[first, second]))
+    replacement = Sequence(nodes=[first])
+
+    with pytest.raises(NodeAlreadyBelongsToDifferentNodeError):
+        statechart.replace(second, replacement)
+    _run(statechart_executor, statechart, sequence)
+
+    assert not replacement.belongs_to_statechart()
+    assert sequence.nodes == [first, second]
+    assert second.parent_node is sequence
+    assert _start_order(statechart, [second, first]) == [first, second]
+
+
+def test_only_a_node_a_language_node_or_the_top_level_holds_can_be_replaced(
+    statechart_executor: StatechartExecutor,
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     holder = CompositeNodeWithChainedChildren(name="holder")
     statechart.add_node(holder)
     nested = holder.sub_node1
 
     with pytest.raises(NotHeldByLanguageNodeError) as raised:
-        Sequence(nodes=[_succeeding("1"), nested]).take_place_of(nested)
+        statechart.replace(nested, Sequence(nodes=[_succeeding("1"), nested]))
 
     assert raised.value.node is nested
-
-
-def test_a_node_takes_only_the_place_of_a_node_it_runs(
-    statechart_executor: StatechartExecutor,
-):
-    statechart = Statechart(context=statechart_executor.context)
-    statechart.add_node(top_level := _succeeding("top level"))
-
-    with pytest.raises(NodeIsNotAChildError):
-        Sequence(nodes=[_succeeding("1")]).take_place_of(top_level)
-
-
-def test_a_compiled_node_keeps_its_place(statechart_executor: StatechartExecutor):
-    statechart = Statechart(context=statechart_executor.context)
-    statechart.add_node(top_level := _succeeding("top level"))
-    statechart_executor.compile(statechart)
-
-    with pytest.raises(StatechartAlreadyCompiledError):
-        Sequence(nodes=[_succeeding("1"), top_level]).take_place_of(top_level)
 
 
 # %% misuse

@@ -44,7 +44,7 @@ from coraplex.robot_plans.actions.core.robot_body import (
     ParkArmsAction,
 )
 from coraplex.robot_plans.mixins import ReattachesBodies
-from cramph.composites import CramLanguageNode, Sequence, StatementNode
+from cramph.composites import Sequence, StatementNode
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from giskardpy.motion_statechart.goals.cartesian_goals import CartesianPoseStraight
@@ -476,7 +476,7 @@ class CloseFingersToObjectWidth(PlanTransformation[GraspingAction]):
 
     def apply(self, plan_node: GraspingAction) -> None:
         closing_step = self.closing_step(plan_node)
-        CramLanguageNode.closest_above(closing_step).replace(
+        plan_node.statechart.replace(
             closing_step,
             plan_node.closing_step(
                 MoveFingersToWidthAction(

@@ -43,7 +43,7 @@ from cramph.exceptions import (
     NodesMissingContextExtensionsError,
     PrerequisiteNotExpandedError,
     StatechartAlreadyCompiledError,
-    NotATopLevelNodeError,
+    NotHeldByLanguageNodeError,
     NotInStatechartError,
     RemovedNodeStillReferencedError,
 )
@@ -60,7 +60,7 @@ from cramph.node import (
     StatechartNode,
     TransitionCondition,
 )
-from cramph.composites import CompositeNodeChoosingItsChild
+from cramph.composites import CompositeNodeChoosingItsChild, CramLanguageNode
 from cramph.plotters.graphviz import StatechartGraphviz
 from cramph.plotters.interactive_graph import StatechartGraphVisualizer
 from semantic_digital_twin.world import ModelRevision
@@ -70,6 +70,8 @@ from semantic_digital_twin.world_description.world_entity import (
 
 if TYPE_CHECKING:
     from types import TracebackType
+
+    from krrood.entity_query_language.query.match import Match
 
 logger = logging.getLogger(__name__)
 
@@ -1180,21 +1182,21 @@ class RecompileCallback(ABC):
         """
 
 
-@dataclass
-class TakenOverNode:
+@dataclass(eq=False)
+class ReplacedNode:
     """
-    A node another composite node took the place of, with what it had before, so that
-    a modification that fails afterwards can put it back.
+    A node another node was put in the place of, with what it had before, so that a
+    modification that fails afterwards can put it back.
     """
 
     node: StatechartNode
     """
-    The node whose place was taken.
+    The node that was replaced.
     """
 
-    new_parent: CompositeNode
+    replacement: StatechartNode
     """
-    The composite node that took its place and became its parent.
+    The node put in its place.
     """
 
     former_parent: CompositeNode | None
@@ -1208,17 +1210,17 @@ class TakenOverNode:
     """
 
     @classmethod
-    def before_taking_over(
-        cls, node: StatechartNode, new_parent: CompositeNode
-    ) -> TakenOverNode:
+    def before_replacing(
+        cls, node: StatechartNode, replacement: StatechartNode
+    ) -> ReplacedNode:
         """
-        :param node: The node whose place `new_parent` is about to take.
-        :param new_parent: The composite node about to take it.
+        :param node: The node about to be replaced.
+        :param replacement: The node about to be put in its place.
         :return: The node as it is now.
         """
         return cls(
             node=node,
-            new_parent=new_parent,
+            replacement=replacement,
             former_parent=node.parent_node,
             former_conditions={
                 transition_kind: node.get_condition(transition_kind)
@@ -1235,7 +1237,7 @@ class TakenOverNode:
         for transition_kind, condition in self.former_conditions.items():
             self.node.set_condition(transition_kind, condition)
         if self.former_parent is not None:
-            self.former_parent.list_in_place_of(self.new_parent, self.node)
+            self.former_parent.list_in_place_of(self.replacement, self.node)
 
 
 @dataclass
@@ -1258,15 +1260,14 @@ class StatechartModification:
     How many nodes the statechart held when this modification started.
     """
 
-    _taken_over_count_at_start: int = field(init=False, default=0)
+    _replaced_count_at_start: int = field(init=False, default=0)
     """
-    How many nodes had their place taken in the open modifications when this one
-    started.
+    How many nodes were replaced in the open modifications when this one started.
     """
 
     def __enter__(self) -> Self:
         self._node_count_at_start = len(self.statechart.nodes)
-        self._taken_over_count_at_start = len(self.statechart._taken_over_nodes)
+        self._replaced_count_at_start = len(self.statechart._replaced_nodes)
         self.statechart._open_modifications += 1
         return self
 
@@ -1279,10 +1280,10 @@ class StatechartModification:
         statechart = self.statechart
         statechart._open_modifications -= 1
         if exception is not None:
-            statechart._put_back_taken_over_nodes_from(self._taken_over_count_at_start)
+            statechart._put_back_replaced_nodes_from(self._replaced_count_at_start)
             statechart._drop_nodes_from(self._node_count_at_start)
         if statechart._open_modifications == 0:
-            statechart._taken_over_nodes.clear()
+            statechart._replaced_nodes.clear()
         if statechart._open_modifications > 0 or not statechart.is_compiled:
             return
         if not statechart._changed_since_compile:
@@ -1414,11 +1415,12 @@ class Statechart(SubclassJSONSerializer):
     How many :class:`StatechartModification` blocks are open on this statechart.
     """
 
-    _taken_over_nodes: list[TakenOverNode] = field(
+    _replaced_nodes: list[ReplacedNode] = field(
         default_factory=list, init=False, repr=False
     )
     """
-    The nodes another node took the place of in the open modifications, in order.
+    The nodes replaced in the open modifications that are still in this statechart, in
+    order.
     """
 
     _recompile_callbacks: list[RecompileCallback] = field(
@@ -1639,33 +1641,6 @@ class Statechart(SubclassJSONSerializer):
             if isinstance(node, CompositeNode):
                 self._expand(node)
 
-    def add_node_above(self, node: StatechartNode, new_parent: CompositeNode) -> None:
-        """
-        Adds `new_parent` to the statechart in the place of `node`, which becomes its
-        child: `new_parent` gets the parent `node` had, or joins the top level if `node`
-        was on it.
-
-        :param node: A node of this statechart, held by its parent among its nodes.
-        :param new_parent: A composite node outside any statechart that runs `node`.
-        :raises NotInStatechartError: If `node` does not belong to this statechart.
-        :raises StatechartAlreadyCompiledError: If the latest compile covers `node`.
-        """
-        if node._statechart is not self:
-            raise NotInStatechartError(name=node.name)
-        if self.is_compiled and self.latest_compile_covers(node):
-            raise StatechartAlreadyCompiledError()
-        with self.modify():
-            self._register_node(new_parent)
-            self._taken_over_nodes.append(
-                TakenOverNode.before_taking_over(node, new_parent)
-            )
-            former_parent = node.parent_node
-            new_parent.parent_node = former_parent
-            if former_parent is not None:
-                former_parent.list_in_place_of(node, new_parent)
-            new_parent.take_over(node)
-            self._expand(new_parent)
-
     def latest_compile_covers(self, node: StatechartNode) -> bool:
         """
         :param node: A node of this statechart.
@@ -1673,17 +1648,16 @@ class Statechart(SubclassJSONSerializer):
         """
         return node.index < self._compiled_node_count
 
-    def _put_back_taken_over_nodes_from(self, first_put_back: int) -> None:
+    def _put_back_replaced_nodes_from(self, first_put_back: int) -> None:
         """
-        Puts back every node whose place was taken from `first_put_back` on, the latest
-        first.
+        Puts back every node replaced from `first_put_back` on, the latest first.
 
         :param first_put_back: The position of the first record to undo in
-            :attr:`_taken_over_nodes`.
+            :attr:`_replaced_nodes`.
         """
-        for taken_over in reversed(self._taken_over_nodes[first_put_back:]):
-            taken_over.put_back()
-        del self._taken_over_nodes[first_put_back:]
+        for replaced in reversed(self._replaced_nodes[first_put_back:]):
+            replaced.put_back()
+        del self._replaced_nodes[first_put_back:]
 
     def _drop_nodes_from(self, first_dropped_index: int) -> None:
         """
@@ -1778,30 +1752,62 @@ class Statechart(SubclassJSONSerializer):
             removed_node.index = None
             removed_node.parent_node_index = None
 
-    def replace(self, node: StatechartNode, replacement: StatechartNode) -> None:
+    def replace(
+        self, node: StatechartNode, replacement: StatechartNode | Match
+    ) -> None:
         """
-        Puts `replacement` on the top layer in place of the top-level node `node`, the
-        way :meth:`~cramph.composites.CramLanguageNode.replace` does for a child.
+        Puts `replacement` where `node` is: at its position among the children of the
+        plan language node holding it, or on the top level.
 
-        If `replacement` is a plan language node that has `node` among its children,
-        `node` stays in the statechart as that child and the conditions written on it
-        are cleared, so that `replacement` wires them. Otherwise `node` leaves the
-        statechart together with everything below it.
+        If `replacement` is a composite node with `node` among its children, `node`
+        stays in the statechart as that child, at its position there, and forgets the
+        transitions its former parent decided for it, so that `replacement` decides
+        them. Otherwise `node` leaves the statechart together with everything below it.
+        A :meth:`modify` block that raises puts back a `node` that stayed in the
+        statechart.
 
-        :param node: A top-level node of this statechart.
+        .. warning:: A :meth:`modify` block that raises after `node` left the statechart
+            does not bring it back.
+
+        :param node: A node of this statechart, on the top level or a child of a plan
+            language node.
         :param replacement: The node to put in its place, which belongs to no
-            statechart yet.
+            statechart yet, or a statement of it.
         :raises NotInStatechartError: If `node` does not belong to this statechart.
-        :raises NotATopLevelNodeError: If `node` is the child of another node.
+        :raises NotHeldByLanguageNodeError: If a node other than a plan language node
+            holds `node`.
         :raises StatechartAlreadyCompiledError: If the latest compile covers `node`.
         """
         if node._statechart is not self:
             raise NotInStatechartError(name=node.name)
-        if node.parent_node is not None:
-            raise NotATopLevelNodeError(node=node)
+        holder = node.parent_node
+        if holder is not None and not isinstance(holder, CramLanguageNode):
+            raise NotHeldByLanguageNodeError(node=node, parent=holder)
         if self.is_compiled and self.latest_compile_covers(node):
             raise StatechartAlreadyCompiledError()
-        replacement._take_place_of(node, lambda: self.add_node(replacement))
+        replacement = CramLanguageNode._as_node(replacement)
+        if holder is not None:
+            holder._check_is_not_a_child(replacement)
+            holder._check_can_be_a_child(replacement)
+        holds_node = isinstance(replacement, CompositeNode) and any(
+            child is node for child in replacement.nodes
+        )
+        record = ReplacedNode.before_replacing(node, replacement)
+        with self.modify():
+            self._replaced_nodes.append(record)
+            self._register_node(replacement)
+            replacement.parent_node = holder
+            if holder is not None:
+                holder.list_in_place_of(node, replacement)
+            if holds_node:
+                replacement.take_over(node)
+            if isinstance(replacement, CompositeNode):
+                self._expand(replacement)
+            if holder is not None:
+                holder._wire_children()
+            if not holds_node:
+                self.remove_node(node)
+                self._replaced_nodes.remove(record)
 
     @staticmethod
     def _check_not_referenced(

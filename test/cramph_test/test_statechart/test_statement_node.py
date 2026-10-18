@@ -150,7 +150,7 @@ def test_a_statement_replacing_a_step_runs_as_a_statement_node(
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(sequence)
 
-    sequence.replace(replaced, statement)
+    statechart.replace(replaced, statement)
 
     [replacement] = sequence.nodes
     assert isinstance(replacement, StatementNode)

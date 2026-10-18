@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from itertools import combinations, takewhile
 
-from typing_extensions import Any, Callable, Generator
+from typing_extensions import Any, Generator
 
 from krrood.adapters.json_serializer import JSONField
 from krrood.entity_query_language.backends import QueryBackend
@@ -24,7 +24,6 @@ from cramph.exceptions import (
     ChildCannotFailError,
     NodeAlreadyAChildError,
     NodeIsNotAChildError,
-    NotHeldByLanguageNodeError,
 )
 from cramph.node import (
     CancelStatechart,
@@ -109,7 +108,8 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
 
     Its children can be changed after it joined a statechart, up to the moment the
     statechart is compiled: :meth:`insert_before`, :meth:`insert_after` and
-    :meth:`replace` rewire the conditions of the current children accordingly.
+    :meth:`~cramph.statechart.Statechart.replace` rewire the conditions of the current
+    children accordingly.
 
     Wherever it is handed a node, it also takes an underspecified `a(...)` statement,
     for which it takes a :class:`StatementNode` as its child.
@@ -170,92 +170,6 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
         :raises NodeAlreadyAChildError: If `node` is a child of this goal already.
         """
         self._insert_at(self._position_of(reference) + 1, node)
-
-    def replace(self, reference: StatechartNode, node: StatechartNode) -> None:
-        """
-        Puts `node` in place of `reference` among the children of this goal.
-
-        If `node` is a plan language node that has `reference` among its children,
-        `reference` stays in the statechart as that child, at the position it was handed
-        over at, and the conditions this goal wired for it are cleared, so that `node`
-        wires them. Otherwise `reference` leaves the statechart together with everything
-        below it.
-
-        .. warning:: A :meth:`~cramph.statechart.Statechart.modify` block that raises
-            afterwards removes `node`, but does not give `reference` back to this goal.
-
-        :param reference: A child of this goal.
-        :param node: The node to put in its place.
-        :raises NodeIsNotAChildError: If `reference` is not a child of this goal.
-        :raises NodeAlreadyAChildError: If `node` is a child of this goal already.
-        :raises StatechartAlreadyCompiledError: If the latest compile covered this goal.
-        """
-        position = self._position_of(reference)
-        node = self._as_node(node)
-        self._check_is_not_a_child(node)
-        if not self.belongs_to_statechart():
-            self.nodes[position] = node
-            return
-        replaced = self.nodes[position]
-        self._check_can_be_a_child(node)
-        self._check_accepts_children()
-        node._take_place_of(replaced, lambda: self._put_at(position, node))
-
-    def _put_at(self, position: int, node: StatechartNode) -> None:
-        """
-        Puts `node`, which is no child yet, in the statechart as the child at
-        `position`, in place of the child there, and wires the children again.
-        """
-        self.nodes[position] = node
-        self._place_child_in_statechart(node)
-        self._wire_children()
-
-    def _take_place_of(
-        self, replaced: StatechartNode, join_statechart: Callable[[], None]
-    ) -> None:
-        """
-        Differs from :meth:`~cramph.node.StatechartNode._take_place_of` where `replaced`
-        is one of the children of this node: it stays in the statechart and becomes a
-        child of this node again, at the position it has among the children. The
-        conditions its former parent wired for it are cleared, so that this node wires
-        them.
-        """
-        if not self._has_child(replaced):
-            super()._take_place_of(replaced, join_statechart)
-            return
-        position = next(
-            index for index, node in enumerate(self.nodes) if node is replaced
-        )
-        del self.nodes[position]
-        join_statechart()
-        replaced._clear_owner_wiring()
-        replaced.parent_node = self
-        self._insert_at(position, replaced)
-
-    def take_place_of(self, node: StatechartNode) -> None:
-        """
-        Puts this node where `node` was, with `node` as one of its children: the plan
-        language node that held `node` holds this node instead, and a top-level `node`
-        leaves the top level to it.
-
-        :param node: A node of a statechart, held by a plan language node or on the top
-            level, and one of :attr:`nodes`.
-        :raises NodeIsNotAChildError: If `node` is not a child of this node.
-        :raises NotHeldByLanguageNodeError: If a node other than a plan language node
-            holds `node`.
-        :raises StatechartAlreadyCompiledError: If the latest compile covers `node`.
-        """
-        if not self._has_child(node):
-            raise NodeIsNotAChildError(node=self, child=node)
-        holder = node.parent_node
-        if holder is None:
-            node.statechart.add_node_above(node, self)
-            return
-        if not isinstance(holder, CramLanguageNode):
-            raise NotHeldByLanguageNodeError(node=node, parent=holder)
-        with node.statechart.modify():
-            node.statechart.add_node_above(node, self)
-            holder._wire_children()
 
     @staticmethod
     def closest_above(node: StatechartNode) -> CramLanguageNode:

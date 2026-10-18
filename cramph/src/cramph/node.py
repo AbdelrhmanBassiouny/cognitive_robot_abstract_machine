@@ -1339,19 +1339,6 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
         for transition_kind in TransitionKind.owner_wired_kinds():
             self.set_condition(transition_kind, transition_kind.unwired_condition)
 
-    def _take_place_of(
-        self, replaced: StatechartNode, join_statechart: Callable[[], None]
-    ) -> None:
-        """
-        Joins the statechart in place of `replaced`, which leaves the statechart
-        together with everything below it.
-
-        :param replaced: The node this one replaces, which belongs to a statechart.
-        :param join_statechart: Puts this node in the statechart where `replaced` was.
-        """
-        join_statechart()
-        replaced.statechart.remove_node(replaced)
-
     def _get_transition(self, transition_kind: TransitionKind) -> TransitionCondition:
         """
         :param transition_kind: The kind of transition to look up.

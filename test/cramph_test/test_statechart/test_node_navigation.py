@@ -477,10 +477,10 @@ def test_a_replacing_step_finds_the_step_before_it_while_it_expands(
 ) -> None:
     statechart = Statechart(context=statechart_executor.context)
     preceding_step, replaced = _step_decided_by_its_owner(), ConstTrueNode()
-    statechart.add_node(sequence := Sequence(nodes=[preceding_step, replaced]))
+    statechart.add_node(Sequence(nodes=[preceding_step, replaced]))
     navigating = CompositeNodeNavigatingWhileItExpands()
 
-    sequence.replace(replaced, navigating)
+    statechart.replace(replaced, navigating)
 
     assert navigating.preceding_fixed_value_node is preceding_step
 

@@ -174,7 +174,7 @@ class SequentialInsertion(
     def _insert(self, anchor: StatechartNode, node: StatechartNode) -> StatechartNode:
         step = self._step_holding(anchor)
         if not isinstance(step.parent_node, Sequence):
-            Sequence(nodes=[step]).take_place_of(step)
+            step.statechart.replace(step, Sequence(nodes=[step]))
         match self.position:
             case InsertionPosition.BEFORE:
                 step.parent_node.insert_before(step, node)
@@ -197,7 +197,7 @@ class ParallelInsertion(
     def _insert(self, anchor: StatechartNode, node: StatechartNode) -> StatechartNode:
         step = self._step_holding(anchor)
         if not isinstance(step.parent_node, Parallel):
-            Parallel(nodes=[step]).take_place_of(step)
+            step.statechart.replace(step, Parallel(nodes=[step]))
         step.parent_node.add_node(node)
         return anchor
 
