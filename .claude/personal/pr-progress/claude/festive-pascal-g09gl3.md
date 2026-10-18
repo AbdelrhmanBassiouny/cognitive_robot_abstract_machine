@@ -7,5 +7,5 @@ Done
 - Pushed through 7d65a9084e: own version, shared publish workflow, version-bump CI check.
 
 Next
-- User: PyPI pending trusted publisher before merge (merge publishes 0.1.0).
+- PyPI pending publisher registered (cram2). Merge upstream publishes 0.1.0; fork-main publish job fails, expected.
 - basstler PR replacing its format_docstrings.py and AGENTS.md (after release).
