@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+# %% Imports
 from abc import ABC
 from dataclasses import dataclass
-from typing import Optional, Any
 
 import numpy as np
 import trimesh.boolean
 from trimesh.collision import CollisionManager
-from typing_extensions import List, TYPE_CHECKING, Iterable, Type
+from typing_extensions import TYPE_CHECKING, Iterable
 
 from krrood.entity_query_language.predicate import (
     Predicate,
@@ -89,7 +89,7 @@ class InContactWith(Triple[TBody, TBody]):
         distance = self.compute_distance()
         return distance is not None and distance < self.maximum_distance
 
-    def compute_distance(self) -> Optional[float]:
+    def compute_distance(self) -> float | None:
         """
         :return: How far apart the two bodies' collision geometry is, or ``None`` when
             the collision detector reports no result for the pair at all.
@@ -688,7 +688,7 @@ class ContainsType(Predicate):
     Iterable to check for objects of the given type.
     """
 
-    obj_type: Type
+    obj_type: type
     """
     Object type to check for.
     """
@@ -731,7 +731,7 @@ class PlaceIsOccupied(Predicate):
     The world whose collidable bodies are tested against it.
     """
 
-    allowed_bodies: Optional[List[Body]] = None
+    allowed_bodies: list[Body] | None = None
     """
     Bodies that may stand there without the place counting as occupied.
     """

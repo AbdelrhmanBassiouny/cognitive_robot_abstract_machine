@@ -21,10 +21,10 @@ The plane detection uses:
 
 from __future__ import annotations
 
+# %% Imports
 from collections.abc import Iterator
 from contextlib import contextmanager, nullcontext
 from timeit import default_timer
-from typing import Optional
 
 import numpy as np
 import open3d as o3d
@@ -101,7 +101,7 @@ class PlaneAnnotator(ThreadedAnnotator):
 
                 """
 
-                self.random_seed: Optional[int] = None
+                self.random_seed: int | None = None
                 """
                 Seed for the random samples RANSAC draws, so that the same cloud gives
                 the same plane every time; ``None`` leaves the samples unseeded.

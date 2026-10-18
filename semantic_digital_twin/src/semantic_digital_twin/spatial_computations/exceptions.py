@@ -36,3 +36,22 @@ class RayPointShapeMismatch(DataclassException):
         Describe matching ray query inputs.
         """
         return "Supply one target point for every origin point."
+
+
+# %% Camera rendering inputs
+@dataclass
+class UnsupportedCameraProjection(DataclassException):
+    """
+    The requested projection cannot be represented by the rendering mode.
+    """
+
+    reason: str
+    """
+    Projection constraint violated by the camera calibration.
+    """
+
+    def error_message(self) -> str:
+        return f"Unsupported camera projection: {self.reason}."
+
+    def suggest_correction(self) -> str:
+        return "Use a calibration supported by the selected rendering mode."

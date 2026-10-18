@@ -26,7 +26,6 @@ from __future__ import annotations
 import logging
 import struct
 from threading import Lock
-from typing import ClassVar
 
 import builtin_interfaces.msg
 import cv2
@@ -39,15 +38,13 @@ from rclpy.node import Node
 from rclpy.time import Time
 from sensor_msgs.msg import CompressedImage, CameraInfo, Image
 from tf2_ros import Buffer
-from typing_extensions import Optional, List, Any, TYPE_CHECKING, Union, Tuple
+from typing_extensions import Any, TYPE_CHECKING
 
+from krrood.ormatic.utils import classproperty
 from robokudo.cas import CASViews, CAS
 from robokudo.defs import PACKAGE_NAME
-from robokudo.exceptions import (
-    CameraAnnotationAmbiguous,
-    CameraDataMissing,
-    InvalidCameraObservation,
-)
+from robokudo.exceptions import CameraDataMissing, InvalidCameraObservation
+from robokudo.io.exceptions import CameraAnnotationAmbiguous
 from robokudo.io.camera_model_adapters import RosCameraModelAdapter
 from robokudo.io.tf_listener_proxy import TFListenerProxy
 from robokudo.types.camera import CameraObservation
@@ -84,10 +81,12 @@ class CameraInterface(object):
     It handles configuration and data availability tracking.
     """
 
-    STANDALONE_MOUNT_PREFIX: ClassVar[str] = "robokudo_camera_mount_"
-    """
-    Connection-name prefix reserved for camera bodies created by RoboKudo.
-    """
+    @classproperty
+    def STANDALONE_MOUNT_PREFIX(cls) -> str:
+        """
+        Connection-name prefix reserved for camera bodies created by RoboKudo.
+        """
+        return "robokudo_camera_mount_"
 
     def __init__(self, camera_config: Any) -> None:
         """
@@ -354,7 +353,7 @@ class ROSCameraInterface(CameraInterface):
     transform lookups and camera intrinsics handling.
     """
 
-    def __init__(self, camera_config: Any, node: Optional[Node] = None) -> None:
+    def __init__(self, camera_config: Any, node: Node | None = None) -> None:
         """
         Initialize the ROS camera interface.
 
@@ -392,12 +391,12 @@ class ROSCameraInterface(CameraInterface):
             Whether to look up camera transforms
             """
 
-        self.camera_translation: List[float] = [0.0, 0.0, 0.0]
+        self.camera_translation: list[float] = [0.0, 0.0, 0.0]
         """
         Camera translation from TF
         """
 
-        self.camera_quaternion: List[float] = [0.0, 0.0, 0.0, 1.0]
+        self.camera_quaternion: list[float] = [0.0, 0.0, 0.0, 1.0]
         """
         Camera rotation from TF
         """
@@ -408,40 +407,39 @@ class ROSCameraInterface(CameraInterface):
             TF buffer populated by the per-node transform listener.
             """
 
-    def lookup_transform(self, timestamp: Time = Time()) -> bool:
+    def lookup_transform(self, timestamp: Time | None = None) -> bool:
         """
-        Look up the camera transform from TF.
+        Cache a camera pose when the requested TF sample is available.
 
-        :return: True if transform lookup succeeded, False otherwise
+        :param timestamp: Acquisition time, or the latest sample when omitted.
+        :return: Whether lookup is disabled or a sample was available.
         """
-        if self.lookup_viewpoint:
-            try:
-                world_T_camera = self.tf_buffer.lookup_transform(
-                    target_frame=self.tf_to,
-                    source_frame=self.tf_from,
-                    time=timestamp,
-                    timeout=Duration(seconds=1.0 / 30.0),
-                )
-                transform = world_T_camera.transform
-                translation = transform.translation
-                rotation = transform.rotation
-
-                self.camera_translation = [
-                    float(translation.x),
-                    float(translation.y),
-                    float(translation.z),
-                ]
-                self.camera_quaternion = [
-                    float(rotation.x),
-                    float(rotation.y),
-                    float(rotation.z),
-                    float(rotation.w),
-                ]
-            except Exception as err:
-                self.rk_logger.warning(
-                    f"cannot transform from {self.tf_from} to {self.tf_to} at ts {timestamp}: {err}"
-                )
-                return False
+        if not self.lookup_viewpoint:
+            return True
+        timestamp = timestamp if timestamp is not None else Time()
+        if not self.tf_buffer.can_transform(
+            target_frame=self.tf_to,
+            source_frame=self.tf_from,
+            time=timestamp,
+            timeout=Duration(seconds=1.0 / 30.0),
+        ):
+            return False
+        world_T_camera = self.tf_buffer.lookup_transform(
+            target_frame=self.tf_to, source_frame=self.tf_from, time=timestamp
+        )
+        translation = world_T_camera.transform.translation
+        rotation = world_T_camera.transform.rotation
+        self.camera_translation = [
+            float(translation.x),
+            float(translation.y),
+            float(translation.z),
+        ]
+        self.camera_quaternion = [
+            float(rotation.x),
+            float(rotation.y),
+            float(rotation.z),
+            float(rotation.w),
+        ]
         return True
 
     def world_T_camera_from_tf(
@@ -595,26 +593,26 @@ class KinectCameraInterface(ROSCameraInterface):
         self.rk_logger.info(f"  {camera_config.topic_depth}")
         self.rk_logger.info(f"  {camera_config.topic_camera_info}")
 
-        self.color: Optional[npt.NDArray] = None
+        self.color: npt.NDArray | None = None
         """
         Latest color image.
         """
-        self.depth: Optional[npt.NDArray] = None
+        self.depth: npt.NDArray | None = None
         """
         Latest depth image
         """
 
-        self.camera_info: Optional[CameraInfo] = None
+        self.camera_info: CameraInfo | None = None
         """
         Latest camera info message
         """
 
-        self.color2depth_ratio: Optional[Tuple[float, float]] = None
+        self.color2depth_ratio: tuple[float, float] | None = None
         """
         Ratio between color and depth image sizes
         """
 
-        self.timestamp: Optional[builtin_interfaces.msg.Time] = None
+        self.timestamp: builtin_interfaces.msg.Time | None = None
         """
         Latest message timestamp
         """
@@ -665,9 +663,9 @@ class KinectCameraInterface(ROSCameraInterface):
 
     def callback(
         self,
-        color_data: Union[Image, CompressedImage],
-        depth_data: Optional[Union[Image, CompressedImage]] = None,
-        camera_info: Optional[CameraInfo] = None,
+        color_data: Image | CompressedImage,
+        depth_data: Image | CompressedImage | None = None,
+        camera_info: CameraInfo | None = None,
     ) -> None:
         """
         Process synchronized camera data.

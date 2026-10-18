@@ -1,7 +1,9 @@
+from __future__ import annotations
+
+# %% Imports
 from dataclasses import dataclass, field
 
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
-from typing_extensions import Tuple
 
 
 @dataclass(kw_only=True)
@@ -139,7 +141,7 @@ class RGBDComponent(DepthComponent, ColorComponent):
     Camera component with configuration for RGB-D input data.
     """
 
-    color2depth_ratio: Tuple[float, float] = (1.0, 1.0)
+    color2depth_ratio: tuple[float, float] = (1.0, 1.0)
     """
     If the resolution of the depth image differs from the color image,
     we need to define the factor for (x, y).

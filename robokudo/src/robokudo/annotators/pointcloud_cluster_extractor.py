@@ -15,6 +15,7 @@ The module uses DBSCAN clustering and oriented bounding boxes (OBB) for object d
 
 from __future__ import annotations
 
+# %% Imports
 import copy
 import logging
 from timeit import default_timer
@@ -25,9 +26,10 @@ import open3d as o3d
 from matplotlib import pyplot as plt
 from py_trees.common import Status
 from scipy.spatial.transform import Rotation as R
-from typing_extensions import TYPE_CHECKING, List, Tuple
+from typing_extensions import TYPE_CHECKING
 
 from robokudo.annotators.core import BaseAnnotator, ThreadedAnnotator
+from robokudo.annotators.exceptions import InvalidAnalysisData
 from robokudo.cas import CASViews
 from robokudo.exceptions import (
     EmptyPointCloud,
@@ -54,8 +56,8 @@ def generate_roi_with_mask_from_points(
     image_width: int,
     pointcloud_camera_model: PinholeCameraModel,
     cloud: o3d.geometry.PointCloud,
-    color2depth_ratio: Tuple[int, int] = (1, 1),
-) -> Tuple[ImageROI, npt.NDArray]:
+    color2depth_ratio: tuple[int, int] = (1, 1),
+) -> tuple[ImageROI, npt.NDArray]:
     """
     Generate ROI and mask from projected point cloud points.
 
@@ -110,7 +112,7 @@ def cluster_points(
     eps: float,
     min_points: int,
     rk_logger: logging.Logger,
-) -> List[int]:
+) -> list[int]:
     """
     Cluster points using DBSCAN algorithm.
 
@@ -169,7 +171,7 @@ class PointCloudClusterExtractor(ThreadedAnnotator):
             Parameters for configuring cluster extraction.
             """
 
-            def __init__(self):
+            def __init__(self) -> None:
                 self.dbscan_min_cluster_count: int = 90
                 """
                 Minimum points for DBSCAN cluster
@@ -210,11 +212,11 @@ class PointCloudClusterExtractor(ThreadedAnnotator):
         self,
         plane_model: Plane,
         cloud: o3d.geometry.PointCloud,
-    ) -> Tuple[
+    ) -> tuple[
         o3d.geometry.OrientedBoundingBox,
         o3d.geometry.OrientedBoundingBox,
         o3d.geometry.PointCloud,
-        List[int],
+        list[int],
         o3d.geometry.PointCloud,
     ]:
         """
@@ -245,7 +247,11 @@ class PointCloudClusterExtractor(ThreadedAnnotator):
         # cloud and was in the analysis of the PlaneAnnotation.
         outlier_cloud = cloud.select_by_index(plane_model.inliers, invert=True)
         plane_obb = plane_cloud.get_oriented_bounding_box()
-        assert isinstance(plane_obb, o3d.geometry.OrientedBoundingBox)
+        if not isinstance(plane_obb, o3d.geometry.OrientedBoundingBox):
+            raise InvalidAnalysisData(
+                expected_type=o3d.geometry.OrientedBoundingBox,
+                actual_type=type(plane_obb),
+            )
 
         # Do we need to fix the Plane OBB orientation?
         # The normal should point 'up' from the detected plane
@@ -278,7 +284,10 @@ class PointCloudClusterExtractor(ThreadedAnnotator):
         on_plane_cloud_indices = on_plane_obb.get_point_indices_within_bounding_box(
             outlier_cloud.points
         )
-        assert isinstance(on_plane_cloud, o3d.geometry.PointCloud)
+        if not isinstance(on_plane_cloud, o3d.geometry.PointCloud):
+            raise InvalidAnalysisData(
+                expected_type=o3d.geometry.PointCloud, actual_type=type(on_plane_cloud)
+            )
         on_plane_point_count = len(on_plane_cloud.points)
         if on_plane_point_count < self.descriptor.parameters.min_on_plane_point_count:
             self.feedback_message = (

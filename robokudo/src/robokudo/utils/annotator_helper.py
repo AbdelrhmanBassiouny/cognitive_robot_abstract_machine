@@ -13,12 +13,13 @@ It supports:
 
 from __future__ import annotations
 
+# %% Imports
 from copy import deepcopy
 
 import cv2
 import numpy as np
 import open3d as o3d
-from typing_extensions import Callable, List, TYPE_CHECKING
+from typing_extensions import Callable, TYPE_CHECKING
 
 from robokudo.cas import CASViews
 from robokudo.exceptions import ColorToDepthRatioMissing
@@ -164,7 +165,7 @@ def get_world_to_camera_transform_matrix(cas: CAS) -> npt.NDArray:
 
 def draw_bounding_boxes_from_object_hypotheses(
     img: npt.NDArray,
-    object_hypotheses: List[ObjectHypothesis],
+    object_hypotheses: list[ObjectHypothesis],
     text_function: Callable[[ObjectHypothesis], str],
 ) -> None:
     """

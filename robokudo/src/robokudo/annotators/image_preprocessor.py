@@ -14,6 +14,7 @@ This module provides an annotator for:
 
 from __future__ import annotations
 
+# %% Imports
 from enum import StrEnum
 from timeit import default_timer
 
@@ -21,7 +22,7 @@ import cv2
 import numpy
 import open3d as o3d
 from py_trees.common import Status
-from typing_extensions import TYPE_CHECKING, Optional
+from typing_extensions import TYPE_CHECKING
 
 from robokudo.annotators.core import BaseAnnotator
 from robokudo.cas import CASViews
@@ -66,7 +67,7 @@ class ImagePreprocessorAnnotator(BaseAnnotator):
             Parameters for configuring preprocessing.
             """
 
-            def __init__(self):
+            def __init__(self) -> None:
                 self.depth_trunc: float = 9.0
                 """
                 Maximum depth distance in meters, points beyond are discarded from cloud creation
@@ -89,12 +90,12 @@ class ImagePreprocessorAnnotator(BaseAnnotator):
         super().__init__(name, descriptor)
         self.rk_logger.debug("%s.__init__()" % self.__class__.__name__)
 
-        self.color: Optional[npt.NDArray] = None
+        self.color: npt.NDArray | None = None
         """
         Optional color image currently being worked with
         """
 
-        self.depth: Optional[npt.NDArray] = None
+        self.depth: npt.NDArray | None = None
         """
         Optional depth image currently being worked with
         """
@@ -141,28 +142,17 @@ class ImagePreprocessorAnnotator(BaseAnnotator):
             self.get_annotator_output_struct().set_image(self.color)
 
         resized_color = None
-        try:
-            resized_color = get_scaled_color_image_for_depth_image(
-                self.get_cas(), self.color
-            )
-        except ColorToDepthRatioMissing:
-            self.rk_logger.error(
-                "No color to depth ratio set by your camera driver! Can't preprocess."
-            )
-            raise
+        resized_color = get_scaled_color_image_for_depth_image(
+            self.get_cas(), self.color
+        )
 
         # o3d expects color images in RGB order
         color_rgb = cv2.cvtColor(resized_color, cv2.COLOR_BGR2RGB)
         o3d_color = o3d.geometry.Image(color_rgb)
-        o3d_depth = None
-        try:
-            o3d_depth = o3d.geometry.Image(
-                self.depth
-            )  # Please note that depth values should be in mm
-        except RuntimeError:
-            # Even though you might have a uint16 already, it might be required to explicitly cast to uint16
-            # (Note: the byteorder field might be different after the cast to make o3d happy)
-            o3d_depth = o3d.geometry.Image(self.depth.astype(numpy.uint16))
+        native_depth = numpy.ascontiguousarray(
+            self.depth, dtype=self.depth.dtype.newbyteorder("=")
+        )
+        o3d_depth = o3d.geometry.Image(native_depth)
         rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(
             o3d_color,
             o3d_depth,

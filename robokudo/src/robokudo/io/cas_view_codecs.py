@@ -4,6 +4,8 @@ Codec registry and serializers for CAS view persistence.
 
 from __future__ import annotations
 
+from robokudo.io.exceptions import CASViewCodecMissing, UnknownViewSerializer
+
 import array
 import base64
 import importlib
@@ -16,7 +18,7 @@ from krrood.adapters.json_serializer import DataclassJSONSerializer
 from krrood.ormatic.utils import classproperty
 
 import numpy as np
-from typing_extensions import Any, Dict, Iterable, List, Optional
+from typing_extensions import Any, Iterable
 from robokudo import world
 from robokudo.exceptions import InvalidCameraObservation
 from robokudo.io.cas_annotation_codecs import krrood_to_json, krrood_from_json
@@ -50,11 +52,11 @@ def _recursive_convert(value: Any) -> Any:
     return value
 
 
-def _ros_message_to_dict(msg: Any) -> Dict[str, Any]:
+def _ros_message_to_dict(msg: Any) -> dict[str, Any]:
     """
     Convert a ROS message object into plain dictionary data.
     """
-    result: Dict[str, Any] = {}
+    result: dict[str, Any] = {}
     for field_name, _ in msg.get_fields_and_field_types().items():
         value = getattr(msg, field_name)
         if hasattr(value, "get_fields_and_field_types"):
@@ -66,7 +68,7 @@ def _ros_message_to_dict(msg: Any) -> Dict[str, Any]:
     return result
 
 
-def _dict_to_ros_message(message_type: type[Any], data_dict: Dict[str, Any]) -> Any:
+def _dict_to_ros_message(message_type: type[Any], data_dict: dict[str, Any]) -> Any:
     """
     Populate a ROS message instance from plain dictionary data.
     """
@@ -131,9 +133,9 @@ class ViewPayload:
     serializer_id: str
     payload: Any
     type_name: str
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_document(self, view_name: str) -> Dict[str, Any]:
+    def to_document(self, view_name: str) -> dict[str, Any]:
         """
         Build a storage document for one encoded view.
         """
@@ -146,7 +148,7 @@ class ViewPayload:
         }
 
     @staticmethod
-    def from_document(document: Dict[str, Any]) -> "ViewPayload":
+    def from_document(document: dict[str, Any]) -> "ViewPayload":
         """
         Create a payload object from a storage document.
         """
@@ -599,7 +601,7 @@ class CASViewCodecRegistry:
     Registry that routes CAS views to matching codecs.
     """
 
-    codecs: List[ViewCodec] = field(default_factory=list)
+    codecs: list[ViewCodec] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         """
@@ -622,7 +624,7 @@ class CASViewCodecRegistry:
             ]
         )
 
-    def _find_encoder(self, value: Any) -> Optional[ViewCodec]:
+    def _find_encoder(self, value: Any) -> ViewCodec | None:
         """
         Return the first registered codec that can encode ``value``.
         """
@@ -638,24 +640,22 @@ class CASViewCodecRegistry:
         for codec in self.codecs:
             if codec.serializer_id == serializer_id:
                 return codec
-        raise ValueError(f"Unknown CAS view serializer '{serializer_id}'.")
+        raise UnknownViewSerializer(serializer_id=serializer_id)
 
     def encode_view(
         self, view_name: str, value: Any, strict: bool = True
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Encode a single CAS view into a storage document.
         """
         codec = self._find_encoder(value)
         if codec is None:
             if strict:
-                raise TypeError(
-                    f"No codec registered for CAS view '{view_name}' with type '{type(value)}'."
-                )
+                raise CASViewCodecMissing(view_name=view_name, value_type=type(value))
             return None
         return codec.encode(value).to_document(view_name=view_name)
 
-    def decode_view(self, document: Dict[str, Any]) -> tuple[str, Any]:
+    def decode_view(self, document: dict[str, Any]) -> tuple[str, Any]:
         """
         Decode a single storage document into one CAS view.
         """
@@ -665,23 +665,23 @@ class CASViewCodecRegistry:
         return view_name, codec.decode(payload)
 
     def encode_views(
-        self, views: Dict[str, Any], strict: bool = True
-    ) -> List[Dict[str, Any]]:
+        self, views: dict[str, Any], strict: bool = True
+    ) -> list[dict[str, Any]]:
         """
         Encode multiple CAS views into storage documents.
         """
-        documents: List[Dict[str, Any]] = []
+        documents: list[dict[str, Any]] = []
         for view_name, value in views.items():
             document = self.encode_view(view_name, value, strict=strict)
             if document is not None:
                 documents.append(document)
         return documents
 
-    def decode_views(self, documents: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
+    def decode_views(self, documents: Iterable[dict[str, Any]]) -> dict[str, Any]:
         """
         Decode storage documents into CAS view values.
         """
-        result: Dict[str, Any] = {}
+        result: dict[str, Any] = {}
         for document in documents:
             view_name, view_value = self.decode_view(document)
             result[view_name] = view_value

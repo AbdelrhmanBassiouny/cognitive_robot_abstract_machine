@@ -21,6 +21,7 @@ The module uses:
 
 from __future__ import annotations
 
+# %% Imports
 import json
 from pathlib import Path
 from timeit import default_timer

@@ -28,7 +28,7 @@ import message_filters
 import numpy as np
 from message_filters import Subscriber
 from sensor_msgs.msg import CameraInfo, Image
-from typing_extensions import Any, Tuple, TYPE_CHECKING, Optional, List
+from typing_extensions import Any, TYPE_CHECKING
 
 from robokudo.cas import CASViews
 from robokudo.exceptions import InvalidCameraObservation
@@ -92,27 +92,27 @@ class ROSCameraWithoutDepthInterface(ROSCameraInterface):
         self.rk_logger.info(f"  {camera_config.topic_color}")
         self.rk_logger.info(f"  {camera_config.topic_camera_info}")
 
-        self.color: Optional[Tuple[npt.NDArray]] = None
+        self.color: tuple[npt.NDArray] | None = None
         """
         Latest RGB image data.
         """
-        self.camera_info: Optional[CameraInfo] = None
+        self.camera_info: CameraInfo | None = None
         """
         Latest camera calibration info.
         """
-        self.color2depth_ratio: Optional[Tuple[float, float]] = (1.0, 1.0)
+        self.color2depth_ratio: tuple[float, float] | None = (1.0, 1.0)
         """
         Always (1.0, 1.0) since no depth data.
         """
-        self.camera_translation: Optional[List[float]] = None
+        self.camera_translation: list[float] | None = None
         """
         Camera translation from TF.
         """
-        self.camera_quaternion: Optional[List[float]] = None
+        self.camera_quaternion: list[float] | None = None
         """
         Camera rotation as quaternion from TF.
         """
-        self.timestamp: Optional[builtin_interfaces.msg.Time] = None
+        self.timestamp: builtin_interfaces.msg.Time | None = None
         """
         Timestamp of latest data.
         """
@@ -264,7 +264,7 @@ class ROSCameraWithoutDepthInterface(ROSCameraInterface):
     def callback(
         self,
         color_data: Image,
-        camera_info: Optional[CameraInfo] = None,
+        camera_info: CameraInfo | None = None,
     ) -> None:
         """
         Process synchronized RGB image and camera info messages.

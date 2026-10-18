@@ -13,7 +13,7 @@ from robokudo.descriptors.camera_configs.config_semdt_raytracer import (
     SemDTRayTracerCameraConfig,
     WorldDescriptorSource,
 )
-from robokudo.exceptions import (
+from robokudo.io.exceptions import (
     CameraAnnotationAmbiguous,
     CameraAnnotationMissing,
     CameraPoseOverrideUnavailable,
@@ -90,7 +90,7 @@ class SemDTCameraContextResolver:
                 self._apply_camera_pose(world, camera, source.camera_pose)
             rk_world.set_world(world)
         else:
-            world = self._load_runtime_world()
+            world = rk_world.world_instance()
             camera = self._select_runtime_robot_camera(world, source)
 
         rk_world.init_world_entity_tracker_from_world(world)
@@ -177,18 +177,6 @@ class SemDTCameraContextResolver:
             module_name=source.descriptor_name,
         )
         return world_descriptor.world
-
-    @staticmethod
-    def _load_runtime_world() -> World:
-        """
-        Return the semantic world currently installed in RoboKudo.
-
-        :return: Current runtime world, which may have been populated after config
-            construction.
-        """
-        # TODO(WorldSynchronizer): Resolve this reference through the synchronization
-        # API once it owns publication of the current semantic world.
-        return rk_world.world_instance()
 
     @staticmethod
     def _select_runtime_robot_camera(

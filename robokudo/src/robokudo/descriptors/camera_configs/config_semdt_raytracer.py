@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from krrood.ormatic.utils import classproperty
 from dataclasses import dataclass, field
 
-from typing_extensions import TYPE_CHECKING, ClassVar
+from typing_extensions import TYPE_CHECKING
 
 from robokudo.descriptors.camera_configs.base_camera_config import BaseCameraConfig
 from semantic_digital_twin.datastructures.camera_rendering import SemDTRGBMode
@@ -67,7 +68,13 @@ class SemDTRayTracerCameraConfig(BaseCameraConfig):
     Configuration for a simulated RGB-D camera backed by SemDT's RayTracer.
     """
 
-    registry_name: ClassVar[str] = "semdt_raytracer"
+    @classproperty
+    def registry_name(cls) -> str:
+        """
+        Identifier selecting this camera configuration.
+        """
+        return "semdt_raytracer"
+
     """
     Name under which the camera configuration is registered.
     """

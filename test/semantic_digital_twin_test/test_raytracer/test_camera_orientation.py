@@ -180,3 +180,48 @@ def test_forward_view_preserves_optical_root_orientation_under_robot_motion(
         root.global_transform.to_np() @ Camera.optical_R_forward_view.to_np(),
         atol=1e-12,
     )
+
+
+# %% Full pinhole calibration
+
+
+def test_render_preserves_off_center_projection(
+    optical_camera: Camera, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """
+    Every rendered ray projects to its pixel center under the published calibration.
+    """
+    model = PinholeCameraModel(
+        image_resolution=CameraResolution(width=8, height=6),
+        focal_length_x=10.0,
+        focal_length_y=12.0,
+        principal_point_x=2.0,
+        principal_point_y=1.0,
+    )
+    optical_camera.camera_model = model
+    tracer = optical_camera.root._world.ray_tracer
+    query = Mock(
+        return_value=RayIntersections(
+            hit_points=np.empty((0, 3)), ray_indices=np.empty(0, dtype=int), bodies=[]
+        )
+    )
+    monkeypatch.setattr(tracer, "ray_test", query)
+    frame = tracer.render(optical_camera)
+    origins, targets = query.call_args.args
+    optical_V_rays = (targets - origins) @ optical_camera.root.global_transform.to_np()[
+        :3, :3
+    ]
+    projected = optical_V_rays @ frame.camera_model.intrinsic_matrix.T
+    projected = projected[:, :2] / projected[:, 2:]
+    expected = (
+        np.stack(
+            np.meshgrid(
+                np.arange(model.resolution.width),
+                np.arange(model.resolution.height),
+                indexing="ij",
+            ),
+            axis=-1,
+        ).reshape(-1, 2)
+        + 0.5
+    )
+    np.testing.assert_allclose(projected, expected, atol=1e-12)

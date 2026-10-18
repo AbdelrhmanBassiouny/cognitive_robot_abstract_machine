@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+# %% Imports
 from timeit import default_timer
 
 import numpy as np
-from builtin_interfaces.msg import Time
+from rclpy.time import Time
 from py_trees.common import Status
 from scipy.optimize import linear_sum_assignment
 
@@ -146,9 +147,8 @@ class SemanticDigitalTwinConnector(ThreadedAnnotator):
             if world_T_camera.reference_frame is not None:
                 stamped_pose.frame = str(world_T_camera.reference_frame.name)
             stamped_pose.timestamp = Time(
-                sec=int(observation.timestamp_nanoseconds // 1_000_000_000),
-                nanosec=int(observation.timestamp_nanoseconds % 1_000_000_000),
-            )
+                nanoseconds=observation.timestamp_nanoseconds
+            ).to_msg()
 
             object_hypothesis.annotations.append(stamped_pose)
 

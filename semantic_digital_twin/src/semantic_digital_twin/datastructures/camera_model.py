@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 import numpy as np
-from typing_extensions import Optional
 
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
@@ -88,16 +87,10 @@ class FieldOfViewCameraModel(CameraModel):
 
     @property
     def field_of_view(self) -> FieldOfView:
-        """
-        Return the declared angular extent.
-        """
         return self.angular_extent
 
     @property
     def resolution(self) -> CameraResolution:
-        """
-        Return the image resolution represented by the model.
-        """
         return self.image_resolution
 
 
@@ -141,9 +134,12 @@ class PinholeCameraModel(CameraModel):
         """
         Validate the focal lengths and principal point.
         """
-        if self.focal_length_x <= 0.0 or self.focal_length_y <= 0.0:
+        if any(
+            not math.isfinite(focal_length) or focal_length <= 0.0
+            for focal_length in (self.focal_length_x, self.focal_length_y)
+        ):
             raise InvalidPinholeCameraModelError(
-                reason="focal lengths must be positive"
+                reason="focal lengths must be finite and positive"
             )
         if not 0.0 <= self.principal_point_x <= self.image_resolution.width:
             raise InvalidPinholeCameraModelError(
@@ -159,7 +155,7 @@ class PinholeCameraModel(CameraModel):
         cls,
         resolution: CameraResolution,
         field_of_view: FieldOfView,
-        distortion: Optional[CameraDistortion] = None,
+        distortion: CameraDistortion | None = None,
     ) -> PinholeCameraModel:
         """
         Create a centered pinhole model for an angular image extent.
@@ -187,9 +183,6 @@ class PinholeCameraModel(CameraModel):
 
     @property
     def resolution(self) -> CameraResolution:
-        """
-        Return the image resolution associated with the calibration.
-        """
         return self.image_resolution
 
     @property
@@ -565,12 +558,15 @@ class CameraRange:
         """
         Validate the distance interval.
         """
-        if self.minimum_distance < 0.0:
+        if not math.isfinite(self.minimum_distance) or self.minimum_distance < 0.0:
             raise InvalidCameraRangeError(
                 minimum_distance=self.minimum_distance,
                 maximum_distance=self.maximum_distance,
             )
-        if self.maximum_distance <= self.minimum_distance:
+        if (
+            math.isnan(self.maximum_distance)
+            or self.maximum_distance <= self.minimum_distance
+        ):
             raise InvalidCameraRangeError(
                 minimum_distance=self.minimum_distance,
                 maximum_distance=self.maximum_distance,

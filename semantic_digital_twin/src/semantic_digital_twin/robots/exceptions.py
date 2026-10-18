@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import TYPE_CHECKING, Type
+from typing_extensions import TYPE_CHECKING
 
 from krrood.exceptions import DataclassException
 from semantic_digital_twin.exceptions import UsageError
@@ -229,7 +229,7 @@ class UnexpectedInputSourceError(RobotPartValidationError):
     The source the part was handed.
     """
 
-    expected_source_family: Type[InputSource]
+    expected_source_family: type[InputSource]
     """
     The kind of source the part can be read from.
     """
@@ -274,3 +274,22 @@ class MissingDriveConnectionError(RobotPartValidationError):
             f"{type(self.robot_part).__name__} has no drive connection its pose could "
             f"be written into."
         )
+
+
+# %% Robot annotation consistency
+@dataclass
+class InvalidRobotAnnotation(UsageError):
+    """
+    A robot annotation violates a world or part ownership constraint.
+    """
+
+    reason: str
+    """
+    Constraint violated by the robot annotation.
+    """
+
+    def error_message(self) -> str:
+        return self.reason
+
+    def suggest_correction(self) -> str:
+        return "Restore consistent world entities, a default camera and robot part ownership."

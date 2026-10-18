@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from importlib.resources import files
 from pathlib import Path
-from typing import Self, List
+from typing_extensions import Self
 
 from krrood.ormatic.utils import classproperty
 from semantic_digital_twin.adapters.sensors.lidar import Lidar, LidarSource
@@ -100,10 +100,10 @@ class HSRBJoint(StrEnum):
 @dataclass(eq=False)
 class HSRBLeftFinger(Finger):
 
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @classmethod
@@ -123,10 +123,10 @@ class HSRBLeftFinger(Finger):
 @dataclass(eq=False)
 class HSRBRightFinger(Finger):
 
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @classmethod
@@ -146,10 +146,10 @@ class HSRBRightFinger(Finger):
 @dataclass(eq=False)
 class HSRBGripper(EndEffector, HasTwoFingers[HSRBLeftFinger, HSRBRightFinger]):
 
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         return
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         world = self._world
         gripper_joints = [
             world.get_connection_by_name(HSRBJoint.HAND_LEFT_PROXIMAL),
@@ -196,10 +196,10 @@ class HSRBGripper(EndEffector, HasTwoFingers[HSRBLeftFinger, HSRBRightFinger]):
 @dataclass(eq=False)
 class HSRBHandCamera(RobotCamera):
 
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @classmethod
@@ -223,7 +223,7 @@ class HSRBHandCamera(RobotCamera):
 @dataclass(eq=False)
 class HSRBArm(Arm[HSRBGripper], HasSensors[HSRBHandCamera]):
 
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         controlled_joints = [
             HSRBJoint.ARM_FLEX,
             HSRBJoint.ARM_LIFT,
@@ -235,7 +235,7 @@ class HSRBArm(Arm[HSRBGripper], HasSensors[HSRBHandCamera]):
             connection = self._world.get_connection_by_name(joint_name)
             connection.has_hardware_interface = True
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         arm_park = JointState.from_mapping(
             name=PrefixedName("arm_park", prefix=self.name.name),
             mapping=dict(
@@ -266,10 +266,10 @@ class HSRBArm(Arm[HSRBGripper], HasSensors[HSRBHandCamera]):
 @dataclass(eq=False)
 class HSRBHeadCenterCamera(RobotCamera):
 
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @classmethod
@@ -294,10 +294,10 @@ class HSRBHeadCenterCamera(RobotCamera):
 @dataclass(eq=False)
 class HSRBHeadLeftCamera(RobotCamera):
 
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @classmethod
@@ -321,10 +321,10 @@ class HSRBHeadLeftCamera(RobotCamera):
 @dataclass(eq=False)
 class HSRBHeadRightCamera(RobotCamera):
 
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @classmethod
@@ -348,10 +348,10 @@ class HSRBHeadRightCamera(RobotCamera):
 @dataclass(eq=False)
 class HSRBHeadRGBDCamera(RobotCamera):
 
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @classmethod
@@ -383,13 +383,13 @@ class HSRBNeck(
     ],
 ):
 
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         controlled_joints = [HSRBJoint.HEAD_PAN, HSRBJoint.HEAD_TILT]
         for joint_name in controlled_joints:
             connection = self._world.get_connection_by_name(joint_name)
             connection.has_hardware_interface = True
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @classmethod
@@ -409,10 +409,10 @@ class HSRBNeck(
 @dataclass(eq=False)
 class HSRBTorso(Torso, HasOneArm[HSRBArm], HasNeck[HSRBNeck]):
 
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         return
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         torso_joint = self.active_connections
         torso_low = JointState.from_mapping(
             name=PrefixedName("torso_low", prefix=self.name.name),
@@ -489,10 +489,10 @@ class HSRBMobileBase(
 
     full_body_controlled: bool = field(default=True, kw_only=True)
 
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @classmethod

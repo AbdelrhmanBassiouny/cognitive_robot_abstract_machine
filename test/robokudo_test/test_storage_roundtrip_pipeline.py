@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+# %% Imports
 import os
 from pathlib import Path
 import json
@@ -82,7 +85,7 @@ def _build_reader_pipeline(db_name: str) -> Pipeline:
 
 
 class TestStorageRoundtripPipeline:
-    def test_store_and_replay_sensor_data_roundtrip(self):
+    def test_store_and_replay_sensor_data_roundtrip(self) -> None:
         rk_world.init_world_with_entity_tracker()
         db_name = f"ONLY_UNITTESTS_roundtrip_{uuid.uuid4().hex}"
         storage = Storage(db_name)

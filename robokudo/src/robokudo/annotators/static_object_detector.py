@@ -11,6 +11,7 @@ The detector can create object hypotheses with poses, masks, and class labels.
 
 from __future__ import annotations
 
+# %% Imports
 import copy
 from enum import Enum
 from timeit import default_timer
@@ -19,10 +20,11 @@ import cv2
 import numpy as np
 from py_trees.common import Status
 from semantic_digital_twin.world_description.world_entity import Body
-from typing_extensions import TYPE_CHECKING, Dict, List, Optional
+from typing_extensions import TYPE_CHECKING
 
 import robokudo.world as rk_world
 from robokudo.annotators.core import BaseAnnotator
+from robokudo.annotators.exceptions import InvalidAnalysisData
 from robokudo.cas import CASViews
 from robokudo.exceptions import (
     CameraObservationMissing,
@@ -64,6 +66,7 @@ from robokudo.utils.transform import (
 from robokudo.world_descriptor import PredefinedObject
 
 if TYPE_CHECKING:
+    from semantic_digital_twin.world_description.shape_collection import ShapeCollection
     import numpy.typing as npt
     import open3d as o3d
 
@@ -127,7 +130,7 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
                 Only used for StaticObjectMode.BOUNDING_BOX
                 """
 
-                self.class_names: List[str] = []
+                self.class_names: list[str] = []
                 """
                 Used for StaticObjectMode.WORLD_DESCRIPTOR
                 """
@@ -167,12 +170,12 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
         """
         super().__init__(name, descriptor)
         self.rk_logger.debug("%s.__init__()" % self.__class__.__name__)
-        self.color: Optional[npt.NDArray] = None
-        self.depth: Optional[npt.NDArray] = None
-        self.cloud: Optional[o3d.geometry.PointCloud] = None
+        self.color: npt.NDArray | None = None
+        self.depth: npt.NDArray | None = None
+        self.cloud: o3d.geometry.PointCloud | None = None
         self.camera_intrinsics = None
-        self.object_body: Optional[Body] = None
-        self.object_bodies_by_name: Dict[str, Body] = {}
+        self.object_body: Body | None = None
+        self.object_bodies_by_name: dict[str, Body] = {}
 
     def detect_from_bb_descriptor(self, color_rgb: npt.NDArray) -> ObjectHypothesis:
         """
@@ -211,7 +214,7 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
         return body.name.name
 
     @staticmethod
-    def _select_body_shape_collection(body: Body):
+    def _select_body_shape_collection(body: Body) -> ShapeCollection | None:
         if body.collision is not None and len(body.collision) > 0:
             return body.collision
         if body.visual is not None and len(body.visual) > 0:
@@ -333,8 +336,8 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
         return object_hypothesis
 
     def detect_from_body_base(
-        self, world_to_camera_transform_matrix: Optional[npt.NDArray] = None
-    ) -> List[ObjectHypothesis]:
+        self, world_to_camera_transform_matrix: npt.NDArray | None = None
+    ) -> list[ObjectHypothesis]:
         """
         Detect from a completed world descriptor
 
@@ -412,38 +415,32 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
             world_frame_required = True
 
         if world_frame_required:
-            try:
-                world_to_camera_transform_matrix = get_world_to_camera_transform_matrix(
-                    self.get_cas()
-                )
-            except (CameraObservationMissing, CameraPoseMissing):
+            observation = self.get_cas().camera_observation
+            if observation is None or observation.world_T_camera is None:
                 self.rk_logger.warning(
-                    "Couldn't find world-to-camera transform in the CAS"
+                    "Could not find world-to-camera transform in the CAS"
                 )
                 return Status.FAILURE
+            world_to_camera_transform_matrix = get_world_to_camera_transform_matrix(
+                self.get_cas()
+            )
 
         # Scale the image down so that it matches the depth image size
-        try:
-            resized_color = get_scaled_color_image_for_depth_image(
-                self.get_cas(), self.color
+        resized_color = get_scaled_color_image_for_depth_image(
+            self.get_cas(), self.color
+        )
+        color2depth_ratio = self.get_cas().color2depth_ratio
+        pointcloud_camera_model = (
+            self.get_cas()
+            .require_camera_observation()
+            .effective_camera_model.scaled(
+                scale_x=color2depth_ratio[0],
+                scale_y=color2depth_ratio[1],
             )
-            color2depth_ratio = self.get_cas().color2depth_ratio
-            pointcloud_camera_model = (
-                self.get_cas()
-                .require_camera_observation()
-                .effective_camera_model.scaled(
-                    scale_x=color2depth_ratio[0],
-                    scale_y=color2depth_ratio[1],
-                )
-            )
-            self.camera_intrinsics = Open3DCameraModelAdapter.to_intrinsic(
-                pointcloud_camera_model
-            )
-        except ColorToDepthRatioMissing:
-            self.rk_logger.error(
-                "No color to depth ratio set by your camera driver! Can't scale image for Point Cloud creation."
-            )
-            raise
+        )
+        self.camera_intrinsics = Open3DCameraModelAdapter.to_intrinsic(
+            pointcloud_camera_model
+        )
 
         color_rgb = cv2.cvtColor(resized_color, cv2.COLOR_BGR2RGB)
 
@@ -475,7 +472,10 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
         visualization_img = copy.deepcopy(self.color)
 
         for oh in object_hypotheses:
-            assert isinstance(oh, ObjectHypothesis)
+            if not isinstance(oh, ObjectHypothesis):
+                raise InvalidAnalysisData(
+                    expected_type=ObjectHypothesis, actual_type=type(oh)
+                )
             oh_roi = oh.roi.roi
             upper_left = (oh_roi.pos.x, oh_roi.pos.y)
             upper_left_text = (oh_roi.pos.x, oh_roi.pos.y - 5)
@@ -525,7 +525,7 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
 
     def get_rotation_list_based_on_parameters(
         self, rotation_x: float, rotation_y: float, rotation_z: float, rotation_w: float
-    ) -> List[float]:
+    ) -> list[float]:
         """
         Return a quaternion based on the parametrization of the Annotator.
 

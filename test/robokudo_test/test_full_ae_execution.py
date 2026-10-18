@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+# %% Imports
 from pathlib import Path
 
 import numpy as np
@@ -45,7 +48,7 @@ def clean_semantic_world():
 
 
 class TestFullAEExecution(object):
-    def test_run_simple_ae_successfully(self, node):
+    def test_run_simple_ae_successfully(self, node) -> None:
         # rclpy.init()
         # node = Node(robokudo.defs.TEST_ROS_NODE_NAME)
 
@@ -89,7 +92,7 @@ class TestFullAEExecution(object):
 
     def test_run_file_reader_ae_synchronizes_semantic_digital_twin_belief_state(
         self, node, clean_semantic_world
-    ):
+    ) -> None:
         cr_fr_config = CollectionReaderDescriptorFactory.create_descriptor(
             "file_reader",
             loop=False,
@@ -240,7 +243,7 @@ class TestFullAEExecution(object):
             len(object_belief.body.visual.shapes) == 1
         ), "The object belief body should contain one visual shape derived from the latest bounding box."
 
-    def test_run_semdt_raytracer_ae_successfully(self, node):
+    def test_run_semdt_raytracer_ae_successfully(self, node) -> None:
         raytracer_config = CollectionReaderDescriptorFactory.create_descriptor(
             "semdt_raytracer",
             source=WorldDescriptorSource(
@@ -328,7 +331,9 @@ class TestFullAEExecution(object):
         )
         assert all(len(shapes[0].inliers) > 0 for shapes in object_shapes)
 
-    def test_run_semdt_raytracer_tabletop_ae_loads_mesh_world_descriptor(self, node):
+    def test_run_semdt_raytracer_tabletop_ae_loads_mesh_world_descriptor(
+        self, node
+    ) -> None:
         raytracer_config = CollectionReaderDescriptorFactory.create_descriptor(
             "semdt_raytracer",
             source=WorldDescriptorSource(

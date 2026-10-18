@@ -15,6 +15,9 @@ The module is primarily used for:
 * Development and debugging
 """
 
+from __future__ import annotations
+
+# %% Imports
 import json
 import pathlib
 import re
@@ -23,11 +26,12 @@ from pathlib import Path
 
 import ament_index_python.packages
 import cv2
-from typing_extensions import Any, Dict, List, Optional, TypeVar
+from typing_extensions import Any, TypeVar
 
 from krrood.adapters.json_serializer import from_json
 from robokudo.cas import CAS, CASViews
 from robokudo.io.camera_interface import CameraInterface
+from robokudo.io.exceptions import InvalidFileSequence, InvalidFileSource
 from semantic_digital_twin.datastructures.camera_model import CameraModality
 
 T = TypeVar("T")
@@ -55,14 +59,14 @@ class FileReaderInterface(CameraInterface):
         """
         Helper class for iterating over dictionary data in sequence.
 
-        This class provides cursor-based iteration over dictionary data,
-        maintaining the sequence order and supporting reset operations.
+        This class provides cursor-based iteration over dictionary data, maintaining the
+        sequence order and supporting reset operations.
         """
 
         def __init__(
             self,
-            data: Optional[Dict[str, Dict[str, Any]]] = None,
-            data_sequence: Optional[List[str]] = None,
+            data: dict[str, dict[str, Any]] | None = None,
+            data_sequence: list[str] | None = None,
         ) -> None:
             """
             Initialize the dictionary iterator.
@@ -70,23 +74,22 @@ class FileReaderInterface(CameraInterface):
             :param data: Dictionary containing the data, defaults to empty dict
             :param data_sequence: List defining iteration order
             """
-
-            self.index: Optional[int] = None
+            self.index: int | None = None
             """
-            Current position in the sequence
+            Current position in the sequence.
             """
-
-            self.data: Dict[str, Dict[str, Any]] = data if data else dict()
+            self.data: dict[str, dict[str, Any]] = data if data else dict()
             """
-            Dictionary containing the data
+            Dictionary containing the data.
             """
-
-            self.data_sequence: List[str] = data_sequence if data_sequence else list()
+            self.data_sequence: list[str] = data_sequence if data_sequence else list()
             """
-            List defining iteration order
+            List defining iteration order.
             """
-
-            assert len(self.data_sequence) == len(self.data)
+            if len(self.data_sequence) != len(self.data):
+                raise InvalidFileSequence(
+                    sequence_length=len(self.data_sequence), data_length=len(self.data)
+                )
 
             self.reset_cursor()
 
@@ -112,7 +115,7 @@ class FileReaderInterface(CameraInterface):
 
             return self.index < len(self.data_sequence)
 
-        def get_next_data(self) -> Optional[Dict]:
+        def get_next_data(self) -> dict | None:
             """
             Get the next data item in the sequence.
 
@@ -130,8 +133,8 @@ class FileReaderInterface(CameraInterface):
         """
         Initialize the file reader interface.
 
-        Sets up the directory structure and loads all matching data files.
-        Raises exceptions for invalid configurations or missing files.
+        Sets up the directory structure and loads all matching data files. Raises
+        exceptions for invalid configurations or missing files.
 
         :param camera_config: Camera configuration object
         :raises Exception: If target directory or ROS package is invalid
@@ -149,43 +152,33 @@ class FileReaderInterface(CameraInterface):
 
         self.initialized: bool = False
         """
-        Whether the interface was successfully initialized
+        Whether the interface was successfully initialized.
         """
-
         # Compute the targeted directory by considering the target_ros_package variable
         if camera_config.target_ros_package:
             # rospack = rospkg.RosPack()
-            try:
-                package_path = Path(
-                    ament_index_python.packages.get_package_share_directory(
-                        camera_config.target_ros_package
-                    )
+            package_path = Path(
+                ament_index_python.packages.get_package_share_directory(
+                    camera_config.target_ros_package
                 )
-            except ament_index_python.packages.PackageNotFoundError:
-                raise Exception(
-                    f"FileReaderInterface: ROS package with name '{camera_config.target_ros_package}' does not exist. "
-                    f"Please adjust your camera config."
+            )
+            target_dir_path = package_path.joinpath(camera_config.target_dir)
+            if not target_dir_path.exists() or not target_dir_path.is_dir():
+                raise InvalidFileSource(
+                    reason=f"{str(target_dir_path)} is not existing or not a directory."
                 )
-            else:
-                target_dir_path = package_path.joinpath(camera_config.target_dir)
-                if not target_dir_path.exists() or not target_dir_path.is_dir():
-                    raise Exception(
-                        f"{str(target_dir_path)} is not existing or not a directory."
-                    )
-
-                self.target_dir: str = str(target_dir_path)
-                """
-                Target directory path as string
-                """
-
-                self.target_dir_path: pathlib.PurePath = target_dir_path
-                """
-                Target directory as Path object
-                """
+            self.target_dir: str = str(target_dir_path)
+            """
+            Target directory path as string.
+            """
+            self.target_dir_path: pathlib.PurePath = target_dir_path
+            """
+            Target directory as Path object.
+            """
         else:
             if not camera_config.target_dir:
-                raise Exception(
-                    "FileReaderInterface: target_ros_package AND target_dir not properly set. Check CameraConfig"
+                raise InvalidFileSource(
+                    reason="FileReaderInterface: target_ros_package AND target_dir not properly set. Check CameraConfig"
                 )
 
             self.target_dir: str = camera_config.target_dir
@@ -196,19 +189,18 @@ class FileReaderInterface(CameraInterface):
         else:
             self.filename_prefix = "rk_"
             """
-            Prefix for data files. Make sure that this matches the filename_prefix in the FileReader.
+            Prefix for data files.
+
+            Make sure that this matches the filename_prefix in the FileReader.
             """
-
-        self.loaded_paths: Dict[str, Dict[str, Path]] = dict()
+        self.loaded_paths: dict[str, dict[str, Path]] = dict()
         """
-        Dictionary mapping timestamps to file paths
+        Dictionary mapping timestamps to file paths.
         """
-
-        self.loaded_data: Dict[str, Dict[str, Any]] = dict()
+        self.loaded_data: dict[str, dict[str, Any]] = dict()
         """
-        Dictionary mapping timestamps to loaded data
+        Dictionary mapping timestamps to loaded data.
         """
-
         # Matching all files with the set prefix and the timestamp
         file_paths_found = [
             x for x in sorted(self.target_dir_path.glob(f"{self.filename_prefix}*"))
@@ -237,12 +229,16 @@ class FileReaderInterface(CameraInterface):
             if matched_data_type == CASViews.COLOR_IMAGE:
                 data = cv2.imread(str(file_path))
                 if data is None:
-                    raise Exception(f"OpenCV couldn't read {str(file_path)}")
+                    raise InvalidFileSource(
+                        reason=f"OpenCV couldn't read {str(file_path)}"
+                    )
                 self.loaded_data[matched_timestamp][matched_data_type] = data
             elif matched_data_type == CASViews.DEPTH_IMAGE:
                 data = cv2.imread(str(file_path), cv2.IMREAD_ANYDEPTH)
                 if data is None:
-                    raise Exception(f"OpenCV couldn't read {str(file_path)}")
+                    raise InvalidFileSource(
+                        reason=f"OpenCV couldn't read {str(file_path)}"
+                    )
                 self.loaded_data[matched_timestamp][matched_data_type] = data
             elif matched_data_type == CASViews.CAMERA_OBSERVATION:
                 with open(str(file_path)) as fp:
@@ -260,17 +256,16 @@ class FileReaderInterface(CameraInterface):
             data=self.loaded_data, data_sequence=list(iter(self.loaded_data))
         )
         """
-        Iterator for accessing loaded data
+        Iterator for accessing loaded data.
         """
-
         self.initialized = True
 
     def has_new_data(self) -> bool:
         """
         Check if new data is available to read.
 
-        Handles looping behavior based on camera configuration and
-        maintains cursor position in the data sequence.
+        Handles looping behavior based on camera configuration and maintains cursor
+        position in the data sequence.
 
         :return: True if new data is available, False otherwise
         """
@@ -288,9 +283,9 @@ class RGBDFileReaderInterface(FileReaderInterface):
     """
     Specialized file reader interface for RGB-D camera data.
 
-    This class extends FileReaderInterface to handle the specific case of
-    reading RGB-D camera data, including color images, depth images, and
-    camera calibration information.
+    This class extends FileReaderInterface to handle the specific case of reading RGB-D
+    camera data, including color images, depth images, and camera calibration
+    information.
 
     Inherits all instance variables from FileReaderInterface.
     """

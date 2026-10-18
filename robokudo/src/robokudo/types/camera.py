@@ -6,15 +6,20 @@ from __future__ import annotations
 
 # %% Imports
 from dataclasses import dataclass, replace
+from typing_extensions import TYPE_CHECKING
 
 from robokudo.exceptions import CameraPoseMissing, InvalidCameraObservation
 from robokudo.utils.ros_frames import normalize_ros_frame_id
 from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
-from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
-from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.robots.robot_parts import Camera
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world_description.world_entity import Body
+
+if TYPE_CHECKING:
+    from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
+
+if TYPE_CHECKING:
+    from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 
 # %% Camera definitions
 
@@ -25,17 +30,10 @@ class CameraObservation:
     Describe the camera state used to produce one perception frame.
 
     :attr:`world_T_camera` alone transforms optical-frame points into world coordinates.
-    The camera root is the optical frame; its sampled pose is also its replay pose.
-    A supplied pose must have a reference frame and identify this camera's optical root.
+    The camera root is the optical frame; its sampled pose is also its replay pose. A
+    supplied pose must have a reference frame and identify this camera's optical root.
     Frame metadata and the camera root must remain unchanged after construction; use
     :meth:`with_world_T_camera` to replace the sampled pose.
-
-    An annotator can access native and effective parameters from its CAS::
-
-        observation = self.get_cas().camera_observation
-        native_model = observation.camera.camera_model
-        effective_model = observation.effective_camera_model
-        world_T_camera = observation.world_T_camera
     """
 
     camera: Camera

@@ -5,7 +5,6 @@ Dataclass construction of camera context resolvers.
 from __future__ import annotations
 
 # %% Imports
-from dataclasses import is_dataclass
 from robokudo.descriptors.camera_configs.config_semdt_raytracer import (
     SemDTRayTracerCameraConfig,
 )
@@ -13,13 +12,6 @@ from robokudo.io.semdt_camera_context import SemDTCameraContextResolver
 from robokudo.utils.module_loader import ModuleLoader
 
 # %% Resolver construction
-
-
-def test_camera_context_resolver_is_dataclass() -> None:
-    """
-    Resolver configuration is represented by dataclass fields.
-    """
-    assert is_dataclass(SemDTCameraContextResolver)
 
 
 def test_camera_context_resolver_preserves_injected_loader() -> None:

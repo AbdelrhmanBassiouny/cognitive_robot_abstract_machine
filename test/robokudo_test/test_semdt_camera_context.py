@@ -1,3 +1,4 @@
+from __future__ import annotations
 from unittest.mock import Mock
 
 import numpy as np
@@ -14,7 +15,7 @@ from robokudo.io.semdt_camera_context import (
     RayTracingContext,
     SemDTCameraContextResolver,
 )
-from robokudo.exceptions import (
+from robokudo.io.exceptions import (
     CameraAnnotationMissing,
     CameraPoseOverrideUnavailable,
     RobotAnnotationAmbiguous,
@@ -33,7 +34,7 @@ from semantic_digital_twin.world_description.world_entity import Body
 # %% Semantic camera selection
 
 
-def test_resolver_selects_named_descriptor_camera():
+def test_resolver_selects_named_descriptor_camera() -> None:
     world = WorldDescriptor().world
     [camera] = world.get_semantic_annotations_by_type(Camera)
     source = WorldDescriptorSource(camera_name=camera.name)
@@ -45,7 +46,7 @@ def test_resolver_selects_named_descriptor_camera():
     assert selected_camera is camera
 
 
-def test_resolver_rejects_unknown_camera_name():
+def test_resolver_rejects_unknown_camera_name() -> None:
     world = WorldDescriptor().world
     source = WorldDescriptorSource(camera_name=PrefixedName(name="unknown_camera"))
 
@@ -53,7 +54,7 @@ def test_resolver_rejects_unknown_camera_name():
         SemDTCameraContextResolver._select_descriptor_camera(world, source)
 
 
-def test_resolver_rejects_world_without_camera_annotation():
+def test_resolver_rejects_world_without_camera_annotation() -> None:
     """
     A ray-traced world must declare the semantic camera it renders from.
     """
@@ -67,7 +68,7 @@ def test_resolver_rejects_world_without_camera_annotation():
 # %% Runtime robot camera selection
 
 
-def test_resolver_uses_runtime_robots_default_camera(monkeypatch):
+def test_resolver_uses_runtime_robots_default_camera(monkeypatch) -> None:
     world = Mock(spec=World)
     robot = Mock(spec=AbstractRobot)
     camera = Mock(spec=RobotCamera)
@@ -87,7 +88,9 @@ def test_resolver_uses_runtime_robots_default_camera(monkeypatch):
     robot.get_default_camera.assert_called_once_with()
 
 
-def test_resolver_retries_runtime_lookup_after_world_becomes_available(monkeypatch):
+def test_resolver_retries_runtime_lookup_after_world_becomes_available(
+    monkeypatch,
+) -> None:
     unavailable_world = Mock(spec=World)
     unavailable_world.get_semantic_annotations_by_type.return_value = []
     available_world = Mock(spec=World)
@@ -110,7 +113,7 @@ def test_resolver_retries_runtime_lookup_after_world_becomes_available(monkeypat
     assert context.camera is camera
 
 
-def test_resolver_selects_named_robot_default_camera():
+def test_resolver_selects_named_robot_default_camera() -> None:
     world = Mock(spec=World)
     selected_robot = Mock(spec=AbstractRobot)
     selected_robot.name = PrefixedName(name="selected_robot")
@@ -131,7 +134,7 @@ def test_resolver_selects_named_robot_default_camera():
     other_robot.get_default_camera.assert_not_called()
 
 
-def test_resolver_rejects_ambiguous_runtime_robot_selection():
+def test_resolver_rejects_ambiguous_runtime_robot_selection() -> None:
     world = Mock(spec=World)
     first_robot = Mock(spec=AbstractRobot)
     first_robot.name = PrefixedName(name="first_robot")
@@ -172,7 +175,7 @@ def test_resolver_preserves_camera_pose_without_override(
     np.testing.assert_array_equal(camera.root.global_transform.to_np(), descriptor_pose)
 
 
-def test_resolver_applies_camera_pose_override_once():
+def test_resolver_applies_camera_pose_override_once() -> None:
     """
     The first camera load applies the override without pinning later motion.
     """
@@ -216,7 +219,7 @@ def test_resolver_applies_camera_pose_override_once():
     )
 
 
-def test_resolver_rejects_pose_override_for_world_root_camera():
+def test_resolver_rejects_pose_override_for_world_root_camera() -> None:
     """
     A camera without a mutable parent connection cannot be repositioned.
     """

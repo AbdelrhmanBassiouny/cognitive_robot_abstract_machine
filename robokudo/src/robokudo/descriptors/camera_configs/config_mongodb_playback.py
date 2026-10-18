@@ -1,7 +1,10 @@
+from __future__ import annotations
+
+# %% Imports
+from krrood.ormatic.utils import classproperty
 from dataclasses import dataclass
 from enum import StrEnum
 
-from typing_extensions import ClassVar
 
 from robokudo.descriptors.camera_configs.base_camera_config import BaseCameraConfig
 from robokudo.descriptors.camera_configs.components import WorldDescriptorComponent
@@ -37,7 +40,12 @@ class MongoCameraConfig(BaseCameraConfig, WorldDescriptorComponent):
         MongoDB database, allowing for replay and analysis of recorded scenes.
     """
 
-    registry_name: ClassVar[str] = "mongo"
+    @classproperty
+    def registry_name(cls) -> str:
+        """
+        Identifier selecting this camera configuration.
+        """
+        return "mongo"
 
     interface_type: str = "StorageReader"
 

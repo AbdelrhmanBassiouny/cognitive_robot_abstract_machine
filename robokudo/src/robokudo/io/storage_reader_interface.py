@@ -20,11 +20,13 @@ The module is primarily used for:
 
 from __future__ import annotations
 
+from krrood.ormatic.utils import classproperty
+
 # %% Imports
 import json
 from dataclasses import dataclass
 from time import perf_counter
-from typing_extensions import Any, ClassVar, TYPE_CHECKING
+from typing_extensions import Any, TYPE_CHECKING
 from uuid import UUID
 
 from semantic_digital_twin.adapters.ros.messages import WorldModelSnapshot
@@ -87,17 +89,19 @@ class StorageReaderInterface(CameraInterface):
     Common Analysis Structure (CAS) views.
     """
 
-    SENSOR_VIEW_NAMES: ClassVar[frozenset[CASViews]] = frozenset(
-        {
-            CASViews.COLOR_IMAGE,
-            CASViews.DEPTH_IMAGE,
-            CASViews.COLOR2DEPTH_RATIO,
-            CASViews.CAMERA_OBSERVATION,
-        }
-    )
-    """
-    CAS views that represent recorded sensor inputs.
-    """
+    @classproperty
+    def SENSOR_VIEW_NAMES(cls) -> frozenset[CASViews]:
+        """
+        CAS views that represent recorded sensor inputs.
+        """
+        return frozenset(
+            {
+                CASViews.COLOR_IMAGE,
+                CASViews.DEPTH_IMAGE,
+                CASViews.COLOR2DEPTH_RATIO,
+                CASViews.CAMERA_OBSERVATION,
+            }
+        )
 
     def __init__(self, camera_config: MongoCameraConfig) -> None:
         """

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+# %% Imports
 import copy
 
 import numpy as np
@@ -7,7 +8,7 @@ import supervision as sv
 from py_trees.common import Status
 from supervision.config import CLASS_NAME_DATA_FIELD
 from trackers import ByteTrackTracker
-from typing_extensions import TYPE_CHECKING, List
+from typing_extensions import TYPE_CHECKING
 
 from robokudo.annotators.core import BaseAnnotator
 from robokudo.cas import CASViews
@@ -29,7 +30,7 @@ class ByteTrackAnnotator(BaseAnnotator):
     * ObjectHypothesis ROI + Mask + Classification annotation
     """
 
-    def __init__(self, name: str = "ByteTrackAnnotator"):
+    def __init__(self, name: str = "ByteTrackAnnotator") -> None:
         super().__init__(name)
 
         self.tracker: ByteTrackTracker = ByteTrackTracker()
@@ -67,7 +68,7 @@ class ByteTrackAnnotator(BaseAnnotator):
             self.tracker.reset()
         self.last_ts = data_ts
 
-        ohs: List[ObjectHypothesis] = cas.filter_annotations_by_type(ObjectHypothesis)
+        ohs: list[ObjectHypothesis] = cas.filter_annotations_by_type(ObjectHypothesis)
         if len(ohs) == 0:
             self.rk_logger.debug(f"{len(ohs)} object hypothesis found, nothing to do.")
             return Status.SUCCESS
@@ -103,7 +104,7 @@ class ByteTrackAnnotator(BaseAnnotator):
                 f"Using {len(restored_masks)} masks for object tracking."
             )
 
-        classifications: List[Classification] = []
+        classifications: list[Classification] = []
         for oh in ohs:
             classification = cas.filter_by_type(Classification, oh.annotations)
             if len(classification) == 0:

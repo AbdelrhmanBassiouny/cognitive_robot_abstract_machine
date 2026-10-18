@@ -17,6 +17,7 @@ Key features:
 
 from __future__ import annotations
 
+# %% Imports
 import copy
 from timeit import default_timer
 
@@ -24,9 +25,10 @@ import cv2
 import numpy as np
 import open3d as o3d
 from py_trees.common import Status
-from typing_extensions import TYPE_CHECKING, Dict, Optional, Tuple
+from typing_extensions import TYPE_CHECKING
 
 from robokudo.annotators.core import BaseAnnotator
+from robokudo.annotators.exceptions import InvalidAnalysisData
 from robokudo.cas import CASViews
 from robokudo.exceptions import ColorToDepthRatioMissing, ImageContourMissing
 from robokudo.io.camera_model_adapters import Open3DCameraModelAdapter
@@ -91,16 +93,16 @@ class ImageClusterExtractor(BaseAnnotator):
                 """
                 Initialize default parameter values.
                 """
-                self.hsv_min: Tuple[int, int, int] = (150, 130, 85)
-                self.hsv_max: Tuple[int, int, int] = (200, 255, 255)
+                self.hsv_min: tuple[int, int, int] = (150, 130, 85)
+                self.hsv_max: tuple[int, int, int] = (200, 255, 255)
                 self.erosion_iterations: int = 2
 
                 # This parameter controls the filtering of the initial list of contours.
                 # It is used to avoid very small contours when calculating 3d points etc.
                 self.contour_min_size: int = 1000
 
-                self.color_name_to_hsv_range: Dict[
-                    str, Dict[str, Tuple[int, int, int]]
+                self.color_name_to_hsv_range: dict[
+                    str, dict[str, tuple[int, int, int]]
                 ] = dict()
                 self.color_name_to_hsv_range["blue"] = {
                     "hsv_min": (150, 130, 85),
@@ -144,8 +146,8 @@ class ImageClusterExtractor(BaseAnnotator):
     ) -> None:
         super().__init__(name, descriptor)
         self.rk_logger.debug("%s.__init__()" % self.__class__.__name__)
-        self.color: Optional[npt.NDArray] = None
-        self.depth: Optional[npt.NDArray] = None
+        self.color: npt.NDArray | None = None
+        self.depth: npt.NDArray | None = None
         self.query = None
         self.camera_intrinsics = None
 
@@ -186,10 +188,9 @@ class ImageClusterExtractor(BaseAnnotator):
         Checks for a color query in the CAS and updates the HSV thresholding parameters
         if a matching color is found in the color_name_to_hsv_range mapping.
         """
-        try:
-            self.query = self.get_cas().get(CASViews.QUERY)
-        except KeyError:
+        if CASViews.QUERY not in self.get_cas().views:
             return
+        self.query = self.get_cas().get(CASViews.QUERY)
 
         if not self.query:
             return
@@ -210,8 +211,8 @@ class ImageClusterExtractor(BaseAnnotator):
 
     def _threshold_hsv(
         self,
-        hsv_min: Tuple[int, int, int],
-        hsv_max: Tuple[int, int, int],
+        hsv_min: tuple[int, int, int],
+        hsv_max: tuple[int, int, int],
     ) -> npt.NDArray:
         """
         Threshold ``self.hsv`` to the given bounds, wrapping the hue channel around the
@@ -267,23 +268,17 @@ class ImageClusterExtractor(BaseAnnotator):
 
         # Scale the image down so that it matches the depth image size
         resized_color = None
-        try:
-            resized_color = get_scaled_color_image_for_depth_image(cas, self.color)
-            color2depth_ratio = cas.color2depth_ratio
-            pointcloud_camera_model = (
-                cas.require_camera_observation().effective_camera_model.scaled(
-                    scale_x=color2depth_ratio[0],
-                    scale_y=color2depth_ratio[1],
-                )
+        resized_color = get_scaled_color_image_for_depth_image(cas, self.color)
+        color2depth_ratio = cas.color2depth_ratio
+        pointcloud_camera_model = (
+            cas.require_camera_observation().effective_camera_model.scaled(
+                scale_x=color2depth_ratio[0],
+                scale_y=color2depth_ratio[1],
             )
-            self.camera_intrinsics = Open3DCameraModelAdapter.to_intrinsic(
-                pointcloud_camera_model
-            )
-        except ColorToDepthRatioMissing:
-            self.rk_logger.error(
-                "No color to depth ratio set by your camera driver! Can't scale image for Point Cloud creation."
-            )
-            raise
+        )
+        self.camera_intrinsics = Open3DCameraModelAdapter.to_intrinsic(
+            pointcloud_camera_model
+        )
 
         self.hsv = cv2.cvtColor(resized_color, cv2.COLOR_BGR2HSV_FULL)
 
@@ -417,7 +412,10 @@ class ImageClusterExtractor(BaseAnnotator):
             visualization_img = copy.deepcopy(result)
 
         for oh in object_hypotheses:
-            assert isinstance(oh, ObjectHypothesis)
+            if not isinstance(oh, ObjectHypothesis):
+                raise InvalidAnalysisData(
+                    expected_type=ObjectHypothesis, actual_type=type(oh)
+                )
             oh_roi = oh.roi.roi
             upper_left = (oh_roi.pos.x, oh_roi.pos.y)
             upper_left_text = (oh_roi.pos.x, oh_roi.pos.y - 5)

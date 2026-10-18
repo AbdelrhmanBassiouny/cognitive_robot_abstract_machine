@@ -1,44 +1,50 @@
+from __future__ import annotations
+
+# %% Imports
+from dataclasses import dataclass
 from pathlib import Path
 import pooch
 
-# ---- Configuration ----
-DATA_PACKAGE_NAME: str = "robokudo_test_data"
-DATA_VERSION: str = "52fedaf2f2e56f52a78eb9ea0a64a15d53a7294b"
-KNOWN_HASH: str = (
-    "sha256:336c328d324f8c0023f924cb6fd0808aaabce8b11270597db427ebde333b3dd6"
-)
 
-URL: str = (
-    "https://gitlab.informatik.uni-bremen.de/robokudo/robokudo_test_data/-/jobs/artifacts/"
-    f"{DATA_VERSION}/raw/robokudo_test_data-{DATA_VERSION}.zip?job=package_zip"
-)
+# %% Test dataset
+@dataclass(frozen=True)
+class TestDataset:
+    """
+    Identify the downloadable RoboKudo test dataset.
+    """
 
-FILENAME: str = f"{DATA_PACKAGE_NAME}.zip"
+    package_name: str = "robokudo_test_data"
+    """
+    Dataset archive and cache name.
+    """
+
+    revision: str = "52fedaf2f2e56f52a78eb9ea0a64a15d53a7294b"
+    """
+    Repository revision packaged in the archive.
+    """
+
+    checksum: str = (
+        "sha256:336c328d324f8c0023f924cb6fd0808aaabce8b11270597db427ebde333b3dd6"
+    )
+    """
+    Expected archive checksum.
+    """
 
 
 def test_data_path() -> Path:
     """
-    Retrieve Robokudo test data, downloading and unpacking if needed.
-
-    :return: Path to the root extracted dataset directory in the local cache.
-
-    .. warning::
-       This function performs network I/O on first use.
+    Retrieve the extracted dataset directory, downloading it when absent.
     """
-    downloader = pooch.HTTPDownloader()
-
-    # Download + verify + unzip
+    dataset = TestDataset()
     extracted_files = pooch.retrieve(
-        url=f"{URL}",
-        known_hash=KNOWN_HASH,
-        path=pooch.os_cache(DATA_PACKAGE_NAME),  # ~/.cache/DATA_PACKAGE_NAME
-        fname=FILENAME,
-        downloader=downloader,
+        url=(
+            "https://gitlab.informatik.uni-bremen.de/robokudo/robokudo_test_data/-/jobs/artifacts/"
+            f"{dataset.revision}/raw/{dataset.package_name}-{dataset.revision}.zip?job=package_zip"
+        ),
+        known_hash=dataset.checksum,
+        path=pooch.os_cache(dataset.package_name),
+        fname=f"{dataset.package_name}.zip",
+        downloader=pooch.HTTPDownloader(),
         processor=pooch.Unzip(),
     )
-
-    # Pooch returns list of extracted file paths
-    # We usually want the root extracted directory:
-    extracted_dir = Path(extracted_files[0]).parents[0]
-
-    return extracted_dir
+    return Path(extracted_files[0]).parent

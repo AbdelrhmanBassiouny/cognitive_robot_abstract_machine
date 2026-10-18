@@ -6,7 +6,7 @@ from __future__ import annotations
 
 # %% Imports
 import io
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from unittest.mock import Mock
 import numpy as np
 import pytest
@@ -14,6 +14,7 @@ from PIL import Image, UnidentifiedImageError
 from pyglet.canvas.xlib import NoSuchDisplayException
 from semantic_digital_twin.datastructures.camera_model import (
     CameraRange,
+    PlumbBobCameraDistortion,
     FieldOfViewCameraModel,
     PinholeCameraModel,
 )
@@ -27,7 +28,10 @@ from semantic_digital_twin.datastructures.camera_rendering import (
 )
 from semantic_digital_twin.robots.robot_parts import Camera
 from semantic_digital_twin.spatial_computations.raytracer import RayTracer
-from semantic_digital_twin.spatial_computations.exceptions import RayPointShapeMismatch
+from semantic_digital_twin.spatial_computations.exceptions import (
+    RayPointShapeMismatch,
+    UnsupportedCameraProjection,
+)
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.testing import ray_test_world
 from semantic_digital_twin.world_description.geometry import Color
@@ -103,6 +107,9 @@ def camera_intersections(
     camera = Mock(spec=Camera)
     camera.camera_model = PinholeCameraModel.from_field_of_view(
         resolution=resolution, field_of_view=FieldOfView()
+    )
+    camera.camera_model = replace(
+        camera.camera_model, focal_length_x=camera.camera_model.focal_length_y
     )
     camera.camera_range = CameraRange(minimum_distance=0.1, maximum_distance=8.0)
     camera.world_T_forward_view = HomogeneousTransformationMatrix()
@@ -460,3 +467,54 @@ def test_ray_query_rejects_mismatched_point_counts(
         fixture.ray_tracer.ray_test(origins, targets)
     assert error.value.origin_shape == origins.shape
     assert error.value.target_shape == targets.shape
+
+
+# %% Unsupported lens projection
+@pytest.mark.parametrize("radial_coefficient", [0.0, 0.1])
+def test_render_rejects_distorted_calibration(
+    camera_intersections: CameraIntersections, radial_coefficient: float
+) -> None:
+    """
+    Distortion metadata is never advertised on an undistorted rendered image.
+    """
+    fixture = camera_intersections
+    fixture.camera.camera_model = replace(
+        fixture.camera.camera_model,
+        distortion=PlumbBobCameraDistortion(radial_coefficient_1=radial_coefficient),
+    )
+    with pytest.raises(UnsupportedCameraProjection):
+        fixture.ray_tracer.render(fixture.camera)
+    fixture.query.assert_not_called()
+
+
+# %% Textured projection constraints
+@pytest.mark.parametrize("off_center", [True, False])
+def test_textured_render_rejects_incompatible_projection(
+    camera_intersections: CameraIntersections,
+    off_center: bool,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    The centered textured viewer rejects off-center or unequal-focal calibration.
+    """
+    fixture = camera_intersections
+    original = fixture.camera.camera_model
+    monkeypatch.setattr(
+        fixture.ray_tracer,
+        "_render_textured_color",
+        Mock(
+            return_value=np.zeros(
+                (fixture.resolution.width, fixture.resolution.height, 3), dtype=np.uint8
+            )
+        ),
+    )
+    fixture.camera.camera_model = replace(
+        original,
+        focal_length_y=(
+            original.focal_length_x if off_center else original.focal_length_x * 2
+        ),
+        principal_point_x=original.principal_point_x + (0.25 if off_center else 0.0),
+    )
+    with pytest.raises(UnsupportedCameraProjection):
+        fixture.ray_tracer.render(fixture.camera, rgb_mode=SemDTRGBMode.TEXTURED)
+    fixture.query.assert_not_called()

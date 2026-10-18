@@ -2,9 +2,11 @@
 Verify camera replay from a full recorded semantic world.
 """
 
+from __future__ import annotations
+
 import json
 from dataclasses import dataclass, replace
-from typing import Any
+from typing_extensions import Any
 from unittest.mock import Mock
 
 import numpy as np
@@ -17,6 +19,7 @@ from robokudo.exceptions import InvalidCameraObservation, CameraObservationMissi
 from robokudo.io.cas_view_codecs import CameraObservationCodec, ViewPayload
 from robokudo.io.sensor_world import SensorWorldProjector
 from robokudo.io.storage import Storage, StorageDocumentField
+from robokudo.io.exceptions import RecordedViewMissing
 from robokudo.io.storage_reader_interface import StorageReaderInterface
 from robokudo.types.camera import CameraObservation
 from semantic_digital_twin.adapters.ros.messages import WorldModelSnapshot
@@ -158,7 +161,7 @@ def _snapshot(world: World) -> dict[str, Any]:
 # %% Sensor projection
 
 
-def test_sensor_world_projection_excludes_inferred_entities():
+def test_sensor_world_projection_excludes_inferred_entities() -> None:
     """
     Keep camera IDs and a direct pose while omitting unrelated world branches.
     """
@@ -177,7 +180,7 @@ def test_sensor_world_projection_excludes_inferred_entities():
     assert sensor_world.get_bodies_by_name(scene.inferred_body.name) == []
 
 
-def test_full_snapshot_replays_only_camera_context():
+def test_full_snapshot_replays_only_camera_context() -> None:
     """
     Restore a full snapshot temporarily and keep only its sensor context.
     """
@@ -220,7 +223,7 @@ def test_full_snapshot_replays_only_camera_context():
     assert reasoning_world.get_bodies_by_name(scene.source_root.name) == []
 
 
-def test_replay_resolves_leading_slash_pose_frame_alias():
+def test_replay_resolves_leading_slash_pose_frame_alias() -> None:
     """
     Replay a TF pose whose frame omits the camera root's leading slash.
     """
@@ -257,7 +260,7 @@ def test_replay_resolves_leading_slash_pose_frame_alias():
 
 
 @pytest.mark.parametrize("pose_frame_alias", [False, True])
-def test_later_frame_updates_same_camera_connection(pose_frame_alias: bool):
+def test_later_frame_updates_same_camera_connection(pose_frame_alias: bool) -> None:
     """
     Apply a new sampled pose without replacing the projected camera.
     """
@@ -299,7 +302,7 @@ def test_later_frame_updates_same_camera_connection(pose_frame_alias: bool):
     )
 
 
-def test_missing_pose_merges_camera_into_existing_world():
+def test_missing_pose_merges_camera_into_existing_world() -> None:
     """
     Attach an unposed recorded camera without restoring recorded objects.
     """
@@ -321,7 +324,7 @@ def test_missing_pose_merges_camera_into_existing_world():
     assert reasoning_world.get_bodies_by_name(scene.inferred_body.name) == []
 
 
-def test_camera_pose_child_must_match_camera_root():
+def test_camera_pose_child_must_match_camera_root() -> None:
     """
     Reject a sampled pose for a different sensor frame.
     """
@@ -338,7 +341,7 @@ def test_camera_pose_child_must_match_camera_root():
         ).project()
 
 
-def test_camera_pose_requires_a_reference_frame():
+def test_camera_pose_requires_a_reference_frame() -> None:
     """
     Reject a pose whose target frame cannot be represented in the sensor world.
     """
@@ -352,7 +355,7 @@ def test_camera_pose_requires_a_reference_frame():
 # %% Reader behavior
 
 
-def test_storage_reader_keeps_camera_identity_in_cas():
+def test_storage_reader_keeps_camera_identity_in_cas() -> None:
     """
     Keep the world camera instance when transferring decoded views into a CAS.
     """
@@ -381,7 +384,7 @@ def test_storage_reader_keeps_camera_identity_in_cas():
     assert cas.require_camera_observation().camera is scene.observation.camera
 
 
-def test_sensor_replay_skips_recorded_nonsensor_views():
+def test_sensor_replay_skips_recorded_nonsensor_views() -> None:
     """
     Fetch only selected sensor views from a recorded frame.
     """
@@ -408,7 +411,7 @@ def test_sensor_replay_skips_recorded_nonsensor_views():
     collection.find_one.assert_called_once_with({"_id": 1})
 
 
-def test_explicit_full_world_replay_restores_recorded_objects():
+def test_explicit_full_world_replay_restores_recorded_objects() -> None:
     """
     Restore inferred entities only when full-world playback is selected.
     """
@@ -529,3 +532,21 @@ def test_sensor_replay_rejects_conflicting_camera_root_without_changing_world(
         reader._restore_sensor_world(frame)
     assert reasoning_world.bodies == [conflict]
     assert reasoning_world.get_semantic_annotations_by_type(Camera) == []
+
+
+# %% Missing stored views
+
+
+def test_storage_reports_missing_view_document() -> None:
+    """
+    A broken recorded view reference raises a structured storage error.
+    """
+    storage = Storage.__new__(Storage)
+    collection = Mock()
+    collection.find_one.return_value = None
+    storage.db = {Storage.VIEW_COLLECTION_NAME: collection}
+    with pytest.raises(RecordedViewMissing):
+        storage.load_view_document(
+            {StorageDocumentField.VIEW_IDS: {CASViews.COLOR_IMAGE: 42}},
+            CASViews.COLOR_IMAGE,
+        )

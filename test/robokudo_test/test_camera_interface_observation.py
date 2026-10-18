@@ -1,5 +1,10 @@
+from __future__ import annotations
 from collections.abc import Iterator
 from dataclasses import dataclass
+from unittest.mock import Mock
+from geometry_msgs.msg import TransformStamped
+from rclpy.time import Time as ROSClockTime
+from tf2_ros import LookupException
 import logging
 from threading import Lock
 
@@ -16,7 +21,11 @@ from robokudo.cas import CAS
 from robokudo.types.image import ImageRotation
 from robokudo.descriptors.camera_configs.base_camera_config import BaseCameraConfig
 from robokudo.exceptions import InvalidCameraObservation
-from robokudo.io.camera_interface import CameraInterface, KinectCameraInterface
+from robokudo.io.camera_interface import (
+    CameraInterface,
+    KinectCameraInterface,
+    ROSCameraInterface,
+)
 from robokudo.io.camera_model_adapters import RosCameraModelAdapter
 from robokudo.io.camera_without_depth_interface import (
     OpenCVCameraWithoutDepthInterface,
@@ -41,7 +50,7 @@ from semantic_digital_twin.world_description.world_entity import Body
 
 
 @dataclass
-class LiveRGBDCameraConfig:
+class SynchronizedImageConfiguration:
     """
     Provide the options consumed by the RGB-D reader's frame conversion.
     """
@@ -122,7 +131,7 @@ class OpenCVCameraTestConfig:
 
 
 @dataclass
-class VideoCaptureMimic:
+class SeekableImageSequence:
     """
     Provide the metadata operations used after an OpenCV frame is retrieved.
     """
@@ -163,18 +172,6 @@ class VideoCaptureMimic:
 
 
 # %% Fixtures
-
-
-@pytest.fixture
-def runtime_world() -> Iterator[World]:
-    """
-    Install an isolated semantic world for one camera-interface test.
-    """
-    previous_world = robokudo_world.world_instance()
-    world = World()
-    robokudo_world.set_world(world)
-    yield world
-    robokudo_world.set_world(previous_world)
 
 
 @pytest.fixture
@@ -538,7 +535,7 @@ def test_live_reader_rejects_tf_source_for_a_different_optical_frame(
     Reject a configured TF source that is not the image optical frame.
     """
     interface = object.__new__(KinectCameraInterface)
-    interface.camera_config = LiveRGBDCameraConfig()
+    interface.camera_config = SynchronizedImageConfiguration()
     interface._has_new_data = True
     interface.lookup_viewpoint = True
     interface.tf_from = "another_optical_frame"
@@ -567,7 +564,7 @@ def test_live_reader_uses_robot_optical_body_for_tf_pose(
     camera_info.header.frame_id = "/color_optical_frame"
     original_parent = camera_body.parent_connection
     interface = object.__new__(KinectCameraInterface)
-    interface.camera_config = LiveRGBDCameraConfig()
+    interface.camera_config = SynchronizedImageConfiguration()
     interface._has_new_data = True
     interface.lookup_viewpoint = True
     interface.tf_from = "color_optical_frame"
@@ -601,7 +598,7 @@ def test_live_reader_creates_isolated_camera_mount_for_tf_pose(
     An isolated live camera gets a world reference and sampled mount.
     """
     interface = object.__new__(KinectCameraInterface)
-    interface.camera_config = LiveRGBDCameraConfig()
+    interface.camera_config = SynchronizedImageConfiguration()
     interface._has_new_data = True
     interface.lookup_viewpoint = True
     interface.tf_from = "color_optical_frame"
@@ -638,7 +635,7 @@ def test_rgbd_reader_stores_camera_observation(
     The live RGB-D reader publishes semantic metadata with each CAS frame.
     """
     interface = object.__new__(KinectCameraInterface)
-    interface.camera_config = LiveRGBDCameraConfig()
+    interface.camera_config = SynchronizedImageConfiguration()
     interface._has_new_data = True
     interface.lookup_viewpoint = False
     interface.color = np.zeros(
@@ -776,7 +773,7 @@ def test_rgbd_high_resolution_crop_updates_effective_resolution(
     camera_info.height = 1024
     camera_info.k = [900.0, 0.0, 640.0, 0.0, 910.0, 512.0, 0.0, 0.0, 1.0]
     interface = object.__new__(KinectCameraInterface)
-    interface.camera_config = LiveRGBDCameraConfig(hi_res_mode=True)
+    interface.camera_config = SynchronizedImageConfiguration(hi_res_mode=True)
     interface._has_new_data = True
     interface.lookup_viewpoint = False
     interface.color = np.zeros((1024, 1280, 3), dtype=np.uint8)
@@ -814,7 +811,7 @@ def test_opencv_reader_stores_camera_observation(
     """
     interface = object.__new__(OpenCVCameraWithoutDepthInterface)
     interface.camera_config = OpenCVCameraTestConfig(camera_info=camera_info)
-    interface.video_capture = VideoCaptureMimic()
+    interface.video_capture = SeekableImageSequence()
     interface.device_driver_flag = 0
     interface.stream_type = 1
     interface._loop_counter = 0
@@ -868,3 +865,98 @@ def test_tf_binding_attaches_existing_camera_root_to_new_reference(
     assert camera_body.parent_connection.parent is pose.reference_frame
     assert len(runtime_world.connections) == 1
     np.testing.assert_array_equal(pose.to_np(), numeric_pose.to_np())
+
+
+# %% Controlled transform availability
+@pytest.fixture
+def transform_camera() -> ROSCameraInterface:
+    """
+    Provide an interface with a controlled TF buffer and no subscriptions.
+    """
+    camera = ROSCameraInterface.__new__(ROSCameraInterface)
+    camera.lookup_viewpoint = True
+    camera.tf_from = "camera_optical_frame"
+    camera.tf_to = "map"
+    camera.tf_buffer = Mock()
+    return camera
+
+
+def test_unavailable_transform_returns_false(
+    transform_camera: ROSCameraInterface,
+) -> None:
+    """
+    An unavailable sample is reported without attempting its lookup.
+    """
+    transform_camera.tf_buffer.can_transform.return_value = False
+    assert transform_camera.lookup_transform() is False
+    transform_camera.tf_buffer.lookup_transform.assert_not_called()
+
+
+def test_available_transform_updates_pose(transform_camera: ROSCameraInterface) -> None:
+    """
+    A sampled pose retains its translation and quaternion components.
+    """
+    sample = TransformStamped()
+    sample.transform.translation.x = 1.0
+    sample.transform.translation.y = 2.0
+    sample.transform.translation.z = 3.0
+    sample.transform.rotation.w = 1.0
+    transform_camera.tf_buffer.can_transform.return_value = True
+    transform_camera.tf_buffer.lookup_transform.return_value = sample
+    timestamp = ROSClockTime(nanoseconds=123)
+    assert transform_camera.lookup_transform(timestamp) is True
+    translation = sample.transform.translation
+    rotation = sample.transform.rotation
+    assert transform_camera.camera_translation == [
+        translation.x,
+        translation.y,
+        translation.z,
+    ]
+    assert transform_camera.camera_quaternion == [
+        rotation.x,
+        rotation.y,
+        rotation.z,
+        rotation.w,
+    ]
+    transform_camera.tf_buffer.lookup_transform.assert_called_once_with(
+        target_frame=transform_camera.tf_to,
+        source_frame=transform_camera.tf_from,
+        time=timestamp,
+    )
+
+
+def test_disabled_lookup_does_not_access_buffer(
+    transform_camera: ROSCameraInterface,
+) -> None:
+    """
+    A camera with pose lookup disabled requires no TF sample.
+    """
+    transform_camera.lookup_viewpoint = False
+    assert transform_camera.lookup_transform() is True
+    transform_camera.tf_buffer.can_transform.assert_not_called()
+    transform_camera.tf_buffer.lookup_transform.assert_not_called()
+
+
+def test_transform_lookup_errors_propagate(
+    transform_camera: ROSCameraInterface,
+) -> None:
+    """
+    A buffer failure after its availability check reaches the caller.
+    """
+    transform_camera.tf_buffer.can_transform.return_value = True
+    transform_camera.tf_buffer.lookup_transform.side_effect = LookupException
+    with pytest.raises(LookupException):
+        transform_camera.lookup_transform()
+
+
+# %% Isolated semantic world
+@pytest.fixture
+def runtime_world() -> Iterator[World]:
+    """
+    Install an isolated semantic world and restore the previous world afterwards.
+    """
+    previous_world = robokudo_world.world_instance()
+    world = World()
+    robokudo_world.set_world(world)
+    yield world
+    robokudo_world.set_world(previous_world)

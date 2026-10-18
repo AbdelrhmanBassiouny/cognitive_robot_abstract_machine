@@ -3,6 +3,7 @@ from __future__ import annotations
 # %% Imports
 from dataclasses import dataclass, field
 import io
+import math
 from typing_extensions import TYPE_CHECKING
 from PIL import Image
 
@@ -11,10 +12,16 @@ import trimesh
 from trimesh import Scene
 from krrood.ormatic.utils import classproperty
 from semantic_digital_twin.world_description.geometry import Color
-from semantic_digital_twin.spatial_computations.exceptions import RayPointShapeMismatch
+from semantic_digital_twin.spatial_computations.exceptions import (
+    RayPointShapeMismatch,
+    UnsupportedCameraProjection,
+)
 
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
-from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
+from semantic_digital_twin.datastructures.camera_model import (
+    PinholeCameraModel,
+    NoCameraDistortion,
+)
 from semantic_digital_twin.datastructures.camera_rendering import (
     CameraRays,
     RayIntersections,
@@ -220,6 +227,7 @@ class RayTracer:
         field_of_view: FieldOfView | None = None,
         *,
         depth_mode: DepthMode = DepthMode.RAY_DISTANCE,
+        camera_model: PinholeCameraModel | None = None,
     ) -> SegmentationDepthFrame:
         """
         Return aligned body indices and meter depths from one intersection query.
@@ -234,10 +242,15 @@ class RayTracer:
         :param min_distance: Inclusive minimum ray-hit distance in meters.
         :param max_distance: Inclusive maximum ray-hit distance in meters.
         :param field_of_view: Horizontal and vertical viewing angles.
+        :param camera_model: Full calibration, overriding resolution and angular extent.
         :param depth_mode: Distance convention represented by the depth values.
         :return: Aligned body indices and meter depths from the same ray query.
         """
-        resolution = resolution or CameraResolution()
+        resolution = (
+            camera_model.resolution
+            if camera_model is not None
+            else (resolution or CameraResolution())
+        )
         segmentation = np.full(
             (resolution.width, resolution.height), -1, dtype=np.int32
         )
@@ -246,6 +259,7 @@ class RayTracer:
             camera_pose,
             resolution=resolution,
             field_of_view=field_of_view,
+            camera_model=camera_model,
         )
         ray_origins = camera_rays.origin_points
         ray_directions = camera_rays.direction_vectors
@@ -292,6 +306,8 @@ class RayTracer:
         camera_pose: GenericSpatialType,
         resolution: CameraResolution | None = None,
         field_of_view: FieldOfView | None = None,
+        *,
+        camera_model: PinholeCameraModel | None = None,
     ) -> CameraRays:
         """
         Return world-space rays and width-first, top-left-origin pixels for an x-forward
@@ -301,26 +317,54 @@ class RayTracer:
             along x.
         :param resolution: Pixel dimensions of the rendered image.
         :param field_of_view: Horizontal and vertical viewing angles.
+        :param camera_model: Full calibration, overriding resolution and angular extent.
+        :raises UnsupportedCameraProjection: If lens distortion is requested.
         :return: World-space ray origins and directions with corresponding width-first
             pixels.
         """
-        field_of_view = field_of_view or FieldOfView()
-        resolution = resolution or CameraResolution()
+        if camera_model is None:
+            camera_model = PinholeCameraModel.from_field_of_view(
+                resolution=resolution or CameraResolution(),
+                field_of_view=field_of_view or FieldOfView(),
+            )
+        if not isinstance(camera_model.distortion, NoCameraDistortion):
+            raise UnsupportedCameraProjection(
+                reason="distorted rendering is not supported"
+            )
+        resolution = camera_model.resolution
         world_T_forward_view = camera_pose.to_np()
         self.update_scene()
-        self.scene.camera.fov = (
-            np.degrees(field_of_view.horizontal_angle),
-            np.degrees(field_of_view.vertical_angle),
-        )
         self.scene.camera.resolution = (resolution.width, resolution.height)
+        self.scene.camera.focal = (
+            camera_model.focal_length_x,
+            camera_model.focal_length_y,
+        )
         self.scene.graph[self.scene.camera.name] = (
             world_T_forward_view
             @ self.forward_view_R_image_axes
             @ self.image_axes_R_optical
         )
 
-        origins, directions, pixels = self.scene.camera_rays()
-        pixels[:, 1] = resolution.height - 1 - pixels[:, 1]
+        pixels = np.stack(
+            np.meshgrid(
+                np.arange(resolution.width), np.arange(resolution.height), indexing="ij"
+            ),
+            axis=-1,
+        ).reshape(-1, 2)
+        optical_V_rays = np.column_stack(
+            (
+                (pixels[:, 0] + 0.5 - camera_model.principal_point_x)
+                / camera_model.focal_length_x,
+                (pixels[:, 1] + 0.5 - camera_model.principal_point_y)
+                / camera_model.focal_length_y,
+                np.ones(len(pixels)),
+            )
+        )
+        optical_V_rays /= np.linalg.norm(optical_V_rays, axis=1, keepdims=True)
+        image_axes_V_rays = optical_V_rays * np.array([1.0, -1.0, -1.0])
+        world_T_image_axes = self.scene.camera_transform
+        directions = image_axes_V_rays @ world_T_image_axes[:3, :3].T
+        origins = np.broadcast_to(world_T_image_axes[:3, 3], directions.shape).copy()
         return CameraRays(
             origin_points=origins,
             direction_vectors=directions,
@@ -400,6 +444,8 @@ class RayTracer:
         :param camera: Camera supplying pose, calibration, resolution, and usable range.
         :param rgb_mode: Source of the rendered color values.
         :param depth_mode: Distance convention represented by the depth values.
+        :raises UnsupportedCameraProjection: If distortion is requested, or textured
+            rendering cannot represent the calibration.
         :return: Aligned BGR colors, millimeter depths, segmentation, and effective
             calibration.
         """
@@ -409,8 +455,19 @@ class RayTracer:
                 resolution=camera_model.resolution,
                 field_of_view=camera_model.field_of_view,
             )
+        if not isinstance(camera_model.distortion, NoCameraDistortion):
+            raise UnsupportedCameraProjection(
+                reason="distorted rendering is not supported"
+            )
         resolution = camera_model.resolution
-        field_of_view = camera_model.field_of_view
+        if rgb_mode == SemDTRGBMode.TEXTURED and not (
+            math.isclose(camera_model.principal_point_x, resolution.width / 2)
+            and math.isclose(camera_model.principal_point_y, resolution.height / 2)
+            and math.isclose(camera_model.focal_length_x, camera_model.focal_length_y)
+        ):
+            raise UnsupportedCameraProjection(
+                reason="textured rendering requires a centered camera with equal focal lengths"
+            )
         world_T_optical = camera.root.global_transform
         world_T_forward_view = HomogeneousTransformationMatrix(
             data=world_T_optical.to_np() @ camera.optical_R_forward_view.to_np(),
@@ -419,7 +476,7 @@ class RayTracer:
         frame = self.create_segmentation_and_depth(
             world_T_forward_view,
             resolution=resolution,
-            field_of_view=field_of_view,
+            camera_model=camera_model,
             min_distance=camera.camera_range.minimum_distance,
             max_distance=camera.camera_range.maximum_distance,
             depth_mode=depth_mode,

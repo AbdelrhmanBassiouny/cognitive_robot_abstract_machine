@@ -14,6 +14,7 @@ The module supports bidirectional conversion between:
 
 from __future__ import annotations
 
+# %% Imports
 import numpy as np
 import open3d as o3d
 from geometry_msgs.msg import Pose, PoseStamped
