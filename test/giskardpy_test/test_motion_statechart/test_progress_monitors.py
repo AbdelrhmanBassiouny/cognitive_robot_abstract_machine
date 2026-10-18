@@ -109,12 +109,12 @@ class NodeWithDeclaredDependencies(EndedByOwner, MotionStatechartNode):
     and cycle detection can be exercised without a real task.
     """
 
-    dependencies: List[MotionStatechartNode] = field(default_factory=list)
+    dependencies: list[MotionStatechartNode] = field(default_factory=list)
     """
     The nodes this node claims to depend on.
     """
 
-    built_after: List[str] = field(default_factory=list)
+    built_after: list[str] = field(default_factory=list)
     """
     Shared list every instance appends its name to when it is built.
     """
@@ -477,7 +477,7 @@ class TestStallDetection:
 
     def test_one_monitor_watches_every_task_beneath_the_watched_node(
         self, cylinder_bot_world: World
-    ):
+    ) -> None:
         """
         A plan holds dozens of converging tasks, and a monitor per task made the
         statechart several times larger than the plan itself.
@@ -574,12 +574,12 @@ class ScriptedErrorRun:
     The world of the bot whose distances to the goals are the tasks' errors.
     """
 
-    goal_xs: List[float] = field(default_factory=lambda: [GOAL_X])
+    goal_xs: list[float] = field(default_factory=lambda: [GOAL_X])
     """
     The x position of each watched task's goal.
     """
 
-    tasks: List[CartesianPosition] = field(init=False)
+    tasks: list[CartesianPosition] = field(init=False)
     """
     The watched tasks, one per goal in :attr:`goal_xs`.
     """
@@ -649,8 +649,8 @@ class ScriptedErrorRun:
         )
 
     def observations_while_the_bot_is_at(
-        self, positions: List[float]
-    ) -> List[ObservationStateValues]:
+        self, positions: list[float]
+    ) -> list[ObservationStateValues]:
         """
         :param positions: The bot's x position on each control cycle.
         :return: What the monitor observes on each of those control cycles.
@@ -724,7 +724,7 @@ class TestConvergenceRule:
 
     def test_several_tasks_are_stalled_only_while_none_of_them_approaches(
         self, cylinder_bot_world: World
-    ):
+    ) -> None:
         """
         Driving towards one goal and away from another is progress, and standing still
         is progress for neither, which the one monitor watching both has to tell apart.
@@ -744,7 +744,7 @@ class TestConvergenceRule:
 
     def test_the_stalled_tasks_are_those_not_approaching_their_goal(
         self, cylinder_bot_world: World
-    ):
+    ) -> None:
         """
         The monitor names the tasks it judges stuck, so a stall can blame them and not
         the tasks that still get closer.
@@ -1016,7 +1016,7 @@ class TestNodeDependencies:
 
     def test_watching_a_goal_that_did_not_join_yet_is_rejected(
         self, cylinder_bot_world: World
-    ):
+    ) -> None:
         """
         The monitor finds the tasks of the goal it watches when it expands, which is
         when it joins, so the goal has to join first.

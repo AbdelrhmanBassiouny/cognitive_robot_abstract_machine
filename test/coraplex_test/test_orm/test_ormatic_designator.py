@@ -23,7 +23,6 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
 from ...plan_running import context_of, simulated_executor, statechart_of
 from ...sampling import SAMPLING_SEED
 from cramph.context import ContextExtension
-from typing_extensions import List
 
 
 @pytest.fixture()
@@ -56,7 +55,7 @@ def _stored_and_loaded(session, plan: StatechartNode) -> StatechartNode:
     return session.get(type(dao), database_id).from_dao()
 
 
-def _executed(plan: StatechartNode, extensions: List[ContextExtension]) -> None:
+def _executed(plan: StatechartNode, extensions: list[ContextExtension]) -> None:
     """
     Execute `plan` in simulation.
     """
@@ -67,7 +66,7 @@ def _executed(plan: StatechartNode, extensions: List[ContextExtension]) -> None:
 
 def test_a_performed_plan_is_read_back_with_its_steps(
     coraplex_testing_session, pr2_apartment_context, simple_plan
-):
+) -> None:
     world, robot_view, extensions = pr2_apartment_context
     _executed(simple_plan, extensions)
 
@@ -82,7 +81,7 @@ def test_a_performed_plan_is_read_back_with_its_steps(
 
 def test_actions_of_every_shape_are_stored_as_actions(
     coraplex_testing_session, pr2_apartment_context, simple_plan
-):
+) -> None:
     """
     Reaching a goal, running steps in turn and running them side by side are shapes of
     an action, so asking for the stored actions finds all of them.
@@ -133,7 +132,7 @@ def complex_plan(pr2_apartment_context):
 
 def test_a_performed_transport_is_read_back(
     coraplex_testing_session, pr2_apartment_context, complex_plan
-):
+) -> None:
     """
     A performed plan holding a transport is persisted and recreated from the database.
     """

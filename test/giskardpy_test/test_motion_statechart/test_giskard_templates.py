@@ -4,8 +4,8 @@ Tests for the motion statechart templates that try alternatives, ``TryAll`` and
 
 The templates are exercised by compiling them into a real :class:`Statechart` and
 ticking the executor, asserting the resulting observation and life cycle states.
-Alternatives observe a fixed value and fail on observing False, so they are deterministic
-children that always arrive / fail.
+Alternatives observe a fixed value and fail on observing False, so they are
+deterministic children that always arrive / fail.
 """
 
 import pytest
@@ -196,7 +196,7 @@ def test_the_next_alternative_starts_on_the_cycle_the_previous_one_fails():
 # %% goals built without children
 
 
-def test_a_try_all_without_nodes_is_rejected():
+def test_a_try_all_without_nodes_is_rejected() -> None:
     executor = StatechartExecutor(
         context=StatechartContext(world=World()), extensions=[MotionControl()]
     )
@@ -207,7 +207,7 @@ def test_a_try_all_without_nodes_is_rejected():
         executor.compile(statechart=msc)
 
 
-def test_a_try_in_order_without_nodes_is_rejected():
+def test_a_try_in_order_without_nodes_is_rejected() -> None:
     executor = StatechartExecutor(
         context=StatechartContext(world=World()), extensions=[MotionControl()]
     )
@@ -221,7 +221,7 @@ def test_a_try_in_order_without_nodes_is_rejected():
 # %% alternatives that cannot fail
 
 
-def test_a_try_in_order_rejects_a_plain_task_before_its_last_alternative():
+def test_a_try_in_order_rejects_a_plain_task_before_its_last_alternative() -> None:
     """
     A plain task has no way of failing, so the alternatives after it could never start.
     """
@@ -235,7 +235,7 @@ def test_a_try_in_order_rejects_a_plain_task_before_its_last_alternative():
     assert error.value.child is task
 
 
-def test_a_try_in_order_accepts_a_plain_task_as_its_last_alternative():
+def test_a_try_in_order_accepts_a_plain_task_as_its_last_alternative() -> None:
     goal = TryInOrder(
         nodes=[
             _failing("first"),
@@ -247,7 +247,7 @@ def test_a_try_in_order_accepts_a_plain_task_as_its_last_alternative():
     assert goal.last_observation_state == ObservationStateValues.TRUE
 
 
-def test_a_try_in_order_accepts_a_plain_task_that_fails_on_its_own():
+def test_a_try_in_order_accepts_a_plain_task_that_fails_on_its_own() -> None:
     """
     A task declaring its own failure has a way to fail, so the next alternative is
     reachable.
@@ -262,7 +262,9 @@ def test_a_try_in_order_accepts_a_plain_task_that_fails_on_its_own():
     assert goal.last_observation_state == ObservationStateValues.TRUE
 
 
-def test_a_try_in_order_accepts_a_monitored_node_that_is_stopped_before_its_last_alternative():
+def test_a_try_in_order_accepts_a_monitored_node_that_is_stopped_before_its_last_alternative() -> (
+    None
+):
     """
     A monitored template fails once its monitor stopped the monitored node, which is a
     way for it to fail.
@@ -351,7 +353,9 @@ def test_paused_until_true_holds_the_monitored_node_until_the_monitor_turns_true
     assert goal.monitored_node.life_cycle_state == LifeCycleValues.RUNNING
 
 
-def test_paused_until_true_holds_the_monitored_node_while_the_monitor_has_not_decided():
+def test_paused_until_true_holds_the_monitored_node_while_the_monitor_has_not_decided() -> (
+    None
+):
     """
     A monitor that has not observed anything yet has not turned True, so the monitored
     node is held all the same.
@@ -397,7 +401,7 @@ def test_stopped_when_true_fails_once_it_stopped_the_monitored_node():
     assert goal.life_cycle_state == LifeCycleValues.FAILED
 
 
-def test_stopped_when_true_observes_false_once_it_stopped_a_node_at_its_goal():
+def test_stopped_when_true_observes_false_once_it_stopped_a_node_at_its_goal() -> None:
     """
     Stopping a node interrupts it however close it was, so a node sitting at its goal
     when the monitor fires is reported as stopped rather than as having arrived.
@@ -412,7 +416,7 @@ def test_stopped_when_true_observes_false_once_it_stopped_a_node_at_its_goal():
     assert goal.last_observation_state == ObservationStateValues.FALSE
 
 
-def test_a_stopped_subtree_makes_its_sequence_report_a_failure():
+def test_a_stopped_subtree_makes_its_sequence_report_a_failure() -> None:
     """
     A stopped subtree used to leave the sequence running it waiting forever, because a
     node short of its goal never ends on its own.

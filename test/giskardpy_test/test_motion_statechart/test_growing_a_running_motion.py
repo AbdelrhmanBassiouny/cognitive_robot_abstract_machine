@@ -35,7 +35,7 @@ def _torso_position(world) -> float:
 # %% growing a running motion
 
 
-def test_a_motion_added_while_running_moves_the_robot(pr2_world_state_reset):
+def test_a_motion_added_while_running_moves_the_robot(pr2_world_state_reset) -> None:
     world = pr2_world_state_reset
     executor = StatechartExecutor(
         context=StatechartContext(world=world), extensions=[MotionControl()]

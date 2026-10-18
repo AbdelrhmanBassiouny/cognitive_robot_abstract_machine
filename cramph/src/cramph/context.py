@@ -17,6 +17,9 @@ from cramph.exceptions import (
 from semantic_digital_twin.world import World
 
 
+# %% context extensions
+
+
 @dataclass
 class ContextExtension:
     """
@@ -36,6 +39,9 @@ class ContextExtension:
 
 
 GenericContextExtension = TypeVar("GenericContextExtension", bound=ContextExtension)
+
+
+# %% statechart context
 
 
 @dataclass

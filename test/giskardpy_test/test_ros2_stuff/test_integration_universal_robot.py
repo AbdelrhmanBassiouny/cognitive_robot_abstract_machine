@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from enum import StrEnum
 from time import sleep, time
-from typing import Iterator
+from typing_extensions import Iterator
 
 import numpy as np
 import pytest
@@ -158,7 +158,9 @@ def connected_giskard(mock_robot) -> Iterator[Giskard]:
     giskard.close_world_model_ros_interface()
 
 
-def test_discovery_leaves_the_node_on_the_executor_of_giskard(connected_giskard):
+def test_discovery_leaves_the_node_on_the_executor_of_giskard(
+    connected_giskard,
+) -> None:
     """
     Giskard only hears the robot and its clients while its own executor spins the node.
     """
@@ -167,7 +169,7 @@ def test_discovery_leaves_the_node_on_the_executor_of_giskard(connected_giskard)
 
 def test_discovery_commands_the_joints_of_the_active_velocity_controller(
     connected_giskard, mock_robot: MockRobotDriver
-):
+) -> None:
     [publisher] = connected_giskard.motion_server.control_loop.command_publishers
 
     assert isinstance(publisher, JointGroupVelocityCommandPublisher)
@@ -197,7 +199,7 @@ def robot(mock_robot) -> Iterator[ControllerManagerRobotTester]:
     tester.close()
 
 
-def test_a_joint_goal_moves_the_mock_robot(robot: ControllerManagerRobotTester):
+def test_a_joint_goal_moves_the_mock_robot(robot: ControllerManagerRobotTester) -> None:
     """
     In a closed loop the world is overwritten with what the robot reports, so the joint
     only arrives if the commands reached the hardware and its state came back.

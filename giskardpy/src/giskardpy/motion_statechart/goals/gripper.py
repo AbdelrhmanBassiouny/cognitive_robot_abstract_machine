@@ -16,7 +16,9 @@ from giskardpy.motion_statechart.tasks.joint_tasks import (
 from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.robots.robot_parts import EndEffector
-from typing_extensions import List, Optional
+
+
+# %% gripper goals
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
@@ -44,14 +46,14 @@ class MoveGripper(Parallel):
     commanded position.
     """
 
-    stall_minimum_time: Optional[float] = None
+    stall_minimum_time: float | None = None
     """
     How long the fingers must stand still before a stall counts, in seconds.
 
     None keeps :attr:`~giskardpy.motion_statechart.monitors.monitors.LocalMinimumReached.minimum_time`.
     """
 
-    finger_velocity: Optional[float] = None
+    finger_velocity: float | None = None
     """
     Maximum speed of the finger joints, in meters per second.
 
@@ -64,7 +66,7 @@ class MoveGripper(Parallel):
     the fingers move.
     """
 
-    nodes: List[StatechartNode] = field(default_factory=list, init=False)
+    nodes: list[StatechartNode] = field(default_factory=list, init=False)
     """
     The finger goal, together with the speed cap and collision allowance that were asked
     for.

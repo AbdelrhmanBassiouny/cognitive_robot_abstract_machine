@@ -32,7 +32,9 @@ class TestStatechartNodeSurvivesRoundTrip:
     The nodes of a statechart are mapped by cramph's own interface.
     """
 
-    def test_node_fields_are_read_back_unchanged(self, session, tick_counting_node):
+    def test_node_fields_are_read_back_unchanged(
+        self, session, tick_counting_node
+    ) -> None:
         session.add(to_dao(tick_counting_node))
         session.commit()
         session.expunge_all()

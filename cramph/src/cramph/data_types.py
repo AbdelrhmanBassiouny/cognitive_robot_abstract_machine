@@ -2,14 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import IntEnum, Enum, StrEnum, auto
-from typing import Union, FrozenSet
 
 from cramph.exceptions import TransitionHasNoOutcomeError
 from krrood.symbolic_math.symbolic_math import Scalar, logic_or
 from semantic_digital_twin.world_description.geometry import Color
-
-goal_parameter = Union[str, float, bool, dict, list, IntEnum, None]
-
 
 # %% serialization
 
@@ -135,7 +131,7 @@ class LifeCycleValues(IntEnum):
         return member
 
     @classmethod
-    def terminal_states(cls) -> FrozenSet[LifeCycleValues]:
+    def terminal_states(cls) -> frozenset[LifeCycleValues]:
         """
         :return: The states a node can only leave by being reset.
         """
@@ -197,7 +193,7 @@ class LifeCyclePredicateDefinition:
     The truth table of a test on a node's life cycle state.
     """
 
-    true_states: FrozenSet[LifeCycleValues]
+    true_states: frozenset[LifeCycleValues]
     """
     The states in which the predicate is true; every other state makes it false.
     """
@@ -326,6 +322,11 @@ class ObservationPredicate(ObservationPredicateDefinition, Enum):
 
 
 class TransitionKind(Enum):
+    """
+    The kinds of transitions a node takes through its life cycle, each decided by one
+    of its transition conditions.
+    """
+
     START = 1
     """
     Transitions nodes from NOT_STARTED to RUNNING, or to PAUSED if their pause condition
@@ -359,7 +360,7 @@ class TransitionKind(Enum):
     """
 
     @property
-    def source_states(self) -> FrozenSet[LifeCycleValues]:
+    def source_states(self) -> frozenset[LifeCycleValues]:
         """
         :return: The lifecycle states from which this transition kind can trigger.
         """

@@ -105,7 +105,7 @@ def _tick_until_succeeded(
 
 def test_a_node_added_in_a_modification_runs_after_the_node_it_waits_for(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     first = _compile_and_run_one_node(statechart_executor)
     statechart = statechart_executor.statechart
     second = _node_arriving_at_once("second")
@@ -122,7 +122,7 @@ def test_a_node_added_in_a_modification_runs_after_the_node_it_waits_for(
 
 def test_a_node_added_outside_a_modification_is_compiled_right_away(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     _compile_and_run_one_node(statechart_executor)
     second = _node_arriving_at_once("second")
 
@@ -133,7 +133,7 @@ def test_a_node_added_outside_a_modification_is_compiled_right_away(
 
 def test_growing_keeps_the_outcome_of_the_nodes_already_there(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     first = _compile_and_run_one_node(statechart_executor)
 
     statechart_executor.statechart.add_node(_node_arriving_at_once("second"))
@@ -144,7 +144,7 @@ def test_growing_keeps_the_outcome_of_the_nodes_already_there(
 
 def test_growing_does_not_restart_the_tick_count(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     _compile_and_run_one_node(statechart_executor)
     ticks_before = statechart_executor.tick_count
 
@@ -155,7 +155,7 @@ def test_growing_does_not_restart_the_tick_count(
 
 def test_the_history_of_an_added_node_starts_when_it_joined(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     _compile_and_run_one_node(statechart_executor)
     history = statechart_executor.statechart.history
     recorded_before_joining = len(history)
@@ -171,7 +171,7 @@ def test_the_history_of_an_added_node_starts_when_it_joined(
 
 def test_a_history_item_reads_the_same_once_a_node_joined(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     _compile_and_run_one_node(statechart_executor)
     recorded_before_joining = statechart_executor.statechart.history.history[-1]
     representation_before_joining = repr(recorded_before_joining)
@@ -183,7 +183,7 @@ def test_a_history_item_reads_the_same_once_a_node_joined(
 
 def test_an_added_composite_node_runs_its_children(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     _compile_and_run_one_node(statechart_executor)
     steps = [_node_arriving_at_once("step one"), _node_arriving_at_once("step two")]
 
@@ -198,7 +198,7 @@ def test_an_added_composite_node_runs_its_children(
 
 def test_an_extension_is_told_apart_that_the_statechart_compiled_again(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     telling_apart = ExtensionTellingRecompilesApart()
     statechart_executor.extensions.append(telling_apart)
     _compile_and_run_one_node(statechart_executor)
@@ -211,7 +211,7 @@ def test_an_extension_is_told_apart_that_the_statechart_compiled_again(
 
 def test_an_extension_not_telling_them_apart_takes_a_recompile_as_a_compile(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     counting = ExtensionCountingCompiles()
     statechart_executor.extensions.append(counting)
     _compile_and_run_one_node(statechart_executor)
@@ -226,7 +226,7 @@ def test_an_extension_not_telling_them_apart_takes_a_recompile_as_a_compile(
 
 def test_nested_modifications_compile_once_when_the_outermost_one_ends(
     statechart_context: StatechartContext,
-):
+) -> None:
     counting = ExtensionCountingCompiles()
     executor = StatechartExecutor(context=statechart_context, extensions=[counting])
     _compile_and_run_one_node(executor)
@@ -246,7 +246,7 @@ def test_nested_modifications_compile_once_when_the_outermost_one_ends(
 
 def test_a_modification_on_a_statechart_not_compiled_yet_only_adds(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
 
     with statechart.modify():
@@ -259,7 +259,7 @@ def test_a_modification_on_a_statechart_not_compiled_yet_only_adds(
 
 def test_an_abandoned_modification_leaves_the_statechart_as_it_was(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     first = _compile_and_run_one_node(statechart_executor)
     statechart = statechart_executor.statechart
     nodes_before = list(statechart.nodes)
@@ -276,7 +276,7 @@ def test_an_abandoned_modification_leaves_the_statechart_as_it_was(
 
 def test_an_abandoned_inner_modification_keeps_the_outer_one_working(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     _compile_and_run_one_node(statechart_executor)
     statechart = statechart_executor.statechart
 
@@ -292,7 +292,7 @@ def test_an_abandoned_inner_modification_keeps_the_outer_one_working(
 
 def test_a_compiled_composite_node_still_rejects_new_children(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(sequence := Sequence(nodes=[_node_arriving_at_once("first")]))
     statechart_executor.compile(statechart)
@@ -303,7 +303,7 @@ def test_a_compiled_composite_node_still_rejects_new_children(
 
 def test_a_child_a_compiled_composite_node_rejects_does_not_join_the_statechart(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(sequence := Sequence(nodes=[_node_arriving_at_once("first")]))
     statechart_executor.compile(statechart)

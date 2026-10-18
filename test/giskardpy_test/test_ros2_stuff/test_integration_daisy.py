@@ -87,7 +87,7 @@ def robot():
 # %% motions through the action server
 
 
-def test_joints1(giskard: DAiSyTester):
+def test_joints1(giskard: DAiSyTester) -> None:
     msc = Statechart(context=giskard.api.context)
     msc.add_node(
         joint_goal := JointPositionList(

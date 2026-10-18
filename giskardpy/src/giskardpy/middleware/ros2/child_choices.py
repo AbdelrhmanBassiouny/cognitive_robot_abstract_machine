@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from threading import Lock
 
-from typing_extensions import Any, Dict, Optional, Self
+from typing_extensions import Any, Self
 
 from cramph.composites import ChildChooser, CompositeNodeChoosingItsChild
 from cramph.context import StatechartContext
@@ -117,20 +117,20 @@ class ChildChoiceMessage(SubclassJSONSerializer):
     The index the first sent node has in the statechart.
     """
 
-    nodes: Optional[Dict[str, Any]]
+    nodes: dict[str, Any] | None
     """
     The nodes the choice added, as written by
     :meth:`~cramph.statechart.Statechart.nodes_from_to_json`, the first of them the
     child, or ``None`` if no child is left.
     """
 
-    required_position: Optional[StreamPosition] = field(default=None, kw_only=True)
+    required_position: StreamPosition | None = field(default=None, kw_only=True)
     """
     The position in the client's stream the world has to contain before the nodes are
     added, ``None`` if there is nothing to wait for.
     """
 
-    def to_json(self, **kwargs) -> Dict[str, Any]:
+    def to_json(self, **kwargs: Any) -> dict[str, Any]:
         return {
             **super().to_json(**kwargs),
             ChildChoicePayloadKey.GOAL_ID: self.goal_id,
@@ -145,7 +145,7 @@ class ChildChoiceMessage(SubclassJSONSerializer):
         }
 
     @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+    def _from_json(cls, data: dict[str, Any], **kwargs: Any) -> Self:
         required_position = data[ChildChoicePayloadKey.REQUIRED_POSITION]
         return cls(
             goal_id=data[ChildChoicePayloadKey.GOAL_ID],
@@ -157,7 +157,7 @@ class ChildChoiceMessage(SubclassJSONSerializer):
             ),
         )
 
-    def apply_to(self, statechart: Statechart) -> Optional[StatechartNode]:
+    def apply_to(self, statechart: Statechart) -> StatechartNode | None:
         """
         Add the sent nodes to `statechart`.
 
@@ -202,7 +202,7 @@ class ChildSentByClient(ChildChooser):
     Tells which goal is running.
     """
 
-    _received: Dict[int, ChildChoiceMessage] = field(
+    _received: dict[int, ChildChoiceMessage] = field(
         default_factory=dict, init=False, repr=False
     )
     """
@@ -263,7 +263,7 @@ class ChildSentByClient(ChildChooser):
 
     def choose_child(
         self, node: CompositeNodeChoosingItsChild, context: StatechartContext
-    ) -> Optional[StatechartNode]:
+    ) -> StatechartNode | None:
         """
         Add the nodes the client sent for `node`.
         """

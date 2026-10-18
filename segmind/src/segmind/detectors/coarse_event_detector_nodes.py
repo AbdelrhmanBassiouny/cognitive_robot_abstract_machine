@@ -125,7 +125,7 @@ class AbstractInteractionDetector(EventCombiningDetector):
         tracked object whose timestamp is within :attr:`shift_threshold`. A secondary
         event is evidence of one interaction only, so a later primary cannot conclude a
         second interaction from the same one. If such a pair is found and has not been
-        recorded in ``segmind_context.placing_pairs`` before, the pair is registered and
+        recorded in :attr:`~segmind.detectors.base.SegmindContext.placing_pairs` before, the pair is registered and
         a detection event is produced via :meth:`make_event`.
 
         :param segmind_context: The shared context holding the event logger and

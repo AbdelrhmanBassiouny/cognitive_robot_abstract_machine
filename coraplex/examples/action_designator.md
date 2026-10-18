@@ -41,7 +41,7 @@ now the possible input arguments for a NavigateActionDescription are:
 
 ## Navigate Action
 
-We will start with a simple example of the {meth}`~coraplex.robot_plans.NavigateAction`.
+We will start with a simple example of the {class}`~coraplex.robot_plans.actions.core.navigation.NavigateAction`.
 
 First, we need a BulletWorld with a robot.
 

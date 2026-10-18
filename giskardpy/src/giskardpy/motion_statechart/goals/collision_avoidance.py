@@ -4,7 +4,6 @@ from dataclasses import field, dataclass
 
 from abc import ABC, abstractmethod
 
-from typing_extensions import Optional
 from itertools import combinations
 
 import krrood.symbolic_math.symbolic_math as sm
@@ -184,7 +183,7 @@ class _ExternalCollisionAvoidanceTask(_CollisionAvoidanceTask):
     observation turns false once a distance drops below its violated distance.
     """
 
-    _external_collision_manager: Optional[ExternalCollisionVariableManager] = field(
+    _external_collision_manager: ExternalCollisionVariableManager | None = field(
         default=None, init=False, repr=False
     )
     """
@@ -314,8 +313,9 @@ class ExternalCollisionAvoidance(EndedByOwner, CompositeNode):
     Avoids external collisions of every collision group of the robot with one task, and
     cancels the motion once one of them is violated.
 
-    ..note:: Its children are left out of drawings. Set
-        `plot_specifications.collapse_children` to False to draw them.
+    .. note:: Its children are left out of drawings. Set
+        :attr:`~cramph.plotters.plot_specs.NodePlotSpec.collapse_children` of
+        :attr:`plot_specifications` to False to draw them.
     """
 
     plot_specifications: NodePlotSpec = plot_specification_field(
@@ -444,7 +444,7 @@ class UpdateTemporaryCollisionRules(EndedByOwner, MotionStatechartNode):
         artifacts.observation = sm.Scalar.const_true()
         return artifacts
 
-    def on_start(self, context: StatechartContext):
+    def on_start(self, context: StatechartContext) -> None:
         """
         :raises TemporaryCollisionRulesDependOnOrder: If it would matter whether
             :attr:`temporary_rules` or the temporary rules already in force are applied
@@ -454,7 +454,7 @@ class UpdateTemporaryCollisionRules(EndedByOwner, MotionStatechartNode):
             self.temporary_rules
         )
 
-    def on_end(self, context: StatechartContext):
+    def on_end(self, context: StatechartContext) -> None:
         context.world.collision_manager.take_temporary_rules_out_of_force(
             self.temporary_rules
         )
@@ -493,7 +493,7 @@ class SetInitialTemporaryCollisionRules(SucceedsOnObservingTrue, MotionStatechar
         artifacts.observation = sm.Scalar.const_true()
         return artifacts
 
-    def on_start(self, context: StatechartContext):
+    def on_start(self, context: StatechartContext) -> None:
         context.world.collision_manager.set_collision_matrix(self.collision_matrix)
 
 
@@ -511,7 +511,7 @@ class _SelfCollisionAvoidanceTask(_CollisionAvoidanceTask):
     Its observation turns false once a distance drops below its violated distance.
     """
 
-    _self_collision_manager: Optional[SelfCollisionVariableManager] = field(
+    _self_collision_manager: SelfCollisionVariableManager | None = field(
         default=None, init=False, repr=False
     )
     """
@@ -661,8 +661,9 @@ class SelfCollisionAvoidance(EndedByOwner, CompositeNode):
     Avoids self collisions between every checked combination of collision groups of the
     robot with one task, and cancels the motion once one of them is violated.
 
-    ..note:: Its children are left out of drawings. Set
-        `plot_specifications.collapse_children` to False to draw them.
+    .. note:: Its children are left out of drawings. Set
+        :attr:`~cramph.plotters.plot_specs.NodePlotSpec.collapse_children` of
+        :attr:`plot_specifications` to False to draw them.
     """
 
     plot_specifications: NodePlotSpec = plot_specification_field(

@@ -27,7 +27,7 @@ from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
-from typing_extensions import List, Optional
+from typing_extensions import Optional
 
 
 @dataclass(kw_only=True, eq=False)
@@ -36,7 +36,7 @@ class HasMaxJointVelocity:
     Adds an optional joint velocity cap to an action or motion.
     """
 
-    max_joint_velocity: Optional[float] = None
+    max_joint_velocity: float | None = None
     """
     Maximum joint velocity (in rad/s or m/s, per joint), enforced via
     :class:`~giskardpy.motion_statechart.tasks.joint_tasks.JointVelocityLimit`. ``None``
@@ -55,7 +55,7 @@ class HasApproachVelocity:
     reach is itself a :class:`ReachAction` and forwards this same value to it.
     """
 
-    pre_approach_linear_velocity: Optional[float] = None
+    pre_approach_linear_velocity: float | None = None
     """
     Maximum linear speed (in m/s) for the initial pre-pose approach, enforced via
     :class:`~giskardpy.motion_statechart.tasks.cartesian_tasks.CartesianPositionVelocityLimit`.
@@ -88,7 +88,7 @@ class ReachTuningParameters(HasApproachVelocity):
     Tunable approach speeds for :class:`~coraplex.robot_plans.actions.core.pick_up.ReachAction`.
     """
 
-    final_approach_linear_velocity: Optional[float] = None
+    final_approach_linear_velocity: float | None = None
     """
     Maximum linear speed (in m/s) for the final approach onto the target pose, enforced
     via
@@ -111,7 +111,7 @@ class PickUpTuningParameters(ReachTuningParameters):
     places rather than two similarly-named-but-distinct fields.
     """
 
-    grasp_closing_velocity: Optional[float] = None
+    grasp_closing_velocity: float | None = None
     """
     Maximum finger joint velocity (in m/s) used while closing onto the object, enforced
     via
@@ -119,7 +119,7 @@ class PickUpTuningParameters(ReachTuningParameters):
     leaves the speed unconstrained.
     """
 
-    lift_linear_velocity: Optional[float] = None
+    lift_linear_velocity: float | None = None
     """
     Maximum linear speed (in m/s) for lifting the object clear of the table after
     grasping, enforced via
@@ -127,14 +127,14 @@ class PickUpTuningParameters(ReachTuningParameters):
     ``None`` leaves the speed unconstrained.
     """
 
-    grasp_stall_minimum_time: Optional[float] = None
+    grasp_stall_minimum_time: float | None = None
     """
     Minimum stall dwell time (in seconds, see
     :attr:`~giskardpy.motion_statechart.goals.gripper.MoveGripper.stall_minimum_time`)
     for the CLOSE motion. ``None`` keeps the default.
     """
 
-    object_friction: Optional[float] = None
+    object_friction: float | None = None
     """
     Sliding friction coefficient to apply to the target object's geom before this pick,
     overriding the world's default. Not consumed by this action itself -- applying it is
@@ -151,7 +151,7 @@ class PlaceTuningParameters:
     :class:`~coraplex.robot_plans.actions.core.placing.PlaceAction`.
     """
 
-    placing_linear_velocity: Optional[float] = None
+    placing_linear_velocity: float | None = None
     """
     Maximum linear speed (in m/s) for the final descent onto the target location,
     enforced via
@@ -159,7 +159,7 @@ class PlaceTuningParameters:
     ``None`` leaves the speed unconstrained.
     """
 
-    transport_linear_velocity: Optional[float] = None
+    transport_linear_velocity: float | None = None
     """
     Maximum linear speed (in m/s) for carrying the held object above the target
     location, before the final descent, enforced via
@@ -167,7 +167,7 @@ class PlaceTuningParameters:
     ``None`` leaves the speed unconstrained.
     """
 
-    release_opening_velocity: Optional[float] = None
+    release_opening_velocity: float | None = None
     """
     Maximum finger joint velocity (in m/s) used while opening the gripper to release
     the object, enforced via
@@ -175,7 +175,7 @@ class PlaceTuningParameters:
     leaves the speed unconstrained.
     """
 
-    retract_linear_velocity: Optional[float] = None
+    retract_linear_velocity: float | None = None
     """
     Maximum linear speed (in m/s) for retracting the end effector away from the placed
     object, enforced via
@@ -194,8 +194,8 @@ class MovesGripper:
         self,
         state: GripperState,
         end_effector: EndEffector,
-        finger_velocity: Optional[float] = None,
-        stall_minimum_time: Optional[float] = None,
+        finger_velocity: float | None = None,
+        stall_minimum_time: float | None = None,
         tolerate_stall: bool = False,
     ) -> MoveGripper:
         """
@@ -226,13 +226,13 @@ class MovesToolCenterPoint(Action, ABC):
     when left unset.
     """
 
-    position_threshold: Optional[float] = None
+    position_threshold: float | None = None
     """
     Distance threshold in meters for goal achievement. ``None`` falls back to
     :attr:`~coraplex.plans.context_extensions.MotionToleranceConfig.default_tcp_position_threshold`.
     """
 
-    orientation_threshold: Optional[float] = None
+    orientation_threshold: float | None = None
     """
     Rotation threshold in rad for goal achievement. ``None`` falls back to
     :attr:`~coraplex.plans.context_extensions.MotionToleranceConfig.tool_orientation_threshold`.
@@ -274,8 +274,8 @@ class MovesToolCenterPoint(Action, ABC):
         self,
         target: Pose,
         arm: Arm,
-        max_linear_velocity: Optional[float] = None,
-        max_angular_velocity: Optional[float] = None,
+        max_linear_velocity: float | None = None,
+        max_angular_velocity: float | None = None,
     ) -> MotionStatechartNode:
         """
         :param target: Where the tool center point should end up.
@@ -289,7 +289,7 @@ class MovesToolCenterPoint(Action, ABC):
         """
         root = self.controlled_root
         tip = arm.end_effector.tool_frame
-        accompanying: List[MotionStatechartNode] = self._velocity_limits(
+        accompanying: list[MotionStatechartNode] = self._velocity_limits(
             root, tip, max_linear_velocity, max_angular_velocity
         )
         accompanying.extend(self.keep_base_still())
@@ -333,13 +333,13 @@ class MovesToolCenterPoint(Action, ABC):
     def _velocity_limits(
         root: KinematicStructureEntity,
         tip: KinematicStructureEntity,
-        max_linear_velocity: Optional[float],
-        max_angular_velocity: Optional[float],
-    ) -> List[MotionStatechartNode]:
+        max_linear_velocity: float | None,
+        max_angular_velocity: float | None,
+    ) -> list[MotionStatechartNode]:
         """
         :return: The speed caps that were asked for, if any.
         """
-        limits: List[MotionStatechartNode] = []
+        limits: list[MotionStatechartNode] = []
         if max_linear_velocity is not None:
             limits.append(
                 CartesianPositionVelocityLimit(
@@ -376,7 +376,7 @@ class ReattachesBodies(Action, ABC):
         self,
         body: KinematicStructureEntity,
         new_parent: KinematicStructureEntity,
-    ) -> List[StatechartNode]:
+    ) -> list[StatechartNode]:
         """
         :param body: The root of the branch to move.
         :param new_parent: The body the branch is moved under.

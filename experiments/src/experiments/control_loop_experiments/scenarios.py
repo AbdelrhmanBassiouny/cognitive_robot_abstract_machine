@@ -598,14 +598,14 @@ class DeeplyNestedCascadeScenario(BenchmarkScenario):
     bottom of its own nesting.
     """
 
-    waypoint_offsets: List[float] = field(
+    waypoint_offsets: list[float] = field(
         default_factory=lambda: [-0.1, 0.1, -0.1, 0.1]
     )
     """
     How far along x each waypoint moves the gripper, relative to the one before.
     """
 
-    def seed_joint_state(self, robot: BenchmarkRobot) -> Dict[str, float]:
+    def seed_joint_state(self, robot: BenchmarkRobot) -> dict[str, float]:
         return robot.default_joint_state
 
     def build_motion_statechart(self, robot: BenchmarkRobot) -> Statechart:

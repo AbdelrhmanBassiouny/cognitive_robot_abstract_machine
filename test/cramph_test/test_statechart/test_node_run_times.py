@@ -17,6 +17,9 @@ from cramph.statechart import Statechart
 from krrood.symbolic_math.symbolic_math import Scalar
 
 
+# %% compiling
+
+
 def _compile(statechart: Statechart) -> StatechartExecutor:
     """
     :param statechart: The statechart to run.
@@ -27,9 +30,12 @@ def _compile(statechart: Statechart) -> StatechartExecutor:
     return executor
 
 
+# %% run times across the life cycle
+
+
 def test_a_node_that_has_not_started_has_no_run_times(
     statechart_context: StatechartContext,
-):
+) -> None:
     statechart = Statechart(context=statechart_context)
     node = NodeRecordingItsCallbacks()
     node.start_condition = Scalar.const_false()
@@ -42,7 +48,7 @@ def test_a_node_that_has_not_started_has_no_run_times(
 
 def test_a_running_node_has_a_start_time_and_no_end_time(
     statechart_context: StatechartContext,
-):
+) -> None:
     statechart = Statechart(context=statechart_context)
     trigger = ConstTrueNode()
     node = NodeRecordingItsCallbacks()
@@ -59,7 +65,7 @@ def test_a_running_node_has_a_start_time_and_no_end_time(
 
 def test_pausing_and_unpausing_does_not_change_the_start_time(
     statechart_context: StatechartContext,
-):
+) -> None:
     statechart = Statechart(context=statechart_context)
     first = NodeRecordingItsCallbacks()
     second = NodeRecordingItsCallbacks()
@@ -82,7 +88,7 @@ def test_pausing_and_unpausing_does_not_change_the_start_time(
 
 def test_an_ended_node_has_both_a_start_time_and_an_end_time(
     statechart_context: StatechartContext,
-):
+) -> None:
     statechart = Statechart(context=statechart_context)
     trigger = ConstTrueNode()
     node = NodeRecordingItsCallbacks()
@@ -100,7 +106,7 @@ def test_an_ended_node_has_both_a_start_time_and_an_end_time(
 
 def test_resetting_and_restarting_reports_only_the_new_run(
     statechart_context: StatechartContext,
-):
+) -> None:
     statechart = Statechart(context=statechart_context)
     trigger = ConstTrueNode()
     node = NodeRecordingItsCallbacks()
@@ -123,9 +129,12 @@ def test_resetting_and_restarting_reports_only_the_new_run(
     assert node.end_time is None
 
 
+# %% run times without a tick duration
+
+
 def test_start_time_raises_without_a_known_tick_duration(
     statechart_context_without_tick_duration: StatechartContext,
-):
+) -> None:
     statechart = Statechart(context=statechart_context_without_tick_duration)
     node = ConstTrueNode()
     statechart.add_node(node)

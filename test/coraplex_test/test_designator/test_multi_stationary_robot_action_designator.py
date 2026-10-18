@@ -1,7 +1,6 @@
 import numpy as np
 import pytest
 from rustworkx import NoEdgeBetweenNodes
-from typing_extensions import List
 
 from cramph.context import ContextExtension
 
@@ -399,7 +398,7 @@ def physically_simulated_block_context(stationary_block_context):
 
 
 def perform_in_physics(
-    plan: Sequence, extensions: List[ContextExtension], simulation: MujocoSim
+    plan: Sequence, extensions: list[ContextExtension], simulation: MujocoSim
 ) -> None:
     """
     :param plan: The plan to perform.

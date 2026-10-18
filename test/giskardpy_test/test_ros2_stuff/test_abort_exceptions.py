@@ -83,7 +83,7 @@ def test_a_reported_error_is_rebuilt():
     assert isinstance(error, WorldModelModifiedDuringMotionError)
 
 
-def test_an_error_about_a_body_is_rebuilt_with_the_body_of_the_client_world():
+def test_an_error_about_a_body_is_rebuilt_with_the_body_of_the_client_world() -> None:
     world = World()
     with world.modify_world():
         world.add_kinematic_structure_entity(body := Body(name=PrefixedName("arm")))

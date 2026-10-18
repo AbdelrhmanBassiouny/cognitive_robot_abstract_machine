@@ -41,7 +41,7 @@ def _create_executor(world: World) -> StatechartExecutor:
 
 def test_cartesian_pose_is_a_parallel_of_its_position_and_orientation(
     cylinder_bot_world: World,
-):
+) -> None:
     tip = cylinder_bot_world.get_kinematic_structure_entity_by_name("bot")
     executor = _create_executor(cylinder_bot_world)
     statechart = Statechart(context=executor.context)
@@ -64,7 +64,7 @@ def test_cartesian_pose_is_a_parallel_of_its_position_and_orientation(
 
 def test_nodes_handed_to_a_cartesian_pose_run_beside_its_tasks(
     cylinder_bot_world: World,
-):
+) -> None:
     """
     Whatever accompanies a pose, such as a speed cap or a collision allowance, runs in
     the pose itself rather than in another parallel around it.
@@ -97,7 +97,7 @@ def test_nodes_handed_to_a_cartesian_pose_run_beside_its_tasks(
 
 def test_cartesian_pose_observes_its_goal_reached(
     cylinder_bot_world: World,
-):
+) -> None:
     tip = cylinder_bot_world.get_kinematic_structure_entity_by_name("bot")
     executor = _create_executor(cylinder_bot_world)
     statechart = Statechart(context=executor.context)
@@ -121,7 +121,7 @@ def test_cartesian_pose_observes_its_goal_reached(
 
 def test_cartesian_pose_straight_is_a_parallel_of_its_tasks(
     cylinder_bot_world: World,
-):
+) -> None:
     tip = cylinder_bot_world.get_kinematic_structure_entity_by_name("bot")
     executor = _create_executor(cylinder_bot_world)
     statechart = Statechart(context=executor.context)
@@ -144,7 +144,7 @@ def test_cartesian_pose_straight_is_a_parallel_of_its_tasks(
 
 def test_velocity_limit_has_its_two_limits_after_a_json_round_trip(
     cylinder_bot_world: World,
-):
+) -> None:
     tip = cylinder_bot_world.get_kinematic_structure_entity_by_name("bot")
     statechart = Statechart(
         context=create_context_with_motion_control(cylinder_bot_world)
@@ -173,7 +173,7 @@ def test_velocity_limit_has_its_two_limits_after_a_json_round_trip(
 
 def test_differential_drive_goal_runs_its_steps_in_one_sequence(
     cylinder_bot_diff_world: World,
-):
+) -> None:
     executor = _create_executor(cylinder_bot_diff_world)
     statechart = Statechart(context=executor.context)
     statechart.add_node(
@@ -194,7 +194,7 @@ def test_differential_drive_goal_runs_its_steps_in_one_sequence(
 
 def test_differential_drive_goal_is_a_step_without_an_attempt(
     cylinder_bot_diff_world: World,
-):
+) -> None:
     executor = _create_executor(cylinder_bot_diff_world)
     statechart = Statechart(context=executor.context)
     statechart.add_node(

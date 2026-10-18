@@ -2791,7 +2791,7 @@ def if_cases(
 
 
 def trinary_if_cases(
-    cases: Sequence[Tuple[ScalarData, GenericSymbolicType]],
+    cases: Sequence[tuple[ScalarData, GenericSymbolicType]],
     else_result: GenericSymbolicType,
 ) -> GenericSymbolicType:
     """

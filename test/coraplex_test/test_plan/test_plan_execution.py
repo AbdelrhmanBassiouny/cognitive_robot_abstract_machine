@@ -67,7 +67,7 @@ class WaitCountingPacer(Pacer):
 
 def test_compiling_puts_the_plan_and_its_end_in_one_statechart(
     pr2_apartment_context,
-):
+) -> None:
     world, robot_view, extensions = pr2_apartment_context
     plan = MoveTorsoAction(torso_state=TorsoState.HIGH)
     executor = simulated_executor(extensions)
@@ -79,7 +79,7 @@ def test_compiling_puts_the_plan_and_its_end_in_one_statechart(
     assert len(statechart.get_nodes_by_type(EndMotion)) == 1
 
 
-def test_executing_before_compiling_is_refused(pr2_apartment_context):
+def test_executing_before_compiling_is_refused(pr2_apartment_context) -> None:
     world, robot_view, extensions = pr2_apartment_context
 
     with pytest.raises(PlanNotCompiled):
@@ -89,7 +89,7 @@ def test_executing_before_compiling_is_refused(pr2_apartment_context):
 # %% executing
 
 
-def test_executing_runs_the_plan_until_it_succeeded(pr2_apartment_context):
+def test_executing_runs_the_plan_until_it_succeeded(pr2_apartment_context) -> None:
     world, robot_view, extensions = pr2_apartment_context
     plan = MoveTorsoAction(torso_state=TorsoState.HIGH)
     executor = simulated_executor(extensions)
@@ -100,7 +100,7 @@ def test_executing_runs_the_plan_until_it_succeeded(pr2_apartment_context):
     assert plan.life_cycle_state == LifeCycleValues.SUCCEEDED
 
 
-def test_a_plan_that_fails_raises_motion_did_not_finish(pr2_apartment_context):
+def test_a_plan_that_fails_raises_motion_did_not_finish(pr2_apartment_context) -> None:
     world, robot_view, extensions = pr2_apartment_context
     plan = NodeFailingOnObservingFalse(observation=ObservationStateValues.FALSE)
     executor = simulated_executor(extensions)
@@ -110,7 +110,7 @@ def test_a_plan_that_fails_raises_motion_did_not_finish(pr2_apartment_context):
         executor.execute()
 
 
-def test_preparing_a_plan_does_not_move_the_robot(pr2_apartment_context):
+def test_preparing_a_plan_does_not_move_the_robot(pr2_apartment_context) -> None:
     world, robot_view, extensions = pr2_apartment_context
     torso = world.get_degree_of_freedom_by_name(PR2Joint.TORSO_LIFT).id
     position_before = world.state[torso].position
@@ -125,7 +125,7 @@ def test_preparing_a_plan_does_not_move_the_robot(pr2_apartment_context):
 
 def test_a_plan_of_several_top_level_nodes_ends_once_all_of_them_succeeded(
     pr2_apartment_context,
-):
+) -> None:
     """
     A statechart has no root node, so every node the caller puts at its top level is
     part of the plan.
@@ -143,7 +143,7 @@ def test_a_plan_of_several_top_level_nodes_ends_once_all_of_them_succeeded(
     assert arms.life_cycle_state == LifeCycleValues.SUCCEEDED
 
 
-def test_a_statechart_without_a_plan_is_refused(pr2_apartment_context):
+def test_a_statechart_without_a_plan_is_refused(pr2_apartment_context) -> None:
     world, robot_view, extensions = pr2_apartment_context
     executor = simulated_executor(extensions)
 
@@ -151,7 +151,7 @@ def test_a_statechart_without_a_plan_is_refused(pr2_apartment_context):
         executor.compile(statechart_of(executor))
 
 
-def test_a_statechart_of_another_context_is_refused(pr2_apartment_context):
+def test_a_statechart_of_another_context_is_refused(pr2_apartment_context) -> None:
     world, robot_view, extensions = pr2_apartment_context
     statechart = statechart_of(
         simulated_executor(extensions), MoveTorsoAction(torso_state=TorsoState.HIGH)
@@ -164,7 +164,7 @@ def test_a_statechart_of_another_context_is_refused(pr2_apartment_context):
 # %% how long a plan may take
 
 
-def test_compiling_watches_the_plan_for_progress(pr2_apartment_context):
+def test_compiling_watches_the_plan_for_progress(pr2_apartment_context) -> None:
     """
     A stalled run has to end by itself, so the statechart carries a monitor watching the
     plan and an abort path wired to it.
@@ -182,7 +182,7 @@ def test_compiling_watches_the_plan_for_progress(pr2_apartment_context):
 
 def test_a_plan_that_stops_approaching_its_goal_is_given_up_on(
     pr2_apartment_context,
-):
+) -> None:
     """
     Nothing bounds the tick loop but the monitor, so a reach the arm cannot close on has
     to end the run rather than tick forever.
@@ -204,7 +204,7 @@ def test_a_plan_that_stops_approaching_its_goal_is_given_up_on(
 
 def test_a_plan_that_outlasts_the_simulation_time_limit_is_given_up_on(
     pr2_apartment_context,
-):
+) -> None:
     """
     A simulated plan is given up on once it exceeds the simulation time limit.
     """
@@ -220,7 +220,7 @@ def test_a_plan_that_outlasts_the_simulation_time_limit_is_given_up_on(
 
 def test_a_plan_is_given_up_on_at_the_simulation_time_limit_of_its_own_executor(
     pr2_apartment_context,
-):
+) -> None:
     world, robot_view, extensions = pr2_apartment_context
     executor = simulated_executor(
         extensions, simulation_time_per_action=timedelta(milliseconds=100)
@@ -235,7 +235,9 @@ def test_a_plan_is_given_up_on_at_the_simulation_time_limit_of_its_own_executor(
     assert error.value.time_limit == executor.simulation_time_limit
 
 
-def test_a_plan_may_take_longer_the_more_actions_it_holds(pr2_apartment_context):
+def test_a_plan_may_take_longer_the_more_actions_it_holds(
+    pr2_apartment_context,
+) -> None:
     """
     Each torso stroke fits the time one action is given, both strokes together only the
     time two actions are given.
@@ -253,7 +255,9 @@ def test_a_plan_may_take_longer_the_more_actions_it_holds(pr2_apartment_context)
     assert plan.life_cycle_state == LifeCycleValues.SUCCEEDED
 
 
-def test_the_simulation_time_limit_grows_when_an_action_joins(pr2_apartment_context):
+def test_the_simulation_time_limit_grows_when_an_action_joins(
+    pr2_apartment_context,
+) -> None:
     """
     An action joining the running plan adds its time before it starts.
     """
@@ -270,7 +274,7 @@ def test_the_simulation_time_limit_grows_when_an_action_joins(pr2_apartment_cont
 
 def test_a_simulated_plan_waits_for_its_pacer_after_every_tick(
     pr2_apartment_context,
-):
+) -> None:
     world, robot_view, extensions = pr2_apartment_context
     pacer = WaitCountingPacer()
     executor = simulated_executor(extensions, pacer=pacer)
@@ -285,7 +289,7 @@ def test_a_simulated_plan_waits_for_its_pacer_after_every_tick(
 
 def test_a_plan_that_violates_collision_avoidance_fails_as_a_plan_failure(
     pr2_apartment_context, monkeypatch
-):
+) -> None:
     """
     A plan that brings the robot closer to something than collision avoidance allows did
     not work from where it started, so a surrounding plan can try another candidate
@@ -313,7 +317,7 @@ def test_a_plan_that_violates_collision_avoidance_fails_as_a_plan_failure(
 
 def test_a_physically_simulated_plan_steps_the_physics_one_control_period_per_tick(
     pr2_apartment_context,
-):
+) -> None:
     """
     The servos take every command as their set point, so the physics has to advance by
     exactly the time the controller planned the command for before the next tick reads
@@ -335,7 +339,7 @@ def test_a_physically_simulated_plan_steps_the_physics_one_control_period_per_ti
 
 def test_a_physically_simulated_plan_is_given_the_same_time_limit(
     pr2_apartment_context,
-):
+) -> None:
     """
     Both simulated executors tick the same loop, so a plan performed in physics is given
     up on by the same limit as one projected kinematically.
@@ -357,7 +361,7 @@ def test_a_physically_simulated_plan_is_given_the_same_time_limit(
 
 def test_a_plan_is_adapted_after_the_transformations_it_was_given(
     pr2_apartment_context,
-):
+) -> None:
     """
     The executor's robot adaptations and then its plan adaptations adapt an action
     before the plan's transformations are offered it.
@@ -377,7 +381,9 @@ def test_a_plan_is_adapted_after_the_transformations_it_was_given(
     ]
 
 
-def test_a_plan_given_no_transformations_is_still_adapted(pr2_apartment_context):
+def test_a_plan_given_no_transformations_is_still_adapted(
+    pr2_apartment_context,
+) -> None:
     world, robot_view, extensions = pr2_apartment_context
     executor = physically_simulated_executor(extensions)
 
@@ -389,7 +395,9 @@ def test_a_plan_given_no_transformations_is_still_adapted(pr2_apartment_context)
     ]
 
 
-def test_the_rewriting_a_plan_was_given_is_left_as_it_was(pr2_apartment_context):
+def test_the_rewriting_a_plan_was_given_is_left_as_it_was(
+    pr2_apartment_context,
+) -> None:
     """
     The same context extensions may configure executors of different kinds, so one
     executor's adaptations must not reach another through them.

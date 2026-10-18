@@ -8,15 +8,10 @@ from abc import ABC, ABCMeta, abstractmethod
 from dataclasses import field, dataclass
 
 from typing_extensions import (
-    ClassVar,
-    Dict,
     Any,
     Self,
-    Optional,
     TYPE_CHECKING,
-    List,
     TypeVar,
-    Tuple,
     Callable,
 )
 
@@ -91,7 +86,7 @@ class TransitionCondition(SubclassJSONSerializer):
     The two-valued expression deciding when the transition happens.
     """
 
-    owner: Optional[StatechartNode] = field(default=None)
+    owner: StatechartNode | None = field(default=None)
     """
     The node this transition belongs to.
     """
@@ -99,12 +94,12 @@ class TransitionCondition(SubclassJSONSerializer):
     def __hash__(self) -> int:
         return hash((str(self), self.kind, self.owner.index))
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         return hash(self) == hash(other)
 
     @classmethod
     def create_true(
-        cls, kind: TransitionKind, owner: Optional[StatechartNode] = None
+        cls, kind: TransitionKind, owner: StatechartNode | None = None
     ) -> Self:
         """
         Creates a condition that always evaluates to true.
@@ -117,7 +112,7 @@ class TransitionCondition(SubclassJSONSerializer):
 
     @classmethod
     def create_false(
-        cls, kind: TransitionKind, owner: Optional[StatechartNode] = None
+        cls, kind: TransitionKind, owner: StatechartNode | None = None
     ) -> Self:
         """
         Creates a condition that always evaluates to false.
@@ -151,7 +146,9 @@ class TransitionCondition(SubclassJSONSerializer):
         self._check_owner_not_in_start_condition(new_expression)
         self._check_no_terminal_node(new_expression)
 
-    def _check_condition_is_variable_or_expression(self, new_expression: Scalar):
+    def _check_condition_is_variable_or_expression(
+        self, new_expression: Scalar
+    ) -> None:
         """
         Rejects values that are not symbolic expressions.
 
@@ -160,7 +157,7 @@ class TransitionCondition(SubclassJSONSerializer):
         if not isinstance(new_expression, Scalar):
             raise InputNotExpressionError(condition=self, new_expression=new_expression)
 
-    def _check_only_condition_variables(self, new_expression: Scalar):
+    def _check_only_condition_variables(self, new_expression: Scalar) -> None:
         """
         Rejects expressions that reference state a transition may not read.
 
@@ -175,7 +172,7 @@ class TransitionCondition(SubclassJSONSerializer):
                 )
 
     @staticmethod
-    def _check_is_two_valued_logic(new_expression: Scalar):
+    def _check_is_two_valued_logic(new_expression: Scalar) -> None:
         """
         Rejects expressions built from anything but the two-valued logic operators, which
         could not be rendered and parsed back.
@@ -185,7 +182,7 @@ class TransitionCondition(SubclassJSONSerializer):
         """
         sm.logic_to_str(new_expression)
 
-    def _check_no_terminal_node(self, new_expression: Scalar):
+    def _check_no_terminal_node(self, new_expression: Scalar) -> None:
         """
         Rejects references to nodes that end the statechart.
 
@@ -202,7 +199,7 @@ class TransitionCondition(SubclassJSONSerializer):
                     terminal_node=variable.statechart_node,
                 )
 
-    def _check_owner_not_in_start_condition(self, new_expression: Scalar):
+    def _check_owner_not_in_start_condition(self, new_expression: Scalar) -> None:
         """
         Rejects start conditions that reference the state of their own node.
 
@@ -220,7 +217,7 @@ class TransitionCondition(SubclassJSONSerializer):
                 )
 
     @property
-    def variables(self) -> List[ConditionVariable]:
+    def variables(self) -> list[ConditionVariable]:
         """
         :return: The terms of this condition, each knowing how it is written and what it
             currently evaluates to.
@@ -232,13 +229,13 @@ class TransitionCondition(SubclassJSONSerializer):
         ]
 
     @property
-    def node_dependencies(self) -> List[StatechartNode]:
+    def node_dependencies(self) -> list[StatechartNode]:
         """
         :return: The nodes this condition reads.
         """
         return [variable.statechart_node for variable in self.variables]
 
-    def __str__(self):
+    def __str__(self) -> str:
         """
         Renders the condition, naming each variable by its
         :attr:`~DerivedConditionVariable.display_name` so the result is readable.
@@ -247,7 +244,7 @@ class TransitionCondition(SubclassJSONSerializer):
         """
         return self._render(lambda variable: variable.display_name)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return str(self)
 
     def _render(self, name_variable: Callable[[DerivedConditionVariable], str]) -> str:
@@ -267,7 +264,7 @@ class TransitionCondition(SubclassJSONSerializer):
             )
         return rendered_condition
 
-    def to_json(self, **kwargs) -> Dict[str, Any]:
+    def to_json(self, **kwargs: Any) -> dict[str, Any]:
         """
         Names the owner and every variable by the id of their node, which, unlike the
         index of a node, exists before the node joins a statechart.
@@ -363,7 +360,7 @@ class TransitionCondition(SubclassJSONSerializer):
         )
 
     @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+    def _from_json(cls, data: dict[str, Any], **kwargs: Any) -> Self:
         """
         Resolves the nodes the condition names through the
         :class:`DeserializedNodeTracker` in `kwargs`.
@@ -398,11 +395,11 @@ class NodeStateVariable(FloatVariable):
     The node this variable refers to.
     """
 
-    def __init__(self, name: str, statechart_node: StatechartNode):
+    def __init__(self, name: str, statechart_node: StatechartNode) -> None:
         super().__init__(name)
         self.statechart_node = statechart_node
 
-    def _value_to_json(self, **kwargs) -> Dict[str, Any]:
+    def _value_to_json(self, **kwargs: Any) -> dict[str, Any]:
         """
         :raises NodeStateVariableNotSerializableError: Always, since JSON cannot refer to
             the node this variable belongs to.
@@ -470,11 +467,13 @@ class LastObservationVariable(NodeStateVariable):
         because it may be unknown. Use an :class:`ObservationPredicateVariable` there.
     """
 
-    attribute_name: ClassVar[str] = "last_observation"
-    """
-    The name this variable is reached under on a node, also used to render it inside a
-    condition.
-    """
+    @classproperty
+    def attribute_name(cls) -> str:
+        """
+        :return: The name this variable is reached under on a node, also used to render
+            it inside a condition.
+        """
+        return "last_observation"
 
     @property
     def display_name(self) -> str:
@@ -564,7 +563,7 @@ class LifeCyclePredicateVariable(DerivedConditionVariable):
         name: str,
         statechart_node: StatechartNode,
         predicate: LifeCyclePredicate,
-    ):
+    ) -> None:
         super().__init__(name, statechart_node)
         self.predicate = predicate
 
@@ -601,7 +600,7 @@ class ObservationPredicateVariable(DerivedConditionVariable):
         name: str,
         statechart_node: StatechartNode,
         predicate: ObservationPredicate,
-    ):
+    ) -> None:
         super().__init__(name, statechart_node)
         self.predicate = predicate
 
@@ -649,10 +648,13 @@ class ConditionVariableReference:
     :attr:`~cramph.data_types.LifeCyclePredicate.attribute_name`.
     """
 
-    separator: ClassVar[str] = "."
-    """
-    Separates the node id from the attribute name in the written reference.
-    """
+    @classproperty
+    def separator(cls) -> str:
+        """
+        :return: What separates the node id from the attribute name in the written
+            reference.
+        """
+        return "."
 
     @classmethod
     def parse(cls, written_reference: str) -> Self:
@@ -689,7 +691,7 @@ class NodeArtifacts:
     It makes explicit what artifacts are produced by a node.
     """
 
-    observation: Optional[Scalar] = field(default=None)
+    observation: Scalar | None = field(default=None)
     """
     A symbolic expression that describes the observation state of this node.
     Instead of setting this attribute directly, you may also implement the `on_tick` method of a node.
@@ -723,7 +725,7 @@ class LifeCycleTransitions:
     outcome is only left by a reset.
     """
 
-    def as_cases(self) -> List[Tuple[LifeCycleValues, sm.Scalar]]:
+    def as_cases(self) -> list[tuple[LifeCycleValues, sm.Scalar]]:
         """
         :return: (current state, next state) pairs covering every life cycle state.
         """
@@ -753,14 +755,14 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
     )
     """
     A name for the node within a statechart.
-    The name is not unique, use `.unique_name`, if you need a unique identifier.
+    The name is not unique, use :attr:`unique_name`, if you need a unique identifier.
     """
 
     _statechart: Statechart = field(init=False, default=None)
     """
     Back reference to the statechart that owns this node.
     """
-    index: Optional[int] = field(default=None, init=False)
+    index: int | None = field(default=None, init=False)
     """
     The index of this node in the statechart.
     """
@@ -774,7 +776,7 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
     also how a serialized condition names its nodes.
     """
 
-    parent_node_index: Optional[int] = field(
+    parent_node_index: int | None = field(
         default=None, init=False, metadata=JSONMetadata(serialize=True).as_dict()
     )
     """
@@ -796,11 +798,11 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
     A variable referring to the observation this node took most recently.
     """
 
-    _artifacts: Optional[NodeArtifacts] = field(init=False, repr=False, default=None)
+    _artifacts: NodeArtifacts | None = field(init=False, repr=False, default=None)
     """
     What :meth:`build` returned, set by :meth:`apply_artifacts`.
     """
-    _set_up_context: Optional[StatechartContext] = field(
+    _set_up_context: StatechartContext | None = field(
         init=False, repr=False, default=None
     )
     """
@@ -834,19 +836,19 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
     """
     Decides when this node declares that it cannot continue and transitions to FAILED.
     """
-    _life_cycle_predicate_variables: Dict[
+    _life_cycle_predicate_variables: dict[
         LifeCyclePredicate, LifeCyclePredicateVariable
     ] = field(init=False, default_factory=dict, repr=False)
     """
     The predicate variables handed out so far, so each one is created only once.
     """
-    _life_cycle_predicate_expression_cache: Dict[LifeCyclePredicate, Scalar] = field(
+    _life_cycle_predicate_expression_cache: dict[LifeCyclePredicate, Scalar] = field(
         init=False, default_factory=dict, repr=False
     )
     """
     The expressions handed out by :meth:`life_cycle_predicate_expression` so far.
     """
-    _observation_predicate_variables: Dict[
+    _observation_predicate_variables: dict[
         ObservationPredicate, ObservationPredicateVariable
     ] = field(init=False, default_factory=dict, repr=False)
     """
@@ -861,7 +863,7 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
     Describes how this node is plotted during a Statechart.draw call or in a statechart inspector.
     """
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.name is None:
             self.name = self.__class__.__name__
         self._node_id = str(uuid.uuid4())
@@ -885,7 +887,7 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
             kind=TransitionKind.FAIL, owner=self
         )
 
-    def _create_state_variables(self):
+    def _create_state_variables(self) -> None:
         """
         Creates the observation, life cycle and last observation variables for this node,
         named from :attr:`_node_id` so they are available before the node is added to a
@@ -907,7 +909,7 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
         )
 
     @property
-    def parent_node(self) -> Optional[StatechartNode]:
+    def parent_node(self) -> StatechartNode | None:
         """
         :return: Reference to the parent node of this node.
         """
@@ -941,7 +943,7 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
             self._observation_expression = artifacts.observation
 
     @property
-    def prerequisite_nodes(self) -> List[StatechartNode]:
+    def prerequisite_nodes(self) -> list[StatechartNode]:
         """
         Nodes that must be expanded and built before this one, because this node reads
         artifacts they only produce during expansion or build.
@@ -951,7 +953,7 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
         return []
 
     @parent_node.setter
-    def parent_node(self, parent_node: Optional[StatechartNode]) -> None:
+    def parent_node(self, parent_node: StatechartNode | None) -> None:
         """
         :param parent_node: The node this node becomes a child of, or None to put it on the top layer.
         """
@@ -963,21 +965,21 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
     # %% tree navigation
 
     @property
-    def children(self) -> List[StatechartNode]:
+    def children(self) -> list[StatechartNode]:
         """
         :return: The children of this node, in order, empty for a node without any.
         """
         return []
 
     @property
-    def descendants(self) -> List[StatechartNode]:
+    def descendants(self) -> list[StatechartNode]:
         """
         :return: Every node below this one, each child followed by its own subtree.
         """
         return [node for child in self.children for node in [child, *child.descendants]]
 
     @property
-    def path(self) -> List[StatechartNode]:
+    def path(self) -> list[StatechartNode]:
         """
         :return: The ancestors of this node, from its parent up to and including the
             root, empty for a node on the top layer.
@@ -1005,14 +1007,14 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
         return not self.children
 
     @property
-    def siblings(self) -> List[StatechartNode]:
+    def siblings(self) -> list[StatechartNode]:
         """
         :return: The other nodes on the same layer, in order.
         """
         return [node for node in self._siblings_including_self if node is not self]
 
     @property
-    def left_siblings(self) -> List[StatechartNode]:
+    def left_siblings(self) -> list[StatechartNode]:
         """
         :return: The siblings before this node, in order.
         """
@@ -1020,7 +1022,7 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
         return siblings[: siblings.index(self)]
 
     @property
-    def right_siblings(self) -> List[StatechartNode]:
+    def right_siblings(self) -> list[StatechartNode]:
         """
         :return: The siblings after this node, in order.
         """
@@ -1028,7 +1030,7 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
         return siblings[siblings.index(self) + 1 :]
 
     @property
-    def left_neighbour(self) -> Optional[StatechartNode]:
+    def left_neighbour(self) -> StatechartNode | None:
         """
         :return: The closest sibling before this node, or None if it is the first on its
             layer.
@@ -1037,7 +1039,7 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
         return left_siblings[-1] if left_siblings else None
 
     @property
-    def right_neighbour(self) -> Optional[StatechartNode]:
+    def right_neighbour(self) -> StatechartNode | None:
         """
         :return: The closest sibling after this node, or None if it is the last on its
             layer.
@@ -1046,7 +1048,7 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
         return right_siblings[0] if right_siblings else None
 
     @property
-    def _siblings_including_self(self) -> List[StatechartNode]:
+    def _siblings_including_self(self) -> list[StatechartNode]:
         """
         The nodes this one shares a parent with, itself among them. A node on the top
         layer shares it with the other top level nodes, which is the same scope a
@@ -1060,14 +1062,14 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
             return self.parent_node.children
         return self.statechart.top_level_nodes
 
-    def to_json(self, **kwargs) -> Dict[str, Any]:
+    def to_json(self, **kwargs: Any) -> dict[str, Any]:
         return {
             **DataclassJSONSerializer.to_json(self, **kwargs),
             NodeJSONKey.NODE_ID: self._node_id,
         }
 
     @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+    def _from_json(cls, data: dict[str, Any], **kwargs: Any) -> Self:
         """
         Deserializes the node, or returns the instance already deserialized for the same
         node of the document, so that nodes referring to it share it.
@@ -1246,7 +1248,7 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
 
     def _create_end_cases(
         self, own_transitions_allowed: sm.Scalar
-    ) -> List[Tuple[sm.Scalar, sm.Scalar]]:
+    ) -> list[tuple[sm.Scalar, sm.Scalar]]:
         """
         Every way this node leaves RUNNING or PAUSED, and the outcome each yields.
 
@@ -1480,7 +1482,7 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
         """
         return NodeArtifacts()
 
-    def on_tick(self, context: StatechartContext) -> Optional[ObservationStateValues]:
+    def on_tick(self, context: StatechartContext) -> ObservationStateValues | None:
         """
         Triggered when the node is ticked.
         .. warning:: This method is called inside a control loop, make sure it is fast.
@@ -1490,28 +1492,28 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
         :return: An optional observation state overwrite
         """
 
-    def on_start(self, context: StatechartContext):
+    def on_start(self, context: StatechartContext) -> None:
         """
         Triggered when the node transitions from NOT_STARTED to RUNNING.
         .. warning:: This method is called inside a control loop, make sure it is fast.
         :param context: The context that contains data that can be used by this node.
         """
 
-    def on_pause(self, context: StatechartContext):
+    def on_pause(self, context: StatechartContext) -> None:
         """
         Triggered when the node transitions from RUNNING to PAUSED.
         .. warning:: This method is called inside a control loop, make sure it is fast.
         :param context: The context that contains data that can be used by this node.
         """
 
-    def on_unpause(self, context: StatechartContext):
+    def on_unpause(self, context: StatechartContext) -> None:
         """
         Triggered when the node transitions from PAUSED to RUNNING.
         .. warning:: This method is called inside a control loop, make sure it is fast.
         :param context: The context that contains data that can be used by this node.
         """
 
-    def on_end(self, context: StatechartContext):
+    def on_end(self, context: StatechartContext) -> None:
         """
         Triggered when the node transitions from RUNNING or PAUSED into any terminal
         state. Read :attr:`life_cycle_state` for the outcome.
@@ -1519,21 +1521,21 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
         :param context: The context that contains data that can be used by this node.
         """
 
-    def on_reset(self, context: StatechartContext):
+    def on_reset(self, context: StatechartContext) -> None:
         """
         Triggered when the node transitions from any state to NOT_STARTED.
         .. warning:: This method is called inside a control loop, make sure it is fast.
         :param context: The context that contains data that can be used by this node.
         """
 
-    def cleanup(self, context: StatechartContext):
+    def cleanup(self, context: StatechartContext) -> None:
         """
         Triggered after an EndStatechart or CancelStatechart was triggered.
         Place code here to clean up after execution.
         :param context: The context that contains data that can be used by this node.
         """
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(self.name)
 
     def __eq__(self, other: object) -> bool:
@@ -1575,7 +1577,7 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
         return self.statechart.last_observation_state[self]
 
     @property
-    def start_time(self) -> Optional[float]:
+    def start_time(self) -> float | None:
         """
         :return: Seconds since the statechart started at which this node most
             recently started running, None if it has not started since its last
@@ -1587,7 +1589,7 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
         return run.start_tick * self.statechart.context.require_tick_duration()
 
     @property
-    def end_time(self) -> Optional[float]:
+    def end_time(self) -> float | None:
         """
         :return: Seconds since the statechart started at which this node most
             recently ended, None if it has not started since its last reset or has
@@ -1785,7 +1787,7 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
         return self._life_cycle_predicate_variables[predicate]
 
     @property
-    def condition_variables(self) -> List[DerivedConditionVariable]:
+    def condition_variables(self) -> list[DerivedConditionVariable]:
         """
         Creates the variables not handed out yet, so that a condition read from a string
         can refer to any of them.
@@ -1804,7 +1806,7 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
         ]
 
     @property
-    def conditions(self) -> List[TransitionCondition]:
+    def conditions(self) -> list[TransitionCondition]:
         """
         :return: Every transition condition of this node, as written.
         """
@@ -1818,7 +1820,7 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
         ]
 
     @property
-    def effective_conditions(self) -> List[TransitionCondition]:
+    def effective_conditions(self) -> list[TransitionCondition]:
         """
         :return: Every transition condition of this node as it takes effect, see
             :meth:`effective_condition`, in the order of :attr:`conditions`.
@@ -2082,7 +2084,7 @@ class DeserializedNodeTracker(DeserializedObjectTracker[str, StatechartNode]):
     :meth:`from_statechart`.
     """
 
-    _statechart: Optional[Statechart] = field(init=False, default=None)
+    _statechart: Statechart | None = field(init=False, default=None)
     """
     The statechart to look up the nodes in that were not deserialized from the
     document.
@@ -2108,7 +2110,7 @@ class DeserializedNodeTracker(DeserializedObjectTracker[str, StatechartNode]):
             raise UntrackedObjectError(key=key)
         return node
 
-    def _find_node_of_statechart(self, node_id: str) -> Optional[StatechartNode]:
+    def _find_node_of_statechart(self, node_id: str) -> StatechartNode | None:
         """
         :param node_id: The id of the node to find.
         :return: The node of :attr:`_statechart` with that id, or None if there is
@@ -2135,19 +2137,27 @@ def expanded_child_field() -> Any:
 
 @dataclass(eq=False, repr=False, kw_only=True)
 class CompositeNode(StatechartNode):
+    """
+    A node that has other nodes as its children.
+    """
+
     accepts_children_after_compile: bool = field(init=False, default=False)
     """
     Whether children may join this node once the statechart compiled it, rather than
     only while it expands.
     """
 
-    nodes: List[StatechartNode] = field(default_factory=list, init=False)
+    nodes: list[StatechartNode] = field(default_factory=list, init=False)
+    """
+    The children of this node.
+    """
+
     plot_specifications: NodePlotSpec = plot_specification_field(
         NodePlotSpec.create_composite_node_style
     )
 
     @property
-    def children(self) -> List[StatechartNode]:
+    def children(self) -> list[StatechartNode]:
         """
         :return: The children of this node, which is what :attr:`nodes` holds.
         """
@@ -2173,7 +2183,7 @@ class CompositeNode(StatechartNode):
 
         Called once, when this node joins a statechart.
 
-        ..warning:: Nodes have not been built yet.
+        .. warning:: Nodes have not been built yet.
         :param context: The context that contains data that can be used to expand this node.
         """
 
@@ -2285,7 +2295,9 @@ class CompositeNode(StatechartNode):
         if isinstance(node, EndStatechart):
             raise EndInCompositeNodeError(node=self)
 
-    def _check_node_doesnt_belong_to_different_parent(self, node: StatechartNode):
+    def _check_node_doesnt_belong_to_different_parent(
+        self, node: StatechartNode
+    ) -> None:
         """
         .. note:: A node held by a *different* statechart is allowed, because it is
             moved into this node's statechart; only two parents within one statechart are
@@ -2294,7 +2306,7 @@ class CompositeNode(StatechartNode):
         if node.belongs_to_statechart() and node.parent_node != self:
             raise NodeAlreadyBelongsToDifferentNodeError(node=self, new_node=node)
 
-    def _add_children_to_statechart(self, nodes: List[StatechartNode]) -> None:
+    def _add_children_to_statechart(self, nodes: list[StatechartNode]) -> None:
         """
         Adds multiple nodes to this node and to the statechart this node belongs
         to, see :meth:`_add_child_to_statechart`.
@@ -2338,7 +2350,7 @@ class ThreadPayloadMonitor(EndedByOwner, ABC, StatechartNode):
         default=ObservationStateValues.UNKNOWN, init=False, repr=False
     )
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         super().__post_init__()
         # Start a daemon worker thread that computes observations when requested
         self._thread = threading.Thread(
@@ -2361,14 +2373,19 @@ class ThreadPayloadMonitor(EndedByOwner, ABC, StatechartNode):
         # Return the last known result (initialized to Unknown until first success)
         return self._last_result
 
-    def cleanup(self, context: StatechartContext):
+    def cleanup(self, context: StatechartContext) -> None:
         """
         Stops the background worker thread.
         """
         self._stop_event.set()
         self._thread.join(timeout=1.0)
 
-    def _worker_loop(self):
+    def _worker_loop(self) -> None:
+        """
+        Computes an observation whenever one is requested, until the node is cleaned up.
+
+        A failing computation is logged and keeps the previous observation.
+        """
         while not self._stop_event.is_set():
             # Wait until a request is made (wake periodically to check for stop)
             triggered = self._request_event.wait(timeout=0.1)
@@ -2466,7 +2483,7 @@ class EndStatechart(TerminalNode):
         return end
 
     @classmethod
-    def when_all_true(cls, nodes: List[StatechartNode]) -> Self:
+    def when_all_true(cls, nodes: list[StatechartNode]) -> Self:
         """
         Factory method for creating an EndStatechart node that activates once *all* of the
         given nodes observe True or succeeded.
@@ -2481,7 +2498,7 @@ class EndStatechart(TerminalNode):
         return end
 
     @classmethod
-    def when_any_true(cls, nodes: List[StatechartNode]) -> Self:
+    def when_any_true(cls, nodes: list[StatechartNode]) -> Self:
         """
         Factory method for creating an EndStatechart node that activates once *any* of the
         given nodes observes True or succeeded.
@@ -2509,9 +2526,7 @@ class CancelStatechart(TerminalNode):
 
     exception: DataclassException
 
-    _pending_exception: Optional[Exception] = field(
-        default=None, init=False, repr=False
-    )
+    _pending_exception: Exception | None = field(default=None, init=False, repr=False)
     """
     The exception this node started with in the current tick, raised once that tick
     is complete.
@@ -2527,7 +2542,7 @@ class CancelStatechart(TerminalNode):
     def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
         return NodeArtifacts(observation=Scalar.const_true())
 
-    def on_start(self, context: StatechartContext):
+    def on_start(self, context: StatechartContext) -> None:
         self._pending_exception = self.create_exception(context)
 
     def raise_pending_exception(self) -> None:
@@ -2549,7 +2564,7 @@ class CancelStatechart(TerminalNode):
 
     @classmethod
     def when_true(
-        cls, node: StatechartNode, exception: Optional[Exception] = None
+        cls, node: StatechartNode, exception: Exception | None = None
     ) -> Self:
         """
         Factory method for creating a CancelStatechart node that activates once the given
@@ -2568,7 +2583,7 @@ class CancelStatechart(TerminalNode):
 
     @classmethod
     def when_failed(
-        cls, node: StatechartNode, exception: Optional[Exception] = None
+        cls, node: StatechartNode, exception: Exception | None = None
     ) -> Self:
         """
         Factory method for creating a CancelStatechart node that activates once the given
@@ -2586,7 +2601,7 @@ class CancelStatechart(TerminalNode):
         return end
 
     @classmethod
-    def when_all_true(cls, nodes: List[StatechartNode], exception: Exception) -> Self:
+    def when_all_true(cls, nodes: list[StatechartNode], exception: Exception) -> Self:
         """
         Factory method for creating a CancelStatechart node that activates once *all* of the
         given nodes observe True or succeeded.
@@ -2602,7 +2617,7 @@ class CancelStatechart(TerminalNode):
         return end
 
     @classmethod
-    def when_any_true(cls, nodes: List[StatechartNode], exception: Exception) -> Self:
+    def when_any_true(cls, nodes: list[StatechartNode], exception: Exception) -> Self:
         """
         Factory method for creating a CancelStatechart node that activates once *any* of the
         given nodes observes True or succeeded.

@@ -510,7 +510,7 @@ class Bridge:
     Native mesh sources allowed through the ``/mesh`` endpoint, keyed by filename.
     """
 
-    _statechart: Optional[Statechart] = None
+    _statechart: Statechart | None = None
     """
     The statechart running the observed plan, whose top-level nodes root its trees.
     """
@@ -1412,7 +1412,7 @@ class Bridge:
         if target:
             entry.target = target
 
-    def _designator_target(self, designator: DesignatorParameters) -> Optional[str]:
+    def _designator_target(self, designator: DesignatorParameters) -> str | None:
         """
         Published key of the object a designator refers to, if any.
 
@@ -1455,7 +1455,7 @@ class Bridge:
             return self.plan_state.to_payload()
 
     # %% motion statechart
-    def observe_chart(self, chart: Optional[Statechart]) -> None:
+    def observe_chart(self, chart: Statechart | None) -> None:
         """
         Publish the executing statechart's structure and node states.
 

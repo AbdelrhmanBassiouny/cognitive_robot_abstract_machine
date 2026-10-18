@@ -1,7 +1,7 @@
 from __future__ import division
 
 from dataclasses import field, dataclass
-from typing import Optional, Type, Tuple
+from typing_extensions import Type, Tuple
 
 import krrood.symbolic_math.symbolic_math as sm
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
@@ -38,7 +38,7 @@ class SetSeedConfiguration(SucceedsOnObservingTrue, MotionStatechartNode):
         """
         return NodeArtifacts(observation=sm.Scalar.const_true())
 
-    def on_start(self, context: StatechartContext):
+    def on_start(self, context: StatechartContext) -> None:
         self.seed_configuration.apply_to(context.world)
 
 
@@ -53,7 +53,7 @@ class SetOdometry(SucceedsOnObservingTrue, MotionStatechartNode):
     The pose of the robot base.
     """
 
-    odom_connection: Optional[OmniDrive] = None
+    odom_connection: OmniDrive | None = None
     """
     The odometry connection to use.
 
@@ -91,7 +91,7 @@ class SetOdometry(SucceedsOnObservingTrue, MotionStatechartNode):
             )
         return drive_connections[0]
 
-    def on_start(self, context: StatechartContext):
+    def on_start(self, context: StatechartContext) -> None:
         parent_T_pose_ref = HomogeneousTransformationMatrix(
             context.world.compute_forward_kinematics_np(
                 self.odom_connection.parent, self.base_pose.reference_frame

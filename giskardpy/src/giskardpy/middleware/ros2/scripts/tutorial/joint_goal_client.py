@@ -6,7 +6,10 @@ from giskardpy.motion_statechart.graph_node import EndMotion
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList, JointState
 
 
-def main():
+def main() -> None:
+    """
+    Move two joints of the robot to fixed positions through a running Giskard.
+    """
     rospy.init_node("giskard_client")
     giskard = GiskardClientExecutor(node_handle=rospy.get_node())
     goal_positions_in_radians = {"shoulder_pan_joint": 0.5, "elbow_joint": 1.0}

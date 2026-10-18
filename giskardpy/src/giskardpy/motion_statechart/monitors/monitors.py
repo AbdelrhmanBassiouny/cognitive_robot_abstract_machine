@@ -83,7 +83,7 @@ class LocalMinimumReached(EndedByOwner, MotionStatechartNode):
     def required_context_extensions(cls) -> tuple[type[ContextExtension], ...]:
         return super().required_context_extensions + (MotionControlContext,)
 
-    def on_start(self, context: StatechartContext):
+    def on_start(self, context: StatechartContext) -> None:
         if self.measure_from_own_start:
             context.float_variable_data.set_value(
                 self._start_cycle_variable,

@@ -8,7 +8,6 @@ from unittest.mock import Mock
 
 import pytest
 from rclpy.node import Node
-from typing_extensions import Type
 
 import coraplex.visualization as visualization_module
 from coraplex.visualization import RvizVisualization
@@ -39,7 +38,7 @@ def test_failed_publisher_creation_leaves_the_node_usable(
 def test_collision_setup_failure_stops_the_publisher(
     monkeypatch: pytest.MonkeyPatch,
     rclpy_node: Node,
-    failure_type: Type[BaseException],
+    failure_type: type[BaseException],
 ) -> None:
     failure = failure_type()
     publisher = Mock()

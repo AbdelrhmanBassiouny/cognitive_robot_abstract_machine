@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC
 from dataclasses import dataclass
 
-from typing_extensions import TYPE_CHECKING, Type
+from typing_extensions import TYPE_CHECKING
 
 from krrood.adapters.exceptions import JSONSerializationError
 from krrood.exceptions import DataclassException
@@ -198,8 +198,8 @@ class CyclicNodeDependencyError(NodeInitializationError):
     """
 
     def error_message(self) -> str:
-        cycle_str = " -> ".join(node.unique_name for node in self.cycle)
-        return f"Nodes depend on each other in a cycle: {cycle_str}."
+        cycle = " -> ".join(node.unique_name for node in self.cycle)
+        return f"Nodes depend on each other in a cycle: {cycle}."
 
     def suggest_correction(self) -> str:
         return "Break the cycle so the nodes can be expanded and built in some order."
@@ -467,7 +467,7 @@ class MissingContextExtensionError(StatechartError):
     Raised when a context extension is requested that was never added to the context.
     """
 
-    expected_extension: Type
+    expected_extension: type
     """
     The type of the requested extension.
     """
@@ -485,7 +485,7 @@ class DuplicateContextExtensionError(StatechartError):
     Raised when an extension is added to a context that already holds one of that type.
     """
 
-    extension_type: Type
+    extension_type: type
     """
     The type of the extension that is already present.
     """
@@ -618,7 +618,7 @@ class MissingExecutorExtensionError(StatechartError):
     Raised when an executor extension is requested that the executor was not given.
     """
 
-    expected_extension: Type
+    expected_extension: type
     """
     The type of the requested extension.
     """

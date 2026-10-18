@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import List, Optional, Self
+from typing_extensions import Self
 
 from krrood.entity_query_language.factories import a, flat_variable, variable
 from coraplex.datastructures.enums import ReachFraction
@@ -59,7 +59,7 @@ class TransportAction(SequentialAction):
         arm: Arm,
         context: StatechartContext,
         number_of_grasps: int = ClosestGrasps.number_of_grasps,
-        seed: Optional[int] = None,
+        seed: int | None = None,
     ) -> Self:
         """
         A transport that takes `graspable` to `target_location`, standing wherever each
@@ -107,7 +107,7 @@ class TransportAction(SequentialAction):
             ),
         )
 
-    def create_steps(self) -> List[StatechartNode]:
+    def create_steps(self) -> list[StatechartNode]:
         return [
             ParkArmsAction(arms=self.robot.all_arms),
             self.pick_up,
@@ -135,7 +135,7 @@ class PickAndPlaceAction(SequentialAction):
     statement of it.
     """
 
-    def create_steps(self) -> List[StatechartNode]:
+    def create_steps(self) -> list[StatechartNode]:
         return [
             self.pick_up,
             self.place,
@@ -189,7 +189,7 @@ class MoveAndPlaceAction(SequentialAction):
             ),
         )
 
-    def create_steps(self) -> List[StatechartNode]:
+    def create_steps(self) -> list[StatechartNode]:
         return [
             self.navigate,
             self.face_and_look_at,
@@ -259,7 +259,7 @@ class MoveAndPickUpAction(SequentialAction):
         arm: Arm,
         context: StatechartContext,
         number_of_grasps: int = ClosestGrasps.number_of_grasps,
-        seed: Optional[int] = None,
+        seed: int | None = None,
     ) -> Match:
         """
         A pick-up of `graspable`, standing wherever it can be reached from and taking it
@@ -295,7 +295,7 @@ class MoveAndPickUpAction(SequentialAction):
             ),
         )
 
-    def create_steps(self) -> List[StatechartNode]:
+    def create_steps(self) -> list[StatechartNode]:
         return [
             self.navigate,
             self.face_and_look_at,
@@ -353,7 +353,7 @@ class MoveAndOpenAction(SequentialAction):
         arm: Arm,
         context: StatechartContext,
         number_of_grasps: int = ClosestGrasps.number_of_grasps,
-        seed: Optional[int] = None,
+        seed: int | None = None,
     ) -> Match:
         """
         An opening of the container `handle` belongs to, standing wherever the handle
@@ -394,7 +394,7 @@ class MoveAndOpenAction(SequentialAction):
             ),
         )
 
-    def create_steps(self) -> List[StatechartNode]:
+    def create_steps(self) -> list[StatechartNode]:
         return [
             self.navigate,
             self.face_and_look_at,

@@ -10,7 +10,6 @@ from krrood.entity_query_language.factories import *
 from coraplex.plans.context_extensions import RobotAccess, StatementGrounding
 from cramph.context import ContextExtension
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
-from typing_extensions import List
 from experiments.sage_10k.sage10k_actions import Sage10kOpenDoor
 from coraplex.robot_plans.actions.composite.transporting import (
     MoveAndPickUpAction,
@@ -135,7 +134,7 @@ class Sage10kAbstractDemoHSRB:
         return main_entrance
 
     @cached_property
-    def context_extensions(self) -> List[ContextExtension]:
+    def context_extensions(self) -> list[ContextExtension]:
         """
         What the demo's plan reads from its context: the robot of the world, and the
         probabilistic backend its statements are grounded with.

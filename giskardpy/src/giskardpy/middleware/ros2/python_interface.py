@@ -8,7 +8,10 @@ from typing_extensions import Any
 
 import rclpy
 from json_msgs.action import JsonAction
-from json_msgs.action._json_action import JsonAction_Result
+from json_msgs.action._json_action import (
+    JsonAction_FeedbackMessage,
+    JsonAction_Result,
+)
 from std_msgs.msg import String
 from cramph.composites import ChildChooserAccess
 from cramph.context import ContextExtension, StatechartContext
@@ -237,7 +240,7 @@ class GiskardClientExecutor(Executor):
             String, child_choices_topic(self.giskard_node_name), 10
         )
 
-        def answer(feedback_message) -> None:
+        def answer(feedback_message: JsonAction_FeedbackMessage) -> None:
             feedback = json.loads(feedback_message.feedback.feedback)
             self._follow_states(feedback)
             for choice in client.answer(feedback):
@@ -334,23 +337,81 @@ class GiskardClientExecutor(Executor):
 
 @dataclass
 class GiskardClientExecutorNode(GiskardClientExecutor):
+    """
+    A :class:`GiskardClientExecutor` that creates and owns its own ros node.
+    """
+
     is_spinning: bool = False
+    """
+    Whether the background spinner currently spins the node.
+    """
+
     node_name: str = "giskard_client"
+    """
+    The name of the ros node this executor creates.
+    """
+
     giskard_node_name: str = "giskard"
-    avoid_name_conflict: bool = True
+    """
+    The name of the ros node of the Giskard this executor talks to.
+    """
+
     ros_context: Context | None = field(kw_only=True, default=None)
+    """
+    The ros context the node is created in, or None for the default context.
+    """
+
     cli_args: list[str] | None = field(kw_only=True, default=None)
+    """
+    Command line arguments of the node.
+    """
+
     namespace: str | None = field(kw_only=True, default=None)
+    """
+    The namespace of the node.
+    """
+
     use_global_arguments: bool = field(kw_only=True, default=True)
+    """
+    Whether the node uses the global command line arguments.
+    """
+
     enable_rosout: bool = field(kw_only=True, default=True)
+    """
+    Whether the node logs to rosout.
+    """
+
     start_parameter_services: bool = field(kw_only=True, default=True)
+    """
+    Whether the node offers its parameter services.
+    """
+
     parameter_overrides: list[Parameter] | None = field(kw_only=True, default=None)
+    """
+    Parameters that override the declared defaults of the node.
+    """
+
     allow_undeclared_parameters: bool = field(kw_only=True, default=False)
+    """
+    Whether the node accepts parameters it did not declare.
+    """
+
     automatically_declare_parameters_from_overrides: bool = field(
         kw_only=True, default=False
     )
+    """
+    Whether the node declares every parameter of :attr:`parameter_overrides`.
+    """
+
     enable_logger_service: bool = field(kw_only=True, default=False)
+    """
+    Whether the node offers the services to get and set its logger levels.
+    """
+
     node_handle: Node = field(init=False)
+    """
+    The ros node this executor created.
+    """
 
     def __post_init__(self):
         self.node_handle = Node(
@@ -364,6 +425,7 @@ class GiskardClientExecutorNode(GiskardClientExecutor):
             parameter_overrides=self.parameter_overrides,
             allow_undeclared_parameters=self.allow_undeclared_parameters,
             automatically_declare_parameters_from_overrides=self.automatically_declare_parameters_from_overrides,
+            enable_logger_service=self.enable_logger_service,
         )
         rospy.executor.add_node(self.node_handle)
         self.is_spinning = False

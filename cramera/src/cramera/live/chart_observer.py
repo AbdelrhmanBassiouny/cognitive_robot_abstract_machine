@@ -38,7 +38,7 @@ class ChartObserver:
     What the run calls what the chart is executing, shown above it.
     """
 
-    _chart: Optional[Statechart] = field(default=None, init=False)
+    _chart: Statechart | None = field(default=None, init=False)
     """
     The chart last seen, to recognize a newly compiled one.
     """
@@ -55,7 +55,7 @@ class ChartObserver:
     Where its nodes stood when :meth:`change` last reported them.
     """
 
-    def snapshot(self, chart: Optional[Statechart]) -> Optional[ChartSnapshot]:
+    def snapshot(self, chart: Statechart | None) -> ChartSnapshot | None:
         """
         What the chart looks like now, or None when nothing is executing.
 
@@ -98,7 +98,7 @@ class ChartObserver:
             edges=list(structure.edges),
         )
 
-    def change(self, chart: Optional[Statechart]) -> Optional[ChartSnapshot]:
+    def change(self, chart: Statechart | None) -> ChartSnapshot | None:
         """
         The snapshot to send a viewer that already holds the last one: None while the
         chart stands where it was reported to stand.

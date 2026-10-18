@@ -1,5 +1,5 @@
 """
-Tests for the repeating template ``RepeatUntil`` (see
+Tests for the repeating template :class:`~cramph.composites.RepeatUntil` (see
 ``cramph/src/cramph/composites.py``).
 
 The loop is exercised with tasks that observe a fixed value and fail on observing False,
@@ -73,7 +73,7 @@ def _repeat(
 
 def test_repeat_until_retries_until_the_monitor_gives_up(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     """
     A task that never succeeds is retried exactly as often as the monitor allows, and
     the goal then reports the failure rather than stalling on Unknown.
@@ -90,7 +90,7 @@ def test_repeat_until_retries_until_the_monitor_gives_up(
 
 def test_repeat_until_succeeds_without_retrying(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     """
     A task that succeeds first time is never reset, so the loop exits on success instead
     of running to the monitor's bound.
@@ -109,7 +109,7 @@ def test_repeat_until_succeeds_without_retrying(
 
 def test_repeat_until_puts_the_task_back_to_not_started(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     """
     Retrying really restarts the task rather than leaving it running, so a task that
     only behaves correctly from its start is safe to retry.
@@ -137,7 +137,7 @@ def test_repeat_until_puts_the_task_back_to_not_started(
 
 def test_repeat_until_does_not_retry_after_giving_up(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     """
     Once the monitor has called the retrying off, no further attempt is started, so a
     finished loop stops consuming ticks.
@@ -158,7 +158,7 @@ def test_repeat_until_does_not_retry_after_giving_up(
     assert loop.last_observation_state == ObservationStateValues.FALSE
 
 
-def test_repeat_until_starts_its_task_while_the_stop_monitor_has_not_decided():
+def test_repeat_until_starts_its_task_while_the_stop_monitor_has_not_decided() -> None:
     """
     A stop monitor that has not observed anything yet has not called the retrying off,
     so the task runs meanwhile.
@@ -180,7 +180,7 @@ def test_repeat_until_starts_its_task_while_the_stop_monitor_has_not_decided():
     assert loop.task.life_cycle_state == LifeCycleValues.RUNNING
 
 
-def test_repeat_until_rejects_a_task_that_cannot_fail():
+def test_repeat_until_rejects_a_task_that_cannot_fail() -> None:
     """
     A plain task has no way of failing, so it would never be retried.
     """
@@ -203,7 +203,7 @@ def test_repeat_until_rejects_a_task_that_cannot_fail():
 
 def test_repeat_until_ends_the_statechart_with_its_exception_once_retrying_stops(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     """
     A loop handed an exception reports running out of attempts by ending the statechart
     with it, rather than only observing False.

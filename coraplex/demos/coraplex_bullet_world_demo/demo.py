@@ -18,7 +18,7 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from typing_extensions import List, Optional, Tuple, Type
+from typing_extensions import Optional, Tuple, Type
 
 from coraplex.plans.context_extensions import RobotAccess, StatementGrounding
 from coraplex.plans.plan_transformation import PlanRewriting
@@ -308,7 +308,7 @@ class BulletWorldDemonstration(RobotDemonstration):
         with world.modify_world():
             WorldReasoner(world).reason()
 
-    def build_context_extensions(self, world: World) -> List[ContextExtension]:
+    def build_context_extensions(self, world: World) -> list[ContextExtension]:
         return [
             RobotAccess(world.get_semantic_annotations_by_type(self.used_robot)[0]),
             StatementGrounding(sampling_seed=SAMPLING_SEED),
@@ -374,7 +374,7 @@ class BulletWorldDemonstration(RobotDemonstration):
 
 
 def main(
-    executor_type: Type[PlanExecutor] = SimulatedPlanExecutor,
+    executor_type: type[PlanExecutor] = SimulatedPlanExecutor,
     collision_avoidance: bool = True,
     event_segmentation: bool = True,
     debug: bool = False,

@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 
 from rclpy.node import Node
-from typing_extensions import TYPE_CHECKING, List, Optional
+from typing_extensions import TYPE_CHECKING
 
 from coraplex.exceptions import (
     MotionDidNotFinish,
@@ -104,7 +104,7 @@ class PlanExecutor(Executor, ABC):
     The world the plan is executed in.
     """
 
-    context_extensions: List[ContextExtension] = field(
+    context_extensions: list[ContextExtension] = field(
         default_factory=list, kw_only=True
     )
     """
@@ -119,7 +119,7 @@ class PlanExecutor(Executor, ABC):
     :attr:`robot_adaptations` and :attr:`plan_adaptations`.
     """
 
-    ros_node: Optional[Node] = field(default=None, kw_only=True)
+    ros_node: Node | None = field(default=None, kw_only=True)
     """
     The ROS node the plan communicates through, if any.
     """
@@ -140,12 +140,12 @@ class PlanExecutor(Executor, ABC):
     Grounds the underspecified actions of the plan while it runs.
     """
 
-    plan_nodes: List[StatechartNode] = field(default_factory=list, init=False)
+    plan_nodes: list[StatechartNode] = field(default_factory=list, init=False)
     """
     The top-level nodes of the plan compiled last.
     """
 
-    robot_adaptations: List[PlanTransformation] = field(
+    robot_adaptations: list[PlanTransformation] = field(
         default_factory=lambda: [
             DriveStretchWithItsDifferentialDrive(),
             DriveTiagoWithItsDifferentialDrive(),
@@ -161,7 +161,7 @@ class PlanExecutor(Executor, ABC):
     :attr:`plan_adaptations`.
     """
 
-    plan_adaptations: List[PlanTransformation] = field(
+    plan_adaptations: list[PlanTransformation] = field(
         default_factory=list, kw_only=True
     )
     """
@@ -170,7 +170,7 @@ class PlanExecutor(Executor, ABC):
     :class:`~coraplex.plans.plan_transformation.PlanRewriting`.
     """
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.debug and self.ros_node is None:
             raise ValueError("Debug mode requires a ROS node")
         logging.getLogger("coraplex").setLevel(
@@ -195,7 +195,7 @@ class PlanExecutor(Executor, ABC):
         ]
 
     @property
-    def adaptations(self) -> List[PlanTransformation]:
+    def adaptations(self) -> list[PlanTransformation]:
         """
         :return: The transformations this executor rewrites every plan with before the
             plan's own: :attr:`robot_adaptations`, then :attr:`plan_adaptations`.
@@ -390,7 +390,7 @@ class SimulatedPlanExecutor(PlanExecutor, StatechartExecutor):
     once. Counted again whenever nodes join the statechart.
     """
 
-    plan_adaptations: List[PlanTransformation] = field(
+    plan_adaptations: list[PlanTransformation] = field(
         default_factory=lambda: [
             WriteTheOdometryInsteadOfDriving(),
             KeepStretchInFrontOfTheContainerItCloses(),
@@ -398,7 +398,7 @@ class SimulatedPlanExecutor(PlanExecutor, StatechartExecutor):
         kw_only=True,
     )
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         super().__post_init__()
         self.simulation_time_limit = self.simulation_time_per_action
 
@@ -497,7 +497,7 @@ class PhysicallySimulatedPlanExecutor(SimulatedPlanExecutor):
     Steps :attr:`simulation` one control period after every tick.
     """
 
-    plan_adaptations: List[PlanTransformation] = field(
+    plan_adaptations: list[PlanTransformation] = field(
         default_factory=lambda: [
             # A servo grips only with the position error it is left with, so fingers
             # sent no further than the object's surface touch it without holding it.
@@ -507,7 +507,7 @@ class PhysicallySimulatedPlanExecutor(SimulatedPlanExecutor):
         kw_only=True,
     )
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.pacer = SteppedSimulationPacer(self.simulation)
         super().__post_init__()
 
@@ -529,15 +529,13 @@ class RealRobotPlanExecutor(PlanExecutor):
     Giskard compiles the statechart once it receives it.
     """
 
-    _giskard: Optional[GiskardClientExecutor] = field(
-        default=None, init=False, repr=False
-    )
+    _giskard: GiskardClientExecutor | None = field(default=None, init=False, repr=False)
     """
     The connection to Giskard every plan is sent through, None until the first plan
     runs.
     """
 
-    plan_adaptations: List[PlanTransformation] = field(
+    plan_adaptations: list[PlanTransformation] = field(
         default_factory=lambda: [CloseFingersToObjectWidth(), DetectWithRoboKudo()],
         kw_only=True,
     )

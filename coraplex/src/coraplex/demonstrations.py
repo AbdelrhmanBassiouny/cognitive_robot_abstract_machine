@@ -18,7 +18,7 @@ from datetime import timedelta
 import rclpy
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
-from typing_extensions import List, Type
+from typing_extensions import Type
 
 from coraplex.datastructures.enums import VisualizationBackend
 from coraplex.plans.executors import PlanExecutor, SimulatedPlanExecutor
@@ -152,7 +152,7 @@ class RobotDemonstration(ABC):
     Name of the node a real run registers.
     """
 
-    executor_type: Type[PlanExecutor] = SimulatedPlanExecutor
+    executor_type: type[PlanExecutor] = SimulatedPlanExecutor
     """
     The executor running the plan, which decides whether it drives the real robot or a
     simulated one.
@@ -226,7 +226,7 @@ class RobotDemonstration(ABC):
         """
 
     @abstractmethod
-    def build_context_extensions(self, world: World) -> List[ContextExtension]:
+    def build_context_extensions(self, world: World) -> list[ContextExtension]:
         """
         Build what the plan's nodes read from their context, at least the
         :class:`~coraplex.plans.context_extensions.RobotAccess` of the robot resolved in

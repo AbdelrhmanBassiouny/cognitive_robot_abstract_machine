@@ -219,7 +219,7 @@ class TestHoldPose:
 
     def test_a_link_held_in_its_orientation_still_moves_but_does_not_turn(
         self, cylinder_bot_world: World
-    ):
+    ) -> None:
         """
         Tasks pull the link both to another position and into another orientation, and
         only the turning is held off.
@@ -847,7 +847,7 @@ class TestCartesianTasks:
 
     def test_unreachable_goal_ends_in_a_local_minimum(
         self, pr2_world_state_reset: World
-    ):
+    ) -> None:
         """
         A base pose below the floor cannot be reached, so the motion settles in a local
         minimum instead of reaching it.
@@ -882,7 +882,7 @@ class TestCartesianTasks:
 
     def test_cart_goal_orientation_singularity(
         self, pr2_world_state_reset: World, default_pr2_pose: dict[str, float]
-    ):
+    ) -> None:
         """
         Goals that keep the orientation of both grippers are reached, although an
         orientation error of zero is a singularity of the rotation error.
@@ -933,7 +933,7 @@ class TestCartesianTasks:
 
     def test_cart_goal_left_right_chain(
         self, pr2_world_state_reset: World, default_pr2_pose: dict[str, float]
-    ):
+    ) -> None:
         """
         A goal for one gripper relative to the other moves both arms.
         """
@@ -975,7 +975,7 @@ class TestCartesianTasks:
             atol=cart_goal.translation_threshold,
         )
 
-    def test_root_link_not_equal_chain_root(self, pr2_world_state_reset: World):
+    def test_root_link_not_equal_chain_root(self, pr2_world_state_reset: World) -> None:
         """
         A goal whose root link is in the middle of the kinematic chain moves only the
         joints below it.
@@ -1029,7 +1029,7 @@ class TestCartesianTasks:
     )
     def test_omni_drive_base_reaches_its_goal(
         self, hsr_world_copy: World, goal_x: float, goal_y: float, goal_yaw: float
-    ):
+    ) -> None:
         """
         An omnidirectional base drives sideways, diagonally and turning to its goal.
         """
@@ -1066,7 +1066,7 @@ class TestCartesianTasks:
 
     def test_daisy_finger_tip_reaches_its_goal(
         self, daisy_world_copy: World, default_daisy_pose: dict[str, float]
-    ):
+    ) -> None:
         JointState.from_str_dict(default_daisy_pose, daisy_world_copy).apply_to(
             daisy_world_copy
         )
@@ -1633,7 +1633,7 @@ class TestCartesianTasks:
 
     def test_cartesian_pose_straight_holds_its_tasks_to_its_thresholds(
         self, pr2_world_state_reset: World
-    ):
+    ) -> None:
         """
         The position task must arrive within the translation threshold and the
         orientation task within the orientation threshold of the goal.
@@ -1887,7 +1887,9 @@ class TestDiffDriveBaseGoal:
             atol=1e-2,
         )
 
-    def test_custom_threshold_applies_to_every_task(self, cylinder_bot_diff_world):
+    def test_custom_threshold_applies_to_every_task(
+        self, cylinder_bot_diff_world
+    ) -> None:
         """
         DifferentialDriveBaseGoal exposes a single ``threshold`` field for its callers,
         so it must reach the position and the orientation tasks of every step --
@@ -1965,7 +1967,7 @@ class TestDiffDriveBaseGoal:
     )
     def test_a_goal_relative_to_a_moving_frame_is_bound_by_its_policy(
         self, cylinder_bot_diff_world, binding_policy, expected_x
-    ):
+    ) -> None:
         """
         The second leg is given relative to the base, which the first leg moves before
         the second starts, so where the second leg ends depends on when its goal frame
@@ -2006,7 +2008,7 @@ class TestDiffDriveBaseGoal:
 
     def test_a_base_moved_onto_a_lift_drives_relative_to_the_lift(
         self, cylinder_bot_diff_world
-    ):
+    ) -> None:
         """
         The base is moved onto the lift and the lift is raised while the statechart
         runs, after the drive goal was built, so the goal only arrives if it drives
@@ -2063,7 +2065,7 @@ class TestDiffDriveBaseGoal:
 
     def test_a_goal_bound_to_the_base_stays_where_it_was_bound_when_the_base_is_moved(
         self, cylinder_bot_diff_world
-    ):
+    ) -> None:
         """
         The goal is given relative to the base and bound when the drive starts, so
         moving the base under another parent halfway there must not carry the goal along
@@ -2105,7 +2107,7 @@ class TestDiffDriveBaseGoal:
             atol=2 * drive.threshold,
         )
 
-    def test_the_first_step_only_turns_the_base(self, cylinder_bot_diff_world):
+    def test_the_first_step_only_turns_the_base(self, cylinder_bot_diff_world) -> None:
         """
         The goal lies to the side of the base, so the base could face it sooner by also
         driving in an arc; the first step must only turn it.
@@ -2451,7 +2453,7 @@ class TestDistanceAlongAxis:
 
     def test_points_on_two_links_end_the_distance_apart_along_the_axis(
         self, prismatic_bot2: World
-    ):
+    ) -> None:
         reference = prismatic_bot2.get_body_by_name("robot")
         tip = prismatic_bot2.get_body_by_name("robot2")
         executor = StatechartExecutor(

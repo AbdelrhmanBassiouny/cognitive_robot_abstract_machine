@@ -472,7 +472,9 @@ def test_apply_filters_keeps_dof_columns_without_slack():
     assert filtered.quadratic_weights.shape[0] == 2
 
 
-def test_apply_filters_drops_slack_variables_without_weight_and_their_constraints():
+def test_apply_filters_drops_slack_variables_without_weight_and_their_constraints() -> (
+    None
+):
     """
     Two degrees of freedom, one equality slack and two inequality slacks; the equality
     slack and the second inequality slack have no weight, so they go together with the
@@ -554,7 +556,7 @@ def test_apply_filters_keeps_dof_columns_without_slack_two_sided_inequality():
 # %% removing variables
 
 
-def test_without_variables_drops_the_constraints_left_without_coefficients():
+def test_without_variables_drops_the_constraints_left_without_coefficients() -> None:
     """
     The first equality only refers to the removed variable, so it goes with it; the
     second equality and the inequality keep a coefficient, so they stay.
@@ -586,7 +588,9 @@ def test_without_variables_drops_the_constraints_left_without_coefficients():
     assert reduced.inequality_upper_bounds.tolist() == [0.7]
 
 
-def test_without_variables_keeps_matrices_without_constraints(simple_inequality_qp):
+def test_without_variables_keeps_matrices_without_constraints(
+    simple_inequality_qp,
+) -> None:
     qp_data, _ = simple_inequality_qp
 
     reduced = qp_data.without_variables(np.array([True, False]))
@@ -622,7 +626,7 @@ def qp_with_constraint_matrices(
     )
 
 
-def test_coefficients_in_ignored_equalities_do_not_count():
+def test_coefficients_in_ignored_equalities_do_not_count() -> None:
     """
     The first equality is ignored, so only the second one refers to a variable.
     """
@@ -638,7 +642,7 @@ def test_coefficients_in_ignored_equalities_do_not_count():
     assert without_coefficients.tolist() == [True, False, True]
 
 
-def test_inequalities_refer_to_variables():
+def test_inequalities_refer_to_variables() -> None:
     qp_data = qp_with_constraint_matrices(
         equality_matrix=sp.csc_matrix((0, 3)),
         inequality_matrix=sp.csc_matrix(np.array([[0.0, 0.0, 4.0]])),
@@ -651,7 +655,7 @@ def test_inequalities_refer_to_variables():
     assert without_coefficients.tolist() == [True, True, False]
 
 
-def test_stored_zeros_are_no_coefficients():
+def test_stored_zeros_are_no_coefficients() -> None:
     """
     The matrix stores an entry for the first variable whose value is zero.
     """
@@ -670,7 +674,7 @@ def test_stored_zeros_are_no_coefficients():
     assert without_coefficients.tolist() == [True, False, True]
 
 
-def test_only_the_leading_variables_are_checked():
+def test_only_the_leading_variables_are_checked() -> None:
     qp_data = qp_with_constraint_matrices(
         equality_matrix=sp.csc_matrix(np.array([[0.0, 0.0, 6.0]])),
         inequality_matrix=sp.csc_matrix((0, 3)),
@@ -683,7 +687,7 @@ def test_only_the_leading_variables_are_checked():
     assert without_coefficients.tolist() == [True, True]
 
 
-def test_a_matrix_without_rows_refers_to_no_variable():
+def test_a_matrix_without_rows_refers_to_no_variable() -> None:
     """
     A matrix without rows does not necessarily have a column per variable.
     """

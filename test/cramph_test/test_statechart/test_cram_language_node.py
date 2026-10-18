@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-from typing_extensions import List
 
 from cramph.composites import (
     PausedWhileTrue,
@@ -63,8 +62,8 @@ def _run(
 
 
 def _start_order(
-    statechart: Statechart, nodes: List[StatechartNode]
-) -> List[StatechartNode]:
+    statechart: Statechart, nodes: list[StatechartNode]
+) -> list[StatechartNode]:
     """
     :return: Those of `nodes` that started, ordered by the tick they started in.
     """
@@ -87,7 +86,7 @@ def _start_order(
 
 def test_a_step_inserted_before_another_runs_right_before_it(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     first, second, third = _succeeding("1"), _succeeding("2"), _succeeding("3")
     statechart.add_node(sequence := Sequence(nodes=[first, third]))
@@ -101,7 +100,7 @@ def test_a_step_inserted_before_another_runs_right_before_it(
 
 def test_a_step_inserted_before_the_first_one_runs_first(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     first, second = _succeeding("1"), _succeeding("2")
     statechart.add_node(sequence := Sequence(nodes=[second]))
@@ -114,7 +113,7 @@ def test_a_step_inserted_before_the_first_one_runs_first(
 
 def test_a_step_inserted_after_the_last_one_runs_last(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     first, second, third = _succeeding("1"), _succeeding("2"), _succeeding("3")
     statechart.add_node(sequence := Sequence(nodes=[first, second]))
@@ -127,7 +126,7 @@ def test_a_step_inserted_after_the_last_one_runs_last(
 
 def test_a_step_inserted_after_another_runs_right_after_it(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     first, second, third = _succeeding("1"), _succeeding("2"), _succeeding("3")
     statechart.add_node(sequence := Sequence(nodes=[first, third]))
@@ -140,7 +139,7 @@ def test_a_step_inserted_after_another_runs_right_after_it(
 
 def test_a_replaced_step_leaves_the_statechart_and_its_replacement_runs_in_its_place(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     first, replaced, third = _succeeding("1"), _succeeding("x"), _succeeding("3")
     second = _succeeding("2")
@@ -155,7 +154,7 @@ def test_a_replaced_step_leaves_the_statechart_and_its_replacement_runs_in_its_p
 
 def test_a_sequence_that_did_not_join_yet_only_changes_its_list(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     first, second, third = _succeeding("1"), _succeeding("2"), _succeeding("3")
     sequence = Sequence(nodes=[first, third])
 
@@ -170,7 +169,7 @@ def test_a_sequence_that_did_not_join_yet_only_changes_its_list(
 
 def test_an_inserted_alternative_starts_once_the_one_before_it_failed(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     first, second, third = _failing("1"), _failing("2"), _succeeding("3")
     statechart.add_node(alternatives := TryInOrder(nodes=[first, third]))
@@ -187,7 +186,7 @@ def test_an_inserted_alternative_starts_once_the_one_before_it_failed(
 
 def test_an_alternative_inserted_into_try_all_can_decide_it(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     failing = _failing("fails")
     statechart.add_node(alternatives := TryAll(nodes=[failing]))
@@ -200,7 +199,7 @@ def test_an_alternative_inserted_into_try_all_can_decide_it(
 
 def test_a_node_inserted_into_a_parallel_counts_towards_its_observation(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     at_goal = NodeObservingAFixedValue(observation=ObservationStateValues.TRUE)
     statechart.add_node(parallel := Parallel(nodes=[at_goal]))
@@ -216,7 +215,7 @@ def test_a_node_inserted_into_a_parallel_counts_towards_its_observation(
 
 def test_a_parallel_can_still_arrive_through_a_node_inserted_after_it_joined(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     failing = _failing("fails")
     statechart.add_node(parallel := Parallel(nodes=[failing], minimum_success=1))
@@ -245,7 +244,7 @@ def _at_goal(name: str) -> NodeObservingAFixedValue:
 
 def test_a_step_replaced_by_a_node_holding_it_stays_in_the_statechart_below_that_node(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     first, held, third = _succeeding("1"), _at_goal("held"), _succeeding("3")
     beside = _at_goal("beside")
@@ -268,7 +267,7 @@ def test_a_step_replaced_by_a_node_holding_it_stays_in_the_statechart_below_that
 
 def test_a_held_step_keeps_its_position_among_the_children_of_its_new_parent(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     held, before, after = (
         _succeeding("held"),
@@ -286,7 +285,7 @@ def test_a_held_step_keeps_its_position_among_the_children_of_its_new_parent(
 
 def test_a_held_step_is_no_longer_ended_by_its_former_parent(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     """
     The sequence ended the step once it was at its goal; a parallel ends none of its
     children, so below one the step keeps running while its sibling is not at its goal.
@@ -313,7 +312,7 @@ def test_a_held_step_is_no_longer_ended_by_its_former_parent(
 
 def test_replacing_a_step_of_a_compiled_statechart_is_rejected_and_changes_nothing(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     held = _at_goal("held")
     statechart.add_node(sequence := Sequence(nodes=[held]))
@@ -334,7 +333,7 @@ def test_replacing_a_step_of_a_compiled_statechart_is_rejected_and_changes_nothi
 
 def test_a_top_level_node_replaced_by_a_node_holding_it_stays_below_that_node(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(held := _succeeding("held"))
     beside = _at_goal("beside")
@@ -350,7 +349,7 @@ def test_a_top_level_node_replaced_by_a_node_holding_it_stays_below_that_node(
 
 def test_a_replaced_top_level_node_leaves_the_statechart(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(replaced := Sequence(nodes=[_succeeding("below")]))
 
@@ -362,7 +361,7 @@ def test_a_replaced_top_level_node_leaves_the_statechart(
 
 def test_only_a_top_level_node_is_replaced_by_the_statechart(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(Sequence(nodes=[step := _succeeding("step")]))
 
@@ -372,7 +371,7 @@ def test_only_a_top_level_node_is_replaced_by_the_statechart(
 
 def test_replacing_a_top_level_node_of_a_compiled_statechart_is_rejected(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(held := _at_goal("held"))
     statechart_executor.compile(statechart)
@@ -390,7 +389,7 @@ def test_replacing_a_top_level_node_of_a_compiled_statechart_is_rejected(
 
 def test_the_closest_language_node_above_a_nested_node_is_the_first_one_on_its_path(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     nested = _succeeding("nested")
     paused = PausedWhileTrue(
@@ -403,7 +402,7 @@ def test_the_closest_language_node_above_a_nested_node_is_the_first_one_on_its_p
 
 def test_a_step_inserted_before_a_nested_node_runs_before_what_holds_it(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     first, nested = _succeeding("1"), _succeeding("nested")
     paused = PausedWhileTrue(
@@ -419,7 +418,7 @@ def test_a_step_inserted_before_a_nested_node_runs_before_what_holds_it(
 
 def test_a_node_without_a_language_node_above_it_has_none_closest_above_it(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(top_level := _succeeding("top level"))
 
@@ -432,7 +431,7 @@ def test_a_node_without_a_language_node_above_it_has_none_closest_above_it(
 
 def test_inserting_next_to_a_node_that_is_not_below_the_goal_is_rejected(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(sequence := Sequence(nodes=[_succeeding("1")]))
 
@@ -442,7 +441,7 @@ def test_inserting_next_to_a_node_that_is_not_below_the_goal_is_rejected(
 
 def test_inserting_a_node_that_is_a_child_of_the_goal_already_is_rejected(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     first = _succeeding("1")
     statechart.add_node(sequence := Sequence(nodes=[first]))

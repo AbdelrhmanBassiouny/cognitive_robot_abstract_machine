@@ -47,7 +47,7 @@ def _run_a_statechart_gaining_a_node(
 
 def test_the_bars_of_a_late_node_span_the_ticks_it_was_recorded_at(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     late = _run_a_statechart_gaining_a_node(statechart_executor)
     statechart = statechart_executor.statechart
     run = statechart.history.get_current_run_ticks_of_node(late)
@@ -70,7 +70,7 @@ def test_the_bars_of_a_late_node_span_the_ticks_it_was_recorded_at(
 
 def test_the_observation_bars_of_a_late_node_start_when_it_joined(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     late = _run_a_statechart_gaining_a_node(statechart_executor)
     statechart = statechart_executor.statechart
     joining_snapshot = statechart.history.items_recording(late)[0]
@@ -83,7 +83,7 @@ def test_the_observation_bars_of_a_late_node_start_when_it_joined(
 
 def test_a_node_no_snapshot_records_has_no_bars(
     statechart_executor: StatechartExecutor, tmp_path: Path
-):
+) -> None:
     _run_a_statechart_gaining_a_node(statechart_executor)
     statechart = statechart_executor.statechart
     unrecorded = NodeSucceedingOnObservingTrue(
@@ -102,7 +102,7 @@ def test_a_node_no_snapshot_records_has_no_bars(
 
 def test_the_chart_has_a_row_for_every_node_the_statechart_holds_at_the_end(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     _run_a_statechart_gaining_a_node(statechart_executor)
     statechart = statechart_executor.statechart
 

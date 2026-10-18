@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import List, Optional
 
 from cramph.composites import (
     ChildChooser,
@@ -43,7 +42,7 @@ class ChooserRunningEveryCandidate(ChildChooser):
 
     def choose_child(
         self, node: CompositeNodeChoosingItsChild, context: StatechartContext
-    ) -> Optional[StatechartNode]:
+    ) -> StatechartNode | None:
         return node.next_candidate(
             EntityQueryLanguageGenerativeBackend(), self.default_candidate_limit
         )
@@ -61,7 +60,7 @@ def _succeeding_statement(name: str) -> Match[NodeSucceedingOnObservingTrue]:
     )
 
 
-def _statement_of_names(names: List[str]) -> Match[NodeSucceedingOnObservingTrue]:
+def _statement_of_names(names: list[str]) -> Match[NodeSucceedingOnObservingTrue]:
     """
     :return: A statement with one candidate per name in `names`.
     """
@@ -90,7 +89,7 @@ def _run(
 # %% a statement among the children of a language node
 
 
-def test_a_statement_handed_to_a_language_node_becomes_a_statement_node():
+def test_a_statement_handed_to_a_language_node_becomes_a_statement_node() -> None:
     statement = _succeeding_statement("step")
 
     for language_node in (
@@ -104,7 +103,7 @@ def test_a_statement_handed_to_a_language_node_becomes_a_statement_node():
         assert step.statement is statement
 
 
-def test_a_statement_added_to_a_sequence_becomes_a_statement_node():
+def test_a_statement_added_to_a_sequence_becomes_a_statement_node() -> None:
     statement = _succeeding_statement("step")
     sequence = Sequence()
 
@@ -117,7 +116,7 @@ def test_a_statement_added_to_a_sequence_becomes_a_statement_node():
 
 def test_a_statement_inserted_into_a_joined_sequence_runs_as_a_statement_node(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     first = NodeSucceedingOnObservingTrue(
         name="first", observation=ObservationStateValues.TRUE
     )
@@ -139,7 +138,7 @@ def test_a_statement_inserted_into_a_joined_sequence_runs_as_a_statement_node(
 
 def test_a_statement_replacing_a_step_runs_as_a_statement_node(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     replaced = NodeSucceedingOnObservingTrue(
         name="replaced", observation=ObservationStateValues.TRUE
     )
@@ -160,7 +159,7 @@ def test_a_statement_replacing_a_step_runs_as_a_statement_node(
 
 def test_a_sequence_runs_the_node_its_statement_grounds_to(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     sequence = Sequence(nodes=[_succeeding_statement("grounded")])
 
     _run(statechart_executor, ChooserRunningEveryCandidate(), sequence)
@@ -175,7 +174,7 @@ def test_a_sequence_runs_the_node_its_statement_grounds_to(
 # %% the candidates of a statement
 
 
-def test_a_statement_yields_no_more_candidates_than_the_default_limit():
+def test_a_statement_yields_no_more_candidates_than_the_default_limit() -> None:
     node = StatementNode(statement=_statement_of_names(["first", "second"]))
     backend = EntityQueryLanguageGenerativeBackend()
 
@@ -186,7 +185,7 @@ def test_a_statement_yields_no_more_candidates_than_the_default_limit():
     assert node.reached_candidate_limit
 
 
-def test_the_limit_of_a_statement_outranks_the_default_limit():
+def test_the_limit_of_a_statement_outranks_the_default_limit() -> None:
     statement = _statement_of_names(["first", "second"]).limit(2)
     node = StatementNode(statement=statement)
 
@@ -197,7 +196,7 @@ def test_the_limit_of_a_statement_outranks_the_default_limit():
     assert node.candidate_limit == statement._limit_
 
 
-def test_a_statement_that_ran_out_of_candidates_did_not_reach_its_limit():
+def test_a_statement_that_ran_out_of_candidates_did_not_reach_its_limit() -> None:
     node = StatementNode(statement=_statement_of_names(["only"]))
     backend = EntityQueryLanguageGenerativeBackend()
 
@@ -207,7 +206,7 @@ def test_a_statement_that_ran_out_of_candidates_did_not_reach_its_limit():
     assert not node.reached_candidate_limit
 
 
-def test_grounding_again_after_stopping_starts_from_the_first_candidate():
+def test_grounding_again_after_stopping_starts_from_the_first_candidate() -> None:
     node = StatementNode(statement=_statement_of_names(["first", "second"]))
     backend = EntityQueryLanguageGenerativeBackend()
     node.next_candidate(backend, default_candidate_limit=2)
@@ -220,7 +219,7 @@ def test_grounding_again_after_stopping_starts_from_the_first_candidate():
 # %% introspecting the node
 
 
-def test_the_class_diagram_resolves_the_type_hints_of_a_statement_node():
+def test_the_class_diagram_resolves_the_type_hints_of_a_statement_node() -> None:
     """
     The ORM is generated from the class diagram, which has to resolve every field.
     """

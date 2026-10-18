@@ -2,7 +2,7 @@ import json
 import threading
 from datetime import timedelta
 from functools import partial
-from typing_extensions import Callable, List, Tuple, Type, Union, Any
+from typing_extensions import Callable, List, Tuple, Union, Any
 
 from action_msgs.msg import GoalStatus
 from rcl_interfaces.srv._get_parameters import (
@@ -74,8 +74,14 @@ def get_robot_description(topic: str = "/robot_description") -> str:
 
 
 def search_for_publisher_of_node_with_type(
-    node_name: str, topic_type, namespace: str = "/"
-):
+    node_name: str, topic_type: type, namespace: str = "/"
+) -> str:
+    """
+    :param node_name: The name of the node that publishes the topic.
+    :param topic_type: The message type of the topic.
+    :param namespace: The namespace of the node.
+    :return: The first topic of `topic_type` the node publishes.
+    """
     topics = rospy.get_node().get_publisher_names_and_types_by_node(
         node_name, namespace
     )
@@ -85,8 +91,14 @@ def search_for_publisher_of_node_with_type(
 
 
 def search_for_subscriber_of_node_with_type(
-    node_name: str, topic_type, namespace: str = "/"
-):
+    node_name: str, topic_type: type, namespace: str = "/"
+) -> str:
+    """
+    :param node_name: The name of the node that subscribes to the topic.
+    :param topic_type: The message type of the topic.
+    :param namespace: The namespace of the node.
+    :return: The first topic of `topic_type` the node subscribes to.
+    """
     topics = rospy.get_node().get_subscriber_names_and_types_by_node(
         node_name, namespace
     )
@@ -134,7 +146,7 @@ def search_for_subscribers_of_type(topic_type) -> List[str]:
 
 
 def call_service(
-    service_type: Type,
+    service_type: type,
     service_name: str,
     request: Any,
     wait_timeout: timedelta = timedelta(seconds=10),
@@ -214,7 +226,17 @@ class MyActionClient:
         while not self._client.wait_for_server(timeout_sec=2):
             self.node_handle.get_logger().info(f"Waiting for {action_name} server...")
 
-    def send_goal_async(self, goal, feedback_callback=None) -> Future:
+    def send_goal_async(
+        self, goal: Any, feedback_callback: Callable[[Any], None] | None = None
+    ) -> Future:
+        """
+        Send `goal` without waiting for it to be accepted.
+
+        :param goal: The goal to send.
+        :param feedback_callback: Receives every feedback of the goal, see
+            :meth:`_receive_feedback`.
+        :return: The future that resolves once the server accepted or rejected the goal.
+        """
         self._goal_counter += 1
         self._current_goal_id = self._goal_counter
         self._feedback_error = None
@@ -245,15 +267,26 @@ class MyActionClient:
             if self._goal_handle is not None:
                 self._goal_handle.cancel_goal_async()
 
-    def send_goal(self, goal, feedback_callback=None):
-        async def muh():
+    def send_goal(
+        self, goal: Any, feedback_callback: Callable[[Any], None] | None = None
+    ) -> Any:
+        """
+        Send `goal` and wait for its result.
+
+        :param goal: The goal to send.
+        :param feedback_callback: Receives every feedback of the goal, see
+            :meth:`_receive_feedback`.
+        :return: The result of the goal, see :meth:`get_result`.
+        """
+
+        async def send_and_wait_for_result() -> Any:
             rospy.wait_for_future_to_complete(
                 self.send_goal_async(goal, feedback_callback=feedback_callback)
             )
             result = await self.get_result()
             return result
 
-        return get_event_loop().run_until_complete(muh())
+        return get_event_loop().run_until_complete(send_and_wait_for_result())
 
     async def get_result(self):
         """

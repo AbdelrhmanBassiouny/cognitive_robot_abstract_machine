@@ -38,8 +38,8 @@ from semantic_digital_twin.world_description.world_entity import (
 
 
 def semantic_annotations_on_surfaces(
-    supporting_surfaces: List[HasSupportingSurface], world: World
-) -> List[HasRootBody]:
+    supporting_surfaces: list[HasSupportingSurface], world: World
+) -> list[HasRootBody]:
     """
     Queries a list of Semantic annotations that are on top of a given list of other
     annotations (ex.
@@ -88,7 +88,7 @@ def get_next_object_using_planar_distance(
 
 def goal_surface_of_object(
     object_of_interest: SemanticAnnotation,
-    supporting_surfaces: List[HasSupportingSurface],
+    supporting_surfaces: list[HasSupportingSurface],
     threshold: int = 1,
 ) -> Optional[HasSupportingSurface]:
     """

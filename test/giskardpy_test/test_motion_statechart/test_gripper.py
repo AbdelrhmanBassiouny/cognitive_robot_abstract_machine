@@ -58,7 +58,7 @@ def _descendants(nodes):
 # %% commanding the fingers
 
 
-def test_gripper_commands_the_state_the_end_effector_defines(pr2_world_copy):
+def test_gripper_commands_the_state_the_end_effector_defines(pr2_world_copy) -> None:
     """
     The joint goal is the end effector's own joint state for the commanded gripper
     state, not a separately spelled out set of finger positions.
@@ -74,7 +74,9 @@ def test_gripper_commands_the_state_the_end_effector_defines(pr2_world_copy):
     )
 
 
-def test_gripper_commands_nothing_besides_the_fingers_by_default(pr2_world_copy):
+def test_gripper_commands_nothing_besides_the_fingers_by_default(
+    pr2_world_copy,
+) -> None:
     """
     A caller that asks for nothing in particular gets the joint goal alone: no speed
     cap, no stall alternative and no collision allowance.
@@ -91,7 +93,9 @@ def test_gripper_commands_nothing_besides_the_fingers_by_default(pr2_world_copy)
 # %% settling for stalled fingers
 
 
-def test_gripper_without_stall_tolerance_only_ends_on_the_joint_goal(pr2_world_copy):
+def test_gripper_without_stall_tolerance_only_ends_on_the_joint_goal(
+    pr2_world_copy,
+) -> None:
     """
     Stall tolerance is off unless asked for, so nothing watches the fingers for standing
     still.
@@ -105,7 +109,7 @@ def test_gripper_without_stall_tolerance_only_ends_on_the_joint_goal(pr2_world_c
     assert not any(isinstance(node, LocalMinimumReached) for node in nodes)
 
 
-def test_gripper_tolerating_stall_settles_for_either_outcome(pr2_world_copy):
+def test_gripper_tolerating_stall_settles_for_either_outcome(pr2_world_copy) -> None:
     """
     Fingers that close on an object stop short of their commanded position, so with
     stall tolerance the joint goal and the stall monitor sit under one goal that either
@@ -126,7 +130,7 @@ def test_gripper_tolerating_stall_settles_for_either_outcome(pr2_world_copy):
     }
 
 
-def test_gripper_watches_only_the_fingers_for_stalling(pr2_world_copy):
+def test_gripper_watches_only_the_fingers_for_stalling(pr2_world_copy) -> None:
     """
     The stall monitor judges the fingers, not the whole robot, so the rest of the body
     moving cannot keep it from reporting settled fingers.
@@ -146,7 +150,9 @@ def test_gripper_watches_only_the_fingers_for_stalling(pr2_world_copy):
     assert monitor.measure_from_own_start
 
 
-def test_gripper_keeps_the_monitors_dwell_time_when_none_is_given(pr2_world_copy):
+def test_gripper_keeps_the_monitors_dwell_time_when_none_is_given(
+    pr2_world_copy,
+) -> None:
     """
     Leaving the dwell time unset keeps whatever the monitor itself defaults to, so the
     default lives in one place.
@@ -163,7 +169,9 @@ def test_gripper_keeps_the_monitors_dwell_time_when_none_is_given(pr2_world_copy
     assert monitor.minimum_time == LocalMinimumReached.minimum_time
 
 
-def test_gripper_dwells_as_long_as_asked_before_accepting_a_stall(pr2_world_copy):
+def test_gripper_dwells_as_long_as_asked_before_accepting_a_stall(
+    pr2_world_copy,
+) -> None:
     """
     A caller that wants the fingers to stand still longer before the stall counts gets
     that time on the monitor.
@@ -184,7 +192,7 @@ def test_gripper_dwells_as_long_as_asked_before_accepting_a_stall(pr2_world_copy
 # %% capping the finger speed
 
 
-def test_gripper_speed_cap_limits_the_finger_joints(pr2_world_copy):
+def test_gripper_speed_cap_limits_the_finger_joints(pr2_world_copy) -> None:
     """
     A finger speed applies to the joints the goal commands, and to no others.
     """
@@ -201,7 +209,7 @@ def test_gripper_speed_cap_limits_the_finger_joints(pr2_world_copy):
     assert limit.connections == list(goal_state.connections)
 
 
-def test_gripper_speed_cap_holds_whichever_way_the_goal_ends(pr2_world_copy):
+def test_gripper_speed_cap_holds_whichever_way_the_goal_ends(pr2_world_copy) -> None:
     """
     The stall alternative decides when the goal is done; the speed cap is not one of the
     things that can satisfy it, so it stays outside that alternative and keeps holding
@@ -224,7 +232,7 @@ def test_gripper_speed_cap_holds_whichever_way_the_goal_ends(pr2_world_copy):
 # %% letting the gripper touch things
 
 
-def test_gripper_may_touch_what_it_grasps_when_asked(pr2_world_copy):
+def test_gripper_may_touch_what_it_grasps_when_asked(pr2_world_copy) -> None:
     """
     Closing on an object means touching it, so the goal can free its own end effector
     from collision avoidance.
@@ -247,7 +255,7 @@ def test_gripper_may_touch_what_it_grasps_when_asked(pr2_world_copy):
     assert rules_node.temporary_rules[0].end_effector is end_effector
 
 
-def test_gripper_keeps_clear_of_its_surroundings_by_default(pr2_world_copy):
+def test_gripper_keeps_clear_of_its_surroundings_by_default(pr2_world_copy) -> None:
     """
     Without being asked, the goal leaves collision avoidance alone.
     """
@@ -263,7 +271,7 @@ def test_gripper_keeps_clear_of_its_surroundings_by_default(pr2_world_copy):
 # %% running it
 
 
-def test_gripper_reaches_the_commanded_state(pr2_world_state_reset):
+def test_gripper_reaches_the_commanded_state(pr2_world_state_reset) -> None:
     """
     Ticking the goal drives the fingers to the positions the commanded state holds.
     """

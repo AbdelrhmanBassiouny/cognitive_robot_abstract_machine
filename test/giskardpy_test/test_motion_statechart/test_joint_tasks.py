@@ -345,7 +345,7 @@ def test_joint_sequence(pr2_world_state_reset):
 @pytest.mark.parametrize("arm_index", [0, 1], ids=["left", "right"])
 def test_daisy_arm_reaches_its_park_state(
     daisy_world_copy: World, default_daisy_pose: dict[str, float], arm_index: int
-):
+) -> None:
     JointState.from_str_dict(default_daisy_pose, daisy_world_copy).apply_to(
         daisy_world_copy
     )

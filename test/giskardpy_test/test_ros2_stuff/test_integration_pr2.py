@@ -192,7 +192,7 @@ class TestCartGoals:
 
 def test_bodies_added_relative_to_the_gripper_are_placed_there_on_the_server(
     pocky_pose_setup: PR2Tester,
-):
+) -> None:
     """
     Bodies placed relative to the gripper end up at the same place relative to it in the
     server's world, which needs that world to be in step with the robot's state.

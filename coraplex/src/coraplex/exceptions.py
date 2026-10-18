@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC
 from dataclasses import dataclass
-from typing_extensions import TYPE_CHECKING, List, Type
+from typing_extensions import TYPE_CHECKING, Type
 
 from krrood.exceptions import DataclassException
 from coraplex.datastructures.enums import (
@@ -294,7 +294,7 @@ class MotionDidNotFinish(PlanFailure):
     Raised when a plan ended without succeeding.
     """
 
-    unfinished_motions: List[StatechartNode]
+    unfinished_motions: list[StatechartNode]
     """
     The nodes that did not succeed, whether they failed, were interrupted or never
     ended.

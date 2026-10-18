@@ -362,7 +362,7 @@ def test_double_tf_publisher(rclpy_node, pr2_world_state_reset):
 # %% listening to tf only while it is needed
 
 
-def test_a_stopped_tf_wrapper_no_longer_listens(rclpy_node):
+def test_a_stopped_tf_wrapper_no_longer_listens(rclpy_node) -> None:
     subscriptions_before = list(rclpy_node.subscriptions)
     tf_wrapper = TFWrapper(node=rclpy_node)
 
@@ -373,7 +373,7 @@ def test_a_stopped_tf_wrapper_no_longer_listens(rclpy_node):
 
 def test_looking_for_existing_frames_leaves_no_listener_behind(
     rclpy_node, pr2_world_state_reset
-):
+) -> None:
     """
     The frames other publishers broadcast are only looked up once, so listening to every
     tf message afterwards would only cost time.
@@ -391,7 +391,7 @@ def test_looking_for_existing_frames_leaves_no_listener_behind(
 # %% fixed transforms are published once
 
 
-def world_with_a_fixed_and_a_moving_body() -> Tuple[World, Body, Body]:
+def world_with_a_fixed_and_a_moving_body() -> tuple[World, Body, Body]:
     """
     Build a world whose root carries one body on a fixed connection and one on a
     connection with degrees of freedom.
@@ -409,7 +409,7 @@ def world_with_a_fixed_and_a_moving_body() -> Tuple[World, Body, Body]:
 
 def test_only_moving_transforms_are_republished_on_a_state_change(
     rclpy_node, ros_publishers
-):
+) -> None:
     world, fixed, moving = world_with_a_fixed_and_a_moving_body()
 
     tf_publisher = ros_publishers.adopt(TFPublisher(node=rclpy_node, _world=world))
@@ -422,7 +422,7 @@ def test_only_moving_transforms_are_republished_on_a_state_change(
 
 def test_a_listener_joining_later_still_receives_the_fixed_transforms(
     rclpy_node, ros_publishers
-):
+) -> None:
     world, fixed, moving = world_with_a_fixed_and_a_moving_body()
     ros_publishers.adopt(TFPublisher(node=rclpy_node, _world=world))
 
@@ -439,7 +439,7 @@ def test_a_listener_joining_later_still_receives_the_fixed_transforms(
 
 def test_a_fixed_body_added_later_reaches_a_listener_joining_afterwards(
     rclpy_node, ros_publishers
-):
+) -> None:
     world, fixed, moving = world_with_a_fixed_and_a_moving_body()
     ros_publishers.adopt(TFPublisher(node=rclpy_node, _world=world))
     shelf = attach_body(world, "shelf")

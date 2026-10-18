@@ -49,7 +49,7 @@ def height_above_base(world: World, link_name: str) -> float:
 
 def test_joint_goal_on_a_mimic_joint_moves_the_joint_it_mimics(
     hsr_world_copy: World, default_hsr_pose: dict[str, float]
-):
+) -> None:
     JointState.from_str_dict(default_hsr_pose, hsr_world_copy).apply_to(hsr_world_copy)
     torso_lift_joint: ActiveConnection1DOF = hsr_world_copy.get_connection_by_name(
         HSRBJoint.TORSO_LIFT
@@ -97,7 +97,7 @@ def test_joint_goal_on_a_mimic_joint_moves_the_joint_it_mimics(
 
 def test_mimic_joint_velocity_limits_are_scaled_by_its_multiplier(
     hsr_world_copy: World,
-):
+) -> None:
     arm_lift_joint: ActiveConnection1DOF = hsr_world_copy.get_connection_by_name(
         HSRBJoint.ARM_LIFT
     )
@@ -120,7 +120,7 @@ def test_mimic_joint_velocity_limits_are_scaled_by_its_multiplier(
 
 def test_lifting_the_gripper_lifts_the_torso_along(
     hsr_world_copy: World, default_hsr_pose: dict[str, float]
-):
+) -> None:
     JointState.from_str_dict(default_hsr_pose, hsr_world_copy).apply_to(hsr_world_copy)
     torso_lift_joint: ActiveConnection1DOF = hsr_world_copy.get_connection_by_name(
         HSRBJoint.TORSO_LIFT
@@ -158,7 +158,7 @@ def test_lifting_the_gripper_lifts_the_torso_along(
 
 def test_lifting_the_head_drives_the_joint_the_torso_mimics(
     hsr_world_copy: World, default_hsr_pose: dict[str, float]
-):
+) -> None:
     JointState.from_str_dict(default_hsr_pose, hsr_world_copy).apply_to(hsr_world_copy)
     torso_lift_joint: ActiveConnection1DOF = hsr_world_copy.get_connection_by_name(
         HSRBJoint.TORSO_LIFT

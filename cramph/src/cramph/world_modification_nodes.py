@@ -36,5 +36,5 @@ class MoveBranch(SucceedsOnObservingTrue, StatechartNode):
     def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
         return NodeArtifacts(observation=sm.Scalar.const_true())
 
-    def on_start(self, context: StatechartContext):
+    def on_start(self, context: StatechartContext) -> None:
         context.world.move_branch(self.body, self.new_parent)

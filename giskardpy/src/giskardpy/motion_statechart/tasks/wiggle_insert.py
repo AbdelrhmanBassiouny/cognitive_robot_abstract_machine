@@ -4,7 +4,7 @@ import random
 from dataclasses import dataclass, field
 
 import numpy as np
-from typing_extensions import Optional, Tuple
+from typing_extensions import Tuple
 
 import krrood.symbolic_math.symbolic_math as symbolic_math
 from giskardpy.motion_statechart.context import MotionControlContext
@@ -72,7 +72,7 @@ class WiggleInsert(ConvergingTask):
     Default is an untuned preset, not a calibrated value.
     """
 
-    hole_normal: Optional[Vector3] = None
+    hole_normal: Vector3 | None = None
     """
     Vector perpendicular to the hole.
 
@@ -259,7 +259,7 @@ class WiggleInsert(ConvergingTask):
         artifacts.error = root_P_current.euclidean_distance(root_P_hole)
         return artifacts
 
-    def on_tick(self, context: StatechartContext) -> Optional[ObservationStateValues]:
+    def on_tick(self, context: StatechartContext) -> ObservationStateValues | None:
         if self.random_walk:
             translation = self._random_walk_translation()
             angle = self._random_walk_angle()

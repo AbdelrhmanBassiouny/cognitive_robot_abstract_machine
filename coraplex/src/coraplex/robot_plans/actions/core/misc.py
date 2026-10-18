@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import List, Type
+from typing_extensions import Type
 
 from krrood.ormatic.utils import classproperty
 from coraplex.datastructures.enums import (
@@ -100,7 +100,7 @@ class DetectAction(SequentialAction):
         """
         return 3.0
 
-    def create_steps(self) -> List[StatechartNode]:
+    def create_steps(self) -> list[StatechartNode]:
         return [
             PerceptionTask(
                 query=self._build_query(),
@@ -175,7 +175,7 @@ class MoveToReach(MovesToolCenterPoint, SequentialAction, HasApproachesGraspPose
     The end effector that should reach it.
     """
 
-    def create_steps(self) -> List[StatechartNode]:
+    def create_steps(self) -> list[StatechartNode]:
         return [
             NavigateAction(target_location=self.standing_pose),
             MoveManipulatorAction(

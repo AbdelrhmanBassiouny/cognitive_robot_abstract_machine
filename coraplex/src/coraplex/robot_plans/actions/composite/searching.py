@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import List
 
 from coraplex.datastructures.enums import DetectionTechnique
 from coraplex.locations.locations import VisibilityLocation
@@ -51,7 +50,7 @@ class SearchAction(SequentialAction):
     How far beyond the points looked at an object may lie and still be detected.
     """
 
-    def create_steps(self) -> List[StatechartNode]:
+    def create_steps(self) -> list[StatechartNode]:
         detection_box = self._detection_box()
         return [
             a(NavigateAction)(

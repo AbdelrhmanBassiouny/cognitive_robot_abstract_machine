@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 from krrood.symbolic_math.symbolic_math import trinary_logic_and
 from semantic_digital_twin.robots.robot_parts import EndEffector
@@ -42,7 +41,7 @@ class Open(EndedByOwner, CompositeNode):
     Name of the handle that was grasped.
     """
 
-    goal_joint_state: Optional[float] = None
+    goal_joint_state: float | None = None
     """
     Goal state for the mechanism.
 

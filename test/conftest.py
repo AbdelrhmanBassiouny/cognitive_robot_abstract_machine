@@ -236,7 +236,7 @@ def pytest_configure(config: pytest.Config) -> None:
     config.stash[LIVING_WORLDS] = living_worlds
 
 
-def pytest_collection_modifyitems(items: List[pytest.Item]) -> None:
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     """
     Skip every test marked ``parked``, pointing at the list of problems it waits for.
     """

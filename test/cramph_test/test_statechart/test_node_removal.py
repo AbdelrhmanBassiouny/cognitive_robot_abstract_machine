@@ -18,7 +18,7 @@ from cramph.statechart import Statechart
 
 def test_removing_a_node_keeps_the_indices_of_the_others_contiguous(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_nodes([first := ConstTrueNode(), removed := ConstTrueNode()])
     statechart.add_node(last := ConstTrueNode())
@@ -32,7 +32,7 @@ def test_removing_a_node_keeps_the_indices_of_the_others_contiguous(
 
 def test_removing_a_node_shrinks_the_state_of_the_statechart(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_nodes([ConstTrueNode(), removed := ConstTrueNode()])
 
@@ -45,7 +45,7 @@ def test_removing_a_node_shrinks_the_state_of_the_statechart(
 
 def test_a_removed_node_no_longer_belongs_to_the_statechart(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(removed := ConstTrueNode())
 
@@ -57,7 +57,7 @@ def test_a_removed_node_no_longer_belongs_to_the_statechart(
 
 def test_removing_a_child_takes_its_descendants_along(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(ConstTrueNode())
     statechart.add_node(sequence := Sequence(nodes=[task := ConstTrueNode()]))
@@ -73,7 +73,7 @@ def test_removing_a_child_takes_its_descendants_along(
 
 def test_a_child_keeps_its_parent_when_a_node_before_them_is_removed(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(removed := ConstTrueNode())
     statechart.add_node(sequence := Sequence(nodes=[task := ConstTrueNode()]))
@@ -85,7 +85,7 @@ def test_a_child_keeps_its_parent_when_a_node_before_them_is_removed(
 
 def test_removing_a_terminal_node_forgets_it_as_a_way_to_end(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(node := ConstTrueNode())
     statechart.add_node(end := EndStatechart.when_true(node))
@@ -100,7 +100,7 @@ def test_removing_a_terminal_node_forgets_it_as_a_way_to_end(
 
 def test_a_node_another_node_still_refers_to_cannot_be_removed(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(referenced := ConstTrueNode())
     statechart.add_node(EndStatechart.when_true(referenced))
@@ -111,7 +111,7 @@ def test_a_node_another_node_still_refers_to_cannot_be_removed(
 
 def test_a_compiled_statechart_keeps_its_nodes(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(node := ConstTrueNode())
     statechart_executor.compile(statechart)
@@ -122,7 +122,7 @@ def test_a_compiled_statechart_keeps_its_nodes(
 
 def test_a_node_no_compile_covered_yet_leaves_a_compiled_statechart(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(compiled := ConstTrueNode())
     statechart_executor.compile(statechart)
@@ -138,7 +138,7 @@ def test_a_node_no_compile_covered_yet_leaves_a_compiled_statechart(
 
 def test_a_compiled_statechart_runs_after_a_joining_node_was_removed_again(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(ConstTrueNode())
     statechart_executor.compile(statechart)
@@ -146,9 +146,7 @@ def test_a_compiled_statechart_runs_after_a_joining_node_was_removed_again(
 
     with statechart.modify():
         statechart.add_node(removed := ConstTrueNode())
-        statechart.add_node(
-            sequence := Sequence(nodes=[ConstTrueNode()])
-        )
+        statechart.add_node(sequence := Sequence(nodes=[ConstTrueNode()]))
         statechart.add_node(EndStatechart.when_true(sequence))
         statechart.remove_node(removed)
     statechart_executor.tick_until_end()
@@ -158,12 +156,10 @@ def test_a_compiled_statechart_runs_after_a_joining_node_was_removed_again(
 
 def test_a_statechart_runs_after_a_node_was_removed(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(removed := ConstTrueNode())
-    statechart.add_node(
-        sequence := Sequence(nodes=[ConstTrueNode()])
-    )
+    statechart.add_node(sequence := Sequence(nodes=[ConstTrueNode()]))
     statechart.add_node(EndStatechart.when_true(sequence))
 
     statechart.remove_node(removed)

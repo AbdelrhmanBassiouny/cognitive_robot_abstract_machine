@@ -29,6 +29,9 @@ from semantic_digital_twin.world_description.shape_collection import ShapeCollec
 from semantic_digital_twin.world_description.world_entity import Body
 
 
+# %% inserting a cylinder
+
+
 def test_insert_cylinder_with_tracy(tracy_world: World) -> None:
     world = deepcopy(tracy_world)
     robot = world.get_semantic_annotations_by_type(Tracy)[0]

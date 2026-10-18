@@ -54,7 +54,7 @@ class TestPlanStatus:
             == root.life_cycle_state.name
         )
 
-    def test_a_paused_motion_publishes_a_paused_status(self):
+    def test_a_paused_motion_publishes_a_paused_status(self) -> None:
         bridge = Bridge()
         motion = make_plan_node("MotionNode", life_cycle_state=LifeCycleValues.PAUSED)
 

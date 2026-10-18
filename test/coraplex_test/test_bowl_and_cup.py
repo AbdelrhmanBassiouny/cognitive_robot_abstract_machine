@@ -297,7 +297,7 @@ def assert_bowl_and_cup_stand_on_the_kitchen_island(
 
 def test_bowl_and_cup_are_moved_from_the_drawer_onto_the_kitchen_island(
     kitchen_with_filled_drawer: KitchenWithFilledDrawer,
-):
+) -> None:
     kitchen = kitchen_with_filled_drawer
 
     run_plan(
@@ -309,7 +309,7 @@ def test_bowl_and_cup_are_moved_from_the_drawer_onto_the_kitchen_island(
 
 def test_the_drawer_stays_open_while_its_contents_are_carried_away(
     kitchen_with_filled_drawer: KitchenWithFilledDrawer,
-):
+) -> None:
     kitchen = kitchen_with_filled_drawer
     drawer_joint = kitchen.world.get_body_by_name(
         "sink_area_left_middle_drawer_main"

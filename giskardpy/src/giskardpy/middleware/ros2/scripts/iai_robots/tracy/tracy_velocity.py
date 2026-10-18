@@ -30,7 +30,10 @@ def create_giskard() -> Giskard:
     )
 
 
-def main():
+def main() -> None:
+    """
+    Run the Giskard :func:`create_giskard` builds as a ros node until ROS shuts down.
+    """
     Giskard.launch(create_giskard)
 
 

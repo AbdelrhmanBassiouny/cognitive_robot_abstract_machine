@@ -6,7 +6,6 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import pytest
-from typing_extensions import List, Optional, Type
 
 from coraplex.plans.context_extensions import RobotAccess
 from coraplex.plans.executors import PlanExecutor
@@ -99,12 +98,12 @@ class ActionRunningHandedInSteps(SequentialAction):
     expanding and running an action can be exercised on its own.
     """
 
-    steps: List[StatechartNode] = field(default_factory=list)
+    steps: list[StatechartNode] = field(default_factory=list)
     """
     The children of this action, in order.
     """
 
-    def create_steps(self) -> List[StatechartNode]:
+    def create_steps(self) -> list[StatechartNode]:
         return list(self.steps)
 
 
@@ -114,12 +113,12 @@ class ActionHoldingHandedInSteps(ParallelAction):
     An action running the steps handed to it side by side.
     """
 
-    steps: List[StatechartNode] = field(default_factory=list)
+    steps: list[StatechartNode] = field(default_factory=list)
     """
     The children of this action.
     """
 
-    def create_steps(self) -> List[StatechartNode]:
+    def create_steps(self) -> list[StatechartNode]:
         return list(self.steps)
 
 
@@ -129,12 +128,12 @@ class ActionTryingHandedInSteps(TryAllAction):
     An action trying the steps handed to it side by side as alternatives.
     """
 
-    steps: List[StatechartNode] = field(default_factory=list)
+    steps: list[StatechartNode] = field(default_factory=list)
     """
     The alternatives of this action.
     """
 
-    def create_steps(self) -> List[StatechartNode]:
+    def create_steps(self) -> list[StatechartNode]:
         return list(self.steps)
 
 
@@ -158,8 +157,8 @@ def _failing(name: str) -> NodeFailingOnObservingFalse:
 
 def _expanded(
     action: Action,
-    extensions: List[ContextExtension],
-    executor: Optional[PlanExecutor] = None,
+    extensions: list[ContextExtension],
+    executor: PlanExecutor | None = None,
 ) -> Statechart:
     """
     Adds `action` to a statechart, which expands it.
@@ -174,8 +173,8 @@ def _expanded(
 
 
 def _nodes_of_type(
-    action: Action, node_type: Type[StatechartNode]
-) -> List[StatechartNode]:
+    action: Action, node_type: type[StatechartNode]
+) -> list[StatechartNode]:
     """
     :return: Every node of `node_type` the expanded `action` runs, in tree order.
     """
@@ -195,7 +194,7 @@ def _run_until(statechart: Statechart, end: EndStatechart) -> None:
 # %% an action is a statechart node
 
 
-def test_a_sequential_action_is_the_sequence_of_its_steps(simple_pr2_context):
+def test_a_sequential_action_is_the_sequence_of_its_steps(simple_pr2_context) -> None:
     """
     The steps of an action are its own children, without a sequence between them and
     the action.
@@ -226,15 +225,15 @@ class ActionRunningOneNode(GoalAction):
         return self.node
 
 
-def test_an_action_has_no_goal_before_it_is_expanded():
+def test_an_action_has_no_goal_before_it_is_expanded() -> None:
     assert ActionRunningOneNode(node=_succeeding("goal")).goal is None
 
 
-def test_an_action_has_no_steps_before_it_is_expanded():
+def test_an_action_has_no_steps_before_it_is_expanded() -> None:
     assert ActionRunningHandedInSteps(steps=[_succeeding("step")]).nodes == []
 
 
-def test_an_action_needs_the_robot_performing_it(simple_pr2_context):
+def test_an_action_needs_the_robot_performing_it(simple_pr2_context) -> None:
     world, _, _ = simple_pr2_context
     statechart = Statechart(context=StatechartContext(world=world))
     action = ActionRunningHandedInSteps(steps=[_succeeding("only")])
@@ -245,7 +244,9 @@ def test_an_action_needs_the_robot_performing_it(simple_pr2_context):
     assert raised.value.nodes_by_missing_extension == {RobotAccess: [action]}
 
 
-def test_an_action_reaching_a_goal_holds_the_goal_it_created(simple_pr2_context):
+def test_an_action_reaching_a_goal_holds_the_goal_it_created(
+    simple_pr2_context,
+) -> None:
     _, _, extensions = simple_pr2_context
     action = ActionRunningOneNode(node=_succeeding("goal"))
 
@@ -254,7 +255,9 @@ def test_an_action_reaching_a_goal_holds_the_goal_it_created(simple_pr2_context)
     assert action.children == [action.goal]
 
 
-def test_an_action_reaching_a_goal_succeeds_once_the_goal_did(simple_pr2_context):
+def test_an_action_reaching_a_goal_succeeds_once_the_goal_did(
+    simple_pr2_context,
+) -> None:
     _, _, extensions = simple_pr2_context
     step = _succeeding("only step")
     action = ActionRunningOneNode(node=step)
@@ -268,7 +271,7 @@ def test_an_action_reaching_a_goal_succeeds_once_the_goal_did(simple_pr2_context
 
 def test_an_action_whose_body_its_owner_decides_succeeds_once_the_body_arrives(
     simple_pr2_context,
-):
+) -> None:
     """
     A single task never ends on its own, so the action ends it once it is at its goal.
     """
@@ -288,7 +291,7 @@ def test_an_action_whose_body_its_owner_decides_succeeds_once_the_body_arrives(
 
 def test_an_action_whose_body_its_owner_decides_waits_while_the_body_is_away(
     simple_pr2_context,
-):
+) -> None:
     """
     A task that has not arrived yet observes False, which is not a failure of the
     action running it.
@@ -311,7 +314,7 @@ def test_an_action_whose_body_its_owner_decides_waits_while_the_body_is_away(
 
 def test_a_parallel_action_ends_itself_once_all_its_steps_are_at_their_goals(
     simple_pr2_context,
-):
+) -> None:
     """
     A parallel on its own leaves ending it to its owner; as an action it ends itself,
     so it can be a step of another one.
@@ -330,7 +333,7 @@ def test_a_parallel_action_ends_itself_once_all_its_steps_are_at_their_goals(
     assert action.life_cycle_state == LifeCycleValues.SUCCEEDED
 
 
-def test_a_parallel_action_waits_while_a_step_is_away(simple_pr2_context):
+def test_a_parallel_action_waits_while_a_step_is_away(simple_pr2_context) -> None:
     """
     A step that has not arrived yet makes the parallel observe False, which is not a
     failure of the action.
@@ -357,7 +360,9 @@ def test_a_parallel_action_waits_while_a_step_is_away(simple_pr2_context):
     assert action.life_cycle_state == LifeCycleValues.RUNNING
 
 
-def test_a_parallel_action_fails_once_a_step_can_no_longer_arrive(simple_pr2_context):
+def test_a_parallel_action_fails_once_a_step_can_no_longer_arrive(
+    simple_pr2_context,
+) -> None:
     _, _, extensions = simple_pr2_context
     action = ActionHoldingHandedInSteps(
         steps=[
@@ -374,7 +379,7 @@ def test_a_parallel_action_fails_once_a_step_can_no_longer_arrive(simple_pr2_con
     assert action.life_cycle_state == LifeCycleValues.FAILED
 
 
-def test_a_parallel_action_takes_no_minimum_of_successes(simple_pr2_context):
+def test_a_parallel_action_takes_no_minimum_of_successes(simple_pr2_context) -> None:
     """
     How many steps have to arrive is up to the action, not one of its parameters.
     """
@@ -383,7 +388,7 @@ def test_a_parallel_action_takes_no_minimum_of_successes(simple_pr2_context):
 
 def test_a_try_all_action_succeeds_once_one_of_its_steps_succeeded(
     simple_pr2_context,
-):
+) -> None:
     _, _, extensions = simple_pr2_context
     action = ActionTryingHandedInSteps(
         steps=[_failing("gives up"), _succeeding("arrives")]
@@ -395,7 +400,7 @@ def test_a_try_all_action_succeeds_once_one_of_its_steps_succeeded(
     assert action.life_cycle_state == LifeCycleValues.SUCCEEDED
 
 
-def test_action_succeeds_once_its_last_step_succeeded(simple_pr2_context):
+def test_action_succeeds_once_its_last_step_succeeded(simple_pr2_context) -> None:
     """
     An action ends successfully when the sequence it runs does.
     """
@@ -408,7 +413,7 @@ def test_action_succeeds_once_its_last_step_succeeded(simple_pr2_context):
     assert action.life_cycle_state == LifeCycleValues.SUCCEEDED
 
 
-def test_action_fails_once_a_step_ended_without_succeeding(simple_pr2_context):
+def test_action_fails_once_a_step_ended_without_succeeding(simple_pr2_context) -> None:
     """
     A step that cannot arrive fails the action rather than leaving it waiting.
     """
@@ -421,7 +426,7 @@ def test_action_fails_once_a_step_ended_without_succeeding(simple_pr2_context):
     assert action.life_cycle_state == LifeCycleValues.FAILED
 
 
-def test_action_without_steps_is_rejected(simple_pr2_context):
+def test_action_without_steps_is_rejected(simple_pr2_context) -> None:
     """
     An action that names no node to run is a mistake, not an empty success.
     """
@@ -432,7 +437,7 @@ def test_action_without_steps_is_rejected(simple_pr2_context):
         statechart.compile()
 
 
-def _subclasses_of(cls: type) -> List[type]:
+def _subclasses_of(cls: type) -> list[type]:
     """
     :return: Every class deriving from `cls`, however indirectly.
     """
@@ -443,7 +448,7 @@ def _subclasses_of(cls: type) -> List[type]:
     ]
 
 
-def _every_action_type() -> List[Type[Action]]:
+def _every_action_type() -> list[type[Action]]:
     """
     :return: Every action class of coraplex, the composite ones included.
     """
@@ -453,7 +458,7 @@ def _every_action_type() -> List[Type[Action]]:
     return _subclasses_of(Action)
 
 
-def _members_decided_by_base_order(action_type: type) -> dict[str, List[str]]:
+def _members_decided_by_base_order(action_type: type) -> dict[str, list[str]]:
     """
     :return: Each member of `action_type` that several of its classes define, where the
         class defining it first does not derive from the others, mapped to the names of
@@ -480,7 +485,7 @@ def _members_decided_by_base_order(action_type: type) -> dict[str, List[str]]:
     return decided_by_order
 
 
-def test_no_member_of_an_action_depends_on_the_order_of_its_bases():
+def test_no_member_of_an_action_depends_on_the_order_of_its_bases() -> None:
     """
     Where two bases of an action define the same member, a class deriving from both
     decides it, so reordering the bases cannot change what the action does.
@@ -495,7 +500,7 @@ def test_no_member_of_an_action_depends_on_the_order_of_its_bases():
     } == {}
 
 
-def test_every_action_is_compared_and_hashed_as_the_node_it_is():
+def test_every_action_is_compared_and_hashed_as_the_node_it_is() -> None:
     """
     The mixins describing an action's parameters are dataclasses comparing by value,
     which must not decide whether two actions are the same node.
@@ -517,7 +522,7 @@ def test_every_action_is_compared_and_hashed_as_the_node_it_is():
     } == {}
 
 
-def test_action_parameters_leave_out_statechart_machinery(simple_pr2_context):
+def test_action_parameters_leave_out_statechart_machinery(simple_pr2_context) -> None:
     """
     Only what the action was parameterized with counts as its parameters.
     """
@@ -552,19 +557,19 @@ class ActionWithHelperField(ActionRunningHandedInSteps):
     """
 
 
-def test_a_keyword_only_field_is_a_parameter():
+def test_a_keyword_only_field_is_a_parameter() -> None:
     action = ActionWithKeywordOnlyParameter(speed=2.0)
 
     assert action.designator_parameter == {"steps": [], "speed": 2.0}
 
 
-def test_the_name_of_an_action_is_not_a_parameter():
+def test_the_name_of_an_action_is_not_a_parameter() -> None:
     action = MoveTorsoAction(torso_state=TorsoState.HIGH, name="lift")
 
     assert action.designator_parameter == {"torso_state": TorsoState.HIGH}
 
 
-def test_a_field_marked_as_no_parameter_is_left_out():
+def test_a_field_marked_as_no_parameter_is_left_out() -> None:
     action = ActionWithHelperField(helper=3)
 
     assert action.designator_parameter == {"steps": []}
@@ -585,7 +590,7 @@ class ActionLettingAGripperTouch(ActionRunningHandedInSteps):
     The end effector that may touch its surroundings while this action runs.
     """
 
-    def create_temporary_collision_rules(self) -> List[CollisionRule]:
+    def create_temporary_collision_rules(self) -> list[CollisionRule]:
         return [AllowCollisionForEndEffector(end_effector=self.end_effector)]
 
 
@@ -611,7 +616,7 @@ def _away(name: str) -> NodeObservingAFixedValue:
 
 def test_an_action_keeps_its_collision_allowances_in_force_while_it_runs(
     simple_pr2_context,
-):
+) -> None:
     _, robot, extensions = simple_pr2_context
     end_effector = robot.left_arm.end_effector
     action = ActionLettingAGripperTouch(
@@ -632,7 +637,7 @@ def test_an_action_keeps_its_collision_allowances_in_force_while_it_runs(
 
 def test_an_action_takes_its_collision_allowances_out_once_it_ended(
     simple_pr2_context,
-):
+) -> None:
     _, robot, extensions = simple_pr2_context
     end_effector = robot.left_arm.end_effector
     action = ActionLettingAGripperTouch(
@@ -646,7 +651,7 @@ def test_an_action_takes_its_collision_allowances_out_once_it_ended(
     assert not _in_force(statechart, action)
 
 
-def test_a_reset_action_takes_its_collision_allowances_out(simple_pr2_context):
+def test_a_reset_action_takes_its_collision_allowances_out(simple_pr2_context) -> None:
     """
     A reset ends a run without the action ending, so the allowances go then as well.
     """
@@ -669,7 +674,7 @@ def test_a_reset_action_takes_its_collision_allowances_out(simple_pr2_context):
     assert not _in_force(statechart, action)
 
 
-def test_an_action_is_sent_with_its_collision_allowances(simple_pr2_context):
+def test_an_action_is_sent_with_its_collision_allowances(simple_pr2_context) -> None:
     """
     A receiver does not expand an action again, so its allowances have to arrive with
     it.
@@ -699,7 +704,7 @@ def test_an_action_is_sent_with_its_collision_allowances(simple_pr2_context):
 
 def test_a_pick_up_and_its_grasp_and_reach_let_the_gripper_touch(
     pr2_apartment_context,
-):
+) -> None:
     """
     The allowance is the action's own rather than a node beside each of its goals.
     """
@@ -717,7 +722,9 @@ def test_a_pick_up_and_its_grasp_and_reach_let_the_gripper_touch(
     assert _nodes_of_type(pick_up, UpdateTemporaryCollisionRules) == []
 
 
-def test_a_place_lets_the_gripper_holding_its_object_touch(pr2_apartment_context):
+def test_a_place_lets_the_gripper_holding_its_object_touch(
+    pr2_apartment_context,
+) -> None:
     world, robot, extensions = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
     pick_up = PickUpAction(grasp=milk.grasp_candidates()[0], arm=robot.left_arm)
@@ -733,7 +740,7 @@ def test_a_place_lets_the_gripper_holding_its_object_touch(pr2_apartment_context
     assert _nodes_of_type(place, UpdateTemporaryCollisionRules) == []
 
 
-def test_opening_lets_the_gripper_on_the_handle_touch(pr2_apartment_context):
+def test_opening_lets_the_gripper_on_the_handle_touch(pr2_apartment_context) -> None:
     world, robot, extensions = pr2_apartment_context
     handle = _handle_annotation(world, "handle_cab10_m")
     action = OpenAction(grasp=handle.grasp_candidates()[0], arm=robot.right_arm)
@@ -745,7 +752,7 @@ def test_opening_lets_the_gripper_on_the_handle_touch(pr2_apartment_context):
     assert _nodes_of_type(action, UpdateTemporaryCollisionRules) == []
 
 
-def test_an_action_lets_nothing_touch_unless_it_says_so(simple_pr2_context):
+def test_an_action_lets_nothing_touch_unless_it_says_so(simple_pr2_context) -> None:
     _, _, extensions = simple_pr2_context
     action = ActionRunningHandedInSteps(steps=[_succeeding("step")])
 
@@ -767,7 +774,7 @@ def _goal_moving_the_tool(step: StatechartNode) -> StatechartNode:
 
 def test_a_pick_up_grasps_reattaches_and_lifts_as_its_own_steps(
     pr2_apartment_context,
-):
+) -> None:
     world, robot, extensions = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
     pick_up = PickUpAction(grasp=milk.grasp_candidates()[0], arm=robot.left_arm)
@@ -781,7 +788,9 @@ def test_a_pick_up_grasps_reattaches_and_lifts_as_its_own_steps(
     assert type(_goal_moving_the_tool(lifting)) is CartesianPose
 
 
-def test_a_place_reattaches_and_retracts_as_its_own_steps(pr2_apartment_context):
+def test_a_place_reattaches_and_retracts_as_its_own_steps(
+    pr2_apartment_context,
+) -> None:
     world, robot, extensions = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
     pick_up = PickUpAction(grasp=milk.grasp_candidates()[0], arm=robot.left_arm)
@@ -804,7 +813,7 @@ def test_a_place_reattaches_and_retracts_as_its_own_steps(pr2_apartment_context)
 
 def test_move_torso_runs_the_joint_goal_of_the_requested_state(
     simple_pr2_context,
-):
+) -> None:
     """
     Moving the torso drives it to the joint state that torso state stands for.
     """
@@ -819,7 +828,7 @@ def test_move_torso_runs_the_joint_goal_of_the_requested_state(
     )
 
 
-def test_set_gripper_drives_the_gripper_it_names(simple_pr2_context):
+def test_set_gripper_drives_the_gripper_it_names(simple_pr2_context) -> None:
     """
     Setting a gripper drives that gripper, with one goal.
     """
@@ -834,7 +843,7 @@ def test_set_gripper_drives_the_gripper_it_names(simple_pr2_context):
     assert goal.end_effector is robot.left_arm.end_effector
 
 
-def test_park_arms_caps_joint_velocity_only_when_asked(simple_pr2_context):
+def test_park_arms_caps_joint_velocity_only_when_asked(simple_pr2_context) -> None:
     """
     The velocity cap is a limit run alongside the park goal, not always present.
     """
@@ -851,7 +860,7 @@ def test_park_arms_caps_joint_velocity_only_when_asked(simple_pr2_context):
     assert _nodes_of_type(uncapped, JointVelocityLimit) == []
 
 
-def test_look_at_points_the_default_camera(simple_pr2_context):
+def test_look_at_points_the_default_camera(simple_pr2_context) -> None:
     """
     Looking somewhere aims the robot's own camera, and runs nothing else.
     """
@@ -866,7 +875,7 @@ def test_look_at_points_the_default_camera(simple_pr2_context):
 
 def test_looking_beside_a_target_takes_sideways_from_the_robots_base(
     simple_pr2_context,
-):
+) -> None:
     """
     Left and right of a target are as seen from where the robot stands.
     """
@@ -880,7 +889,7 @@ def test_looking_beside_a_target_takes_sideways_from_the_robots_base(
     assert pointing.sideways_offset == action.sideways_offset
 
 
-def test_following_a_path_runs_one_goal_per_waypoint(simple_pr2_context):
+def test_following_a_path_runs_one_goal_per_waypoint(simple_pr2_context) -> None:
     """
     Every waypoint of the path becomes a goal of its own, in order.
     """
@@ -897,7 +906,7 @@ def test_following_a_path_runs_one_goal_per_waypoint(simple_pr2_context):
 
 def test_moving_the_manipulator_relaxes_collisions_only_when_allowed(
     simple_pr2_context,
-):
+) -> None:
     """
     The gripper is only let through its surroundings when the caller asks.
     """
@@ -922,7 +931,7 @@ def test_moving_the_manipulator_relaxes_collisions_only_when_allowed(
 
 def test_moving_the_manipulator_hands_what_accompanies_it_to_its_pose(
     simple_pr2_context,
-):
+) -> None:
     """
     The hold on the base runs in the pose itself, rather than in another parallel
     around it, so that the motion is a level shallower.
@@ -944,7 +953,7 @@ def test_moving_the_manipulator_hands_what_accompanies_it_to_its_pose(
 
 def test_a_pose_of_the_tool_center_point_holds_what_accompanies_it(
     simple_pr2_context,
-):
+) -> None:
     """
     Every reach moves the tool center point through this goal, so a parallel around it
     would make every reach a level deeper.
@@ -970,7 +979,7 @@ def test_a_pose_of_the_tool_center_point_holds_what_accompanies_it(
 
 def test_navigating_drives_the_base_towards_what_it_should_face(
     simple_pr2_context,
-):
+) -> None:
     """
     Navigating commands the base pose, and runs nothing else.
     """
@@ -983,7 +992,7 @@ def test_navigating_drives_the_base_towards_what_it_should_face(
     assert drive.tip_link == robot.root
 
 
-def test_navigating_writes_the_odometry_when_simulated(simple_pr2_context):
+def test_navigating_writes_the_odometry_when_simulated(simple_pr2_context) -> None:
     """
     A simulated run has no drive to follow a pose, so it sets the odometry itself.
     """
@@ -996,7 +1005,9 @@ def test_navigating_writes_the_odometry_when_simulated(simple_pr2_context):
     assert _nodes_of_type(action, CartesianPose) == []
 
 
-def test_navigating_drives_the_base_when_physically_simulated(simple_pr2_context):
+def test_navigating_drives_the_base_when_physically_simulated(
+    simple_pr2_context,
+) -> None:
     """
     A robot whose wheels have to carry it cannot be put at a pose by saying so, which is
     why performing in physics is told apart from performing kinematically.
@@ -1028,7 +1039,7 @@ def full_body_controlled_pr2(simple_pr2_context):
         robot.mobile_base.full_body_controlled = False
 
 
-def arm_and_look_actions(robot) -> List[Action]:
+def arm_and_look_actions(robot) -> list[Action]:
     """
     :return: One of every action that moves an arm or the head while the base is meant
         to stand.
@@ -1047,7 +1058,7 @@ def arm_and_look_actions(robot) -> List[Action]:
 
 def test_moving_an_arm_or_looking_holds_the_base_of_a_robot_that_stands_still(
     simple_pr2_context,
-):
+) -> None:
     """
     A goal relative to the robot is bound when it starts, so a base that collision
     avoidance pushes afterwards carries the goal away from its target.
@@ -1066,7 +1077,7 @@ def test_moving_an_arm_or_looking_holds_the_base_of_a_robot_that_stands_still(
 
 def test_moving_an_arm_or_looking_leaves_a_full_body_controlled_base_free(
     full_body_controlled_pr2,
-):
+) -> None:
     """
     A robot that may move its whole body drives while it reaches, so its base is not
     held.
@@ -1084,7 +1095,7 @@ def test_moving_an_arm_or_looking_leaves_a_full_body_controlled_base_free(
 
 def test_fingers_sent_to_a_width_are_given_the_distance_between_their_facing_points(
     simple_pr2_context,
-):
+) -> None:
     """
     The distance between the fingertips is what Giskard is given, so it finds the joint
     positions that realise it rather than being told them.
@@ -1102,7 +1113,7 @@ def test_fingers_sent_to_a_width_are_given_the_distance_between_their_facing_poi
     assert goal.distance == action.width
 
 
-def test_a_squeeze_sends_the_fingers_past_the_width(simple_pr2_context):
+def test_a_squeeze_sends_the_fingers_past_the_width(simple_pr2_context) -> None:
     _, robot, extensions = simple_pr2_context
     gripper = robot.left_arm.end_effector
     width = 0.04
@@ -1116,7 +1127,9 @@ def test_a_squeeze_sends_the_fingers_past_the_width(simple_pr2_context):
     assert pressing.goal.distance == pytest.approx(touching.goal.distance - 2 * squeeze)
 
 
-def test_hinged_fingers_sent_to_a_width_stand_that_far_apart(stretch_apartment_context):
+def test_hinged_fingers_sent_to_a_width_stand_that_far_apart(
+    stretch_apartment_context,
+) -> None:
     """
     A Stretch's fingers swing on hinges, so their tips stand a width apart without one
     ever standing straight across from the other.
@@ -1133,7 +1146,9 @@ def test_hinged_fingers_sent_to_a_width_stand_that_far_apart(stretch_apartment_c
     )
 
 
-def test_fingers_are_not_sent_wider_than_their_gripper_opens(simple_pr2_context):
+def test_fingers_are_not_sent_wider_than_their_gripper_opens(
+    simple_pr2_context,
+) -> None:
     _, robot, extensions = simple_pr2_context
     gripper = robot.left_arm.end_effector
     action = MoveFingersToWidthAction(
@@ -1144,7 +1159,7 @@ def test_fingers_are_not_sent_wider_than_their_gripper_opens(simple_pr2_context)
         _expanded(action, extensions, physically_simulated_executor(extensions))
 
 
-def test_fingers_may_be_sent_as_wide_as_their_gripper_opens(simple_pr2_context):
+def test_fingers_may_be_sent_as_wide_as_their_gripper_opens(simple_pr2_context) -> None:
     _, robot, extensions = simple_pr2_context
     gripper = robot.left_arm.end_effector
     action = MoveFingersToWidthAction(

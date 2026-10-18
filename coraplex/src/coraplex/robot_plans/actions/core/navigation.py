@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC
 from dataclasses import dataclass, field
 
-from typing_extensions import List, Optional
+from typing_extensions import Optional
 
 from coraplex.exceptions import NoFloorBelowRobot, NotOnASingleLevelException
 from cramph.node import StatechartNode
@@ -136,7 +136,7 @@ class LookAtAction(ParallelAction):
     base stands when the look starts; a negative offset looks to the right.
     """
 
-    def create_steps(self) -> List[StatechartNode]:
+    def create_steps(self) -> list[StatechartNode]:
         camera = self.camera or self.robot.get_default_camera()
         pointing = PointingBeside(
             root_link=self.robot.get_torso().root,
@@ -163,7 +163,7 @@ class FaceAtAction(ParallelAction):
     What to face; only its horizontal position matters.
     """
 
-    def create_steps(self) -> List[StatechartNode]:
+    def create_steps(self) -> list[StatechartNode]:
         return [
             Pointing(
                 root_link=self.world.root,
@@ -208,7 +208,7 @@ class PathPlanningNavigateAction(DrivesBase, SequentialAction):
     Where the robot should stand at the end of the path, with its base.
     """
 
-    def create_steps(self) -> List[StatechartNode]:
+    def create_steps(self) -> list[StatechartNode]:
         return [self._drive_to(waypoint) for waypoint in self._path()]
 
     @property
@@ -342,7 +342,7 @@ class ElevatorNavigation(ReattachesBodies, SequentialAction):
     Position error within which the elevator's drive and doors count as having arrived.
     """
 
-    def create_steps(self) -> List[StatechartNode]:
+    def create_steps(self) -> list[StatechartNode]:
         return [
             NavigateAction(target_location=self._pose_infront_of_elevator),
             PausedUntilTrue(

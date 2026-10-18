@@ -6,10 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 
 from typing_extensions import (
-    List,
-    Optional,
     TYPE_CHECKING,
-    Type,
 )
 
 from coraplex.datastructures.enums import ActionTrialVisualization
@@ -70,7 +67,7 @@ class PlanChildChooser(ChildChooser, ABC):
         node: CompositeNodeChoosingItsChild,
         child: StatechartNode,
         context: StatechartContext,
-    ) -> List[StatechartNode]:
+    ) -> list[StatechartNode]:
         """
         :return: A monitor firing once nothing below `child` approaches its goal.
         """
@@ -103,7 +100,7 @@ class ActionTrial:
     are left untouched too, so they can still run for real afterwards.
     """
 
-    trial_executor_type: Type[PlanExecutor]
+    trial_executor_type: type[PlanExecutor]
     """
     The executor that runs a candidate in the copy, which simulates the robot.
     """
@@ -312,7 +309,7 @@ class UnderspecifiedChildChooser(PlanChildChooser):
     The executor whose statechart holds the nodes, which also tries their candidates.
     """
 
-    trial_executor_type: Type[PlanExecutor]
+    trial_executor_type: type[PlanExecutor]
     """
     The executor the candidates are tried in, see :class:`ActionTrial`.
     """
@@ -323,14 +320,14 @@ class UnderspecifiedChildChooser(PlanChildChooser):
     of the world.
     """
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.trial = ActionTrial(
             executor=self.executor, trial_executor_type=self.trial_executor_type
         )
 
     def choose_child(
         self, node: CompositeNodeChoosingItsChild, context: StatechartContext
-    ) -> Optional[StatechartNode]:
+    ) -> StatechartNode | None:
         """
         :return: The sequence holding the next grounded action that succeeds its
             trial, or None once the statement ran out of actions that succeed their

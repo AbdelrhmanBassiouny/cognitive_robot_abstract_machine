@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import List, Optional
 
 from cramph.composites import (
     ChildChooser,
@@ -70,14 +69,14 @@ class ChooserNotingTheTick(ChildChooser):
     The child to choose.
     """
 
-    asked_on_ticks: List[int] = field(default_factory=list)
+    asked_on_ticks: list[int] = field(default_factory=list)
     """
     The tick of every question.
     """
 
     def choose_child(
         self, node: CompositeNodeChoosingItsChild, context
-    ) -> Optional[StatechartNode]:
+    ) -> StatechartNode | None:
         self.asked_on_ticks.append(self.executor.tick_count)
         return self.child
 
@@ -88,7 +87,7 @@ class ExtensionRecordingCompiles(TickingExecutorExtension):
     An executor extension that records in which order it was told about compiling.
     """
 
-    events: List[str] = field(default_factory=list)
+    events: list[str] = field(default_factory=list)
     """
     The hooks that ran, in order, each by its method name.
     """
@@ -128,7 +127,7 @@ def _choosing_statechart(
 
 def test_a_node_chooses_its_child_only_once_the_extensions_are_at_rest(
     statechart_context,
-):
+) -> None:
     extension = ExtensionComingToRest(questions_until_at_rest=3)
     executor, chooser, _ = _choosing_statechart(statechart_context, extension)
 
@@ -140,7 +139,7 @@ def test_a_node_chooses_its_child_only_once_the_extensions_are_at_rest(
 
 def test_the_statechart_keeps_ticking_while_the_extensions_come_to_rest(
     statechart_context,
-):
+) -> None:
     extension = ExtensionComingToRest(questions_until_at_rest=3)
     executor, chooser, choosing = _choosing_statechart(statechart_context, extension)
 
@@ -152,7 +151,9 @@ def test_the_statechart_keeps_ticking_while_the_extensions_come_to_rest(
     assert extension.questions == 3
 
 
-def test_the_extensions_are_asked_to_hold_still_once_per_choice(statechart_context):
+def test_the_extensions_are_asked_to_hold_still_once_per_choice(
+    statechart_context,
+) -> None:
     """
     Choosing the child compiles the statechart again, which must not ask a second time.
     """
