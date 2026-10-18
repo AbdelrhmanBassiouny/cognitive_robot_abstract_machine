@@ -27,7 +27,7 @@ from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
 from ..motion_control_context import create_context_with_motion_control
 
-# %% goals running their tasks in a parallel
+# %% goals that are a parallel of their tasks
 
 
 def _create_executor(world: World) -> StatechartExecutor:
@@ -39,9 +39,9 @@ def _create_executor(world: World) -> StatechartExecutor:
     )
 
 
-def test_cartesian_pose_runs_its_position_and_orientation_in_one_parallel(
+def test_cartesian_pose_is_a_parallel_of_its_position_and_orientation(
     cylinder_bot_world: World,
-):
+) -> None:
     tip = cylinder_bot_world.get_kinematic_structure_entity_by_name("bot")
     executor = _create_executor(cylinder_bot_world)
     statechart = Statechart(context=executor.context)
@@ -55,18 +55,49 @@ def test_cartesian_pose_runs_its_position_and_orientation_in_one_parallel(
     statechart.add_node(EndMotion.when_true(pose))
     executor.compile(statechart=statechart)
 
-    assert not isinstance(pose, Parallel)
-    assert pose.nodes == [pose.parallel]
-    assert isinstance(pose.parallel, Parallel)
-    assert [type(task) for task in pose.parallel.nodes] == [
+    assert isinstance(pose, Parallel)
+    assert [type(task) for task in pose.nodes] == [
         CartesianPosition,
         CartesianOrientation,
     ]
 
 
-def test_cartesian_pose_observes_what_its_parallel_observes(
+def test_nodes_handed_to_a_cartesian_pose_run_beside_its_tasks(
     cylinder_bot_world: World,
-):
+) -> None:
+    """
+    Whatever accompanies a pose, such as a speed cap or a collision allowance, runs in
+    the pose itself rather than in another parallel around it.
+    """
+    tip = cylinder_bot_world.get_kinematic_structure_entity_by_name("bot")
+    executor = _create_executor(cylinder_bot_world)
+    statechart = Statechart(context=executor.context)
+    pose = CartesianPose(
+        root_link=cylinder_bot_world.root,
+        tip_link=tip,
+        goal_pose=Pose.from_xyz_rpy(x=0.1, reference_frame=cylinder_bot_world.root),
+    )
+    speed_cap = CartesianPositionVelocityLimit(
+        root_link=cylinder_bot_world.root, tip_link=tip
+    )
+    pose.add_node(speed_cap)
+    statechart.add_node(pose)
+    statechart.add_node(EndMotion.when_true(pose))
+    executor.compile(statechart=statechart)
+    executor.tick_until_end()
+
+    assert [type(node) for node in pose.nodes] == [
+        CartesianPosition,
+        CartesianOrientation,
+        CartesianPositionVelocityLimit,
+    ]
+    assert speed_cap.parent_node is pose
+    assert pose.last_observation_state == ObservationStateValues.TRUE
+
+
+def test_cartesian_pose_observes_its_goal_reached(
+    cylinder_bot_world: World,
+) -> None:
     tip = cylinder_bot_world.get_kinematic_structure_entity_by_name("bot")
     executor = _create_executor(cylinder_bot_world)
     statechart = Statechart(context=executor.context)
@@ -81,13 +112,16 @@ def test_cartesian_pose_observes_what_its_parallel_observes(
     executor.compile(statechart=statechart)
     executor.tick_until_end()
 
-    assert pose.parallel.last_observation_state == ObservationStateValues.TRUE
+    assert all(
+        task.last_observation_state == ObservationStateValues.TRUE
+        for task in pose.nodes
+    )
     assert pose.last_observation_state == ObservationStateValues.TRUE
 
 
-def test_cartesian_pose_straight_runs_its_tasks_in_one_parallel(
+def test_cartesian_pose_straight_is_a_parallel_of_its_tasks(
     cylinder_bot_world: World,
-):
+) -> None:
     tip = cylinder_bot_world.get_kinematic_structure_entity_by_name("bot")
     executor = _create_executor(cylinder_bot_world)
     statechart = Statechart(context=executor.context)
@@ -101,9 +135,8 @@ def test_cartesian_pose_straight_runs_its_tasks_in_one_parallel(
     statechart.add_node(EndMotion.when_true(pose))
     executor.compile(statechart=statechart)
 
-    assert not isinstance(pose, Parallel)
-    assert pose.nodes == [pose.parallel]
-    assert [type(task) for task in pose.parallel.nodes] == [
+    assert isinstance(pose, Parallel)
+    assert [type(task) for task in pose.nodes] == [
         CartesianPositionStraight,
         CartesianOrientation,
     ]
@@ -111,7 +144,7 @@ def test_cartesian_pose_straight_runs_its_tasks_in_one_parallel(
 
 def test_velocity_limit_has_its_two_limits_after_a_json_round_trip(
     cylinder_bot_world: World,
-):
+) -> None:
     tip = cylinder_bot_world.get_kinematic_structure_entity_by_name("bot")
     statechart = Statechart(
         context=create_context_with_motion_control(cylinder_bot_world)
@@ -128,8 +161,8 @@ def test_velocity_limit_has_its_two_limits_after_a_json_round_trip(
     (limit_copy,) = statechart_copy.top_level_nodes
     executor.compile(statechart=statechart_copy)
 
-    assert not isinstance(limit_copy, Parallel)
-    assert [type(limit) for limit in limit_copy.parallel.nodes] == [
+    assert isinstance(limit_copy, Parallel)
+    assert [type(limit) for limit in limit_copy.nodes] == [
         CartesianPositionVelocityLimit,
         CartesianRotationVelocityLimit,
     ]
@@ -140,7 +173,7 @@ def test_velocity_limit_has_its_two_limits_after_a_json_round_trip(
 
 def test_differential_drive_goal_runs_its_steps_in_one_sequence(
     cylinder_bot_diff_world: World,
-):
+) -> None:
     executor = _create_executor(cylinder_bot_diff_world)
     statechart = Statechart(context=executor.context)
     statechart.add_node(
@@ -161,7 +194,7 @@ def test_differential_drive_goal_runs_its_steps_in_one_sequence(
 
 def test_differential_drive_goal_is_a_step_without_an_attempt(
     cylinder_bot_diff_world: World,
-):
+) -> None:
     executor = _create_executor(cylinder_bot_diff_world)
     statechart = Statechart(context=executor.context)
     statechart.add_node(

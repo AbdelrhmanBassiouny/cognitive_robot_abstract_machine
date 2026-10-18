@@ -8,8 +8,6 @@ from __future__ import annotations
 from abc import ABC
 from dataclasses import dataclass
 
-from typing_extensions import List
-
 from coraplex.exceptions import ClosingGoalNotFound, ToolPathNotFound
 from coraplex.plans.plan_transformation import (
     ConfigurationTransformation,
@@ -60,7 +58,7 @@ class KeepTheTorsoUprightWhileUsingATool(ParallelInsertion[ToolMotionAction]):
                 return node
         raise ToolPathNotFound(plan_node)
 
-    def nodes_to_insert(self, plan_node: ToolMotionAction) -> List[StatechartNode]:
+    def nodes_to_insert(self, plan_node: ToolMotionAction) -> list[StatechartNode]:
         root = plan_node.controlled_root
         torso_tip = plan_node.robot.mobile_base.torso.tip
         return [
@@ -142,16 +140,32 @@ class KeepStretchFromTurningWhileMovingItsTool(
         )
 
     def apply(self, plan_node: MovesToolCenterPoint) -> None:
-        plan_node.replace_action_body(
-            Parallel(
-                nodes=[
-                    plan_node.action_body,
-                    HoldOrientation(
-                        root_link=plan_node.world.root, tip_link=plan_node.robot.root
-                    ),
-                ]
-            )
+        """
+        Puts the hold beside the action, in a parallel taking the action's place in the
+        closest plan language node above it, or on the top layer of the statechart if
+        there is none; the parallel holds whatever below that place holds the action.
+        """
+        language_node = next(
+            (node for node in plan_node.path if isinstance(node, CramLanguageNode)),
+            None,
         )
+        held = next(
+            node
+            for node in [plan_node, *plan_node.path]
+            if node.parent_node is language_node
+        )
+        holding = Parallel(
+            nodes=[
+                held,
+                HoldOrientation(
+                    root_link=plan_node.world.root, tip_link=plan_node.robot.root
+                ),
+            ]
+        )
+        if language_node is None:
+            plan_node.statechart.replace(held, holding)
+        else:
+            language_node.replace(held, holding)
 
     @staticmethod
     def _holds_the_base(node: StatechartNode, robot: Stretch) -> bool:

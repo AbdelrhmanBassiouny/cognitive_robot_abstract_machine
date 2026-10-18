@@ -2,15 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import Optional, Self
+from typing_extensions import Self
 
 from krrood.entity_query_language.factories import a, flat_variable, variable
 from coraplex.datastructures.enums import ReachFraction
 from coraplex.locations.locations import ReachabilityLocation
-from cramph.composites import Sequence
 from cramph.context import StatechartContext
 from cramph.node import StatechartNode
-from coraplex.robot_plans.actions.base import Action
+from coraplex.robot_plans.actions.base import SequentialAction
 from coraplex.robot_plans.mixins import HasApproachesGraspPoses
 from coraplex.robot_plans.actions.composite.carrying import CarryAction
 from coraplex.robot_plans.actions.composite.facing import FaceAndLookAtAction
@@ -37,7 +36,7 @@ from semantic_digital_twin.spatial_types.spatial_types import Pose
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class TransportAction(Action):
+class TransportAction(SequentialAction):
     """
     Picks an object up with one step and puts it down with another.
     """
@@ -61,7 +60,7 @@ class TransportAction(Action):
         arm: Arm,
         context: StatechartContext,
         number_of_grasps: int = ClosestGrasps.number_of_grasps,
-        seed: Optional[int] = None,
+        seed: int | None = None,
     ) -> Self:
         """
         A transport that takes `graspable` to `target_location`, standing wherever each
@@ -109,20 +108,18 @@ class TransportAction(Action):
             ),
         )
 
-    def create_action_body(self) -> StatechartNode:
-        return Sequence(
-            nodes=[
-                ParkArmsAction(arms=self.robot.all_arms),
-                self.pick_up,
-                ParkArmsAction(arms=self.robot.all_arms),
-                self.place,
-                ParkArmsAction(arms=self.robot.all_arms),
-            ]
-        )
+    def create_steps(self) -> list[StatechartNode]:
+        return [
+            ParkArmsAction(arms=self.robot.all_arms),
+            self.pick_up,
+            ParkArmsAction(arms=self.robot.all_arms),
+            self.place,
+            ParkArmsAction(arms=self.robot.all_arms),
+        ]
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class PickAndPlaceAction(Action):
+class PickAndPlaceAction(SequentialAction):
     """
     Picks an object up with one step and puts it down with another, without moving the
     base of the robot.
@@ -139,17 +136,15 @@ class PickAndPlaceAction(Action):
     statement of it.
     """
 
-    def create_action_body(self) -> StatechartNode:
-        return Sequence(
-            nodes=[
-                self.pick_up,
-                self.place,
-            ]
-        )
+    def create_steps(self) -> list[StatechartNode]:
+        return [
+            self.pick_up,
+            self.place,
+        ]
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class MoveAndPlaceAction(Action):
+class MoveAndPlaceAction(SequentialAction):
     """
     Carries the object upright to where the robot stands, faces the target and places
     the object there.
@@ -196,18 +191,16 @@ class MoveAndPlaceAction(Action):
             ),
         )
 
-    def create_action_body(self) -> StatechartNode:
-        return Sequence(
-            nodes=[
-                CarryAction(navigate=self.navigate),
-                self.face_and_look_at,
-                self.place,
-            ]
-        )
+    def create_steps(self) -> list[StatechartNode]:
+        return [
+            CarryAction(navigate=self.navigate),
+            self.face_and_look_at,
+            self.place,
+        ]
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class MoveAndPickUpAction(Action):
+class MoveAndPickUpAction(SequentialAction):
     """
     Navigates to where the robot stands, faces the object and picks it up.
     """
@@ -268,7 +261,7 @@ class MoveAndPickUpAction(Action):
         arm: Arm,
         context: StatechartContext,
         number_of_grasps: int = ClosestGrasps.number_of_grasps,
-        seed: Optional[int] = None,
+        seed: int | None = None,
     ) -> Match:
         """
         A pick-up of `graspable`, standing wherever it can be reached from and taking it
@@ -304,18 +297,16 @@ class MoveAndPickUpAction(Action):
             ),
         )
 
-    def create_action_body(self) -> StatechartNode:
-        return Sequence(
-            nodes=[
-                self.navigate,
-                self.face_and_look_at,
-                self.pick_up,
-            ]
-        )
+    def create_steps(self) -> list[StatechartNode]:
+        return [
+            self.navigate,
+            self.face_and_look_at,
+            self.pick_up,
+        ]
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class MoveAndOpenAction(Action):
+class MoveAndOpenAction(SequentialAction):
     """
     Navigates to where the robot stands, faces the handle and opens its container.
     """
@@ -364,7 +355,7 @@ class MoveAndOpenAction(Action):
         arm: Arm,
         context: StatechartContext,
         number_of_grasps: int = ClosestGrasps.number_of_grasps,
-        seed: Optional[int] = None,
+        seed: int | None = None,
     ) -> Match:
         """
         An opening of the container `handle` belongs to, standing wherever the handle
@@ -405,11 +396,9 @@ class MoveAndOpenAction(Action):
             ),
         )
 
-    def create_action_body(self) -> StatechartNode:
-        return Sequence(
-            nodes=[
-                self.navigate,
-                self.face_and_look_at,
-                self.open_container,
-            ]
-        )
+    def create_steps(self) -> list[StatechartNode]:
+        return [
+            self.navigate,
+            self.face_and_look_at,
+            self.open_container,
+        ]

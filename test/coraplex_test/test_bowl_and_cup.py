@@ -23,6 +23,7 @@ from coraplex.robot_plans.actions.core.robot_body import (
 from cramph.composites import Parallel, Sequence
 from cramph.context import ContextExtension
 from giskardpy.motion_statechart.tasks.cartesian_tasks import HoldPose
+from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList
 from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
     VizMarkerPublisher,
 )
@@ -274,7 +275,7 @@ def assert_bowl_and_cup_stand_on_the_kitchen_island(
 
 def test_bowl_and_cup_are_moved_from_the_drawer_onto_the_kitchen_island(
     kitchen_with_filled_drawer: KitchenWithFilledDrawer,
-):
+) -> None:
     kitchen = kitchen_with_filled_drawer
 
     run_plan(
@@ -286,7 +287,7 @@ def test_bowl_and_cup_are_moved_from_the_drawer_onto_the_kitchen_island(
 
 def test_the_drawer_stays_open_while_its_contents_are_carried_away(
     kitchen_with_filled_drawer: KitchenWithFilledDrawer,
-):
+) -> None:
     kitchen = kitchen_with_filled_drawer
     drawer_joint = kitchen.world.get_body_by_name(
         "sink_area_left_middle_drawer_main"
@@ -296,9 +297,9 @@ def test_the_drawer_stays_open_while_its_contents_are_carried_away(
         transport_plan(kitchen), kitchen.context_extensions, collision_avoidance=True
     )
 
-    # The gripper pulling the drawer open ends within the position threshold of the
-    # joint's limit.
+    # Opening ends once the goal driving the drawer to the joint's limit is within its
+    # threshold, wherever the last control step within it landed.
     assert drawer_joint.position == pytest.approx(
         drawer_joint.raw_dof.limits.upper.position,
-        abs=MotionToleranceConfig().default_tcp_position_threshold,
+        abs=JointPositionList.threshold,
     )

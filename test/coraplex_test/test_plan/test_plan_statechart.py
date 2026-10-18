@@ -7,15 +7,23 @@ import pytest
 import json
 from dataclasses import dataclass, field
 
-from typing_extensions import Iterator, List
+from typing_extensions import Iterator
 
 from coraplex.exceptions import MotionDidNotFinish
 from coraplex.locations.base import Location
 from coraplex.plans.failures import EmptyUnderspecified
-from coraplex.robot_plans.actions.core.navigation import NavigateAction
+from coraplex.robot_plans.actions.composite.facing import FaceAndLookAtAction
+from coraplex.robot_plans.actions.core.navigation import (
+    FaceAtAction,
+    LookAtAction,
+    NavigateAction,
+)
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.robot_plans.actions.core.placing import PlaceAction
-from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction
+from coraplex.robot_plans.actions.core.robot_body import (
+    MoveTorsoAction,
+    SetGripperAction,
+)
 from coraplex.plans import executors
 from cramph.composites import (
     StatementNode,
@@ -39,7 +47,7 @@ from krrood.entity_query_language.factories import a, variable
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
     WorldEntityWithIDKwargsTracker,
 )
-from semantic_digital_twin.datastructures.definitions import TorsoState
+from semantic_digital_twin.datastructures.definitions import GripperState, TorsoState
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Milk,
@@ -80,7 +88,7 @@ class RecordingLocationInFrontOfTheRobot(Location):
     The robot the location is in front of.
     """
 
-    torso_high_when_sampled: List[bool] = field(default_factory=list)
+    torso_high_when_sampled: list[bool] = field(default_factory=list)
     """
     Whether the torso stood high, once per sampling.
     """
@@ -96,7 +104,7 @@ class RecordingLocationInFrontOfTheRobot(Location):
 
 def test_a_plan_grounding_an_action_mid_sequence_runs_as_one_statechart(
     pr2_apartment_context,
-):
+) -> None:
     world, robot, extensions = pr2_apartment_context
     torso = MoveTorsoAction(torso_state=TorsoState.HIGH)
     plan = Sequence(
@@ -125,7 +133,7 @@ def test_a_plan_grounding_an_action_mid_sequence_runs_as_one_statechart(
 
 def test_an_underspecified_action_is_grounded_against_the_world_the_steps_before_left(
     pr2_apartment_context,
-):
+) -> None:
     world, robot, extensions = pr2_apartment_context
     torso_high = robot.get_torso().get_joint_state_by_type(TorsoState.HIGH)
     assert not torso_high.is_achieved()
@@ -147,7 +155,7 @@ def test_an_underspecified_action_is_grounded_against_the_world_the_steps_before
     assert location.torso_high_when_sampled == [True]
 
 
-def test_a_branch_moved_mid_plan_follows_its_new_parent(pr2_apartment_context):
+def test_a_branch_moved_mid_plan_follows_its_new_parent(pr2_apartment_context) -> None:
     world, robot, extensions = pr2_apartment_context
     milk = world.get_body_by_name("milk.stl")
     tool_frame = robot.left_arm.end_effector.tool_frame
@@ -169,14 +177,16 @@ def test_a_branch_moved_mid_plan_follows_its_new_parent(pr2_apartment_context):
 # %% actions as statechart nodes
 
 
-def test_actions_with_the_same_parameters_are_different_nodes():
+def test_actions_with_the_same_parameters_are_different_nodes() -> None:
     first = MoveTorsoAction(torso_state=TorsoState.HIGH)
     second = MoveTorsoAction(torso_state=TorsoState.HIGH)
 
     assert first != second
 
 
-def test_a_place_finds_the_grasp_of_the_pick_up_before_it(pr2_apartment_context):
+def test_a_place_finds_the_grasp_of_the_pick_up_before_it(
+    pr2_apartment_context,
+) -> None:
     world, robot, extensions = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
     pick_up = PickUpAction(grasp=milk.grasp_candidates()[0], arm=robot.left_arm)
@@ -193,7 +203,7 @@ def test_a_place_finds_the_grasp_of_the_pick_up_before_it(pr2_apartment_context)
 
 def test_a_place_below_a_pausing_composite_finds_the_pick_up_before_that(
     pr2_apartment_context,
-):
+) -> None:
     world, robot, extensions = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
     pick_up = PickUpAction(grasp=milk.grasp_candidates()[0], arm=robot.left_arm)
@@ -211,7 +221,7 @@ def test_a_place_below_a_pausing_composite_finds_the_pick_up_before_that(
 
 def test_a_place_after_several_pick_ups_uses_the_arm_that_picked_its_object(
     pr2_apartment_context,
-):
+) -> None:
     world, robot, extensions = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
     spoon = world.get_semantic_annotations_by_type(Spoon)[0]
@@ -241,7 +251,7 @@ def test_a_place_after_several_pick_ups_uses_the_arm_that_picked_its_object(
 
 def test_a_place_after_an_earlier_place_uses_the_arm_that_picked_its_object(
     pr2_apartment_context,
-):
+) -> None:
     world, robot, extensions = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
     spoon = world.get_semantic_annotations_by_type(Spoon)[0]
@@ -289,12 +299,12 @@ class GiskardRecordingTheGoal:
     The statechart handed over last.
     """
 
-    executed: List[Statechart] = field(default_factory=list)
+    executed: list[Statechart] = field(default_factory=list)
     """
     Every statechart sent, in order.
     """
 
-    child_choosers: List[ChildChooser] = field(default_factory=list)
+    child_choosers: list[ChildChooser] = field(default_factory=list)
     """
     The chooser of the context every sent statechart was built in.
     """
@@ -319,7 +329,7 @@ class GiskardRecordingTheGoal:
 
 def test_a_sent_plan_compiles_without_what_its_actions_read_to_expand(
     pr2_apartment_context,
-):
+) -> None:
     """
     Giskard compiles the plan it receives in a context of its own, which holds what
     motions need and nothing of what the actions read while the client expanded them.
@@ -352,7 +362,7 @@ def test_a_sent_plan_compiles_without_what_its_actions_read_to_expand(
 
 def test_an_underspecified_node_is_sent_as_a_node_choosing_its_child(
     pr2_apartment_context,
-):
+) -> None:
     """
     Giskard receives the children the client chooses, so it needs nothing but the node
     itself, and not the statement it is grounded from.
@@ -368,7 +378,7 @@ def test_an_underspecified_node_is_sent_as_a_node_choosing_its_child(
 
 def test_a_plan_on_the_robot_is_sent_once_with_the_chooser_grounding_its_actions(
     pr2_apartment_context, monkeypatch
-):
+) -> None:
     world, robot, extensions = pr2_apartment_context
     giskard = GiskardRecordingTheGoal()
     monkeypatch.setattr(
@@ -399,7 +409,7 @@ def test_a_plan_on_the_robot_is_sent_once_with_the_chooser_grounding_its_actions
 
 def test_plans_run_one_after_another_share_one_connection_to_giskard(
     pr2_apartment_context, monkeypatch
-):
+) -> None:
     world, robot, extensions = pr2_apartment_context
     connections = []
 
@@ -426,7 +436,7 @@ def test_plans_run_one_after_another_share_one_connection_to_giskard(
 
 def test_closing_the_executor_closes_its_connection_to_giskard(
     pr2_apartment_context, monkeypatch
-):
+) -> None:
     world, robot, extensions = pr2_apartment_context
     giskard = GiskardRecordingTheGoal()
     monkeypatch.setattr(
@@ -445,7 +455,7 @@ def test_closing_the_executor_closes_its_connection_to_giskard(
 
 def test_an_executor_that_never_ran_a_plan_connects_to_nothing(
     pr2_apartment_context, monkeypatch
-):
+) -> None:
     world, robot, extensions = pr2_apartment_context
     connections = []
     monkeypatch.setattr(
@@ -490,7 +500,7 @@ class GiskardTickingTheGoalUntilItEnded:
 
 def test_a_plan_that_fails_on_the_robot_raises_motion_did_not_finish(
     pr2_apartment_context, monkeypatch
-):
+) -> None:
     world, robot, extensions = pr2_apartment_context
     monkeypatch.setattr(
         executors,
@@ -510,7 +520,7 @@ def test_a_plan_that_fails_on_the_robot_raises_motion_did_not_finish(
 
 def test_an_underspecified_action_out_of_candidates_on_the_robot_says_it_is_empty(
     pr2_apartment_context, monkeypatch
-):
+) -> None:
     world, robot, extensions = pr2_apartment_context
     monkeypatch.setattr(
         executors,
@@ -529,14 +539,20 @@ def test_an_underspecified_action_out_of_candidates_on_the_robot_says_it_is_empt
     assert failure.value.node is plan
 
 
-def test_an_expanded_action_is_received_with_the_nodes_it_runs(pr2_apartment_context):
+def test_an_expanded_action_is_received_with_the_goal_it_reaches(
+    pr2_apartment_context,
+) -> None:
     """
     A receiver does not expand the nodes of a statechart again, so an action has to
-    arrive knowing the sequence it runs.
+    arrive knowing the goal it reaches.
     """
     world, robot, extensions = pr2_apartment_context
     sent = Statechart(context=simulated_executor(extensions).context)
-    sent.add_node(action := MoveTorsoAction(torso_state=TorsoState.HIGH))
+    sent.add_node(
+        action := SetGripperAction(
+            gripper=robot.left_arm.end_effector, motion=GripperState.OPEN
+        )
+    )
 
     received = Statechart.from_json(
         json.loads(json.dumps(sent.to_json())),
@@ -545,6 +561,37 @@ def test_an_expanded_action_is_received_with_the_nodes_it_runs(pr2_apartment_con
     )
 
     received_action = received.get_node_by_index(action.index)
-    assert received_action.action_body is received.get_node_by_index(
-        action.action_body.index
+    assert received_action.goal is received.get_node_by_index(action.goal.index)
+
+
+def test_an_expanded_action_is_received_with_the_steps_it_runs(
+    pr2_apartment_context,
+) -> None:
+    """
+    The steps of an action are its children, which arrive linked to it rather than
+    created again.
+    """
+    world, robot, extensions = pr2_apartment_context
+    target = Pose.from_xyz_rpy(1.0, 0.0, 1.0, reference_frame=world.root)
+    sent = Statechart(context=simulated_executor(extensions).context)
+    sent.add_node(
+        action := FaceAndLookAtAction(
+            face_at=FaceAtAction(target=target), look_at=LookAtAction(target=target)
+        )
     )
+
+    received = Statechart.from_json(
+        json.loads(json.dumps(sent.to_json())),
+        context=simulated_executor(extensions).context,
+        **WorldEntityWithIDKwargsTracker.from_world(world).create_kwargs(),
+    )
+
+    received_action = received.get_node_by_index(action.index)
+    assert type(received_action) is FaceAndLookAtAction
+    assert received_action.nodes == [
+        received.get_node_by_index(step.index) for step in action.nodes
+    ]
+    assert [type(step) for step in received_action.nodes] == [
+        FaceAtAction,
+        LookAtAction,
+    ]

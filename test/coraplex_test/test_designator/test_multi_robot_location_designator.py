@@ -108,7 +108,7 @@ def setup_multi_robot_simple_apartment(
 @pytest.fixture
 def multiple_robot_simple_apartment_context(
     setup_multi_robot_simple_apartment,
-) -> Generator[Tuple[World, AbstractRobot, List[ContextExtension]]]:
+) -> Generator[tuple[World, AbstractRobot, list[ContextExtension]]]:
     """
     The shared simple apartment world with one robot, the robot and the context
     extensions of its plans, returned to its initial model and state after the test.

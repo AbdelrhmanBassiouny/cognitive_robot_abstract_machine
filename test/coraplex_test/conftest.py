@@ -15,8 +15,6 @@ from functools import partial
 import numpy as np
 import pytest
 
-from typing_extensions import List, Optional, Type
-
 from coraplex.plans.context_extensions import RobotAccess
 from coraplex.plans.executors import PhysicallySimulatedPlanExecutor
 from cramph.context import ContextExtension
@@ -200,8 +198,8 @@ def empty_region(pr2_apartment_context) -> VolumetricBoundingBox:
 
 def tool_center_point_goal(
     robot: AbstractRobot,
-    arm: Optional[Arm] = None,
-    target: Optional[Pose] = None,
+    arm: Arm | None = None,
+    target: Pose | None = None,
 ) -> CartesianPose:
     """
     Build the goal an action would build to move an arm's tool center point.
@@ -228,8 +226,8 @@ def tool_center_point_goal(
 
 
 def motion_nodes_of(
-    plan: StatechartNode, extensions: List[ContextExtension]
-) -> List[StatechartNode]:
+    plan: StatechartNode, extensions: list[ContextExtension]
+) -> list[StatechartNode]:
     """
     :param plan: The plan whose motions to read.
     :param extensions: The context extensions the plan is expanded with.
@@ -242,8 +240,8 @@ def motion_nodes_of(
 
 
 def nodes_of_type(
-    plan: StatechartNode, node_type: Type[StatechartNode]
-) -> List[StatechartNode]:
+    plan: StatechartNode, node_type: type[StatechartNode]
+) -> list[StatechartNode]:
     """
     :param plan: An expanded plan.
     :param node_type: The type of the nodes to collect.
@@ -261,7 +259,7 @@ class SimulationThatCountsItsSteps:
     Stands in for a started simulation, counting the physics steps asked of it.
     """
 
-    steps: List[timedelta] = field(default_factory=list)
+    steps: list[timedelta] = field(default_factory=list)
     """
     Every period the physics was asked to advance by.
     """
@@ -279,7 +277,7 @@ class SimulationThatCountsItsSteps:
 
 
 def physically_simulated_executor(
-    extensions: List[ContextExtension], **options
+    extensions: list[ContextExtension], **options
 ) -> PhysicallySimulatedPlanExecutor:
     """
     :param extensions: The context extensions of a plan, holding a
@@ -297,8 +295,8 @@ def physically_simulated_executor(
 
 
 def motion_nodes_in_physics_of(
-    plan: StatechartNode, extensions: List[ContextExtension]
-) -> List[StatechartNode]:
+    plan: StatechartNode, extensions: list[ContextExtension]
+) -> list[StatechartNode]:
     """
     :param plan: The plan whose motions to read.
     :param extensions: The context extensions the plan is expanded with.

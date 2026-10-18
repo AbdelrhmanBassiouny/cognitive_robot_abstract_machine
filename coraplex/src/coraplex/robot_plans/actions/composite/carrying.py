@@ -4,9 +4,8 @@ from dataclasses import dataclass
 
 from typing_extensions import TYPE_CHECKING
 
-from cramph.composites import Parallel
 from cramph.node import StatechartNode
-from coraplex.robot_plans.actions.base import Action
+from coraplex.robot_plans.actions.base import Action, ParallelAction
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.robot_plans.actions.core.placing import PlaceAction
@@ -21,7 +20,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class CarryAction(Action):
+class CarryAction(ParallelAction):
     """
     Drives the robot's base to a pose while every object the robot holds keeps its
     z-axis pointing up.
@@ -42,7 +41,7 @@ class CarryAction(Action):
     the object counts as upright.
     """
 
-    def create_action_body(self) -> StatechartNode:
+    def create_steps(self) -> list[StatechartNode]:
         keep_upright = [
             AlignPlanes(
                 root_link=self.world.root,
@@ -53,9 +52,7 @@ class CarryAction(Action):
             )
             for held_body in self._held_bodies()
         ]
-        if not keep_upright:
-            return self.navigate
-        return Parallel(nodes=[self.navigate, *keep_upright])
+        return [self.navigate, *keep_upright]
 
     def _held_bodies(self) -> list[Body]:
         """

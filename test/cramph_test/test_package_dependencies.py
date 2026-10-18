@@ -11,14 +11,13 @@ from importlib.util import find_spec
 from pathlib import Path
 
 import pytest
-from typing_extensions import List, Set
 
 import cramph
 from cramph.context import StatechartContext
 from cramph.statechart import Statechart
 from semantic_digital_twin.world import World
 
-FORBIDDEN_PACKAGES: Set[str] = {
+FORBIDDEN_PACKAGES: set[str] = {
     "giskardpy",
     "coraplex",
     "segmind",
@@ -62,7 +61,7 @@ class ImportedModule:
         return self.name.split(".")[0]
 
 
-def cramph_module_names() -> List[str]:
+def cramph_module_names() -> list[str]:
     """
     :return: The names of every module of the installed ``cramph`` package.
     """
@@ -74,7 +73,7 @@ def cramph_module_names() -> List[str]:
     ]
 
 
-def imports_of(module_name: str) -> List[ImportedModule]:
+def imports_of(module_name: str) -> list[ImportedModule]:
     """
     :param module_name: The module whose source is read.
     :return: Every module its source imports, wherever in the source the import is.
@@ -95,18 +94,18 @@ def imports_of(module_name: str) -> List[ImportedModule]:
 # %% cramph stays independent of motion control and ROS
 
 
-def test_submodules_of_cramph_are_found():
+def test_submodules_of_cramph_are_found() -> None:
     assert Statechart.__module__ in cramph_module_names()
 
 
-def test_imports_of_a_module_are_found():
+def test_imports_of_a_module_are_found() -> None:
     assert ImportedModule(
         importer=StatechartContext.__module__, name=World.__module__
     ) in imports_of(StatechartContext.__module__)
 
 
 @pytest.mark.parametrize("module_name", cramph_module_names())
-def test_cramph_module_imports_no_forbidden_package(module_name: str):
+def test_cramph_module_imports_no_forbidden_package(module_name: str) -> None:
     forbidden_imports = [
         imported
         for imported in imports_of(module_name)

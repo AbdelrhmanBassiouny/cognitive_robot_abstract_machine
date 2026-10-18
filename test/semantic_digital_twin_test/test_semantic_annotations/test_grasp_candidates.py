@@ -283,7 +283,7 @@ def _handle_with_bar_along(
 
 
 @pytest.mark.parametrize("bar_axis", [0, 1, 2], ids=["along-x", "along-y", "along-z"])
-def test_a_handle_is_approached_from_every_side_across_its_bar(bar_axis):
+def test_a_handle_is_approached_from_every_side_across_its_bar(bar_axis) -> None:
     """
     The fingers close around the bar, so neither the approach nor the closing runs
     along it, and the bar can be approached from any of the four sides around it.
@@ -307,7 +307,7 @@ def test_a_handle_is_approached_from_every_side_across_its_bar(bar_axis):
         assert float(np.dot(closing, bar_direction)) == pytest.approx(0, abs=1e-9)
 
 
-def test_a_handle_is_grasped_at_the_centre_of_its_bar():
+def test_a_handle_is_grasped_at_the_centre_of_its_bar() -> None:
     """
     A handle's frame may sit at its mount rather than on the bar, so the grasps are
     placed where the bar is.
@@ -320,7 +320,7 @@ def test_a_handle_is_grasped_at_the_centre_of_its_bar():
         )
 
 
-def test_a_kitchen_handle_can_be_approached_into_the_furniture(kitchen_world):
+def test_a_kitchen_handle_can_be_approached_into_the_furniture(kitchen_world) -> None:
     """
     The kitchen's handle links point out of the furniture with the bar along their
     y-axis, so one grasp has to approach along their negative x-axis and close along
@@ -338,7 +338,7 @@ def test_a_kitchen_handle_can_be_approached_into_the_furniture(kitchen_world):
     )
 
 
-def test_a_handle_without_a_shape_offers_no_grasp():
+def test_a_handle_without_a_shape_offers_no_grasp() -> None:
     body = Body(name=PrefixedName("shapeless_handle", prefix="grasp_candidates"))
     handle = Handle(root=body)
     world = World()

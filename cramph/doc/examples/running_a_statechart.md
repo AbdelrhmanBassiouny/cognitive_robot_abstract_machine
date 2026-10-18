@@ -37,21 +37,25 @@ an extension may also add the [context extensions](../statecharts.md#writing-a-n
 nodes read.
 
 ```{code-cell} ipython3
-from cramph.composites import Attempt, Sequence, TryInOrder
+from cramph.composites import Sequence, TryInOrder
 from cramph.context import StatechartContext
 from cramph.executor import StatechartExecutor
 from cramph.monitors import CountTicks
 from cramph.node import EndStatechart
 from cramph.statechart import Statechart
+from cramph.threaded_nodes import FunctionCall
 from semantic_digital_twin.world import World
 
 executor = StatechartExecutor(context=StatechartContext(world=World()))
 statechart = Statechart(context=executor.context)
 
-slow_approach = Attempt(
-    name="slow approach",
-    task=CountTicks(name="slow", ticks=100),
-    failure_monitors=[CountTicks(name="timeout", ticks=10)],
+
+def slip():
+    raise RuntimeError("the gripper slipped")
+
+
+slow_approach = FunctionCall(
+    name="slow approach", function=slip, failure_types=(RuntimeError,)
 )
 fast_approach = CountTicks(name="fast approach", ticks=5)
 
@@ -73,7 +77,7 @@ executor.tick_until_end(timeout=100)
 
 print(f"Ticks executed: {executor.tick_count}")
 print(f"slow approach: {slow_approach.life_cycle_state.name}")
-print(f"failure reasons: {[node.name for node in slow_approach.failure_reasons]}")
+print(f"fast approach: {fast_approach.life_cycle_state.name}")
 print(f"plan: {plan.life_cycle_state.name}")
 ```
 

@@ -409,7 +409,9 @@ The orientation every generated pose takes, so that only its position varies.
 """
 
 
-def test_generative_backend_grounds_a_keyword_bound_to_a_flattening_of_a_variable():
+def test_generative_backend_grounds_a_keyword_bound_to_a_flattening_of_a_variable() -> (
+    None
+):
     """
     A keyword bound to the flattened values of a variable's attribute takes each of
     those values in turn, for each value of the variable, in their order.
@@ -428,7 +430,9 @@ def test_generative_backend_grounds_a_keyword_bound_to_a_flattening_of_a_variabl
     ]
 
 
-def test_generative_backend_grounds_a_keyword_bound_to_an_attribute_of_a_variable():
+def test_generative_backend_grounds_a_keyword_bound_to_an_attribute_of_a_variable() -> (
+    None
+):
     holders = [
         KRROODPositionsSubclassWithAnotherKRROODPosition(
             [], [], KRROODPosition(1, 0, 0)

@@ -5,7 +5,7 @@ import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
-from typing_extensions import Any, Callable, Optional, Tuple, Type
+from typing_extensions import Any, Callable
 
 from cramph.node import SucceedsOnObservingTrue, FailsOnObservingFalse
 from cramph.context import StatechartContext
@@ -13,6 +13,9 @@ from cramph.data_types import ObservationStateValues
 from cramph.node import StatechartNode
 
 logger = logging.getLogger(__name__)
+
+
+# %% threaded nodes
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
@@ -28,7 +31,7 @@ class ThreadedNode(StatechartNode, ABC):
         works in a locally ticked statechart.
     """
 
-    _thread: Optional[threading.Thread] = field(default=None, init=False, repr=False)
+    _thread: threading.Thread | None = field(default=None, init=False, repr=False)
     """
     The thread :meth:`run` runs in, from the start of this node on.
     """
@@ -38,7 +41,7 @@ class ThreadedNode(StatechartNode, ABC):
     What :meth:`run` returned the last time it returned.
     """
 
-    _error: Optional[BaseException] = field(default=None, init=False, repr=False)
+    _error: BaseException | None = field(default=None, init=False, repr=False)
     """
     What :meth:`run` raised, if it raised.
     """
@@ -82,6 +85,9 @@ class ThreadedNode(StatechartNode, ABC):
             self._error = error
 
 
+# %% function calls
+
+
 @dataclass(eq=False, repr=False, kw_only=True)
 class FunctionCall(SucceedsOnObservingTrue, FailsOnObservingFalse, ThreadedNode):
     """
@@ -100,7 +106,7 @@ class FunctionCall(SucceedsOnObservingTrue, FailsOnObservingFalse, ThreadedNode)
     The function to call.
     """
 
-    failure_types: Tuple[Type[BaseException], ...] = ()
+    failure_types: tuple[type[BaseException], ...] = ()
     """
     The exceptions that make this node fail rather than being raised out of the tick.
     """
@@ -108,7 +114,7 @@ class FunctionCall(SucceedsOnObservingTrue, FailsOnObservingFalse, ThreadedNode)
     def run(self) -> Any:
         return self.function()
 
-    def on_tick(self, context: StatechartContext) -> Optional[ObservationStateValues]:
+    def on_tick(self, context: StatechartContext) -> ObservationStateValues | None:
         """
         Wait for the function and observe whether it succeeded.
 

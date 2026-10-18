@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pytest
 from rustworkx.rustworkx import NoEdgeBetweenNodes
-from typing_extensions import Generator, Iterable, List, Tuple
+from typing_extensions import Generator, Iterable
 
 from coraplex.datastructures.enums import (
     AxisIdentifier,
@@ -64,8 +64,10 @@ from giskardpy.motion_statechart.goals.collision_avoidance import (
 )
 from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from giskardpy.motion_statechart.monitors.overwrite_state_monitors import SetOdometry
+from giskardpy.motion_statechart.goals.cartesian_goals import CartesianPoseStraight
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
+    CartesianPositionVelocityLimit,
     DistanceAlongAxis,
     HoldPose,
 )
@@ -83,6 +85,9 @@ from semantic_digital_twin.datastructures.definitions import (
 )
 from semantic_digital_twin.reasoning.robot_predicates import get_visible_bodies
 from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
+from semantic_digital_twin.collision_checking.collision_rules import (
+    AllowCollisionForEndEffector,
+)
 from semantic_digital_twin.robots.robot_parts import AbstractRobot, EndEffector
 from ..conftest import (
     grasp_point_of,
@@ -315,7 +320,7 @@ def setup_multi_robot_apartment(
 @pytest.fixture
 def multiple_robot_apartment_context(
     setup_multi_robot_apartment,
-) -> Generator[Tuple[World, AbstractRobot, List[ContextExtension]]]:
+) -> Generator[tuple[World, AbstractRobot, list[ContextExtension]]]:
     """
     The shared apartment world with one robot, the robot and the context extensions of
     its plans, returned to its initial model, state and full body control setting after
@@ -1083,7 +1088,7 @@ def test_elevator_navigation(multiple_robot_apartment_context, rclpy_node):
 # %% searching for an object
 
 
-def test_search_action(multiple_robot_apartment_context):
+def test_search_action(multiple_robot_apartment_context) -> None:
     """
     Searching where the object stands ends with the robot standing where it can see the
     object, having detected it on the first look.
@@ -1187,7 +1192,7 @@ def test_set_gripper_drives_the_gripper_it_names(multiple_robot_apartment_contex
 
 def test_park_arms_caps_joint_velocity_only_when_asked(
     multiple_robot_apartment_context,
-):
+) -> None:
     """
     The velocity cap is a limit run alongside the park goal, not always present.
     """
@@ -1200,7 +1205,7 @@ def test_park_arms_caps_joint_velocity_only_when_asked(
 
     [limit] = nodes_of_type(capped, JointVelocityLimit)
     assert limit.max_velocity == capped.max_joint_velocity
-    assert nodes_of_type(capped, Parallel) != []
+    assert limit in capped.nodes
     assert nodes_of_type(uncapped, JointVelocityLimit) == []
 
 
@@ -1236,7 +1241,7 @@ def test_following_a_path_runs_one_goal_per_waypoint(
 
 def test_moving_the_manipulator_relaxes_collisions_only_when_allowed(
     multiple_robot_apartment_context,
-):
+) -> None:
     """
     The gripper is only let through its surroundings when the caller asks.
     """
@@ -1252,9 +1257,62 @@ def test_moving_the_manipulator_relaxes_collisions_only_when_allowed(
     expand(allowed, extensions)
     expand(forbidden, extensions)
 
-    assert len(nodes_of_type(allowed, UpdateTemporaryCollisionRules)) == 1
-    assert nodes_of_type(forbidden, UpdateTemporaryCollisionRules) == []
+    [rule] = allowed.temporary_collision_rules
+    assert rule.end_effector is end_effector
+    assert forbidden.temporary_collision_rules == []
+    assert nodes_of_type(allowed, UpdateTemporaryCollisionRules) == []
     assert len(nodes_of_type(forbidden, CartesianPose)) == 1
+
+
+def test_moving_the_manipulator_hands_what_accompanies_it_to_its_pose(
+    multiple_robot_apartment_context,
+) -> None:
+    """
+    The hold on the base runs in the pose itself, rather than in another parallel around
+    it, so that the motion is a level shallower.
+    """
+    world, robot, extensions = multiple_robot_apartment_context
+    with world.modify_world():
+        robot.mobile_base.full_body_controlled = False
+    action = MoveManipulatorAction(
+        target_pose=Pose(),
+        end_effector=left_or_only_arm(robot).end_effector,
+        allow_gripper_collision=True,
+    )
+
+    expand(action, extensions)
+
+    [pose] = nodes_of_type(action, CartesianPose)
+    [hold_base] = nodes_of_type(action, HoldPose)
+    assert hold_base.parent_node is pose
+    assert nodes_of_type(action, Parallel) == [pose]
+
+
+def test_a_pose_of_the_tool_center_point_holds_what_accompanies_it(
+    multiple_robot_apartment_context,
+) -> None:
+    """
+    Every reach moves the tool center point through this goal, so a parallel around it
+    would make every reach a level deeper.
+    """
+    world, robot, extensions = multiple_robot_apartment_context
+    with world.modify_world():
+        robot.mobile_base.full_body_controlled = False
+    arm = left_or_only_arm(robot)
+    action = MoveManipulatorAction(
+        target_pose=Pose(),
+        end_effector=arm.end_effector,
+        allow_gripper_collision=False,
+    )
+    expand(action, extensions)
+
+    goal = action.tool_center_point_goal(Pose(), arm, max_linear_velocity=0.1)
+
+    assert isinstance(goal, (CartesianPose, CartesianPoseStraight))
+    assert [type(node) for node in goal.nodes] == [
+        CartesianPositionVelocityLimit,
+        HoldPose,
+    ]
 
 
 @pytest.fixture
@@ -1319,7 +1377,7 @@ def test_navigating_drives_the_base_when_physically_simulated(
 # %% a robot that does not move its whole body stands still while it moves an arm
 
 
-def arm_and_look_actions(robot: AbstractRobot) -> List[Action]:
+def arm_and_look_actions(robot: AbstractRobot) -> list[Action]:
     """
     :return: One of every action that moves an arm or the head while the base is meant
         to stand.
@@ -1380,7 +1438,7 @@ def test_moving_an_arm_or_looking_leaves_a_full_body_controlled_base_free(
 
 def test_fingers_sent_to_a_width_are_given_the_distance_between_their_facing_points(
     multiple_robot_apartment_context,
-):
+) -> None:
     """
     The distance between the fingertips is what Giskard is given, so it finds the joint
     positions that realise it rather than being told them.
@@ -1391,14 +1449,16 @@ def test_fingers_sent_to_a_width_are_given_the_distance_between_their_facing_poi
 
     statechart_of(physically_simulated_executor(extensions), action)
 
-    goal = action.action_body
+    goal = action.goal
     assert isinstance(goal, DistanceAlongAxis)
     assert goal.reference_point.reference_frame is gripper.finger.tip
     assert goal.tip_point.reference_frame is gripper.thumb.tip
     assert goal.distance == action.width
 
 
-def test_a_squeeze_sends_the_fingers_past_the_width(multiple_robot_apartment_context):
+def test_a_squeeze_sends_the_fingers_past_the_width(
+    multiple_robot_apartment_context,
+) -> None:
     _, robot, extensions = multiple_robot_apartment_context
     gripper = left_or_only_arm(robot).end_effector
     width = 0.04
@@ -1409,9 +1469,7 @@ def test_a_squeeze_sends_the_fingers_past_the_width(multiple_robot_apartment_con
     statechart_of(physically_simulated_executor(extensions), touching)
     statechart_of(physically_simulated_executor(extensions), pressing)
 
-    assert pressing.action_body.distance == pytest.approx(
-        touching.action_body.distance - 2 * squeeze
-    )
+    assert pressing.goal.distance == pytest.approx(touching.goal.distance - 2 * squeeze)
 
 
 def test_fingers_sent_to_a_width_stand_that_far_apart(
@@ -1446,7 +1504,7 @@ def test_fingers_are_not_sent_wider_than_their_gripper_opens(
 
 def test_fingers_may_be_sent_as_wide_as_their_gripper_opens(
     multiple_robot_apartment_context,
-):
+) -> None:
     _, robot, extensions = multiple_robot_apartment_context
     gripper = left_or_only_arm(robot).end_effector
     action = MoveFingersToWidthAction(
@@ -1455,13 +1513,13 @@ def test_fingers_may_be_sent_as_wide_as_their_gripper_opens(
 
     statechart_of(physically_simulated_executor(extensions), action)
 
-    assert isinstance(action.action_body, DistanceAlongAxis)
+    assert isinstance(action.goal, DistanceAlongAxis)
 
 
 # %% what holds a picked object
 
 
-def branch_moves_of(nodes: List[StatechartNode]) -> List[MoveBranch]:
+def branch_moves_of(nodes: list[StatechartNode]) -> list[MoveBranch]:
     """
     :return: The nodes among `nodes` that move a body under a new parent.
     """
@@ -1680,18 +1738,18 @@ def test_a_cup_picked_up_earlier_in_the_plan_ends_upright(
     )
 
 
-def test_a_robot_holding_nothing_only_drives(multiple_robot_apartment_context):
+def test_a_robot_holding_nothing_only_drives(multiple_robot_apartment_context) -> None:
     _, robot, extensions = multiple_robot_apartment_context
     carry = CarryAction(navigate=drive_ahead(robot))
 
     expand(carry, extensions)
 
-    assert carry.action_body is carry.navigate
+    assert carry.nodes == [carry.navigate]
 
 
 def test_a_cup_put_down_earlier_in_the_plan_is_not_carried(
     multiple_robot_apartment_context,
-):
+) -> None:
     _, robot, extensions = multiple_robot_apartment_context
     cup = cup_in_reach(robot, "cup")
     carry = CarryAction(navigate=drive_ahead(robot))
@@ -1710,12 +1768,12 @@ def test_a_cup_put_down_earlier_in_the_plan_is_not_carried(
         extensions,
     )
 
-    assert carry.action_body is carry.navigate
+    assert carry.nodes == [carry.navigate]
 
 
 def test_a_placing_carries_its_object_to_where_it_stands(
     multiple_robot_apartment_context,
-):
+) -> None:
     _, robot, extensions = multiple_robot_apartment_context
     cup = cup_held_tilted(robot)
     target = Pose.from_xyz_rpy(x=0.8, z=0.8, reference_frame=robot.root)
@@ -1729,7 +1787,7 @@ def test_a_placing_carries_its_object_to_where_it_stands(
 
     expand(move_and_place, extensions)
 
-    carry = move_and_place.action_body.nodes[0]
+    carry = move_and_place.nodes[0]
     assert isinstance(carry, CarryAction)
     assert carry.navigate is move_and_place.navigate
 
@@ -1749,18 +1807,18 @@ class CupForEachArm:
     The world holding the robot and the cups.
     """
 
-    context_extensions: List[ContextExtension]
+    context_extensions: list[ContextExtension]
     """
     The context extensions the plans of the robot read.
     """
 
-    pick_ups: List[PickUpAction]
+    pick_ups: list[PickUpAction]
     """
     The pick-up of each cup, the nearer cup with the left arm and the farther one with
     the right arm.
     """
 
-    def extensions_parking_first(self) -> List[ContextExtension]:
+    def extensions_parking_first(self) -> list[ContextExtension]:
         """
         :return: The context extensions of the plans of the robot, parking its arms
             before the first action of a plan.
@@ -1770,7 +1828,7 @@ class CupForEachArm:
             PlanRewriting(transformations=[ParkArmsBeforeFirstAction()]),
         ]
 
-    def places(self) -> List[PlaceAction]:
+    def places(self) -> list[PlaceAction]:
         """
         :return: The actions that set each cup down to the side of where it is now, the
             first far away and the second close by, so that one gripper opens while the
@@ -1831,7 +1889,7 @@ def cup_for_each_arm(multiple_robot_apartment_context) -> CupForEachArm:
 
 def test_a_gripper_closes_at_its_grasp_although_the_other_arm_is_moving(
     cup_for_each_arm: CupForEachArm,
-):
+) -> None:
     run_plan(
         Parallel(nodes=cup_for_each_arm.pick_ups),
         cup_for_each_arm.extensions_parking_first(),
@@ -1851,7 +1909,7 @@ def test_a_gripper_closes_at_its_grasp_although_the_other_arm_is_moving(
 
 def test_a_gripper_opens_at_its_place_target_although_the_other_arm_is_moving(
     cup_for_each_arm: CupForEachArm,
-):
+) -> None:
     # One after the other, so that both cups sit in their grippers at their grasps.
     run_plan(
         Sequence(nodes=cup_for_each_arm.pick_ups),
@@ -1867,3 +1925,77 @@ def test_a_gripper_opens_at_its_place_target_although_the_other_arm_is_moving(
             place.target_location.position.to_np()[:3],
             atol=2 * MotionToleranceConfig().default_tcp_position_threshold,
         )
+
+
+# %% the gripper while its object is reattached
+
+
+def allowances_while_reattaching(
+    plan: StatechartNode,
+    extensions: list[ContextExtension],
+    end_effector: EndEffector,
+    max_ticks: int = 5000,
+) -> list[bool]:
+    """
+    Run `plan` simulated, tick by tick, until it succeeded.
+
+    :param plan: The plan to run, which moves one body under a new parent.
+    :param extensions: The context extensions of the plan.
+    :param end_effector: The end effector touching the moved body.
+    :param max_ticks: How many ticks `plan` is given to succeed.
+    :return: For every tick after which the body was still being moved, whether
+        `end_effector` was allowed to touch its surroundings, which is what the
+        collision check of the next tick reads.
+    """
+    executor = simulated_executor(extensions)
+    executor.compile(statechart_of(executor, plan))
+    [reattaching] = branch_moves_of(plan.descendants)
+    allowances = []
+    for _ in range(max_ticks):
+        if plan.life_cycle_state == LifeCycleValues.SUCCEEDED:
+            break
+        executor.tick()
+        if reattaching.life_cycle_state == LifeCycleValues.RUNNING:
+            allowances.append(
+                any(
+                    isinstance(rule, AllowCollisionForEndEffector)
+                    and rule.end_effector is end_effector
+                    for rule in executor.world.collision_manager.temporary_rules
+                )
+            )
+    assert plan.life_cycle_state == LifeCycleValues.SUCCEEDED
+    return allowances
+
+
+def test_a_gripper_may_touch_its_surroundings_while_its_grasp_is_reattached(
+    cup_for_each_arm: CupForEachArm,
+) -> None:
+    """
+    The gripper is closed around the object, touching whatever the object rests on, from
+    closing to lifting, so the moment the object is put under it is no exception.
+    """
+    pick_up = cup_for_each_arm.pick_ups[0]
+
+    allowances = allowances_while_reattaching(
+        pick_up, cup_for_each_arm.extensions_parking_first(), pick_up.arm.end_effector
+    )
+
+    assert allowances == [True]
+
+
+def test_a_gripper_may_touch_its_surroundings_while_its_release_is_reattached(
+    cup_for_each_arm: CupForEachArm,
+) -> None:
+    """
+    The gripper still surrounds the object it has just let go of when the object is put
+    back under the world.
+    """
+    pick_up = cup_for_each_arm.pick_ups[0]
+    run_plan(pick_up, cup_for_each_arm.extensions_parking_first())
+    place = cup_for_each_arm.places()[0]
+
+    allowances = allowances_while_reattaching(
+        place, cup_for_each_arm.context_extensions, pick_up.arm.end_effector
+    )
+
+    assert allowances == [True]

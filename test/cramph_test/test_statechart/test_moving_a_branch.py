@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import pytest
-from typing_extensions import List
 
 from cramph.node import EndedByOwner
 from cramph.context import StatechartContext
@@ -152,7 +151,7 @@ class ExtensionRecordingCompiles(TickingExecutorExtension):
     An executor extension that records in which order it was told about compiling.
     """
 
-    events: List[str] = field(default_factory=list)
+    events: list[str] = field(default_factory=list)
     """
     The hooks that ran, in order, each by its method name.
     """
@@ -181,7 +180,7 @@ def _compile(executor: StatechartExecutor, *nodes: StatechartNode) -> Statechart
 
 def test_moving_a_branch_puts_the_body_below_its_new_parent(
     sliding_world: SlidingWorld, sliding_executor: StatechartExecutor
-):
+) -> None:
     move = MoveBranch(body=sliding_world.box, new_parent=sliding_world.slider)
     _compile(sliding_executor, move, EndStatechart.when_true(move))
 
@@ -193,7 +192,7 @@ def test_moving_a_branch_puts_the_body_below_its_new_parent(
 
 def test_a_node_moving_a_branch_has_the_chart_rebuilt_on_the_next_tick(
     sliding_world: SlidingWorld, sliding_executor: StatechartExecutor
-):
+) -> None:
     counting = NodeCountingItsBuilds(name="counting")
     move = MoveBranch(body=sliding_world.box, new_parent=sliding_world.slider)
     _compile(sliding_executor, counting, move)
@@ -209,7 +208,7 @@ def test_a_node_moving_a_branch_has_the_chart_rebuilt_on_the_next_tick(
 
 def test_a_node_reading_a_moved_body_reads_it_below_its_new_parent(
     sliding_world: SlidingWorld, sliding_executor: StatechartExecutor
-):
+) -> None:
     observer = NodeObservingABodyPastAPosition(
         name="observer", body=sliding_world.box, position=0.5
     )
@@ -224,7 +223,7 @@ def test_a_node_reading_a_moved_body_reads_it_below_its_new_parent(
 
 def test_every_node_is_built_again_once_the_world_structure_changed(
     sliding_world: SlidingWorld, sliding_executor: StatechartExecutor
-):
+) -> None:
     counting = NodeCountingItsBuilds(name="counting")
     _compile(sliding_executor, counting)
 
@@ -236,7 +235,7 @@ def test_every_node_is_built_again_once_the_world_structure_changed(
 
 def test_a_node_is_set_up_once_however_often_it_is_built(
     sliding_world: SlidingWorld, sliding_executor: StatechartExecutor
-):
+) -> None:
     counting = NodeCountingItsBuilds(name="counting")
     _compile(sliding_executor, counting)
 
@@ -248,7 +247,7 @@ def test_a_node_is_set_up_once_however_often_it_is_built(
 
 def test_a_running_node_keeps_running_and_the_history_goes_on_across_a_rebuild(
     sliding_world: SlidingWorld, sliding_executor: StatechartExecutor
-):
+) -> None:
     counting = NodeCountingItsBuilds(name="counting")
     statechart = _compile(sliding_executor, counting)
     sliding_executor.tick()
@@ -267,7 +266,7 @@ def test_extensions_are_told_before_and_after_a_rebuild(
     sliding_world: SlidingWorld,
     recording_executor: StatechartExecutor,
     recording: ExtensionRecordingCompiles,
-):
+) -> None:
     _compile(recording_executor, NodeCountingItsBuilds(name="counting"))
     recording.events.clear()
 
@@ -282,7 +281,7 @@ def test_extensions_are_told_before_and_after_a_rebuild(
 
 def test_a_tick_in_an_unchanged_world_does_not_compile_again(
     recording_executor: StatechartExecutor, recording: ExtensionRecordingCompiles
-):
+) -> None:
     _compile(recording_executor, NodeCountingItsBuilds(name="counting"))
     recording.events.clear()
 
@@ -293,7 +292,7 @@ def test_a_tick_in_an_unchanged_world_does_not_compile_again(
 
 def test_nodes_joining_after_the_world_structure_changed_have_every_node_built_again(
     sliding_world: SlidingWorld, sliding_executor: StatechartExecutor
-):
+) -> None:
     counting = NodeCountingItsBuilds(name="counting")
     statechart = _compile(sliding_executor, counting)
 

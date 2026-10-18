@@ -8,7 +8,10 @@ from typing_extensions import Any
 
 import rclpy
 from json_msgs.action import JsonAction
-from json_msgs.action._json_action import JsonAction_Result
+from json_msgs.action._json_action import (
+    JsonAction_FeedbackMessage,
+    JsonAction_Result,
+)
 from std_msgs.msg import String
 from cramph.composites import ChildChooserAccess
 from cramph.context import ContextExtension, StatechartContext
@@ -85,9 +88,18 @@ class GiskardClientExecutor(Executor):
     Keeps this world in step with the world Giskard controls around a goal.
     """
 
-    heartbeat_publisher: ClientHeartbeatPublisher = field(init=False, default=None)
+    announces_presence: bool = field(default=False, kw_only=True)
     """
-    Announces to Giskard that this client is still waiting for its goal.
+    Whether this client announces itself to Giskard from the start, see
+    :meth:`announce_presence`.
+    """
+
+    heartbeat_publisher: ClientHeartbeatPublisher | None = field(
+        init=False, default=None
+    )
+    """
+    Announces to Giskard that this client is still waiting for its goal, or ``None``
+    while this client does not announce itself.
     """
 
     def __post_init__(self):
@@ -107,11 +119,8 @@ class GiskardClientExecutor(Executor):
         self.world_updates = ClientWorldUpdates(
             world_synchronizer=WorldSynchronizer.of_world(self.world)
         )
-        self.heartbeat_publisher = ClientHeartbeatPublisher(
-            node=self.node_handle,
-            client=self.client,
-            giskard_node_name=self.giskard_node_name,
-        )
+        if self.announces_presence:
+            self.announce_presence()
         giskard_topic = f"{self.giskard_node_name}/command"
         self._client = MyActionClient(self.node_handle, JsonAction, giskard_topic)
         sleep(0.3)
@@ -128,6 +137,25 @@ class GiskardClientExecutor(Executor):
         Who this client is, as it names itself in its goals and its heartbeats.
         """
         return self.world_updates.world_synchronizer.meta_data
+
+    def announce_presence(self) -> None:
+        """
+        Start announcing to Giskard that this client is still there.
+
+        Giskard only watches clients that announce themselves. It stops the goal of one
+        whose announcements stop arriving, so that a robot does not finish a motion
+        nobody is waiting for any more. This is off unless asked for, because a client
+        on a machine too busy to announce itself in time looks just like one that died.
+
+        Does nothing if this client already announces itself.
+        """
+        if self.heartbeat_publisher is not None:
+            return
+        self.heartbeat_publisher = ClientHeartbeatPublisher(
+            node=self.node_handle,
+            client=self.client,
+            giskard_node_name=self.giskard_node_name,
+        )
 
     @property
     def robot_name(self) -> PrefixedName:
@@ -205,13 +233,14 @@ class GiskardClientExecutor(Executor):
         client = ChildChoiceClient(
             statechart=self.statechart,
             chooser=child_chooser_access.chooser,
+            world_updates=self.world_updates,
             required_position=self.world_updates.required_position(),
         )
         publisher = self.node_handle.create_publisher(
             String, child_choices_topic(self.giskard_node_name), 10
         )
 
-        def answer(feedback_message) -> None:
+        def answer(feedback_message: JsonAction_FeedbackMessage) -> None:
             feedback = json.loads(feedback_message.feedback.feedback)
             self._follow_states(feedback)
             for choice in client.answer(feedback):
@@ -296,33 +325,93 @@ class GiskardClientExecutor(Executor):
 
     def close(self) -> None:
         """
-        Stop announcing this client's heartbeat to Giskard.
+        Stop announcing this client's heartbeat to Giskard, if it announces one.
 
         Does not touch :attr:`node_handle`: it was given to this executor by its caller,
         who owns its lifecycle.
         """
+        if self.heartbeat_publisher is None:
+            return
         self.heartbeat_publisher.stop()
 
 
 @dataclass
 class GiskardClientExecutorNode(GiskardClientExecutor):
+    """
+    A :class:`GiskardClientExecutor` that creates and owns its own ros node.
+    """
+
     is_spinning: bool = False
+    """
+    Whether the background spinner currently spins the node.
+    """
+
     node_name: str = "giskard_client"
+    """
+    The name of the ros node this executor creates.
+    """
+
     giskard_node_name: str = "giskard"
-    avoid_name_conflict: bool = True
+    """
+    The name of the ros node of the Giskard this executor talks to.
+    """
+
     ros_context: Context | None = field(kw_only=True, default=None)
+    """
+    The ros context the node is created in, or None for the default context.
+    """
+
     cli_args: list[str] | None = field(kw_only=True, default=None)
+    """
+    Command line arguments of the node.
+    """
+
     namespace: str | None = field(kw_only=True, default=None)
+    """
+    The namespace of the node.
+    """
+
     use_global_arguments: bool = field(kw_only=True, default=True)
+    """
+    Whether the node uses the global command line arguments.
+    """
+
     enable_rosout: bool = field(kw_only=True, default=True)
+    """
+    Whether the node logs to rosout.
+    """
+
     start_parameter_services: bool = field(kw_only=True, default=True)
+    """
+    Whether the node offers its parameter services.
+    """
+
     parameter_overrides: list[Parameter] | None = field(kw_only=True, default=None)
+    """
+    Parameters that override the declared defaults of the node.
+    """
+
     allow_undeclared_parameters: bool = field(kw_only=True, default=False)
+    """
+    Whether the node accepts parameters it did not declare.
+    """
+
     automatically_declare_parameters_from_overrides: bool = field(
         kw_only=True, default=False
     )
+    """
+    Whether the node declares every parameter of :attr:`parameter_overrides`.
+    """
+
     enable_logger_service: bool = field(kw_only=True, default=False)
+    """
+    Whether the node offers the services to get and set its logger levels.
+    """
+
     node_handle: Node = field(init=False)
+    """
+    The ros node this executor created.
+    """
 
     def __post_init__(self):
         self.node_handle = Node(
@@ -336,6 +425,7 @@ class GiskardClientExecutorNode(GiskardClientExecutor):
             parameter_overrides=self.parameter_overrides,
             allow_undeclared_parameters=self.allow_undeclared_parameters,
             automatically_declare_parameters_from_overrides=self.automatically_declare_parameters_from_overrides,
+            enable_logger_service=self.enable_logger_service,
         )
         rospy.executor.add_node(self.node_handle)
         self.is_spinning = False

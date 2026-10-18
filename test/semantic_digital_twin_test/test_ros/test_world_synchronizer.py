@@ -9,7 +9,7 @@ import uuid
 from dataclasses import dataclass, field
 from multiprocessing.synchronize import RLock
 from time import sleep
-from typing import Callable, Dict, Optional, Set, Tuple, List
+from typing_extensions import Dict, Optional, Set, Tuple, List
 from uuid import uuid4
 
 import numpy as np
@@ -51,6 +51,12 @@ from semantic_digital_twin.exceptions import (
 )
 from semantic_digital_twin.orm.ormatic_interface import WorldMappingDAO
 from semantic_digital_twin.robots.pr2 import PR2
+from test.semantic_digital_twin_test.test_part_finding.test_splitting import (
+    BODY_OUTER_RADIUS,
+    annotated_mug,
+    mug,
+    split_handle,
+)
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Handle,
     Door,
@@ -3083,6 +3089,216 @@ def test_all_blocks_received_when_subscribed_before_publishing(rclpy_node):
     finally:
         sender_synchronizer.close()
         receiver_synchronizer.close()
+
+
+def test_a_split_part_and_its_rollback_reach_a_synchronized_world(rclpy_node):
+    sender = World(name="sender")
+    receiver = World(name="receiver")
+    receiver_synchronizer = WorldSynchronizer(node=rclpy_node, _world=receiver)
+    sender_synchronizer = WorldSynchronizer(node=rclpy_node, _world=sender)
+    try:
+        assert wait_for_condition(
+            lambda: sender_synchronizer.publisher.get_subscription_count() >= 2
+        ), "the synchronizers never discovered each other"
+        annotation = annotated_mug(sender)
+        whole_faces = len(mug().faces)
+
+        def received_faces(shapes: str) -> int:
+            root = receiver.get_kinematic_structure_entity_by_id(annotation.root.id)
+            return len(getattr(root, shapes).combined_mesh.faces)
+
+        assert wait_for_condition(lambda: len(receiver.bodies) == 1)
+        assert received_faces("collision") == whole_faces
+
+        split_handle(annotation)
+
+        assert wait_for_condition(lambda: len(receiver.bodies) == 2)
+        root = receiver.get_kinematic_structure_entity_by_id(annotation.root.id)
+        assert root.collision.reference_frame is root
+        assert received_faces("collision") == len(
+            annotation.root.collision.combined_mesh.faces
+        )
+        assert received_faces("visual") == len(
+            annotation.root.visual.combined_mesh.faces
+        )
+        assert root.collision.combined_mesh.bounds[1][0] == pytest.approx(
+            BODY_OUTER_RADIUS
+        )
+
+        sender.rollback_modification_blocks()
+
+        assert wait_for_condition(lambda: len(receiver.bodies) == 1)
+        assert wait_for_condition(
+            lambda: received_faces("collision") == whole_faces
+        ), "the receiver kept the cut shape after the rollback"
+        assert received_faces("visual") == whole_faces
+    finally:
+        sender_synchronizer.close()
+        receiver_synchronizer.close()
+
+
+# %% updates a receiver could not keep up with
+
+
+def add_prismatic_connection(world: World, name: str) -> PrismaticConnection:
+    """
+    :param world: The world the connection is added to.
+    :param name: Names the body the connection moves.
+    :return: A new prismatic connection moving a new body of `world` along its root.
+    """
+    with world.modify_world():
+        child_body = Body(name=PrefixedName(name))
+        world.add_body(child_body)
+        connection = PrismaticConnection.create_with_dofs(
+            world=world, parent=world.root, child=child_body, axis=Vector3.X()
+        )
+        world.add_connection(connection)
+    return connection
+
+
+def move_connection(
+    world: World, connection: PrismaticConnection, position: float
+) -> None:
+    """
+    Move `connection` of `world` and announce the change.
+    """
+    world.state[connection.dof.id].position = position
+    world.notify_state_change()
+
+
+def test_updates_published_while_a_receiver_is_busy_are_not_lost(rclpy_node) -> None:
+    """
+    Only what changed is published, so an update that is lost while the receiver is busy
+    applying another one leaves a degree of freedom that does not move again stale for
+    good.
+    """
+    (
+        publisher_world,
+        receiver_world,
+        publisher_synchronizer,
+        receiver_synchronizer,
+    ) = create_connected_worlds(rclpy_node, "busy_receiver")
+    try:
+        moving = publisher_world.get_connections_by_type(PrismaticConnection)[0]
+        moved_once = add_prismatic_connection(publisher_world, "busy_receiver_once")
+        assert wait_for_condition(
+            lambda: receiver_synchronizer.has_applied(
+                publisher_synchronizer.latest_published_position
+            )
+        ), "the receiver never caught up with the second connection"
+
+        with receiver_world._world_lock:
+            move_connection(publisher_world, moving, 0.1)
+            move_connection(publisher_world, moved_once, 0.5)
+            for step in range(100):
+                move_connection(publisher_world, moving, 0.2 + 0.001 * step)
+
+        assert wait_for_condition(
+            lambda: receiver_synchronizer.has_applied(
+                publisher_synchronizer.latest_published_position
+            )
+        ), "the receiver never caught up with the burst"
+        assert receiver_world.state[moved_once.dof.id].position == pytest.approx(
+            publisher_world.state[moved_once.dof.id].position
+        )
+    finally:
+        publisher_synchronizer.close()
+        receiver_synchronizer.close()
+
+
+@dataclass
+class LoggerRecordingWarnings:
+    """
+    Stands in for the logger of a ros node, recording every warning it is given.
+    """
+
+    warnings: list[str] = field(default_factory=list)
+    """
+    Every warning given, in order.
+    """
+
+    def warning(self, message: str, **kwargs) -> None:
+        self.warnings.append(message)
+
+
+@dataclass
+class ReceivingSynchronizer:
+    """
+    A synchronizer of an empty world, on a topic nobody else publishes on, and the
+    warnings its node gives.
+    """
+
+    synchronizer: WorldSynchronizer
+    """
+    Receives the updates.
+    """
+
+    logger: LoggerRecordingWarnings
+    """
+    Records the warnings of the node of :attr:`synchronizer`.
+    """
+
+    def receive(self, publisher: MetaData, sequence_number: int) -> None:
+        """
+        Hand the synchronizer an update of `publisher` at `sequence_number` in its
+        stream that changes nothing.
+        """
+        update = WorldUpdate(
+            meta_data=publisher,
+            sequence_number=sequence_number,
+            state_update=WorldStateUpdate(meta_data=publisher, ids=[], states=[]),
+        )
+        self.synchronizer.subscription_callback(
+            std_msgs.msg.String(data=json.dumps(to_json(update)))
+        )
+
+
+@pytest.fixture()
+def receiving(rclpy_node, monkeypatch) -> ReceivingSynchronizer:
+    synchronizer = WorldSynchronizer(
+        node=rclpy_node,
+        _world=World(name="receiving"),
+        topic_name=unique_topic("receiving"),
+    )
+    logger = LoggerRecordingWarnings()
+    monkeypatch.setattr(rclpy_node, "get_logger", lambda: logger)
+    yield ReceivingSynchronizer(synchronizer=synchronizer, logger=logger)
+    synchronizer.close()
+
+
+def test_a_receiver_that_lost_updates_warns_about_it(
+    receiving: ReceivingSynchronizer,
+) -> None:
+    """
+    Its world may differ from the publisher's in what the lost updates carried.
+    """
+    publisher = MetaData(node_name="publisher", process_id=1)
+    receiving.receive(publisher, 1)
+    receiving.receive(publisher, 4)
+
+    assert len(receiving.logger.warnings) == 1
+
+
+def test_updates_received_in_sequence_are_not_lost(
+    receiving: ReceivingSynchronizer,
+) -> None:
+    publisher = MetaData(node_name="publisher", process_id=1)
+    receiving.receive(publisher, 1)
+    receiving.receive(publisher, 2)
+
+    assert receiving.logger.warnings == []
+
+
+def test_a_publisher_heard_from_for_the_first_time_has_lost_nothing(
+    receiving: ReceivingSynchronizer,
+) -> None:
+    """
+    A receiver that joins late starts somewhere in the middle of the stream, having
+    fetched what was published before.
+    """
+    receiving.receive(MetaData(node_name="publisher", process_id=1), 7)
+
+    assert receiving.logger.warnings == []
 
 
 if __name__ == "__main__":

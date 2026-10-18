@@ -31,6 +31,7 @@ from semantic_digital_twin.semantic_annotations.mixins import (
     HasDrawers,
     HasDoors,
     HasHandle,
+    HasHandles,
     HasCaseAsRootBody,
     HasMovableJoint,
     HasApertures,
@@ -151,7 +152,7 @@ class Handle(HasGraspCandidates):
             name, handle_event, connection_specification=connection_specification
         )
 
-    def grasp_candidates(self) -> List[GraspCandidate]:
+    def grasp_candidates(self) -> list[GraspCandidate]:
         """
         The grasps at the centre of the handle's bar that close around it, one
         approaching from each of the four sides around it.
@@ -941,9 +942,9 @@ class Cup(DrinkingContainer, IsPerceivable):
 
 
 @dataclass(eq=False)
-class Mug(DrinkingContainer):
+class Mug(DrinkingContainer, HasHandle):
     """
-    A mug.
+    A mug, held by its handle.
     """
 
 
@@ -970,7 +971,7 @@ class PanLid(Lid):
 
 
 @dataclass(eq=False)
-class Pot(CookingContainer):
+class Pot(CookingContainer, HasHandles):
     """
     A pot.
     """

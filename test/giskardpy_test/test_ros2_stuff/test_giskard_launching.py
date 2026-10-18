@@ -41,7 +41,7 @@ def body_names_after_setup(world_config: WorldWithRobot) -> set[PrefixedName]:
     return {body.name for body in world_config.world.bodies}
 
 
-def test_a_world_without_a_urdf_holds_the_robot_its_robot_class_declares():
+def test_a_world_without_a_urdf_holds_the_robot_its_robot_class_declares() -> None:
     described_by_robot_class = body_names_after_setup(WorldWithPR2Config())
 
     assert described_by_robot_class == body_names_after_setup(
@@ -49,7 +49,9 @@ def test_a_world_without_a_urdf_holds_the_robot_its_robot_class_declares():
     )
 
 
-def test_a_world_without_a_urdf_needs_a_robot_class_that_declares_a_description():
+def test_a_world_without_a_urdf_needs_a_robot_class_that_declares_a_description() -> (
+    None
+):
     world_config = WorldWithFixedRobot()
 
     with pytest.raises(RobotDescriptionMissingError) as raised:
@@ -61,7 +63,7 @@ def test_a_world_without_a_urdf_needs_a_robot_class_that_declares_a_description(
 # %% building a Giskard that simulates
 
 
-def test_a_standalone_giskard_simulates_the_robot_of_its_world():
+def test_a_standalone_giskard_simulates_the_robot_of_its_world() -> None:
     world_config = WorldWithPR2Config()
     qp_controller_config = QPControllerConfig(target_frequency=20)
 
@@ -118,7 +120,7 @@ def shut_ros_down_afterwards():
 
 def test_launching_builds_giskard_on_its_node_and_runs_it_until_shutdown(
     shut_ros_down_afterwards, mini_world: World
-):
+) -> None:
     create_giskard = GiskardBuiltOnItsNode(world=mini_world)
     node_name = "launched_giskard"
 

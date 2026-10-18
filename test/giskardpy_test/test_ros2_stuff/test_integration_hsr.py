@@ -72,7 +72,7 @@ def robot():
 # %% motions through the action server
 
 
-def test_move_base(giskard: HSRTester):
+def test_move_base(giskard: HSRTester) -> None:
     msc = Statechart(context=giskard.api.context)
     msc.add_node(
         node := Sequence(

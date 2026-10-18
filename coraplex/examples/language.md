@@ -231,22 +231,21 @@ print(code_func.life_cycle_state)
 
 ## Repeat
 
-{class}`~giskardpy.motion_statechart.goals.templates.RepeatOnStall` attempts a task again whenever an attempt stops
-making progress, until the task succeeds or its stop monitor fires. Counting the attempts with
+{class}`~cramph.composites.RepeatUntil` attempts a task again whenever an attempt fails, until the task succeeds or
+its stop monitor fires. Counting the attempts with
 {class}`~cramph.monitors.CountNodeResets` limits how often it tries, and the exception it is given is raised once the
 attempts run out.
 
 ```python
 from cramph.exceptions import RepetitionsExhausted
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction
-from cramph.composites import Sequence
+from cramph.composites import RepeatUntil, Sequence
 from cramph.monitors import CountNodeResets
-from giskardpy.motion_statechart.goals.templates import RepeatOnStall
 from semantic_digital_twin.datastructures.definitions import TorsoState
 
 move_torso = Sequence(nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH), MoveTorsoAction(torso_state=TorsoState.LOW)])
 
-plan = RepeatOnStall(
+plan = RepeatUntil(
     task=move_torso,
     stop_retry_monitor=CountNodeResets(node=move_torso, target=3),
     exception=RepetitionsExhausted(repeated_node=move_torso, maximum_repetitions=3),
@@ -264,13 +263,13 @@ simulation time.
 There are three monitored nodes for this:
 
 * {class}`~cramph.composites.CancelledWhenTrue` stops its node once the monitor observes True and gives up on the plan
-  with the exception it is given, such as {class}`~coraplex.plans.failures.PlanCancelled`, instead of leaving the rest
+  with the exception it is given, such as {class}`~cramph.exceptions.PlanCancelled`, instead of leaving the rest
   of the plan waiting for a subtree that will not finish.
 * {class}`~cramph.composites.PausedWhileTrue` holds its node for as long as the monitor observes True.
 * {class}`~cramph.composites.PausedUntilTrue` holds its node until the monitor observes True, then lets it run.
 
 For the example we will move the torso up and down, and stop it after 2 seconds of simulation time. Since cancelling
-gives up on the plan, executing it raises {class}`~coraplex.plans.failures.PlanCancelled`.
+gives up on the plan, executing it raises {class}`~cramph.exceptions.PlanCancelled`.
 
 ```python
 from cramph.exceptions import PlanCancelled

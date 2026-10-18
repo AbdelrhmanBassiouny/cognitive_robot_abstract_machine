@@ -66,14 +66,14 @@ class TestStart:
 
 
 @pytest.fixture(autouse=True)
-def interrupted_inspection(monkeypatch) -> List[str]:
+def interrupted_inspection(monkeypatch) -> list[str]:
     """
     End the inspection after a demo as if Ctrl-C was pressed at once, leaving the signal
     mask of the test process alone.
 
     :return: Records ``"inspected"`` for every inspection that waited for Ctrl-C.
     """
-    inspections: List[str] = []
+    inspections: list[str] = []
     monkeypatch.setattr(signal, "pthread_sigmask", lambda how, mask: set())
     monkeypatch.setattr(
         signal, "sigwait", lambda signals: inspections.append("inspected")
@@ -119,8 +119,8 @@ class TestMain:
 
     def test_main_keeps_the_viewer_up_after_the_demo_until_interrupted(
         self, monkeypatch, interrupted_inspection
-    ):
-        events: List[str] = interrupted_inspection
+    ) -> None:
+        events: list[str] = interrupted_inspection
         monkeypatch.setattr(sys, "argv", ["cramera-live", "/demos/demo.py"])
         monkeypatch.setattr(
             runpy, "run_path", lambda path, run_name: events.append("ran")

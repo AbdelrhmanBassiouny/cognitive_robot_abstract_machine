@@ -15,7 +15,7 @@ from datetime import timedelta
 import pytest
 import rclpy
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
-from typing_extensions import Iterator, List
+from typing_extensions import Iterator
 
 from coraplex.demonstrations import RobotDemonstration, RobotDemonstrationRosSession
 from semantic_digital_twin.robots.minimal_robot import MinimalRobot
@@ -95,7 +95,7 @@ class RecordingDemonstration(RobotDemonstration):
     def populate_scene(self, world: World) -> None:
         self.populate_scene_calls += 1
 
-    def build_context_extensions(self, world: World) -> List[ContextExtension]:
+    def build_context_extensions(self, world: World) -> list[ContextExtension]:
         return robot_extensions(world.get_semantic_annotations_by_type(MinimalRobot)[0])
 
     def build_statechart(self, context: StatechartContext) -> Statechart:
@@ -214,7 +214,7 @@ def test_run_returns_the_world_it_acted_on(cylinder_bot_world):
 
 def test_a_simulated_plan_is_given_up_on_at_the_time_limit_of_its_demonstration(
     cylinder_bot_world,
-):
+) -> None:
     demonstration = RecordingDemonstration(
         world=cylinder_bot_world,
         used_robot=MinimalRobot,
@@ -339,7 +339,7 @@ def test_session_leaves_a_context_somebody_else_started(rclpy_node):
 # %% callbacks of the session's node
 
 
-def test_a_callback_of_another_group_runs_while_one_is_busy(rclpy_node):
+def test_a_callback_of_another_group_runs_while_one_is_busy(rclpy_node) -> None:
     """
     A client announces itself to its controller from a callback group of its own, which
     has to be served while the node is busy choosing what the plan does next.
@@ -347,7 +347,7 @@ def test_a_callback_of_another_group_runs_while_one_is_busy(rclpy_node):
     session = RobotDemonstrationRosSession.start("busy_callback_probe")
     busy_callback_started = threading.Event()
     other_callback_ran_meanwhile = threading.Event()
-    busy_callback_outcomes: List[bool] = []
+    busy_callback_outcomes: list[bool] = []
 
     def stay_busy_until_the_other_callback_ran() -> None:
         busy_callback_started.set()

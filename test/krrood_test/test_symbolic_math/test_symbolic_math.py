@@ -301,7 +301,7 @@ class TestIfElse:
     )
     def test_trinary_if_cases_selects_a_case_only_while_its_guard_is_true(
         self, guard: sm.Scalar, selected: bool
-    ):
+    ) -> None:
         """
         A trinary guard selects its case only while it is True, where :func:`if_cases`
         would take Unknown for true as well.
@@ -843,7 +843,9 @@ class TestCompiledFunction:
         assert np.allclose(f().toarray(), expected)
         assert np.allclose(f(np.array([], dtype=float)).toarray(), expected)
 
-    def test_function_of_an_expression_without_entries_has_a_representation(self):
+    def test_function_of_an_expression_without_entries_has_a_representation(
+        self,
+    ) -> None:
         function = sm.Matrix().compile()
         assert repr(function.expression) in repr(function)
 

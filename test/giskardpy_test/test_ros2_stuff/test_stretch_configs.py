@@ -17,7 +17,7 @@ from semantic_digital_twin.world_description.connections import (
 # %% controlled joints
 
 
-def test_stretch_declares_both_wheels_as_controlled(stretch_world_copy):
+def test_stretch_declares_both_wheels_as_controlled(stretch_world_copy) -> None:
     """
     The wheels are driven by the same velocity controller as the arm, so the robot
     declares them next to the base drive.

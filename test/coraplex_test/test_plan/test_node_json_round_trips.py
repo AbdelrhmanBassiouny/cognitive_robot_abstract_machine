@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 import pytest
-from typing_extensions import Callable, List
+from typing_extensions import Callable
 
 from coraplex import perception
 from coraplex.datastructures.enums import DetectionTechnique
@@ -117,7 +117,7 @@ class ActionRoundTripCase(NodeRoundTripCase):
     received by executors of the kind that performs it.
     """
 
-    executor_for: Callable[[List[ContextExtension]], PlanExecutor] = simulated_executor
+    executor_for: Callable[[list[ContextExtension]], PlanExecutor] = simulated_executor
     """
     Builds an executor performing the nodes, from the context extensions of their plan.
     """

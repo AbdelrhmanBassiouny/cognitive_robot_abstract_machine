@@ -663,7 +663,7 @@ def test_pointing_lowers_the_torso_when_the_head_cannot_tilt_far_enough(
 
 def test_pointing_follows_a_goal_point_given_as_an_expression_of_a_moving_frame(
     pr2_world_copy: World,
-):
+) -> None:
     """
     A goal given as the expression of where its frame is follows that frame while the
     pointing runs, and the joint moving the frame still reaches its own goal.

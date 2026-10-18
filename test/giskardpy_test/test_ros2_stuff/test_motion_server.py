@@ -29,6 +29,7 @@ from semantic_digital_twin.input_synchronization import (
 from giskardpy.middleware.ros2.motion_goal import MotionGoal
 from giskardpy.middleware.ros2.motion_server import MotionServer
 from giskardpy.middleware.ros2.post_goal_plotters import PostGoalPlotter
+from giskardpy.middleware.ros2.world_updates import OutgoingWorldUpdates
 from cramph.exceptions import SelfInStartConditionError
 from giskardpy.motion_statechart.graph_node import EndMotion
 from cramph.monitors import CountSimulationTimeSeconds
@@ -150,7 +151,7 @@ class WorldUpdatesMimic:
     recording what the server had already done whenever it asked about a position.
     """
 
-    executor: Optional[StatechartExecutor] = None
+    executor: StatechartExecutor | None = None
     """
     The executor whose compiled motion statechart is observed while a goal waits.
     """
@@ -643,8 +644,14 @@ def motion_server(init_rospy) -> MotionServerFixture:
     world = executor.context.world
     action_server = GoalQueueMimic()
     world_updates = WorldUpdatesMimic(executor=executor)
+    publication_progress = PublicationProgressMimic()
+    outgoing_world_updates = OutgoingWorldUpdates(
+        world_synchronizer=publication_progress
+    )
     feedback_publisher = ActionFeedbackPublisher(
-        executor=executor, action_server=action_server
+        executor=executor,
+        action_server=action_server,
+        outgoing_world_updates=outgoing_world_updates,
     )
     command_publisher = RecordingCommandPublisher(world=world)
     control_input = RecordingInputSynchronizer(world=world, executor=executor)
@@ -665,14 +672,13 @@ def motion_server(init_rospy) -> MotionServerFixture:
     )
     idle_input = RecordingInputSynchronizer(world=world, executor=executor)
     plotter = RecordingPlotter(executor=executor)
-    publication_progress = PublicationProgressMimic()
     server = MotionServer(
         executor=executor,
         action_server=action_server,
         control_loop=control_loop,
         client_watchdog=client_watchdog,
         world_updates=world_updates,
-        world_synchronizer=publication_progress,
+        outgoing_world_updates=outgoing_world_updates,
         feedback_publisher=feedback_publisher,
         inputs=WorldStateInputs(world=world, synchronizers=[idle_input]),
         cycle_counter=cycle_counter,
@@ -863,7 +869,7 @@ class TestGoalResult:
 
     def test_result_contains_the_last_observation_state(
         self, motion_server: MotionServerFixture
-    ):
+    ) -> None:
         motion_server.action_server.goal_json = create_goal_json()
 
         motion_server.motion_server.run_idle_cycle()
@@ -886,7 +892,7 @@ class TestStatesOfAFailedGoal:
 
     def test_a_goal_failing_before_it_compiled_reports_no_states(
         self, motion_server: MotionServerFixture
-    ):
+    ) -> None:
         motion_server.action_server.goal_json = create_goal_json()
         motion_server.motion_server.run_idle_cycle()
         motion_server.action_server.goal_json = "not a goal"
@@ -997,7 +1003,7 @@ class TestStateFeedback:
 
     def test_the_last_feedback_carries_the_tick_the_goal_ended_on(
         self, motion_server: MotionServerFixture
-    ):
+    ) -> None:
         motion_server.action_server.goal_json = create_goal_json()
 
         motion_server.motion_server.run_idle_cycle()

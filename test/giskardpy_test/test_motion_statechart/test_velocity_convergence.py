@@ -14,7 +14,7 @@ from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedom,
     DegreeOfFreedomLimits,
 )
-from typing_extensions import List, Optional
+from typing_extensions import Optional
 from ..motion_control_context import create_context_with_motion_control
 
 #: thresholds the expression is built with; the values themselves do not matter here
@@ -67,7 +67,7 @@ def context(world) -> StatechartContext:
 
 
 def convergence_of(
-    context: StatechartContext, degrees_of_freedom: List[DegreeOfFreedom]
+    context: StatechartContext, degrees_of_freedom: list[DegreeOfFreedom]
 ) -> str:
     """
     The convergence expression over the given degrees of freedom, as comparable text.

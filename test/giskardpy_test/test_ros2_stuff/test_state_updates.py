@@ -21,14 +21,20 @@ from giskardpy.middleware.ros2.exceptions import StateUpdateAheadOfStatechartErr
 from giskardpy.middleware.ros2.feedback_publisher import ActionFeedbackPublisher
 from giskardpy.middleware.ros2.motion_goal import MotionGoal
 from giskardpy.middleware.ros2.state_updates import StatechartStateUpdate
+from giskardpy.middleware.ros2.world_updates import OutgoingWorldUpdates
 from giskardpy.motion_statechart.graph_node import EndMotion
 from semantic_digital_twin.adapters.ros.messages import MetaData
 from semantic_digital_twin.input_synchronization import InputSynchronizer
 from semantic_digital_twin.world import World
 
-from .test_child_choices import ChooserAnsweringInTurn, ChoosingGoal
+from .test_child_choices import (
+    ChooserAnsweringInTurn,
+    ChoosingGoal,
+    client_world_updates,
+)
 from .test_motion_server import (
     GoalQueueMimic,
+    PublicationProgressMimic,
     MotionServerFixture,
     feedback_data,
     motion_server,
@@ -159,7 +165,11 @@ def _reported_states(ticks: int) -> dict:
     for _ in range(ticks):
         executor.tick()
     return ActionFeedbackPublisher(
-        executor=executor, action_server=GoalQueueMimic()
+        executor=executor,
+        action_server=GoalQueueMimic(),
+        outgoing_world_updates=OutgoingWorldUpdates(
+            world_synchronizer=PublicationProgressMimic()
+        ),
     ).create_states()
 
 
@@ -176,7 +186,7 @@ def client_statechart() -> Statechart:
 
 def test_the_reported_states_are_written_into_the_client_statechart(
     client_statechart: Statechart,
-):
+) -> None:
     payload = _reported_states(ticks=2)
     update = StatechartStateUpdate.from_json(payload, statechart=client_statechart)
 
@@ -196,7 +206,7 @@ def test_the_reported_states_are_written_into_the_client_statechart(
 
 def test_a_node_giskard_has_not_added_yet_keeps_its_state(
     client_statechart: Statechart,
-):
+) -> None:
     payload = _reported_states(ticks=2)
     client_statechart.add_node(chosen := CountTicks(ticks=1))
 
@@ -205,7 +215,7 @@ def test_a_node_giskard_has_not_added_yet_keeps_its_state(
     assert chosen.life_cycle_state == LifeCycleValues.NOT_STARTED
 
 
-def test_states_of_more_nodes_than_the_client_holds_are_rejected():
+def test_states_of_more_nodes_than_the_client_holds_are_rejected() -> None:
     payload = _reported_states(ticks=2)
     client_statechart = Statechart(context=StatechartContext(world=World()))
     client_statechart.add_node(CountTicks(ticks=1))
@@ -216,7 +226,7 @@ def test_states_of_more_nodes_than_the_client_holds_are_rejected():
 
 def test_the_observers_of_the_client_statechart_learn_the_reported_tick(
     client_statechart: Statechart,
-):
+) -> None:
     observer = ObserverRecordingTicks()
     client_statechart.history.add_observer(observer)
     update = StatechartStateUpdate.from_json(
@@ -230,7 +240,7 @@ def test_the_observers_of_the_client_statechart_learn_the_reported_tick(
 
 def test_the_same_states_reported_twice_are_recorded_once(
     client_statechart: Statechart,
-):
+) -> None:
     payload = _reported_states(ticks=3)
 
     StatechartStateUpdate.from_json(payload, statechart=client_statechart).apply()
@@ -244,7 +254,7 @@ def test_the_same_states_reported_twice_are_recorded_once(
 
 def test_the_client_sees_a_node_run_before_the_goal_ends(
     motion_server: MotionServerFixture,
-):
+) -> None:
     statechart = Statechart(context=StatechartContext(world=World()))
     statechart.add_node(counter := CountSimulationTimeSeconds(seconds=0.1))
     statechart.add_node(EndMotion.when_true(counter))
@@ -273,7 +283,7 @@ def test_the_client_sees_a_node_run_before_the_goal_ends(
 
 def test_the_client_follows_a_child_it_chose_once_giskard_runs_it(
     motion_server: MotionServerFixture,
-):
+) -> None:
     motion_server.executor.context.add_extension(
         ChildChooserAccess(
             chooser=ChildSentByClient(
@@ -289,7 +299,9 @@ def test_the_client_follows_a_child_it_chose_once_giskard_runs_it(
         statechart=goal.statechart,
         action_server=motion_server.action_server,
         child_choice_client=ChildChoiceClient(
-            statechart=goal.statechart, chooser=ChooserAnsweringInTurn([child])
+            statechart=goal.statechart,
+            chooser=ChooserAnsweringInTurn([child]),
+            world_updates=client_world_updates(),
         ),
         server_chooser=motion_server.executor.context.require_extension(
             ChildChooserAccess

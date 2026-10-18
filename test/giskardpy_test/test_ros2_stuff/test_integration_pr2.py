@@ -192,7 +192,7 @@ class TestCartGoals:
 
 def test_bodies_added_relative_to_the_gripper_are_placed_there_on_the_server(
     pocky_pose_setup: PR2Tester,
-):
+) -> None:
     """
     Bodies placed relative to the gripper end up at the same place relative to it in the
     server's world, which needs that world to be in step with the robot's state.
@@ -355,6 +355,7 @@ class TestActionServerEvents:
         msc.add_node(give_up := CountSeconds(seconds=30))
         msc.add_node(EndMotion.when_true(give_up))
         giskard.api.compile(msc)
+        giskard.api.announce_presence()
         goal_accepted_future = giskard.api.execute_async()
         wait_for_future_to_complete(goal_accepted_future)
         client_watchdog = giskard.giskard.motion_server.client_watchdog

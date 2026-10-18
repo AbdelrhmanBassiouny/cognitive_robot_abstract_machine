@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import Optional
 
 from cramph.context import ContextExtension
 from krrood.entity_query_language.backends import (
@@ -67,7 +66,7 @@ class StatementGrounding(ContextExtension):
     has a limit of its own.
     """
 
-    sampling_seed: Optional[int] = None
+    sampling_seed: int | None = None
     """
     Seed for the locations the plan's actions sample, so a run can be repeated;
     ``None`` samples afresh each run.

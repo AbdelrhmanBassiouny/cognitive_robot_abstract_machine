@@ -52,7 +52,7 @@ from semantic_digital_twin.world_description.world_entity import (
 )
 
 
-def test_trinary_transition():
+def test_trinary_transition() -> None:
     msc = Statechart(context=StatechartContext(world=World()))
     node1 = ConstTrueNode()
     node2 = ConstTrueNode()
@@ -79,7 +79,7 @@ def test_trinary_transition():
 
 
 @pytest.mark.parametrize("transition_kind", TransitionKind.ending_kinds())
-def test_ending_condition_round_trip(transition_kind: TransitionKind):
+def test_ending_condition_round_trip(transition_kind: TransitionKind) -> None:
     """
     Every condition that ends a node survives serialization, including the predicate it
     reads, and keeps the kind that decides the outcome it yields.
@@ -105,7 +105,7 @@ def test_ending_condition_round_trip(transition_kind: TransitionKind):
     assert condition_copy.kind is transition_kind
 
 
-def test_nested_goals(tmp_path):
+def test_nested_goals(tmp_path) -> None:
     msc = Statechart(context=StatechartContext(world=World()))
     msc.add_node(
         sequence := Sequence(
@@ -124,7 +124,7 @@ def test_nested_goals(tmp_path):
         new_json_data, context=StatechartContext(world=World())
     )
     msc_copy._add_transitions()
-    msc.draw(str(tmp_path / "muh.pdf"))
+    msc.draw(str(tmp_path / "statechart.pdf"))
 
     for node in msc.nodes:
         node_copy = msc_copy.get_node_by_index(node.index)
@@ -135,7 +135,7 @@ def test_nested_goals(tmp_path):
             assert node_copy.parent_node_index is None
 
 
-def test_collapsed_goal_survives_json_round_trip():
+def test_collapsed_goal_survives_json_round_trip() -> None:
     msc = Statechart(context=StatechartContext(world=World()))
     msc.add_node(goal := CompositeNodeWithNestedCompositeChild())
     goal.plot_specifications.collapse_children = True
@@ -151,7 +151,7 @@ def test_collapsed_goal_survives_json_round_trip():
     assert msc_copy.get_node_by_index(goal.index).plot_specifications.collapse_children
 
 
-def test_structure_copy_keeps_every_condition():
+def test_structure_copy_keeps_every_condition() -> None:
     """
     A structural copy stands in for the chart it was made from, so every transition
     condition of a node comes along with it.
@@ -168,7 +168,7 @@ def test_structure_copy_keeps_every_condition():
     ]
 
 
-def test_structure_copy_uses_the_kind_a_node_declares():
+def test_structure_copy_uses_the_kind_a_node_declares() -> None:
     """
     Node kinds declared outside the statechart's own node classes decide their structure
     copy themselves, so a plain statechart copies them without knowing them.
@@ -184,7 +184,7 @@ def test_structure_copy_uses_the_kind_a_node_declares():
     assert node_copy.name == node.name
 
 
-def test_structure_copy_keeps_the_base_kinds_of_the_statechart_nodes():
+def test_structure_copy_keeps_the_base_kinds_of_the_statechart_nodes() -> None:
     msc = Statechart(context=StatechartContext(world=World()))
     msc.add_nodes(
         [
@@ -207,7 +207,7 @@ def test_structure_copy_keeps_the_base_kinds_of_the_statechart_nodes():
     assert cancel_copy.exception is cancel.exception
 
 
-def test_structure_copy_conditions_read_the_copied_nodes():
+def test_structure_copy_conditions_read_the_copied_nodes() -> None:
     """
     The conditions of a structural copy read the nodes of the copy, not the nodes of the
     chart it was made from.
@@ -232,7 +232,7 @@ def test_structure_copy_conditions_read_the_copied_nodes():
     ]
 
 
-def test_start_condition(statechart_executor: StatechartExecutor):
+def test_start_condition(statechart_executor: StatechartExecutor) -> None:
     msc = Statechart(context=statechart_executor.context)
     node1 = ConstTrueNode()
     msc.add_node(node1)
@@ -263,7 +263,7 @@ def test_start_condition(statechart_executor: StatechartExecutor):
         assert edge == msc_copy.edges[index]
 
 
-def test_cancel_statechart():
+def test_cancel_statechart() -> None:
     msc = Statechart(context=StatechartContext(world=World()))
     msc.add_node(node := ConstTrueNode())
     msc.add_node(
@@ -284,7 +284,7 @@ def test_cancel_statechart():
         kin_sim.tick_until_end()
 
 
-def test_to_json_does_not_accumulate_edges():
+def test_to_json_does_not_accumulate_edges() -> None:
     msc = Statechart(context=StatechartContext(world=World()))
     node1 = ConstTrueNode()
     node2 = ConstTrueNode()
@@ -301,7 +301,7 @@ def test_to_json_does_not_accumulate_edges():
     assert first[StatechartJSONKey.CONDITIONS] == second[StatechartJSONKey.CONDITIONS]
 
 
-def test_duplicate_condition():
+def test_duplicate_condition() -> None:
     """
     Tests if two condition with the same name and type will be preserved.
     """
@@ -329,7 +329,7 @@ def test_duplicate_condition():
     assert len(msc_copy.unique_edges) == 3
 
 
-def test_child_added_to_goal_is_its_child_once_after_json_round_trip():
+def test_child_added_to_goal_is_its_child_once_after_json_round_trip() -> None:
     """
     A child added to a goal before compilation is a child of the deserialized goal once.
     """
@@ -349,7 +349,7 @@ def test_child_added_to_goal_is_its_child_once_after_json_round_trip():
 
 def test_children_of_compiled_goal_are_its_children_once_after_json_round_trip(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     """
     Compiling adds the children of a goal to the statechart while the goal keeps them in
     its own node list, and each is still a child of the deserialized goal once.
@@ -372,7 +372,9 @@ def test_children_of_compiled_goal_are_its_children_once_after_json_round_trip(
     ]
 
 
-def test_node_referenced_by_another_node_is_one_instance_after_json_round_trip():
+def test_node_referenced_by_another_node_is_one_instance_after_json_round_trip() -> (
+    None
+):
     """
     A node that another node refers to is deserialized as the node of the statechart,
     not as a detached copy.
@@ -407,7 +409,7 @@ def _connection(world: World) -> WorldEntityWithID:
 )
 def test_a_statechart_refers_to_world_entities_by_reference(
     mini_world: World, entity_of: Callable[[World], WorldEntityWithID]
-):
+) -> None:
     """
     Whoever reads a statechart has the world it was built for, so its nodes point at the
     entities of that world instead of carrying copies of them.
@@ -451,7 +453,7 @@ def assert_conditions_survive_json_round_trip(msc: Statechart) -> None:
     ] == [[str(condition) for condition in node.conditions] for node in msc.nodes]
 
 
-def test_conditions_of_goal_children_survive_json_round_trip():
+def test_conditions_of_goal_children_survive_json_round_trip() -> None:
     """
     The children of a goal join the chart only when it is compiled, and the conditions
     set on them before that come along with them.
@@ -466,7 +468,7 @@ def test_conditions_of_goal_children_survive_json_round_trip():
     assert_conditions_survive_json_round_trip(msc)
 
 
-def test_goal_reading_its_child_survives_json_round_trip():
+def test_goal_reading_its_child_survives_json_round_trip() -> None:
     """
     A goal may read its child before the child has joined the chart.
     """
@@ -478,7 +480,7 @@ def test_goal_reading_its_child_survives_json_round_trip():
     assert_conditions_survive_json_round_trip(msc)
 
 
-def test_constant_condition_survives_json_round_trip():
+def test_constant_condition_survives_json_round_trip() -> None:
     """
     A condition reading no node is serialized like any other.
     """
@@ -492,7 +494,7 @@ def test_constant_condition_survives_json_round_trip():
 @pytest.mark.parametrize("predicate", [*LifeCyclePredicate, *ObservationPredicate])
 def test_every_predicate_survives_json_round_trip(
     predicate: LifeCyclePredicate | ObservationPredicate,
-):
+) -> None:
     """
     Every test a condition can read about a node reads back as the same test.
     """
@@ -507,7 +509,7 @@ def test_every_predicate_survives_json_round_trip(
     assert_conditions_survive_json_round_trip(msc)
 
 
-def test_condition_naming_an_unknown_variable_is_rejected():
+def test_condition_naming_an_unknown_variable_is_rejected() -> None:
     """
     A document may name a predicate nodes no longer offer, for example one that was
     removed after the document was written.
@@ -540,7 +542,7 @@ def _compared_with_itself(expression: str) -> str:
 )
 def test_condition_using_unsupported_syntax_is_rejected(
     rewrite_condition: Callable[[str], str],
-):
+) -> None:
     """
     A rendered condition is Python syntax, so a document may hold syntax that has no
     meaning as a condition.
@@ -568,7 +570,7 @@ def test_condition_using_unsupported_syntax_is_rejected(
 # %% node state variables
 
 
-def test_node_state_variable_is_not_json_serializable():
+def test_node_state_variable_is_not_json_serializable() -> None:
     variable = ConstTrueNode().observation_variable
 
     with pytest.raises(NodeStateVariableNotSerializableError) as error:
@@ -579,7 +581,7 @@ def test_node_state_variable_is_not_json_serializable():
 
 def test_written_conditions_of_a_compiled_statechart_survive_json_round_trip(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     """
     Compiling a statechart parsed from a compiled one leaves the conditions as they were
     written on the original.
@@ -604,7 +606,7 @@ def test_written_conditions_of_a_compiled_statechart_survive_json_round_trip(
 @pytest.mark.parametrize("state_type", [LifeCycleState, ObservationState])
 def test_state_of_an_executed_json_parsed_statechart_survives_json_round_trip(
     state_type: type[LifeCycleState] | type[ObservationState],
-):
+) -> None:
     """
     The states a statechart parsed from JSON reached by ticking read back as they were.
     """

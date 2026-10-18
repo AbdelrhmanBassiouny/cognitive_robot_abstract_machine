@@ -1,12 +1,10 @@
 import numpy as np
 import pytest
-from giskardpy.motion_statechart.goals.collision_avoidance import (
-    UpdateTemporaryCollisionRules,
-)
 from scipy.spatial.transform import Rotation
 
 from coraplex.datastructures.enums import CuttingTechnique, PouringSide
 from coraplex.exceptions import WipingTargetMissing
+from coraplex.robot_plans.actions.base import ParallelAction
 from coraplex.robot_plans.actions.composite.tool_based import (
     CuttingAction,
     MixingAction,
@@ -33,7 +31,6 @@ from semantic_digital_twin.world_description.geometry import Box, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
 
-from cramph.composites import Parallel
 from coraplex.robot_plans.robot_specific_plan_transformations import (
     KeepTheTorsoUprightWhileUsingATool,
 )
@@ -78,11 +75,11 @@ def tool_action_world(pr2_apartment_context):
 def _tool_path_goals(action, extensions):
     """
     :return: The goals the action expanded into that follow its tool path, one per tool
-        motion: its body where that is such a goal, and the steps of its body otherwise.
+        motion: the action itself where it runs its tool path side by side, and its
+        steps otherwise.
     """
     expand(action, extensions)
-    body = action.action_body
-    candidates = [body] if isinstance(body, Parallel) else body.nodes
+    candidates = [action] if isinstance(action, ParallelAction) else action.nodes
     return [goal for goal in candidates if _trajectory_of(goal) is not None]
 
 
@@ -90,27 +87,17 @@ def _trajectory_of(goal):
     """
     :return: The trajectory task somewhere below `goal`, or None when it holds none.
     """
-    for node in _nodes_below(goal):
+    for node in [goal, *goal.descendants]:
         if isinstance(node, CartesianPositionTrajectory):
             return node
     return None
-
-
-def _nodes_below(goal):
-    """
-    :return: `goal` and, recursively, every node it holds.
-    """
-    found = [goal]
-    for node in getattr(goal, "nodes", []):
-        found.extend(_nodes_below(node))
-    return found
 
 
 def _alignments_of(goal):
     """
     :return: Every plane alignment held anywhere below `goal`.
     """
-    return [node for node in _nodes_below(goal) if isinstance(node, AlignPlanes)]
+    return [node for node in [goal, *goal.descendants] if isinstance(node, AlignPlanes)]
 
 
 def test_mixing_action_expands_to_aligned_motion(tool_action_world):
@@ -155,7 +142,7 @@ def test_cutting_action_pointer_stride_reduces_waypoints(tool_action_world):
     assert len(_alignments_of(dense_goal)) == 2
 
 
-def test_tool_motion_frees_the_manipulator_holding_the_tool(tool_action_world):
+def test_tool_motion_frees_the_manipulator_holding_the_tool(tool_action_world) -> None:
     """
     A tool works by touching what it is used on, so the manipulator holding it is freed
     from collision avoidance for the whole stroke.
@@ -164,15 +151,10 @@ def test_tool_motion_frees_the_manipulator_holding_the_tool(tool_action_world):
     whisk = Whisk(root=tool_body)
 
     action = MixingAction(container=container, arm=robot.right_arm, tool=whisk)
-    goal = _tool_path_goals(action, extensions)[0]
+    expand(action, extensions)
 
-    rules = [
-        node
-        for node in _nodes_below(goal)
-        if isinstance(node, UpdateTemporaryCollisionRules)
-    ]
-    assert len(rules) == 1
-    assert rules[0].temporary_rules[0].end_effector is robot.right_arm.end_effector
+    [rule] = action.temporary_collision_rules
+    assert rule.end_effector is robot.right_arm.end_effector
 
 
 def test_wiping_action_requires_container_or_target_pose(tool_action_world):
@@ -330,7 +312,7 @@ def test_mixing_action_orm_roundtrip(tool_action_world, coraplex_testing_session
 # %% full body control
 
 
-def test_a_tool_motion_moves_the_tool_relative_to_the_world(tool_action_world):
+def test_a_tool_motion_moves_the_tool_relative_to_the_world(tool_action_world) -> None:
     """
     The base supports the arm during a tool motion, which only works if the tool path is
     expressed relative to the world rather than to the robot.
@@ -352,7 +334,7 @@ def test_a_tool_motion_moves_the_tool_relative_to_the_world(tool_action_world):
 
 def test_a_wipe_counts_as_done_once_the_tool_reached_its_final_waypoint(
     tool_action_world,
-):
+) -> None:
     world, robot, extensions, container, tool_body = tool_action_world
     sponge = Sponge(root=tool_body)
     action = WipingAction(
@@ -364,7 +346,9 @@ def test_a_wipe_counts_as_done_once_the_tool_reached_its_final_waypoint(
     expand(action, extensions)
 
     [final_waypoint_reached] = [
-        node for node in _nodes_below(action) if isinstance(node, PositionReached)
+        node
+        for node in [action, *action.descendants]
+        if isinstance(node, PositionReached)
     ]
     assert final_waypoint_reached.tip_link is tool_body
     assert final_waypoint_reached.goal_point is action._waypoints[-1]
@@ -396,7 +380,7 @@ def _rewritten_mixing(world, robot):
     return action
 
 
-def test_justin_keeps_its_torso_upright_while_it_uses_a_tool(justin_world):
+def test_justin_keeps_its_torso_upright_while_it_uses_a_tool(justin_world) -> None:
     robot = justin_world.get_semantic_annotations_by_type(Justin)[0]
 
     action = _rewritten_mixing(justin_world, robot)
@@ -410,7 +394,7 @@ def test_justin_keeps_its_torso_upright_while_it_uses_a_tool(justin_world):
     assert len(torso_alignments) == 1
 
 
-def test_a_robot_other_than_justin_keeps_its_torso_as_it_is(tool_action_world):
+def test_a_robot_other_than_justin_keeps_its_torso_as_it_is(tool_action_world) -> None:
     world, robot, extensions, container, tool_body = tool_action_world
     action = MixingAction(
         container=container, arm=robot.right_arm, tool=Whisk(root=tool_body)

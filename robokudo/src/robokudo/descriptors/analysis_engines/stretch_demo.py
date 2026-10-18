@@ -12,7 +12,8 @@ grasping it.
     has an empty ``type`` and the caller decides what it asked for. Adding a classifying
     annotator (for example
     :class:`~robokudo.annotators.clip_annotator.CLIPAnnotator` or
-    :class:`~robokudo.annotators.simple_yolo_annotator.SimpleYoloAnnotator`) before
+    :class:`~robokudo.annotators.yolo_annotator.YoloAnnotator` with
+    ``classify_existing_hypotheses`` enabled) before
     :class:`~robokudo.annotators.query.GenerateQueryResult` fills that field in without any
     other change.
 """

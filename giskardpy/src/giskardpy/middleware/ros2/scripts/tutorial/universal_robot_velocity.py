@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 from dataclasses import dataclass
 
-from giskardpy.middleware.ros2 import rospy
 from giskardpy.middleware.ros2.giskard import Giskard
 from giskardpy.middleware.ros2.robot_interface_config import (
     ClosedLoopRobotInterfaceConfig,
@@ -19,7 +18,7 @@ class ControllerManagerInterface(ClosedLoopRobotInterfaceConfig):
     controller manager.
     """
 
-    def setup(self):
+    def setup(self) -> None:
         self.discover_interfaces_from_controller_manager()
 
 
@@ -39,9 +38,11 @@ def create_giskard() -> Giskard:
     )
 
 
-def main():
-    rospy.init_node("giskard")
-    create_giskard().live()
+def main() -> None:
+    """
+    Run the Giskard :func:`create_giskard` builds as a ros node until ROS shuts down.
+    """
+    Giskard.launch(create_giskard)
 
 
 if __name__ == "__main__":

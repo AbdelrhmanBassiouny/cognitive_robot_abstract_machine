@@ -13,13 +13,13 @@ import pytest
 from cramph.executor import StatechartExecutor
 from cramph.context import StatechartContext
 from cramph.data_types import LifeCycleValues, ObservationStateValues
-from cramph.composites import Attempt
 from cramph.node import DerivedConditionVariable
 from cramph.node import StatechartNode
 from cramph.composites import (
     MonitoredCompositeNode,
     PausedUntilTrue,
     PausedWhileTrue,
+    Sequence,
     StoppedWhenTrue,
 )
 from cramph.monitors import CountTicks
@@ -278,24 +278,24 @@ def test_a_template_fails_once_its_monitored_node_failed_on_its_own(
 
 
 @pytest.mark.parametrize("goal_type", [PausedWhileTrue, StoppedWhenTrue])
-def test_a_template_whose_monitored_node_failed_observing_true_fails_its_attempt(
+def test_a_template_whose_monitored_node_failed_observing_true_fails_its_sequence(
     goal_type: type[MonitoredCompositeNode],
 ) -> None:
     """
-    What a monitored node observed on the tick it failed is no arrival, so an attempt
-    running the template must not succeed on it.
+    What a monitored node observed on the tick it failed is no arrival, so a sequence
+    holding the template must not succeed on it.
     """
     monitored_node = ConstTrueNode(name="monitored")
     monitored_node.fail_condition = monitored_node.observes_true
     goal = goal_type(
         monitor=ConstFalseNode(name="monitor"), monitored_node=monitored_node
     )
-    attempt = Attempt(task=goal, failure_monitors=[ConstFalseNode()])
+    sequence = Sequence(nodes=[goal])
 
-    tick_compiled(attempt)
+    tick_compiled(sequence)
 
     assert goal.life_cycle_state == LifeCycleValues.FAILED
-    assert attempt.life_cycle_state == LifeCycleValues.FAILED
+    assert sequence.life_cycle_state == LifeCycleValues.FAILED
 
 
 # %% pausing from the start

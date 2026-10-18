@@ -58,13 +58,13 @@ class ActionDescription:
     action type.
     """
 
-    designator_parameter: Dict[str, Any] = field(default_factory=dict)
+    designator_parameter: dict[str, Any] = field(default_factory=dict)
     """
     The parameters by the name they were given under.
     """
 
     @classmethod
-    def of(cls, target: Optional[Body] = None, arm: Optional[str] = None) -> Self:
+    def of(cls, target: Body | None = None, arm: str | None = None) -> Self:
         """
         :return: The parameters of an action acting on `target` with `arm`.
         """
@@ -79,7 +79,7 @@ class ActionDescription:
 def make_plan_node(
     kind: str,
     life_cycle_state: LifeCycleValues = LifeCycleValues.NOT_STARTED,
-    designator: Optional[ActionDescription] = None,
+    designator: ActionDescription | None = None,
     children: tuple = (),
 ) -> Any:
     """
@@ -298,13 +298,15 @@ class TestPlanSnapshot:
             second.life_cycle_state.name,
         ]
 
-    def test_a_new_plan_replaces_the_previous_one(self, plan_bridge):
+    def test_a_new_plan_replaces_the_previous_one(self, plan_bridge) -> None:
         bridge, root, action, condition, motion = plan_bridge
         other = make_plan_node("OtherNode")
         bridge.begin_plan(make_statechart(other))
         assert [node["kind"] for node in bridge.get_plan()["nodes"]] == ["OtherNode"]
 
-    def test_a_plan_of_several_top_level_nodes_is_published_as_trees_of_its_own(self):
+    def test_a_plan_of_several_top_level_nodes_is_published_as_trees_of_its_own(
+        self,
+    ) -> None:
         """
         A statechart has no root node, so each top-level node of a plan roots a tree.
         """

@@ -21,7 +21,7 @@ import basstler.refresh_dashboard_support
 import basstler.standard_streams
 from basstler.locations import PackageLocation, ProjectLocation
 
-from .constants import DatasetLocation, SkillDirectory
+from .constants import DatasetLocation, FileMode, SkillDirectory
 from .scratch_repository import install_hook_scripts_into
 
 PLAN_DASHBOARD_DIRECTORY = (
@@ -47,7 +47,7 @@ def scratch_project_root(tmp_path: Path) -> Path:
     hooks_directory = tmp_path / ProjectLocation.HOOKS
     package_directory = tmp_path / ProjectLocation.PACKAGE
     plan_dashboard_directory.mkdir(parents=True)
-    package_directory.mkdir()
+    package_directory.mkdir(parents=True)
 
     shutil.copy(
         PLAN_DASHBOARD_DIRECTORY / "refresh_dashboard.sh",
@@ -73,7 +73,7 @@ def scratch_project_root(tmp_path: Path) -> Path:
         DatasetLocation.STUBS / "write_personal_notes_file_stub.sh",
         hooks_directory / "write-personal-notes-file.sh",
     )
-    (hooks_directory / "write-personal-notes-file.sh").chmod(0o755)
+    (hooks_directory / "write-personal-notes-file.sh").chmod(FileMode.EXECUTABLE)
 
     return tmp_path
 

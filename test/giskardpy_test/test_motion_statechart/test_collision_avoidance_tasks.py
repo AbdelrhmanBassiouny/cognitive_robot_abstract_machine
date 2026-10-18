@@ -12,8 +12,12 @@ from giskardpy.motion_statechart.data_types import (
     DefaultWeights,
 )
 from giskardpy.motion_statechart.exceptions import CollisionViolatedError
+from giskardpy.motion_statechart.context import MotionControlContext
 from giskardpy.motion_statechart.goals.collision_avoidance import (
+    _CancelBecauseExternalCollisionViolated,
     _CancelBecauseSelfCollisionViolated,
+    _ExternalCollisionAvoidanceTask,
+    _SelfCollisionAvoidanceTask,
     ExternalCollisionAvoidance,
     SelfCollisionAvoidance,
     ExternalCollisionDistanceMonitor,
@@ -23,7 +27,7 @@ from giskardpy.motion_statechart.goals.collision_avoidance import (
 from cramph.composites import Sequence, Parallel
 from cramph.data_types import LifeCycleValues, ObservationStateValues
 from cramph.nodes_for_testing import ConstFalseNode
-from giskardpy.motion_statechart.graph_node import EndMotion
+from giskardpy.motion_statechart.graph_node import EndMotion, Task
 from cramph.node import CancelStatechart, StatechartNode
 from giskardpy.motion_statechart.monitors.monitors import LocalMinimumReached
 from giskardpy.motion_statechart.monitors.overwrite_state_monitors import (
@@ -48,6 +52,9 @@ from semantic_digital_twin.collision_checking.collision_detector import (
     CollisionCheckingResult,
 )
 from semantic_digital_twin.collision_checking.collision_manager import CollisionConsumer
+from semantic_digital_twin.collision_checking.collision_matrix import (
+    MaxAvoidedCollisionsOverride,
+)
 from semantic_digital_twin.collision_checking.collision_rules import (
     AllowCollisionBetweenGroups,
 )
@@ -114,7 +121,7 @@ def statechart_origin(request: pytest.FixtureRequest) -> StatechartOrigin:
 
 def test_external_collision_avoidance(
     cylinder_bot_world: World, statechart_origin: StatechartOrigin
-):
+) -> None:
     robot = cylinder_bot_world.get_semantic_annotations_by_type(AbstractRobot)[0]
     tip = cylinder_bot_world.get_kinematic_structure_entity_by_name("bot")
     env1 = cylinder_bot_world.get_kinematic_structure_entity_by_name("environment")
@@ -320,7 +327,7 @@ def test_external_collision_avoidance_battle():
 
 def test_external_collision_avoidance_with_weight_above_ca(
     cylinder_bot_world: World, statechart_origin: StatechartOrigin
-):
+) -> None:
     robot = cylinder_bot_world.get_semantic_annotations_by_type(AbstractRobot)[0]
     tip = cylinder_bot_world.get_kinematic_structure_entity_by_name("bot")
     env1 = cylinder_bot_world.get_kinematic_structure_entity_by_name("environment")
@@ -568,12 +575,15 @@ def test_self_collision_avoidance_without_checked_body_combinations(
 
     executor.compile(statechart=msc)
 
-    assert goal.nodes == msc.get_nodes_by_type(CancelStatechart)
+    task, cancel = goal.nodes
+    assert task.checked_combinations == []
+    assert task.constraint_collection.inequality_constraints == []
+    assert [cancel] == msc.get_nodes_by_type(CancelStatechart)
 
 
 def test_self_collision_avoidance(
     self_collision_bot_world: World, statechart_origin: StatechartOrigin
-):
+) -> None:
 
     robot = self_collision_bot_world.get_semantic_annotations_by_type(AbstractRobot)[0]
     l_tip = self_collision_bot_world.get_kinematic_structure_entity_by_name("l_tip")
@@ -607,8 +617,8 @@ def test_self_collision_avoidance(
     executed_msc = statechart_origin.hand_over(msc, kin_sim)
     kin_sim.compile(statechart=executed_msc)
 
-    # 4 because of the base nodes + 20 that are added by self collision avoidance + 1 for CancelStatechart
-    assert len(executed_msc.nodes) == 4 + 20 + 1
+    # 4 because of the base nodes + 1 task avoiding every self collision + 1 for CancelStatechart
+    assert len(executed_msc.nodes) == 4 + 1 + 1
 
     kin_sim.tick_until_end(500)
     collisions = kin_sim.context.world.collision_manager.compute_collisions()
@@ -781,9 +791,234 @@ def test_avoid_self_collision_with_l_arm(pr2_with_box, rclpy_node):
 
     kin_sim.compile(statechart=msc)
 
-    assert len(msc.nodes) == 79
+    assert len(msc.nodes) == 13
 
     kin_sim.tick_until_end(500)
+
+
+# %% one task avoiding every collision
+
+
+def _compile_collision_avoidance(
+    world: World, goal: StatechartNode, *nodes: StatechartNode
+) -> StatechartExecutor:
+    """
+    :param world: The world the robot of `goal` stands in.
+    :param goal: The collision avoidance goal to compile.
+    :param nodes: Further nodes running next to it.
+    :return: An executor that compiled `goal` and `nodes` into one statechart.
+    """
+    executor = StatechartExecutor(
+        context=StatechartContext(world=world), extensions=[MotionControl()]
+    )
+    msc = Statechart(context=executor.context)
+    msc.add_nodes([goal, *nodes, local_min := LocalMinimumReached()])
+    msc.add_node(EndMotion.when_true(local_min))
+    executor.compile(statechart=msc)
+    return executor
+
+
+def _weights(task: Task) -> list[float]:
+    """
+    :param task: A built task.
+    :return: The current weight of every inequality constraint of `task`, in order.
+    """
+    return [
+        float(constraint.quadratic_weight.evaluate()[0])
+        for constraint in task.constraint_collection.inequality_constraints
+    ]
+
+
+def test_self_collision_avoidance_avoids_every_checked_combination_in_one_task(
+    self_collision_bot_world: World,
+) -> None:
+    robot = self_collision_bot_world.get_semantic_annotations_by_type(AbstractRobot)[0]
+    goal = SelfCollisionAvoidance(robot=robot)
+
+    executor = _compile_collision_avoidance(self_collision_bot_world, goal)
+
+    task, cancel = goal.nodes
+    assert isinstance(task, _SelfCollisionAvoidanceTask)
+    assert isinstance(cancel, _CancelBecauseSelfCollisionViolated)
+    manager = executor.context.require_extension(
+        MotionControlContext
+    ).self_collision_manager
+    assert task.checked_combinations == list(manager.registered_group_combinations)
+    assert task.avoided_contacts == [
+        (group_a, group_b, index)
+        for group_a, group_b in manager.registered_group_combinations
+        for index in range(manager.avoided_contacts_of(group_a, group_b))
+    ]
+    assert len(task.constraint_collection.inequality_constraints) == len(
+        task.avoided_contacts
+    )
+
+
+def test_self_collision_avoidance_avoids_the_closest_contacts_of_a_combination(
+    self_collision_bot_world: World,
+) -> None:
+    """
+    Each hand holds a tip and a thumb, so the two hands touch in several places at once.
+
+    Avoiding only the closest of them leaves the next closest free to close the gap
+    within one control cycle.
+    """
+    world = self_collision_bot_world
+    robot = world.get_semantic_annotations_by_type(AbstractRobot)[0]
+    left_hand = {
+        world.get_kinematic_structure_entity_by_name("l_tip"),
+        world.get_kinematic_structure_entity_by_name("l_thumb"),
+    }
+    right_hand = {
+        world.get_kinematic_structure_entity_by_name("r_tip"),
+        world.get_kinematic_structure_entity_by_name("r_thumb"),
+    }
+    world.collision_manager.max_avoided_bodies_rules.append(
+        MaxAvoidedCollisionsOverride(2, left_hand | right_hand)
+    )
+    goal = SelfCollisionAvoidance(robot=robot)
+    executor = _compile_collision_avoidance(
+        world,
+        goal,
+        UpdateTemporaryCollisionRules(
+            temporary_rules=[
+                AvoidCollisionBetweenGroups(
+                    buffer_zone_distance=1.0,
+                    violated_distance=0.0,
+                    body_group_a=left_hand,
+                    body_group_b=right_hand,
+                ),
+            ]
+        ),
+    )
+
+    executor.tick()
+
+    task = goal.nodes[0]
+    manager = executor.context.require_extension(
+        MotionControlContext
+    ).self_collision_manager
+    (hands,) = [
+        (group_a, group_b)
+        for group_a, group_b in task.checked_combinations
+        if group_a.root in left_hand | right_hand
+        and group_b.root in left_hand | right_hand
+    ]
+    contacts = manager.last_closest_contacts[hands]
+    assert len(contacts) == 4
+    avoided_distances = [
+        manager.get_contact_distance_symbol(*hands, index).evaluate()[0]
+        for index in range(manager.avoided_contacts_of(*hands))
+    ]
+    assert avoided_distances == pytest.approx(
+        sorted(contact.distance for contact in contacts)[:2]
+    )
+
+
+def test_external_collision_avoidance_avoids_every_closest_object_in_one_task(
+    cylinder_bot_world: World,
+) -> None:
+    robot = cylinder_bot_world.get_semantic_annotations_by_type(AbstractRobot)[0]
+    goal = ExternalCollisionAvoidance(robot=robot)
+
+    executor = _compile_collision_avoidance(cylinder_bot_world, goal)
+
+    task, cancel = goal.nodes
+    assert isinstance(task, _ExternalCollisionAvoidanceTask)
+    assert isinstance(cancel, _CancelBecauseExternalCollisionViolated)
+    manager = executor.context.require_extension(
+        MotionControlContext
+    ).external_collision_manager
+    assert task.avoided_contacts == [
+        (group, index)
+        for group in manager.registered_groups
+        for index in range(
+            group.get_max_avoided_bodies(cylinder_bot_world.collision_manager)
+        )
+    ]
+    assert len(task.constraint_collection.inequality_constraints) == len(
+        task.avoided_contacts
+    )
+
+
+def test_only_self_collision_combinations_with_collision_data_weigh_anything(
+    self_collision_bot_world: World,
+) -> None:
+    robot = self_collision_bot_world.get_semantic_annotations_by_type(AbstractRobot)[0]
+    l_thumb = self_collision_bot_world.get_kinematic_structure_entity_by_name("l_thumb")
+    r_thumb = self_collision_bot_world.get_kinematic_structure_entity_by_name("r_thumb")
+    goal = SelfCollisionAvoidance(robot=robot)
+    executor = _compile_collision_avoidance(
+        self_collision_bot_world,
+        goal,
+        UpdateTemporaryCollisionRules(
+            temporary_rules=[
+                AvoidCollisionBetweenGroups(
+                    buffer_zone_distance=0.25,
+                    violated_distance=0.0,
+                    body_group_a={l_thumb},
+                    body_group_b={r_thumb},
+                ),
+            ]
+        ),
+    )
+
+    executor.tick()
+
+    task = goal.nodes[0]
+    manager = executor.context.require_extension(
+        MotionControlContext
+    ).self_collision_manager
+    with_data = [
+        combination in manager.last_closest_contacts
+        for combination in task.checked_combinations
+    ]
+    assert any(with_data) and not all(with_data)
+    assert _weights(task) == [
+        DefaultWeights.WEIGHT_COLLISION_AVOIDANCE if has_data else 0.0
+        for has_data in with_data
+    ]
+
+
+def test_only_closest_objects_with_collision_data_weigh_anything(
+    cylinder_bot_world: World,
+) -> None:
+    robot = cylinder_bot_world.get_semantic_annotations_by_type(AbstractRobot)[0]
+    tip = cylinder_bot_world.get_kinematic_structure_entity_by_name("bot")
+    environment = cylinder_bot_world.get_kinematic_structure_entity_by_name(
+        "environment"
+    )
+    goal = ExternalCollisionAvoidance(robot=robot)
+    executor = _compile_collision_avoidance(
+        cylinder_bot_world,
+        goal,
+        UpdateTemporaryCollisionRules(
+            temporary_rules=[
+                AvoidCollisionBetweenGroups(
+                    buffer_zone_distance=10.0,
+                    violated_distance=0.0,
+                    body_group_a=[tip],
+                    body_group_b=[environment],
+                )
+            ]
+        ),
+    )
+
+    executor.tick()
+
+    task = goal.nodes[0]
+    manager = executor.context.require_extension(
+        MotionControlContext
+    ).external_collision_manager
+    with_data = [
+        index < len(manager.last_closest_contacts[group])
+        for group, index in task.avoided_contacts
+    ]
+    assert any(with_data) and not all(with_data)
+    assert _weights(task) == [
+        DefaultWeights.WEIGHT_COLLISION_AVOIDANCE if has_data else 0.0
+        for has_data in with_data
+    ]
 
 
 # %% collision check counting
@@ -939,7 +1174,7 @@ def test_collisions_are_computed_for_a_distance_monitor_alone(pr2_with_box):
 
 def test_hard_constraints_violated(
     cylinder_bot_world: World, statechart_origin: StatechartOrigin
-):
+) -> None:
     root = cylinder_bot_world.root
     with cylinder_bot_world.modify_world():
         env2 = Body(
@@ -1188,7 +1423,7 @@ def test_repeated_collision_pr2_apartment_does_not_increase_execution_time(
 # %% rules for a single end effector
 
 
-def test_end_effector_rules_free_only_that_end_effector(pr2_world_copy):
+def test_end_effector_rules_free_only_that_end_effector(pr2_world_copy) -> None:
     """
     The rules built for an end effector allow collisions for that end effector and
     nothing else.
@@ -1209,7 +1444,7 @@ def test_end_effector_rules_free_only_that_end_effector(pr2_world_copy):
 
 def test_building_a_rules_node_keeps_the_temporary_rules_in_force(
     cylinder_bot_world: World,
-):
+) -> None:
     collision_manager = cylinder_bot_world.collision_manager
     rule_in_force = AllowAllCollisions()
     collision_manager.add_temporary_rule(rule_in_force)
@@ -1241,7 +1476,7 @@ def _executor_of(world: World) -> StatechartExecutor:
 
 def test_rules_nodes_running_at_once_keep_the_rules_of_each_other_in_force(
     pr2_world_copy: World,
-):
+) -> None:
     robot = pr2_world_copy.get_semantic_annotations_by_type(PR2)[0]
     left = UpdateTemporaryCollisionRules.for_end_effector(robot.left_arm.end_effector)
     right = UpdateTemporaryCollisionRules.for_end_effector(robot.right_arm.end_effector)
@@ -1260,7 +1495,7 @@ def test_rules_nodes_running_at_once_keep_the_rules_of_each_other_in_force(
 
 def test_the_rules_of_a_rules_node_are_out_of_force_once_it_ended(
     cylinder_bot_world: World,
-):
+) -> None:
     collision_manager = cylinder_bot_world.collision_manager
     rule_in_force = AllowAllCollisions()
     collision_manager.add_temporary_rule(rule_in_force)
@@ -1279,7 +1514,7 @@ def test_the_rules_of_a_rules_node_are_out_of_force_once_it_ended(
 
 def test_rules_nodes_whose_order_changes_what_is_checked_do_not_run_at_once(
     cylinder_bot_world: World,
-):
+) -> None:
     executor = _executor_of(cylinder_bot_world)
     statechart = Statechart(context=executor.context)
     statechart.add_nodes(
@@ -1359,7 +1594,7 @@ def run_to_end(
 
 def test_cable_guide_collision(
     pr2_world_copy: World, default_pr2_pose: dict[str, float]
-):
+) -> None:
     """
     Turning the head into the cable guide is stopped by self collision avoidance.
     """
@@ -1383,7 +1618,7 @@ def test_cable_guide_collision(
 
 def test_attached_self_collision_avoid_stick(
     pr2_world_copy: World, default_pr2_pose: dict[str, float]
-):
+) -> None:
     """
     A stick held in the left gripper keeps its distance to the robot, too.
     """
@@ -1436,7 +1671,7 @@ def test_attached_self_collision_avoid_stick(
 
 def test_box_overlapping_with_gripper(
     pr2_world_copy: World, better_pr2_pose: dict[str, float]
-):
+) -> None:
     """
     A held box that overlaps the gripper holding it does not keep the gripper from
     moving.
@@ -1474,7 +1709,7 @@ def test_box_overlapping_with_gripper(
 
 def test_avoid_self_collision_specific_link(
     pr2_world_copy: World, default_pr2_pose: dict[str, float]
-):
+) -> None:
     """
     A temporary rule makes the right gripper keep its distance to the left forearm.
     """
@@ -1531,7 +1766,7 @@ def test_avoid_self_collision_specific_link(
 
 def test_get_out_of_self_collision(
     pr2_world_copy: World, default_pr2_pose: dict[str, float]
-):
+) -> None:
     """
     Self collision avoidance gives up on a robot that already is in self collision.
     """
@@ -1572,7 +1807,9 @@ def test_get_out_of_self_collision(
         )
 
 
-def test_attached_two_items(pr2_world_copy: World, default_pr2_pose: dict[str, float]):
+def test_attached_two_items(
+    pr2_world_copy: World, default_pr2_pose: dict[str, float]
+) -> None:
     """
     Boxes held in both grippers keep their distance to each other.
     """
@@ -1640,7 +1877,7 @@ def test_attached_two_items(pr2_world_copy: World, default_pr2_pose: dict[str, f
 
 def test_avoid_collision_box_between_3_boxes(
     pr2_world_copy: World, pocky_pr2_pose: dict[str, float]
-):
+) -> None:
     """
     Aligning a held box with the world moves it between three boxes without touching
     them.
@@ -1706,7 +1943,7 @@ def test_avoid_collision_box_between_3_boxes(
 
 def test_hsr_self_collision_avoidance(
     hsr_world_copy: World, default_hsr_pose: dict[str, float]
-):
+) -> None:
     """
     The HSR reaches a goal for its gripper from a configuration close to self collision.
     """

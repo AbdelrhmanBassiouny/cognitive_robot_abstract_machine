@@ -9,7 +9,7 @@ from giskardpy.middleware.ros2.ros2_interface import call_service
 # %% calling services
 
 
-def test_calling_a_service_that_nobody_offers_raises(init_rospy):
+def test_calling_a_service_that_nobody_offers_raises(init_rospy) -> None:
     with pytest.raises(ServiceUnavailableError):
         call_service(
             Trigger,

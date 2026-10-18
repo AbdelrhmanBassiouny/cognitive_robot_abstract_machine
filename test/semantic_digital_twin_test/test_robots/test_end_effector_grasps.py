@@ -382,7 +382,9 @@ def test_the_goal_for_a_grasp_turns_the_gripper_the_same_way_as_the_tool_frame_g
 # %% how wide the fingers stand
 
 
-def test_the_finger_to_thumb_axis_points_from_the_finger_to_the_thumb(pr2_gripper):
+def test_the_finger_to_thumb_axis_points_from_the_finger_to_the_thumb(
+    pr2_gripper,
+) -> None:
     fingertips = pr2_gripper.fingertips
     thumb, finger = (
         fingertips._bounding_box(tip).center.vector3.dot(
@@ -394,14 +396,14 @@ def test_the_finger_to_thumb_axis_points_from_the_finger_to_the_thumb(pr2_grippe
     assert thumb > finger
 
 
-def test_each_facing_point_is_read_in_its_own_tips_frame(pr2_gripper):
+def test_each_facing_point_is_read_in_its_own_tips_frame(pr2_gripper) -> None:
     fingertips = pr2_gripper.fingertips
 
     assert fingertips.thumb_P_facing_point.reference_frame is fingertips.thumb
     assert fingertips.finger_P_facing_point.reference_frame is fingertips.finger
 
 
-def test_opening_the_gripper_moves_the_facing_points_apart(pr2_gripper):
+def test_opening_the_gripper_moves_the_facing_points_apart(pr2_gripper) -> None:
     world = pr2_gripper._world
     with world.reset_state_context():
         pr2_gripper.get_joint_state_by_type(GripperState.CLOSE).apply_to(world)
@@ -488,7 +490,7 @@ def test_reading_the_travel_stands_the_world_back_up(tracy_world):
 
 def test_a_gripper_opens_as_wide_as_its_fingertips_stand_in_its_open_state(
     pr2_gripper,
-):
+) -> None:
     world = pr2_gripper._world
     pr2_gripper.get_joint_state_by_type(GripperState.CLOSE).apply_to(world)
     positions_before = world.state.positions.copy()
@@ -500,7 +502,7 @@ def test_a_gripper_opens_as_wide_as_its_fingertips_stand_in_its_open_state(
     np.testing.assert_array_equal(world.state.positions, positions_before)
 
 
-def test_a_robotiq_2f_85_opens_as_wide_as_its_name_says(tracy_world):
+def test_a_robotiq_2f_85_opens_as_wide_as_its_name_says(tracy_world) -> None:
     """
     The 2F-85 is named for the 85 mm its pads stand apart when open, so this is read on
     the pads' surfaces rather than on the fingertip frames.

@@ -262,7 +262,7 @@ class ProbabilisticModel(ABC):
         return conditional, np.exp(log_probability)
 
     @abstractmethod
-    def log_conditional(self, point: PartialPointType) -> Tuple[Optional[Self], float]:
+    def log_conditional(self, point: PartialPointType) -> tuple[Self | None, float]:
         """
         Calculate the conditioned distribution P(*| point) and the probability of the
         event. Check the documentation of `conditional` for more information.

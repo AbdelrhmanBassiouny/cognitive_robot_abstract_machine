@@ -18,7 +18,7 @@ from semantic_digital_twin.world_description.geometry import Color
 
 
 @pytest.mark.parametrize("life_cycle_state", list(LifeCycleValues))
-def test_every_life_cycle_state_has_a_color_and_a_badge(life_cycle_state):
+def test_every_life_cycle_state_has_a_color_and_a_badge(life_cycle_state) -> None:
     """
     A visualization asks a state how it is drawn, so a state without an answer only
     shows up as a failure while drawing.
@@ -28,7 +28,7 @@ def test_every_life_cycle_state_has_a_color_and_a_badge(life_cycle_state):
 
 
 @pytest.mark.parametrize("observation_state", list(ObservationStateValues))
-def test_every_observation_state_has_a_color_and_a_badge(observation_state):
+def test_every_observation_state_has_a_color_and_a_badge(observation_state) -> None:
     assert isinstance(observation_state.color, Color)
     assert observation_state.badge
 
@@ -36,7 +36,7 @@ def test_every_observation_state_has_a_color_and_a_badge(observation_state):
 # %% states have to be told apart in a drawing
 
 
-def test_life_cycle_states_are_drawn_differently_from_each_other():
+def test_life_cycle_states_are_drawn_differently_from_each_other() -> None:
     """
     Two states sharing a color or a symbol would be indistinguishable to whoever reads
     the drawing.
@@ -45,7 +45,7 @@ def test_life_cycle_states_are_drawn_differently_from_each_other():
     assert len({state.badge for state in LifeCycleValues}) == len(LifeCycleValues)
 
 
-def test_observation_states_are_drawn_differently_from_each_other():
+def test_observation_states_are_drawn_differently_from_each_other() -> None:
     assert len({state.color for state in ObservationStateValues}) == len(
         ObservationStateValues
     )
@@ -57,7 +57,7 @@ def test_observation_states_are_drawn_differently_from_each_other():
 # %% a state is still the number it stands for
 
 
-def test_a_life_cycle_state_is_found_by_the_number_it_stands_for():
+def test_a_life_cycle_state_is_found_by_the_number_it_stands_for() -> None:
     """
     Every read of a life cycle state looks the member up by the number stored for it, so
     that number has to stay the member's value.
@@ -65,7 +65,7 @@ def test_a_life_cycle_state_is_found_by_the_number_it_stands_for():
     assert LifeCycleValues(int(LifeCycleValues.FAILED)) is LifeCycleValues.FAILED
 
 
-def test_an_observation_state_is_found_by_the_number_it_stands_for():
+def test_an_observation_state_is_found_by_the_number_it_stands_for() -> None:
     """
     The compiled updater writes the trinary constants, and reading a node's observation
     turns one back into the member it stands for.
@@ -102,7 +102,7 @@ def test_an_observation_state_is_found_by_the_number_it_stands_for():
         (TransitionKind.RESET, frozenset(LifeCycleValues)),
     ],
 )
-def test_transition_kind_source_states(transition_kind, expected_states):
+def test_transition_kind_source_states(transition_kind, expected_states) -> None:
     """
     Each transition kind declares the exact lifecycle states from which it can legally
     trigger.
@@ -112,7 +112,7 @@ def test_transition_kind_source_states(transition_kind, expected_states):
 
 @pytest.mark.parametrize("transition_kind", list(TransitionKind))
 @pytest.mark.parametrize("life_cycle_state", list(LifeCycleValues))
-def test_transition_kind_can_trigger_from(transition_kind, life_cycle_state):
+def test_transition_kind_can_trigger_from(transition_kind, life_cycle_state) -> None:
     """
     The triggerability check matches membership in the transition kind's source states.
     """
@@ -133,7 +133,7 @@ def test_transition_kind_can_trigger_from(transition_kind, life_cycle_state):
 )
 def test_an_ending_transition_yields_its_own_outcome(
     transition_kind: TransitionKind, expected_outcome: LifeCycleValues
-):
+) -> None:
     """
     An outcome is declared by the condition that ended a node, never read off what the
     node observed.
@@ -147,7 +147,7 @@ def test_an_ending_transition_yields_its_own_outcome(
 )
 def test_a_transition_that_does_not_end_a_node_has_no_outcome(
     transition_kind: TransitionKind,
-):
+) -> None:
     with pytest.raises(TransitionHasNoOutcomeError):
         transition_kind.outcome
 
@@ -195,10 +195,11 @@ def test_transition_kind_of_covers_every_reachable_state_pair(
     previous_state: LifeCycleValues,
     new_state: LifeCycleValues,
     expected_kind: TransitionKind,
-):
+) -> None:
     """
-    Every `(previous_state, new_state)` pair a `LifeCycleChange` can actually hold is
-    classified as the transition kind whose own condition could have caused it.
+    Every `(previous_state, new_state)` pair a
+    :class:`~cramph.statechart.LifeCycleChange` can actually hold is classified as the
+    transition kind whose own condition could have caused it.
     """
     assert TransitionKind.of(previous_state, new_state) is expected_kind
 
@@ -210,7 +211,7 @@ def test_transition_kind_of_covers_every_reachable_state_pair(
 @pytest.mark.parametrize("life_cycle_state", list(LifeCycleValues))
 def test_a_life_cycle_predicate_expression_matches_its_truth_table(
     predicate: LifeCyclePredicate, life_cycle_state: LifeCycleValues
-):
+) -> None:
     life_cycle = FloatVariable(name="life_cycle")
 
     expression = predicate.expression(life_cycle).substitute(

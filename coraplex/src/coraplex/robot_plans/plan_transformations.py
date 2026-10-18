@@ -138,7 +138,7 @@ class DetectBeforeGrasp(SequentialInsertion[ReachAction]):
     def anchor(self, plan_node: ReachAction) -> StatechartNode:
         return self.final_approach(plan_node)
 
-    def nodes_to_insert(self, plan_node: ReachAction) -> List[StatechartNode]:
+    def nodes_to_insert(self, plan_node: ReachAction) -> list[StatechartNode]:
         approached_pose = plan_node.grasp_pose_sequence(
             plan_node.grasp.grasp_pose, plan_node.arm.end_effector, plan_node.grasp
         ).grasp
@@ -199,7 +199,7 @@ class DrawerOpening(
 
     def opening_nodes(
         self, drawer: Drawer, arm: Arm, context: StatechartContext
-    ) -> List[StatechartNode]:
+    ) -> list[StatechartNode]:
         """
         :param drawer: The drawer to open
         :param arm: The arm that opens it
@@ -236,7 +236,7 @@ class OpenDrawerBeforePickUp(DrawerOpening[PickUpAction]):
             self._closed_drawers_containing(plan_node.grasp.graspable, plan_node.world)
         )
 
-    def nodes_to_insert(self, plan_node: PickUpAction) -> List[StatechartNode]:
+    def nodes_to_insert(self, plan_node: PickUpAction) -> list[StatechartNode]:
         graspable = plan_node.grasp.graspable
         nodes = []
         for drawer in self._closed_drawers_containing(graspable, plan_node.world):
@@ -305,7 +305,7 @@ class OpenDrawerBeforeMoveAndPickUp(DrawerOpening[MoveAndPickUpAction]):
 
     def nodes_to_insert(
         self, plan_node: MoveAndPickUpAction | StatementNode
-    ) -> List[StatechartNode]:
+    ) -> list[StatechartNode]:
         target = self._pick_up_target(plan_node)
         nodes = []
         for drawer in self._closed_drawers_containing(
@@ -381,11 +381,10 @@ class ParkArmsAroundPickAndPlaceSteps(PlanTransformation[PickAndPlaceAction]):
         return True
 
     def apply(self, plan_node: PickAndPlaceAction) -> None:
-        steps = plan_node.action_body
-        for step in list(steps.nodes):
-            steps.insert_before(step, ParkArmsAction(arms=plan_node.robot.all_arms))
-        steps.insert_after(
-            steps.nodes[-1], ParkArmsAction(arms=plan_node.robot.all_arms)
+        for step in list(plan_node.nodes):
+            plan_node.insert_before(step, ParkArmsAction(arms=plan_node.robot.all_arms))
+        plan_node.insert_after(
+            plan_node.nodes[-1], ParkArmsAction(arms=plan_node.robot.all_arms)
         )
 
 
@@ -425,11 +424,11 @@ class ParkArmsBeforeFirstAction(SequentialInsertion[Action]):
             holders[-1],
         )
 
-    def nodes_to_insert(self, plan_node: Action) -> List[StatechartNode]:
+    def nodes_to_insert(self, plan_node: Action) -> list[StatechartNode]:
         return [ParkArmsAction(arms=plan_node.robot.all_arms)]
 
     @staticmethod
-    def _first_action_of_the_plan_of(node: StatechartNode) -> Optional[Action]:
+    def _first_action_of_the_plan_of(node: StatechartNode) -> Action | None:
         """
         :param node: A node of a plan.
         :return: The action of that plan that runs first.
@@ -496,9 +495,7 @@ class CloseFingersToObjectWidth(PlanTransformation[GraspingAction]):
             grasp, which it has none of before it is expanded.
         :return: The step of the grasp that shuts its gripper.
         """
-        body = plan_node.action_body
-        steps = [] if body is None else body.nodes
-        for step in reversed(steps):
+        for step in reversed(plan_node.nodes):
             if any(
                 isinstance(node, MoveGripper) and node.state is GripperState.CLOSE
                 for node in [step, *step.descendants]

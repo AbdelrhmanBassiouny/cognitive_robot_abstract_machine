@@ -102,11 +102,11 @@ def test_attaching_lets_the_interface_reach_the_server_config():
 # %% the interface decides how the control loop is paced
 
 
-def test_a_standalone_interface_is_not_paced():
+def test_a_standalone_interface_is_not_paced() -> None:
     assert isinstance(StandAloneRobotInterfaceConfig().create_pacer(), NoPacing)
 
 
-def test_a_closed_loop_interface_runs_in_real_time():
+def test_a_closed_loop_interface_runs_in_real_time() -> None:
     interface = GroupCommandingInterface(joint_names=[])
 
     assert isinstance(interface.create_pacer(), RealTimePacer)
@@ -141,7 +141,7 @@ def set_up_standalone(world_config: WorldConfig) -> Giskard:
     return giskard
 
 
-def test_standalone_controls_the_joints_tracy_declares(init_rospy, tracy_world):
+def test_standalone_controls_the_joints_tracy_declares(init_rospy, tracy_world) -> None:
     giskard = set_up_standalone(
         WorldWithTracyConfig(urdf=load_xacro(Tracy.get_ros_file_path()))
     )
@@ -151,7 +151,7 @@ def test_standalone_controls_the_joints_tracy_declares(init_rospy, tracy_world):
     )
 
 
-def test_standalone_controls_the_joints_daisy_declares(init_rospy, daisy_world):
+def test_standalone_controls_the_joints_daisy_declares(init_rospy, daisy_world) -> None:
     giskard = set_up_standalone(
         WorldWithDaisyConfig(urdf=load_xacro(DAiSy.get_ros_file_path()))
     )
@@ -161,7 +161,9 @@ def test_standalone_controls_the_joints_daisy_declares(init_rospy, daisy_world):
     )
 
 
-def test_standalone_controls_the_joints_the_pr2_declares(init_rospy, pr2_world_copy):
+def test_standalone_controls_the_joints_the_pr2_declares(
+    init_rospy, pr2_world_copy
+) -> None:
     giskard = set_up_standalone(
         WorldWithPR2Config(urdf=load_xacro(PR2.get_ros_file_path()))
     )
@@ -171,7 +173,9 @@ def test_standalone_controls_the_joints_the_pr2_declares(init_rospy, pr2_world_c
     )
 
 
-def test_standalone_controls_the_joints_the_hsr_declares(init_rospy, _hsr_world_setup):
+def test_standalone_controls_the_joints_the_hsr_declares(
+    init_rospy, _hsr_world_setup
+) -> None:
     giskard = set_up_standalone(
         WorldWithHSRConfig(urdf=load_xacro(HSRB.get_ros_file_path()))
     )
@@ -183,7 +187,7 @@ def test_standalone_controls_the_joints_the_hsr_declares(init_rospy, _hsr_world_
 
 def test_standalone_controls_the_joints_stretch_declares(
     init_rospy, stretch_world_copy
-):
+) -> None:
     giskard = set_up_standalone(
         WorldWithStretchConfigDiffDrive(urdf=load_xacro(Stretch.get_ros_file_path()))
     )
@@ -196,7 +200,7 @@ def test_standalone_controls_the_joints_stretch_declares(
 # %% the world config flags the drive it creates
 
 
-def test_a_world_with_an_omni_drive_robot_controls_its_drive():
+def test_a_world_with_an_omni_drive_robot_controls_its_drive() -> None:
     world_config = WorldWithPR2Config(urdf=load_xacro(PR2.get_ros_file_path()))
     with world_config.world.modify_world():
         world_config.setup_world()
@@ -205,7 +209,7 @@ def test_a_world_with_an_omni_drive_robot_controls_its_drive():
     assert drive.is_controlled
 
 
-def test_a_world_with_a_differential_drive_robot_controls_its_drive():
+def test_a_world_with_a_differential_drive_robot_controls_its_drive() -> None:
     world_config = WorldWithStretchConfigDiffDrive(
         urdf=load_xacro(Stretch.get_ros_file_path())
     )
@@ -216,7 +220,7 @@ def test_a_world_with_a_differential_drive_robot_controls_its_drive():
     assert drive.is_controlled
 
 
-def test_a_world_with_a_drive_limits_the_velocity_of_its_drive():
+def test_a_world_with_a_drive_limits_the_velocity_of_its_drive() -> None:
     world_config = WorldWithPR2Config(
         urdf=load_xacro(PR2.get_ros_file_path()),
         translation_velocity_limit=0.4,
@@ -246,7 +250,7 @@ class GroupCommandingInterface(ClosedLoopRobotInterfaceConfig):
     The joints the group controller drives.
     """
 
-    def setup(self):
+    def setup(self) -> None:
         self.add_joint_velocity_group_controller(
             cmd_topic="group_velocity_commands", connections=self.joint_names
         )
@@ -264,14 +268,16 @@ def closed_loop_pr2(interface: ClosedLoopRobotInterfaceConfig) -> Giskard:
     )
 
 
-def test_a_closed_loop_interface_that_commands_nothing_controls_no_joint(init_rospy):
+def test_a_closed_loop_interface_that_commands_nothing_controls_no_joint(
+    init_rospy,
+) -> None:
     giskard = closed_loop_pr2(GroupCommandingInterface(joint_names=[]))
 
     with pytest.raises(NoControlledJointsError):
         giskard.setup()
 
 
-def test_closed_loop_controls_exactly_the_commanded_joints(init_rospy):
+def test_closed_loop_controls_exactly_the_commanded_joints(init_rospy) -> None:
     interface = GroupCommandingInterface(
         joint_names=[PR2Joint.HEAD_PAN, PR2Joint.HEAD_TILT]
     )
@@ -284,7 +290,7 @@ def test_closed_loop_controls_exactly_the_commanded_joints(init_rospy):
     )
 
 
-def test_closed_loop_does_not_control_a_drive_nothing_commands(init_rospy):
+def test_closed_loop_does_not_control_a_drive_nothing_commands(init_rospy) -> None:
     giskard = closed_loop_pr2(GroupCommandingInterface(joint_names=[PR2Joint.HEAD_PAN]))
 
     giskard.setup()

@@ -20,7 +20,6 @@ from dataclasses import dataclass
 from enum import Enum, IntEnum, StrEnum
 
 from ament_index_python.packages import get_package_share_directory
-from typing_extensions import List, Type
 
 from coraplex.demonstrations import RobotDemonstration
 from coraplex.plans.context_extensions import RobotAccess, StatementGrounding
@@ -297,7 +296,7 @@ class GarmiApartmentDemonstration(RobotDemonstration):
             parent_connection_specification=Connection6DoFSpecification(),
         ).spawn(world, parent=world.get_body_by_name(SceneBody.SPOON_DRAWER))
 
-    def build_context_extensions(self, world: World) -> List[ContextExtension]:
+    def build_context_extensions(self, world: World) -> list[ContextExtension]:
         return [
             RobotAccess(world.get_semantic_annotations_by_type(self.used_robot)[0]),
             StatementGrounding(sampling_seed=SamplingSeed.REPEATABLE),
@@ -342,7 +341,7 @@ class GarmiApartmentDemonstration(RobotDemonstration):
         return statechart
 
 
-def main(executor_type: Type[PlanExecutor] = SimulatedPlanExecutor) -> None:
+def main(executor_type: type[PlanExecutor] = SimulatedPlanExecutor) -> None:
     """
     Run the demonstration.
 

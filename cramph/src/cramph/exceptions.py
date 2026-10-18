@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC
 from dataclasses import dataclass
 
-from typing_extensions import TYPE_CHECKING, Type
+from typing_extensions import TYPE_CHECKING
 
 from krrood.adapters.exceptions import JSONSerializationError
 from krrood.exceptions import DataclassException
@@ -84,23 +84,6 @@ class EndInCompositeNodeError(NodeInitializationError):
 
 
 @dataclass
-class AttemptWithoutFailureMonitorsError(NodeInitializationError):
-    """
-    Raised when an attempt is created without a failure monitor, which leaves nothing
-    that could give up on its task.
-    """
-
-    def error_message(self) -> str:
-        return f'The attempt "{self.node.name}" has no failure monitors.'
-
-    def suggest_correction(self) -> str:
-        return (
-            "Pass at least one failure monitor, or hand the task to a template as it "
-            "is, which ends it once it observes True."
-        )
-
-
-@dataclass
 class ChildCannotFailError(NodeInitializationError):
     """
     Raised when a template that only moves on once a child failed is handed a child that
@@ -120,8 +103,8 @@ class ChildCannotFailError(NodeInitializationError):
 
     def suggest_correction(self) -> str:
         return (
-            "Wrap the child in an Attempt whose failure monitors decide when to give up "
-            "on it."
+            "Give the child a fail condition, for example one reading a monitor that "
+            "decides when to give up on it."
         )
 
 
@@ -215,8 +198,8 @@ class CyclicNodeDependencyError(NodeInitializationError):
     """
 
     def error_message(self) -> str:
-        cycle_str = " -> ".join(node.unique_name for node in self.cycle)
-        return f"Nodes depend on each other in a cycle: {cycle_str}."
+        cycle = " -> ".join(node.unique_name for node in self.cycle)
+        return f"Nodes depend on each other in a cycle: {cycle}."
 
     def suggest_correction(self) -> str:
         return "Break the cycle so the nodes can be expanded and built in some order."
@@ -484,7 +467,7 @@ class MissingContextExtensionError(StatechartError):
     Raised when a context extension is requested that was never added to the context.
     """
 
-    expected_extension: Type
+    expected_extension: type
     """
     The type of the requested extension.
     """
@@ -502,7 +485,7 @@ class DuplicateContextExtensionError(StatechartError):
     Raised when an extension is added to a context that already holds one of that type.
     """
 
-    extension_type: Type
+    extension_type: type
     """
     The type of the extension that is already present.
     """
@@ -635,7 +618,7 @@ class MissingExecutorExtensionError(StatechartError):
     Raised when an executor extension is requested that the executor was not given.
     """
 
-    expected_extension: Type
+    expected_extension: type
     """
     The type of the requested extension.
     """
@@ -777,6 +760,22 @@ class NotHeldByLanguageNodeError(NodeInitializationError):
         return (
             f"Take the place of the node a plan language node runs above "
             f"{self.node.name}."
+        )
+
+
+@dataclass
+class NotATopLevelNodeError(NodeInitializationError):
+    """
+    Raised when the statechart is asked to replace a node that is the child of another
+    node, which is the replacement that node's parent has to make.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.node.name} is not a top-level node of its statechart."
+
+    def suggest_correction(self) -> str:
+        return (
+            f"Replace {self.node.name} through the closest plan language node above it."
         )
 
 

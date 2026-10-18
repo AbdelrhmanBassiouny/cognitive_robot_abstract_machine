@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import logging
+from abc import ABC
 from copy import deepcopy
 from dataclasses import dataclass, field
 
 from typing_extensions import (
-    Optional,
     TYPE_CHECKING,
-    Type,
 )
 
 from coraplex.datastructures.enums import ActionTrialVisualization
@@ -20,7 +19,6 @@ from coraplex.robot_plans.robot_specific_plan_transformations import (
 )
 from coraplex.visualization import RvizVisualization
 from cramph.composites import (
-    Attempt,
     ChildChooser,
     CompositeNodeChoosingItsChild,
     Sequence,
@@ -39,26 +37,41 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# %% attempting a grounded action
+# %% preparing a chosen child
 
 
-@dataclass(eq=False, repr=False, kw_only=True)
-class AttemptRewritingItsTask(Attempt):
+@dataclass
+class PlanChildChooser(ChildChooser, ABC):
     """
-    An attempt whose task is rewritten by the plan transformations of its statechart
-    before its failure monitors join it, so that they watch the task as it is run.
+    Chooses children that are part of a plan: each is rewritten by the plan
+    transformations of its statechart, and given up on once it stops approaching its
+    goal, so the node that chose it can choose the next one.
     """
 
-    def expand(self, context: StatechartContext) -> None:
+    def prepare_chosen_child(
+        self,
+        node: CompositeNodeChoosingItsChild,
+        child: StatechartNode,
+        context: StatechartContext,
+    ) -> None:
         """
-        Differs from :meth:`~cramph.composites.Attempt.expand` in rewriting the task
-        once it is added, before the monitors are.
+        Rewrite `child`, before the monitor watching it for a stall collects what it
+        watches.
         """
-        self._add_child_to_statechart(self.task)
         rewriting = context.get_extension(PlanRewriting)
         if rewriting is not None:
-            rewriting.rewrite(self.task)
-        self._add_children_to_statechart(self.failure_monitors)
+            rewriting.rewrite(child)
+
+    def failure_monitors_for(
+        self,
+        node: CompositeNodeChoosingItsChild,
+        child: StatechartNode,
+        context: StatechartContext,
+    ) -> list[StatechartNode]:
+        """
+        :return: A monitor firing once nothing below `child` approaches its goal.
+        """
+        return [Stalled(monitored_node=child)]
 
 
 @dataclass
@@ -87,7 +100,7 @@ class ActionTrial:
     are left untouched too, so they can still run for real afterwards.
     """
 
-    trial_executor_type: Type[PlanExecutor]
+    trial_executor_type: type[PlanExecutor]
     """
     The executor that runs a candidate in the copy, which simulates the robot.
     """
@@ -280,10 +293,11 @@ class ActionTrial:
 
 
 @dataclass
-class UnderspecifiedChildChooser(ChildChooser):
+class UnderspecifiedChildChooser(PlanChildChooser):
     """
     Grounds the statement of every :class:`~cramph.composites.StatementNode` of a
-    statechart into the action it runs next.
+    statechart into the action it runs next, in a sequence of its own for the nodes a
+    plan transformation puts beside it.
 
     A grounded action is tried out first, so one that fails its trial is discarded
     without ever touching the real world, and a bad parameterization cannot poison a
@@ -295,7 +309,7 @@ class UnderspecifiedChildChooser(ChildChooser):
     The executor whose statechart holds the nodes, which also tries their candidates.
     """
 
-    trial_executor_type: Type[PlanExecutor]
+    trial_executor_type: type[PlanExecutor]
     """
     The executor the candidates are tried in, see :class:`ActionTrial`.
     """
@@ -306,18 +320,18 @@ class UnderspecifiedChildChooser(ChildChooser):
     of the world.
     """
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.trial = ActionTrial(
             executor=self.executor, trial_executor_type=self.trial_executor_type
         )
 
     def choose_child(
         self, node: CompositeNodeChoosingItsChild, context: StatechartContext
-    ) -> Optional[StatechartNode]:
+    ) -> StatechartNode | None:
         """
-        :return: The node running the next grounded action that succeeds its trial,
-            given up on once it stops approaching its goal, or None once the statement
-            ran out of actions that succeed their trial.
+        :return: The sequence holding the next grounded action that succeeds its
+            trial, or None once the statement ran out of actions that succeed their
+            trial.
         :raises NotAStatementNode: If `node` carries no statement to ground.
         """
         if not isinstance(node, StatementNode):
@@ -328,26 +342,12 @@ class UnderspecifiedChildChooser(ChildChooser):
         )
         while proposal is not None:
             if self.trial.succeeds(proposal):
-                return self._attempt_of(proposal)
+                return Sequence(name=f"{proposal.name}/steps", nodes=[proposal])
             proposal = node.next_candidate(
                 grounding.query_backend, grounding.candidates_to_try
             )
         node.stop_grounding()
         return None
-
-    @staticmethod
-    def _attempt_of(proposal: DesignatorParameters) -> StatechartNode:
-        """
-        :return: `proposal`, in a sequence of its own for the nodes a plan
-            transformation puts beside it, given up on once it stops approaching its
-            goal, so its node can try the next action instead.
-        """
-        steps = Sequence(name=f"{proposal.name}/steps", nodes=[proposal])
-        return AttemptRewritingItsTask(
-            name=f"{proposal.name}/attempt",
-            task=steps,
-            failure_monitors=[Stalled(monitored_node=steps)],
-        )
 
     def cleanup(self) -> None:
         """

@@ -101,8 +101,8 @@ class ContainmentDetector(AbstractDetector):
     """
 
     def get_containment_pairs(
-        self, context: StatechartContext, tracked_objects: List[Body]
-    ) -> Dict[Body, Set[Body]]:
+        self, context: StatechartContext, tracked_objects: list[Body]
+    ) -> dict[Body, set[Body]]:
         """
         Computes containment relationships.
 

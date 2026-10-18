@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from uuid import UUID, uuid4
 
 import pytest
-from typing_extensions import Callable, Dict, Iterator, List, Optional
+from typing_extensions import Callable, Dict, Iterator, List
 
 from krrood.entity_query_language.backends import (
     EntityQueryLanguageGenerativeBackend,
@@ -28,7 +28,7 @@ from coraplex.plans.underspecified import (
     ActionTrial,
     UnderspecifiedChildChooser,
 )
-from coraplex.robot_plans.actions.base import Action
+from coraplex.robot_plans.actions.base import SequentialAction
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction, ReachAction
 from coraplex.visualization import RvizVisualization
@@ -56,7 +56,7 @@ from coraplex.plans.executors import SimulatedPlanExecutor
 @dataclass
 class TrialCall:
     """
-    One recorded attempt of a `RecordingAction`.
+    One recorded attempt of a :class:`RecordingAction`.
     """
 
     world: World
@@ -74,7 +74,8 @@ class TrialCall:
 
 class TrialProbe:
     """
-    Records every attempt of a `RecordingAction` across both trial and real execution.
+    Records every attempt of a :class:`RecordingAction` across both trial and real
+    execution.
     """
 
     def __init__(self):
@@ -83,10 +84,11 @@ class TrialProbe:
 
 _registered_probes: Dict[UUID, TrialProbe] = {}
 """
-`TrialProbe` instances, keyed by the id a `RecordingAction` carries as `probe_key`.
+:class:`TrialProbe` instances, keyed by the id a :class:`RecordingAction` carries as
+:attr:`~RecordingAction.probe_key`.
 
-`World.rebind_world_entities` deep-copies every value it does not recognize as a world entity, so a
-rebound `RecordingAction` cannot share a probe handed to it directly as a field - the
+:meth:`~semantic_digital_twin.world.World.rebind_world_entities` deep-copies every value it does not recognize as a world entity, so a
+rebound :class:`RecordingAction` cannot share a probe handed to it directly as a field - the
 same isolation that makes a trial safe for real designators. Reaching the probe
 out-of-band by an id, whose value survives copying even though its identity need not,
 is what lets a test observe a candidate's trial and its later real attempt as one
@@ -108,8 +110,8 @@ def release_registered_probes() -> Iterator[None]:
 
 def register_probe() -> UUID:
     """
-    Register a fresh `TrialProbe` and return the id a `RecordingAction` should carry to
-    record into it.
+    Register a fresh :class:`TrialProbe` and return the id a :class:`RecordingAction`
+    should carry to record into it.
     """
     key = uuid4()
     _registered_probes[key] = TrialProbe()
@@ -117,7 +119,7 @@ def register_probe() -> UUID:
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class RecordingAction(Action):
+class RecordingAction(SequentialAction):
     """
     An action whose execution deterministically records itself and can be made to fail
     on a specific attempt, for testing the trial-then-real handling of an underspecified
@@ -126,7 +128,7 @@ class RecordingAction(Action):
 
     probe_key: UUID
     """
-    Id of the `TrialProbe` this action's attempts are recorded to.
+    Id of the :class:`TrialProbe` this action's attempts are recorded to.
     """
 
     dof_id: UUID
@@ -135,7 +137,7 @@ class RecordingAction(Action):
     state changes observable.
     """
 
-    fail_on_attempt_number: Optional[int] = None
+    fail_on_attempt_number: int | None = None
     """
     Report :attr:`reported_failure` once the probe has recorded this many calls; never
     fail if None.
@@ -146,14 +148,10 @@ class RecordingAction(Action):
     Builds the failure a failing attempt reports.
     """
 
-    def create_action_body(self) -> StatechartNode:
-        return Sequence(
-            nodes=[
-                FunctionCall(
-                    function=self._record_attempt, failure_types=(PlanFailure,)
-                )
-            ]
-        )
+    def create_steps(self) -> list[StatechartNode]:
+        return [
+            FunctionCall(function=self._record_attempt, failure_types=(PlanFailure,))
+        ]
 
     def _record_attempt(self) -> None:
         """
@@ -278,7 +276,7 @@ def test_isolation_rejected_candidate_never_touches_real_world(
     run_plan(plan, extensions)
 
     assert plan.life_cycle_state == LifeCycleValues.SUCCEEDED
-    assert len(plan.children) == 1
+    assert len(plan.chosen_children) == 1
     assert plan.grounded_nodes[0].fail_on_attempt_number is None
 
     probe = _registered_probes[probe_key]
@@ -616,7 +614,7 @@ def _compiled_trial_executor(
     return executor, copied
 
 
-def test_a_trial_publishes_its_copy_while_debugging(debugging_executor):
+def test_a_trial_publishes_its_copy_while_debugging(debugging_executor) -> None:
     """
     The candidates are tried in the copy, so a run being watched would otherwise show
     the robot standing still through every candidate it rejects.
@@ -633,7 +631,9 @@ def test_a_trial_publishes_its_copy_while_debugging(debugging_executor):
     trial.discard()
 
 
-def test_a_trial_publishes_its_copy_apart_from_the_world_it_copies(debugging_executor):
+def test_a_trial_publishes_its_copy_apart_from_the_world_it_copies(
+    debugging_executor,
+) -> None:
     """
     The copy has the same frame names and markers as the world it was taken from, so it
     is published under a prefix and on a topic of its own rather than over that world.
@@ -653,7 +653,7 @@ def test_a_trial_publishes_its_copy_apart_from_the_world_it_copies(debugging_exe
     trial.discard()
 
 
-def test_a_trial_copy_is_drawn_see_through(debugging_executor):
+def test_a_trial_copy_is_drawn_see_through(debugging_executor) -> None:
     """
     The copy is drawn translucent so that it can be told apart from the world it copies
     where the two overlap.
@@ -691,7 +691,7 @@ def test_a_trial_publishes_nothing_without_debugging(
 
 def test_a_trial_adapts_a_candidate_to_the_robot_as_its_executor_does(
     apartment_world_pr2_copy_with_context,
-):
+) -> None:
     """
     A candidate is tried the way the robot will perform it, so the trial keeps the robot
     adaptations its executor was given, apart from how the base drives.
@@ -708,7 +708,7 @@ def test_a_trial_adapts_a_candidate_to_the_robot_as_its_executor_does(
 
 def test_a_trial_puts_a_differentially_driven_base_at_its_goal(
     stretch_apartment_context,
-):
+) -> None:
     """
     A trial only decides whether a candidate can succeed, so it puts the base where the
     candidate drives it instead of spending the time driving there.
@@ -726,13 +726,13 @@ def test_a_trial_puts_a_differentially_driven_base_at_its_goal(
 
     trial_executor.prepare(statechart_of(trial_executor, navigation))
 
-    assert type(navigation.action_body) is SetOdometry
+    assert type(navigation.goal) is SetOdometry
     trial.discard()
 
 
 def test_a_trial_moves_the_tool_center_point_the_way_the_robot_does(
     stretch_apartment_context,
-):
+) -> None:
     world, robot, extensions = stretch_apartment_context
     trial = ActionTrial(
         executor=simulated_executor(extensions),
@@ -759,7 +759,7 @@ def test_a_trial_moves_the_tool_center_point_the_way_the_robot_does(
 
 def test_a_trial_stops_publishing_its_copy_once_the_candidate_has_run(
     debugging_executor,
-):
+) -> None:
     """
     The copy is only published while a candidate runs in it.
     """
@@ -773,7 +773,9 @@ def test_a_trial_stops_publishing_its_copy_once_the_candidate_has_run(
     trial.discard()
 
 
-def test_a_trial_tries_an_action_that_already_belongs_to_a_plan(debugging_executor):
+def test_a_trial_tries_an_action_that_already_belongs_to_a_plan(
+    debugging_executor,
+) -> None:
     """
     An action in a statechart reaches that statechart's extensions, and with it the ROS
     node the run publishes through, which a trial must not try to copy.

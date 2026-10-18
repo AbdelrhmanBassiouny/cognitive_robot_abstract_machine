@@ -90,7 +90,7 @@ class MotionGoal(SubclassJSONSerializer):
             ),
         )
 
-    def parse_motion_statechart(self, **kwargs) -> Statechart:
+    def parse_motion_statechart(self, **kwargs: Any) -> Statechart:
         """
         Resolve the motion statechart against the world described by the given kwargs.
         """

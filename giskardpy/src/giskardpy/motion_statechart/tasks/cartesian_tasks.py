@@ -5,24 +5,23 @@ from dataclasses import field, dataclass
 from functools import cached_property
 
 import numpy as np
-from typing_extensions import ClassVar, List
+from typing_extensions import ClassVar
 
 import krrood.symbolic_math.symbolic_math as sm
+from cramph.composites import Parallel
+from cramph.context import StatechartContext
+from cramph.data_types import ObservationStateValues
+from cramph.node import StatechartNode
 from giskardpy.motion_statechart.binding_policy import (
     GoalBindingPolicy,
     ForwardKinematicsBinding,
 )
-from cramph.node import EndedByOwner
-from cramph.context import StatechartContext
 from giskardpy.motion_statechart.data_types import DefaultWeights
-from cramph.data_types import ObservationStateValues
-from giskardpy.motion_statechart.exceptions import GoalPointsReferenceFrameMismatchError
-from cramph.composites import Parallel
-from cramph.node import CompositeNode, NodeArtifacts
 from giskardpy.motion_statechart.error_signals import (
     joint_position_and_velocity_variables,
     time_derivative_from_joint_motion,
 )
+from giskardpy.motion_statechart.exceptions import GoalPointsReferenceFrameMismatchError
 from giskardpy.motion_statechart.graph_node import (
     MotionNodeArtifacts,
     MotionStatechartNode,
@@ -92,7 +91,7 @@ class CartesianTask(ConvergingTask, ABC):
         self._forward_kinematics_binding.bind(context.world)
         self.root_T_goal_reference_frame = self._forward_kinematics_binding.root_T_tip
 
-    def on_start(self, context: StatechartContext):
+    def on_start(self, context: StatechartContext) -> None:
         if self.binding_policy == GoalBindingPolicy.Bind_on_start:
             self._forward_kinematics_binding.bind(context.world)
 
@@ -394,7 +393,7 @@ class CartesianPositionTrajectory(CartesianTask):
         )
         return float(distance_to_path + segment_lengths.sum())
 
-    def compile_current_point_on_tick(self, context: StatechartContext):
+    def compile_current_point_on_tick(self, context: StatechartContext) -> None:
         """
         Computing the current point relative to the goal reference frame is expensive, this method turns it into
         a compiled expression.
@@ -691,14 +690,14 @@ class CartesianOrientation(CartesianTask):
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class CartesianPose(EndedByOwner, CompositeNode):
+class CartesianPose(Parallel):
     """
     This goal will use the kinematic chain between root and tip link to move tip_link into the 6D goal_pose.
 
     Position and orientation are separate tasks, because an error in meters and an error
-    in radians cannot be compared against one threshold. Both run in one
-    :class:`~cramph.composites.Parallel`, and this goal observes what that parallel
-    observes.
+    in radians cannot be compared against one threshold. This goal is the parallel
+    holding both, together with any node it is handed, such as a speed cap or a
+    collision allowance accompanying the motion.
     """
 
     root_link: KinematicStructureEntity | None = None
@@ -735,34 +734,23 @@ class CartesianPose(EndedByOwner, CompositeNode):
     binding_policy: GoalBindingPolicy = GoalBindingPolicy.Bind_on_start
     """Describes when the goal is computed. See GoalBindingPolicy for more information."""
 
-    @property
-    def parallel(self) -> Parallel:
-        """
-        The parallel running the position and the orientation task.
-        """
-        return self.nodes[0]
+    nodes: list[StatechartNode] = field(default_factory=list, init=False)
+    """
+    The position and the orientation task, followed by the nodes this goal was handed.
+    """
 
     def expand(self, context: StatechartContext) -> None:
         """
-        Add the parallel running the position and the orientation task.
+        Create the position and the orientation task, then adopt them before the nodes
+        this goal was handed, as :meth:`~cramph.composites.CramLanguageNode.expand`
+        does.
         """
         if self.root_link is None:
             self.root_link = context.world.root
-        self._add_child_to_statechart(
-            Parallel(name=f"{self.name}/parallel", nodes=self._create_tasks())
-        )
+        self.nodes[:0] = self._create_tasks()
+        super().expand(context)
 
-    @property
-    def inherent_fail_condition(self) -> sm.Scalar:
-        """
-        Fails as well once the parallel can no longer arrive, see
-        :meth:`~cramph.node.StatechartNode.inherent_fail_condition`.
-        """
-        return sm.logic_or(
-            super().inherent_fail_condition, self.parallel.is_failed_or_interrupted
-        )
-
-    def _create_tasks(self) -> List[MotionStatechartNode]:
+    def _create_tasks(self) -> list[MotionStatechartNode]:
         """
         :return: The position and the orientation task.
         """
@@ -788,12 +776,6 @@ class CartesianPose(EndedByOwner, CompositeNode):
                 binding_policy=self.binding_policy,
             ),
         ]
-
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
-        """
-        Observe what the parallel observes.
-        """
-        return NodeArtifacts(observation=self.parallel.observation_variable)
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
@@ -1031,7 +1013,7 @@ class CartesianRotationVelocityLimit(Task):
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class CartesianVelocityLimit(EndedByOwner, CompositeNode):
+class CartesianVelocityLimit(Parallel):
     """
     Combines both linear and angular velocity limits for a kinematic chain.
 
@@ -1063,49 +1045,28 @@ class CartesianVelocityLimit(EndedByOwner, CompositeNode):
     limits are enforced. Higher weights give these constraints soft priority
     over lower weighted constraints when conflicts occur."""
 
-    @property
-    def parallel(self) -> Parallel:
-        """
-        The parallel running the linear and the angular velocity limit.
-        """
-        return self.nodes[0]
+    nodes: list[StatechartNode] = field(default_factory=list, init=False)
+    """
+    The linear and the angular velocity limit.
+    """
 
     def expand(self, context: StatechartContext) -> None:
         """
-        Add the parallel running the linear and the angular velocity limit.
+        Create the linear and the angular velocity limit, then adopt them as
+        :meth:`~cramph.composites.CramLanguageNode.expand` does.
         """
-        self._add_child_to_statechart(
-            Parallel(
-                name=f"{self.name}/parallel",
-                nodes=[
-                    CartesianPositionVelocityLimit(
-                        root_link=self.root_link,
-                        tip_link=self.tip_link,
-                        max_linear_velocity=self.max_linear_velocity,
-                        weight=self.weight,
-                    ),
-                    CartesianRotationVelocityLimit(
-                        root_link=self.root_link,
-                        tip_link=self.tip_link,
-                        max_angular_velocity=self.max_angular_velocity,
-                        weight=self.weight,
-                    ),
-                ],
-            )
-        )
-
-    @property
-    def inherent_fail_condition(self) -> sm.Scalar:
-        """
-        Fails as well once the parallel can no longer arrive, see
-        :meth:`~cramph.node.StatechartNode.inherent_fail_condition`.
-        """
-        return sm.logic_or(
-            super().inherent_fail_condition, self.parallel.is_failed_or_interrupted
-        )
-
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
-        """
-        Observe what the parallel observes.
-        """
-        return NodeArtifacts(observation=self.parallel.observation_variable)
+        self.nodes[:0] = [
+            CartesianPositionVelocityLimit(
+                root_link=self.root_link,
+                tip_link=self.tip_link,
+                max_linear_velocity=self.max_linear_velocity,
+                weight=self.weight,
+            ),
+            CartesianRotationVelocityLimit(
+                root_link=self.root_link,
+                tip_link=self.tip_link,
+                max_angular_velocity=self.max_angular_velocity,
+                weight=self.weight,
+            ),
+        ]
+        super().expand(context)

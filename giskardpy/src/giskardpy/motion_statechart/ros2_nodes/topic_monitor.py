@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 from rclpy.node import MsgType, Node
 from rclpy.publisher import Publisher
@@ -12,7 +11,7 @@ from typing_extensions import Generic, Type
 import krrood.symbolic_math.symbolic_math as sm
 from krrood.ormatic.utils import classproperty
 from cramph.node import EndedByOwner
-from cramph.context import StatechartContext
+from cramph.context import ContextExtension, StatechartContext
 from cramph.data_types import ObservationStateValues
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from cramph.node import NodeArtifacts
@@ -30,7 +29,7 @@ class TopicNode(EndedByOwner, MotionStatechartNode, Generic[MsgType]):
     Name of the ROS topic to subscribe to.
     """
 
-    msg_type: Type[MsgType]
+    msg_type: type[MsgType]
     """
     Type of the ROS message.
     """
@@ -96,13 +95,13 @@ class TopicSubscriberNode(TopicNode[MsgType]):
     def clear_msg(self):
         self.__last_msg = None
 
-    def on_tick(self, context: StatechartContext) -> Optional[ObservationStateValues]:
+    def on_tick(self, context: StatechartContext) -> ObservationStateValues | None:
         """
         .. warning:: If you override this method, make sure to call `super().on_tick(context)`.
         """
         self.current_msg = self.__last_msg
 
-    def on_reset(self, context: StatechartContext):
+    def on_reset(self, context: StatechartContext) -> None:
         self.clear_msg()
 
 
@@ -134,7 +133,7 @@ class WaitForMessage(TopicSubscriberNode[MsgType]):
     This node will turn to True once a message was received on its topic.
     """
 
-    def on_tick(self, context: StatechartContext) -> Optional[ObservationStateValues]:
+    def on_tick(self, context: StatechartContext) -> ObservationStateValues | None:
         super().on_tick(context)
         if self.has_msg():
             return ObservationStateValues.TRUE
@@ -169,5 +168,5 @@ class PublishOnStart(TopicPublisherNode[MsgType]):
         node_artifacts.observation = sm.Scalar.const_true()
         return node_artifacts
 
-    def on_start(self, context: StatechartContext):
+    def on_start(self, context: StatechartContext) -> None:
         self._publisher.publish(self.msg)

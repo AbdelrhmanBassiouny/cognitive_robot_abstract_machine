@@ -1,6 +1,5 @@
 import pydot
 import pytest
-from typing_extensions import List, Optional, Set, Union
 
 from cramph.context import StatechartContext
 from cramph.data_types import (
@@ -58,14 +57,14 @@ def draw(statechart: Statechart) -> pydot.Graph:
     return StatechartGraphviz(statechart).to_dot_graph()
 
 
-def direct_node_names(graph: Union[pydot.Graph, pydot.Cluster]) -> Set[str]:
+def direct_node_names(graph: pydot.Graph | pydot.Cluster) -> set[str]:
     """
     :return: The names of the nodes declared on `graph` itself, ignoring its subgraphs.
     """
     return {node.get_name().strip('"') for node in graph.get_nodes()}
 
 
-def all_node_names(graph: Union[pydot.Graph, pydot.Cluster]) -> Set[str]:
+def all_node_names(graph: pydot.Graph | pydot.Cluster) -> set[str]:
     """
     :return: The names of the nodes declared anywhere in `graph`, subgraphs included.
     """
@@ -75,7 +74,7 @@ def all_node_names(graph: Union[pydot.Graph, pydot.Cluster]) -> Set[str]:
     return names
 
 
-def all_edge_endpoints(graph: Union[pydot.Graph, pydot.Cluster]) -> Set[str]:
+def all_edge_endpoints(graph: pydot.Graph | pydot.Cluster) -> set[str]:
     """
     :return: The source and destination names of every edge in `graph`, subgraphs included.
     """
@@ -88,9 +87,7 @@ def all_edge_endpoints(graph: Union[pydot.Graph, pydot.Cluster]) -> Set[str]:
     return endpoints
 
 
-def find_cluster_of(
-    graph: pydot.Graph, node: StatechartNode
-) -> Optional[pydot.Cluster]:
+def find_cluster_of(graph: pydot.Graph, node: StatechartNode) -> pydot.Cluster | None:
     """
     :return: The cluster `node` owns as a goal, or None if it has none.
     """
@@ -100,28 +97,37 @@ def find_cluster_of(
     return None
 
 
-def find_node(
-    graph: Union[pydot.Graph, pydot.Cluster], node: StatechartNode
-) -> pydot.Node:
+def find_node(graph: pydot.Graph | pydot.Cluster, node: StatechartNode) -> pydot.Node:
     """
     :return: The pydot node drawn for `node`.
+    """
+    drawn = _drawn_node_or_none(graph, node)
+    assert drawn is not None, f"{node.unique_name} was not drawn in {graph.get_name()}"
+    return drawn
+
+
+def _drawn_node_or_none(
+    graph: pydot.Graph | pydot.Cluster, node: StatechartNode
+) -> pydot.Node | None:
+    """
+    :return: The pydot node drawn for `node` in `graph` or any of its subgraphs, or None
+        if it was not drawn there.
     """
     for candidate in graph.get_nodes():
         if candidate.get_name().strip('"') == node.unique_name:
             return candidate
     for subgraph in graph.get_subgraphs():
-        try:
-            return find_node(subgraph, node)
-        except AssertionError:
-            continue
-    raise AssertionError(f"{node.unique_name} was not drawn in {graph.get_name()}")
+        drawn = _drawn_node_or_none(subgraph, node)
+        if drawn is not None:
+            return drawn
+    return None
 
 
 def find_edges(
-    graph: Union[pydot.Graph, pydot.Cluster],
+    graph: pydot.Graph | pydot.Cluster,
     source: StatechartNode,
     destination: StatechartNode,
-) -> List[pydot.Edge]:
+) -> list[pydot.Edge]:
     """
     :return: Every edge drawn from `source` to `destination`, searching subgraphs too,
         because an edge between two children of a goal is declared on that goal's cluster.
@@ -168,7 +174,7 @@ def build_dependency_statechart(
 # %% expanded goals
 
 
-def test_expanded_goal_draws_children_in_its_cluster():
+def test_expanded_goal_draws_children_in_its_cluster() -> None:
     goal = CompositeNodeWithChainedChildren(name="goal")
     statechart = build_statechart(goal)
 
@@ -181,7 +187,7 @@ def test_expanded_goal_draws_children_in_its_cluster():
     }
 
 
-def test_expanded_goal_node_is_declared_only_in_its_cluster():
+def test_expanded_goal_node_is_declared_only_in_its_cluster() -> None:
     goal = CompositeNodeWithChainedChildren(name="goal")
     statechart = build_statechart(goal)
 
@@ -193,7 +199,7 @@ def test_expanded_goal_node_is_declared_only_in_its_cluster():
 # %% collapsed goals
 
 
-def test_collapsed_goal_hides_children_and_their_edges():
+def test_collapsed_goal_hides_children_and_their_edges() -> None:
     goal = CompositeNodeWithChainedChildren(name="goal")
     goal.plot_specifications.collapse_children = True
     statechart = build_statechart(goal)
@@ -207,7 +213,7 @@ def test_collapsed_goal_hides_children_and_their_edges():
     assert all_edge_endpoints(graph) & hidden_names == set()
 
 
-def test_collapsed_goal_reports_hidden_node_count():
+def test_collapsed_goal_reports_hidden_node_count() -> None:
     goal = CompositeNodeWithChainedChildren(name="goal")
     goal.plot_specifications.collapse_children = True
     statechart = build_statechart(goal)
@@ -217,7 +223,7 @@ def test_collapsed_goal_reports_hidden_node_count():
     assert "2 nodes hidden" in label
 
 
-def test_collapsed_goal_counts_hidden_nodes_of_nested_goals():
+def test_collapsed_goal_counts_hidden_nodes_of_nested_goals() -> None:
     goal = CompositeNodeWithNestedCompositeChild(name="goal")
     goal.plot_specifications.collapse_children = True
     statechart = build_statechart(goal)
@@ -228,7 +234,7 @@ def test_collapsed_goal_counts_hidden_nodes_of_nested_goals():
     assert "3 nodes hidden" in label
 
 
-def test_expanded_goal_reports_no_hidden_node_count():
+def test_expanded_goal_reports_no_hidden_node_count() -> None:
     goal = CompositeNodeWithChainedChildren(name="goal")
     statechart = build_statechart(goal)
 
@@ -243,7 +249,7 @@ def test_expanded_goal_reports_no_hidden_node_count():
 # %% structure copies
 
 
-def test_structure_copy_keeps_plot_specs():
+def test_structure_copy_keeps_plot_specs() -> None:
     goal = CompositeNodeWithChainedChildren(name="goal")
     goal.plot_specifications.collapse_children = True
     statechart = build_statechart(goal)
@@ -258,7 +264,7 @@ def test_structure_copy_keeps_plot_specs():
 
 
 @pytest.mark.parametrize("transition_kind", list(TransitionKind))
-def test_every_transition_kind_has_a_minimum_rank_distance(transition_kind):
+def test_every_transition_kind_has_a_minimum_rank_distance(transition_kind) -> None:
     """
     The lookup is total, so a kind missing from it only shows up as a KeyError while
     drawing an arrow.
@@ -266,7 +272,7 @@ def test_every_transition_kind_has_a_minimum_rank_distance(transition_kind):
     assert transition_kind in MINIMUM_RANK_DISTANCES
 
 
-def test_pause_dependency_may_sit_beside_the_node_reading_it():
+def test_pause_dependency_may_sit_beside_the_node_reading_it() -> None:
     observed = ConstTrueNode(name="Observed")
     owner = ConstTrueNode(name="Owner")
     statechart = build_dependency_statechart(observed, owner)
@@ -278,7 +284,7 @@ def test_pause_dependency_may_sit_beside_the_node_reading_it():
     assert int(edge.get("minlen")) == MINIMUM_RANK_DISTANCES[TransitionKind.PAUSE]
 
 
-def test_start_dependency_is_drawn_a_row_above_the_node_reading_it():
+def test_start_dependency_is_drawn_a_row_above_the_node_reading_it() -> None:
     observed = ConstTrueNode(name="Observed")
     owner = ConstTrueNode(name="Owner")
     statechart = build_dependency_statechart(observed, owner)
@@ -290,7 +296,7 @@ def test_start_dependency_is_drawn_a_row_above_the_node_reading_it():
     assert int(edge.get("minlen")) == MINIMUM_RANK_DISTANCES[TransitionKind.START]
 
 
-def test_merged_arrow_keeps_the_largest_distance_its_conditions_ask_for():
+def test_merged_arrow_keeps_the_largest_distance_its_conditions_ask_for() -> None:
     """
     A rank distance is a lower bound, so the two arrows this used to draw already left
     graphviz solving for the larger of the two.
@@ -312,10 +318,10 @@ def test_merged_arrow_keeps_the_largest_distance_its_conditions_ask_for():
     )
 
 
-def test_reset_dependency_points_at_the_node_reading_it():
+def test_reset_dependency_points_at_the_node_reading_it() -> None:
     """
-    A reset arrow used to be emitted backwards and turned around with `arrowtail`; it
-    now runs the same way as every other arrow.
+    A reset arrow runs from the observed node to the node whose reset condition reads
+    it, the same way as every other arrow.
     """
     observed = ConstTrueNode(name="Observed")
     owner = ConstTrueNode(name="Owner")
@@ -333,7 +339,7 @@ def test_reset_dependency_points_at_the_node_reading_it():
 
 
 @pytest.mark.parametrize("observation_state", list(ObservationStateValues))
-def test_every_observation_state_has_a_drawing_style(observation_state):
+def test_every_observation_state_has_a_drawing_style(observation_state) -> None:
     """
     The lookup is total, so a state missing from it only shows up as a KeyError while
     drawing an edge.
@@ -344,7 +350,7 @@ def test_every_observation_state_has_a_drawing_style(observation_state):
 # %% arrows carry the observation of the node they leave
 
 
-def test_unknown_arrow_is_thinner_than_a_decided_arrow():
+def test_unknown_arrow_is_thinner_than_a_decided_arrow() -> None:
     unknown = OBSERVATION_DRAWING_STYLES[ObservationStateValues.UNKNOWN]
 
     assert (
@@ -357,7 +363,7 @@ def test_unknown_arrow_is_thinner_than_a_decided_arrow():
     )
 
 
-def test_arrow_takes_the_line_width_of_the_observation_it_carries():
+def test_arrow_takes_the_line_width_of_the_observation_it_carries() -> None:
     observed = ConstTrueNode(name="Observed")
     owner = ConstTrueNode(name="Owner")
     statechart = build_dependency_statechart(observed, owner)
@@ -371,7 +377,7 @@ def test_arrow_takes_the_line_width_of_the_observation_it_carries():
     assert float(edge.get("penwidth")) == expected.line_width
 
 
-def test_one_arrow_is_drawn_per_dependency():
+def test_one_arrow_is_drawn_per_dependency() -> None:
     """
     A node read by two of another node's conditions is reached once, because an arrow no
     longer says which condition reads it.
@@ -389,7 +395,7 @@ def test_one_arrow_is_drawn_per_dependency():
 # %% condition terms carry the value of the term
 
 
-def test_condition_term_is_colored_by_the_value_of_the_term():
+def test_condition_term_is_colored_by_the_value_of_the_term() -> None:
     """
     A term is inked by what it evaluates to, not by the observation of the node it
     names:
@@ -413,7 +419,7 @@ def test_condition_term_is_colored_by_the_value_of_the_term():
     assert f'<FONT COLOR="{term_color}">"{term}"</FONT>' in label
 
 
-def test_condition_term_is_colored_when_its_node_name_reads_as_an_operator():
+def test_condition_term_is_colored_when_its_node_name_reads_as_an_operator() -> None:
     """
     A term is found by what it is, not by what its text looks like: a node named after a
     logical operator still gets its own color.
@@ -436,7 +442,7 @@ def test_condition_term_is_colored_when_its_node_name_reads_as_an_operator():
     assert f'<FONT COLOR="{term_color}">"{term}"</FONT>' in label
 
 
-def test_condition_without_terms_is_spelled_out():
+def test_condition_without_terms_is_spelled_out() -> None:
     """
     A constant condition colors True green and False red when active, and grays them out
     when inactive.
@@ -458,7 +464,7 @@ def test_condition_without_terms_is_spelled_out():
     )
 
 
-def test_condition_boolean_constants_coloring_in_running_state():
+def test_condition_boolean_constants_coloring_in_running_state() -> None:
     """
     In RUNNING state, pause:False is active and rendered with False colored red, while
     start:True is inactive and rendered grayed out.
@@ -486,7 +492,7 @@ def test_condition_boolean_constants_coloring_in_running_state():
 # %% extra border styles for terminal nodes
 
 
-def test_end_statechart_renders_with_rounded_outer_cluster():
+def test_end_statechart_renders_with_rounded_outer_cluster() -> None:
     end = EndStatechart()
     statechart = Statechart(context=StatechartContext(world=World()))
     statechart.add_node(end)
@@ -502,7 +508,7 @@ def test_end_statechart_renders_with_rounded_outer_cluster():
     assert end.unique_name not in direct_node_names(graph)
 
 
-def test_cancel_statechart_renders_with_dashed_outer_cluster():
+def test_cancel_statechart_renders_with_dashed_outer_cluster() -> None:
     cancel = CancelStatechart(exception=Exception("fail"))
     statechart = Statechart(context=StatechartContext(world=World()))
     statechart.add_node(cancel)
@@ -518,7 +524,7 @@ def test_cancel_statechart_renders_with_dashed_outer_cluster():
     assert cancel.unique_name not in direct_node_names(graph)
 
 
-def test_edge_targeting_terminal_node_clips_to_outer_cluster():
+def test_edge_targeting_terminal_node_clips_to_outer_cluster() -> None:
     observed = ConstTrueNode(name="Observed")
     end = EndStatechart()
     cancel = CancelStatechart(exception=Exception("fail"))
@@ -542,7 +548,7 @@ def test_edge_targeting_terminal_node_clips_to_outer_cluster():
 @pytest.mark.parametrize("life_cycle_state", list(LifeCycleValues))
 def test_conditions_are_grayed_out_when_not_triggerable(
     life_cycle_state: LifeCycleValues,
-):
+) -> None:
     """
     Conditions that cannot legally trigger a transition from the node's current
     lifecycle state are rendered in disabled gray font without individual term color
@@ -624,7 +630,7 @@ def test_conditions_are_grayed_out_when_not_triggerable(
 @pytest.mark.parametrize("life_cycle_state", list(LifeCycleValues))
 def test_terminal_node_condition_graying(
     node_factory, life_cycle_state: LifeCycleValues
-):
+) -> None:
     """
     Terminal nodes render only the start condition, grayed out when not in NOT_STARTED.
     """

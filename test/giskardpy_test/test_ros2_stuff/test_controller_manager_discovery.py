@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from threading import Thread
 from time import sleep, time
-from typing import Iterator
+from typing_extensions import Iterator
 
 import pytest
 from rclpy.executors import SingleThreadedExecutor
@@ -113,7 +113,7 @@ class ControllerManagerMimic:
     The node of the manager followed by one node per controller.
     """
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         manager = ControllerManager(self.name)
         manager_node = Node(manager.node_name, namespace=manager.namespace)
         manager_node.create_service(
@@ -231,7 +231,7 @@ class ControllerManagerMimics:
     The thread the executor spins on.
     """
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         for manager in self.managers:
             for node in manager.nodes:
                 self.executor.add_node(node)
@@ -302,7 +302,7 @@ class CommandDiscoveringInterface(ClosedLoopRobotInterfaceConfig):
     The controllers to consider, all if ``None``.
     """
 
-    def setup(self):
+    def setup(self) -> None:
         self.add_velocity_controllers_from_controller_manager(
             self.controller_manager_name, whitelist=self.whitelist
         )
@@ -314,7 +314,7 @@ class FullyDiscoveringInterface(CommandDiscoveringInterface):
     An interface that takes both its state and its commands from a controller manager.
     """
 
-    def setup(self):
+    def setup(self) -> None:
         self.discover_interfaces_from_controller_manager(
             self.controller_manager_name, whitelist=self.whitelist
         )
@@ -361,7 +361,9 @@ def joints_by_command_topic(
 # %% discovering the commanded joints
 
 
-def test_a_controller_manager_in_a_namespace_yields_its_velocity_controller(serve):
+def test_a_controller_manager_in_a_namespace_yields_its_velocity_controller(
+    serve,
+) -> None:
     manager = ControllerManagerMimic(
         name="head/controller_manager",
         controllers=[
@@ -380,7 +382,7 @@ def test_a_controller_manager_in_a_namespace_yields_its_velocity_controller(serv
     assert commanded_joint_names_by_topic(giskard) == joints_by_command_topic(manager)
 
 
-def test_an_inactive_velocity_controller_is_not_commanded(serve):
+def test_an_inactive_velocity_controller_is_not_commanded(serve) -> None:
     active = ControllerMimic(
         name="head_velocity_controller",
         controller_type=ControllerType.JOINT_GROUP_VELOCITY,
@@ -403,7 +405,7 @@ def test_an_inactive_velocity_controller_is_not_commanded(serve):
     assert controlled_joint_names(giskard.world_config.world) == set(active.joints)
 
 
-def test_a_whitelist_limits_the_commanded_controllers(serve):
+def test_a_whitelist_limits_the_commanded_controllers(serve) -> None:
     listed = ControllerMimic(
         name="head_velocity_controller",
         controller_type=ControllerType.JOINT_GROUP_VELOCITY,
@@ -427,7 +429,7 @@ def test_a_whitelist_limits_the_commanded_controllers(serve):
     assert controlled_joint_names(giskard.world_config.world) == set(listed.joints)
 
 
-def test_a_whitelisted_controller_that_is_not_loaded_raises(serve):
+def test_a_whitelisted_controller_that_is_not_loaded_raises(serve) -> None:
     manager = ControllerManagerMimic(
         name="controller_manager",
         controllers=[
@@ -449,7 +451,7 @@ def test_a_whitelisted_controller_that_is_not_loaded_raises(serve):
         giskard.setup()
 
 
-def test_a_whitelisted_controller_that_is_not_active_raises(serve):
+def test_a_whitelisted_controller_that_is_not_active_raises(serve) -> None:
     inactive = ControllerMimic(
         name="head_velocity_controller",
         controller_type=ControllerType.JOINT_GROUP_VELOCITY,
@@ -489,7 +491,7 @@ def manager_with_broadcaster_and_velocity_controller() -> ControllerManagerMimic
     )
 
 
-def test_discovering_only_commands_reads_no_joint_state_topic(serve):
+def test_discovering_only_commands_reads_no_joint_state_topic(serve) -> None:
     manager = manager_with_broadcaster_and_velocity_controller()
     start(serve, manager)
     giskard = closed_loop_pr2(CommandDiscoveringInterface(manager.name))
@@ -499,7 +501,9 @@ def test_discovering_only_commands_reads_no_joint_state_topic(serve):
     assert joint_state_topics(giskard) == []
 
 
-def test_discovering_everything_reads_the_topic_of_the_joint_state_broadcaster(serve):
+def test_discovering_everything_reads_the_topic_of_the_joint_state_broadcaster(
+    serve,
+) -> None:
     manager = manager_with_broadcaster_and_velocity_controller()
     start(serve, manager)
     [broadcaster, _] = manager.controllers
@@ -582,7 +586,7 @@ def closed_loop_tracy() -> Giskard:
     )
 
 
-def test_tracy_commands_the_joints_its_two_controller_managers_report(serve):
+def test_tracy_commands_the_joints_its_two_controller_managers_report(serve) -> None:
     left = tracy_left_arm_manager()
     right = tracy_right_arm_manager()
     start(serve, left, right)
@@ -595,7 +599,7 @@ def test_tracy_commands_the_joints_its_two_controller_managers_report(serve):
     )
 
 
-def test_tracy_does_not_command_a_velocity_controller_of_a_gripper(serve):
+def test_tracy_does_not_command_a_velocity_controller_of_a_gripper(serve) -> None:
     gripper = arm_velocity_controller(
         "gripper_velocity_controller", [TracyJoint.LEFT_GRIPPER_LEFT_KNUCKLE]
     )
@@ -608,7 +612,7 @@ def test_tracy_does_not_command_a_velocity_controller_of_a_gripper(serve):
     assert left.command_topic_of(gripper) not in commanded_joint_names_by_topic(giskard)
 
 
-def test_tracy_fails_when_an_arm_has_not_loaded_its_velocity_controller(serve):
+def test_tracy_fails_when_an_arm_has_not_loaded_its_velocity_controller(serve) -> None:
     left_without_controllers = ControllerManagerMimic(
         name=TracyControllerManager.LEFT_ARM, controllers=[]
     )
@@ -665,7 +669,7 @@ def closed_loop_daisy() -> Giskard:
     )
 
 
-def test_daisy_commands_the_joints_its_controller_manager_reports(serve):
+def test_daisy_commands_the_joints_its_controller_manager_reports(serve) -> None:
     manager = ControllerManagerMimic(
         name="controller_manager",
         controllers=[daisy_left_arm_controller(), daisy_right_arm_controller()],
@@ -678,7 +682,7 @@ def test_daisy_commands_the_joints_its_controller_manager_reports(serve):
     assert commanded_joint_names_by_topic(giskard) == joints_by_command_topic(manager)
 
 
-def test_daisy_does_not_command_a_velocity_controller_of_a_gripper(serve):
+def test_daisy_does_not_command_a_velocity_controller_of_a_gripper(serve) -> None:
     gripper = arm_velocity_controller(
         "gripper_velocity_controller", [DAiSyJoint.LEFT_GRIPPER_FINGER]
     )
@@ -700,7 +704,7 @@ def test_daisy_does_not_command_a_velocity_controller_of_a_gripper(serve):
     )
 
 
-def test_daisy_fails_when_an_arm_has_not_loaded_its_velocity_controller(serve):
+def test_daisy_fails_when_an_arm_has_not_loaded_its_velocity_controller(serve) -> None:
     manager = ControllerManagerMimic(
         name="controller_manager", controllers=[daisy_left_arm_controller()]
     )

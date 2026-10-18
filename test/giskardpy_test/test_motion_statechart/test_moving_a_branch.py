@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import numpy as np
-from typing_extensions import List, Optional
 
 from cramph.composites import (
     ChildChooser,
@@ -59,7 +58,7 @@ def _add_box_next_to_the_robot(world: World) -> Body:
 
 def test_a_motion_built_before_a_body_was_moved_moves_it_with_its_new_parent(
     cylinder_bot_world: World,
-):
+) -> None:
     world = cylinder_bot_world
     box = _add_box_next_to_the_robot(world)
     robot = world.get_kinematic_structure_entity_by_name("bot")
@@ -100,7 +99,7 @@ def test_a_motion_built_before_a_body_was_moved_moves_it_with_its_new_parent(
 
 def test_building_the_nodes_again_registers_no_further_variables(
     cylinder_bot_world: World,
-):
+) -> None:
     world = cylinder_bot_world
     box = _add_box_next_to_the_robot(world)
     robot = world.get_kinematic_structure_entity_by_name("bot")
@@ -148,14 +147,14 @@ class ChooserNotingTheSpeed(ChildChooser):
     The child to choose.
     """
 
-    speeds_when_asked: List[float] = field(default_factory=list)
+    speeds_when_asked: list[float] = field(default_factory=list)
     """
     The fastest velocity of any degree of freedom, once per question.
     """
 
     def choose_child(
         self, node: CompositeNodeChoosingItsChild, context
-    ) -> Optional[StatechartNode]:
+    ) -> StatechartNode | None:
         self.speeds_when_asked.append(_fastest_velocity(self.world))
         return self.child
 
@@ -169,7 +168,7 @@ def _fastest_velocity(world: World) -> float:
 
 def test_a_moving_robot_decelerates_to_rest_before_a_child_is_chosen(
     cylinder_bot_world: World,
-):
+) -> None:
     """
     Choosing blocks the tick, so the robot is brought to rest first, by the controller
     slowing it down rather than by its velocities being cut to zero.
@@ -216,7 +215,7 @@ def test_a_moving_robot_decelerates_to_rest_before_a_child_is_chosen(
 
 def test_a_degree_of_freedom_the_controller_does_not_command_leaves_the_robot_at_rest(
     cylinder_bot_world: World,
-):
+) -> None:
     """
     Only what the controller drives has to come to rest; a free body sliding about is
     not the robot moving.
@@ -250,7 +249,7 @@ def test_a_degree_of_freedom_the_controller_does_not_command_leaves_the_robot_at
 
 def test_the_speed_at_rest_given_to_a_motion_control_decides_when_the_robot_is_at_rest(
     cylinder_bot_world: World,
-):
+) -> None:
     world = cylinder_bot_world
     robot = world.get_kinematic_structure_entity_by_name("bot")
     motion_control = MotionControl(speed_at_rest=0.5)

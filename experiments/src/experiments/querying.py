@@ -33,7 +33,7 @@ from cramph.data_types import LifeCycleValues
 from coraplex.orm.ormatic_interface import Base  # type: ignore
 from coraplex.plans.failures import PlanFailure
 from coraplex.robot_plans.actions.base import Action
-from cramph.composites import Attempt, Sequence, TryInOrder
+from cramph.composites import Sequence, StatementNode, TryInOrder
 from cramph.node import StatechartNode
 from coraplex.robot_plans.actions.composite.transporting import TransportAction
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction, ParkArmsAction
@@ -246,13 +246,13 @@ def build_plan(executor: SimulatedPlanExecutor) -> StatechartNode:
                 ]
             ),
             TransportAction.from_graspable_by_closest_grasps(
-                bowl_annotation,
+                world.get_semantic_annotations_by_type(Bowl)[0],
                 Pose.from_xyz_rpy(5.0, 3.3, 0.75, yaw=1.57, reference_frame=world.root),
                 pr2.left_arm,
                 executor.context,
             ),
             TransportAction.from_graspable_by_closest_grasps(
-                spoon_annotation,
+                world.get_semantic_annotations_by_type(Spoon)[0],
                 Pose.from_xyz_rpy(5.1, 3.3, 0.75, yaw=1.57, reference_frame=world.root),
                 pr2.left_arm,
                 executor.context,
@@ -268,7 +268,7 @@ def build_plan(executor: SimulatedPlanExecutor) -> StatechartNode:
     return root
 
 
-def _nodes_of(plan: StatechartNode) -> List[StatechartNode]:
+def _nodes_of(plan: StatechartNode) -> list[StatechartNode]:
     """
     :return: Every node the performed plan ran, its root first.
     """
@@ -276,6 +276,9 @@ def _nodes_of(plan: StatechartNode) -> List[StatechartNode]:
 
 
 def _q_what_did_you_do(plan: StatechartNode) -> BehaviourQuery:
+    """
+    :return: The query answering the question it carries.
+    """
     n = eql.variable(Action, domain=_nodes_of(plan))
     return BehaviourQuery(
         question="What did you just do?",
@@ -289,6 +292,9 @@ def _q_what_did_you_do(plan: StatechartNode) -> BehaviourQuery:
 
 
 def _q_walk_through_in_order(plan: StatechartNode) -> BehaviourQuery:
+    """
+    :return: The query answering the question it carries.
+    """
     n = eql.variable(StatechartNode, domain=_nodes_of(plan))
     return BehaviourQuery(
         question="Walk me through what you did in order.",
@@ -299,6 +305,9 @@ def _q_walk_through_in_order(plan: StatechartNode) -> BehaviourQuery:
 
 
 def _q_total_duration(plan: StatechartNode) -> BehaviourQuery:
+    """
+    :return: The query answering the question it carries.
+    """
     n = eql.variable(Action, domain=_nodes_of(plan))
     return BehaviourQuery(
         question="How long did the whole task take?",
@@ -312,6 +321,9 @@ def _q_total_duration(plan: StatechartNode) -> BehaviourQuery:
 
 
 def _q_duration_per_step(plan: StatechartNode) -> BehaviourQuery:
+    """
+    :return: The query answering the question it carries.
+    """
     n = eql.variable(StatechartNode, domain=_nodes_of(plan))
     return BehaviourQuery(
         question="How long did each step take?",
@@ -322,6 +334,9 @@ def _q_duration_per_step(plan: StatechartNode) -> BehaviourQuery:
 
 
 def _q_did_anything_go_wrong(plan: StatechartNode) -> BehaviourQuery:
+    """
+    :return: The query answering the question it carries.
+    """
     n = eql.variable(StatechartNode, domain=_nodes_of(plan))
     return BehaviourQuery(
         question="Did anything go wrong?",
@@ -330,18 +345,20 @@ def _q_did_anything_go_wrong(plan: StatechartNode) -> BehaviourQuery:
 
 
 def _q_why_did_you_fail(plan: StatechartNode) -> BehaviourQuery:
-    n = eql.variable(Attempt, domain=_nodes_of(plan))
+    """
+    :return: The query answering the question it carries.
+    """
+    n = eql.variable(StatementNode, domain=_nodes_of(plan))
     return BehaviourQuery(
         question="Why did you fail at that step?",
-        query=eql.an(
-            eql.entity(n.failure_reasons).where(
-                n.life_cycle_state == LifeCycleValues.FAILED
-            )
-        ),
+        query=eql.an(eql.entity(n.failure_reasons)),
     )
 
 
 def _q_how_many_retries(plan: StatechartNode) -> BehaviourQuery:
+    """
+    :return: The query answering the question it carries.
+    """
     n = eql.variable(StatechartNode, domain=_nodes_of(plan))
     return BehaviourQuery(
         question="How many times did you retry before giving up?",
@@ -354,6 +371,9 @@ def _q_how_many_retries(plan: StatechartNode) -> BehaviourQuery:
 
 
 def _q_which_fallback(plan: StatechartNode) -> BehaviourQuery:
+    """
+    :return: The query answering the question it carries.
+    """
     n = eql.variable(StatechartNode, domain=_nodes_of(plan))
     s = eql.variable(StatechartNode, domain=n.left_siblings)
     return BehaviourQuery(
@@ -368,6 +388,9 @@ def _q_which_fallback(plan: StatechartNode) -> BehaviourQuery:
 
 
 def _q_longest_step(plan: StatechartNode) -> BehaviourQuery:
+    """
+    :return: The query answering the question it carries.
+    """
     n = eql.variable(Action, domain=_nodes_of(plan))
 
     return BehaviourQuery(
@@ -379,6 +402,9 @@ def _q_longest_step(plan: StatechartNode) -> BehaviourQuery:
 
 
 def _q_status_breakdown(plan: StatechartNode) -> BehaviourQuery:
+    """
+    :return: The query answering the question it carries.
+    """
     n = eql.variable(StatechartNode, domain=_nodes_of(plan))
     return BehaviourQuery(
         question="Were all subtasks successful, or did some fail?",
@@ -390,7 +416,21 @@ def _q_status_breakdown(plan: StatechartNode) -> BehaviourQuery:
     )
 
 
+def _q_world_modifications(world: World) -> BehaviourQuery:
+    """
+    :return: The query answering the question it carries.
+    """
+    m = eql.variable(WorldModelModificationBlock, domain=world.modification_history)
+    return BehaviourQuery(
+        question="What world modifications were made?",
+        query=eql.an(eql.entity(m)),
+    )
+
+
 def _q_world_state_at_end(world: World) -> BehaviourQuery:
+    """
+    :return: The query answering the question it carries.
+    """
     n = eql.variable(World, domain=[world])
     return BehaviourQuery(
         question="What was the state of the world when you finished?",
@@ -398,7 +438,7 @@ def _q_world_state_at_end(world: World) -> BehaviourQuery:
     )
 
 
-def build_queries(plan: StatechartNode, world: World) -> List[BehaviourQuery]:
+def build_queries(plan: StatechartNode, world: World) -> list[BehaviourQuery]:
     """
     Construct all behaviour queries for a completed plan execution.
 
@@ -417,7 +457,7 @@ def build_queries(plan: StatechartNode, world: World) -> List[BehaviourQuery]:
         _q_which_fallback(plan),
         _q_longest_step(plan),
         _q_status_breakdown(plan),
-        _q_world_modifications(plan),
+        _q_world_modifications(world),
         _q_world_state_at_end(world),
     ]
 

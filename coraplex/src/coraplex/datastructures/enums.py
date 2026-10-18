@@ -161,17 +161,6 @@ class DetectionState(int, Enum):
     PAUSE = 2
 
 
-class MovementType(Enum):
-    """
-    Enum for the different movement types of the robot.
-    """
-
-    STRAIGHT_TRANSLATION = auto()
-    STRAIGHT_CARTESIAN = auto()
-    TRANSLATION = auto()
-    CARTESIAN = auto()
-
-
 class InsertionPosition(Enum):
     """
     When the nodes a sequential insertion inserts run relative to the anchor node.

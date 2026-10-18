@@ -156,7 +156,7 @@ class ClosedLoopRobotInterfaceConfig(RobotInterfaceConfig, ABC):
         self.setup()
 
     @abstractmethod
-    def setup(self):
+    def setup(self) -> None:
         """
         Implement this method to configure how Giskard reads the state of the robot and
         how it sends commands, using the ``sync_*`` and ``add_*`` methods.
@@ -360,7 +360,7 @@ class ClosedLoopRobotInterfaceConfig(RobotInterfaceConfig, ABC):
     def sync_joint_states_from_controller_manager(
         self,
         controller_manager_name: str = "controller_manager",
-        whitelist: List[str] | None = None,
+        whitelist: list[str] | None = None,
     ) -> None:
         """
         Tell Giskard to sync the world state with the active joint state broadcasters of
@@ -380,7 +380,7 @@ class ClosedLoopRobotInterfaceConfig(RobotInterfaceConfig, ABC):
     def add_velocity_controllers_from_controller_manager(
         self,
         controller_manager_name: str = "controller_manager",
-        whitelist: List[str] | None = None,
+        whitelist: list[str] | None = None,
     ) -> None:
         """
         Tell Giskard to command the joints of the active velocity controllers of a

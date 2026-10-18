@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import pytest
-from typing_extensions import List, Optional
 
 from cramph.node import EndedByOwner
 from cramph.composites import Parallel, Sequence
@@ -37,13 +36,13 @@ class CompositeNodeCountingTheChildrenOfAnother(EndedByOwner, CompositeNode):
     The composite node whose children are counted.
     """
 
-    counted_children: Optional[int] = field(default=None, init=False)
+    counted_children: int | None = field(default=None, init=False)
     """
     How many children :attr:`watched` had when this node expanded.
     """
 
     @property
-    def prerequisite_nodes(self) -> List[StatechartNode]:
+    def prerequisite_nodes(self) -> list[StatechartNode]:
         return [self.watched]
 
     def expand(self, context: StatechartContext) -> None:
@@ -55,7 +54,7 @@ class CompositeNodeCountingTheChildrenOfAnother(EndedByOwner, CompositeNode):
 
 def test_a_composite_node_expands_when_it_joins_a_statechart(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     first = NodeSucceedingOnObservingTrue(observation=ObservationStateValues.TRUE)
     second = NodeSucceedingOnObservingTrue(observation=ObservationStateValues.TRUE)
@@ -67,7 +66,7 @@ def test_a_composite_node_expands_when_it_joins_a_statechart(
 
 def test_a_nested_composite_node_expands_with_its_parent(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     step = NodeSucceedingOnObservingTrue(observation=ObservationStateValues.TRUE)
     statechart.add_node(Sequence(nodes=[inner := Sequence(nodes=[step])]))
@@ -79,7 +78,7 @@ def test_a_nested_composite_node_expands_with_its_parent(
 
 def test_a_node_handed_to_a_joined_composite_node_joins_right_away(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(sequence := Sequence())
     sequence.add_node(
@@ -95,7 +94,7 @@ def test_a_node_handed_to_a_joined_composite_node_joins_right_away(
 
 def test_a_composite_node_reads_a_prerequisite_that_joined_before_it(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(sequence := Sequence(nodes=[ConstTrueNode(), ConstTrueNode()]))
     statechart.add_node(
@@ -107,7 +106,7 @@ def test_a_composite_node_reads_a_prerequisite_that_joined_before_it(
 
 def test_a_composite_node_joining_before_its_prerequisite_is_rejected(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     sequence = Sequence(nodes=[ConstTrueNode()])
 
@@ -117,7 +116,7 @@ def test_a_composite_node_joining_before_its_prerequisite_is_rejected(
 
 def test_a_compiled_statechart_takes_new_nodes(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(ConstTrueNode())
     statechart_executor.compile(statechart)
@@ -133,7 +132,7 @@ def test_a_compiled_statechart_takes_new_nodes(
 
 def test_a_parallel_keeps_failing_on_its_children_after_its_fail_condition_is_set(
     statechart_executor: StatechartExecutor,
-):
+) -> None:
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(
         parallel := Parallel(

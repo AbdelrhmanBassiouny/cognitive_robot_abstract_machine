@@ -26,7 +26,7 @@ class ExtensionRecordingItsCleanup(ContextExtension):
     Whether :meth:`cleanup` was called.
     """
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         self.cleaned_up = True
 
 
@@ -46,7 +46,7 @@ class OtherSpecializedExtensionRecordingItsCleanup(ExtensionRecordingItsCleanup)
 
 def test_cleaning_up_a_context_cleans_up_its_extensions(
     statechart_context: StatechartContext,
-):
+) -> None:
     extension = ExtensionRecordingItsCleanup()
     statechart_context.add_extension(extension)
 
@@ -57,13 +57,13 @@ def test_cleaning_up_a_context_cleans_up_its_extensions(
 
 def test_get_extension_returns_none_when_nothing_is_registered(
     statechart_context: StatechartContext,
-):
+) -> None:
     assert statechart_context.get_extension(ExtensionRecordingItsCleanup) is None
 
 
 def test_get_extension_returns_the_registered_extension(
     statechart_context: StatechartContext,
-):
+) -> None:
     extension = ExtensionRecordingItsCleanup()
     statechart_context.add_extension(extension)
 
@@ -72,14 +72,14 @@ def test_get_extension_returns_the_registered_extension(
 
 def test_require_extension_raises_when_nothing_is_registered(
     statechart_context: StatechartContext,
-):
+) -> None:
     with pytest.raises(MissingContextExtensionError):
         statechart_context.require_extension(ExtensionRecordingItsCleanup)
 
 
 def test_adding_a_second_extension_of_the_same_type_raises(
     statechart_context: StatechartContext,
-):
+) -> None:
     statechart_context.add_extension(ExtensionRecordingItsCleanup())
 
     with pytest.raises(DuplicateContextExtensionError):
@@ -91,7 +91,7 @@ def test_adding_a_second_extension_of_the_same_type_raises(
 
 def test_an_extension_is_found_by_the_type_it_specializes(
     statechart_context: StatechartContext,
-):
+) -> None:
     extension = SpecializedExtensionRecordingItsCleanup()
     statechart_context.add_extension(extension)
 
@@ -103,7 +103,7 @@ def test_an_extension_is_found_by_the_type_it_specializes(
 
 def test_an_extension_is_not_found_by_a_type_specializing_it(
     statechart_context: StatechartContext,
-):
+) -> None:
     statechart_context.add_extension(ExtensionRecordingItsCleanup())
 
     assert (
@@ -114,7 +114,7 @@ def test_an_extension_is_not_found_by_a_type_specializing_it(
 
 def test_two_extensions_specializing_the_requested_type_are_ambiguous(
     statechart_context: StatechartContext,
-):
+) -> None:
     statechart_context.add_extension(SpecializedExtensionRecordingItsCleanup())
     statechart_context.add_extension(OtherSpecializedExtensionRecordingItsCleanup())
 
@@ -127,7 +127,7 @@ def test_two_extensions_specializing_the_requested_type_are_ambiguous(
 
 def test_ensuring_an_extension_adds_it_when_none_is_registered(
     statechart_context: StatechartContext,
-):
+) -> None:
     extension = ExtensionRecordingItsCleanup()
 
     assert statechart_context.ensure_extension(extension) is extension
@@ -136,7 +136,7 @@ def test_ensuring_an_extension_adds_it_when_none_is_registered(
 
 def test_ensuring_an_extension_keeps_the_registered_one(
     statechart_context: StatechartContext,
-):
+) -> None:
     registered = ExtensionRecordingItsCleanup()
     statechart_context.add_extension(registered)
 
@@ -151,7 +151,7 @@ def test_ensuring_an_extension_keeps_the_registered_one(
 
 def test_a_context_without_a_tick_duration_takes_the_one_set(
     statechart_context_without_tick_duration: StatechartContext,
-):
+) -> None:
     statechart_context_without_tick_duration.set_tick_duration(0.02)
 
     assert statechart_context_without_tick_duration.require_tick_duration() == 0.02
@@ -159,7 +159,7 @@ def test_a_context_without_a_tick_duration_takes_the_one_set(
 
 def test_setting_the_tick_duration_a_context_already_has_keeps_it(
     statechart_context: StatechartContext,
-):
+) -> None:
     tick_duration = statechart_context.require_tick_duration()
 
     statechart_context.set_tick_duration(tick_duration)
@@ -169,7 +169,7 @@ def test_setting_the_tick_duration_a_context_already_has_keeps_it(
 
 def test_setting_a_different_tick_duration_is_rejected(
     statechart_context: StatechartContext,
-):
+) -> None:
     tick_duration = statechart_context.require_tick_duration()
 
     with pytest.raises(ConflictingTickDurationError):

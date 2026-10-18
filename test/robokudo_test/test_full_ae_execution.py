@@ -4,6 +4,7 @@ import numpy as np
 import py_trees
 import pytest
 
+from robokudo.types.cv import ColorToDepthRatio
 from robokudo import world as rk_world
 import robokudo.cas
 import robokudo.defs
@@ -54,7 +55,7 @@ class TestFullAEExecution(object):
             loop=False,
             target_dir=robokudo.utils.data_downloader.test_data_path() / Path("data"),
             kinect_height_fix_mode=True,
-            color2depth_ratio=(0.5, 0.5),
+            color_to_depth_ratio=ColorToDepthRatio(horizontal=0.5, vertical=0.5),
             static_camera_transform_enabled=True,
             static_world_frame="map",
             static_camera_frame="camera",
@@ -97,7 +98,7 @@ class TestFullAEExecution(object):
             loop=False,
             target_dir=robokudo.utils.data_downloader.test_data_path() / Path("data"),
             kinect_height_fix_mode=True,
-            color2depth_ratio=(0.5, 0.5),
+            color_to_depth_ratio=ColorToDepthRatio(horizontal=0.5, vertical=0.5),
             static_camera_transform_enabled=True,
             static_world_frame="map",
             static_camera_frame="camera",

@@ -4,7 +4,7 @@ import logging
 import os
 from dataclasses import field, dataclass
 from pathlib import Path
-from typing import Optional, List
+from typing_extensions import Optional
 from cramph.context import StatechartContext
 from cramph.executor import StatechartExecutor, TickingExecutorExtension
 from semantic_digital_twin.adapters.package_resolver import FileUriResolver
@@ -47,7 +47,7 @@ class EpisodeSegmentation(TickingExecutorExtension):
             self.player.start()
 
     @staticmethod
-    def detect_holes(context: StatechartContext):
+    def detect_holes(context: StatechartContext) -> None:
         """
         Collects the bodies of the world that have "hole" in their name as the holes of
         the :class:`~segmind.detectors.base.SegmindContext`.
@@ -72,12 +72,12 @@ class EpisodeSceneLoader:
     The world the models are loaded into.
     """
 
-    ignored_objects: List[str] = field(default_factory=list)
+    ignored_objects: list[str] = field(default_factory=list)
     """
     Names of the models that are not loaded.
     """
 
-    fixed_objects: List[str] = field(default_factory=list)
+    fixed_objects: list[str] = field(default_factory=list)
     """
     Names of the models that are fixed to the root of the world.
     """

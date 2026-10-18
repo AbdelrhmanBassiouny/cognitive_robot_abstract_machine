@@ -54,7 +54,7 @@ quaternions = [np.array([1.0, 0, 0, 0]), np.array([0.0, 1, 0, 0])]
 class TestRotationMatrix:
     def test_expression_with_structural_zeros_is_written_the_same_after_a_round_trip(
         self,
-    ):
+    ) -> None:
         angle = sm.FloatVariable("angle")
         rotation = RotationMatrix.from_vectors(
             x=Vector3(sm.cos(angle), sm.sin(angle), 0), z=Vector3.Z()

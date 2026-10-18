@@ -5,9 +5,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-
-from coraplex.datastructures.enums import MovementType
-from cramph.composites import Parallel, Sequence
+from coraplex.robot_plans.actions.base import SequentialAction
+from cramph.composites import Parallel
 from cramph.node import StatechartNode
 from coraplex.robot_plans.mixins import (
     ReattachesBodies,
@@ -17,6 +16,10 @@ from coraplex.robot_plans.mixins import (
     MovesToolCenterPoint,
     PickUpTuningParameters,
     ReachTuningParameters,
+)
+from semantic_digital_twin.collision_checking.collision_matrix import CollisionRule
+from semantic_digital_twin.collision_checking.collision_rules import (
+    AllowCollisionForEndEffector,
 )
 from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.grasping.grasp_candidates import (
@@ -30,7 +33,7 @@ from semantic_digital_twin.spatial_types.spatial_types import Pose
 logger = logging.getLogger(__name__)
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, eq=False)
 class HasGraspChoice:
     """
     Adds to an action the grasp it takes hold by.
@@ -56,6 +59,7 @@ class HasGraspChoice:
 @dataclass(eq=False, repr=False, kw_only=True)
 class ReachAction(
     MovesToolCenterPoint,
+    SequentialAction,
     HasApproachesGraspPoses,
     ReachTuningParameters,
     HasGraspDetectionThreshold,
@@ -87,7 +91,14 @@ class ReachAction(
     :class:`PickUpAction` to open before its slower final approach.
     """
 
-    def create_action_body(self) -> StatechartNode:
+    def create_temporary_collision_rules(self) -> list[CollisionRule]:
+        """
+        :return: An allowance for the gripper to touch the surroundings of the grasp it
+            comes down onto.
+        """
+        return [AllowCollisionForEndEffector(end_effector=self.arm.end_effector)]
+
+    def create_steps(self) -> list[StatechartNode]:
         poses = self.grasp_pose_sequence(
             self.grasp.grasp_pose, self.arm.end_effector, self.grasp
         )
@@ -96,7 +107,6 @@ class ReachAction(
             self.tool_center_point_goal(
                 pre_pose,
                 self.arm,
-                allow_gripper_collision=True,
                 max_linear_velocity=self.pre_approach_linear_velocity,
             ),
         ]
@@ -106,17 +116,17 @@ class ReachAction(
             self.tool_center_point_goal(
                 poses.grasp,
                 self.arm,
-                allow_gripper_collision=True,
                 max_linear_velocity=self.final_approach_linear_velocity,
             )
         )
-        return Sequence(nodes=children)
+        return children
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
 class PickUpAction(
     MovesToolCenterPoint,
     ReattachesBodies,
+    SequentialAction,
     HasGraspChoice,
     HasApproachesGraspPoses,
     PickUpTuningParameters,
@@ -155,57 +165,60 @@ class PickUpAction(
         )
         return cls(grasp=grasp, arm=arm)
 
-    def _grasp_attempt(self) -> Sequence:
+    def _grasp_steps(self) -> list[StatechartNode]:
         """
         A pick-up is a grasp the world is then told about: the object hangs off the tool
         frame afterwards, which is what makes it move with the arm.
 
-        :return: One attempt at taking :attr:`grasp`, without lifting the object.
+        :return: The steps taking :attr:`grasp`, without lifting the object.
         """
-        return Sequence(
-            name=f"{self.name}/grasp attempt",
-            nodes=[
-                GraspingAction(
-                    grasp=self.grasp,
-                    arm=self.arm,
-                    approach_clearance=self.approach_clearance,
-                    retreat_distance=self.retreat_distance,
-                    pre_approach_linear_velocity=self.pre_approach_linear_velocity,
-                    final_approach_linear_velocity=self.final_approach_linear_velocity,
-                    grasp_closing_velocity=self.grasp_closing_velocity,
-                    grasp_stall_minimum_time=self.grasp_stall_minimum_time,
-                    tolerate_grasp_stall=self.tolerate_grasp_stall,
-                    grasp_detection_threshold=self.grasp_detection_threshold,
-                    position_threshold=self.position_threshold,
-                    orientation_threshold=self.orientation_threshold,
-                ),
-                *self.reattach(
-                    self.grasp.graspable.root, self.arm.end_effector.tool_frame
-                ),
-            ],
-        )
+        return [
+            GraspingAction(
+                grasp=self.grasp,
+                arm=self.arm,
+                approach_clearance=self.approach_clearance,
+                retreat_distance=self.retreat_distance,
+                pre_approach_linear_velocity=self.pre_approach_linear_velocity,
+                final_approach_linear_velocity=self.final_approach_linear_velocity,
+                grasp_closing_velocity=self.grasp_closing_velocity,
+                grasp_stall_minimum_time=self.grasp_stall_minimum_time,
+                tolerate_grasp_stall=self.tolerate_grasp_stall,
+                grasp_detection_threshold=self.grasp_detection_threshold,
+                position_threshold=self.position_threshold,
+                orientation_threshold=self.orientation_threshold,
+            ),
+            *self.reattach(
+                self.grasp.graspable.root,
+                self.arm.end_effector.tool_frame,
+            ),
+        ]
 
-    def create_action_body(self) -> StatechartNode:
+    def create_temporary_collision_rules(self) -> list[CollisionRule]:
+        """
+        :return: An allowance for the gripper to touch the surroundings of its object,
+            which it is around from reaching for it until it has lifted it clear, the
+            moment the object is put under it included.
+        """
+        return [AllowCollisionForEndEffector(end_effector=self.arm.end_effector)]
+
+    def create_steps(self) -> list[StatechartNode]:
         lift_to_pose = self.grasp_pose_sequence(
             self.grasp.grasp_pose, self.arm.end_effector, self.grasp
         ).retreat
-        return Sequence(
-            nodes=[
-                self._grasp_attempt(),
-                self.tool_center_point_goal(
-                    lift_to_pose,
-                    self.arm,
-                    allow_gripper_collision=True,
-                    movement_type=MovementType.TRANSLATION,
-                    max_linear_velocity=self.lift_linear_velocity,
-                ),
-            ]
-        )
+        return [
+            *self._grasp_steps(),
+            self.tool_center_point_goal(
+                lift_to_pose,
+                self.arm,
+                max_linear_velocity=self.lift_linear_velocity,
+            ),
+        ]
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
 class GraspingAction(
     MovesToolCenterPoint,
+    SequentialAction,
     HasGraspChoice,
     HasApproachesGraspPoses,
     PickUpTuningParameters,
@@ -225,33 +238,37 @@ class GraspingAction(
     :attr:`~giskardpy.motion_statechart.goals.gripper.MoveGripper.tolerate_stall`).
     """
 
-    def create_action_body(self) -> StatechartNode:
-        return Sequence(
-            nodes=[
-                ReachAction(
-                    grasp=self.grasp,
-                    arm=self.arm,
-                    approach_clearance=self.approach_clearance,
-                    retreat_distance=self.retreat_distance,
-                    pre_approach_linear_velocity=self.pre_approach_linear_velocity,
-                    final_approach_linear_velocity=self.final_approach_linear_velocity,
-                    open_gripper_at_pre_pose=True,
-                    position_threshold=self.position_threshold,
-                    orientation_threshold=self.orientation_threshold,
-                    grasp_detection_threshold=self.grasp_detection_threshold,
-                ),
-                self.closing_step(
-                    self.gripper_goal(
-                        GripperState.CLOSE,
-                        self.arm.end_effector,
-                        allow_gripper_collision=True,
-                        finger_velocity=self.grasp_closing_velocity,
-                        stall_minimum_time=self.grasp_stall_minimum_time,
-                        tolerate_stall=self.tolerate_grasp_stall,
-                    )
-                ),
-            ]
-        )
+    def create_temporary_collision_rules(self) -> list[CollisionRule]:
+        """
+        :return: An allowance for the gripper to touch the surroundings of the grasp it
+            reaches and closes on.
+        """
+        return [AllowCollisionForEndEffector(end_effector=self.arm.end_effector)]
+
+    def create_steps(self) -> list[StatechartNode]:
+        return [
+            ReachAction(
+                grasp=self.grasp,
+                arm=self.arm,
+                approach_clearance=self.approach_clearance,
+                retreat_distance=self.retreat_distance,
+                pre_approach_linear_velocity=self.pre_approach_linear_velocity,
+                final_approach_linear_velocity=self.final_approach_linear_velocity,
+                open_gripper_at_pre_pose=True,
+                position_threshold=self.position_threshold,
+                orientation_threshold=self.orientation_threshold,
+                grasp_detection_threshold=self.grasp_detection_threshold,
+            ),
+            self.closing_step(
+                self.gripper_goal(
+                    GripperState.CLOSE,
+                    self.arm.end_effector,
+                    finger_velocity=self.grasp_closing_velocity,
+                    stall_minimum_time=self.grasp_stall_minimum_time,
+                    tolerate_stall=self.tolerate_grasp_stall,
+                )
+            ),
+        ]
 
     def closing_step(self, closing_goal: StatechartNode) -> Parallel:
         """
@@ -267,7 +284,6 @@ class GraspingAction(
                         self.grasp.grasp_pose, self.arm.end_effector, self.grasp
                     ).grasp,
                     self.arm,
-                    allow_gripper_collision=True,
                 ),
             ]
         )
