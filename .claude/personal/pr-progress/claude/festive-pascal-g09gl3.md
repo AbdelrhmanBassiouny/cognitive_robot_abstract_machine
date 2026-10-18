@@ -4,8 +4,9 @@ Plan
 - Package (format, agents-md, generic AGENTS.md), hooks, CI, PyPI publish.
 
 Done
-- Pushed through 7d65a9084e: own version, shared publish workflow, version-bump CI check.
+- Pushed through e89fafc237: review round 1 (CommandLine class, Formatter.run, version check script + tests, authors/maintainers, README).
 
 Next
-- PyPI pending publisher registered (cram2). Merge upstream publishes 0.1.0; fork-main publish job fails, expected.
+- Open threads: authors/maintainers (confirm @Tigul=Jonas Dech, @ichumuh=Simon Stelter); generic fork/upstream rules proposal awaiting user decision.
+- Merge upstream publishes 0.1.0; fork-main publish job fails, expected.
 - basstler PR replacing its format_docstrings.py and AGENTS.md (after release).
