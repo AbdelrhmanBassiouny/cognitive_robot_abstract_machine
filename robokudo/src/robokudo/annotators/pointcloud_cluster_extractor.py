@@ -454,7 +454,7 @@ class PointCloudClusterExtractor(ThreadedAnnotator):
         draw_bounding_boxes_from_object_hypotheses(
             visualization_img,
             object_hypotheses,
-            lambda oh: f"ROI-{oh.id}({len(oh.points.points)})",
+            lambda object_hypothesis: f"ROI-{object_hypothesis.id}({len(object_hypothesis.points.points)})",
         )
 
         self.get_annotator_output_struct().set_image(visualization_img)
@@ -633,7 +633,7 @@ class NaivePointCloudClusterExtractor(ThreadedAnnotator):
         draw_bounding_boxes_from_object_hypotheses(
             visualization_img,
             object_hypotheses,
-            lambda oh: f"ROI-{oh.id}({len(oh.points.points)})",
+            lambda object_hypothesis: f"ROI-{object_hypothesis.id}({len(object_hypothesis.points.points)})",
         )
 
         self.get_annotator_output_struct().set_image(visualization_img)

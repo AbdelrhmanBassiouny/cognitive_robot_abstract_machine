@@ -2,6 +2,7 @@ from __future__ import annotations
 
 # %% Imports
 import copy
+from dataclasses import dataclass
 from enum import Enum
 
 import cv2
@@ -14,6 +15,7 @@ from robokudo.annotators.core import BaseAnnotator, ThreadedAnnotator
 from robokudo.cas import CASViews
 from robokudo.io.camera_model_adapters import Open3DCameraModelAdapter
 from robokudo.types.annotation import PoseAnnotation, TSDFAnnotation
+from robokudo.types.cv import Point2D, Rect
 from robokudo.types.scene import ObjectHypothesis
 from robokudo.utils.comparators import TranslationComparator
 from robokudo.utils.cv_helper import get_scaled_color_image_for_depth_image
@@ -21,6 +23,24 @@ from robokudo.utils.transform import get_transform_matrix_from_q
 
 if TYPE_CHECKING:
     import numpy.typing as npt
+
+
+# %% Volume integration inputs
+@dataclass
+class VolumeIntegrationInput:
+    """An object's pose and image region for volume integration."""
+
+    object_hypothesis: ObjectHypothesis
+    """Object whose volume is integrated."""
+
+    pose: PoseAnnotation
+    """Object pose relative to the camera."""
+
+    roi: Rect
+    """Object bounds in depth-image coordinates."""
+
+
+# %% Volume integration
 
 
 class TSDFAnnotatorVisualizationModes(Enum):
@@ -134,31 +154,40 @@ class TSDFAnnotator(ThreadedAnnotator):
         if cas is None:
             return Status.FAILURE
 
-        ohs: list[ObjectHypothesis] = cas.filter_annotations_by_type(ObjectHypothesis)
-        if len(ohs) == 0:
+        object_hypotheses: list[ObjectHypothesis] = cas.filter_annotations_by_type(
+            ObjectHypothesis
+        )
+        if len(object_hypotheses) == 0:
             return Status.FAILURE
 
         color2depth_ratio: tuple[float, float] = cas.color2depth_ratio
 
-        # Only process ohs with pose
-        oh_data: list[
-            tuple[ObjectHypothesis, PoseAnnotation, tuple[int, int, int, int]]
-        ] = []
-        for oh in ohs:
-            poses = cas.filter_by_type(PoseAnnotation, oh.annotations)
-            if len(poses) > 0:
-                roi: tuple[int, int, int, int] = oh.roi.roi.get_corner_points()
-                roi = (
-                    int(roi[0] * color2depth_ratio[0]),
-                    int(roi[1] * color2depth_ratio[1]),
-                    int(roi[2] * color2depth_ratio[0]),
-                    int(roi[3] * color2depth_ratio[1]),
+        volume_integration_inputs: list[VolumeIntegrationInput] = []
+        for object_hypothesis in object_hypotheses:
+            poses = cas.filter_by_type(PoseAnnotation, object_hypothesis.annotations)
+            if len(poses) == 0:
+                self.rk_logger.debug(
+                    f"No pose found for object {object_hypothesis.id}, skipping..."
                 )
-                oh_data.append((oh, poses[0], roi))
-            else:
-                self.rk_logger.debug(f"No pose found for object {oh.id}, skipping...")
+                continue
 
-        if len(oh_data) == 0:
+            left, top, right, bottom = object_hypothesis.roi.roi.get_corner_points()
+            scaled_left = int(left * color2depth_ratio[0])
+            scaled_top = int(top * color2depth_ratio[1])
+            scaled_right = int(right * color2depth_ratio[0])
+            scaled_bottom = int(bottom * color2depth_ratio[1])
+            roi = Rect(
+                pos=Point2D(x=scaled_left, y=scaled_top),
+                width=scaled_right - scaled_left,
+                height=scaled_bottom - scaled_top,
+            )
+            volume_integration_inputs.append(
+                VolumeIntegrationInput(
+                    object_hypothesis=object_hypothesis, pose=poses[0], roi=roi
+                )
+            )
+
+        if len(volume_integration_inputs) == 0:
             return Status.FAILURE
 
         camera_intrinsic = Open3DCameraModelAdapter.to_intrinsic(
@@ -176,10 +205,15 @@ class TSDFAnnotator(ThreadedAnnotator):
 
         geometries: list[o3d.geometry.Geometry] = []
         masks: list[npt.NDArray[np.uint8]] = []
-        for i, (oh, pose, roi) in enumerate(oh_data):
-            mask: npt.NDArray[np.uint8] = oh.roi.mask
+        for volume_integration_input in volume_integration_inputs:
+            object_hypothesis = volume_integration_input.object_hypothesis
+            pose = volume_integration_input.pose
+            left, top, right, bottom = volume_integration_input.roi.get_corner_points()
+            mask: npt.NDArray[np.uint8] = object_hypothesis.roi.mask
             if mask is None:
-                self.rk_logger.debug(f"No mask found for object {oh.id}, skipping...")
+                self.rk_logger.debug(
+                    f"No mask found for object {object_hypothesis.id}, skipping..."
+                )
                 continue
 
             # Mask should be or (0, 1)
@@ -193,14 +227,13 @@ class TSDFAnnotator(ThreadedAnnotator):
                 masked_color = color_image * mask[..., np.newaxis]
             else:
                 masked_depth = np.zeros_like(depth_image, dtype=np.float32)
-                masked_depth[roi[1] : roi[3], roi[0] : roi[2]] = (
-                    depth_image[roi[1] : roi[3], roi[0] : roi[2]] * mask
+                masked_depth[top:bottom, left:right] = (
+                    depth_image[top:bottom, left:right] * mask
                 )
 
                 masked_color = np.zeros_like(color_image, dtype=np.uint8)
-                masked_color[roi[1] : roi[3], roi[0] : roi[2]] = (
-                    color_image[roi[1] : roi[3], roi[0] : roi[2]]
-                    * mask[..., np.newaxis]
+                masked_color[top:bottom, left:right] = (
+                    color_image[top:bottom, left:right] * mask[..., np.newaxis]
                 )
 
             masks.append(mask)
@@ -247,17 +280,19 @@ class TSDFAnnotator(ThreadedAnnotator):
                 extrinsic=pose_in_camera,
             )
 
-            volume_an = TSDFAnnotation(source=self.name)
-            volume_an.volume = volume
-            volume_an.transform = pose_in_camera
-            oh.annotations.append(volume_an)
+            volume_annotation = TSDFAnnotation(source=self.name)
+            volume_annotation.volume = volume
+            volume_annotation.transform = pose_in_camera
+            object_hypothesis.annotations.append(volume_annotation)
 
             vis_mode = self.descriptor.parameters.geometry_visualization_mode
             if vis_mode != TSDFAnnotatorVisualizationModes.NONE:
-                vis_geom = self.get_visualization_geometries(volume_an)
+                vis_geom = self.get_visualization_geometries(volume_annotation)
                 geometries.extend(vis_geom)
 
-        vis_image = self.get_visualization_image(color_image, oh_data, masks)
+        vis_image = self.get_visualization_image(
+            color_image, volume_integration_inputs, masks
+        )
         self.get_annotator_output_struct().set_image(vis_image)
 
         vis_mode = self.descriptor.parameters.geometry_visualization_mode
@@ -272,30 +307,33 @@ class TSDFAnnotator(ThreadedAnnotator):
     def get_visualization_image(
         self,
         image: npt.NDArray[np.uint8],
-        oh_data: list[
-            tuple[ObjectHypothesis, PoseAnnotation, tuple[int, int, int, int]]
-        ],
+        volume_integration_inputs: list[VolumeIntegrationInput],
         masks: list[npt.NDArray[np.uint8]],
     ) -> npt.NDArray[np.uint8]:
         """
         Get an image containing the bounding boxes and masks of objects.
 
         :param image: The image to add the visualizations to.
-        :param oh_data: The object hypotheses to visualize.
+        :param volume_integration_inputs: Objects with poses and depth-image bounds.
         :param masks: The masks to visualize.
         :return: The image with the visualizations.
         """
-        self.rk_logger.debug(f"Visualizing image for {len(oh_data)} objects")
+        self.rk_logger.debug(
+            f"Visualizing image for {len(volume_integration_inputs)} objects"
+        )
 
         overlay = np.zeros_like(image, dtype=np.uint8)
         combined_mask = np.zeros(image.shape[:2], dtype=np.uint8)  # 0-1
-        for i, (oh, _, roi) in enumerate(oh_data):
-            cv2.rectangle(image, (roi[0], roi[1]), (roi[2], roi[3]), (0, 255, 0), 2)
+        for hypothesis_index, volume_integration_input in enumerate(
+            volume_integration_inputs
+        ):
+            left, top, right, bottom = volume_integration_input.roi.get_corner_points()
+            cv2.rectangle(image, (left, top), (right, bottom), (0, 255, 0), 2)
 
-            mask = masks[i]  # (H, W)
+            mask = masks[hypothesis_index]  # (H, W)
             if mask.shape[:2] != image.shape[:2]:
-                combined_mask[roi[1] : roi[3], roi[0] : roi[2]] = np.maximum(
-                    combined_mask[roi[1] : roi[3], roi[0] : roi[2]], mask
+                combined_mask[top:bottom, left:right] = np.maximum(
+                    combined_mask[top:bottom, left:right], mask
                 )
             else:
                 combined_mask = np.maximum(combined_mask, mask)

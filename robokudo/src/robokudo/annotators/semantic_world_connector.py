@@ -265,16 +265,20 @@ class SemanticDigitalTwinConnector(ThreadedAnnotator):
             return
 
         visualization_img = cas.get_copy(CASViews.COLOR_IMAGE)
-        object_hypotheses = [oh for oh, _ in associated_hypotheses]
+        object_hypotheses = [
+            object_hypothesis for object_hypothesis, _ in associated_hypotheses
+        ]
         labels_by_hypothesis_id = {
-            id(oh): self.get_object_belief_label(object_belief)
-            for oh, object_belief in associated_hypotheses
+            id(object_hypothesis): self.get_object_belief_label(object_belief)
+            for object_hypothesis, object_belief in associated_hypotheses
         }
 
         draw_bounding_boxes_from_object_hypotheses(
             visualization_img,
             object_hypotheses,
-            lambda oh: labels_by_hypothesis_id.get(id(oh), "unassociated"),
+            lambda object_hypothesis: labels_by_hypothesis_id.get(
+                id(object_hypothesis), "unassociated"
+            ),
         )
         self.get_annotator_output_struct().set_image(visualization_img)
 

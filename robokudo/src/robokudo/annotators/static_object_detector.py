@@ -488,10 +488,6 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
         visualization_image = copy.deepcopy(self.color)
 
         for object_hypothesis in object_hypotheses:
-            if not isinstance(object_hypothesis, ObjectHypothesis):
-                raise InvalidAnalysisData(
-                    expected_type=ObjectHypothesis, actual_type=type(object_hypothesis)
-                )
             object_hypothesis_roi = object_hypothesis.roi.roi
             upper_left = (object_hypothesis_roi.pos.x, object_hypothesis_roi.pos.y)
             upper_left_text = (

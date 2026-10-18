@@ -68,14 +68,25 @@ class ByteTrackAnnotator(BaseAnnotator):
             self.tracker.reset()
         self.last_ts = data_ts
 
-        ohs: list[ObjectHypothesis] = cas.filter_annotations_by_type(ObjectHypothesis)
-        if len(ohs) == 0:
-            self.rk_logger.debug(f"{len(ohs)} object hypothesis found, nothing to do.")
+        object_hypotheses: list[ObjectHypothesis] = cas.filter_annotations_by_type(
+            ObjectHypothesis
+        )
+        if len(object_hypotheses) == 0:
+            self.rk_logger.debug(
+                f"{len(object_hypotheses)} object hypothesis found, nothing to do."
+            )
             return Status.SUCCESS
 
-        rois_xyxy = np.array([oh.roi.roi.get_corner_points() for oh in ohs])
+        rois_xyxy = np.array(
+            [
+                object_hypothesis.roi.roi.get_corner_points()
+                for object_hypothesis in object_hypotheses
+            ]
+        )
         if len(rois_xyxy) == 0:
-            self.rk_logger.debug(f"No ROI found in {len(ohs)} object hypothesis.")
+            self.rk_logger.debug(
+                f"No ROI found in {len(object_hypotheses)} object hypothesis."
+            )
             return Status.FAILURE
 
         detections = {
@@ -83,7 +94,7 @@ class ByteTrackAnnotator(BaseAnnotator):
             "confidence": np.ones(len(rois_xyxy), dtype=float),  # Default confidence
         }
 
-        masks = [oh.roi.mask for oh in ohs]
+        masks = [object_hypothesis.roi.mask for object_hypothesis in object_hypotheses]
         masks = list(filter(lambda m: m is not None, masks))
         if len(masks) == len(rois_xyxy):
             # Masks must be restored to full color image size
@@ -105,24 +116,30 @@ class ByteTrackAnnotator(BaseAnnotator):
             )
 
         classifications: list[Classification] = []
-        for oh in ohs:
-            classification = cas.filter_by_type(Classification, oh.annotations)
+        for object_hypothesis in object_hypotheses:
+            classification = cas.filter_by_type(
+                Classification, object_hypothesis.annotations
+            )
             if len(classification) == 0:
                 break
             classifications.append(classification[0])
         if len(classifications) == len(rois_xyxy):
-            detections["class_id"] = np.zeros(len(ohs))
-            detections["confidence"] = np.zeros(len(ohs))
+            detections["class_id"] = np.zeros(len(object_hypotheses))
+            detections["confidence"] = np.zeros(len(object_hypotheses))
             detections["data"][CLASS_NAME_DATA_FIELD] = np.full(
-                len(ohs), "NONE", dtype=str
+                len(object_hypotheses), "NONE", dtype=str
             )
 
-            for i, (oh, cls) in enumerate(zip(ohs, classifications)):
+            for i, (object_hypothesis, cls) in enumerate(
+                zip(object_hypotheses, classifications)
+            ):
                 detections["class_id"][i] = cls.class_id
                 detections["confidence"][i] = cls.confidence
                 detections["data"][CLASS_NAME_DATA_FIELD] = cls.classname
 
-            self.rk_logger.debug(f"Using {len(ohs)} class ids for object tracking.")
+            self.rk_logger.debug(
+                f"Using {len(object_hypotheses)} class ids for object tracking."
+            )
 
         detections = sv.Detections(**detections)
         tracked_detections = self.tracker.update(detections)
