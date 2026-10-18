@@ -9,11 +9,29 @@ description = "Development tooling for Python repositories: a black-compatible d
 readme = "README.md"
 requires-python = ">=3.11"
 license = "LGPL-3.0-only"
+# The authors are everyone who edited the docstring formatter or AGENTS.md before they
+# moved into this package; the maintainers are the repository's code owners.
 authors = [
-    {name = "Abdelrhman Bassiouny", email = "abassiou@uni-bremen.de"}
+    {name = "Abdelrhman Bassiouny", email = "abassiou@uni-bremen.de"},
+    {name = "LucaKro", email = "luc_kro@uni-bremen.de"},
+    {name = "Simon Stelter", email = "stelter@uni-bremen.de"},
+    {name = "Tom Schierenbeck", email = "tom_sch@uni-bremen.de"},
+    {name = "Jonas Dech", email = "j.dech@gmx.net"},
+    {name = "Jeroen Schäfer", email = "jeroen.schaefer@outlook.de"},
+    {name = "David Prüser", email = "david@pruesernet.de"},
+    {name = "AbdElRahmanFarhan", email = "abdofarhan75@gmail.com"},
+    {name = "Sanic", email = "pmania@tzi.de"},
+    {name = "rinaalo", email = "rinaalo@hotmail.com"},
 ]
 maintainers = [
-    {name = "Abdelrhman Bassiouny", email = "abassiou@uni-bremen.de"}
+    {name = "Abdelrhman Bassiouny", email = "abassiou@uni-bremen.de"},
+    {name = "Tom Schierenbeck", email = "tom_sch@uni-bremen.de"},
+    {name = "Simon Stelter", email = "stelter@uni-bremen.de"},
+    {name = "maltehue", email = "huerkamp@uni-bremen.de"},
+    {name = "Jonas Dech", email = "j.dech@gmx.net"},
+    {name = "Vanessa Hassouna", email = "hassouna@uni-bremen.de"},
+    {name = "LucaKro", email = "luc_kro@uni-bremen.de"},
+    {name = "Sanic", email = "pmania@tzi.de"},
 ]
 keywords = ["developer-tooling", "pre-commit", "black", "docformatter", "agents"]
 classifiers = [
@@ -39,7 +57,7 @@ dependencies = [
 Repository = "https://github.com/cram2/cognitive_robot_abstract_machine"
 
 [project.scripts]
-cram-development-tools = "cram_development_tools.command_line:main"
+cram-development-tools = "cram_development_tools.command_line:CommandLine.main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

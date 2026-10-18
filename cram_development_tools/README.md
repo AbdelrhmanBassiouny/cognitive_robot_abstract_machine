@@ -76,11 +76,6 @@ releasing every other package. It is published the same way as the other package
 `main` that touches `cram_development_tools/`, and publishes with PyPI trusted publishing
 whenever that version is not on PyPI yet.
 
-One-time set-up: on PyPI, add a trusted publisher for the project
-`cram-development-tools` with the repository's owner and name, the workflow
-`cram-development-tools-publish-to-pypi.yml` and the environment `pypi` (for the first
-release, as a pending publisher).
-
 To release, raise `version` in `cram_development_tools/pyproject.toml`, together with the
 `additional_dependencies` pins in this README, and merge the change into `main`. A pull
 request that changes the package's source or metadata without raising its version fails

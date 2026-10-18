@@ -3,12 +3,11 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from cram_development_tools.command_line import ExitStatus, Subcommand, main
+from cram_development_tools.command_line import CommandLine, ExitStatus, Subcommand
 from cram_development_tools.docstring_formatting import (
     BlackOption,
     DocstringFormatter,
     Formatter,
-    run_formatter,
 )
 
 from .dataset_files import DatasetFile
@@ -35,7 +34,7 @@ def test_keeps_black_output_when_docformatter_conflicts_with_black(
     )
     black_only_path = tmp_path / "black_only.py"
     shutil.copyfile(path, black_only_path)
-    run_formatter(Formatter.BLACK, list(BlackOption), black_only_path)
+    Formatter.BLACK.run(list(BlackOption), black_only_path)
 
     outcome = DocstringFormatter().format_file(path)
 
@@ -68,7 +67,7 @@ def test_format_command_writes_changes_and_reports_failure(
 ) -> None:
     path = copy_into_temporary_directory(DatasetFile.UNFORMATTED_MODULE, "module.py")
 
-    exit_status = main([Subcommand.FORMAT, str(path)])
+    exit_status = CommandLine.main([Subcommand.FORMAT, str(path)])
 
     assert exit_status == ExitStatus.FAILURE
     assert path.read_text() == DatasetFile.FORMATTED_MODULE.value.read_text()
@@ -79,7 +78,7 @@ def test_format_command_succeeds_on_formatted_files(
 ) -> None:
     path = copy_into_temporary_directory(DatasetFile.FORMATTED_MODULE, "module.py")
 
-    exit_status = main([Subcommand.FORMAT, str(path)])
+    exit_status = CommandLine.main([Subcommand.FORMAT, str(path)])
 
     assert exit_status == ExitStatus.SUCCESS
     assert path.read_text() == DatasetFile.FORMATTED_MODULE.value.read_text()

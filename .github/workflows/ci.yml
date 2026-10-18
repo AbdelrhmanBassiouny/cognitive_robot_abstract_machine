@@ -128,32 +128,5 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: |
-          base=${{ github.event.pull_request.base.sha }}
-          package_metadata=cram_development_tools/pyproject.toml
-          if git diff --quiet "$base" HEAD -- cram_development_tools/src "$package_metadata"; then
-            echo "cram-development-tools is unchanged."
-            exit 0
-          fi
-          if ! git cat-file -e "$base:$package_metadata" 2>/dev/null; then
-            echo "cram-development-tools is new; its first version is released as it is."
-            exit 0
-          fi
-          pip install packaging
-          git show "$base:$package_metadata" > "$RUNNER_TEMP/base_pyproject.toml"
-          python - "$RUNNER_TEMP/base_pyproject.toml" "$package_metadata" <<'EOF'
-          import sys
-          import tomllib
-          from packaging.version import Version
-
-          base, head = (
-              Version(tomllib.load(open(path, "rb"))["project"]["version"])
-              for path in sys.argv[1:]
-          )
-          if head <= base:
-              sys.exit(
-                  f"cram_development_tools/ changed but its version is still {head} "
-                  f"(base: {base}); raise version in cram_development_tools/pyproject.toml."
-              )
-          print(f"cram-development-tools version raised from {base} to {head}.")
-          EOF
+      - run: pip install packaging
+      - run: python scripts/check_version_is_raised.py cram_development_tools ${{ github.event.pull_request.base.sha }}

@@ -8,10 +8,10 @@ from cram_development_tools.agents_instructions import (
     RepositoryInstructionsFile,
 )
 from cram_development_tools.command_line import (
+    CommandLine,
     ExitStatus,
     Option,
     Subcommand,
-    main,
 )
 
 from .dataset_files import DatasetFile
@@ -60,7 +60,7 @@ def test_agents_md_command_writes_the_composed_file(repository_root: Path) -> No
         repository_root / RepositoryInstructionsFile.PROJECT,
     )
 
-    exit_status = main([Subcommand.AGENTS_MD])
+    exit_status = CommandLine.main([Subcommand.AGENTS_MD])
 
     assert exit_status == ExitStatus.FAILURE
     assert (repository_root / RepositoryInstructionsFile.GENERATED).read_text() == (
@@ -71,7 +71,7 @@ def test_agents_md_command_writes_the_composed_file(repository_root: Path) -> No
 def test_agents_md_command_writes_without_project_rules(
     repository_root: Path,
 ) -> None:
-    exit_status = main([Subcommand.AGENTS_MD])
+    exit_status = CommandLine.main([Subcommand.AGENTS_MD])
 
     assert exit_status == ExitStatus.FAILURE
     assert (repository_root / RepositoryInstructionsFile.GENERATED).read_text() == (
@@ -82,9 +82,9 @@ def test_agents_md_command_writes_without_project_rules(
 def test_agents_md_command_succeeds_when_the_file_is_current(
     repository_root: Path,
 ) -> None:
-    main([Subcommand.AGENTS_MD])
+    CommandLine.main([Subcommand.AGENTS_MD])
 
-    assert main([Subcommand.AGENTS_MD]) == ExitStatus.SUCCESS
+    assert CommandLine.main([Subcommand.AGENTS_MD]) == ExitStatus.SUCCESS
 
 
 def test_check_passes_on_a_freshly_written_file(repository_root: Path) -> None:
@@ -92,15 +92,15 @@ def test_check_passes_on_a_freshly_written_file(repository_root: Path) -> None:
         DatasetFile.PROJECT_RULES.value,
         repository_root / RepositoryInstructionsFile.PROJECT,
     )
-    main([Subcommand.AGENTS_MD])
+    CommandLine.main([Subcommand.AGENTS_MD])
 
-    assert main([Subcommand.AGENTS_MD, Option.CHECK]) == ExitStatus.SUCCESS
+    assert CommandLine.main([Subcommand.AGENTS_MD, Option.CHECK]) == ExitStatus.SUCCESS
 
 
 def test_check_fails_on_a_stale_file_without_rewriting_it(
     repository_root: Path,
 ) -> None:
-    main([Subcommand.AGENTS_MD])
+    CommandLine.main([Subcommand.AGENTS_MD])
     shutil.copyfile(
         DatasetFile.PROJECT_RULES.value,
         repository_root / RepositoryInstructionsFile.PROJECT,
@@ -108,11 +108,11 @@ def test_check_fails_on_a_stale_file_without_rewriting_it(
     generated_path = repository_root / RepositoryInstructionsFile.GENERATED
     stale_content = generated_path.read_text()
 
-    exit_status = main([Subcommand.AGENTS_MD, Option.CHECK])
+    exit_status = CommandLine.main([Subcommand.AGENTS_MD, Option.CHECK])
 
     assert exit_status == ExitStatus.FAILURE
     assert generated_path.read_text() == stale_content
 
 
 def test_check_fails_when_the_file_is_missing(repository_root: Path) -> None:
-    assert main([Subcommand.AGENTS_MD, Option.CHECK]) == ExitStatus.FAILURE
+    assert CommandLine.main([Subcommand.AGENTS_MD, Option.CHECK]) == ExitStatus.FAILURE

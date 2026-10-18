@@ -37,6 +37,20 @@ class Formatter(StrEnum):
     BLACK = "black"
     DOCFORMATTER = "docformatter"
 
+    def run(self, options: Sequence[str], file_path: Path) -> int:
+        """
+        Run this tool on ``file_path`` with the interpreter running this code.
+
+        :param options: The command line options to pass before the file.
+        :param file_path: The file to format, in place.
+        :return: The tool's exit code.
+        """
+        return subprocess.run(
+            [sys.executable, "-m", self, *options, str(file_path)],
+            capture_output=True,
+            text=True,
+        ).returncode
+
 
 class BlackOption(StrEnum):
     """
@@ -73,22 +87,6 @@ class DocformatterExitCode(IntEnum):
 
     UNCHANGED = 0
     CHANGED = 3
-
-
-def run_formatter(formatter: Formatter, options: Sequence[str], file_path: Path) -> int:
-    """
-    Run ``formatter`` on ``file_path`` with the interpreter running this code.
-
-    :param formatter: The tool to run.
-    :param options: The command line options to pass before the file.
-    :param file_path: The file to format, in place.
-    :return: The tool's exit code.
-    """
-    return subprocess.run(
-        [sys.executable, "-m", formatter, *options, str(file_path)],
-        capture_output=True,
-        text=True,
-    ).returncode
 
 
 # %% formatting
@@ -218,8 +216,7 @@ class DocstringFormatter:
         :return: Whether black accepted and formatted the file.
         """
         return (
-            run_formatter(Formatter.BLACK, list(BlackOption), file_path)
-            == BlackExitCode.SUCCESS
+            Formatter.BLACK.run(list(BlackOption), file_path) == BlackExitCode.SUCCESS
         )
 
     @staticmethod
@@ -230,7 +227,5 @@ class DocstringFormatter:
         :param file_path: The file to format.
         :return: Whether docformatter ran successfully.
         """
-        exit_code = run_formatter(
-            Formatter.DOCFORMATTER, list(DocformatterOption), file_path
-        )
+        exit_code = Formatter.DOCFORMATTER.run(list(DocformatterOption), file_path)
         return exit_code in list(DocformatterExitCode)

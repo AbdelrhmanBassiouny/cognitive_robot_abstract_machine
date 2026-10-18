@@ -7,7 +7,9 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from dataclasses import dataclass
 from enum import IntEnum, StrEnum
+from functools import cached_property
 from pathlib import Path
 
 from typing_extensions import Sequence
@@ -64,84 +66,98 @@ class ExitStatus(IntEnum):
     """
 
 
-# %% subcommands
+# %% command line
 
 
-def format_files(arguments: argparse.Namespace) -> ExitStatus:
+@dataclass
+class CommandLine:
     """
-    Format the files named on the command line.
-
-    :param arguments: The parsed command line.
-    :return: :attr:`ExitStatus.FAILURE` if any file was modified.
+    The ``cram-development-tools`` command line: its subcommands, their arguments and
+    running the one a command line names.
     """
-    if DocstringFormatter().format_files(arguments.files):
-        return ExitStatus.FAILURE
-    return ExitStatus.SUCCESS
 
-
-def generate_agents_instructions(arguments: argparse.Namespace) -> ExitStatus:
+    program_name: str = "cram-development-tools"
     """
-    Write, or with :attr:`Option.CHECK` verify, the ``AGENTS.md`` of the current directory.
-
-    :param arguments: The parsed command line.
-    :return: :attr:`ExitStatus.FAILURE` if the file was rewritten or is stale.
+    The name the command is invoked by.
     """
-    instructions = AgentsInstructions(Path.cwd())
-    if arguments.check:
-        if instructions.is_current():
-            return ExitStatus.SUCCESS
-        logger.error(
-            "%s is out of date; run `cram-development-tools %s` to regenerate it",
-            instructions.generated_path.name,
-            Subcommand.AGENTS_MD,
+
+    @classmethod
+    def main(cls, command_line: Sequence[str] | None = None) -> int:
+        """
+        Run the subcommand the command line names.
+
+        :param command_line: The arguments after the program name; the process's own when
+            omitted.
+        :return: The subcommand's exit status.
+        """
+        logging.basicConfig(level=logging.INFO, format="%(message)s")
+        interface = cls()
+        arguments = interface.parser.parse_args(command_line)
+        return arguments.run(arguments)
+
+    @cached_property
+    def parser(self) -> argparse.ArgumentParser:
+        """
+        The parser for every subcommand, each bound to the method that runs it.
+        """
+        parser = argparse.ArgumentParser(prog=self.program_name)
+        subparsers = parser.add_subparsers(required=True)
+
+        format_parser = subparsers.add_parser(
+            Subcommand.FORMAT,
+            help="Format Python files with black, then docformatter where they agree.",
         )
-        return ExitStatus.FAILURE
-    if instructions.write():
-        logger.info("Wrote %s", instructions.generated_path.name)
-        return ExitStatus.FAILURE
-    return ExitStatus.SUCCESS
+        format_parser.add_argument("files", nargs="*", type=Path)
+        format_parser.set_defaults(run=self.format_files)
 
+        agents_parser = subparsers.add_parser(
+            Subcommand.AGENTS_MD,
+            help="Generate AGENTS.md from the packaged rules and AGENTS.project.md.",
+        )
+        agents_parser.add_argument(
+            Option.CHECK,
+            action="store_true",
+            help="Only verify that AGENTS.md is up to date; exit non-zero if it is not.",
+        )
+        agents_parser.set_defaults(run=self.generate_agents_instructions)
 
-def build_parser() -> argparse.ArgumentParser:
-    """
-    :return: The parser for the ``cram-development-tools`` command line.
-    """
-    parser = argparse.ArgumentParser(prog="cram-development-tools")
-    subparsers = parser.add_subparsers(required=True)
+        return parser
 
-    format_parser = subparsers.add_parser(
-        Subcommand.FORMAT,
-        help="Format Python files with black, then docformatter where they agree.",
-    )
-    format_parser.add_argument("files", nargs="*", type=Path)
-    format_parser.set_defaults(run=format_files)
+    def format_files(self, arguments: argparse.Namespace) -> ExitStatus:
+        """
+        Format the files named on the command line.
 
-    agents_parser = subparsers.add_parser(
-        Subcommand.AGENTS_MD,
-        help="Generate AGENTS.md from the packaged rules and AGENTS.project.md.",
-    )
-    agents_parser.add_argument(
-        Option.CHECK,
-        action="store_true",
-        help="Only verify that AGENTS.md is up to date; exit non-zero if it is not.",
-    )
-    agents_parser.set_defaults(run=generate_agents_instructions)
+        :param arguments: The parsed command line.
+        :return: :attr:`ExitStatus.FAILURE` if any file was modified.
+        """
+        if DocstringFormatter().format_files(arguments.files):
+            return ExitStatus.FAILURE
+        return ExitStatus.SUCCESS
 
-    return parser
+    def generate_agents_instructions(self, arguments: argparse.Namespace) -> ExitStatus:
+        """
+        Write, or with :attr:`Option.CHECK` verify, the ``AGENTS.md`` of the current
+        directory.
 
-
-def main(command_line: Sequence[str] | None = None) -> int:
-    """
-    Run the subcommand the command line names.
-
-    :param command_line: The arguments after the program name; the process's own when
-        omitted.
-    :return: The subcommand's exit status.
-    """
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
-    arguments = build_parser().parse_args(command_line)
-    return arguments.run(arguments)
+        :param arguments: The parsed command line.
+        :return: :attr:`ExitStatus.FAILURE` if the file was rewritten or is stale.
+        """
+        instructions = AgentsInstructions(Path.cwd())
+        if arguments.check:
+            if instructions.is_current():
+                return ExitStatus.SUCCESS
+            logger.error(
+                "%s is out of date; run `%s %s` to regenerate it",
+                instructions.generated_path.name,
+                self.program_name,
+                Subcommand.AGENTS_MD,
+            )
+            return ExitStatus.FAILURE
+        if instructions.write():
+            logger.info("Wrote %s", instructions.generated_path.name)
+            return ExitStatus.FAILURE
+        return ExitStatus.SUCCESS
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(CommandLine.main())
