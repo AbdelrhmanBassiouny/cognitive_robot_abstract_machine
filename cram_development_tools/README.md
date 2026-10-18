@@ -55,7 +55,7 @@ repository rather than this package:
 ```yaml
 repos:
   - repo: https://github.com/cram2/cognitive_robot_abstract_machine
-    rev: cram-development-tools-v0.1.0
+    rev: <commit on main>
     hooks:
       - id: cram-development-tools-format
       - id: cram-development-tools-agents-md
@@ -69,25 +69,17 @@ Write the rules that only apply to your repository in `AGENTS.project.md`, run
 
 ## Releasing
 
-Releases are built and published by
-`.github/workflows/cram-development-tools-publish-to-pypi.yml` with PyPI trusted
-publishing, whenever a `cram-development-tools-v<version>` tag is pushed.
+The package has its own version, in `cram_development_tools/pyproject.toml`, independent
+of the repository's `VERSION`, so a change to the tooling can be released without
+releasing every other package. It is published the same way as the other packages:
+`.github/workflows/cram-development-tools-publish-to-pypi.yml` runs on every push to
+`main` that touches `cram_development_tools/`, and publishes with PyPI trusted publishing
+whenever that version is not on PyPI yet.
 
 One-time set-up: on PyPI, add a trusted publisher for the project
 `cram-development-tools` with the repository's owner and name, the workflow
 `cram-development-tools-publish-to-pypi.yml` and the environment `pypi` (for the first
-release, as a pending publisher). The repository needs a GitHub environment named `pypi`.
+release, as a pending publisher).
 
-For each release:
-
-1. Set `version` in `cram_development_tools/pyproject.toml` to the new version, and the
-   `additional_dependencies` pins and `rev` in this README to match.
-2. Merge that change into `main`.
-3. Tag the merge commit and push the tag:
-
-   ```bash
-   git tag cram-development-tools-v<version>
-   git push origin cram-development-tools-v<version>
-   ```
-
-The workflow refuses a tag whose version differs from `pyproject.toml`.
+To release, raise `version` in `cram_development_tools/pyproject.toml`, together with the
+`additional_dependencies` pins in this README, and merge the change into `main`.

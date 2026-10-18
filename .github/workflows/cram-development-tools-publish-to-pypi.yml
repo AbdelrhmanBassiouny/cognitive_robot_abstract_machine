@@ -2,35 +2,66 @@ name: Publish cram-development-tools to PyPI
 
 on:
   push:
-    tags:
-      - 'cram-development-tools-v*'
+    branches:
+      - main
+    paths:
+      - 'cram_development_tools/**'
+  workflow_dispatch:
 
 defaults:
   run:
     working-directory: cram_development_tools
 
 jobs:
-  build:
-    name: Build distribution
+  check-version:
+    name: Check if version is new
     runs-on: ubuntu-latest
+    outputs:
+      should_publish: ${{ steps.check.outputs.should_publish }}
+      version: ${{ steps.check.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
           python-version: '3.12'
 
-      - name: Check the tag matches the package version
+      - name: Check version against PyPI
+        id: check
         run: |
-          PACKAGE_VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
-          TAG_VERSION="${GITHUB_REF_NAME#cram-development-tools-v}"
-          echo "Package version: $PACKAGE_VERSION, tag version: $TAG_VERSION"
-          if [ "$PACKAGE_VERSION" != "$TAG_VERSION" ]; then
-            echo "The tag ${GITHUB_REF_NAME} does not match version ${PACKAGE_VERSION} in cram_development_tools/pyproject.toml"
-            exit 1
-          fi
+          LOCAL_VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          echo "Local version: $LOCAL_VERSION"
+
+          PYPI_VERSION=$(pip index versions cram-development-tools 2>/dev/null \
+            | grep -oP '(?<=Available versions: )[^,]+' \
+            | tr -d ' ')
+          PYPI_VERSION=${PYPI_VERSION:-0.0.0}
+          echo "PyPI version: $PYPI_VERSION"
+
+          python -c "
+          import sys
+          def parse(v):
+              return tuple(int(x) for x in v.split('.'))
+          sys.exit(0 if parse('$LOCAL_VERSION') > parse('$PYPI_VERSION') else 1)
+          " && echo "should_publish=true" >> $GITHUB_OUTPUT \
+            || echo "should_publish=false" >> $GITHUB_OUTPUT
+          echo "version=$LOCAL_VERSION" >> $GITHUB_OUTPUT
+
+  build:
+    name: Build distribution
+    runs-on: ubuntu-latest
+    needs: check-version
+    if: needs.check-version.outputs.should_publish == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
 
       - name: Build
         run: |
