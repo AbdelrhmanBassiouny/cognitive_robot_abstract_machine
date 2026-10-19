@@ -5,13 +5,13 @@ import numpy as np
 import pytest
 
 import robokudo.world as rk_world
-from robokudo.descriptors.camera_configs.config_semdt_raytracer import (
+from robokudo.descriptors.camera_configs.config_ray_tracing import (
     RuntimeRobotWorldSource,
     RayTracingCameraConfiguration,
     WorldDescriptorSource,
 )
 from robokudo.descriptors.worlds.world_semdt_raytracer_cylinders import WorldDescriptor
-from robokudo.io.semdt_camera_context import (
+from robokudo.io.ray_tracing_context import (
     RayTracingContext,
     RayTracingContextResolver,
 )

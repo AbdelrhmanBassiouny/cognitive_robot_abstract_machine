@@ -14,7 +14,7 @@ import robokudo.defs
 import robokudo.descriptors.camera_configs.config_filereader_playback
 import robokudo.descriptors.camera_configs.config_mongodb_playback
 import robokudo.io.file_reader_interface
-import robokudo.io.semdt_raytracer_camera_interface
+import robokudo.io.ray_tracing_camera_interface
 import robokudo.io.storage_reader_interface
 import robokudo.behaviours.clear_annotator_outputs
 import robokudo.pipeline
@@ -31,7 +31,8 @@ from robokudo.annotators.pointcloud_cluster_extractor import PointCloudClusterEx
 from robokudo.annotators.pointcloud_crop import PointcloudCropAnnotator
 from robokudo.annotators.semantic_world_connector import SemanticDigitalTwinConnector
 from robokudo.annotators.shape_estimator import ShapeEstimatorAnnotator
-from robokudo.descriptors.camera_configs.config_semdt_raytracer import (
+from robokudo.descriptors.camera_configs.config_ray_tracing import (
+    RayTracingCameraConfiguration,
     WorldDescriptorSource,
 )
 from robokudo.descriptors.factories.cr_descriptor_factory import (
@@ -247,7 +248,7 @@ class TestFullAEExecution(object):
 
     def test_run_semdt_raytracer_ae_successfully(self, node) -> None:
         raytracer_config = CollectionReaderDescriptorFactory.create_descriptor(
-            "semdt_raytracer",
+            RayTracingCameraConfiguration.registry_name,
             source=WorldDescriptorSource(
                 descriptor_name="world_semdt_raytracer_cylinders"
             ),
@@ -337,7 +338,7 @@ class TestFullAEExecution(object):
         self, node
     ) -> None:
         raytracer_config = CollectionReaderDescriptorFactory.create_descriptor(
-            "semdt_raytracer",
+            RayTracingCameraConfiguration.registry_name,
             source=WorldDescriptorSource(
                 descriptor_name="world_semdt_raytracer_tabletop"
             ),

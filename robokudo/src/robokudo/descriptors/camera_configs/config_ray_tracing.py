@@ -74,13 +74,13 @@ class RayTracingCameraConfiguration(BaseCameraConfig):
         """
         Identifier selecting this camera configuration.
         """
-        return "semdt_raytracer"
+        return "ray_tracing"
 
     """
     Name under which the camera configuration is registered.
     """
 
-    interface_type: str = "SemDTRayTracer"
+    interface_type: str = "RayTracingCameraInterface"
     """
     Camera interface selected by the collection-reader factory.
     """

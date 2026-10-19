@@ -5,10 +5,10 @@ Dataclass construction of camera context resolvers.
 from __future__ import annotations
 
 # %% Imports
-from robokudo.descriptors.camera_configs.config_semdt_raytracer import (
+from robokudo.descriptors.camera_configs.config_ray_tracing import (
     RayTracingCameraConfiguration,
 )
-from robokudo.io.semdt_camera_context import RayTracingContextResolver
+from robokudo.io.ray_tracing_context import RayTracingContextResolver
 from robokudo.utils.module_loader import ModuleLoader
 
 # %% Resolver construction

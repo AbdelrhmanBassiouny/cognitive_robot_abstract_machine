@@ -2,7 +2,7 @@
 Analysis engine for simulated RGB-D input from SemDT RayTracer with query functionality.
 
 This pipeline mirrors the standard tabletop segmentation flow but uses the
-`semdt_raytracer` camera descriptor, which renders color/depth images from a
+``ray_tracing`` camera descriptor, which renders color/depth images from a
 world descriptor instead of reading a physical camera stream.
 """
 
@@ -19,7 +19,8 @@ from robokudo.annotators.pointcloud_cluster_extractor import PointCloudClusterEx
 from robokudo.annotators.pointcloud_crop import PointcloudCropAnnotator
 from robokudo.annotators.query import QueryAnnotator, GenerateQueryResult
 from robokudo.behaviours.action_server_checks import ActionServerCheck
-from robokudo.descriptors.camera_configs.config_semdt_raytracer import (
+from robokudo.descriptors.camera_configs.config_ray_tracing import (
+    RayTracingCameraConfiguration,
     WorldDescriptorSource,
 )
 from robokudo.descriptors.factories.cr_descriptor_factory import (
@@ -35,7 +36,7 @@ class AnalysisEngine(AnalysisEngineInterface):
 
     def implementation(self) -> Pipeline:
         raytracer_config = CollectionReaderDescriptorFactory.create_descriptor(
-            "semdt_raytracer",
+            RayTracingCameraConfiguration.registry_name,
             source=WorldDescriptorSource(
                 descriptor_name="world_semdt_raytracer_tabletop"
             ),

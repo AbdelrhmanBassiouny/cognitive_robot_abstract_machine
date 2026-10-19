@@ -11,11 +11,11 @@ import numpy as np
 from sensor_msgs.msg import CameraInfo
 
 from robokudo.cas import CAS, CASViews
-from robokudo.descriptors.camera_configs.config_semdt_raytracer import (
+from robokudo.descriptors.camera_configs.config_ray_tracing import (
     RayTracingCameraConfiguration,
     WorldDescriptorSource,
 )
-from robokudo.io.semdt_raytracer_camera_interface import (
+from robokudo.io.ray_tracing_camera_interface import (
     RayTracingCameraInterface,
 )
 from semantic_digital_twin.datastructures.camera_model import FieldOfViewCameraModel

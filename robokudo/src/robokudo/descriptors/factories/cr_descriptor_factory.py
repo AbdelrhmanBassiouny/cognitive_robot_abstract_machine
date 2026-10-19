@@ -4,10 +4,13 @@ from typing_extensions import Any
 
 from robokudo.annotators.collection_reader import CollectionReaderAnnotator
 from robokudo.descriptors.camera_configs.registry import CameraConfigRegistry
+from robokudo.descriptors.camera_configs.config_ray_tracing import (
+    RayTracingCameraConfiguration,
+)
 from robokudo.io.camera_interface import KinectCameraInterface
 from robokudo.io.camera_without_depth_interface import OpenCVCameraWithoutDepthInterface
 from robokudo.io.file_reader_interface import RGBDFileReaderInterface
-from robokudo.io.semdt_raytracer_camera_interface import (
+from robokudo.io.ray_tracing_camera_interface import (
     RayTracingCameraInterface,
 )
 from robokudo.io.storage_reader_interface import StorageReaderInterface
@@ -28,7 +31,7 @@ class CollectionReaderDescriptorFactory:
         "orbbec": KinectCameraInterface,
         "orbbec_wo_tf": KinectCameraInterface,
         "file_reader": RGBDFileReaderInterface,
-        "semdt_raytracer": RayTracingCameraInterface,
+        RayTracingCameraConfiguration.registry_name: RayTracingCameraInterface,
         "hsr_ros2": KinectCameraInterface,
     }
     """

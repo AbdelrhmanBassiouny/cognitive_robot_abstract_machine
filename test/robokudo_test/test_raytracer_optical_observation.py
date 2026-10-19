@@ -18,12 +18,12 @@ from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
 )
 from robokudo.cas import CAS, CASViews
 from robokudo.types.camera import CameraObservation
-from robokudo.descriptors.camera_configs.config_semdt_raytracer import (
+from robokudo.descriptors.camera_configs.config_ray_tracing import (
     RayTracingCameraConfiguration,
     WorldDescriptorSource,
 )
 from robokudo.io.sensor_world import SensorWorldProjector
-from robokudo.io.semdt_raytracer_camera_interface import RayTracingCameraInterface
+from robokudo.io.ray_tracing_camera_interface import RayTracingCameraInterface
 from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
 from semantic_digital_twin.datastructures.camera_rendering import RenderedRGBDFrame

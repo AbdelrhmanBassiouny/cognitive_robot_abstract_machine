@@ -7,11 +7,11 @@ from __future__ import annotations
 import time
 
 from robokudo.cas import CAS, CASViews
-from robokudo.descriptors.camera_configs.config_semdt_raytracer import (
+from robokudo.descriptors.camera_configs.config_ray_tracing import (
     RayTracingCameraConfiguration,
 )
 from robokudo.io.camera_interface import CameraInterface
-from robokudo.io.semdt_camera_context import (
+from robokudo.io.ray_tracing_context import (
     RayTracingContext,
     RayTracingContextResolver,
 )
