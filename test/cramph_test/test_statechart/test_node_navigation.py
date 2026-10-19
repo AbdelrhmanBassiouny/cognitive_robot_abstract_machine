@@ -6,7 +6,7 @@ import pytest
 from typing_extensions import Callable
 
 from cramph.composites import (
-    CramLanguageNode,
+    ControlStructureNode,
     Parallel,
     PausedUntilTrue,
     RepeatUntil,
@@ -14,7 +14,6 @@ from cramph.composites import (
     TryAll,
     TryInOrder,
 )
-from cramph.context import StatechartContext
 from cramph.data_types import ObservationStateValues
 from cramph.executor import StatechartExecutor
 from cramph.node import CompositeNode, EndedByOwner, StatechartNode
@@ -354,8 +353,8 @@ def test_the_children_of_a_sequence_are_the_steps_it_was_handed(
 @dataclass(eq=False, repr=False, kw_only=True)
 class CompositeNodeNavigatingWhileItExpands(EndedByOwner, CompositeNode):
     """
-    A node that reads the tree around it while it expands, which is the moment the plan
-    language node above it is still adopting its children.
+    A node that reads the tree around it while it expands, which is the moment the control
+    structure node above it is still adopting its children.
     """
 
     preceding_fixed_value_node: NodeObservingAFixedValue | None = field(
@@ -370,20 +369,22 @@ class CompositeNodeNavigatingWhileItExpands(EndedByOwner, CompositeNode):
         default_factory=list, init=False
     )
     """
-    The children of the closest plan language node above this node, as read while
+    The children of the closest control structure node above this node, as read while
     expanding.
     """
 
-    def expand(self, context: StatechartContext) -> None:
+    def expand(self) -> None:
         self.preceding_fixed_value_node = self.statechart.get_preceding_node_by_type(
             self, NodeObservingAFixedValue
         )
-        self.children_of_language_node = CramLanguageNode.closest_above(self).children
+        self.children_of_language_node = ControlStructureNode.closest_above(
+            self
+        ).children
 
 
 def _self_deciding_step() -> NodeObservingAFixedValue:
     """
-    :return: A node a plan language node takes as its child as it is, without an
+    :return: A node a control structure node takes as its child as it is, without an
         attempt around it.
     """
     return NodeSucceedingOnObservingTrue(observation=ObservationStateValues.TRUE)
@@ -391,7 +392,7 @@ def _self_deciding_step() -> NodeObservingAFixedValue:
 
 def _step_decided_by_its_owner() -> NodeObservingAFixedValue:
     """
-    :return: A node a plan language node ends once it observes True.
+    :return: A node a control structure node ends once it observes True.
     """
     return NodeObservingAFixedValue(observation=ObservationStateValues.TRUE)
 
@@ -409,7 +410,7 @@ def _paused_until_true(monitored_node: StatechartNode) -> PausedUntilTrue:
 @pytest.mark.parametrize("language_node_type", [Sequence, TryInOrder, TryAll, Parallel])
 def test_a_step_finds_the_step_before_it_while_it_expands(
     statechart_executor: StatechartExecutor,
-    language_node_type: type[CramLanguageNode],
+    language_node_type: type[ControlStructureNode],
     preceding_step_factory: Callable[[], NodeObservingAFixedValue],
 ) -> None:
     statechart = Statechart(context=statechart_executor.context)
@@ -427,7 +428,7 @@ def test_a_step_finds_the_step_before_it_while_it_expands(
 @pytest.mark.parametrize("language_node_type", [Sequence, TryInOrder, TryAll, Parallel])
 def test_a_node_below_a_step_finds_the_step_before_that_while_it_expands(
     statechart_executor: StatechartExecutor,
-    language_node_type: type[CramLanguageNode],
+    language_node_type: type[ControlStructureNode],
     preceding_step_factory: Callable[[], NodeObservingAFixedValue],
 ) -> None:
     statechart = Statechart(context=statechart_executor.context)

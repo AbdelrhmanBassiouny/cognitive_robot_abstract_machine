@@ -5,7 +5,7 @@ from typing_extensions import List, Optional
 
 from krrood.ormatic.utils import classproperty
 from cramph.node import EndedByOwner
-from cramph.context import ContextExtension, StatechartContext
+from cramph.context import ContextExtension
 from giskardpy.motion_statechart.context import MotionControlContext
 from giskardpy.motion_statechart.exceptions import EmptyDegreesOfFreedomError
 from giskardpy.motion_statechart.graph_node import (
@@ -83,29 +83,31 @@ class LocalMinimumReached(EndedByOwner, MotionStatechartNode):
     def required_context_extensions(cls) -> tuple[type[ContextExtension], ...]:
         return super().required_context_extensions + (MotionControlContext,)
 
-    def on_start(self, context: StatechartContext) -> None:
+    def on_start(self) -> None:
         if self.measure_from_own_start:
-            context.float_variable_data.set_value(
+            self.context.float_variable_data.set_value(
                 self._start_cycle_variable,
-                context.tick_variable.evaluate()[0],
+                self.context.tick_variable.evaluate()[0],
             )
 
-    def set_up(self, context: StatechartContext) -> None:
+    def set_up(self) -> None:
         """
         Register the variable holding the tick this monitor started on, if it measures
         from its own start.
         """
-        super().set_up(context)
+        super().set_up()
         if self.measure_from_own_start:
             self._start_cycle_variable = FloatVariable(f"{self.name}_start_cycle")
-            context.float_variable_data.register_expression(self._start_cycle_variable)
+            self.context.float_variable_data.register_expression(
+                self._start_cycle_variable
+            )
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         if self.degrees_of_freedom is not None and not self.degrees_of_freedom:
             raise EmptyDegreesOfFreedomError(node=self)
         return NodeArtifacts(
             observation=velocity_convergence_expression(
-                context=context,
+                context=self.context,
                 joint_convergence_threshold=self.joint_convergence_threshold,
                 minimum_threshold=self.minimum_threshold,
                 maximum_threshold=self.maximum_threshold,

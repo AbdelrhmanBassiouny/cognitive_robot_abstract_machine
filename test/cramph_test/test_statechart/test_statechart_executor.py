@@ -102,7 +102,7 @@ def test_generic_nodes_build_plain_node_artifacts(
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_nodes([node, EndStatechart.when_true(node)])
 
-    artifacts = node.build(statechart_executor.context)
+    artifacts = node.build()
 
     assert type(artifacts) is NodeArtifacts
 
@@ -310,9 +310,9 @@ class NodeRequiringACountingContext(ConstTrueNode):
     A node that can only be built in a context that holds a :class:`CountingContext`.
     """
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
-        context.require_extension(CountingContext).builds += 1
-        return super().build_artifacts(context)
+    def build_artifacts(self) -> NodeArtifacts:
+        self.context.require_extension(CountingContext).builds += 1
+        return super().build_artifacts()
 
 
 @dataclass

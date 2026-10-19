@@ -106,7 +106,7 @@ class HistoryGanttChartPlotter:
         """
         :return: The number of ticks the history of the statechart covers.
         """
-        return self.statechart.history.history[-1].tick_count
+        return self.statechart.state_history.latest_item.tick_count
 
     @property
     def num_bars(self) -> int:
@@ -121,7 +121,7 @@ class HistoryGanttChartPlotter:
         :return: The life cycle states `node` went through since it joined the
             statechart, in order; empty if no snapshot records it.
         """
-        snapshots = self.statechart.history.items_recording(node)
+        snapshots = self.statechart.state_history.items_recording(node)
         return self._merge_into_spans(
             ticks=[snapshot.tick_count for snapshot in snapshots],
             states=[snapshot.life_cycle_state[node] for snapshot in snapshots],
@@ -133,7 +133,7 @@ class HistoryGanttChartPlotter:
         :return: The observation states `node` went through since it joined the
             statechart, in order; empty if no snapshot records it.
         """
-        snapshots = self.statechart.history.items_recording(node)
+        snapshots = self.statechart.state_history.items_recording(node)
         return self._merge_into_spans(
             ticks=[snapshot.tick_count for snapshot in snapshots],
             states=[snapshot.observation_state[node] for snapshot in snapshots],
@@ -202,8 +202,7 @@ class HistoryGanttChartPlotter:
             logger.warning("Gantt chart skipped: no nodes in statechart.")
             return
 
-        history = self.statechart.history.history
-        if len(history) == 0:
+        if self.statechart.state_history.latest_item is None:
             logger.warning("Gantt chart skipped: empty StateHistory.")
             return
 
@@ -339,7 +338,7 @@ class HistoryGanttChartPlotter:
         :param column_padding: The space left free on each side of the column, as a
             fraction of its width.
         """
-        snapshots = self.statechart.history.items_recording(node)
+        snapshots = self.statechart.state_history.items_recording(node)
         if not snapshots:
             return
         final_states = [

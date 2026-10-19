@@ -45,7 +45,7 @@ class HistoryRecorder(StateHistoryObserver):
 
         :param history: The history whose newest snapshot was published.
         """
-        self.snapshots.append(history.history[-1])
+        self.snapshots.append(history.latest_item)
 
 
 @dataclass
@@ -96,11 +96,11 @@ def append_snapshot(chart: Statechart) -> StateHistoryItem:
     :return: The snapshot offered to the history.
     """
     snapshot = StateHistoryItem(
-        tick_count=len(chart.history),
+        tick_count=len(chart.state_history),
         life_cycle_state=chart.life_cycle_state,
         observation_state=chart.observation_state,
     )
-    chart.history.append(snapshot)
+    chart.state_history.append(snapshot)
     return snapshot
 
 
@@ -109,7 +109,7 @@ def test_history_notifies_only_when_a_snapshot_changes(history_chart) -> None:
     Repeated ticks do not produce duplicate history notifications.
     """
     recorder = HistoryRecorder()
-    history_chart.history.add_observer(recorder)
+    history_chart.state_history.add_observer(recorder)
     history_chart.life_cycle_state[history_chart.nodes[0]] = LifeCycleValues.PAUSED
     paused = append_snapshot(history_chart)
     append_snapshot(history_chart)
@@ -117,7 +117,26 @@ def test_history_notifies_only_when_a_snapshot_changes(history_chart) -> None:
     running = append_snapshot(history_chart)
 
     assert recorder.snapshots == [paused, running]
-    assert recorder.snapshots[-1] is history_chart.history.history[-1]
+    assert recorder.snapshots[-1] is history_chart.state_history.latest_item
+
+
+def test_an_empty_history_has_no_latest_item() -> None:
+    history = StateHistory()
+
+    assert history.latest_item is None
+    assert history.item_before_latest is None
+
+
+def test_item_before_latest_is_the_snapshot_recorded_before_the_latest(
+    history_chart,
+) -> None:
+    history_chart.life_cycle_state[history_chart.nodes[0]] = LifeCycleValues.PAUSED
+    paused = append_snapshot(history_chart)
+    history_chart.life_cycle_state[history_chart.nodes[0]] = LifeCycleValues.RUNNING
+    running = append_snapshot(history_chart)
+
+    assert history_chart.state_history.item_before_latest is paused
+    assert history_chart.state_history.latest_item is running
 
 
 def test_history_registration_is_idempotent_by_identity(history_chart) -> None:
@@ -126,15 +145,15 @@ def test_history_registration_is_idempotent_by_identity(history_chart) -> None:
     """
     first = HistoryRecorder()
     second = HistoryRecorder()
-    history_chart.history.add_observer(first)
-    history_chart.history.add_observer(first)
-    history_chart.history.add_observer(second)
+    history_chart.state_history.add_observer(first)
+    history_chart.state_history.add_observer(first)
+    history_chart.state_history.add_observer(second)
     history_chart.life_cycle_state[history_chart.nodes[0]] = LifeCycleValues.PAUSED
     snapshot = append_snapshot(history_chart)
 
-    assert len(history_chart.history.observers) == 2
-    assert history_chart.history.observers[0] is first
-    assert history_chart.history.observers[1] is second
+    assert len(history_chart.state_history.observers) == 2
+    assert history_chart.state_history.observers[0] is first
+    assert history_chart.state_history.observers[1] is second
     assert first.snapshots == [snapshot]
     assert second.snapshots == [snapshot]
 
@@ -145,10 +164,10 @@ def test_history_removes_only_the_owned_observer(history_chart) -> None:
     """
     first = HistoryRecorder()
     second = HistoryRecorder()
-    history_chart.history.add_observer(first)
-    history_chart.history.add_observer(second)
-    history_chart.history.remove_observer(first)
-    history_chart.history.remove_observer(first)
+    history_chart.state_history.add_observer(first)
+    history_chart.state_history.add_observer(second)
+    history_chart.state_history.remove_observer(first)
+    history_chart.state_history.remove_observer(first)
     history_chart.life_cycle_state[history_chart.nodes[0]] = LifeCycleValues.PAUSED
     snapshot = append_snapshot(history_chart)
 
@@ -163,8 +182,8 @@ def test_subscription_changes_apply_after_current_notification(history_chart) ->
     removed = HistoryRecorder()
     added = HistoryRecorder()
     replacement = ObserverReplacement(removed, added)
-    history_chart.history.add_observer(replacement)
-    history_chart.history.add_observer(removed)
+    history_chart.state_history.add_observer(replacement)
+    history_chart.state_history.add_observer(removed)
     history_chart.life_cycle_state[history_chart.nodes[0]] = LifeCycleValues.PAUSED
     paused = append_snapshot(history_chart)
     history_chart.life_cycle_state[history_chart.nodes[0]] = LifeCycleValues.RUNNING
@@ -187,7 +206,7 @@ def test_cancelled_tick_publishes_its_final_snapshot(
     chart = Statechart(context=statechart_context)
     chart.add_node(cancel)
     recorder = HistoryRecorder()
-    chart.history.add_observer(recorder)
+    chart.state_history.add_observer(recorder)
     executor = StatechartExecutor(statechart_context)
 
     with pytest.raises(NodeAssertionError) as caught:
@@ -216,8 +235,8 @@ def test_cancelled_tick_preserves_error_when_observer_fails(
     recorder = HistoryRecorder()
     observer = Mock(spec=StateHistoryObserver)
     observer.on_state_change.side_effect = ValueError("observer failed")
-    chart.history.add_observer(recorder)
-    chart.history.add_observer(observer)
+    chart.state_history.add_observer(recorder)
+    chart.state_history.add_observer(observer)
 
     with pytest.raises(NodeAssertionError) as caught:
         while True:
@@ -237,15 +256,13 @@ def test_failed_settle_does_not_publish_partial_snapshot(
     A tick that fails while settling records nothing.
     """
     recorder = HistoryRecorder()
-    history_chart.history.add_observer(recorder)
-    snapshots = list(history_chart.history.history)
+    history_chart.state_history.add_observer(recorder)
+    snapshots = list(history_chart.state_history.items)
     failure = NodeAssertionError(reason="settling failed")
 
-    def fail_settle(context: StatechartContext) -> None:
+    def fail_settle() -> None:
         """
         Change one state before settling fails to complete.
-
-        :param context: The context of the tick.
         """
         history_chart.life_cycle_state[history_chart.nodes[0]] = LifeCycleValues.PAUSED
         raise failure
@@ -255,7 +272,7 @@ def test_failed_settle_does_not_publish_partial_snapshot(
         history_chart.tick()
 
     assert caught.value is failure
-    assert history_chart.history.history == snapshots
+    assert history_chart.state_history.items == snapshots
     assert recorder.snapshots == []
 
 
@@ -281,7 +298,7 @@ def test_a_node_that_just_started_is_among_those_started_in_the_newest_snapshot(
 ) -> None:
     running = ConstTrueNode(name="running")
 
-    history = _compiled_with(statechart_context, running).statechart.history
+    history = _compiled_with(statechart_context, running).statechart.state_history
 
     assert (
         history.nodes_started_in_latest_item(),
@@ -300,4 +317,6 @@ def test_a_node_that_just_ended_is_among_those_ended_in_the_newest_snapshot(
 
     executor.tick()
 
-    assert executor.statechart.history.nodes_ended_in_latest_item() == [succeeding]
+    assert executor.statechart.state_history.nodes_ended_in_latest_item() == [
+        succeeding
+    ]

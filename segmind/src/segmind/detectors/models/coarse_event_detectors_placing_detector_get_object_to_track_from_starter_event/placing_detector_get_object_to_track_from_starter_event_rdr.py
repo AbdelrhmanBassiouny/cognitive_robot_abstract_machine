@@ -1,10 +1,12 @@
 from ripple_down_rules.helpers import general_rdr_classify
 from typing_extensions import Any, Dict
 from ripple_down_rules.datastructures.case import Case, create_case
-from . import placing_detector_get_object_to_track_from_starter_event_output__scrdr as output__classifier
+from . import (
+    placing_detector_get_object_to_track_from_starter_event_output__scrdr as output__classifier,
+)
 
 classifiers_dict = dict()
-classifiers_dict['output_'] = output__classifier
+classifiers_dict["output_"] = output__classifier
 
 
 def classify(case: Dict, **kwargs) -> Dict[str, Any]:

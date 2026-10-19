@@ -8,7 +8,6 @@ from dataclasses import dataclass, field
 from typing_extensions import Any, Callable
 
 from cramph.node import SucceedsOnObservingTrue, FailsOnObservingFalse
-from cramph.context import StatechartContext
 from cramph.data_types import ObservationStateValues
 from cramph.node import StatechartNode
 
@@ -67,7 +66,7 @@ class ThreadedNode(StatechartNode, ABC):
         """
         self._thread.join()
 
-    def on_start(self, context: StatechartContext) -> None:
+    def on_start(self) -> None:
         self._result = None
         self._error = None
         self._thread = threading.Thread(
@@ -114,7 +113,7 @@ class FunctionCall(SucceedsOnObservingTrue, FailsOnObservingFalse, ThreadedNode)
     def run(self) -> Any:
         return self.function()
 
-    def on_tick(self, context: StatechartContext) -> ObservationStateValues | None:
+    def on_tick(self) -> ObservationStateValues | None:
         """
         Wait for the function and observe whether it succeeded.
 

@@ -118,7 +118,7 @@ class ActionFeedbackPublisher:
             self.executor.statechart.create_structure_copy().to_json()
         )
         data[MotionStatechartPayloadKey.GOAL_ID] = self.action_server.goal_id
-        self.last_history_length = len(self.executor.statechart.history)
+        self.last_history_length = len(self.executor.statechart.state_history)
         self.send(data)
 
     def publish_if_changed(self) -> None:
@@ -194,7 +194,7 @@ class ActionFeedbackPublisher:
         """
         Whether the statechart history grew since the last feedback.
         """
-        history_length = len(self.executor.statechart.history)
+        history_length = len(self.executor.statechart.state_history)
         has_changed = self.last_history_length != history_length
         if has_changed:
             self.last_history_length = history_length

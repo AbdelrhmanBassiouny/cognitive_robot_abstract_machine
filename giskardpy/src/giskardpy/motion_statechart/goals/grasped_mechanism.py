@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
+
 from krrood.symbolic_math.symbolic_math import trinary_logic_and
 from semantic_digital_twin.robots.robot_parts import EndEffector
 from semantic_digital_twin.spatial_types.spatial_types import Pose
@@ -10,7 +12,6 @@ from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
 from cramph.node import EndedByOwner
-from cramph.context import StatechartContext
 from giskardpy.motion_statechart.data_types import DefaultWeights
 from giskardpy.motion_statechart.goals.collision_avoidance import (
     UpdateTemporaryCollisionRules,
@@ -21,10 +22,10 @@ from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList, Joi
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class Open(EndedByOwner, CompositeNode):
+class ArticulateGraspedMechanism(EndedByOwner, CompositeNode):
     """
-    Open a 1-dof mechanism in an environment by driving its degree of freedom towards
-    its upper limit while keeping the end effector fixed relative to the grasped part.
+    Drive the degree of freedom of a 1-dof mechanism in an environment to a position
+    while keeping the end effector fixed relative to the grasped part.
 
     Assumes that the grasped part (e.g. a handle or a bottle cap) has already been
     grasped. Works with any mechanism whose grasped part hangs below an
@@ -41,11 +42,10 @@ class Open(EndedByOwner, CompositeNode):
     Name of the handle that was grasped.
     """
 
-    goal_joint_state: float | None = None
+    goal_joint_state: float
     """
-    Goal state for the mechanism.
-
-    default is the limit this goal drives towards.
+    The position the degree of freedom of the mechanism is driven to, clamped to its
+    limits once this goal expands.
     """
 
     mechanism_weight: float = DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE
@@ -71,11 +71,14 @@ class Open(EndedByOwner, CompositeNode):
     mechanism moves; ``None`` leaves collision avoidance as it is.
     """
 
-    def expand(self, context: StatechartContext) -> None:
+    def expand(self) -> None:
         self.connection = self.environment_link.get_first_parent_connection_of_type(
             ActiveConnection1DOF
         )
-        self.goal_joint_state = self._reachable_goal_joint_state()
+        limits = self.connection.dof.limits
+        self.goal_joint_state = float(
+            np.clip(self.goal_joint_state, limits.lower.position, limits.upper.position)
+        )
 
         self._add_children_to_statechart(
             [
@@ -104,16 +107,7 @@ class Open(EndedByOwner, CompositeNode):
                 ]
             )
 
-    def _reachable_goal_joint_state(self) -> float:
-        """
-        :return: The commanded goal state, clamped to the limit this goal drives towards.
-        """
-        limit = self.connection.dof.limits.upper.position
-        if self.goal_joint_state is None:
-            return limit
-        return min(limit, self.goal_joint_state)
-
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         """
         Build an observation that is True once both the degree of freedom and the grip
         on the grasped part reached their goals.
@@ -127,21 +121,3 @@ class Open(EndedByOwner, CompositeNode):
                 *[node.observation_variable for node in self.nodes]
             )
         )
-
-
-@dataclass(eq=False, repr=False, kw_only=True)
-class Close(Open):
-    """
-    Close a 1-dof mechanism in an environment by driving its degree of freedom towards
-    its lower limit while keeping the end effector fixed relative to the grasped part.
-
-    Assumes that the grasped part (e.g. a handle or a bottle cap) has already been
-    grasped. Works with any mechanism whose grasped part hangs below an
-    :class:`ActiveConnection1DOF`, e.g. drawers, doors, or screw caps.
-    """
-
-    def _reachable_goal_joint_state(self) -> float:
-        limit = self.connection.dof.limits.lower.position
-        if self.goal_joint_state is None:
-            return limit
-        return max(limit, self.goal_joint_state)

@@ -10,7 +10,6 @@ from semantic_digital_twin.world_description.connections import (
 )
 from semantic_digital_twin.world_description.world_entity import Connection
 from cramph.node import SucceedsOnObservingTrue
-from cramph.context import StatechartContext
 from giskardpy.motion_statechart.exceptions import UnexpectedWorldEntityCountError
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from cramph.node import NodeArtifacts
@@ -31,15 +30,15 @@ class SetSeedConfiguration(SucceedsOnObservingTrue, MotionStatechartNode):
 
     seed_configuration: JointState
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         """
         Applying the configuration is what this node is for and it cannot fail, so it
         counts as succeeded from the moment it runs.
         """
         return NodeArtifacts(observation=sm.Scalar.const_true())
 
-    def on_start(self, context: StatechartContext) -> None:
-        self.seed_configuration.apply_to(context.world)
+    def on_start(self) -> None:
+        self.seed_configuration.apply_to(self.context.world)
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
@@ -62,11 +61,11 @@ class SetOdometry(SucceedsOnObservingTrue, MotionStatechartNode):
 
     _odom_joints: Tuple[Type[Connection], ...] = field(default=(OmniDrive,), init=False)
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
-        self.odom_connection = self._current_odom_connection(context)
+    def build_artifacts(self) -> NodeArtifacts:
+        self.odom_connection = self._current_odom_connection()
         return NodeArtifacts(observation=sm.Scalar.const_true())
 
-    def _current_odom_connection(self, context: StatechartContext) -> OmniDrive:
+    def _current_odom_connection(self) -> OmniDrive:
         """
         The drive that moves the body this node sets the odometry of, as the world holds
         it now.
@@ -75,13 +74,14 @@ class SetOdometry(SucceedsOnObservingTrue, MotionStatechartNode):
         world model change between then and now (re-parenting the body onto a carrier,
         say) replaces the connection object while keeping the body.
 
-        :param context: The context holding the world to resolve against.
         :return: The drive to write the odometry into.
         """
         if self.odom_connection is not None:
             return self.odom_connection.child.parent_connection
 
-        drive_connections = context.world.get_connections_by_type(self._odom_joints)
+        drive_connections = self.context.world.get_connections_by_type(
+            self._odom_joints
+        )
         if len(drive_connections) != 1:
             raise UnexpectedWorldEntityCountError(
                 node=self,
@@ -91,9 +91,9 @@ class SetOdometry(SucceedsOnObservingTrue, MotionStatechartNode):
             )
         return drive_connections[0]
 
-    def on_start(self, context: StatechartContext) -> None:
+    def on_start(self) -> None:
         parent_T_pose_ref = HomogeneousTransformationMatrix(
-            context.world.compute_forward_kinematics_np(
+            self.context.world.compute_forward_kinematics_np(
                 self.odom_connection.parent, self.base_pose.reference_frame
             )
         )

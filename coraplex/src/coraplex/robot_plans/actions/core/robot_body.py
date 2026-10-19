@@ -22,7 +22,6 @@ from coraplex.robot_plans.actions.base import (
 from coraplex.robot_plans.actions.core.exceptions import WidthBeyondGripperOpening
 from coraplex.robot_plans.mixins import (
     HasMaxJointVelocity,
-    MovesGripper,
     MovesToolCenterPoint,
 )
 from cramph.composites import Sequence
@@ -37,6 +36,7 @@ from giskardpy.motion_statechart.tasks.joint_tasks import (
     JointVelocityLimit,
 )
 from semantic_digital_twin.datastructures.joint_state import JointState
+from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from semantic_digital_twin.datastructures.definitions import (
     TorsoState,
     GripperState,
@@ -61,7 +61,7 @@ class MoveTorsoAction(SequentialAction):
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class SetGripperAction(GoalAction, MovesGripper):
+class SetGripperAction(GoalAction):
     """
     Set the gripper state of the robot.
     """
@@ -77,7 +77,7 @@ class SetGripperAction(GoalAction, MovesGripper):
     """
 
     def create_goal(self) -> StatechartNode:
-        return self.gripper_goal(self.motion, self.gripper)
+        return MoveGripper(end_effector=self.gripper, state=self.motion)
 
 
 @dataclass(eq=False, repr=False, kw_only=True)

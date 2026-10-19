@@ -71,7 +71,7 @@ class CompositeRequiringAnExtension(SucceedsOnObservingTrue, CompositeNode):
     def required_context_extensions(cls) -> tuple[type[ContextExtension], ...]:
         return super().required_context_extensions + (ExtensionANodeRequires,)
 
-    def expand(self, context: StatechartContext) -> None:
+    def expand(self) -> None:
         self.expanded = True
 
 
@@ -102,7 +102,7 @@ class CompositeReadingAnExtensionWhileExpanding(SucceedsOnObservingTrue, Composi
             ExtensionACompositeReadsWhileExpanding,
         )
 
-    def expand(self, context: StatechartContext) -> None:
+    def expand(self) -> None:
         self.expanded = True
         self._add_child_to_statechart(
             NodeSucceedingOnObservingTrue(

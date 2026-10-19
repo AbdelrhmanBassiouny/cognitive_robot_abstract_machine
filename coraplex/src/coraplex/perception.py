@@ -8,7 +8,7 @@ import numpy as np
 
 from krrood.ormatic.utils import classproperty
 from cramph.node import EndedByOwner, FailsOnObservingFalse
-from cramph.context import ContextExtension, StatechartContext
+from cramph.context import ContextExtension
 from cramph.data_types import ObservationStateValues
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.ros_context import RosContextExtension
@@ -484,17 +484,17 @@ class PerceptionTask(EndedByOwner, FailsOnObservingFalse, StatechartNode):
     def required_context_extensions(cls) -> tuple[type[ContextExtension], ...]:
         return super().required_context_extensions + (RosContextExtension,)
 
-    def set_up(self, context: StatechartContext) -> None:
-        super().set_up(context)
+    def set_up(self) -> None:
+        super().set_up()
         self.perception_source = PerceptionInterface.for_source(
             self.answered_by,
-            context.require_extension(RosContextExtension).ros_node,
+            self.context.require_extension(RosContextExtension).ros_node,
         )
 
-    def on_start(self, context: StatechartContext) -> None:
+    def on_start(self) -> None:
         self._observation = None
 
-    def on_tick(self, context: StatechartContext) -> ObservationStateValues | None:
+    def on_tick(self) -> ObservationStateValues | None:
         if self._observation is None:
             self._observation = self._answer_query()
         return self._observation

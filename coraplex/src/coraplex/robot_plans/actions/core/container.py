@@ -16,7 +16,9 @@ from coraplex.robot_plans.actions.core.pick_up import GraspingAction, HasGraspCh
 from coraplex.robot_plans.mixins import HasApproachesGraspPoses, MovesToolCenterPoint
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from giskardpy.motion_statechart.goals.gripper import MoveGripper
-from giskardpy.motion_statechart.goals.open_close import Open, Close
+from giskardpy.motion_statechart.goals.grasped_mechanism import (
+    ArticulateGraspedMechanism,
+)
 from semantic_digital_twin.collision_checking.collision_matrix import CollisionRule
 from semantic_digital_twin.collision_checking.collision_rules import (
     AllowCollisionForEndEffector,
@@ -28,6 +30,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Handle,
 )
 from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
 
 # %% taking a container by its handle
 
@@ -120,13 +123,16 @@ class MovesContainerByItsHandle(
 @dataclass(eq=False, repr=False, kw_only=True)
 class OpenAction(MovesContainerByItsHandle):
     """
-    Opens a container like object.
+    Opens a container like object, driving its mechanism to its upper limit.
     """
 
     def create_mechanism_goal(self) -> MotionStatechartNode:
-        return Open(
+        handle = self.grasp.graspable.root
+        mechanism = handle.get_first_parent_connection_of_type(ActiveConnection1DOF)
+        return ArticulateGraspedMechanism(
             tip_link=self.arm.end_effector.tool_frame,
-            environment_link=self.grasp.graspable.root,
+            environment_link=handle,
+            goal_joint_state=mechanism.dof.limits.upper.position,
         )
 
 
@@ -143,7 +149,7 @@ class CloseAction(MovesContainerByItsHandle):
     """
 
     def create_mechanism_goal(self) -> MotionStatechartNode:
-        return Close(
+        return ArticulateGraspedMechanism(
             tip_link=self.arm.end_effector.tool_frame,
             environment_link=self.grasp.graspable.root,
             goal_joint_state=self.closed_joint_position,

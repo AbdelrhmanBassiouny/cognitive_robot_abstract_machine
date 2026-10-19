@@ -22,7 +22,10 @@ from giskardpy.motion_statechart.ros_context import RosNodeAccess
 from cramph.context import StatechartContext
 from cramph.exceptions import MissingExecutorExtensionError
 from cramph.executor import StatechartExecutor
-from ..motion_control_context import create_context_with_motion_control
+from ..motion_control_context import (
+    add_to_statechart_with_motion_control,
+    create_context_with_motion_control,
+)
 
 
 def align_planes_statechart(context: StatechartContext) -> Statechart:
@@ -51,7 +54,8 @@ def build_align_planes_task(world: World) -> AlignPlanes:
         tip_normal=Vector3.Z(reference_frame=tip),
         name="align",
     )
-    artifacts = task.build(create_context_with_motion_control(world))
+    add_to_statechart_with_motion_control(task, world)
+    artifacts = task.build()
     task._artifacts = artifacts
     return task
 

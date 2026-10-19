@@ -31,7 +31,9 @@ from giskardpy.motion_statechart.goals.collision_avoidance import (
     _SelfCollisionAvoidanceTask,
 )
 from giskardpy.motion_statechart.goals.gripper import MoveGripper
-from giskardpy.motion_statechart.goals.open_close import Close, Open
+from giskardpy.motion_statechart.goals.grasped_mechanism import (
+    ArticulateGraspedMechanism,
+)
 from giskardpy.motion_statechart.goals.tracebot import InsertCylinder, StayOnLineTask
 from giskardpy.motion_statechart.graph_node import (
     EndMotion,
@@ -466,21 +468,12 @@ def _cartesian_cases() -> list[NodeRoundTripCase]:
             WorldFixture.PR2_WORLD,
         ),
         NodeRoundTripCase(
-            Open,
+            ArticulateGraspedMechanism,
             lambda world: [
-                Open(
+                ArticulateGraspedMechanism(
                     environment_link=world.get_body_by_name("robot"),
                     tip_link=world.get_body_by_name("robot2"),
-                )
-            ],
-            WorldFixture.PRISMATIC_BOT2,
-        ),
-        NodeRoundTripCase(
-            Close,
-            lambda world: [
-                Close(
-                    environment_link=world.get_body_by_name("robot"),
-                    tip_link=world.get_body_by_name("robot2"),
+                    goal_joint_state=0.0,
                 )
             ],
             WorldFixture.PRISMATIC_BOT2,

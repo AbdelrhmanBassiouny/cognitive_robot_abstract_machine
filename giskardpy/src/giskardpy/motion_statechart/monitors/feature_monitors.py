@@ -4,7 +4,6 @@ from dataclasses import field, dataclass
 
 import krrood.symbolic_math.symbolic_math as sm
 from cramph.node import EndedByOwner
-from cramph.context import StatechartContext
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from cramph.node import NodeArtifacts
 from semantic_digital_twin.spatial_types import Point3, Vector3
@@ -27,19 +26,19 @@ class FeatureFunctionMonitor(EndedByOwner, MotionStatechartNode):
     controlled_feature: Point3 | Vector3 = field(init=False)
     """Controlled feature, typically moved towards `reference_feature`."""
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         """
         Transform the controlled and reference features into the root link frame and store them on
         the node for use by subclasses.
         """
-        root_reference_feature = context.world.transform(
+        root_reference_feature = self.context.world.transform(
             target_frame=self.root_link, spatial_object=self.reference_feature
         )
-        tip_controlled_feature = context.world.transform(
+        tip_controlled_feature = self.context.world.transform(
             target_frame=self.tip_link, spatial_object=self.controlled_feature
         )
 
-        root_T_tip = context.world.compose_forward_kinematics_expression(
+        root_T_tip = self.context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
         )
         if isinstance(self.controlled_feature, Point3):
@@ -71,10 +70,10 @@ class HeightMonitor(FeatureFunctionMonitor):
     upper_limit: float
     """Upper bound for the height difference in meters."""
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         self.reference_feature = self.reference_point
         self.controlled_feature = self.tip_point
-        artifacts = super().build_artifacts(context)
+        artifacts = super().build_artifacts()
 
         distance = (
             self.root_P_controlled_feature - self.root_P_reference_feature
@@ -100,10 +99,10 @@ class PerpendicularMonitor(FeatureFunctionMonitor):
     threshold: float = 0.01
     """Threshold on the dot product of the two normals."""
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         self.reference_feature = self.reference_normal
         self.controlled_feature = self.tip_normal
-        artifacts = super().build_artifacts(context)
+        artifacts = super().build_artifacts()
 
         expr = self.root_V_reference_feature[:3] @ self.root_V_controlled_feature[:3]
         artifacts.observation = sm.abs(expr) <= self.threshold
@@ -126,10 +125,10 @@ class DistanceMonitor(FeatureFunctionMonitor):
     upper_limit: float
     """Upper bound for the distance in meters."""
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         self.reference_feature = self.reference_point
         self.controlled_feature = self.tip_point
-        artifacts = super().build_artifacts(context)
+        artifacts = super().build_artifacts()
 
         root_V_diff = self.root_P_controlled_feature - self.root_P_reference_feature
         root_V_diff[2] = 0.0
@@ -157,10 +156,10 @@ class AngleMonitor(FeatureFunctionMonitor):
     upper_angle: float
     """Upper bound for the angle in radians."""
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         self.reference_feature = self.reference_vector
         self.controlled_feature = self.tip_vector
-        artifacts = super().build_artifacts(context)
+        artifacts = super().build_artifacts()
 
         expr = self.root_V_reference_feature.angle_between(
             self.root_V_controlled_feature

@@ -9,8 +9,8 @@ from coraplex.plans.designator import DesignatorParameters
 from coraplex.plans.plan_transformation import PlanRewriting
 from krrood.ormatic.utils import classproperty
 from cramph.node import SucceedsOnObservingTrue, FailsOnObservingFalse
-from cramph.composites import CramLanguageNode, Parallel, Sequence, TryAll
-from cramph.context import ContextExtension, StatechartContext
+from cramph.composites import ControlStructureNode, Parallel, Sequence, TryAll
+from cramph.context import ContextExtension
 from cramph.node import CompositeNode, NodeArtifacts, StatechartNode
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from giskardpy.motion_statechart.tasks.cartesian_tasks import HoldPose
@@ -39,7 +39,7 @@ class Action(
     It ends itself once it did what it does, so an action can be a step of another one.
     What it does takes one of a few shapes: a :class:`GoalAction` reaches a single goal,
     while a :class:`SequentialAction`, :class:`ParallelAction` or :class:`TryAllAction`
-    is the plan language node of the steps it creates.
+    is the control structure node of the steps it creates.
 
     .. note:: :class:`~coraplex.plans.designator.DesignatorParameters` is the last
         base, because ORMatic resolves a data access object's parent by walking the
@@ -111,17 +111,17 @@ class Action(
             HoldPose(name="hold base", root_link=self.world.root, tip_link=robot.root)
         ]
 
-    def expand(self, context: StatechartContext) -> None:
+    def expand(self) -> None:
         """
         Creates what this action does below it, once the
-        :class:`~coraplex.plans.plan_transformation.PlanRewriting` of `context`, if any,
+        :class:`~coraplex.plans.plan_transformation.PlanRewriting` of :attr:`context`, if any,
         configured this action.
         """
-        rewriting = context.get_extension(PlanRewriting)
+        rewriting = self.context.get_extension(PlanRewriting)
         if rewriting is not None:
             rewriting.configure(self)
         self.temporary_collision_rules = self.create_temporary_collision_rules()
-        self._create_children(context)
+        self._create_children()
 
     def create_temporary_collision_rules(self) -> list[CollisionRule]:
         """
@@ -132,35 +132,33 @@ class Action(
         """
         return []
 
-    def on_start(self, context: StatechartContext) -> None:
-        super().on_start(context)
+    def on_start(self) -> None:
+        super().on_start()
         if self.temporary_collision_rules:
-            context.world.collision_manager.put_temporary_rules_in_force(
+            self.context.world.collision_manager.put_temporary_rules_in_force(
                 self.temporary_collision_rules
             )
 
-    def on_end(self, context: StatechartContext) -> None:
-        self._take_temporary_collision_rules_out_of_force(context)
-        super().on_end(context)
+    def on_end(self) -> None:
+        self._take_temporary_collision_rules_out_of_force()
+        super().on_end()
 
-    def on_reset(self, context: StatechartContext) -> None:
-        self._take_temporary_collision_rules_out_of_force(context)
-        super().on_reset(context)
+    def on_reset(self) -> None:
+        self._take_temporary_collision_rules_out_of_force()
+        super().on_reset()
 
-    def _take_temporary_collision_rules_out_of_force(
-        self, context: StatechartContext
-    ) -> None:
+    def _take_temporary_collision_rules_out_of_force(self) -> None:
         """
         Takes :attr:`temporary_collision_rules` out of force, which skips those that are
         not in force, so a reset that ends no run changes nothing.
         """
         if self.temporary_collision_rules:
-            context.world.collision_manager.take_temporary_rules_out_of_force(
+            self.context.world.collision_manager.take_temporary_rules_out_of_force(
                 self.temporary_collision_rules
             )
 
     @abstractmethod
-    def _create_children(self, context: StatechartContext) -> None:
+    def _create_children(self) -> None:
         """
         Puts the nodes doing what this action does below it, in the shape of its kind of
         action.
@@ -195,7 +193,7 @@ class GoalAction(Action, SucceedsOnObservingTrue, FailsOnObservingFalse, ABC):
             return None
         return self.children[0]
 
-    def _create_children(self, context: StatechartContext) -> None:
+    def _create_children(self) -> None:
         """
         Puts the goal below this action and ends it once it is at its goal, unless it
         decides its own success.
@@ -204,7 +202,7 @@ class GoalAction(Action, SucceedsOnObservingTrue, FailsOnObservingFalse, ABC):
         self._add_child_to_statechart(goal)
         self._succeed_at_its_goal(goal)
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         """
         Report how the goal ended, or nothing while it has not.
         """
@@ -220,10 +218,10 @@ class GoalAction(Action, SucceedsOnObservingTrue, FailsOnObservingFalse, ABC):
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class ActionOfSteps(Action, CramLanguageNode, ABC):
+class ActionOfSteps(Action, ControlStructureNode, ABC):
     """
-    An action that is the plan language node of its own steps, the nodes
-    :meth:`create_steps` creates, so the steps are its children and the language node it
+    An action that is the control structure node of its own steps, the nodes
+    :meth:`create_steps` creates, so the steps are its children and the control structure node it
     also is decides how they run and when they are done.
     """
 
@@ -240,14 +238,14 @@ class ActionOfSteps(Action, CramLanguageNode, ABC):
             action is expanded.
         """
 
-    # Action and CramLanguageNode both define expand; deciding it here keeps it from
+    # Action and ControlStructureNode both define expand; deciding it here keeps it from
     # depending on the order of the bases. Action.expand adopts the steps as a language
     # node in _create_children.
     expand = Action.expand
 
-    def _create_children(self, context: StatechartContext) -> None:
+    def _create_children(self) -> None:
         """
-        Puts the steps below this action and lets the language node wire them.
+        Puts the steps below this action and lets the control structure node wire them.
         """
         self.nodes = [self._as_node(step) for step in self.create_steps()]
         self._adopt_nodes()

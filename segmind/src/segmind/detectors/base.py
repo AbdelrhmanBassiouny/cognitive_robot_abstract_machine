@@ -8,7 +8,7 @@ from typing_extensions import TypeVar
 
 from krrood.ormatic.utils import classproperty
 from cramph.node import EndedByOwner
-from cramph.context import ContextExtension, StatechartContext
+from cramph.context import ContextExtension
 from cramph.data_types import ObservationStateValues
 from cramph.node import StatechartNode
 from krrood.entity_query_language.predicate import Triple
@@ -129,7 +129,7 @@ class AbstractDetector(EndedByOwner, StatechartNode, ABC):
     def required_context_extensions(cls) -> tuple[type[ContextExtension], ...]:
         return super().required_context_extensions + (SegmindContext,)
 
-    def on_tick(self, context: StatechartContext) -> ObservationStateValues | None:
+    def on_tick(self) -> ObservationStateValues | None:
         """
         Executes one update cycle of the detector.
 
@@ -137,23 +137,22 @@ class AbstractDetector(EndedByOwner, StatechartNode, ABC):
         computes new contact relationships, and triggers events if
         contact changes are detected.
 
-        :param context: The current statechart context.
         :return: ObservationStateValues.TRUE if events were triggered,
         otherwise ObservationStateValues.FALSE.
         """
-        segmind_context_extension = context.require_extension(SegmindContext)
+        segmind_context_extension = self.context.require_extension(SegmindContext)
 
         objects_to_check = (
             [self.tracked_object]
             if self.tracked_object
             else [
                 body
-                for body in context.world.bodies
+                for body in self.context.world.bodies
                 if type(body.parent_connection) is Connection6DoF
             ]
         )
         events = self.update_context_and_events(
-            context, segmind_context_extension, objects_to_check
+            segmind_context_extension, objects_to_check
         )
         for event in events:
             segmind_context_extension.logger.log_event(
@@ -269,7 +268,6 @@ class AbstractDetector(EndedByOwner, StatechartNode, ABC):
 
     def get_relation(
         self,
-        context: StatechartContext,
         tracked_objects: List[Body],
         relation: Type[BodyRelation],
         candidates: Optional[List[Body]] = None,
@@ -277,7 +275,6 @@ class AbstractDetector(EndedByOwner, StatechartNode, ABC):
         """
         Get the relation between tracked objects.
 
-        :param context: The context containing world information.
         :param tracked_objects: List of bodies to check for contact changes.
         :param relation: The relation between two bodies, with each tracked body as its
             subject and each other body as its object.
@@ -289,8 +286,8 @@ class AbstractDetector(EndedByOwner, StatechartNode, ABC):
 
         related_bodies: Dict[Body, Set[Body]] = {}
         if candidates is None:
-            candidates = context.world.bodies_with_collision
-        left_out = self.bodies_left_out(context.world)
+            candidates = self.context.world.bodies_with_collision
+        left_out = self.bodies_left_out(self.context.world)
         candidates = [body for body in candidates if body not in left_out]
         for tracked_object in tracked_objects:
             for body in candidates:
@@ -303,7 +300,6 @@ class AbstractDetector(EndedByOwner, StatechartNode, ABC):
     @abstractmethod
     def update_context_and_events(
         self,
-        context: StatechartContext,
         segmind_context: SegmindContext,
         tracked_objects: List[Body],
     ) -> List[DetectionEvent]:
@@ -321,8 +317,6 @@ class AbstractDetector(EndedByOwner, StatechartNode, ABC):
         * Continuous processes: e.g., ongoing motion or containment.
         * Complex interactions: e.g., insertion or picking up objects.
 
-        :param context: The shared SegmindContext containing the world state,
-                        history of relationships, and the event logger.
         :param segmind_context: The SegmindContext extension containing additional states.
         :param tracked_objects: A list of bodies that this detector should focus on
                                 during this update cycle.

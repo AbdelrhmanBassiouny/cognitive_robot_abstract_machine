@@ -552,7 +552,7 @@ def test_cancel_node_without_tasks_never_starts():
         cancel := _CancelBecauseSelfCollisionViolated(name="cancel", tasks=[])
     )
 
-    cancel.build(statechart.context)
+    cancel.build()
 
     assert cancel.start_condition.is_constant_false()
 

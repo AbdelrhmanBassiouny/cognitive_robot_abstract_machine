@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from cramph.context import StatechartContext
 from cramph.executor import StatechartExecutor
+from cramph.node import StatechartNode
 from cramph.statechart import Statechart
 from giskardpy.motion_control import MotionControl
 from giskardpy.qp.qp_controller_config import QPControllerConfig
@@ -34,6 +35,28 @@ def create_context_with_motion_control(
     )
     motion_control.extend_context(context)
     return context
+
+
+def add_to_statechart_with_motion_control(
+    node: StatechartNode,
+    world: World,
+    qp_controller_config: QPControllerConfig | None = None,
+) -> Statechart:
+    """
+    Put `node` into a statechart of its own, so it can be built outside of an executor.
+
+    :param node: The node to build.
+    :param world: The world the node acts in.
+    :param qp_controller_config: The controller configuration, the simulation defaults
+        of :class:`~giskardpy.motion_control.MotionControl` if None.
+    :return: The statechart holding `node`, in a context made by
+        :func:`create_context_with_motion_control`.
+    """
+    statechart = Statechart(
+        context=create_context_with_motion_control(world, qp_controller_config)
+    )
+    statechart.add_node(node)
+    return statechart
 
 
 # %% where the statechart an executor runs comes from

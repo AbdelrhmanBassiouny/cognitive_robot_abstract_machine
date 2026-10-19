@@ -161,6 +161,24 @@ class TransitionHasNoOutcomeError(StatechartError):
 
 
 @dataclass
+class UnknownTransitionKindError(StatechartError):
+    """
+    Raised when a node is asked for a transition of a kind it does not have.
+    """
+
+    transition_kind: TransitionKind
+    """
+    The kind that was asked for.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.transition_kind!r} is not a kind of transition."
+
+    def suggest_correction(self) -> str:
+        return "Pass a member of TransitionKind."
+
+
+@dataclass
 class CompositeNodeWithoutChildrenError(NodeInitializationError):
     """
     Raised when a composite node that exists to hold child nodes is built without any.
@@ -613,6 +631,27 @@ class ConflictingTickDurationError(StatechartError):
 
 
 @dataclass
+class TickLimitReachedError(StatechartError):
+    """
+    Raised when a statechart has not ended after the most ticks it was given.
+    """
+
+    tick_limit: int
+    """
+    How many ticks the statechart was given to end.
+    """
+
+    def error_message(self) -> str:
+        return f"The statechart did not end within {self.tick_limit} ticks."
+
+    def suggest_correction(self) -> str:
+        return (
+            "Check that an EndStatechart node can start, or allow more ticks if the "
+            "statechart needs them."
+        )
+
+
+@dataclass
 class MissingExecutorExtensionError(StatechartError):
     """
     Raised when an executor extension is requested that the executor was not given.
@@ -722,27 +761,27 @@ class NodeAlreadyAChildError(NodeInitializationError):
 
 
 @dataclass
-class NoLanguageNodeAboveError(NodeInitializationError):
+class NoControlStructureNodeAboveError(NodeInitializationError):
     """
-    Raised when the closest plan language node above a node is asked for, but there is
-    none, which leaves nothing that could hold a neighbour of it.
+    Raised when the closest control structure node above a node is asked for, but there
+    is none, which leaves nothing that could hold a neighbour of it.
     """
 
     def error_message(self) -> str:
-        return f"No plan language node is above {self.node.name}."
+        return f"No control structure node is above {self.node.name}."
 
     def suggest_correction(self) -> str:
         return (
-            f"Put {self.node.name} below a plan language node, or add the new node as "
+            f"Put {self.node.name} below a control structure node, or add the new node as "
             f"the last child of one."
         )
 
 
 @dataclass
-class NotHeldByLanguageNodeError(NodeInitializationError):
+class NotHeldByControlStructureNodeError(NodeInitializationError):
     """
-    Raised when a node is to be replaced whose parent is not a plan language node, which
-    leaves nothing that could run another node in its place.
+    Raised when a node is to be replaced whose parent is not a control structure node,
+    which leaves nothing that could run another node in its place.
     """
 
     parent: StatechartNode
@@ -752,13 +791,13 @@ class NotHeldByLanguageNodeError(NodeInitializationError):
 
     def error_message(self) -> str:
         return (
-            f"{self.parent.name} holds {self.node.name}, and is no plan language node "
+            f"{self.parent.name} holds {self.node.name}, and is no control structure node "
             f"that could run another node in its place."
         )
 
     def suggest_correction(self) -> str:
         return (
-            f"Replace the node above {self.node.name} that a plan language node or the "
+            f"Replace the node above {self.node.name} that a control structure node or the "
             f"top level holds."
         )
 
@@ -861,6 +900,42 @@ class RepetitionsExhausted(ExecutionFailure):
             "Allow more repetitions, or check whether the children can succeed at all "
             "from the state each attempt starts in."
         )
+
+
+@dataclass
+class CancelledByNode(ExecutionFailure, ABC):
+    """
+    Raised when a :class:`~cramph.node.CancelStatechart` given no exception of its own
+    ends the statechart because of the node it watches.
+    """
+
+    node: StatechartNode
+    """
+    The node whose outcome cancelled the statechart.
+    """
+
+    def suggest_correction(self) -> str:
+        return "Give the cancelling node an exception that says why it cancels."
+
+
+@dataclass
+class CancelledByNodeReachingItsGoal(CancelledByNode):
+    """
+    Raised when the watched node observed True or succeeded.
+    """
+
+    def error_message(self) -> str:
+        return f"Cancelled because {self.node.unique_name} reached its goal."
+
+
+@dataclass
+class CancelledByNodeFailing(CancelledByNode):
+    """
+    Raised when the watched node failed.
+    """
+
+    def error_message(self) -> str:
+        return f"Cancelled because {self.node.unique_name} failed."
 
 
 @dataclass

@@ -3,9 +3,11 @@ from ripple_down_rules.datastructures.case import Case, create_case
 from typing_extensions import Optional
 from .placing_detector_get_interaction_event_output__scrdr_defs import *
 
-
-attribute_name = 'output_'
-conclusion_type = (NoneType, PlacingEvent,)
+attribute_name = "output_"
+conclusion_type = (
+    NoneType,
+    PlacingEvent,
+)
 mutually_exclusive = True
 
 

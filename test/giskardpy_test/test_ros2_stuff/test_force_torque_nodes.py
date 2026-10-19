@@ -60,14 +60,14 @@ def test_force_impact_node(rclpy_node):
     executor.tick_until_end(timeout=5_000)
     statechart_copy.draw("muh.pdf")
     assert (
-        statechart_copy.history.get_observation_history_of_node(ft_node)[0]
+        statechart_copy.state_history.get_observation_history_of_node(ft_node)[0]
         == ObservationStateValues.UNKNOWN
     )
     assert (
         ObservationStateValues.FALSE
-        in statechart_copy.history.get_observation_history_of_node(ft_node)
+        in statechart_copy.state_history.get_observation_history_of_node(ft_node)
     )
     assert (
-        statechart_copy.history.get_observation_history_of_node(ft_node)[-1]
+        statechart_copy.state_history.get_observation_history_of_node(ft_node)[-1]
         == ObservationStateValues.TRUE
     )

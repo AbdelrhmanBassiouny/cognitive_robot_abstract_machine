@@ -6,7 +6,7 @@ from test.giskardpy_test.test_motion_statechart.debug_expression_helpers import 
     GOAL_COLOR,
     debug_expression_by_name,
 )
-from ..motion_control_context import create_context_with_motion_control
+from ..motion_control_context import add_to_statechart_with_motion_control
 
 
 class TestPointingDebugExpressions:
@@ -26,7 +26,8 @@ class TestPointingDebugExpressions:
             name="point",
         )
 
-        artifacts = task.build(create_context_with_motion_control(cylinder_bot_world))
+        add_to_statechart_with_motion_control(task, cylinder_bot_world)
+        artifacts = task.build()
 
         goal = debug_expression_by_name(artifacts.debug_expressions, "point/goal")
         current = debug_expression_by_name(artifacts.debug_expressions, "point/current")
@@ -47,7 +48,8 @@ class TestPointingDebugExpressions:
             name="cone",
         )
 
-        artifacts = task.build(create_context_with_motion_control(cylinder_bot_world))
+        add_to_statechart_with_motion_control(task, cylinder_bot_world)
+        artifacts = task.build()
 
         goal = debug_expression_by_name(artifacts.debug_expressions, "cone/goal")
         current = debug_expression_by_name(artifacts.debug_expressions, "cone/current")

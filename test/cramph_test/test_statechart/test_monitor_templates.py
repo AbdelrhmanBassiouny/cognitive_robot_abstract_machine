@@ -80,7 +80,7 @@ def observation_for(
     :param monitored_life_cycle: The life cycle state the monitored node is in.
     :return: What the goal observes.
     """
-    artifacts = goal.build_artifacts(StatechartContext(world=World()))
+    artifacts = goal.build_artifacts()
     # A template may hand back a node's observation variable unwrapped, which cannot be
     # copied and therefore not substituted into.
     substituted = DerivedConditionVariable.substitute_in(

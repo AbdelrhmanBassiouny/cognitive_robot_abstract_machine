@@ -75,7 +75,7 @@ class ChooserNotingTheTick(ChildChooser):
     """
 
     def choose_child(
-        self, node: CompositeNodeChoosingItsChild, context
+        self, node: CompositeNodeChoosingItsChild
     ) -> StatechartNode | None:
         self.asked_on_ticks.append(self.executor.tick_count)
         return self.child

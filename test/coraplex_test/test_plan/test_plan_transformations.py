@@ -58,7 +58,6 @@ from cramph.composites import (
     StatementNode,
 )
 from cramph.context import ContextExtension
-from cramph.context import StatechartContext
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.goals.cartesian_goals import CartesianPoseStraight
 from giskardpy.motion_statechart.goals.gripper import MoveGripper
@@ -135,7 +134,7 @@ def prepared_plan_nodes(
 
 def steps_of(node: StatechartNode) -> list[StatechartNode]:
     """
-    :param node: An expanded action, or a plan language node.
+    :param node: An expanded action, or a control structure node.
     :return: The steps it runs, in order, which is its goal alone for an action reaching
         a single goal.
     """
@@ -506,7 +505,7 @@ def test_a_transformation_bound_to_the_base_type_selects_every_action(
 ):
     """
     A transformation bound to the base type of all actions reports that type and selects
-    every action, but not the language node holding them.
+    every action, but not the control structure node holding them.
     """
     world, view, extensions = pr2_apartment_context
     transformation = MoveGripperBeforeEveryAction()
@@ -1027,9 +1026,7 @@ class ChoosesTheGivenChild(PlanChildChooser):
     The child handed over, None once it was.
     """
 
-    def choose_child(
-        self, node: StatementNode, context: StatechartContext
-    ) -> StatechartNode | None:
+    def choose_child(self, node: StatementNode) -> StatechartNode | None:
         child, self.child = self.child, None
         return child
 
@@ -1060,7 +1057,6 @@ def test_the_opening_joins_the_sequence_a_grounded_pick_up_is_a_child_of(
 
     underspecified.choose_child_with(
         ChoosesTheGivenChild(child=candidate_steps),
-        plan.statechart.context,
     )
 
     [parking, opening, parking_again, drive_to_the_spoon, chosen] = steps_of(
@@ -1146,7 +1142,7 @@ def underspecified_move_and_pick_up_in(plan: StatechartNode) -> StatementNode:
 
 def step_before(step: StatechartNode) -> StatechartNode:
     """
-    :param step: A step that is not the first child of its language node.
+    :param step: A step that is not the first child of its control structure node.
     :return: The step directly in front of it.
     """
     siblings = steps_of(step.parent_node)
@@ -1330,7 +1326,7 @@ def test_the_arms_are_parked_around_every_step_of_a_pick_and_place(
     ]
 
 
-# %% inserting where no fitting plan language node runs the anchor
+# %% inserting where no fitting control structure node runs the anchor
 
 
 @dataclass

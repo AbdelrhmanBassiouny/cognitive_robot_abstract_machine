@@ -5,7 +5,10 @@ import pytest
 
 from giskardpy.motion_statechart.data_types import DefaultWeights
 from cramph.data_types import LifeCycleValues, ObservationStateValues
-from giskardpy.motion_statechart.goals.open_close import Open, Close
+from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
+from giskardpy.motion_statechart.goals.grasped_mechanism import (
+    ArticulateGraspedMechanism,
+)
 from cramph.composites import Sequence, Parallel
 from giskardpy.motion_statechart.graph_node import (
     EndMotion,
@@ -945,8 +948,8 @@ def test_angle_goal(pr2_world_state_reset: World):
     ), f"AngleGoal failed: final angle {angle:.6f} rad not in [{lower_angle:.6f}, {upper_angle:.6f}]"
 
 
-class TestOpenClose:
-    def test_the_mechanism_is_open_once_its_parts_reached_their_goals(
+class TestArticulateGraspedMechanism:
+    def test_the_mechanism_is_articulated_once_its_parts_reached_their_goals(
         self, prismatic_bot2: World
     ):
         """
@@ -959,9 +962,10 @@ class TestOpenClose:
         )
         motion_statechart = Statechart(context=executor.context)
         motion_statechart.add_node(
-            open_goal := Open(
+            open_goal := ArticulateGraspedMechanism(
                 environment_link=prismatic_bot2.get_body_by_name("robot"),
                 tip_link=prismatic_bot2.get_body_by_name("robot2"),
+                goal_joint_state=0.0,
             )
         )
         executor.compile(statechart=motion_statechart)
@@ -1032,7 +1036,7 @@ class TestOpenClose:
                         ),
                         opening := Parallel(
                             nodes=[
-                                Open(
+                                ArticulateGraspedMechanism(
                                     tip_link=r_tip,
                                     environment_link=handle,
                                     goal_joint_state=open_goal,
@@ -1046,7 +1050,7 @@ class TestOpenClose:
                         ),
                         closing := Parallel(
                             nodes=[
-                                Close(
+                                ArticulateGraspedMechanism(
                                     tip_link=r_tip,
                                     environment_link=handle,
                                     goal_joint_state=close_goal,
@@ -1130,7 +1134,7 @@ class TestOpenClose:
                                 reference_frame=cap_body
                             ),
                         ),
-                        open := Open(
+                        open := ArticulateGraspedMechanism(
                             tip_link=r_tip,
                             environment_link=cap_body,
                             goal_joint_state=unscrew_goal,
@@ -1169,7 +1173,7 @@ class TestOpenClose:
         tighten_statechart = Statechart(context=executor.context)
         tighten_statechart.add_nodes(
             [
-                close := Close(
+                close := ArticulateGraspedMechanism(
                     tip_link=r_tip,
                     environment_link=cap_body,
                     goal_joint_state=tightened_goal_joint_state,
@@ -1191,16 +1195,16 @@ class TestOpenClose:
             world_T_cap_tightened[:3, 3], world_T_cap_before[:3, 3], atol=1e-3
         )
 
-    def _expanded_nodes(self, goal: Open, world: World):
+    def _expanded_nodes(self, goal: ArticulateGraspedMechanism, world: World):
         """
         Expands a goal on a statechart of its own and returns the children it built.
         """
         statechart = Statechart(context=create_context_with_motion_control(world))
         statechart.add_node(goal)
-        goal.expand(statechart.context)
+        goal.expand()
         return goal.nodes
 
-    def test_open_yields_the_mechanism_but_not_the_grasp_by_default(
+    def test_the_mechanism_yields_to_collision_avoidance_but_not_the_grasp_by_default(
         self, prismatic_bot
     ):
         """
@@ -1209,7 +1213,11 @@ class TestOpenClose:
         part does not.
         """
         grasped_part = prismatic_bot.get_body_by_name("robot")
-        goal = Open(tip_link=prismatic_bot.root, environment_link=grasped_part)
+        goal = ArticulateGraspedMechanism(
+            tip_link=prismatic_bot.root,
+            environment_link=grasped_part,
+            goal_joint_state=0.0,
+        )
 
         nodes = self._expanded_nodes(goal, prismatic_bot)
 
@@ -1220,36 +1228,19 @@ class TestOpenClose:
         assert mechanism_node.weight == DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE
         assert grasp_node.weight == DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE
 
-    def test_close_yields_the_mechanism_but_not_the_grasp_by_default(
-        self, prismatic_bot
-    ):
-        """
-        Closing defaults its weights the same way opening does.
-        """
-        grasped_part = prismatic_bot.get_body_by_name("robot")
-        goal = Close(tip_link=prismatic_bot.root, environment_link=grasped_part)
-
-        nodes = self._expanded_nodes(goal, prismatic_bot)
-
-        mechanism_node = next(
-            node for node in nodes if isinstance(node, JointPositionList)
-        )
-        grasp_node = next(node for node in nodes if isinstance(node, CartesianPose))
-        assert mechanism_node.weight == DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE
-        assert grasp_node.weight == DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE
-
-    def test_open_weighs_mechanism_and_grasp_separately(self, prismatic_bot):
+    def test_mechanism_and_grasp_are_weighed_separately(self, prismatic_bot):
         """
         Driving the mechanism and holding the grasped part are separate goals, so a
         caller can let the mechanism yield to collision avoidance while the grasp keeps
         outranking it.
         """
         grasped_part = prismatic_bot.get_body_by_name("robot")
-        goal = Open(
+        goal = ArticulateGraspedMechanism(
             tip_link=prismatic_bot.root,
             environment_link=grasped_part,
-            mechanism_weight=DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE,
-            grasp_weight=DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE,
+            goal_joint_state=0.0,
+            mechanism_weight=DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE,
+            grasp_weight=DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE,
         )
 
         nodes = self._expanded_nodes(goal, prismatic_bot)
@@ -1258,60 +1249,33 @@ class TestOpenClose:
             node for node in nodes if isinstance(node, JointPositionList)
         )
         grasp_node = next(node for node in nodes if isinstance(node, CartesianPose))
-        assert mechanism_node.weight == DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE
-        assert grasp_node.weight == DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE
+        assert mechanism_node.weight == DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE
+        assert grasp_node.weight == DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE
 
-    def test_close_weighs_mechanism_and_grasp_separately(self, prismatic_bot):
-        """
-        Closing splits its weights the same way opening does.
-        """
+    def test_a_goal_within_the_limits_is_kept(self, prismatic_bot):
         grasped_part = prismatic_bot.get_body_by_name("robot")
-        goal = Close(
+        connection = grasped_part.get_first_parent_connection_of_type(
+            ActiveConnection1DOF
+        )
+        limits = connection.dof.limits
+        within_limits = (limits.lower.position + limits.upper.position) / 2
+        goal = ArticulateGraspedMechanism(
             tip_link=prismatic_bot.root,
             environment_link=grasped_part,
-            mechanism_weight=DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE,
-            grasp_weight=DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE,
+            goal_joint_state=within_limits,
         )
-
-        nodes = self._expanded_nodes(goal, prismatic_bot)
-
-        mechanism_node = next(
-            node for node in nodes if isinstance(node, JointPositionList)
-        )
-        grasp_node = next(node for node in nodes if isinstance(node, CartesianPose))
-        assert mechanism_node.weight == DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE
-        assert grasp_node.weight == DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE
-
-    def test_open_drives_towards_the_upper_limit(self, prismatic_bot):
-        """
-        Without a commanded state, opening drives the mechanism to the top of its range.
-        """
-        grasped_part = prismatic_bot.get_body_by_name("robot")
-        goal = Open(tip_link=prismatic_bot.root, environment_link=grasped_part)
 
         self._expanded_nodes(goal, prismatic_bot)
 
-        assert goal.goal_joint_state == goal.connection.dof.limits.upper.position
+        assert goal.goal_joint_state == within_limits
 
-    def test_close_drives_towards_the_lower_limit(self, prismatic_bot):
-        """
-        Without a commanded state, closing drives the mechanism to the bottom of its
-        range, the mirror of what opening does.
-        """
-        grasped_part = prismatic_bot.get_body_by_name("robot")
-        goal = Close(tip_link=prismatic_bot.root, environment_link=grasped_part)
-
-        self._expanded_nodes(goal, prismatic_bot)
-
-        assert goal.goal_joint_state == goal.connection.dof.limits.lower.position
-
-    def test_open_clamps_a_goal_beyond_the_upper_limit(self, prismatic_bot):
+    def test_a_goal_beyond_the_upper_limit_is_clamped_to_it(self, prismatic_bot):
         """
         A commanded state the mechanism cannot reach is cut down to its upper limit,
         rather than left as a goal the solver can never observe as reached.
         """
         grasped_part = prismatic_bot.get_body_by_name("robot")
-        goal = Open(
+        goal = ArticulateGraspedMechanism(
             tip_link=prismatic_bot.root,
             environment_link=grasped_part,
             goal_joint_state=1e3,
@@ -1321,12 +1285,9 @@ class TestOpenClose:
 
         assert goal.goal_joint_state == goal.connection.dof.limits.upper.position
 
-    def test_close_clamps_a_goal_below_the_lower_limit(self, prismatic_bot):
-        """
-        Closing clamps an unreachable commanded state against the opposite limit.
-        """
+    def test_a_goal_below_the_lower_limit_is_clamped_to_it(self, prismatic_bot):
         grasped_part = prismatic_bot.get_body_by_name("robot")
-        goal = Close(
+        goal = ArticulateGraspedMechanism(
             tip_link=prismatic_bot.root,
             environment_link=grasped_part,
             goal_joint_state=-1e3,

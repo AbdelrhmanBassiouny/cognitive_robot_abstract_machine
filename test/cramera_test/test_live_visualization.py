@@ -407,12 +407,12 @@ class TestLiveVisualization:
         executor.compile(statechart)
 
         assert bridge.world is world
-        assert statechart.history.observers == [live.publishing]
+        assert statechart.state_history.observers == [live.publishing]
         assert nodes_by_kind(bridge)["ConstTrueNode"] is not None
 
         executor.execute()
 
-        assert statechart.history.observers == []
+        assert statechart.state_history.observers == []
         live.stop()
 
     def test_the_viewer_keeps_showing_a_run_once_it_ended(
@@ -471,7 +471,7 @@ class TestLiveVisualization:
 
         assert bridge.live_server is server
         assert bridge.recording is recording
-        assert second.history.observers == [live.publishing]
+        assert second.state_history.observers == [live.publishing]
         executor.execute()
         live.stop()
 

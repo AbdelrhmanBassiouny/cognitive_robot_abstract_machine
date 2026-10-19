@@ -55,7 +55,7 @@ class ObserverRecordingTicks(StateHistoryObserver):
     """
 
     def on_state_change(self, history: StateHistory) -> None:
-        self.ticks.append(history.history[-1].tick_count)
+        self.ticks.append(history.latest_item.tick_count)
 
 
 @dataclass
@@ -83,7 +83,7 @@ class ObserverRecordingLifeCycles(StateHistoryObserver):
     """
 
     def on_state_change(self, history: StateHistory) -> None:
-        self.life_cycle_states.append(history.history[-1].life_cycle_state[self.node])
+        self.life_cycle_states.append(history.latest_item.life_cycle_state[self.node])
         self.statechart_ended.append(self.node.statechart.is_ended())
 
 
@@ -228,7 +228,7 @@ def test_the_observers_of_the_client_statechart_learn_the_reported_tick(
     client_statechart: Statechart,
 ) -> None:
     observer = ObserverRecordingTicks()
-    client_statechart.history.add_observer(observer)
+    client_statechart.state_history.add_observer(observer)
     update = StatechartStateUpdate.from_json(
         _reported_states(ticks=3), statechart=client_statechart
     )
@@ -246,7 +246,7 @@ def test_the_same_states_reported_twice_are_recorded_once(
     StatechartStateUpdate.from_json(payload, statechart=client_statechart).apply()
     StatechartStateUpdate.from_json(payload, statechart=client_statechart).apply()
 
-    assert len(client_statechart.history.history) == 1
+    assert len(client_statechart.state_history.items) == 1
 
 
 # %% following a running goal
@@ -259,7 +259,7 @@ def test_the_client_sees_a_node_run_before_the_goal_ends(
     statechart.add_node(counter := CountSimulationTimeSeconds(seconds=0.1))
     statechart.add_node(EndMotion.when_true(counter))
     observer = ObserverRecordingLifeCycles(node=counter)
-    statechart.history.add_observer(observer)
+    statechart.state_history.add_observer(observer)
     following = ClientFollowingTheStates(
         world=motion_server.executor.context.world,
         statechart=statechart,

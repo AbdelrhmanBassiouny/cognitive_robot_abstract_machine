@@ -594,25 +594,25 @@ by hand cleans up nothing.
 A node class inherits `EndedByOwner` or `SucceedsOnObservingTrue` (see
 [Who ends a node](#who-ends-a-node)) and states what it observes in one of two ways:
 
-- `build_artifacts(context)` returns `NodeArtifacts` whose `observation` is a symbolic
+- `build_artifacts()` returns `NodeArtifacts` whose `observation` is a symbolic
   expression. It is compiled into the tick, so it costs no Python call per tick.
-- `on_tick(context)` is called every tick the node was running at the start of, and may
+- `on_tick()` is called every tick the node was running at the start of, and may
   return an `ObservationStateValues`, which takes precedence over the expression. Returning
   None keeps the expression's value, or, for a node without one, the observation of its
   last tick.
 
 Further hooks a node class may override:
 
-- `set_up(context)` is called once per context, before the node is first built. Register the
+- `set_up()` is called once per context, before the node is first built. Register the
   variables the node reads here.
-- `build(context)` is called when the statechart compiles the node, and again whenever the
-  kinematic structure of the world changed. An override must return `super().build(context)`.
+- `build()` is called when the statechart compiles the node, and again whenever the
+  kinematic structure of the world changed. An override must return `super().build()`.
 - `on_start`, `on_pause`, `on_unpause`, `on_end` and `on_reset` are called after the passes of
   the tick in which the transition happened.
-- `cleanup(context)` is called once the executor finished running the statechart (see
+- `cleanup()` is called once the executor finished running the statechart (see
   [Ending the statechart](#ending-the-statechart)).
 
-A composite node adds its children in `expand(context)`, which is called once when it joins a
+A composite node adds its children in `expand()`, which is called once when it joins a
 statechart, and may reject them in `check_children()`, which runs when the statechart is
 compiled and the children's conditions are complete. The plan language constructs, for
 example, raise `CompositeNodeWithoutChildrenError` there if they were handed no node.
@@ -621,7 +621,9 @@ Data or services that are not part of every statechart reach a node through its
 `StatechartContext` as a `ContextExtension`. A node class names the extensions it reads in
 `required_context_extensions`, and a composite node class those it reads only while expanding
 in `context_extensions_required_to_expand`; a statechart whose context lacks one raises
-`NodesMissingContextExtensionsError`. `context.require_extension(type)` returns an extension.
+`NodesMissingContextExtensionsError`. Every hook reads the context of the node's statechart
+through the node's `context` property, and `self.context.require_extension(type)` returns an
+extension.
 
 cramph ships these nodes besides the templates:
 

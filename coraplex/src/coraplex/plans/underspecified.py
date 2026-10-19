@@ -24,7 +24,6 @@ from cramph.composites import (
     Sequence,
     StatementNode,
 )
-from cramph.context import StatechartContext
 from cramph.executor import ExecutorExtension
 from cramph.exceptions import ExecutionFailure
 from cramph.node import StatechartNode
@@ -52,14 +51,13 @@ class PlanChildChooser(ChildChooser, ABC):
         self,
         node: CompositeNodeChoosingItsChild,
         child: StatechartNode,
-        context: StatechartContext,
     ) -> None:
         """
         Rewrites `child` with the plan transformations of `context`, before the monitor
         watching it for a stall collects what it watches, see
         :meth:`~cramph.composites.ChildChooser.prepare_chosen_child`.
         """
-        rewriting = context.get_extension(PlanRewriting)
+        rewriting = node.context.get_extension(PlanRewriting)
         if rewriting is not None:
             rewriting.rewrite(child)
 
@@ -67,7 +65,6 @@ class PlanChildChooser(ChildChooser, ABC):
         self,
         node: CompositeNodeChoosingItsChild,
         child: StatechartNode,
-        context: StatechartContext,
     ) -> list[StatechartNode]:
         """
         Differs from :meth:`~cramph.composites.ChildChooser.failure_monitors_for` in
@@ -330,7 +327,7 @@ class UnderspecifiedChildChooser(PlanChildChooser):
         )
 
     def choose_child(
-        self, node: CompositeNodeChoosingItsChild, context: StatechartContext
+        self, node: CompositeNodeChoosingItsChild
     ) -> StatechartNode | None:
         """
         :return: The sequence holding the next grounded action that succeeds its
@@ -340,7 +337,7 @@ class UnderspecifiedChildChooser(PlanChildChooser):
         """
         if not isinstance(node, StatementNode):
             raise NotAStatementNode(node=node)
-        grounding = context.require_extension(StatementGrounding)
+        grounding = node.context.require_extension(StatementGrounding)
         proposal = node.next_candidate(
             grounding.query_backend, grounding.candidates_to_try
         )

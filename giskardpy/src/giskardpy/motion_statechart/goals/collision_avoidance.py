@@ -10,7 +10,7 @@ import krrood.symbolic_math.symbolic_math as sm
 from giskardpy.motion_statechart.context import MotionControlContext
 from krrood.ormatic.utils import classproperty
 from cramph.node import EndedByOwner, SucceedsOnObservingTrue
-from cramph.context import ContextExtension, StatechartContext
+from cramph.context import ContextExtension
 from cramph.data_types import ObservationStateValues
 from giskardpy.motion_statechart.data_types import DefaultWeights
 from giskardpy.motion_statechart.exceptions import (
@@ -125,7 +125,7 @@ class _CancelBecauseCollisionViolated(CancelStatechart):
     def required_context_extensions(cls) -> tuple[type[ContextExtension], ...]:
         return super().required_context_extensions + (MotionControlContext,)
 
-    def build(self, context: StatechartContext) -> NodeArtifacts:
+    def build(self) -> NodeArtifacts:
         self.start_condition = self.create_violation_condition()
         return NodeArtifacts()
 
@@ -138,7 +138,7 @@ class _CancelBecauseCollisionViolated(CancelStatechart):
             return Scalar.const_false()
         return sm.logic_or(*[node.observes_false for node in self.tasks])
 
-    def create_exception(self, context: StatechartContext) -> CollisionViolatedError:
+    def create_exception(self) -> CollisionViolatedError:
         violated = [
             violation
             for task in self.tasks
@@ -151,16 +151,13 @@ class _CancelBecauseCollisionViolated(CancelStatechart):
         )
 
 
-def _single_robot_of_world(
-    node: CompositeNode, context: StatechartContext
-) -> AbstractRobot:
+def _single_robot_of_world(node: CompositeNode) -> AbstractRobot:
     """
     :param node: The collision avoidance goal that was given no robot.
-    :param context: The context `node` is expanded in.
-    :return: The only robot in the world of `context`.
+    :return: The only robot in the world of `node`.
     :raises UnexpectedWorldEntityCountError: If that world holds no robot or several.
     """
-    robots = context.world.get_semantic_annotations_by_type(AbstractRobot)
+    robots = node.world.get_semantic_annotations_by_type(AbstractRobot)
     if len(robots) != 1:
         raise UnexpectedWorldEntityCountError(
             node=node,
@@ -200,29 +197,27 @@ class _ExternalCollisionAvoidanceTask(_CollisionAvoidanceTask):
     the environment object it avoids, 0 for the closest.
     """
 
-    def build(self, context: StatechartContext) -> NodeArtifacts:
+    def build(self) -> NodeArtifacts:
         """
         Registers every collision group of :attr:`robot` that avoids external collisions
-        with the external collision variable manager of `context`, which this node reads
-        from then on.
+        with the external collision variable manager of :attr:`context`, which this node
+        reads from then on.
         """
-        self._external_collision_manager = context.require_extension(
+        self._external_collision_manager = self.context.require_extension(
             MotionControlContext
         ).external_collision_manager
         self.avoided_contacts = []
-        for group in self._groups_avoiding_external_collisions(context):
+        for group in self._groups_avoiding_external_collisions():
             self._external_collision_manager.register_group_of_body(group.root)
             self.avoided_contacts.extend(
                 (group, index)
                 for index in range(
-                    group.get_max_avoided_bodies(context.world.collision_manager)
+                    group.get_max_avoided_bodies(self.context.world.collision_manager)
                 )
             )
-        return super().build(context)
+        return super().build()
 
-    def _groups_avoiding_external_collisions(
-        self, context: StatechartContext
-    ) -> list[CollisionGroup]:
+    def _groups_avoiding_external_collisions(self) -> list[CollisionGroup]:
         """
         :return: The collision groups rooted in :attr:`robot` that hold a body avoiding
             at least one external collision, each once.
@@ -230,19 +225,19 @@ class _ExternalCollisionAvoidanceTask(_CollisionAvoidanceTask):
         robot_bodies = self.robot.bodies
         groups = []
         for body in self.robot.bodies_with_collision:
-            if not context.world.collision_manager.get_max_avoided_bodies(body):
+            if not self.context.world.collision_manager.get_max_avoided_bodies(body):
                 continue
             group = self._external_collision_manager.get_collision_group(body)
             if group not in groups and group.root in robot_bodies:
                 groups.append(group)
         return groups
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         artifacts = MotionNodeArtifacts()
         manager = self._external_collision_manager
         for group, index in self.avoided_contacts:
-            root_T_group = context.world.compose_forward_kinematics_expression(
-                context.world.root, group.root
+            root_T_group = self.context.world.compose_forward_kinematics_expression(
+                self.context.world.root, group.root
             )
             root_V_point_on_group = (
                 root_T_group @ manager.get_group_a_P_point_on_a_symbol(group, index)
@@ -337,7 +332,7 @@ class ExternalCollisionAvoidance(EndedByOwner, CompositeNode):
     def required_context_extensions(cls) -> tuple[type[ContextExtension], ...]:
         return super().required_context_extensions + (MotionControlContext,)
 
-    def expand(self, context: StatechartContext) -> None:
+    def expand(self) -> None:
         """
         Add the task avoiding every external collision of :attr:`robot`, and the node
         cancelling the motion once one is violated.
@@ -346,7 +341,7 @@ class ExternalCollisionAvoidance(EndedByOwner, CompositeNode):
         that runs it.
         """
         if self.robot is None:
-            self.robot = _single_robot_of_world(self, context)
+            self.robot = _single_robot_of_world(self)
         task = _ExternalCollisionAvoidanceTask(
             name=f"{self.name}/task", robot=self.robot, max_velocity=self.max_velocity
         )
@@ -386,10 +381,10 @@ class ExternalCollisionDistanceMonitor(EndedByOwner, MotionStatechartNode):
     def required_context_extensions(cls) -> tuple[type[ContextExtension], ...]:
         return super().required_context_extensions + (MotionControlContext,)
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         # 1. Access the shared external collision manager
         # This automatically registers the manager with the CollisionManager
-        manager = context.require_extension(
+        manager = self.context.require_extension(
             MotionControlContext
         ).external_collision_manager
 
@@ -435,23 +430,23 @@ class UpdateTemporaryCollisionRules(EndedByOwner, MotionStatechartNode):
             temporary_rules=[AllowCollisionForEndEffector(end_effector=end_effector)]
         )
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         artifacts = MotionNodeArtifacts()
         artifacts.observation = sm.Scalar.const_true()
         return artifacts
 
-    def on_start(self, context: StatechartContext) -> None:
+    def on_start(self) -> None:
         """
         :raises TemporaryCollisionRulesDependOnOrder: If it would matter whether
             :attr:`temporary_rules` or the temporary rules already in force are applied
             first.
         """
-        context.world.collision_manager.put_temporary_rules_in_force(
+        self.context.world.collision_manager.put_temporary_rules_in_force(
             self.temporary_rules
         )
 
-    def on_end(self, context: StatechartContext) -> None:
-        context.world.collision_manager.take_temporary_rules_out_of_force(
+    def on_end(self) -> None:
+        self.context.world.collision_manager.take_temporary_rules_out_of_force(
             self.temporary_rules
         )
 
@@ -469,28 +464,30 @@ class SetInitialTemporaryCollisionRules(SucceedsOnObservingTrue, MotionStatechar
     Whether to set the collision matrix on build.
     """
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         artifacts = MotionNodeArtifacts()
         # safe old rules
-        old_temporary_rules = list(context.world.collision_manager.temporary_rules)
+        old_temporary_rules = list(self.context.world.collision_manager.temporary_rules)
 
         # compute collision matrix with new rules
-        context.world.collision_manager.clear_temporary_rules()
-        context.world.collision_manager.extend_temporary_rule(self.temporary_rules)
-        context.world.collision_manager.update_collision_matrix()
-        self.collision_matrix = context.world.collision_manager.collision_matrix
+        self.context.world.collision_manager.clear_temporary_rules()
+        self.context.world.collision_manager.extend_temporary_rule(self.temporary_rules)
+        self.context.world.collision_manager.update_collision_matrix()
+        self.collision_matrix = self.context.world.collision_manager.collision_matrix
 
         # restore old rules
         if not self.set_on_build:
-            context.world.collision_manager.clear_temporary_rules()
-            context.world.collision_manager.extend_temporary_rule(old_temporary_rules)
-            context.world.collision_manager.update_collision_matrix()
+            self.context.world.collision_manager.clear_temporary_rules()
+            self.context.world.collision_manager.extend_temporary_rule(
+                old_temporary_rules
+            )
+            self.context.world.collision_manager.update_collision_matrix()
 
         artifacts.observation = sm.Scalar.const_true()
         return artifacts
 
-    def on_start(self, context: StatechartContext) -> None:
-        context.world.collision_manager.set_collision_matrix(self.collision_matrix)
+    def on_start(self) -> None:
+        self.context.world.collision_manager.set_collision_matrix(self.collision_matrix)
 
 
 # %% self collision avoidance
@@ -536,9 +533,7 @@ class _SelfCollisionAvoidanceTask(_CollisionAvoidanceTask):
             for index in range(manager.avoided_contacts_of(group_a, group_b))
         ]
 
-    def create_self_collision_matrix(
-        self, context: StatechartContext
-    ) -> CollisionMatrix:
+    def create_self_collision_matrix(self) -> CollisionMatrix:
         """
         Creates a collision matrix that contains all body combinations except those that
         are always filtered.
@@ -548,24 +543,24 @@ class _SelfCollisionAvoidanceTask(_CollisionAvoidanceTask):
         """
         collision_matrix = CollisionMatrix()
         avoid_self_collisions = AvoidSelfCollisions(robot=self.robot)
-        avoid_self_collisions.update(context.world)
+        avoid_self_collisions.update(self.context.world)
         avoid_self_collisions.apply_to_collision_matrix(collision_matrix)
         for (
             ignore_collision_rule
-        ) in context.world.collision_manager.ignore_collision_rules:
+        ) in self.context.world.collision_manager.ignore_collision_rules:
             ignore_collision_rule.apply_to_collision_matrix(collision_matrix)
         return collision_matrix
 
-    def build(self, context: StatechartContext) -> NodeArtifacts:
+    def build(self) -> NodeArtifacts:
         """
         Registers every combination of collision groups of :attr:`robot` that the self
-        collision matrix checks with the self collision variable manager of `context`,
-        which this node reads from then on.
+        collision matrix checks with the self collision variable manager of
+        :attr:`context`, which this node reads from then on.
         """
-        self._self_collision_manager = context.require_extension(
+        self._self_collision_manager = self.context.require_extension(
             MotionControlContext
         ).self_collision_manager
-        collision_matrix = self.create_self_collision_matrix(context)
+        collision_matrix = self.create_self_collision_matrix()
         kinematic_structure_entities = self.robot.kinematic_structure_entities
         self.checked_combinations = []
         for group_a, group_b in combinations(
@@ -590,14 +585,16 @@ class _SelfCollisionAvoidanceTask(_CollisionAvoidanceTask):
                     group_a.root, group_b.root
                 )
             )
-        return super().build(context)
+        return super().build()
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         artifacts = MotionNodeArtifacts()
         manager = self._self_collision_manager
         for group_a, group_b, index in self.avoided_contacts:
-            group_b_T_group_a = context.world.compose_forward_kinematics_expression(
-                group_b.root, group_a.root
+            group_b_T_group_a = (
+                self.context.world.compose_forward_kinematics_expression(
+                    group_b.root, group_a.root
+                )
             )
             group_b_P_point_on_a = (
                 group_b_T_group_a
@@ -694,7 +691,7 @@ class SelfCollisionAvoidance(EndedByOwner, CompositeNode):
     def required_context_extensions(cls) -> tuple[type[ContextExtension], ...]:
         return super().required_context_extensions + (MotionControlContext,)
 
-    def expand(self, context: StatechartContext) -> None:
+    def expand(self) -> None:
         """
         Add the task avoiding every self collision of :attr:`robot`, and the node
         cancelling the motion once one is violated.
@@ -703,7 +700,7 @@ class SelfCollisionAvoidance(EndedByOwner, CompositeNode):
         built, in the context that runs it.
         """
         if self.robot is None:
-            self.robot = _single_robot_of_world(self, context)
+            self.robot = _single_robot_of_world(self)
         task = _SelfCollisionAvoidanceTask(
             name=f"{self.name}/task", robot=self.robot, max_velocity=self.max_velocity
         )
@@ -744,8 +741,10 @@ class SelfCollisionDistanceMonitor(EndedByOwner, MotionStatechartNode):
     def required_context_extensions(cls) -> tuple[type[ContextExtension], ...]:
         return super().required_context_extensions + (MotionControlContext,)
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
-        manager = context.require_extension(MotionControlContext).self_collision_manager
+    def build_artifacts(self) -> MotionNodeArtifacts:
+        manager = self.context.require_extension(
+            MotionControlContext
+        ).self_collision_manager
 
         manager.register_groups_of_body_combination(self.body_a, self.body_b)
         group_a, group_b = manager.body_pair_to_group_pair(self.body_a, self.body_b)

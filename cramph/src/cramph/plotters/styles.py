@@ -3,8 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum, StrEnum
 
-from typing_extensions import Dict
-
 from semantic_digital_twin.world_description.geometry import Color
 from cramph.data_types import ObservationStateValues, TransitionKind
 
@@ -113,28 +111,37 @@ class DrawingMetrics:
     where no conditions follow them.
     """
 
+    side_by_side_rank_distance: int = 0
+    """
+    How many rows apart a dependency of a pause or a reset condition draws its endpoints
+    at least, so the node read may sit beside the node reading it.
+    """
 
-DRAWING_METRICS = DrawingMetrics()
-"""
-The measurements every drawing is laid out with.
-"""
+    stacked_rank_distance: int = 1
+    """
+    How many rows apart a dependency of every other transition kind draws its endpoints
+    at least, so the node read is drawn a row above the node reading it.
+    """
 
-
-# %% conditions
-
-DISABLED_CONDITION_COLOR = Color.from_hex("#9CA3AF")
-"""
-The color a condition that cannot become true any more is written in.
-"""
+    def minimum_rank_distance(self, transition_kind: TransitionKind) -> int:
+        """
+        :param transition_kind: The kind of the condition a dependency feeds.
+        :return: How many rows apart that dependency draws its endpoints at least.
+        """
+        if transition_kind in (TransitionKind.PAUSE, TransitionKind.RESET):
+            return self.side_by_side_rank_distance
+        return self.stacked_rank_distance
 
 
 # %% how a trinary value is drawn
 
 
-@dataclass(frozen=True)
-class ObservationDrawingStyle:
+class ObservationDrawingStyle(Enum):
     """
     How one trinary value is drawn as a line or as text.
+
+    Only true and false are colors; a value with no answer yet is plain black and drawn
+    thin, so it recedes instead of presenting itself as a third value color.
 
     ..note:: These are the badge colors of :class:`ObservationStateValues` darkened for
         drawing on the page. A badge color fills a cell behind black text and has to stay
@@ -146,44 +153,38 @@ class ObservationDrawingStyle:
     The color a line or a term carrying this value is drawn in.
     """
 
-    line_width: float
+    line_width_factor: float
     """
-    The width of a line carrying this value.
+    The multiple of :attr:`DrawingMetrics.line_width` a line carrying this value is
+    drawn with.
     """
 
+    TRUE = "#2E7D32", 1.25
+    FALSE = "#C62828", 1.25
+    UNKNOWN = "#000000", 0.5
 
-OBSERVATION_DRAWING_STYLES: Dict[ObservationStateValues, ObservationDrawingStyle] = {
-    ObservationStateValues.TRUE: ObservationDrawingStyle(
-        color=Color.from_hex("#2E7D32"), line_width=DRAWING_METRICS.line_width * 1.25
-    ),
-    ObservationStateValues.FALSE: ObservationDrawingStyle(
-        color=Color.from_hex("#C62828"), line_width=DRAWING_METRICS.line_width * 1.25
-    ),
-    ObservationStateValues.UNKNOWN: ObservationDrawingStyle(
-        color=Color.from_hex("#000000"), line_width=DRAWING_METRICS.line_width * 0.5
-    ),
-}
-"""
-The drawing style of every trinary value.
+    def __init__(self, color_hex: str, line_width_factor: float) -> None:
+        """
+        :param color_hex: The color a line or a term carrying this value is drawn in.
+        :param line_width_factor: The multiple of :attr:`DrawingMetrics.line_width` a
+            line carrying this value is drawn with.
+        """
+        self.color = Color.from_hex(color_hex)
+        self.line_width_factor = line_width_factor
 
-Only true and false are colors; a value with no answer yet is plain black and drawn
-thin, so it recedes instead of presenting itself as a third value color.
-"""
+    @classmethod
+    def of_observation(
+        cls, observation: ObservationStateValues
+    ) -> ObservationDrawingStyle:
+        """
+        :param observation: The trinary value to draw.
+        :return: The style that value is drawn in.
+        """
+        return cls[observation.name]
 
-# %% how far apart a dependency pushes its endpoints
-
-
-MINIMUM_RANK_DISTANCES: Dict[TransitionKind, int] = {
-    TransitionKind.START: 1,
-    TransitionKind.PAUSE: 0,
-    TransitionKind.SUCCEED: 1,
-    TransitionKind.RESET: 0,
-    TransitionKind.FAIL: 1,
-    TransitionKind.INTERRUPT: 1,
-}
-"""
-How many rows apart a dependency of each transition kind draws its endpoints at least.
-
-A node read by a pause or a reset condition may sit beside the node reading it; the
-other kinds are drawn a row above it.
-"""
+    def line_width(self, metrics: DrawingMetrics) -> float:
+        """
+        :param metrics: The measurements the drawing is laid out with.
+        :return: The width of a line carrying this value.
+        """
+        return metrics.line_width * self.line_width_factor

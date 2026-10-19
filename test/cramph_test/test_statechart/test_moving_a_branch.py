@@ -113,10 +113,10 @@ class NodeCountingItsBuilds(EndedByOwner, StatechartNode):
     How often :meth:`build_artifacts` ran.
     """
 
-    def set_up(self, context: StatechartContext) -> None:
+    def set_up(self) -> None:
         self.set_up_count += 1
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         self.build_count += 1
         return NodeArtifacts()
 
@@ -138,9 +138,9 @@ class NodeObservingABodyPastAPosition(EndedByOwner, StatechartNode):
     The x coordinate the body has to reach.
     """
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
-        root_T_body = context.world.compose_forward_kinematics_expression(
-            context.world.root, self.body
+    def build_artifacts(self) -> NodeArtifacts:
+        root_T_body = self.context.world.compose_forward_kinematics_expression(
+            self.context.world.root, self.body
         )
         return NodeArtifacts(observation=root_T_body.position.x >= self.position)
 
@@ -252,14 +252,14 @@ def test_a_running_node_keeps_running_and_the_history_goes_on_across_a_rebuild(
     statechart = _compile(sliding_executor, counting)
     sliding_executor.tick()
     ticks_before = sliding_executor.tick_count
-    history_before = list(statechart.history.history)
+    history_before = list(statechart.state_history.items)
 
     sliding_world.world.move_branch(sliding_world.box, sliding_world.slider)
     sliding_executor.tick()
 
     assert counting.life_cycle_state == LifeCycleValues.RUNNING
     assert sliding_executor.tick_count == ticks_before + 1
-    assert statechart.history.history[: len(history_before)] == history_before
+    assert statechart.state_history.items[: len(history_before)] == history_before
 
 
 def test_extensions_are_told_before_and_after_a_rebuild(

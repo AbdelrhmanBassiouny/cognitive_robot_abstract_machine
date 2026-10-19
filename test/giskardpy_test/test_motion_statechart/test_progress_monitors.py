@@ -44,7 +44,7 @@ from cramph.context import StatechartContext
 from cramph.executor import StatechartExecutor
 from semantic_digital_twin.world_description.connections import OmniDrive
 from giskardpy.motion_statechart.context import MotionControlContext
-from ..motion_control_context import create_context_with_motion_control
+from ..motion_control_context import add_to_statechart_with_motion_control
 
 # %% helpers
 
@@ -123,7 +123,7 @@ class NodeWithDeclaredDependencies(EndedByOwner, MotionStatechartNode):
     def prerequisite_nodes(self) -> List[MotionStatechartNode]:
         return self.dependencies
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         self.built_after.append(self.name)
         return NodeArtifacts(observation=Scalar.const_true())
 
@@ -716,7 +716,7 @@ class TestConvergenceRule:
             ObservationStateValues.TRUE,
         ]
 
-        run.monitor.on_start(run.context)
+        run.monitor.on_start()
 
         assert run.observations_while_the_error_is([5.0]) == [
             ObservationStateValues.FALSE
@@ -802,7 +802,8 @@ class TestErrorDrivesObservation:
             root_link=cylinder_bot_world.root, tip_link=bot, goal_point=goal_point
         )
 
-        artifacts = goal.build(create_context_with_motion_control(cylinder_bot_world))
+        add_to_statechart_with_motion_control(goal, cylinder_bot_world)
+        artifacts = goal.build()
 
         tip_position = cylinder_bot_world.compute_forward_kinematics_np(
             cylinder_bot_world.root, bot
@@ -822,7 +823,8 @@ class TestErrorDrivesObservation:
             goal_point=Point3(1, 0, 0, reference_frame=cylinder_bot_world.root),
         )
 
-        artifacts = goal.build(create_context_with_motion_control(cylinder_bot_world))
+        add_to_statechart_with_motion_control(goal, cylinder_bot_world)
+        artifacts = goal.build()
 
         expected = (artifacts.error <= goal.threshold).evaluate()[0]
         assert artifacts.observation.evaluate()[0] == expected

@@ -20,7 +20,6 @@ from coraplex.robot_plans.mixins import (
     ReattachesBranches,
     HasApproachesGraspPoses,
     HasGraspDetectionThreshold,
-    MovesGripper,
     MovesToolCenterPoint,
     PlaceTuningParameters,
 )
@@ -28,6 +27,7 @@ from semantic_digital_twin.collision_checking.collision_matrix import CollisionR
 from semantic_digital_twin.collision_checking.collision_rules import (
     AllowCollisionForEndEffector,
 )
+from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.grasping.grasp_candidates import (
     GraspCandidate,
@@ -46,7 +46,6 @@ class PlaceAction(
     HasApproachesGraspPoses,
     PlaceTuningParameters,
     HasGraspDetectionThreshold,
-    MovesGripper,
 ):
     """
     Places an object at a position with the arm that holds it.
@@ -100,9 +99,9 @@ class PlaceAction(
             ),
             Parallel(
                 nodes=[
-                    self.gripper_goal(
-                        GripperState.OPEN,
-                        arm.end_effector,
+                    MoveGripper(
+                        end_effector=arm.end_effector,
+                        state=GripperState.OPEN,
                         finger_velocity=self.release_opening_velocity,
                     ),
                     # Keeps the gripper in place while it opens, whatever else

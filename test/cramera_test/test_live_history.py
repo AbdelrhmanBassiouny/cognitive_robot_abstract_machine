@@ -70,7 +70,9 @@ class TestMotionHistoryPublication:
         motion_execution.compile()
         motion_execution.compile()
 
-        assert motion_execution.chart.history.observers == [motion_execution.publishing]
+        assert motion_execution.chart.state_history.observers == [
+            motion_execution.publishing
+        ]
 
     def test_a_reset_clears_the_progress_of_the_plan(
         self, motion_execution: MotionExecution
@@ -96,14 +98,16 @@ class TestMotionHistoryPublication:
         """
         motion_execution.compile()
         motion_execution.record(LifeCycleValues.RUNNING)
-        assert motion_execution.chart.history.observers == [motion_execution.publishing]
+        assert motion_execution.chart.state_history.observers == [
+            motion_execution.publishing
+        ]
 
         motion_execution.publishing.finish()
         motion_execution.publishing.finish()
         published = motion_execution.bridge.chart_state
         motion_execution.record(LifeCycleValues.NOT_STARTED)
 
-        assert motion_execution.chart.history.observers == []
+        assert motion_execution.chart.state_history.observers == []
         assert motion_execution.bridge.chart_state == published
 
     def test_visualization_stop_removes_history_subscriptions(
@@ -114,12 +118,14 @@ class TestMotionHistoryPublication:
         """
         visualization = LiveVisualization(bridge=motion_execution.bridge)
         visualization.publishing.observe(motion_execution.chart)
-        assert motion_execution.chart.history.observers == [visualization.publishing]
+        assert motion_execution.chart.state_history.observers == [
+            visualization.publishing
+        ]
 
         visualization.stop()
         visualization.stop()
 
-        assert motion_execution.chart.history.observers == []
+        assert motion_execution.chart.state_history.observers == []
 
 
 # %% recording alignment
@@ -182,5 +188,5 @@ class TestHistoryRecordingAlignment:
         )
         assert not any(
             observer is motion_execution.publishing
-            for observer in motion_execution.chart.history.observers
+            for observer in motion_execution.chart.state_history.observers
         )

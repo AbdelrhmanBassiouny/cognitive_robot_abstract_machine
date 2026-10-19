@@ -164,12 +164,10 @@ class MotionStatechartNode(StatechartNode):
         motion_artifacts.constraints.link_to_motion_statechart_node(self)
         super().apply_artifacts(motion_artifacts)
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         """
         Describe this node in terms of constraints, observation and debug expressions.
 
-        :param context: The context that contains data that can be used to build this
-            node.
         :return: The artifacts describing this node. It is normal for nodes that don't
             directly affect the motion to return empty artifacts.
         """
@@ -315,14 +313,14 @@ class ConvergingTask(ABC, Task):
     Error at or below which the goal counts as reached, in the task's own units.
     """
 
-    def build(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build(self) -> MotionNodeArtifacts:
         """
         Build the task and derive its observation from its error.
 
         Being within :attr:`threshold` is what this task observes about the world, and
         succeeding means reaching it, which is what any node is judged by.
         """
-        artifacts = super().build(context)
+        artifacts = super().build()
         if not isinstance(artifacts, MotionNodeArtifacts) or artifacts.error is None:
             raise MissingErrorSignalError(node=self)
         artifacts.observation = self.goal_reached_at(artifacts.error)
@@ -336,13 +334,11 @@ class ConvergingTask(ABC, Task):
         return error <= self.threshold
 
     @abstractmethod
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         """
         Add the motion constraints of this task and set
         :attr:`MotionNodeArtifacts.error` to the error they drive to zero.
 
-        :param context: The context that contains data that can be used to build this
-            task.
         :return: The artifacts describing this task.
         """
 
@@ -397,7 +393,7 @@ class EndMotion(EndStatechart):
     def create_structure_copy(self) -> EndMotion:
         return EndMotion(name=self.name)
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         """
         Reports "done" only once the world has actually settled, so the motion isn't cut
         short while the controller is still commanding nonzero velocity.
@@ -405,10 +401,10 @@ class EndMotion(EndStatechart):
         .. note:: If the world has no active degrees of freedom, there is nothing to
             converge, so this reports done immediately once running, same as before.
         """
-        if not context.world.active_degrees_of_freedom:
-            return super().build_artifacts(context)
+        if not self.context.world.active_degrees_of_freedom:
+            return super().build_artifacts()
         observation = velocity_convergence_expression(
-            context=context,
+            context=self.context,
             joint_convergence_threshold=self.joint_convergence_threshold,
             minimum_threshold=self.minimum_threshold,
             maximum_threshold=self.maximum_threshold,

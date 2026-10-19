@@ -153,7 +153,7 @@ class ChooserNotingTheSpeed(ChildChooser):
     """
 
     def choose_child(
-        self, node: CompositeNodeChoosingItsChild, context
+        self, node: CompositeNodeChoosingItsChild
     ) -> StatechartNode | None:
         self.speeds_when_asked.append(_fastest_velocity(self.world))
         return self.child

@@ -164,31 +164,22 @@ class Handle(HasGraspCandidates):
         """
         if not self.root.has_collision():
             raise NoGraspGeometry(self)
-        bar = self.root.collision.as_bounding_box_collection_in_frame(
-            self.root
-        ).bounding_box()
-        extents = [bar.scale.x, bar.scale.y, bar.scale.z]
-        directions = [
-            (Vector3.X(), Vector3.NEGATIVE_X()),
-            (Vector3.Y(), Vector3.NEGATIVE_Y()),
-            (Vector3.Z(), Vector3.NEGATIVE_Z()),
-        ]
-        bar_axis = extents.index(max(extents))
-        bar_direction, _ = directions[bar_axis]
+        mesh = self.root.combined_mesh
+        bar_axis = np.argmax(mesh.extents)
+        bar_direction = Vector3.from_iterable(np.eye(3)[bar_axis])
+        across_bar = np.delete(np.eye(3), bar_axis, axis=0)
         return [
             GraspCandidate(
                 self,
                 Pose(
-                    position=bar.center,
+                    position=Point3.from_iterable(mesh.bounds.mean(axis=0)),
                     orientation=RotationMatrix.from_vectors(
                         x=approach, y=bar_direction.cross(approach)
                     ).quaternion,
                     reference_frame=self.root,
                 ),
             )
-            for axis, both_ways in enumerate(directions)
-            if axis != bar_axis
-            for approach in both_ways
+            for approach in map(Vector3.from_iterable, [*across_bar, *-across_bar])
         ]
 
 

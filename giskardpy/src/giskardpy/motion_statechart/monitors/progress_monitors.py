@@ -18,7 +18,7 @@ from krrood.symbolic_math.symbolic_math import (
 from giskardpy.motion_statechart.context import MotionControlContext
 from krrood.ormatic.utils import classproperty
 from cramph.node import EndedByOwner
-from cramph.context import ContextExtension, StatechartContext
+from cramph.context import ContextExtension
 from cramph.data_types import LifeCycleValues, ObservationStateValues
 from giskardpy.motion_statechart.exceptions import NoProgressError
 from cramph.node import CancelStatechart, CompositeNode, NodeArtifacts
@@ -137,29 +137,29 @@ class NoMonitoredTaskApproachingItsGoal(EndedByOwner, MotionStatechartNode):
             if is_stalled
         ]
 
-    def set_up(self, context: StatechartContext) -> None:
+    def set_up(self) -> None:
         """
         Register the progress this node keeps track of.
         """
-        super().set_up(context)
-        self._control_dt = context.require_extension(
+        super().set_up()
+        self._control_dt = self.context.require_extension(
             MotionControlContext
         ).qp_controller_config.control_time_step.total_seconds()
         self._errors_at_last_progress_variables = self._registered_variables(
-            "error_at_last_progress", context
+            "error_at_last_progress"
         )
         self._seconds_since_last_progress_variables = self._registered_variables(
-            "seconds_since_last_progress", context
+            "seconds_since_last_progress"
         )
         self._errors_at_last_progress = np.full(len(self.monitored_tasks), np.inf)
         self._seconds_since_last_progress = np.zeros(len(self.monitored_tasks))
         self._previous_errors = np.full(len(self.monitored_tasks), np.nan)
-        self._store_progress(context)
+        self._store_progress()
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         if not self.monitored_tasks:
             return NodeArtifacts(observation=Scalar.const_true())
-        self._compile_errors(context)
+        self._compile_errors()
         return NodeArtifacts(
             observation=sm.min(
                 sm.Vector(
@@ -232,10 +232,9 @@ class NoMonitoredTaskApproachingItsGoal(EndedByOwner, MotionStatechartNode):
             )
         return ~np.isnan(errors) & fell_too_little
 
-    def _registered_variables(self, name: str, context: StatechartContext) -> Vector:
+    def _registered_variables(self, name: str) -> Vector:
         """
         :param name: What the variables hold.
-        :param context: The context whose float variable data holds their values.
         :return: One new variable of this node per monitored task, registered with that
             data.
         """
@@ -246,10 +245,10 @@ class NoMonitoredTaskApproachingItsGoal(EndedByOwner, MotionStatechartNode):
             ]
         )
         if self.monitored_tasks:
-            context.float_variable_data.register_expression(variables)
+            self.context.float_variable_data.register_expression(variables)
         return variables
 
-    def _compile_errors(self, context: StatechartContext) -> None:
+    def _compile_errors(self) -> None:
         """
         Compile the monitored tasks' errors against the world's positions and the float
         variable data, reading both in place.
@@ -258,13 +257,15 @@ class NoMonitoredTaskApproachingItsGoal(EndedByOwner, MotionStatechartNode):
             [task.error_signal for task in self.monitored_tasks]
         ).compile(
             parameters=VariableParameters.from_lists(
-                context.world.state.position_float_variables,
-                context.float_variable_data.variables,
+                self.context.world.state.position_float_variables,
+                self.context.float_variable_data.variables,
             ),
             sparse=False,
         )
-        self._compiled_errors.bind_args_to_memory_view(0, context.world.state.positions)
-        context.float_variable_data.bind_argument(self._compiled_errors, 1)
+        self._compiled_errors.bind_args_to_memory_view(
+            0, self.context.world.state.positions
+        )
+        self.context.float_variable_data.bind_argument(self._compiled_errors, 1)
 
     def _judged(self) -> NDArray[np.bool_]:
         """
@@ -280,11 +281,11 @@ class NoMonitoredTaskApproachingItsGoal(EndedByOwner, MotionStatechartNode):
             dtype=bool,
         )
 
-    def on_start(self, context: StatechartContext) -> None:
+    def on_start(self) -> None:
         self._forget_progress(np.ones(len(self.monitored_tasks), dtype=bool))
-        self._store_progress(context)
+        self._store_progress()
 
-    def on_tick(self, context: StatechartContext) -> None:
+    def on_tick(self) -> None:
         """
         Move each task's error at the last progress forward once it made progress on the
         previous control cycle, and count the time while it did not.
@@ -305,7 +306,7 @@ class NoMonitoredTaskApproachingItsGoal(EndedByOwner, MotionStatechartNode):
         self._seconds_since_last_progress[approached] = 0.0
         self._seconds_since_last_progress[stalled] += self._control_dt
         self._forget_progress(~still_judged)
-        self._store_progress(context)
+        self._store_progress()
         return None
 
     def _forget_progress(self, tasks: NDArray[np.bool_]) -> None:
@@ -318,18 +319,16 @@ class NoMonitoredTaskApproachingItsGoal(EndedByOwner, MotionStatechartNode):
         self._seconds_since_last_progress[tasks] = 0.0
         self._previous_errors[tasks] = np.nan
 
-    def _store_progress(self, context: StatechartContext) -> None:
+    def _store_progress(self) -> None:
         """
         Copy :attr:`_errors_at_last_progress` and :attr:`_seconds_since_last_progress`
         into the float variable data the observation reads.
-
-        :param context: The context whose float variable data holds the progress.
         """
         if self.monitored_tasks:
-            context.float_variable_data.set_value(
+            self.context.float_variable_data.set_value(
                 self._errors_at_last_progress_variables, self._errors_at_last_progress
             )
-            context.float_variable_data.set_value(
+            self.context.float_variable_data.set_value(
                 self._seconds_since_last_progress_variables,
                 self._seconds_since_last_progress,
             )
@@ -354,7 +353,7 @@ class AnyMonitoredTaskShortOfItsGoal(EndedByOwner, MotionStatechartNode):
     The tasks whose life cycle states and goals are watched.
     """
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         """
         Each task contributes ``0`` or ``1``, so their maximum is ``1`` exactly when at
         least one of them is still short of its goal.
@@ -465,7 +464,7 @@ class StillProgressing(EndedByOwner, CompositeNode):
         cancel.start_condition = self.observes_false
         return cancel
 
-    def expand(self, context: StatechartContext) -> None:
+    def expand(self) -> None:
         timer = CountSimulationTimeSeconds(
             name=f"{self.name}/timer", seconds=self.timeout.total_seconds()
         )
@@ -510,7 +509,7 @@ class StillProgressing(EndedByOwner, CompositeNode):
         self._add_children_to_statechart([not_approaching, still_working])
         return [not_approaching, still_working]
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         """
         The timer only reaches what it counts once progress has stalled for
         :attr:`timeout`, so every other reading of it means this node has not given up
@@ -552,7 +551,7 @@ class Stalled(StillProgressing):
     choosing its child can give up on that child once it fires.
     """
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         """
         The timer reaches what it counts once progress has stalled for :attr:`timeout`,
         which is exactly when this node has something to report.
@@ -578,5 +577,5 @@ class _CancelBecauseNoProgress(CancelStatechart):
     which tasks are stalled.
     """
 
-    def create_exception(self, context: StatechartContext) -> NoProgressError:
+    def create_exception(self) -> NoProgressError:
         return NoProgressError(progress_monitor=self.progress_monitor)

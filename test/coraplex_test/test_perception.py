@@ -749,31 +749,32 @@ def test_labelled_candidates_are_narrowed_to_the_requested_type(
 
 def build_perception_task(
     task: PerceptionTask, world: World, ros_node: Node
-) -> StatechartContext:
+) -> Statechart:
     """
     Put a perception task through the build phase a motion state chart would give it.
 
     :param task: The task to build.
     :param world: The world the chart runs against.
     :param ros_node: Node the task reaches a real perception pipeline through.
-    :return: The context it was built with.
+    :return: The statechart holding the task, in the context it was built with.
     """
     context = StatechartContext(world=world)
     MotionControl().extend_context(context)
     context.add_extension(RosContextExtension(ros_node))
-    task.build(context)
-    return context
+    statechart = Statechart(context=context)
+    statechart.add_node(task)
+    task.build()
+    return statechart
 
 
-def run_perception_task(task: PerceptionTask, context: StatechartContext) -> None:
+def run_perception_task(task: PerceptionTask) -> None:
     """
     Start a built perception task and tick it once, as its chart does.
 
     :param task: The built task to run.
-    :param context: The context it was built with.
     """
-    task.on_start(context)
-    assert task.on_tick(context) == ObservationStateValues.TRUE
+    task.on_start()
+    assert task.on_tick() == ObservationStateValues.TRUE
 
 
 def test_perception_task_is_a_plain_statechart_node(
@@ -818,7 +819,8 @@ def test_perception_task_moves_the_detected_body(
     query = PerceptionQuery(Milk, whole_scene_region, view, world)
     task = PerceptionTask(query=query, answered_by=PerceptionSource.ROBOKUDO)
 
-    run_perception_task(task, build_perception_task(task, world, rclpy_node))
+    build_perception_task(task, world, rclpy_node)
+    run_perception_task(task)
 
     np.testing.assert_allclose(
         world.get_body_by_name("milk.stl").global_pose.position.to_np().flatten()[:3],
@@ -839,11 +841,11 @@ def test_a_source_that_sees_nothing_leaves_the_task_observing_false(
     spawned_pose = milk_body.global_pose.to_np()
     query = PerceptionQuery(Milk, empty_region, view, world)
     task = PerceptionTask(query=query, answered_by=PerceptionSource.WORLD_MODEL)
-    build_context = build_perception_task(task, world, rclpy_node)
+    build_perception_task(task, world, rclpy_node)
 
-    task.on_start(build_context)
+    task.on_start()
 
-    assert task.on_tick(build_context) == ObservationStateValues.FALSE
+    assert task.on_tick() == ObservationStateValues.FALSE
     np.testing.assert_allclose(milk_body.global_pose.to_np(), spawned_pose, atol=1e-9)
 
 
@@ -878,13 +880,13 @@ def test_perception_task_reports_a_failed_query_as_itself(
     world, view, extensions = pr2_apartment_context
     query = PerceptionQuery(Milk, whole_scene_region, view, world)
     task = PerceptionTask(query=query, answered_by=PerceptionSource.WORLD_MODEL)
-    build_context = build_perception_task(task, world, rclpy_node)
+    build_perception_task(task, world, rclpy_node)
     task.perception_source = UnanswerablePerception(
         PerceptionSourceUnavailable(ROBOKUDO_QUERY_ACTION_NAME)
     )
 
     with pytest.raises(PerceptionSourceUnavailable):
-        run_perception_task(task, build_context)
+        run_perception_task(task)
 
 
 def test_perception_task_answers_its_query_only_once(
@@ -897,10 +899,10 @@ def test_perception_task_answers_its_query_only_once(
     world, view, extensions = pr2_apartment_context
     query = PerceptionQuery(Milk, whole_scene_region, view, world)
     task = PerceptionTask(query=query, answered_by=PerceptionSource.ROBOKUDO)
-    build_context = build_perception_task(task, world, rclpy_node)
+    build_perception_task(task, world, rclpy_node)
 
-    run_perception_task(task, build_context)
-    assert task.on_tick(build_context) == ObservationStateValues.TRUE
+    run_perception_task(task)
+    assert task.on_tick() == ObservationStateValues.TRUE
 
     assert robokudo_query_server.received_types == ["milk"]
 
@@ -1050,11 +1052,12 @@ def test_detection_in_a_chart_corrects_a_reach_planned_before_it(
         goal_point=Point3(reference_frame=milk_body),
         name="MoveTCP",
     )
-    build_context = build_perception_task(detection, world, rclpy_node)
-    reach.build(build_context)
+    statechart = build_perception_task(detection, world, rclpy_node)
+    statechart.add_node(reach)
+    reach.build()
 
-    run_perception_task(detection, build_context)
-    reach.on_start(build_context)
+    run_perception_task(detection)
+    reach.on_start()
 
     np.testing.assert_allclose(
         reach.root_T_goal_reference_frame.position.evaluate().flatten()[:3],

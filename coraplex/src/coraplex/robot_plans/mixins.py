@@ -12,14 +12,12 @@ from krrood.ormatic.utils import classproperty
 from cramph.composites import Parallel
 from giskardpy.motion_statechart.binding_policy import GoalBindingPolicy
 from giskardpy.motion_statechart.goals.cartesian_goals import CartesianPoseStraight
-from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
     CartesianPositionVelocityLimit,
     CartesianRotationVelocityLimit,
 )
-from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.robots.robot_parts import Arm, EndEffector
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
@@ -182,39 +180,6 @@ class PlaceTuningParameters:
     :class:`~giskardpy.motion_statechart.tasks.cartesian_tasks.CartesianPositionVelocityLimit`.
     ``None`` leaves the speed unconstrained.
     """
-
-
-@dataclass(kw_only=True, eq=False)
-class MovesGripper:
-    """
-    Builds the goals that drive a gripper to one of its states.
-    """
-
-    def gripper_goal(
-        self,
-        state: GripperState,
-        end_effector: EndEffector,
-        finger_velocity: float | None = None,
-        stall_minimum_time: float | None = None,
-        tolerate_stall: bool = False,
-    ) -> MoveGripper:
-        """
-        :param state: The state to drive the gripper to.
-        :param end_effector: The gripper that is driven.
-        :param finger_velocity: Cap on the speed of the finger joints, in m/s.
-        :param stall_minimum_time: How long the fingers must stand still before a stall
-            counts, in seconds.
-        :param tolerate_stall: Whether fingers that stopped short of their commanded
-            position count as done.
-        :return: The goal driving that gripper.
-        """
-        return MoveGripper(
-            end_effector=end_effector,
-            state=state,
-            finger_velocity=finger_velocity,
-            stall_minimum_time=stall_minimum_time,
-            tolerate_stall=tolerate_stall,
-        )
 
 
 @dataclass(eq=False, repr=False, kw_only=True)

@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import krrood.symbolic_math.symbolic_math as sm
-from cramph.context import StatechartContext
 from giskardpy.motion_statechart.data_types import DefaultWeights
 from giskardpy.motion_statechart.exceptions import EmptyGoalStateError
 from giskardpy.motion_statechart.graph_node import MotionNodeArtifacts, Task
@@ -42,11 +41,10 @@ class JointPositionList(ConvergingTask):
     The maximum velocity of the joints.
     """
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         """
         Build one equality constraint per joint of the goal state.
 
-        :param context: Provides access to world model and kinematic expressions.
         :return: The artifacts of this task, whose error is the largest absolute joint
             position error, so the task succeeds only once every joint is within the
             threshold.
@@ -128,7 +126,7 @@ class JointVelocityLimit(Task):
     :class:`JointPositionList`).
     """
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         artifacts = MotionNodeArtifacts()
         velocities = []
         for connection in self.connections:

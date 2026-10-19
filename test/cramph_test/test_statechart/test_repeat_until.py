@@ -123,7 +123,7 @@ def test_repeat_until_puts_the_task_back_to_not_started(
     for _ in range(SETTLE_TICKS):
         executor.tick()
 
-    life_cycles = statechart.history.get_life_cycle_history_of_node(task)
+    life_cycles = statechart.state_history.get_life_cycle_history_of_node(task)
     restarts = [
         index
         for index in range(1, len(life_cycles) - 1)

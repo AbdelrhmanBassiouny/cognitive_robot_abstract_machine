@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 from cramph.context import StatechartContext
+from cramph.statechart import Statechart
 from segmind.datastructures.events import (
     ContactEvent,
     LossOfContactEvent,
@@ -717,8 +718,9 @@ def test_a_relation_relates_only_the_bodies_it_holds_between(
     bodies that relation holds for.
     """
     world, top, bottom = box_resting_on_another_beside_a_distant_one
-    context = StatechartContext(world=world)
+    detector = SupportDetector()
+    Statechart(context=StatechartContext(world=world)).add_node(detector)
 
-    related = SupportDetector().get_relation(context, [top], relation)
+    related = detector.get_relation([top], relation)
 
     assert related == {top: {bottom}}

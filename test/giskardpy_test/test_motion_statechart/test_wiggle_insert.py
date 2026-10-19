@@ -25,7 +25,7 @@ from test.semantic_digital_twin_test.test_orm.test_orm import hsr_world_state_re
 from giskardpy.motion_control import MotionControl
 from cramph.context import StatechartContext
 from cramph.executor import StatechartExecutor
-from ..motion_control_context import create_context_with_motion_control
+from ..motion_control_context import add_to_statechart_with_motion_control
 
 
 def _hole_at_current_tip(world: World, tip, root) -> Point3:
@@ -87,8 +87,8 @@ def test_wiggle_insert_basis_uses_root_frame_hole_normal(pr2_world_state_reset: 
         hole_point=hole_point,
         hole_normal=hole_normal_in_tip_frame,
     )
-    context = create_context_with_motion_control(pr2_world_state_reset)
-    wiggle.build(context)
+    add_to_statechart_with_motion_control(wiggle, pr2_world_state_reset)
+    wiggle.build()
 
     expected_normal_in_root = pr2_world_state_reset.transform(
         target_frame=root, spatial_object=hole_normal_in_tip_frame

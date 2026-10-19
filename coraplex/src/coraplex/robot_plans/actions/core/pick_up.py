@@ -12,7 +12,6 @@ from coraplex.robot_plans.mixins import (
     ReattachesBranches,
     HasApproachesGraspPoses,
     HasGraspDetectionThreshold,
-    MovesGripper,
     MovesToolCenterPoint,
     PickUpTuningParameters,
     ReachTuningParameters,
@@ -21,6 +20,7 @@ from semantic_digital_twin.collision_checking.collision_matrix import CollisionR
 from semantic_digital_twin.collision_checking.collision_rules import (
     AllowCollisionForEndEffector,
 )
+from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.grasping.grasp_candidates import (
     GraspCandidate,
@@ -63,7 +63,6 @@ class ReachAction(
     HasApproachesGraspPoses,
     ReachTuningParameters,
     HasGraspDetectionThreshold,
-    MovesGripper,
 ):
     """
     Let the robot reach a specific pose.
@@ -111,7 +110,9 @@ class ReachAction(
             ),
         ]
         if self.open_gripper_at_pre_pose:
-            children.append(self.gripper_goal(GripperState.OPEN, self.arm.end_effector))
+            children.append(
+                MoveGripper(end_effector=self.arm.end_effector, state=GripperState.OPEN)
+            )
         children.append(
             self.tool_center_point_goal(
                 poses.grasp,
@@ -131,7 +132,6 @@ class PickUpAction(
     HasApproachesGraspPoses,
     PickUpTuningParameters,
     HasGraspDetectionThreshold,
-    MovesGripper,
 ):
     """
     Let the robot pick up an object: take hold of it and lift it clear of its support.
@@ -223,7 +223,6 @@ class GraspingAction(
     HasApproachesGraspPoses,
     PickUpTuningParameters,
     HasGraspDetectionThreshold,
-    MovesGripper,
 ):
     """
     Let the robot take hold of an object: reach onto a grasp and close on it.
@@ -260,9 +259,9 @@ class GraspingAction(
                 grasp_detection_threshold=self.grasp_detection_threshold,
             ),
             self.closing_step(
-                self.gripper_goal(
-                    GripperState.CLOSE,
-                    self.arm.end_effector,
+                MoveGripper(
+                    end_effector=self.arm.end_effector,
+                    state=GripperState.CLOSE,
                     finger_velocity=self.grasp_closing_velocity,
                     stall_minimum_time=self.grasp_stall_minimum_time,
                     tolerate_stall=self.tolerate_grasp_stall,

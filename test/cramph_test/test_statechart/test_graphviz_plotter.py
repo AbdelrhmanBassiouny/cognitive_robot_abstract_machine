@@ -19,11 +19,9 @@ from cramph.nodes_for_testing import (
 )
 from cramph.plotters.graphviz import StatechartGraphviz
 from cramph.plotters.styles import (
-    DISABLED_CONDITION_COLOR,
-    DRAWING_METRICS,
+    DrawingMetrics,
     Font,
-    MINIMUM_RANK_DISTANCES,
-    OBSERVATION_DRAWING_STYLES,
+    ObservationDrawingStyle,
 )
 from semantic_digital_twin.world import World
 
@@ -263,15 +261,6 @@ def test_structure_copy_keeps_plot_specs() -> None:
 # %% how far apart an arrow pushes its endpoints
 
 
-@pytest.mark.parametrize("transition_kind", list(TransitionKind))
-def test_every_transition_kind_has_a_minimum_rank_distance(transition_kind) -> None:
-    """
-    The lookup is total, so a kind missing from it only shows up as a KeyError while
-    drawing an arrow.
-    """
-    assert transition_kind in MINIMUM_RANK_DISTANCES
-
-
 def test_pause_dependency_may_sit_beside_the_node_reading_it() -> None:
     observed = ConstTrueNode(name="Observed")
     owner = ConstTrueNode(name="Owner")
@@ -281,7 +270,9 @@ def test_pause_dependency_may_sit_beside_the_node_reading_it() -> None:
 
     edge = find_edge(draw(statechart), observed, owner)
 
-    assert int(edge.get("minlen")) == MINIMUM_RANK_DISTANCES[TransitionKind.PAUSE]
+    assert int(edge.get("minlen")) == DrawingMetrics().minimum_rank_distance(
+        TransitionKind.PAUSE
+    )
 
 
 def test_start_dependency_is_drawn_a_row_above_the_node_reading_it() -> None:
@@ -293,7 +284,9 @@ def test_start_dependency_is_drawn_a_row_above_the_node_reading_it() -> None:
 
     edge = find_edge(draw(statechart), observed, owner)
 
-    assert int(edge.get("minlen")) == MINIMUM_RANK_DISTANCES[TransitionKind.START]
+    assert int(edge.get("minlen")) == DrawingMetrics().minimum_rank_distance(
+        TransitionKind.START
+    )
 
 
 def test_merged_arrow_keeps_the_largest_distance_its_conditions_ask_for() -> None:
@@ -313,8 +306,8 @@ def test_merged_arrow_keeps_the_largest_distance_its_conditions_ask_for() -> Non
     edge = find_edge(draw(statechart), observed, owner)
 
     assert int(edge.get("minlen")) == max(
-        MINIMUM_RANK_DISTANCES[TransitionKind.START],
-        MINIMUM_RANK_DISTANCES[TransitionKind.RESET],
+        DrawingMetrics().minimum_rank_distance(TransitionKind.START),
+        DrawingMetrics().minimum_rank_distance(TransitionKind.RESET),
     )
 
 
@@ -344,23 +337,20 @@ def test_every_observation_state_has_a_drawing_style(observation_state) -> None:
     The lookup is total, so a state missing from it only shows up as a KeyError while
     drawing an edge.
     """
-    assert observation_state in OBSERVATION_DRAWING_STYLES
+    assert (
+        ObservationDrawingStyle.of_observation(observation_state).name
+        == observation_state.name
+    )
 
 
 # %% arrows carry the observation of the node they leave
 
 
 def test_unknown_arrow_is_thinner_than_a_decided_arrow() -> None:
-    unknown = OBSERVATION_DRAWING_STYLES[ObservationStateValues.UNKNOWN]
+    unknown = ObservationDrawingStyle.UNKNOWN
 
-    assert (
-        unknown.line_width
-        < OBSERVATION_DRAWING_STYLES[ObservationStateValues.TRUE].line_width
-    )
-    assert (
-        unknown.line_width
-        < OBSERVATION_DRAWING_STYLES[ObservationStateValues.FALSE].line_width
-    )
+    assert unknown.line_width_factor < ObservationDrawingStyle.TRUE.line_width_factor
+    assert unknown.line_width_factor < ObservationDrawingStyle.FALSE.line_width_factor
 
 
 def test_arrow_takes_the_line_width_of_the_observation_it_carries() -> None:
@@ -373,8 +363,8 @@ def test_arrow_takes_the_line_width_of_the_observation_it_carries() -> None:
 
     edge = find_edge(draw(statechart), observed, owner)
 
-    expected = OBSERVATION_DRAWING_STYLES[ObservationStateValues.UNKNOWN]
-    assert float(edge.get("penwidth")) == expected.line_width
+    expected = ObservationDrawingStyle.of_observation(ObservationStateValues.UNKNOWN)
+    assert float(edge.get("penwidth")) == expected.line_width(DrawingMetrics())
 
 
 def test_one_arrow_is_drawn_per_dependency() -> None:
@@ -414,7 +404,7 @@ def test_condition_term_is_colored_by_the_value_of_the_term() -> None:
     label = find_node(draw(statechart), owner).get_label()
 
     term_value = LifeCyclePredicate.IS_SUCCEEDED.truth_value(LifeCycleValues.RUNNING)
-    term_color = OBSERVATION_DRAWING_STYLES[term_value].color.to_hex()
+    term_color = ObservationDrawingStyle.of_observation(term_value).color.to_hex()
     term = f"{observed.unique_name}.{LifeCyclePredicate.IS_SUCCEEDED.attribute_name}"
     assert f'<FONT COLOR="{term_color}">"{term}"</FONT>' in label
 
@@ -437,7 +427,7 @@ def test_condition_term_is_colored_when_its_node_name_reads_as_an_operator() -> 
     term_value = ObservationPredicate.LAST_OBSERVED_TRUE.truth_value(
         observed.last_observation_state
     )
-    term_color = OBSERVATION_DRAWING_STYLES[term_value].color.to_hex()
+    term_color = ObservationDrawingStyle.of_observation(term_value).color.to_hex()
     term = f"{observed.unique_name}.{ObservationPredicate.LAST_OBSERVED_TRUE.attribute_name}"
     assert f'<FONT COLOR="{term_color}">"{term}"</FONT>' in label
 
@@ -452,8 +442,10 @@ def test_condition_without_terms_is_spelled_out() -> None:
     statechart.add_node(owner)
     expand(statechart)
 
-    true_color = OBSERVATION_DRAWING_STYLES[ObservationStateValues.TRUE].color.to_hex()
-    disabled_color = DISABLED_CONDITION_COLOR.to_hex()
+    true_color = ObservationDrawingStyle.of_observation(
+        ObservationStateValues.TRUE
+    ).color.to_hex()
+    disabled_color = StatechartGraphviz(statechart).disabled_condition_color.to_hex()
 
     label = find_node(draw(statechart), owner).get_label()
 
@@ -475,10 +467,10 @@ def test_condition_boolean_constants_coloring_in_running_state() -> None:
     expand(statechart)
     statechart.life_cycle_state[owner] = LifeCycleValues.RUNNING
 
-    false_color = OBSERVATION_DRAWING_STYLES[
+    false_color = ObservationDrawingStyle.of_observation(
         ObservationStateValues.FALSE
-    ].color.to_hex()
-    disabled_color = DISABLED_CONDITION_COLOR.to_hex()
+    ).color.to_hex()
+    disabled_color = StatechartGraphviz(statechart).disabled_condition_color.to_hex()
 
     label = find_node(draw(statechart), owner).get_label()
 
@@ -503,7 +495,7 @@ def test_end_statechart_renders_with_rounded_outer_cluster() -> None:
     assert cluster is not None
     assert cluster.get("style").strip('"') == "rounded"
     assert cluster.get("color").strip('"') == "black"
-    assert float(cluster.get("penwidth")) == DRAWING_METRICS.line_width
+    assert float(cluster.get("penwidth")) == DrawingMetrics().line_width
     assert end.unique_name in direct_node_names(cluster)
     assert end.unique_name not in direct_node_names(graph)
 
@@ -519,7 +511,7 @@ def test_cancel_statechart_renders_with_dashed_outer_cluster() -> None:
     assert cluster is not None
     assert cluster.get("style").strip('"') == "dashed, rounded"
     assert cluster.get("color").strip('"') == "black"
-    assert float(cluster.get("penwidth")) == DRAWING_METRICS.line_width
+    assert float(cluster.get("penwidth")) == DrawingMetrics().line_width
     assert cancel.unique_name in direct_node_names(cluster)
     assert cancel.unique_name not in direct_node_names(graph)
 
@@ -568,7 +560,7 @@ def test_conditions_are_grayed_out_when_not_triggerable(
     statechart.observation_state[observed] = ObservationStateValues.TRUE
 
     label = find_node(draw(statechart), node).get_label()
-    disabled_color = DISABLED_CONDITION_COLOR.to_hex()
+    disabled_color = StatechartGraphviz(statechart).disabled_condition_color.to_hex()
 
     for condition, term in [
         (
@@ -605,9 +597,9 @@ def test_conditions_are_grayed_out_when_not_triggerable(
                 not in label
             )
             variable = condition.variables[0]
-            resolved_color = OBSERVATION_DRAWING_STYLES[
+            resolved_color = ObservationDrawingStyle.of_observation(
                 variable.resolve()
-            ].color.to_hex()
+            ).color.to_hex()
             assert f'<FONT COLOR="{resolved_color}">"{term}"</FONT>' in label
         else:
             assert (
@@ -641,7 +633,7 @@ def test_terminal_node_condition_graying(
     statechart.life_cycle_state[terminal_node] = life_cycle_state
 
     label = find_node(draw(statechart), terminal_node).get_label()
-    disabled_color = DISABLED_CONDITION_COLOR.to_hex()
+    disabled_color = StatechartGraphviz(statechart).disabled_condition_color.to_hex()
 
     can_trigger = TransitionKind.START.can_trigger_from(life_cycle_state)
     if can_trigger:

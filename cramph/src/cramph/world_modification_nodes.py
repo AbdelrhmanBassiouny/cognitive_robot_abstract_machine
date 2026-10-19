@@ -4,7 +4,6 @@ from dataclasses import dataclass
 
 import krrood.symbolic_math.symbolic_math as sm
 from cramph.node import SucceedsOnObservingTrue
-from cramph.context import StatechartContext
 from cramph.node import NodeArtifacts, StatechartNode
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
@@ -33,8 +32,8 @@ class MoveBranch(SucceedsOnObservingTrue, StatechartNode):
     The entity the branch is moved under.
     """
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         return NodeArtifacts(observation=sm.Scalar.const_true())
 
-    def on_start(self, context: StatechartContext) -> None:
-        context.world.move_branch(self.branch_root, self.new_parent)
+    def on_start(self) -> None:
+        self.context.world.move_branch(self.branch_root, self.new_parent)

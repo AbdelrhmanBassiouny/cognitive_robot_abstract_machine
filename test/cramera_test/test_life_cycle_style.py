@@ -13,7 +13,6 @@ from cramera.knowledge.life_cycle_style import (
 )
 from cramera.knowledge.views.chart import ChartViewPayload
 from cramph.data_types import LifeCycleValues
-from cramph.plotters.styles import DRAWING_METRICS
 from semantic_digital_twin.world_description.geometry import Color
 
 
@@ -79,10 +78,16 @@ def test_ring_weights_keep_active_nodes_visible() -> None:
     assert (
         active.width
         == failed.width
-        == DRAWING_METRICS.line_width * metrics.active_width_factor
+        == metrics.statechart_drawing_metrics.line_width * metrics.active_width_factor
     )
-    assert pending.width == DRAWING_METRICS.line_width * metrics.pending_width_factor
-    assert succeeded.width == DRAWING_METRICS.line_width * metrics.default_width_factor
+    assert (
+        pending.width
+        == metrics.statechart_drawing_metrics.line_width * metrics.pending_width_factor
+    )
+    assert (
+        succeeded.width
+        == metrics.statechart_drawing_metrics.line_width * metrics.default_width_factor
+    )
     assert active.width > succeeded.width > pending.width
     assert pending.dashes == metrics.pending_dashes
     assert active.dashes is None

@@ -4,7 +4,6 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from cramph.context import StatechartContext
 from cramph.node import (
     CompositeNode,
     EndedByOwner,
@@ -60,25 +59,24 @@ class StayOnLineTask(ConvergingTask):
     Reference velocity for normalization in m/s.
     """
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         """
         Build motion constraints that pull the controlled point onto the line segment.
 
-        :param context: Provides access to world model and kinematic expressions.
         :return: The artifacts of this task, whose error is the distance between the
             controlled point and the line segment.
         """
-        root_T_tip = context.world.compose_forward_kinematics_expression(
+        root_T_tip = self.context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
         )
-        root_P_tool = root_T_tip @ context.world.transform(
+        root_P_tool = root_T_tip @ self.context.world.transform(
             target_frame=self.tip_link, spatial_object=self.tip_P_tool
         )
         distance_to_line, root_P_on_line = root_P_tool.distance_to_line_segment(
-            context.world.transform(
+            self.context.world.transform(
                 target_frame=self.root_link, spatial_object=self.root_P_start
             ),
-            context.world.transform(
+            self.context.world.transform(
                 target_frame=self.root_link, spatial_object=self.root_P_end
             ),
         )
@@ -194,12 +192,12 @@ class InsertCylinder(EndedByOwner, CompositeNode):
     Aligns the cylinder with the hole axis.
     """
 
-    def expand(self, context: StatechartContext) -> None:
-        root = context.world.root
-        root_V_up = context.world.transform(
+    def expand(self) -> None:
+        root = self.context.world.root
+        root_V_up = self.context.world.transform(
             target_frame=root, spatial_object=self.up_axis
         )
-        root_P_hole = context.world.transform(
+        root_P_hole = self.context.world.transform(
             target_frame=root, spatial_object=self.hole_point
         )
         root_P_top = root_P_hole + root_V_up * self.pre_grasp_height
@@ -272,7 +270,7 @@ class InsertCylinder(EndedByOwner, CompositeNode):
         self.insert_task.start_condition = above_hole_and_tilted
         self.tilt_straight_task.start_condition = bottom_reached
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         """
         Observe what straightening the cylinder observes.
         """

@@ -21,6 +21,8 @@ from cramph.data_types import (
     TransitionKind,
 )
 from cramph.exceptions import (
+    CancelledByNodeFailing,
+    CancelledByNodeReachingItsGoal,
     ChildTransitionAlreadyWiredError,
     NotInStatechartError,
     EndInCompositeNodeError,
@@ -31,6 +33,8 @@ from cramph.exceptions import (
     NodeAlreadyBelongsToDifferentNodeError,
     ConditionScopeError,
     TerminalNodeInConditionError,
+    TickLimitReachedError,
+    UnknownTransitionKindError,
 )
 from cramph.composites import Sequence, Parallel
 from cramph.node import EndStatechart, StatechartNode
@@ -443,7 +447,7 @@ class _BuildCountingNode(EndedByOwner, StatechartNode):
     Number of times build() has run on this node.
     """
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         self.build_count += 1
         return NodeArtifacts(observation=sm.Scalar.const_true())
 
@@ -465,11 +469,11 @@ class _BuildCountingCompositeNode(EndedByOwner, CompositeNode):
     The child node expanded by this goal.
     """
 
-    def expand(self, context: StatechartContext) -> None:
+    def expand(self) -> None:
         self.child = _BuildCountingNode(name="counting_child")
         self._add_child_to_statechart(self.child)
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         self.build_count += 1
         return NodeArtifacts(observation=self.child.observation_variable)
 
@@ -574,11 +578,11 @@ class _SetupThenArtifactsNode(EndedByOwner, StatechartNode):
     Names of the build hooks that ran, in the order they ran.
     """
 
-    def build(self, context: StatechartContext) -> NodeArtifacts:
+    def build(self) -> NodeArtifacts:
         self.hook_calls.append("build")
-        return super().build(context)
+        return super().build()
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         self.hook_calls.append("build_artifacts")
         return NodeArtifacts(observation=sm.Scalar.const_true())
 
@@ -603,6 +607,14 @@ def test_a_node_class_declaring_no_way_to_succeed_cannot_be_constructed() -> Non
     """
     with pytest.raises(TypeError):
         NodeDeclaringNoWayToSucceed()
+
+
+def test_asking_for_a_condition_of_no_transition_kind_raises() -> None:
+    msc = Statechart(context=StatechartContext(world=World()))
+    msc.add_node(node := ConstTrueNode())
+
+    with pytest.raises(UnknownTransitionKindError):
+        node.get_condition("not a transition kind")
 
 
 def test_state_iteration_yields_nodes() -> None:
@@ -758,7 +770,7 @@ def test_thread_payload_monitor_cleanup_stops_worker() -> None:
     monitor = _SucceedingThreadMonitor()
     assert monitor._thread.is_alive()
 
-    monitor.cleanup(context=StatechartContext(world=World()))
+    monitor.cleanup()
 
     monitor._thread.join(timeout=1.0)
     assert not monitor._thread.is_alive()
@@ -783,7 +795,7 @@ def test_thread_payload_monitor_surfaces_compute_exception() -> None:
         assert any(record.levelno >= logging.ERROR for record in records)
     finally:
         node_module.logger.removeHandler(handler)
-        monitor.cleanup(context=StatechartContext(world=World()))
+        monitor.cleanup()
 
 
 class TestStatechartLogic:
@@ -897,8 +909,8 @@ class TestStatechartLogic:
             executor.tick()
             ticks += 1
 
-        assert msc.history.history[0].tick_count == 0
-        assert msc.history.history[-1].tick_count == ticks
+        assert msc.state_history.items[0].tick_count == 0
+        assert msc.state_history.latest_item.tick_count == ticks
 
     def test_statechart(self) -> None:
         kin_sim = StatechartExecutor(StatechartContext(world=World()))
@@ -922,16 +934,16 @@ class TestStatechartLogic:
         assert len(msc.edges) == 3
         kin_sim.tick_until_end()
 
-        assert len(msc.history) == 5
+        assert len(msc.state_history) == 5
         # %% node1
-        assert msc.history.get_life_cycle_history_of_node(node1) == [
+        assert msc.state_history.get_life_cycle_history_of_node(node1) == [
             LifeCycleValues.NOT_STARTED,
             LifeCycleValues.NOT_STARTED,
             LifeCycleValues.RUNNING,
             LifeCycleValues.RUNNING,
             LifeCycleValues.RUNNING,
         ]
-        assert msc.history.get_observation_history_of_node(node1) == [
+        assert msc.state_history.get_observation_history_of_node(node1) == [
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.UNKNOWN,
@@ -939,14 +951,14 @@ class TestStatechartLogic:
             ObservationStateValues.TRUE,
         ]
         # %% node2
-        assert msc.history.get_life_cycle_history_of_node(node2) == [
+        assert msc.state_history.get_life_cycle_history_of_node(node2) == [
             LifeCycleValues.NOT_STARTED,
             LifeCycleValues.RUNNING,
             LifeCycleValues.RUNNING,
             LifeCycleValues.RUNNING,
             LifeCycleValues.RUNNING,
         ]
-        assert msc.history.get_observation_history_of_node(node2) == [
+        assert msc.state_history.get_observation_history_of_node(node2) == [
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.TRUE,
@@ -954,14 +966,14 @@ class TestStatechartLogic:
             ObservationStateValues.TRUE,
         ]
         # %% node3
-        assert msc.history.get_life_cycle_history_of_node(node3) == [
+        assert msc.state_history.get_life_cycle_history_of_node(node3) == [
             LifeCycleValues.NOT_STARTED,
             LifeCycleValues.RUNNING,
             LifeCycleValues.RUNNING,
             LifeCycleValues.RUNNING,
             LifeCycleValues.RUNNING,
         ]
-        assert msc.history.get_observation_history_of_node(node3) == [
+        assert msc.state_history.get_observation_history_of_node(node3) == [
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.TRUE,
@@ -969,14 +981,14 @@ class TestStatechartLogic:
             ObservationStateValues.TRUE,
         ]
         # %% end
-        assert msc.history.get_life_cycle_history_of_node(end) == [
+        assert msc.state_history.get_life_cycle_history_of_node(end) == [
             LifeCycleValues.NOT_STARTED,
             LifeCycleValues.NOT_STARTED,
             LifeCycleValues.NOT_STARTED,
             LifeCycleValues.RUNNING,
             LifeCycleValues.RUNNING,
         ]
-        assert msc.history.get_observation_history_of_node(end) == [
+        assert msc.state_history.get_observation_history_of_node(end) == [
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.UNKNOWN,
@@ -1002,9 +1014,9 @@ class TestStatechartLogic:
 
         kin_sim.compile(statechart=msc)
         kin_sim.tick_until_end()
-        assert len(msc.history) == 6
+        assert len(msc.state_history) == 6
         # %% goal
-        assert msc.history.get_life_cycle_history_of_node(goal) == [
+        assert msc.state_history.get_life_cycle_history_of_node(goal) == [
             LifeCycleValues.NOT_STARTED,
             LifeCycleValues.NOT_STARTED,
             LifeCycleValues.RUNNING,
@@ -1012,7 +1024,7 @@ class TestStatechartLogic:
             LifeCycleValues.RUNNING,
             LifeCycleValues.RUNNING,
         ]
-        assert msc.history.get_observation_history_of_node(goal) == [
+        assert msc.state_history.get_observation_history_of_node(goal) == [
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.UNKNOWN,
@@ -1021,7 +1033,7 @@ class TestStatechartLogic:
             ObservationStateValues.TRUE,
         ]
         # %% node1
-        assert msc.history.get_life_cycle_history_of_node(node1) == [
+        assert msc.state_history.get_life_cycle_history_of_node(node1) == [
             LifeCycleValues.NOT_STARTED,
             LifeCycleValues.RUNNING,
             LifeCycleValues.RUNNING,
@@ -1029,7 +1041,7 @@ class TestStatechartLogic:
             LifeCycleValues.RUNNING,
             LifeCycleValues.RUNNING,
         ]
-        assert msc.history.get_observation_history_of_node(node1) == [
+        assert msc.state_history.get_observation_history_of_node(node1) == [
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.TRUE,
@@ -1038,7 +1050,7 @@ class TestStatechartLogic:
             ObservationStateValues.TRUE,
         ]
         # %% sub_node1
-        assert msc.history.get_life_cycle_history_of_node(goal.sub_node1) == [
+        assert msc.state_history.get_life_cycle_history_of_node(goal.sub_node1) == [
             LifeCycleValues.NOT_STARTED,
             LifeCycleValues.NOT_STARTED,
             LifeCycleValues.RUNNING,
@@ -1046,7 +1058,7 @@ class TestStatechartLogic:
             LifeCycleValues.SUCCEEDED,
             LifeCycleValues.SUCCEEDED,
         ]
-        assert msc.history.get_observation_history_of_node(goal.sub_node1) == [
+        assert msc.state_history.get_observation_history_of_node(goal.sub_node1) == [
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.UNKNOWN,
@@ -1055,7 +1067,7 @@ class TestStatechartLogic:
             ObservationStateValues.UNKNOWN,
         ]
         # %% sub_node2
-        assert msc.history.get_life_cycle_history_of_node(goal.sub_node2) == [
+        assert msc.state_history.get_life_cycle_history_of_node(goal.sub_node2) == [
             LifeCycleValues.NOT_STARTED,
             LifeCycleValues.NOT_STARTED,
             LifeCycleValues.NOT_STARTED,
@@ -1063,7 +1075,7 @@ class TestStatechartLogic:
             LifeCycleValues.RUNNING,
             LifeCycleValues.RUNNING,
         ]
-        assert msc.history.get_observation_history_of_node(goal.sub_node2) == [
+        assert msc.state_history.get_observation_history_of_node(goal.sub_node2) == [
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.UNKNOWN,
@@ -1072,7 +1084,7 @@ class TestStatechartLogic:
             ObservationStateValues.TRUE,
         ]
         # %% sub_node2
-        assert msc.history.get_life_cycle_history_of_node(end) == [
+        assert msc.state_history.get_life_cycle_history_of_node(end) == [
             LifeCycleValues.NOT_STARTED,
             LifeCycleValues.NOT_STARTED,
             LifeCycleValues.NOT_STARTED,
@@ -1080,7 +1092,7 @@ class TestStatechartLogic:
             LifeCycleValues.RUNNING,
             LifeCycleValues.RUNNING,
         ]
-        assert msc.history.get_observation_history_of_node(end) == [
+        assert msc.state_history.get_observation_history_of_node(end) == [
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.UNKNOWN,
@@ -1344,11 +1356,10 @@ def test_count_ticks() -> None:
 
 def test_count_ticks_returns_false_until_target() -> None:
     node = CountTicks(ticks=3)
-    context = StatechartContext(world=World())
-    node.on_start(context)
-    assert node.on_tick(context) == ObservationStateValues.FALSE
-    assert node.on_tick(context) == ObservationStateValues.FALSE
-    assert node.on_tick(context) == ObservationStateValues.TRUE
+    node.on_start()
+    assert node.on_tick() == ObservationStateValues.FALSE
+    assert node.on_tick() == ObservationStateValues.FALSE
+    assert node.on_tick() == ObservationStateValues.TRUE
 
 
 def test_count_simulation_time_seconds_reaches_target_on_exact_tick(
@@ -1358,10 +1369,11 @@ def test_count_simulation_time_seconds_reaches_target_on_exact_tick(
     ticks_until_true = 4
     seconds = context.tick_duration * ticks_until_true
     node = CountSimulationTimeSeconds(seconds=seconds)
-    node.on_start(context)
+    Statechart(context=context).add_node(node)
+    node.on_start()
     for _ in range(ticks_until_true - 1):
-        assert node.on_tick(context) == ObservationStateValues.FALSE
-    assert node.on_tick(context) == ObservationStateValues.TRUE
+        assert node.on_tick() == ObservationStateValues.FALSE
+    assert node.on_tick() == ObservationStateValues.TRUE
 
 
 def test_count_simulation_time_seconds_on_start_resets_counter(
@@ -1370,11 +1382,12 @@ def test_count_simulation_time_seconds_on_start_resets_counter(
     context = statechart_context
     seconds = context.tick_duration * 2
     node = CountSimulationTimeSeconds(seconds=seconds)
-    node.on_start(context)
-    node.on_tick(context)
-    node.on_tick(context)
-    node.on_start(context)
-    assert node.on_tick(context) == ObservationStateValues.FALSE
+    Statechart(context=context).add_node(node)
+    node.on_start()
+    node.on_tick()
+    node.on_tick()
+    node.on_start()
+    assert node.on_tick() == ObservationStateValues.FALSE
 
 
 def test_count_simulation_time_seconds_with_executor(
@@ -1432,7 +1445,7 @@ class TestEndStatechart:
         msc.add_node(end)
 
         kin_sim.compile(statechart=msc)
-        with pytest.raises(TimeoutError):
+        with pytest.raises(TickLimitReachedError):
             kin_sim.tick_until_end()
         msc.draw(str(tmp_path / "muh.pdf"))
         assert end.life_cycle_state == LifeCycleValues.NOT_STARTED
@@ -1475,7 +1488,7 @@ class TestEndStatechart:
         msc.add_node(end)
 
         kin_sim.compile(statechart=msc)
-        with pytest.raises(TimeoutError):
+        with pytest.raises(TickLimitReachedError):
             kin_sim.tick_until_end()
         msc.draw(str(tmp_path / "muh.pdf"))
         assert end.life_cycle_state == LifeCycleValues.NOT_STARTED
@@ -1573,6 +1586,35 @@ class TestEndStatechart:
 
         assert error.value is cancelled
 
+    def test_cancel_statechart_when_true_without_exception_names_the_node(
+        self,
+    ) -> None:
+        executor = StatechartExecutor(StatechartContext(world=World()))
+        msc = Statechart(context=executor.context)
+        msc.add_node(watched := ConstTrueNode())
+        msc.add_node(CancelStatechart.when_true(watched))
+
+        executor.compile(statechart=msc)
+        with pytest.raises(CancelledByNodeReachingItsGoal) as error:
+            executor.tick_until_end()
+
+        assert error.value.node is watched
+
+    def test_cancel_statechart_when_failed_without_exception_names_the_node(
+        self,
+    ) -> None:
+        executor = StatechartExecutor(StatechartContext(world=World()))
+        msc = Statechart(context=executor.context)
+        msc.add_nodes([trigger := ConstTrueNode(), falling_short := ConstFalseNode()])
+        falling_short.fail_condition = trigger.observes_true
+        msc.add_node(CancelStatechart.when_failed(falling_short))
+
+        executor.compile(statechart=msc)
+        with pytest.raises(CancelledByNodeFailing) as error:
+            executor.tick_until_end()
+
+        assert error.value.node is falling_short
+
     @pytest.mark.parametrize(
         "factory",
         [CancelStatechart.when_true, EndStatechart.when_true],
@@ -1624,7 +1666,7 @@ class TestTemplates:
 
         assert all(step.life_cycle_state == LifeCycleValues.SUCCEEDED for step in steps)
         starts = [
-            msc.history.get_life_cycle_history_of_node(step).index(
+            msc.state_history.get_life_cycle_history_of_node(step).index(
                 LifeCycleValues.RUNNING
             )
             for step in steps
@@ -1987,9 +2029,9 @@ class TestLifeCycleTransitions:
         kin_sim.compile(statechart=msc)
         kin_sim.tick_until_end()
 
-        assert len(msc.history) == 14
+        assert len(msc.state_history) == 14
         # %% count_node1 history
-        assert msc.history.get_life_cycle_history_of_node(count_node1) == [
+        assert msc.state_history.get_life_cycle_history_of_node(count_node1) == [
             LifeCycleValues.NOT_STARTED,
             LifeCycleValues.RUNNING,
             LifeCycleValues.RUNNING,
@@ -2005,7 +2047,7 @@ class TestLifeCycleTransitions:
             LifeCycleValues.SUCCEEDED,
             LifeCycleValues.SUCCEEDED,
         ]
-        assert msc.history.get_observation_history_of_node(count_node1) == [
+        assert msc.state_history.get_observation_history_of_node(count_node1) == [
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.TRUE,
@@ -2023,7 +2065,7 @@ class TestLifeCycleTransitions:
         ]
 
         # %% count_node2 history
-        assert msc.history.get_life_cycle_history_of_node(count_node2) == [
+        assert msc.state_history.get_life_cycle_history_of_node(count_node2) == [
             LifeCycleValues.NOT_STARTED,
             LifeCycleValues.NOT_STARTED,
             LifeCycleValues.NOT_STARTED,
@@ -2039,7 +2081,7 @@ class TestLifeCycleTransitions:
             LifeCycleValues.RUNNING,
             LifeCycleValues.RUNNING,
         ]
-        assert msc.history.get_observation_history_of_node(count_node2) == [
+        assert msc.state_history.get_observation_history_of_node(count_node2) == [
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.UNKNOWN,
@@ -2057,7 +2099,7 @@ class TestLifeCycleTransitions:
         ]
 
         # %% end_count_node1 history
-        assert msc.history.get_life_cycle_history_of_node(end_count_node1) == [
+        assert msc.state_history.get_life_cycle_history_of_node(end_count_node1) == [
             LifeCycleValues.NOT_STARTED,
             LifeCycleValues.RUNNING,
             LifeCycleValues.RUNNING,
@@ -2073,7 +2115,7 @@ class TestLifeCycleTransitions:
             LifeCycleValues.RUNNING,
             LifeCycleValues.RUNNING,
         ]
-        assert msc.history.get_observation_history_of_node(end_count_node1) == [
+        assert msc.state_history.get_observation_history_of_node(end_count_node1) == [
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.FALSE,
@@ -2091,7 +2133,7 @@ class TestLifeCycleTransitions:
         ]
 
         # %% end_node history
-        assert msc.history.get_life_cycle_history_of_node(end_node) == [
+        assert msc.state_history.get_life_cycle_history_of_node(end_node) == [
             LifeCycleValues.NOT_STARTED,
             LifeCycleValues.NOT_STARTED,
             LifeCycleValues.NOT_STARTED,
@@ -2107,7 +2149,7 @@ class TestLifeCycleTransitions:
             LifeCycleValues.RUNNING,
             LifeCycleValues.RUNNING,
         ]
-        assert msc.history.get_observation_history_of_node(end_node) == [
+        assert msc.state_history.get_observation_history_of_node(end_node) == [
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.UNKNOWN,
@@ -2126,7 +2168,7 @@ class TestLifeCycleTransitions:
 
         # %% pulse_node1 history
         # The pulse is interrupted whenever count_node2 fires.
-        pulse_node1_observations = msc.history.get_observation_history_of_node(
+        pulse_node1_observations = msc.state_history.get_observation_history_of_node(
             pulse_node1
         )
         assert pulse_node1_observations == [
@@ -2145,7 +2187,7 @@ class TestLifeCycleTransitions:
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.UNKNOWN,
         ]
-        assert msc.history.get_life_cycle_history_of_node(pulse_node1) == [
+        assert msc.state_history.get_life_cycle_history_of_node(pulse_node1) == [
             LifeCycleValues.NOT_STARTED,
             LifeCycleValues.NOT_STARTED,
             LifeCycleValues.RUNNING,
@@ -2163,7 +2205,7 @@ class TestLifeCycleTransitions:
         ]
 
         # %% pulse_node2 history
-        assert msc.history.get_life_cycle_history_of_node(pulse_node2) == [
+        assert msc.state_history.get_life_cycle_history_of_node(pulse_node2) == [
             LifeCycleValues.NOT_STARTED,
             LifeCycleValues.NOT_STARTED,
             LifeCycleValues.NOT_STARTED,
@@ -2179,7 +2221,7 @@ class TestLifeCycleTransitions:
             LifeCycleValues.RUNNING,
             LifeCycleValues.RUNNING,
         ]
-        assert msc.history.get_observation_history_of_node(pulse_node2) == [
+        assert msc.state_history.get_observation_history_of_node(pulse_node2) == [
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.UNKNOWN,
@@ -2236,7 +2278,7 @@ class TestLifeCycleTransitions:
         kin_sim.tick_until_end()
         msc.plot_gantt_chart()
 
-        assert len(msc.history) == 5
+        assert len(msc.state_history) == 5
 
     def test_a_child_starts_while_its_parent_success_condition_has_no_answer(
         self,
@@ -2973,7 +3015,7 @@ class TestReadingChildrenThatEnded:
         for _ in range(5):
             executor.tick()
 
-        assert set(msc.history.get_observation_history_of_node(sequence)) == {
+        assert set(msc.state_history.get_observation_history_of_node(sequence)) == {
             ObservationStateValues.UNKNOWN
         }
 
@@ -3086,13 +3128,13 @@ class TestReadingChildrenThatEnded:
 
         assert (
             ObservationStateValues.TRUE
-            in msc.history.get_observation_history_of_node(drifting)
+            in msc.state_history.get_observation_history_of_node(drifting)
         )
         assert (
             ObservationStateValues.TRUE
-            in msc.history.get_observation_history_of_node(late)
+            in msc.state_history.get_observation_history_of_node(late)
         )
-        assert set(msc.history.get_observation_history_of_node(parallel)) == {
+        assert set(msc.state_history.get_observation_history_of_node(parallel)) == {
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.FALSE,
         }
@@ -3210,7 +3252,7 @@ class TestLastObservation:
 
         assert (
             ObservationStateValues.TRUE
-            in msc.history.get_observation_history_of_node(pulse)
+            in msc.state_history.get_observation_history_of_node(pulse)
         )
         assert pulse.life_cycle_state == LifeCycleValues.INTERRUPTED
         assert pulse.observation_state == ObservationStateValues.UNKNOWN

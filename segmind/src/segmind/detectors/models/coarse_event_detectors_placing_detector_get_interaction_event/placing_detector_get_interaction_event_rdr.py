@@ -4,7 +4,7 @@ from ripple_down_rules.datastructures.case import Case, create_case
 from . import placing_detector_get_interaction_event_output__scrdr as output__classifier
 
 classifiers_dict = dict()
-classifiers_dict['output_'] = output__classifier
+classifiers_dict["output_"] = output__classifier
 
 
 def classify(case: Dict, **kwargs) -> Dict[str, Any]:

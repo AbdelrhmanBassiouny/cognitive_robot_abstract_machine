@@ -60,9 +60,7 @@ def _translation_of(body: Body, at: datetime) -> TranslationEvent:
 def _pick_ups_concluded_from(segmind_context: SegmindContext) -> List[DetectionEvent]:
     return [
         event
-        for event in PickUpDetector().update_context_and_events(
-            None, segmind_context, []
-        )
+        for event in PickUpDetector().update_context_and_events(segmind_context, [])
         if isinstance(event, PickUpEvent)
     ]
 
@@ -143,7 +141,7 @@ def _pick_ups_concluded_beside_a_grasp_detector(
     )
     return [
         event
-        for event in pick_up.update_context_and_events(None, segmind_context, [])
+        for event in pick_up.update_context_and_events(segmind_context, [])
         if isinstance(event, PickUpEvent)
     ]
 
@@ -227,7 +225,7 @@ def test_an_interaction_is_concluded_from_the_events_a_detector_states(
     )
 
     [concluded] = DetectorOfAPlacingFollowingALossOfSupport().update_context_and_events(
-        None, segmind_context, []
+        segmind_context, []
     )
 
     assert isinstance(concluded, PlacingEvent)

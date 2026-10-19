@@ -4,13 +4,13 @@ Native lifecycle presentation in the graph viewer's JSON shape.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 
 from typing_extensions import Any
 
 from cramph.data_types import LifeCycleValues
-from cramph.plotters.styles import DRAWING_METRICS
+from cramph.plotters.styles import DrawingMetrics
 
 
 # %% graph payload vocabulary
@@ -60,6 +60,12 @@ class LifeCycleDrawingMetrics:
     suspended_dashes: tuple[int, int] = (9, 7)
     """
     Longer dashes identifying a paused or interrupted node.
+    """
+
+    statechart_drawing_metrics: DrawingMetrics = field(default_factory=DrawingMetrics)
+    """
+    The measurements of the native statechart drawing, whose line width the ring widths
+    are relative to.
     """
 
 
@@ -118,7 +124,7 @@ class LifeCycleStyle:
         return cls(
             label=state.name.lower().replace("_", " "),
             color=state.color.to_hex(),
-            width=DRAWING_METRICS.line_width * width_factor,
+            width=metrics.statechart_drawing_metrics.line_width * width_factor,
             dashes=dashes,
             show_label=state is not LifeCycleValues.NOT_STARTED,
         )

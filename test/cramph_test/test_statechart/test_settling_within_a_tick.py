@@ -466,7 +466,7 @@ class TestLifeCycleCallbacks:
             LifeCycleCallback.START,
             LifeCycleCallback.END,
         ]
-        last_snapshot = statechart.history.history[-1]
+        last_snapshot = statechart.state_history.latest_item
         assert last_snapshot.tick_count == executor.tick_count
         assert last_snapshot.life_cycle_state[cancel] == LifeCycleValues.RUNNING
 
@@ -483,7 +483,7 @@ class TestLifeCycleCallbacks:
         executor = _compile(statechart)
 
         assert paused.life_cycle_state == LifeCycleValues.PAUSED
-        assert statechart.history.get_life_cycle_history_of_node(paused) == [
+        assert statechart.state_history.get_life_cycle_history_of_node(paused) == [
             LifeCycleValues.NOT_STARTED,
             LifeCycleValues.PAUSED,
         ]

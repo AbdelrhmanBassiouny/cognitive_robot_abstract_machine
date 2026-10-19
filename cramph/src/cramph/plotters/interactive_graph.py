@@ -3,9 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import rustworkx as rx
-from typing_extensions import ClassVar, TYPE_CHECKING
+from typing_extensions import TYPE_CHECKING
 
 from cramph.node import StatechartNode
+from krrood.ormatic.utils import classproperty
 from krrood.rustworkx_utils.graph_visualizer_base import (
     GraphLayout,
     GraphVisualizerBackend,
@@ -49,17 +50,19 @@ class StatechartGraphVisualizer:
     The statechart to draw.
     """
 
-    visualizer_classes: ClassVar[
-        dict[GraphVisualizerBackend, type[GraphVisualizerBase]]
-    ] = {
-        GraphVisualizerBackend.PLOTLY: InteractiveGraphVisualizer,
-        GraphVisualizerBackend.CYTOSCAPE: CytoscapeGraphVisualizer,
-        GraphVisualizerBackend.VIS_NETWORK: VisNetworkGraphVisualizer,
-        GraphVisualizerBackend.THREE: ThreeGraphVisualizer,
-    }
-    """
-    The visualizer to use for each rendering backend.
-    """
+    @classproperty
+    def visualizer_classes(
+        cls,
+    ) -> dict[GraphVisualizerBackend, type[GraphVisualizerBase]]:
+        """
+        :return: The visualizer to use for each rendering backend.
+        """
+        return {
+            GraphVisualizerBackend.PLOTLY: InteractiveGraphVisualizer,
+            GraphVisualizerBackend.CYTOSCAPE: CytoscapeGraphVisualizer,
+            GraphVisualizerBackend.VIS_NETWORK: VisNetworkGraphVisualizer,
+            GraphVisualizerBackend.THREE: ThreeGraphVisualizer,
+        }
 
     def create_visualizer(
         self, backend: GraphVisualizerBackend, layout: GraphLayout
@@ -106,7 +109,7 @@ class StatechartGraphVisualizer:
             f"life cycle: {node.life_cycle_state.name}",
             f"observation: {self.statechart.observation_state[node].name}",
         ]
-        run = self.statechart.history.get_current_run_ticks_of_node(node)
+        run = self.statechart.state_history.get_current_run_ticks_of_node(node)
         if run is None:
             return details
         return details + [f"start tick: {run.start_tick}", f"end tick: {run.end_tick}"]

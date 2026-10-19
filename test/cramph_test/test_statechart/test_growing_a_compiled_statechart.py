@@ -157,7 +157,7 @@ def test_the_history_of_an_added_node_starts_when_it_joined(
     statechart_executor: StatechartExecutor,
 ) -> None:
     _compile_and_run_one_node(statechart_executor)
-    history = statechart_executor.statechart.history
+    history = statechart_executor.statechart.state_history
     recorded_before_joining = len(history)
     second = _node_arriving_at_once("second")
 
@@ -173,7 +173,7 @@ def test_a_history_item_reads_the_same_once_a_node_joined(
     statechart_executor: StatechartExecutor,
 ) -> None:
     _compile_and_run_one_node(statechart_executor)
-    recorded_before_joining = statechart_executor.statechart.history.history[-1]
+    recorded_before_joining = statechart_executor.statechart.state_history.latest_item
     representation_before_joining = repr(recorded_before_joining)
 
     statechart_executor.statechart.add_node(_node_arriving_at_once("second"))

@@ -13,14 +13,14 @@ from krrood.ormatic.utils import classproperty
 from krrood.patterns.field_metadata import JSONMetadata
 from krrood.utils import get_full_class_name
 from cramph.node import EndedByOwner, SucceedsOnObservingTrue, FailsOnObservingFalse
-from cramph.context import ContextExtension, StatechartContext
+from cramph.context import ContextExtension
 from cramph.data_types import (
     LifeCyclePredicate,
     LifeCycleValues,
     ObservationStateValues,
 )
 from cramph.exceptions import (
-    NoLanguageNodeAboveError,
+    NoControlStructureNodeAboveError,
     ChildCannotFailError,
     NodeAlreadyAChildError,
     NodeIsNotAChildError,
@@ -102,9 +102,10 @@ class CompositeNodeEndingItsChildren(
 
 
 @dataclass(repr=False, eq=False, kw_only=True)
-class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
+class ControlStructureNode(CompositeNode, ABC):
     """
-    A construct of the plan language, whose children are the list of nodes it is handed.
+    A control structure of the plan language, whose children are the list of nodes it is
+    handed.
 
     Its children can be changed after it joined a statechart, up to the moment the
     statechart is compiled: :meth:`insert_before`, :meth:`insert_after` and
@@ -172,19 +173,19 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
         self._insert_at(self._position_of(reference) + 1, node)
 
     @staticmethod
-    def closest_above(node: StatechartNode) -> CramLanguageNode:
+    def closest_above(node: StatechartNode) -> ControlStructureNode:
         """
         :param node: A node of a statechart.
-        :return: The closest plan language node on the path from `node` up to the root,
+        :return: The closest control structure node on the path from `node` up to the root,
             which can hold a neighbour of whatever holds `node` below it.
-        :raises NoLanguageNodeAboveError: If no plan language node is above `node`.
+        :raises NoControlStructureNodeAboveError: If no control structure node is above `node`.
         """
         for ancestor in node.path:
-            if isinstance(ancestor, CramLanguageNode):
+            if isinstance(ancestor, ControlStructureNode):
                 return ancestor
-        raise NoLanguageNodeAboveError(node=node)
+        raise NoControlStructureNodeAboveError(node=node)
 
-    def expand(self, context: StatechartContext) -> None:
+    def expand(self) -> None:
         self._adopt_nodes()
 
     def _adopt_nodes(self) -> None:
@@ -205,7 +206,7 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
     def _check_can_be_a_child(self, node: StatechartNode) -> None:
         """
         Rejects a node that cannot be a child of this goal, before it joins the
-        statechart.
+        statechart. Accepts every node unless overridden.
 
         :param node: The node the caller handed over.
         """
@@ -213,10 +214,13 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
     def _wire_children(self) -> None:
         """
         Wires the conditions of the current children to each other.
+
+        Wires nothing unless overridden.
         """
 
     def _has_child(self, node: StatechartNode) -> bool:
         """
+        :param node: The node to look for.
         :return: Whether `node` itself is one of the children, whatever other child it
             compares equal to.
         """
@@ -224,6 +228,7 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
 
     def _position_of(self, reference: StatechartNode) -> int:
         """
+        :param reference: A child of this goal, or a node below one.
         :return: The position of the child that is `reference` or holds it.
         :raises NodeIsNotAChildError: If no child is or holds `reference`.
         """
@@ -234,6 +239,7 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
 
     def _check_is_not_a_child(self, node: StatechartNode) -> None:
         """
+        :param node: The node about to become a child of this goal.
         :raises NodeAlreadyAChildError: If `node` is a child of this goal already.
         """
         if self._has_child(node):
@@ -242,6 +248,10 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
     def _insert_at(self, position: int, node: StatechartNode) -> None:
         """
         Runs `node` at `position` among the children.
+
+        :param position: The index among the children `node` takes.
+        :param node: The node to insert, or a statement of it.
+        :raises NodeAlreadyAChildError: If `node` is a child of this goal already.
         """
         node = self._as_node(node)
         self._check_is_not_a_child(node)
@@ -255,8 +265,8 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
 
 
 @dataclass(repr=False, eq=False, kw_only=True)
-class CramLanguageNodeRunningItsChildrenInTurn(
-    CramLanguageNode, CompositeNodeEndingItsChildren, ABC
+class ControlStructureNodeRunningItsChildrenInTurn(
+    ControlStructureNode, CompositeNodeEndingItsChildren, ABC
 ):
     """
     A plan language construct that starts each child only once the one before it ended
@@ -292,7 +302,7 @@ class CramLanguageNodeRunningItsChildrenInTurn(
 
 
 @dataclass(repr=False, eq=False, kw_only=True)
-class Sequence(CramLanguageNodeRunningItsChildrenInTurn):
+class Sequence(ControlStructureNodeRunningItsChildrenInTurn):
     """
     Runs a list of nodes one after another.
 
@@ -306,7 +316,7 @@ class Sequence(CramLanguageNodeRunningItsChildrenInTurn):
     def _check_can_be_a_child(self, node: StatechartNode) -> None:
         """
         A node that ends the statechart may be a step although it belongs to no other
-        node's life cycle, see :meth:`CramLanguageNode._check_can_be_a_child`.
+        node's life cycle, see :meth:`ControlStructureNode._check_can_be_a_child`.
         """
         if isinstance(node, TerminalNode):
             self._check_caller_wired_no_transitions(node)
@@ -320,7 +330,7 @@ class Sequence(CramLanguageNodeRunningItsChildrenInTurn):
         """
         return previous.is_succeeded
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         """
         Report success, a failed step, or neither, all read off the steps' outcomes.
 
@@ -344,7 +354,7 @@ class Sequence(CramLanguageNodeRunningItsChildrenInTurn):
 
 
 @dataclass(repr=False, eq=False, kw_only=True)
-class Parallel(EndedByOwner, CramLanguageNode):
+class Parallel(EndedByOwner, ControlStructureNode):
     """
     Holds a list of nodes at once until enough of them are at their goals together.
 
@@ -415,7 +425,7 @@ class Parallel(EndedByOwner, CramLanguageNode):
             ]
         )
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         """
         Count the nodes that are at their goals against :attr:`required_successes`.
 
@@ -476,7 +486,7 @@ class RepeatUntil(CompositeNodeEndingItsChildren):
     retrying off, or None to only observe False then.
     """
 
-    def expand(self, context: StatechartContext) -> None:
+    def expand(self) -> None:
         """
         Wire the retry loop.
 
@@ -529,7 +539,7 @@ class RepeatUntil(CompositeNodeEndingItsChildren):
         self._add_child_to_statechart(exhausted)
         exhausted.start_condition = self._retrying_stopped
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         """
         Report success, giving up, or neither.
 
@@ -552,7 +562,7 @@ class RepeatUntil(CompositeNodeEndingItsChildren):
 
 
 @dataclass(repr=False, eq=False, kw_only=True)
-class TryAll(CramLanguageNode, CompositeNodeEndingItsChildren):
+class TryAll(ControlStructureNode, CompositeNodeEndingItsChildren):
     """
     Runs a list of alternatives at once and takes the first one that works.
 
@@ -570,7 +580,7 @@ class TryAll(CramLanguageNode, CompositeNodeEndingItsChildren):
         """
         self._succeed_children_at_their_goals()
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         """
         Report the first alternative that worked, or that none of them did.
         """
@@ -599,7 +609,7 @@ class TryAll(CramLanguageNode, CompositeNodeEndingItsChildren):
 
 
 @dataclass(repr=False, eq=False, kw_only=True)
-class TryInOrder(CramLanguageNodeRunningItsChildrenInTurn):
+class TryInOrder(ControlStructureNodeRunningItsChildrenInTurn):
     """
     Tries a list of alternatives one after another, short-circuiting on the first
     success.
@@ -631,7 +641,7 @@ class TryInOrder(CramLanguageNodeRunningItsChildrenInTurn):
         for alternative in self.nodes[:-1]:
             self._check_child_can_fail(alternative)
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         """
         Report the alternative that worked, or that none of them did.
         """
@@ -686,7 +696,7 @@ class MonitoredCompositeNode(EndedByOwner, CompositeNode, ABC):
     The node placed under the monitor's control.
     """
 
-    def expand(self, context: StatechartContext) -> None:
+    def expand(self) -> None:
         """
         Add the monitor and the monitored node, and wire the monitor.
         """
@@ -712,7 +722,7 @@ class MonitoredCompositeNode(EndedByOwner, CompositeNode, ABC):
         Connect the monitor's observation to the monitored node's life cycle.
         """
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         """
         The monitored node is read through its last observation, which outlasts it,
         because a node that ended observes nothing any more.
@@ -772,7 +782,7 @@ class StoppedWhenTrue(MonitoredCompositeNode):
             self.monitor.last_observed_true,
         )
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         """
         The monitored node's observation counts only while it has not ended; after that,
         only its success does.
@@ -828,12 +838,12 @@ class CancelledWhenTrue(StoppedWhenTrue):
     The failure reported once the monitor ends the statechart.
     """
 
-    def expand(self, context: StatechartContext) -> None:
+    def expand(self) -> None:
         """
         Add the monitor and the monitored node, and the node that ends the statechart
         once the monitor observes True.
         """
-        super().expand(context)
+        super().expand()
         cancelled = CancelStatechart(
             name=f"{self.name}/cancelled", exception=self.exception
         )
@@ -860,11 +870,10 @@ class ChildChooser(ABC):
 
     @abstractmethod
     def choose_child(
-        self, node: CompositeNodeChoosingItsChild, context: StatechartContext
+        self, node: CompositeNodeChoosingItsChild
     ) -> StatechartNode | None:
         """
         :param node: The node asking for its next child.
-        :param context: The context the statechart runs in.
         :return: The child `node` runs next, or None if no child is left.
         """
 
@@ -872,28 +881,25 @@ class ChildChooser(ABC):
         self,
         node: CompositeNodeChoosingItsChild,
         child: StatechartNode,
-        context: StatechartContext,
     ) -> None:
         """
         Finishes a chosen child once it joined the statechart and expanded, before its
-        failure monitors are asked for. Does nothing unless overridden.
+        failure monitors are asked for.
 
         :param node: The node that chose `child`.
         :param child: The child just chosen.
-        :param context: The context the statechart runs in.
         """
+        return None
 
     def failure_monitors_for(
         self,
         node: CompositeNodeChoosingItsChild,
         child: StatechartNode,
-        context: StatechartContext,
     ) -> list[StatechartNode]:
         """
         :param node: The node that chose `child`.
         :param child: The child just chosen and prepared, see
             :meth:`prepare_chosen_child`.
-        :param context: The context the statechart runs in.
         :return: The nodes whose observing True gives up on `child`, any one of which
             is enough. None unless overridden, so `child` runs until it ends on its own.
         """
@@ -904,6 +910,7 @@ class ChildChooser(ABC):
         Releases what the chooser acquired to choose children, once the statechart
         stopped running.
         """
+        return None
 
 
 @dataclass
@@ -1078,40 +1085,37 @@ class CompositeNodeChoosingItsChild(SucceedsOnObservingTrue, CompositeNode):
             LifeCycleValues.INTERRUPTED,
         )
 
-    def choose_child(self, context: StatechartContext) -> None:
+    def choose_child(self) -> None:
         """
-        Ask the chooser of `context` for the next child and follow its answer.
+        Ask the chooser of :attr:`context` for the next child and follow its answer.
         """
         self.choose_child_with(
-            context.require_extension(ChildChooserAccess).chooser, context
+            self.context.require_extension(ChildChooserAccess).chooser
         )
 
-    def choose_child_with(
-        self, chooser: ChildChooser, context: StatechartContext
-    ) -> bool:
+    def choose_child_with(self, chooser: ChildChooser) -> bool:
         """
         Run the child `chooser` chooses next, or fail if it has no child left.
 
         :param chooser: The chooser to ask.
-        :param context: The context the statechart runs in.
         :return: Whether `chooser` answered, rather than having no choice yet.
         """
         if not chooser.has_choice_for(self):
             return False
-        child = chooser.choose_child(self, context)
+        child = chooser.choose_child(self)
         if child is None:
             self.give_up()
             return True
         self.adopt_chosen_child(child)
-        chooser.prepare_chosen_child(self, child, context)
-        self.give_up_on_child_when(
-            child, chooser.failure_monitors_for(self, child, context)
-        )
+        chooser.prepare_chosen_child(self, child)
+        self.give_up_on_child_when(child, chooser.failure_monitors_for(self, child))
         return True
 
     def adopt_chosen_child(self, child: StatechartNode) -> None:
         """
         Run `child` next, succeeding once it succeeds.
+
+        :param child: The child the chooser chose.
         """
         self._add_child_to_statechart(child)
         self._chosen_children.append(child)
@@ -1148,7 +1152,7 @@ class CompositeNodeChoosingItsChild(SucceedsOnObservingTrue, CompositeNode):
         self._out_of_children = True
         self.statechart.request_rebuild(self)
 
-    def on_reset(self, context: StatechartContext) -> None:
+    def on_reset(self) -> None:
         """
         Go back to choosing: the children chosen so far never start again, and a node
         that had no child left may be given one again.
@@ -1167,7 +1171,7 @@ class CompositeNodeChoosingItsChild(SucceedsOnObservingTrue, CompositeNode):
             self._out_of_children = False
             self.statechart.request_rebuild(self)
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         """
         Report what the latest child observed last, which outlasts it, because a node
         that ended observes nothing any more.
@@ -1190,7 +1194,7 @@ class StatementNode(CompositeNodeChoosingItsChild):
 
     The statement is grounded only when this node starts, against the world the nodes
     before it left behind; the chooser of the context decides which of its candidates
-    run. A plan language node handed a statement takes such a node as its child.
+    run. A control structure node handed a statement takes such a node as its child.
     """
 
     statement: Match = field(metadata=JSONMetadata(serialize=False).as_dict())
@@ -1226,7 +1230,7 @@ class StatementNode(CompositeNodeChoosingItsChild):
         :return: Whether the last run through the statement stopped because it yielded
             :attr:`candidate_limit` candidates.
         """
-        return self._candidates_pulled == self.candidate_limit
+        return self._candidates_pulled >= self.candidate_limit
 
     def next_candidate(
         self, query_backend: QueryBackend, default_candidate_limit: int
@@ -1271,7 +1275,7 @@ class StatementNode(CompositeNodeChoosingItsChild):
         self._candidates.close()
         self._candidates = None
 
-    def cleanup(self, context: StatechartContext) -> None:
+    def cleanup(self) -> None:
         self.stop_grounding()
 
     @property

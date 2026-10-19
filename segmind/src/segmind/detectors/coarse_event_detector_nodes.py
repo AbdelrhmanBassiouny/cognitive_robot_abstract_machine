@@ -7,7 +7,6 @@ from datetime import timedelta
 from typing import List, Tuple, Type
 
 from typing_extensions import Hashable
-from cramph.context import StatechartContext
 from segmind.datastructures.events import (
     GraspEvent,
     LossOfGraspEvent,
@@ -99,14 +98,12 @@ class AbstractInteractionDetector(EventCombiningDetector):
 
     def update_context_and_events(
         self,
-        context: StatechartContext,
         segmind_context: SegmindContext,
         tracked_objects: List[Body],
     ) -> List[DetectionEvent]:
         """
         Concludes the interactions that the events logged so far amount to.
 
-        :param context: The current statechart context.
         :param segmind_context: The shared SegmindContext containing the information
             required to track events.
         :param tracked_objects: The bodies checked this tick.

@@ -425,27 +425,3 @@ class TransitionKind(Enum):
         :return: Whether this transition can trigger from the given lifecycle state.
         """
         return life_cycle in self.source_states
-
-    @classmethod
-    def of(
-        cls, previous_state: LifeCycleValues, new_state: LifeCycleValues
-    ) -> TransitionKind:
-        """
-        :param previous_state: The life cycle state a change moved a node out of.
-        :param new_state: The life cycle state the same change moved it into.
-        :return: The transition kind whose own condition could have caused the
-            change, assuming `previous_state` and `new_state` differ.
-        """
-        match previous_state, new_state:
-            case (_, LifeCycleValues.NOT_STARTED):
-                return cls.RESET
-            case (LifeCycleValues.NOT_STARTED, _):
-                return cls.START
-            case (_, LifeCycleValues.SUCCEEDED):
-                return cls.SUCCEED
-            case (_, LifeCycleValues.FAILED):
-                return cls.FAIL
-            case (_, LifeCycleValues.INTERRUPTED):
-                return cls.INTERRUPT
-            case _:
-                return cls.PAUSE

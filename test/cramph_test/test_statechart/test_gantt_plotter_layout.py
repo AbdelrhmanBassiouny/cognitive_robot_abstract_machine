@@ -169,7 +169,7 @@ def test_x_axis_units_ticks_vs_seconds(
     ax_main_seconds = axes_seconds["main"]
     assert ax_main_seconds.get_xlabel() == "Time [s]"
     # Upper xlim should equal total_ticks * dt
-    total_ticks = msc.history.history[-1].tick_count
+    total_ticks = msc.state_history.latest_item.tick_count
     expected_span = total_ticks * context.tick_duration
     assert ax_main_seconds.get_xlim()[1] == pytest.approx(
         expected_span, rel=1e-6, abs=1e-6

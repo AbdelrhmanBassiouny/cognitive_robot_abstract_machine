@@ -106,7 +106,7 @@ class StatechartStateUpdate:
         self.statechart.last_observation_state.data[:reported_node_count] = (
             self.last_observation_state.data
         )
-        self.statechart.history.append(
+        self.statechart.state_history.append(
             next_item=StateHistoryItem(
                 tick_count=self.tick_count,
                 life_cycle_state=self.statechart.life_cycle_state,

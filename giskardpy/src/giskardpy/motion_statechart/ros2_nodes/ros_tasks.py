@@ -22,7 +22,7 @@ from typing_extensions import Type, TypeVar, Generic
 import krrood.symbolic_math.symbolic_math as sm
 from krrood.ormatic.utils import classproperty
 from cramph.node import EndedByOwner
-from cramph.context import ContextExtension, StatechartContext
+from cramph.context import ContextExtension
 from cramph.data_types import ObservationStateValues
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from cramph.node import NodeArtifacts
@@ -80,26 +80,26 @@ class ActionServerTask(
         return super().required_context_extensions + (RosContextExtension,)
 
     @abstractmethod
-    def build_msg(self, context: StatechartContext) -> None:
+    def build_msg(self) -> None:
         """
         Build the goal message this node sends to the action server.
         """
         ...
 
-    def set_up(self, context: StatechartContext) -> None:
+    def set_up(self) -> None:
         """
         Creates the action client and the message to send.
         """
-        super().set_up(context)
-        ros_context_extension = context.require_extension(RosContextExtension)
+        super().set_up()
+        ros_context_extension = self.context.require_extension(RosContextExtension)
         self._action_client = ros_context_extension.get_or_create_action_client(
             self.message_type, self.action_topic
         )
-        self.build_msg(context)
+        self.build_msg()
         logger.info(f"Waiting for action server {self.action_topic}")
         self._action_client.wait_for_server()
 
-    def on_start(self, context: StatechartContext) -> None:
+    def on_start(self) -> None:
         """
         Creates a goal and sends it to the action server asynchronously.
         """
@@ -151,9 +151,9 @@ class NavigateActionServerTask(
     Base link of the robot, used for estimating the distance to the goal.
     """
 
-    def build_msg(self, context: StatechartContext) -> None:
-        root_p_goal = context.world.transform(
-            target_frame=context.world.root, spatial_object=self.target_pose
+    def build_msg(self) -> None:
+        root_p_goal = self.context.world.transform(
+            target_frame=self.context.world.root, spatial_object=self.target_pose
         )
         position = root_p_goal.position.to_np()
         orientation = root_p_goal.quaternion.to_np()
@@ -171,16 +171,16 @@ class NavigateActionServerTask(
         )
         self._msg = NavigateToPose.Goal(pose=pose_stamped)
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         """
         Observes whether the robot is within 1cm of the target pose.
         """
         artifacts = NodeArtifacts()
-        root_T_goal = context.world.transform(
-            target_frame=context.world.root, spatial_object=self.target_pose
+        root_T_goal = self.context.world.transform(
+            target_frame=self.context.world.root, spatial_object=self.target_pose
         )
-        root_T_current = context.world.compose_forward_kinematics_expression(
-            context.world.root, self.base_link
+        root_T_current = self.context.world.compose_forward_kinematics_expression(
+            self.context.world.root, self.base_link
         )
 
         position_error = root_T_goal.position.euclidean_distance(
@@ -206,7 +206,7 @@ class NavigateActionServerTask(
             f"Finished navigation with response status: {self._result.result.status} and result code: {self._result.error_code}"
         )
 
-    def on_tick(self, context: StatechartContext) -> ObservationStateValues:
+    def on_tick(self) -> ObservationStateValues:
         if self._result.result:
             return (
                 ObservationStateValues.TRUE

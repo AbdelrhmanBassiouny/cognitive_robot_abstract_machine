@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from cramph.composites import Parallel
-from cramph.context import StatechartContext
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.goals.collision_avoidance import (
     UpdateTemporaryCollisionRules,
@@ -16,7 +15,6 @@ from giskardpy.motion_statechart.tasks.joint_tasks import (
 from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.robots.robot_parts import EndEffector
-
 
 # %% gripper goals
 
@@ -72,10 +70,10 @@ class MoveGripper(Parallel):
     for.
     """
 
-    def expand(self, context: StatechartContext) -> None:
+    def expand(self) -> None:
         """
         Create the finger goal, the speed cap and the collision allowance, then adopt
-        them as :meth:`~cramph.composites.CramLanguageNode.expand` does.
+        them as :meth:`~cramph.composites.ControlStructureNode.expand` does.
         """
         goal_state = self.end_effector.get_joint_state_by_type(self.state)
         self.nodes.append(self._finger_goal(goal_state))
@@ -90,7 +88,7 @@ class MoveGripper(Parallel):
             self.nodes.append(
                 UpdateTemporaryCollisionRules.for_end_effector(self.end_effector)
             )
-        super().expand(context)
+        super().expand()
 
     def _finger_goal(self, goal_state: JointState) -> StatechartNode:
         """

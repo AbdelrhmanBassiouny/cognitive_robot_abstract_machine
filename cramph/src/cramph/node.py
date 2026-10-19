@@ -28,6 +28,8 @@ from cramph.data_types import (
     NodeJSONKey,
 )
 from cramph.exceptions import (
+    CancelledByNodeFailing,
+    CancelledByNodeReachingItsGoal,
     ChildTransitionAlreadyWiredError,
     NotInStatechartError,
     EndInCompositeNodeError,
@@ -42,6 +44,7 @@ from cramph.exceptions import (
     UnsupportedConditionSyntaxError,
     NodeStateVariableNotSerializableError,
     StatechartAlreadyCompiledError,
+    UnknownTransitionKindError,
 )
 from cramph.plotters.plot_specs import NodePlotSpec, plot_specification_field
 from krrood.adapters.deserialized_object_tracker import DeserializedObjectTracker
@@ -385,7 +388,7 @@ class TransitionCondition(SubclassJSONSerializer):
 
 
 @dataclass(repr=False, eq=False, init=False)
-class NodeStateVariable(FloatVariable):
+class NodeStateVariable(FloatVariable, ABC):
     """
     A symbol standing for part of the state of one node.
     """
@@ -414,9 +417,15 @@ class NodeStateVariable(FloatVariable):
         """
         return self.statechart_node.unique_name
 
+    @abstractmethod
+    def resolve(self) -> float:
+        """
+        :return: The part of its node's state this variable currently stands for.
+        """
+
 
 @dataclass(repr=False, eq=False, init=False)
-class ConditionVariable(NodeStateVariable):
+class ConditionVariable(NodeStateVariable, ABC):
     """
     A node state variable a transition condition may read.
 
@@ -424,11 +433,13 @@ class ConditionVariable(NodeStateVariable):
     built from them two-valued.
     """
 
+    @abstractmethod
     def resolve(self) -> ObservationStateValues:
         """
+        Narrows :meth:`NodeStateVariable.resolve` to a two-valued answer.
+
         :return: True or false, whichever this variable currently stands for.
         """
-        raise NotImplementedError
 
 
 @dataclass(repr=False, eq=False, init=False)
@@ -1114,7 +1125,7 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
             case TransitionKind.INTERRUPT:
                 self._interrupt_condition = transition
             case _:
-                raise ValueError(f"Unknown transition kind: {transition.kind}")
+                raise UnknownTransitionKindError(transition_kind=transition.kind)
 
     def create_lifecycle_transitions(
         self, own_transitions_allowed: sm.Scalar
@@ -1358,7 +1369,7 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
             case TransitionKind.INTERRUPT:
                 return self._interrupt_condition
             case _:
-                raise ValueError(f"Unknown transition kind: {transition_kind}")
+                raise UnknownTransitionKindError(transition_kind=transition_kind)
 
     @property
     def life_cycle_variable(self) -> LifeCycleVariable:
@@ -1428,98 +1439,87 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
         """
         return StructureCopyNode(name=self.name)
 
-    def set_up(self, context: StatechartContext) -> None:
+    def set_up(self) -> None:
         """
         Called once per context, when this node is first built in it, before
-        :meth:`build_artifacts`. Register what this node reads from `context` here,
-        such as float variables, because :meth:`build` may run more than once.
-
-        :param context: The context this node is built and ticked in.
+        :meth:`build_artifacts`. Register what this node reads from :attr:`context`
+        here, such as float variables, because :meth:`build` may run more than once.
         """
 
-    def build(self, context: StatechartContext) -> NodeArtifacts:
+    def build(self) -> NodeArtifacts:
         """
         Called when the statechart compiles this node, and again every time the
         kinematic structure of the world changes, so that expressions reading the
-        structure follow it. Anything registered in `context` belongs in
+        structure follow it. Anything registered in :attr:`context` belongs in
         :meth:`set_up`.
         .. warning:: Don't create other nodes within this function.
-        .. warning:: An override must return ``super().build(context)``, otherwise
+        .. warning:: An override must return ``super().build()``, otherwise
             :meth:`set_up` and :meth:`build_artifacts` never run.
-        :param context: The context that contains data that can be used to build this node.
         :return: A NodeArtifacts instance that describes this node.
         """
-        self._set_up_once(context)
-        return self.build_artifacts(context)
+        self._set_up_once()
+        return self.build_artifacts()
 
-    def _set_up_once(self, context: StatechartContext) -> None:
+    def _set_up_once(self) -> None:
         """
-        Calls :meth:`set_up` unless it already ran in `context`.
+        Calls :meth:`set_up` unless it already ran in :attr:`context`.
         """
-        if self._set_up_context is context:
+        if self._set_up_context is self.context:
             return
-        self.set_up(context)
-        self._set_up_context = context
+        self.set_up()
+        self._set_up_context = self.context
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         """
         Describe this node in terms of its observation.
-        :param context: The context that contains data that can be used to build this node.
         :return: A NodeArtifacts instance that describes this node.
         """
         return NodeArtifacts()
 
-    def on_tick(self, context: StatechartContext) -> ObservationStateValues | None:
+    def on_tick(self) -> ObservationStateValues | None:
         """
         Triggered when the node is ticked.
         .. warning:: This method is called inside a control loop, make sure it is fast.
         .. warning:: Only happens while the node is in state RUNNING.
         .. warning:: The result of this method takes precedence over the observation expression created in build().
-        :param context: The context that contains data that can be used while ticking this node.
         :return: An optional observation state overwrite
         """
 
-    def on_start(self, context: StatechartContext) -> None:
+    def on_start(self) -> None:
         """
         Triggered when the node transitions from NOT_STARTED to RUNNING.
         .. warning:: This method is called inside a control loop, make sure it is fast.
-        :param context: The context that contains data that can be used by this node.
         """
 
-    def on_pause(self, context: StatechartContext) -> None:
+    def on_pause(self) -> None:
         """
         Triggered when the node transitions from RUNNING to PAUSED.
         .. warning:: This method is called inside a control loop, make sure it is fast.
-        :param context: The context that contains data that can be used by this node.
         """
 
-    def on_unpause(self, context: StatechartContext) -> None:
+    def on_unpause(self) -> None:
         """
         Triggered when the node transitions from PAUSED to RUNNING.
         .. warning:: This method is called inside a control loop, make sure it is fast.
-        :param context: The context that contains data that can be used by this node.
         """
 
-    def on_end(self, context: StatechartContext) -> None:
+    def on_end(self) -> None:
         """
         Triggered when the node transitions from RUNNING or PAUSED into any terminal
         state. Read :attr:`life_cycle_state` for the outcome.
         .. warning:: This method is called inside a control loop, make sure it is fast.
-        :param context: The context that contains data that can be used by this node.
         """
 
-    def on_reset(self, context: StatechartContext) -> None:
+    def on_reset(self) -> None:
         """
         Triggered when the node transitions from any state to NOT_STARTED.
         .. warning:: This method is called inside a control loop, make sure it is fast.
-        :param context: The context that contains data that can be used by this node.
         """
 
-    def cleanup(self, context: StatechartContext) -> None:
+    def cleanup(self) -> None:
         """
         Triggered after an EndStatechart or CancelStatechart was triggered.
         Place code here to clean up after execution.
-        :param context: The context that contains data that can be used by this node.
         """
 
     def __hash__(self) -> int:
@@ -1570,7 +1570,7 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
             recently started running, None if it has not started since its last
             reset.
         """
-        run = self.statechart.history.get_current_run_ticks_of_node(self)
+        run = self.statechart.state_history.get_current_run_ticks_of_node(self)
         if run is None:
             return None
         return run.start_tick * self.statechart.context.require_tick_duration()
@@ -1582,7 +1582,7 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
             recently ended, None if it has not started since its last reset or has
             not ended yet.
         """
-        run = self.statechart.history.get_current_run_ticks_of_node(self)
+        run = self.statechart.state_history.get_current_run_ticks_of_node(self)
         if run is None or run.end_tick is None:
             return None
         return run.end_tick * self.statechart.context.require_tick_duration()
@@ -2164,14 +2164,13 @@ class CompositeNode(StatechartNode):
     def create_structure_copy(self) -> CompositeNode:
         return StructureCopyCompositeNode(name=self.name)
 
-    def expand(self, context: StatechartContext) -> None:
+    def expand(self) -> None:
         """
         Instantiate child nodes, add them to this node, and wire their life cycle transition conditions.
 
         Called once, when this node joins a statechart.
 
         .. warning:: Nodes have not been built yet.
-        :param context: The context that contains data that can be used to expand this node.
         """
 
     def check_children(self) -> None:
@@ -2311,9 +2310,15 @@ class CompositeNode(StatechartNode):
         self, node: StatechartNode
     ) -> None:
         """
+        Rejects a node that is already a child of another node of this statechart.
+
         .. note:: A node held by a *different* statechart is allowed, because it is
             moved into this node's statechart; only two parents within one statechart are
             an error.
+
+        :param node: The node about to become a child of this node.
+        :raises NodeAlreadyBelongsToDifferentNodeError: If another node of this
+            statechart holds `node`.
         """
         if node.belongs_to_statechart() and node.parent_node != self:
             raise NodeAlreadyBelongsToDifferentNodeError(node=self, new_node=node)
@@ -2340,31 +2345,46 @@ class StructureCopyCompositeNode(EndedByOwner, CompositeNode):
 @dataclass(eq=False, repr=False, kw_only=True)
 class ThreadPayloadMonitor(EndedByOwner, ABC, StatechartNode):
     """
-    Payload monitor that evaluates _compute_observation in a background thread.
+    A monitor whose observation is computed by :meth:`_compute_observation` in a
+    background thread, so that a slow computation never blocks a tick.
 
-    - compute_observation triggers an async evaluation and immediately returns.
-    - Until the first successful completion, returns TrinaryUnknown.
-    - Afterwards, returns the last successfully computed value.
+    :meth:`compute_observation` returns at once with the latest finished observation,
+    which is unknown until the first computation finished.
     """
 
-    # Internal threading primitives
     _request_event: threading.Event = field(
         default_factory=threading.Event, init=False, repr=False
     )
+    """
+    Set to ask the worker thread for a fresh observation.
+    """
+
     _stop_event: threading.Event = field(
         default_factory=threading.Event, init=False, repr=False
     )
-    _thread: threading.Thread = field(init=False, repr=False)
+    """
+    Set to end the worker thread.
+    """
 
-    # Cache of last successful result from _compute_observation
+    _thread: threading.Thread = field(init=False, repr=False)
+    """
+    The worker thread computing the observations.
+    """
+
     _has_result: bool = field(default=False, init=False, repr=False)
+    """
+    Whether a computation has finished since this node was created.
+    """
+
     _last_result: float = field(
         default=ObservationStateValues.UNKNOWN, init=False, repr=False
     )
+    """
+    The observation the latest finished computation returned.
+    """
 
     def __post_init__(self) -> None:
         super().__post_init__()
-        # Start a daemon worker thread that computes observations when requested
         self._thread = threading.Thread(
             target=self._worker_loop,
             name=f"{self.__class__.__name__}-worker",
@@ -2380,12 +2400,10 @@ class ThreadPayloadMonitor(EndedByOwner, ABC, StatechartNode):
 
         :return: The last successfully computed observation, unknown until the first one finished.
         """
-        # Signal the worker to compute a fresh value if it is not already signaled.
         self._request_event.set()
-        # Return the last known result (initialized to Unknown until first success)
         return self._last_result
 
-    def cleanup(self, context: StatechartContext) -> None:
+    def cleanup(self) -> None:
         """
         Stops the background worker thread.
         """
@@ -2443,11 +2461,14 @@ class EndStatechart(TerminalNode):
     plot_specifications: NodePlotSpec = plot_specification_field(
         NodePlotSpec.create_end_style
     )
+    """
+    Draws this node in the style of a node ending the statechart.
+    """
 
     def create_structure_copy(self) -> EndStatechart:
         return EndStatechart(name=self.name)
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         return NodeArtifacts(observation=Scalar.const_true())
 
     @classmethod
@@ -2537,6 +2558,9 @@ class CancelStatechart(TerminalNode):
     """
 
     exception: DataclassException
+    """
+    The exception that ends the statechart once this node starts.
+    """
 
     _pending_exception: Exception | None = field(default=None, init=False, repr=False)
     """
@@ -2547,15 +2571,18 @@ class CancelStatechart(TerminalNode):
     plot_specifications: NodePlotSpec = plot_specification_field(
         NodePlotSpec.create_cancel_style
     )
+    """
+    Draws this node in the style of a node cancelling the statechart.
+    """
 
     def create_structure_copy(self) -> CancelStatechart:
         return CancelStatechart(name=self.name, exception=self.exception)
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         return NodeArtifacts(observation=Scalar.const_true())
 
-    def on_start(self, context: StatechartContext) -> None:
-        self._pending_exception = self.create_exception(context)
+    def on_start(self) -> None:
+        self._pending_exception = self.create_exception()
 
     def raise_pending_exception(self) -> None:
         """
@@ -2567,9 +2594,8 @@ class CancelStatechart(TerminalNode):
         self._pending_exception = None
         raise exception
 
-    def create_exception(self, context: StatechartContext) -> Exception:
+    def create_exception(self) -> Exception:
         """
-        :param context: The context of the tick this node starts on.
         :return: The exception that cancels the statechart.
         """
         return self.exception
@@ -2586,9 +2612,8 @@ class CancelStatechart(TerminalNode):
         :param exception: The exception raised on activation, defaults to one naming the given node.
         :return: The new CancelStatechart node.
         """
-        exception = exception or Exception(
-            f"Cancelled because {node.unique_name} reached its goal"
-        )
+        if exception is None:
+            exception = CancelledByNodeReachingItsGoal(node=node)
         end = cls(exception=exception)
         end.start_condition = cls._observing_true_or_succeeded(node)
         return end
@@ -2605,9 +2630,8 @@ class CancelStatechart(TerminalNode):
         :param exception: The exception raised on activation, defaults to one naming the given node.
         :return: The new CancelStatechart node.
         """
-        exception = exception or Exception(
-            f"Cancelled because {node.unique_name} failed"
-        )
+        if exception is None:
+            exception = CancelledByNodeFailing(node=node)
         end = cls(exception=exception)
         end.start_condition = node.is_failed
         return end

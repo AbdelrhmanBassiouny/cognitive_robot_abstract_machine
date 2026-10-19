@@ -11,6 +11,7 @@ from rclpy.node import Node
 
 import coraplex.visualization as visualization_module
 from coraplex.visualization import RvizVisualization
+from cramph.exceptions import TickLimitReachedError
 
 from .test_optional_visualization import (
     VisualizationRecordingItsRuns,
@@ -80,7 +81,7 @@ def test_a_failed_run_still_stops_the_visualization() -> None:
     statechart = an_ending_statechart(executor.context)
     executor.compile(statechart)
 
-    with pytest.raises(TimeoutError):
+    with pytest.raises(TickLimitReachedError):
         executor.tick_until_end(timeout=0)
 
     assert visualization.stops == 1

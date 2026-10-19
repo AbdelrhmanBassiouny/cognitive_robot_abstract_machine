@@ -185,21 +185,21 @@ def test_joint_goal(tmp_path):
     statechart.draw(str(tmp_path / "muh.pdf"))
     # +1 compared to the tick count without a moving dof: EndMotion now waits for the
     # dof's velocity to settle below its convergence threshold before observing True.
-    assert len(statechart.history) == 7
+    assert len(statechart.state_history) == 7
     assert (
-        statechart.history.get_observation_history_of_node(task1)[-1]
+        statechart.state_history.get_observation_history_of_node(task1)[-1]
         == ObservationStateValues.TRUE
     )
     assert (
-        statechart.history.get_observation_history_of_node(end)[-1]
+        statechart.state_history.get_observation_history_of_node(end)[-1]
         == ObservationStateValues.TRUE
     )
     assert (
-        statechart.history.get_life_cycle_history_of_node(task1)[-1]
+        statechart.state_history.get_life_cycle_history_of_node(task1)[-1]
         == LifeCycleValues.RUNNING
     )
     assert (
-        statechart.history.get_life_cycle_history_of_node(end)[-1]
+        statechart.state_history.get_life_cycle_history_of_node(end)[-1]
         == LifeCycleValues.RUNNING
     )
 

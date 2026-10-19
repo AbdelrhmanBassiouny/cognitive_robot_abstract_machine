@@ -16,19 +16,18 @@ from cramph.data_types import ObservationStateValues, TransitionKind
 from cramph.node import StatechartNode, TerminalNode
 from cramph.node import CompositeNode, TransitionCondition
 from cramph.plotters.styles import (
-    DISABLED_CONDITION_COLOR,
-    DRAWING_METRICS,
+    DrawingMetrics,
     Font,
-    MINIMUM_RANK_DISTANCES,
     NodeDrawingStyle,
-    OBSERVATION_DRAWING_STYLES,
+    ObservationDrawingStyle,
 )
+from semantic_digital_twin.world_description.geometry import Color
 
 if TYPE_CHECKING:
     from cramph.statechart import Statechart
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class ConditionDependency:
     """
     One node reading another in its transition conditions.
@@ -47,21 +46,24 @@ class ConditionDependency:
     The node those conditions read.
     """
 
-    conditions: list[TransitionCondition] = field(default_factory=list)
+    conditions: list[TransitionCondition] = field(
+        default_factory=list, compare=False, hash=False
+    )
     """
     The conditions of :attr:`condition_owner` that read :attr:`observed_node`.
     """
 
-    @property
-    def minimum_rank_distance(self) -> int:
+    def minimum_rank_distance(self, metrics: DrawingMetrics) -> int:
         """
         A rank distance is a lower bound, so the separate arrows this one replaces
         already left graphviz solving for the largest of them.
 
+        :param metrics: The measurements the drawing is laid out with.
         :return: How many rows below the observed node its owner is drawn at least.
         """
         return max(
-            MINIMUM_RANK_DISTANCES[condition.kind] for condition in self.conditions
+            metrics.minimum_rank_distance(condition.kind)
+            for condition in self.conditions
         )
 
 
@@ -81,12 +83,8 @@ def format_condition_text(text: str, color_constants: bool = False) -> str:
     text = text.replace("1.0", "True")
     text = text.replace("0.0", "False")
     if color_constants:
-        true_color = OBSERVATION_DRAWING_STYLES[
-            ObservationStateValues.TRUE
-        ].color.to_hex()
-        false_color = OBSERVATION_DRAWING_STYLES[
-            ObservationStateValues.FALSE
-        ].color.to_hex()
+        true_color = ObservationDrawingStyle.TRUE.color.to_hex()
+        false_color = ObservationDrawingStyle.FALSE.color.to_hex()
         text = re.sub(r"\bTrue\b", f'<FONT COLOR="{true_color}">True</FONT>', text)
         text = re.sub(r"\bFalse\b", f'<FONT COLOR="{false_color}">False</FONT>', text)
     return text
@@ -120,6 +118,18 @@ class StatechartGraphviz:
     Whether nodes are drawn without their conditions and with tighter spacing.
     """
 
+    metrics: DrawingMetrics = field(default_factory=DrawingMetrics)
+    """
+    The measurements the drawing is laid out with.
+    """
+
+    disabled_condition_color: Color = field(
+        default_factory=lambda: Color.from_hex("#9CA3AF")
+    )
+    """
+    The color a condition that cannot become true any more is written in.
+    """
+
     _cluster_map: dict[StatechartNode, pydot.Cluster] = field(
         init=False, default_factory=dict
     )
@@ -136,16 +146,16 @@ class StatechartGraphviz:
             graph_type="digraph",
             graph_name="",
             ranksep=(
-                DRAWING_METRICS.rank_separation
+                self.metrics.rank_separation
                 if not self.compact
-                else DRAWING_METRICS.rank_separation
-                * DRAWING_METRICS.compact_separation_factor
+                else self.metrics.rank_separation
+                * self.metrics.compact_separation_factor
             ),
             nodesep=(
-                DRAWING_METRICS.node_separation
+                self.metrics.node_separation
                 if not self.compact
-                else DRAWING_METRICS.node_separation
-                * DRAWING_METRICS.compact_separation_factor
+                else self.metrics.node_separation
+                * self.metrics.compact_separation_factor
             ),
             compound=True,
             ratio="compress",
@@ -169,7 +179,7 @@ class StatechartGraphviz:
         label = (
             f'<<TABLE  BORDER="0" CELLBORDER="0" CELLSPACING="0">'
             f"<TR>"
-            f'  <TD WIDTH="100%" HEIGHT="{DRAWING_METRICS.line_width}"></TD>'
+            f'  <TD WIDTH="100%" HEIGHT="{self.metrics.line_width}"></TD>'
             f"</TR>"
             f"<TR>"
             f"  <TD><B> {node.unique_name} </B></TD>"
@@ -191,7 +201,7 @@ class StatechartGraphviz:
         if self.compact:
             label += (
                 f"<TR>"
-                f'  <TD WIDTH="100%" HEIGHT="{DRAWING_METRICS.line_width * DRAWING_METRICS.compact_bottom_padding_factor}"></TD>'
+                f'  <TD WIDTH="100%" HEIGHT="{self.metrics.line_width * self.metrics.compact_bottom_padding_factor}"></TD>'
                 f"</TR>"
             )
         else:
@@ -266,10 +276,10 @@ class StatechartGraphviz:
         if is_active:
             font_tag = f'<FONT FACE="{Font.MONOSPACE}">{prefix}:{rendered}</FONT>'
         else:
-            font_tag = f'<FONT FACE="{Font.MONOSPACE}" COLOR="{DISABLED_CONDITION_COLOR.to_hex()}">{prefix}:{rendered}</FONT>'
+            font_tag = f'<FONT FACE="{Font.MONOSPACE}" COLOR="{self.disabled_condition_color.to_hex()}">{prefix}:{rendered}</FONT>'
         return (
-            f'<TR><TD WIDTH="100%" BGCOLOR="{line_color}" HEIGHT="{DRAWING_METRICS.line_width}"></TD></TR>'
-            f'<TR><TD ALIGN="LEFT" BALIGN="LEFT" CELLPADDING="{DRAWING_METRICS.line_width}">{font_tag}</TD></TR>'
+            f'<TR><TD WIDTH="100%" BGCOLOR="{line_color}" HEIGHT="{self.metrics.line_width}"></TD></TR>'
+            f'<TR><TD ALIGN="LEFT" BALIGN="LEFT" CELLPADDING="{self.metrics.line_width}">{font_tag}</TD></TR>'
         )
 
     def _render_condition(
@@ -318,7 +328,7 @@ class StatechartGraphviz:
         :param value: The value that term takes.
         :return: The term in the color of that value.
         """
-        style = OBSERVATION_DRAWING_STYLES[value]
+        style = ObservationDrawingStyle.of_observation(value)
         return f'<FONT COLOR="{style.color.to_hex()}">{term}</FONT>'
 
     def _escape_name(self, name: str) -> str:
@@ -367,7 +377,7 @@ class StatechartGraphviz:
         for index, style in enumerate(node.plot_specifications.extra_border_styles):
             c = pydot.Cluster(
                 graph_name=f"{node.unique_name}",
-                penwidth=DRAWING_METRICS.line_width,
+                penwidth=self.metrics.line_width,
                 style=node.plot_specifications.extra_border_styles[index],
                 color="black",
             )
@@ -396,8 +406,8 @@ class StatechartGraphviz:
             margin=0,
             fillcolor="white",
             fontname=Font.SANS_SERIF,
-            fontsize=DRAWING_METRICS.font_size,
-            penwidth=DRAWING_METRICS.line_width,
+            fontsize=self.metrics.font_size,
+            penwidth=self.metrics.line_width,
         )
         return pydot_node
 
@@ -489,11 +499,11 @@ class StatechartGraphviz:
         goal_cluster = pydot.Cluster(
             graph_name=str(node.unique_name),
             fontname=Font.SANS_SERIF,
-            fontsize=DRAWING_METRICS.font_size,
+            fontsize=self.metrics.font_size,
             style=NodeDrawingStyle.COMPOSITE.style,
             color="black",
             fillcolor="white",
-            penwidth=DRAWING_METRICS.line_width,
+            penwidth=self.metrics.line_width,
         )
         parent_cluster.add_subgraph(goal_cluster)
         self._cluster_map[node] = goal_cluster
@@ -513,9 +523,7 @@ class StatechartGraphviz:
             of the owner's conditions read it, leaving out those with an endpoint that is
             not drawn or that sits in another cluster.
         """
-        dependencies: dict[
-            tuple[StatechartNode, StatechartNode], ConditionDependency
-        ] = {}
+        dependencies: dict[ConditionDependency, ConditionDependency] = {}
         condition: TransitionCondition
         for (
             owner_index,
@@ -528,10 +536,8 @@ class StatechartGraphviz:
                 continue
             if not self._are_nodes_in_same_cluster(condition_owner, observed_node):
                 continue
-            dependency = dependencies.setdefault(
-                (condition_owner, observed_node),
-                ConditionDependency(condition_owner, observed_node),
-            )
+            new_dependency = ConditionDependency(condition_owner, observed_node)
+            dependency = dependencies.setdefault(new_dependency, new_dependency)
             dependency.conditions.append(condition)
         return list(dependencies.values())
 
@@ -590,11 +596,11 @@ class StatechartGraphviz:
         destination_name = str(dependency.condition_owner.unique_name)
 
         kwargs = self._edge_clusters_kwargs(graph, source_name, destination_name)
-        style = OBSERVATION_DRAWING_STYLES[ObservationStateValues.UNKNOWN]
+        style = ObservationDrawingStyle.UNKNOWN
         color = (
             style.color.to_hex()
             if self._is_dependency_active(dependency)
-            else DISABLED_CONDITION_COLOR.to_hex()
+            else self.disabled_condition_color.to_hex()
         )
 
         graph.add_edge(
@@ -602,9 +608,9 @@ class StatechartGraphviz:
                 src=source_name,
                 dst=destination_name,
                 color=color,
-                penwidth=style.line_width,
-                minlen=dependency.minimum_rank_distance,
-                arrowsize=DRAWING_METRICS.arrow_size,
+                penwidth=style.line_width(self.metrics),
+                minlen=dependency.minimum_rank_distance(self.metrics),
+                arrowsize=self.metrics.arrow_size,
                 **kwargs,
             )
         )

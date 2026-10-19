@@ -59,7 +59,7 @@ class ChooserAnsweringInTurn(ChildChooser):
     """
 
     def choose_child(
-        self, node: CompositeNodeChoosingItsChild, context: StatechartContext
+        self, node: CompositeNodeChoosingItsChild
     ) -> StatechartNode | None:
         if not self.children:
             return None

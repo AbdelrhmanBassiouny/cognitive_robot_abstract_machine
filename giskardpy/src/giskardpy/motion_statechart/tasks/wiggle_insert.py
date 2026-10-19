@@ -9,7 +9,7 @@ from typing_extensions import Tuple
 import krrood.symbolic_math.symbolic_math as symbolic_math
 from giskardpy.motion_statechart.context import MotionControlContext
 from krrood.ormatic.utils import classproperty
-from cramph.context import ContextExtension, StatechartContext
+from cramph.context import ContextExtension
 from giskardpy.motion_statechart.data_types import DefaultWeights
 from cramph.data_types import ObservationStateValues
 from giskardpy.motion_statechart.graph_node import (
@@ -167,12 +167,12 @@ class WiggleInsert(ConvergingTask):
     def required_context_extensions(cls) -> tuple[type[ContextExtension], ...]:
         return super().required_context_extensions + (MotionControlContext,)
 
-    def set_up(self, context: StatechartContext) -> None:
+    def set_up(self) -> None:
         """
         Register the noise variables and start the wiggle at rest.
         """
-        super().set_up(context)
-        control_time_step = context.require_extension(
+        super().set_up()
+        control_time_step = self.context.require_extension(
             MotionControlContext
         ).qp_controller_config.control_time_step
         self._control_frequency = 1 / control_time_step.total_seconds()
@@ -186,23 +186,22 @@ class WiggleInsert(ConvergingTask):
             f"{self.name}_rand_translation"
         )
         self._random_translation.reference_frame = self.root_link
-        context.float_variable_data.register_expression(self._random_translation)
+        self.context.float_variable_data.register_expression(self._random_translation)
 
         self._random_angle = symbolic_math.FloatVariable(f"{self.name}_rand_angle")
-        context.float_variable_data.register_expression(self._random_angle)
+        self.context.float_variable_data.register_expression(self._random_angle)
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         """
         Build motion constraints that press the tip into the hole while wiggling.
 
-        :param context: Provides access to world model and kinematic expressions.
         :return: The artifacts of this task, whose error is the distance between the tip
             and the hole.
         """
         artifacts = MotionNodeArtifacts()
         # The previous default was a zero vector, which has no well-defined perpendicular plane;
         # the root z-axis is used instead so the default is usable.
-        hole_normal = context.world.transform(
+        hole_normal = self.context.world.transform(
             target_frame=self.root_link,
             spatial_object=(
                 self.hole_normal
@@ -215,10 +214,10 @@ class WiggleInsert(ConvergingTask):
             self._calculate_perpendicular_basis(hole_normal.to_np()[:3])
         )
 
-        root_P_current = context.world.compose_forward_kinematics_expression(
+        root_P_current = self.context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
         ).position
-        root_P_hole = context.world.transform(
+        root_P_hole = self.context.world.transform(
             target_frame=self.root_link, spatial_object=self.hole_point
         )
 
@@ -231,13 +230,13 @@ class WiggleInsert(ConvergingTask):
             name=f"{self.name}_point_goal",
         )
 
-        tip_V_hole_normal = context.world.transform(
+        tip_V_hole_normal = self.context.world.transform(
             target_frame=self.tip_link, spatial_object=hole_normal
         )
         tip_R_hole_normal = RotationMatrix.from_axis_angle(
             AxisAngle(angle=self._random_angle, axis=tip_V_hole_normal)
         )
-        root_R_current = context.world.compose_forward_kinematics_expression(
+        root_R_current = self.context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
         ).rotation_matrix
         root_R_goal = root_R_current.dot(tip_R_hole_normal)
@@ -259,15 +258,17 @@ class WiggleInsert(ConvergingTask):
         artifacts.error = root_P_current.euclidean_distance(root_P_hole)
         return artifacts
 
-    def on_tick(self, context: StatechartContext) -> ObservationStateValues | None:
+    def on_tick(self) -> ObservationStateValues | None:
         if self.random_walk:
             translation = self._random_walk_translation()
             angle = self._random_walk_angle()
         else:
             translation = self._random_sample_translation()
             angle = self._random_sample_angle()
-        context.float_variable_data.set_value(self._random_translation, translation)
-        context.float_variable_data.set_value(self._random_angle, angle)
+        self.context.float_variable_data.set_value(
+            self._random_translation, translation
+        )
+        self.context.float_variable_data.set_value(self._random_angle, angle)
         return None
 
     def _random_sample_angle(self) -> float:

@@ -13,7 +13,7 @@ from typing_extensions import (
 
 from coraplex.datastructures.enums import InsertionPosition
 from coraplex.exceptions import CannotMatchOnType
-from cramph.composites import CramLanguageNode, Parallel, Sequence
+from cramph.composites import ControlStructureNode, Parallel, Sequence
 from cramph.context import ContextExtension
 from cramph.node import StatechartNode
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
@@ -139,8 +139,8 @@ class InsertionTransformation(
     def _step_holding(node: StatechartNode) -> StatechartNode:
         """
         :param node: A node of a plan.
-        :return: `node`, or the node above it, that the plan language node nearest above
-            `node` runs, or the top-level node above `node` when no plan language node
+        :return: `node`, or the node above it, that the control structure node nearest above
+            `node` runs, or the top-level node above `node` when no control structure node
             runs it.
         """
         holders = [node, *node.path]
@@ -148,7 +148,7 @@ class InsertionTransformation(
             (
                 holder
                 for holder in holders
-                if isinstance(holder.parent_node, CramLanguageNode)
+                if isinstance(holder.parent_node, ControlStructureNode)
             ),
             holders[-1],
         )

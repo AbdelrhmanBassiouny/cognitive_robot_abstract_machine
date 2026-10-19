@@ -5,7 +5,6 @@ from dataclasses import field, dataclass
 from typing_extensions import Callable
 
 from cramph.node import EndedByOwner
-from cramph.context import StatechartContext
 from cramph.data_types import LifeCycleValues, ObservationStateValues
 from cramph.node import StatechartNode, NodeArtifacts
 from cramph.threaded_nodes import ThreadedNode
@@ -27,9 +26,9 @@ class CheckTickCount(EndedByOwner, StatechartNode):
     After this many ticks, the node will turn True.
     """
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         artifacts = NodeArtifacts()
-        artifacts.observation = context.tick_variable > self.threshold
+        artifacts.observation = self.context.tick_variable > self.threshold
         return artifacts
 
 
@@ -43,8 +42,11 @@ class Print(EndedByOwner, StatechartNode):
     """
 
     message: str = ""
+    """
+    The text printed on every tick.
+    """
 
-    def on_tick(self, context: StatechartContext) -> ObservationStateValues:
+    def on_tick(self) -> ObservationStateValues:
         print(self.message)
         return ObservationStateValues.TRUE
 
@@ -62,16 +64,32 @@ class CountSeconds(EndedByOwner, StatechartNode):
     """
 
     seconds: float
-    _now: Callable[[], float] = field(default=time.monotonic, repr=False)
-    _start_time: float = field(init=False)
+    """
+    How many seconds to count before turning True.
+    """
 
-    def on_tick(self, context: StatechartContext) -> ObservationStateValues | None:
+    tolerance: float = 1e-5
+    """
+    How many seconds short of :attr:`seconds` still count as having counted them.
+    """
+
+    _now: Callable[[], float] = field(default=time.monotonic, repr=False)
+    """
+    The clock the seconds are read from.
+    """
+
+    _start_time: float = field(init=False)
+    """
+    What :attr:`_now` read when this node started.
+    """
+
+    def on_tick(self) -> ObservationStateValues | None:
         difference = self._now() - self._start_time
-        if difference >= self.seconds - 1e-5:
+        if difference >= self.seconds - self.tolerance:
             return ObservationStateValues.TRUE
         return None
 
-    def on_start(self, context: StatechartContext) -> None:
+    def on_start(self) -> None:
         self._start_time = self._now()
 
 
@@ -90,17 +108,17 @@ class TickCounter(EndedByOwner, StatechartNode, ABC):
     Number of ticks counted since the last start/reset.
     """
 
-    def on_start(self, context: StatechartContext) -> None:
+    def on_start(self) -> None:
         self._counter = 0
 
-    def on_tick(self, context: StatechartContext) -> ObservationStateValues | None:
+    def on_tick(self) -> ObservationStateValues | None:
         self._counter += 1
-        if self._reached_target(context):
+        if self._reached_target():
             return ObservationStateValues.TRUE
         return ObservationStateValues.FALSE
 
     @abstractmethod
-    def _reached_target(self, context: StatechartContext) -> bool:
+    def _reached_target(self) -> bool:
         """
         Whether the counted target has been reached on the current tick.
         """
@@ -120,8 +138,8 @@ class CountSimulationTimeSeconds(TickCounter):
     How many seconds of simulation time to count.
     """
 
-    def _reached_target(self, context: StatechartContext) -> bool:
-        return context.require_tick_duration() * self._counter >= self.seconds
+    def _reached_target(self) -> bool:
+        return self.context.require_tick_duration() * self._counter >= self.seconds
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
@@ -137,7 +155,7 @@ class CountTicks(TickCounter):
     Turns True after this many ticks.
     """
 
-    def _reached_target(self, context: StatechartContext) -> bool:
+    def _reached_target(self) -> bool:
         return self._counter >= self.ticks
 
 
@@ -166,7 +184,7 @@ class ThreadedPredicateMonitor(EndedByOwner, ThreadedNode):
     def run(self) -> bool:
         return bool(self.predicate())
 
-    def on_start(self, context: StatechartContext) -> None:
+    def on_start(self) -> None:
         """
         Start evaluating the predicate, unless there is none.
         """
@@ -176,9 +194,9 @@ class ThreadedPredicateMonitor(EndedByOwner, ThreadedNode):
                 self.unique_name,
             )
             return
-        super().on_start(context)
+        super().on_start()
 
-    def on_tick(self, context: StatechartContext) -> ObservationStateValues | None:
+    def on_tick(self) -> ObservationStateValues | None:
         """
         :raises BaseException: What the predicate raised, if it raised.
         """
@@ -217,10 +235,10 @@ class Pulse(EndedByOwner, StatechartNode):
     Number of ticks to stay True.
     """
 
-    def on_start(self, context: StatechartContext) -> None:
+    def on_start(self) -> None:
         self._counter = 0
 
-    def on_tick(self, context: StatechartContext) -> ObservationStateValues | None:
+    def on_tick(self) -> ObservationStateValues | None:
         if self._counter < self.length:
             self._triggered = True
             self._counter += 1
@@ -263,7 +281,7 @@ class CountNodeResets(EndedByOwner, StatechartNode):
     Life cycle state of :attr:`node` on the previous tick.
     """
 
-    def on_tick(self, context: StatechartContext) -> ObservationStateValues | None:
+    def on_tick(self) -> ObservationStateValues | None:
         current_life_cycle = self.node.life_cycle_state
         if (
             self._previous_life_cycle is not None

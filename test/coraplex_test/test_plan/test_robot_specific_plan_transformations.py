@@ -24,7 +24,9 @@ from giskardpy.motion_statechart.goals.cartesian_goals import (
     CartesianPoseStraight,
     DifferentialDriveBaseGoal,
 )
-from giskardpy.motion_statechart.goals.open_close import Close
+from giskardpy.motion_statechart.goals.grasped_mechanism import (
+    ArticulateGraspedMechanism,
+)
 from giskardpy.motion_statechart.graph_node import ConvergingTask
 from giskardpy.motion_statechart.monitors.overwrite_state_monitors import SetOdometry
 from giskardpy.motion_statechart.tasks.align_planes import AlignPlanes
@@ -375,7 +377,7 @@ def test_a_simulated_stretch_stays_in_front_of_the_container_it_closes(
     assert facing.goal_normal.reference_frame is action.grasp.graspable.root
     np.testing.assert_allclose(facing.tip_normal.to_np()[:3], [0, -1, 0])
     assert facing.tip_normal.reference_frame is robot.root
-    assert type(close) is Close
+    assert type(close) is ArticulateGraspedMechanism
     assert close.tip_link is default_close.tip_link
     assert close.environment_link is default_close.environment_link
     assert close.goal_joint_state == default_close.goal_joint_state
@@ -403,7 +405,7 @@ def test_the_real_stretch_closes_a_container_unchanged(
 
     action = prepared(close_action(world, robot), executor)
 
-    assert type(closing_step_of(action)) is Close
+    assert type(closing_step_of(action)) is ArticulateGraspedMechanism
 
 
 def test_a_robot_of_another_type_closes_a_container_unchanged(
@@ -414,7 +416,7 @@ def test_a_robot_of_another_type_closes_a_container_unchanged(
 
     action = prepared(close_action(world, robot), executor)
 
-    assert type(closing_step_of(action)) is Close
+    assert type(closing_step_of(action)) is ArticulateGraspedMechanism
 
 
 # %% moving the tool center point in a straight line

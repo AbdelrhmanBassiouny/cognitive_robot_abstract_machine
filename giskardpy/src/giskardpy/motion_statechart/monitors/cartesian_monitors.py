@@ -11,7 +11,6 @@ from giskardpy.motion_statechart.binding_policy import (
     GoalBindingPolicy,
 )
 from cramph.node import EndedByOwner
-from cramph.context import StatechartContext
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from cramph.node import NodeArtifacts
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -61,29 +60,29 @@ class RootRelativeGoalMonitor(EndedByOwner, MotionStatechartNode, ABC):
         :return: The goal spatial object, expressed in its own reference frame.
         """
 
-    def set_up(self, context: StatechartContext) -> None:
+    def set_up(self) -> None:
         """
         Bind the goal reference frame, which the goal is captured relative to.
         """
-        super().set_up(context)
+        super().set_up()
         self._forward_kinematics_binding = ForwardKinematicsBinding(
             name=PrefixedName("root_T_goal_ref", str(self.name)),
             root=self.root_link,
             tip=self.goal.reference_frame,
-            float_variable_data=context.float_variable_data,
+            float_variable_data=self.context.float_variable_data,
         )
-        self._forward_kinematics_binding.bind(context.world)
+        self._forward_kinematics_binding.bind(self.context.world)
 
-    def resolve_root_goal(self, context: StatechartContext) -> SpatialType:
+    def resolve_root_goal(self) -> SpatialType:
         """
         Express the goal in the root link frame, captured relative to the goal reference
         frame via a forward kinematics binding.
         """
         return self._forward_kinematics_binding.root_T_tip @ self.goal
 
-    def on_start(self, context: StatechartContext) -> None:
+    def on_start(self) -> None:
         if self.binding_policy == GoalBindingPolicy.Bind_on_start:
-            self._forward_kinematics_binding.bind(context.world)
+            self._forward_kinematics_binding.bind(self.context.world)
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
@@ -117,18 +116,18 @@ class PoseReached(RootRelativeGoalMonitor):
     def goal(self) -> HomogeneousTransformationMatrix:
         return self.goal_pose
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
-        root_T_goal = self.resolve_root_goal(context)
+    def build_artifacts(self) -> NodeArtifacts:
+        root_T_goal = self.resolve_root_goal()
 
         root_P_goal = root_T_goal.position
-        root_P_current = context.world.compose_forward_kinematics_expression(
+        root_P_current = self.context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
         ).position
         distance_to_goal = root_P_goal.euclidean_distance(root_P_current)
         position_reached = distance_to_goal < self.position_threshold
 
         root_R_goal = root_T_goal.rotation_matrix
-        root_R_current = context.world.compose_forward_kinematics_expression(
+        root_R_current = self.context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
         ).rotation_matrix
         rotation_error = root_R_current.rotational_distance(root_R_goal)
@@ -164,10 +163,10 @@ class PositionReached(RootRelativeGoalMonitor):
     def goal(self) -> Point3:
         return self.goal_point
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
-        root_P_goal = self.resolve_root_goal(context)
+    def build_artifacts(self) -> NodeArtifacts:
+        root_P_goal = self.resolve_root_goal()
 
-        root_P_current = context.world.compose_forward_kinematics_expression(
+        root_P_current = self.context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
         ).position
         distance_to_goal = root_P_goal.euclidean_distance(root_P_current)
@@ -200,10 +199,10 @@ class OrientationReached(RootRelativeGoalMonitor):
     def goal(self) -> RotationMatrix:
         return self.goal_orientation
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
-        root_R_goal = self.resolve_root_goal(context)
+    def build_artifacts(self) -> NodeArtifacts:
+        root_R_goal = self.resolve_root_goal()
 
-        root_R_current = context.world.compose_forward_kinematics_expression(
+        root_R_current = self.context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
         ).rotation_matrix
         rotation_error = root_R_current.rotational_distance(root_R_goal)
@@ -242,16 +241,16 @@ class PointingAt(EndedByOwner, MotionStatechartNode):
     Distance threshold between the goal point and the pointing line in meters.
     """
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
-        root_P_goal_point = context.world.transform(
+    def build_artifacts(self) -> NodeArtifacts:
+        root_P_goal_point = self.context.world.transform(
             target_frame=self.root_link, spatial_object=self.goal_point
         )
 
-        tip_V_pointing_axis = context.world.transform(
+        tip_V_pointing_axis = self.context.world.transform(
             target_frame=self.tip_link, spatial_object=self.pointing_axis
         )
         tip_V_pointing_axis.scale(1)
-        root_T_tip = context.world.compose_forward_kinematics_expression(
+        root_T_tip = self.context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
         )
         root_P_tip = root_T_tip.position
@@ -295,18 +294,18 @@ class VectorsAligned(EndedByOwner, MotionStatechartNode):
     Angle threshold between the two normals in radians.
     """
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
-        tip_V_tip_normal = context.world.transform(
+    def build_artifacts(self) -> NodeArtifacts:
+        tip_V_tip_normal = self.context.world.transform(
             target_frame=self.tip_link, spatial_object=self.tip_normal
         )
         tip_V_tip_normal.scale(1)
 
-        root_V_root_normal = context.world.transform(
+        root_V_root_normal = self.context.world.transform(
             target_frame=self.root_link, spatial_object=self.goal_normal
         )
         root_V_root_normal.scale(1)
 
-        root_R_tip = context.world.compose_forward_kinematics_expression(
+        root_R_tip = self.context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
         ).rotation_matrix
         root_V_tip_normal = root_R_tip.dot(tip_V_tip_normal)
@@ -351,15 +350,15 @@ class DistanceToLine(EndedByOwner, MotionStatechartNode):
     Distance threshold to the line segment in meters.
     """
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
-        root_P_current = context.world.compose_forward_kinematics_expression(
+    def build_artifacts(self) -> NodeArtifacts:
+        root_P_current = self.context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
         ).position
-        root_V_line_axis = context.world.transform(
+        root_V_line_axis = self.context.world.transform(
             target_frame=self.root_link, spatial_object=self.line_axis
         )
         root_V_line_axis.scale(1)
-        root_P_center = context.world.transform(
+        root_P_center = self.context.world.transform(
             target_frame=self.root_link, spatial_object=self.center_point
         )
         root_P_line_start = root_P_center + root_V_line_axis * (self.line_length / 2)

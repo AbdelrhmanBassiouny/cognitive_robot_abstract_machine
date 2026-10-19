@@ -90,7 +90,7 @@ class GoalGanttChartPlotter(PostGoalPlotter):
     """
 
     def plot(self, goal_id: int) -> None:
-        if not self.executor.statechart.history:
+        if not self.executor.statechart.state_history:
             return
         file_name = self.create_file_name("gantt_charts", goal_id)
         self.executor.statechart.plot_gantt_chart(

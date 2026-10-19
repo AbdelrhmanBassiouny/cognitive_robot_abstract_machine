@@ -4,7 +4,7 @@ import pytest
 
 from cramph.composites import (
     PausedWhileTrue,
-    CramLanguageNode,
+    ControlStructureNode,
     Parallel,
     Sequence,
     TryAll,
@@ -15,8 +15,8 @@ from cramph.exceptions import (
     NodeAlreadyAChildError,
     NodeAlreadyBelongsToDifferentNodeError,
     NodeIsNotAChildError,
-    NotHeldByLanguageNodeError,
-    NoLanguageNodeAboveError,
+    NotHeldByControlStructureNodeError,
+    NoControlStructureNodeAboveError,
     StatechartAlreadyCompiledError,
 )
 from cramph.executor import StatechartExecutor
@@ -71,7 +71,7 @@ def _start_order(
     """
     first_running_tick = {}
     for node in nodes:
-        history = statechart.history.get_life_cycle_history_of_node(node)
+        history = statechart.state_history.get_life_cycle_history_of_node(node)
         started = [
             tick
             for tick, state in enumerate(history)
@@ -376,7 +376,7 @@ def test_replacing_a_top_level_node_of_a_compiled_statechart_is_rejected(
     assert statechart.top_level_nodes == [held]
 
 
-# %% the closest language node above a node
+# %% the closest control structure node above a node
 
 
 def test_the_closest_language_node_above_a_nested_node_is_the_first_one_on_its_path(
@@ -389,7 +389,7 @@ def test_the_closest_language_node_above_a_nested_node_is_the_first_one_on_its_p
     )
     statechart.add_node(sequence := Sequence(nodes=[paused]))
 
-    assert CramLanguageNode.closest_above(nested) is sequence
+    assert ControlStructureNode.closest_above(nested) is sequence
 
 
 def test_a_step_inserted_before_a_nested_node_runs_before_what_holds_it(
@@ -402,7 +402,7 @@ def test_a_step_inserted_before_a_nested_node_runs_before_what_holds_it(
     )
     statechart.add_node(sequence := Sequence(nodes=[paused]))
 
-    CramLanguageNode.closest_above(nested).insert_before(nested, first)
+    ControlStructureNode.closest_above(nested).insert_before(nested, first)
     _run(statechart_executor, statechart, sequence)
 
     assert _start_order(statechart, [paused, first]) == [first, paused]
@@ -414,8 +414,8 @@ def test_a_node_without_a_language_node_above_it_has_none_closest_above_it(
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(top_level := _succeeding("top level"))
 
-    with pytest.raises(NoLanguageNodeAboveError):
-        CramLanguageNode.closest_above(top_level)
+    with pytest.raises(NoControlStructureNodeAboveError):
+        ControlStructureNode.closest_above(top_level)
 
 
 # %% a failed replacement
@@ -465,7 +465,7 @@ def test_only_a_node_a_language_node_or_the_top_level_holds_can_be_replaced(
     statechart.add_node(holder)
     nested = holder.sub_node1
 
-    with pytest.raises(NotHeldByLanguageNodeError) as raised:
+    with pytest.raises(NotHeldByControlStructureNodeError) as raised:
         statechart.replace(nested, Sequence(nodes=[_succeeding("1"), nested]))
 
     assert raised.value.node is nested

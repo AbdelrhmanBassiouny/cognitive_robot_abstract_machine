@@ -57,4 +57,6 @@ def test_motion_recording_retains_completed_chart(
     expected = ChartObserver(title=bridge.chart_state.title).snapshot(chart)
     assert frames[-1].statechart == expected
     assert bridge.chart_state == expected
-    assert all(observer is not live.publishing for observer in chart.history.observers)
+    assert all(
+        observer is not live.publishing for observer in chart.state_history.observers
+    )

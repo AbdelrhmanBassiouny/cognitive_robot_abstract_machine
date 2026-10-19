@@ -13,7 +13,6 @@ from cramph.composites import (
     TryAll,
     TryInOrder,
 )
-from cramph.context import StatechartContext
 from cramph.data_types import LifeCycleValues, ObservationStateValues
 from cramph.executor import StatechartExecutor
 from cramph.node import EndStatechart, StatechartNode
@@ -41,7 +40,7 @@ class ChooserRunningEveryCandidate(ChildChooser):
     """
 
     def choose_child(
-        self, node: CompositeNodeChoosingItsChild, context: StatechartContext
+        self, node: CompositeNodeChoosingItsChild
     ) -> StatechartNode | None:
         return node.next_candidate(
             EntityQueryLanguageGenerativeBackend(), self.default_candidate_limit
@@ -86,7 +85,7 @@ def _run(
     return statechart
 
 
-# %% a statement among the children of a language node
+# %% a statement among the children of a control structure node
 
 
 def test_a_statement_handed_to_a_language_node_becomes_a_statement_node() -> None:

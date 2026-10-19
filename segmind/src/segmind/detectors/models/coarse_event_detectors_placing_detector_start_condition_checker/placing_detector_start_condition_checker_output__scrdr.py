@@ -3,8 +3,7 @@ from ripple_down_rules.datastructures.case import Case, create_case
 from types import NoneType
 from .placing_detector_start_condition_checker_output__scrdr_defs import *
 
-
-attribute_name = 'output_'
+attribute_name = "output_"
 conclusion_type = (bool,)
 mutually_exclusive = True
 

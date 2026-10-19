@@ -9,7 +9,6 @@ from typing_extensions import ClassVar
 
 import krrood.symbolic_math.symbolic_math as sm
 from cramph.composites import Parallel
-from cramph.context import StatechartContext
 from cramph.data_types import ObservationStateValues
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.binding_policy import (
@@ -77,23 +76,23 @@ class CartesianTask(ConvergingTask, ABC):
     CURRENT_COLOR: ClassVar[Color] = Color(R=1.0, G=0.0, B=0.0, A=1.0)
     """The color of the current debug expression marker (red)."""
 
-    def set_up(self, context: StatechartContext) -> None:
+    def set_up(self) -> None:
         """
         Bind the goal reference frame, which the error is described against.
         """
-        super().set_up(context)
+        super().set_up()
         self._forward_kinematics_binding = ForwardKinematicsBinding(
             name=PrefixedName("root_T_goal_ref", str(self.name)),
             root=self.root_link,
             tip=self.goal_reference_frame,
-            float_variable_data=context.float_variable_data,
+            float_variable_data=self.context.float_variable_data,
         )
-        self._forward_kinematics_binding.bind(context.world)
+        self._forward_kinematics_binding.bind(self.context.world)
         self.root_T_goal_reference_frame = self._forward_kinematics_binding.root_T_tip
 
-    def on_start(self, context: StatechartContext) -> None:
+    def on_start(self) -> None:
         if self.binding_policy == GoalBindingPolicy.Bind_on_start:
-            self._forward_kinematics_binding.bind(context.world)
+            self._forward_kinematics_binding.bind(self.context.world)
 
     @property
     @abstractmethod
@@ -152,18 +151,17 @@ class CartesianPosition(CartesianTask):
     def goal_reference_frame(self) -> KinematicStructureEntity:
         return self.goal_point.reference_frame
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         """
         Build motion constraints for reaching the goal position.
 
-        :param context: Provides access to world model and kinematic expressions.
         :return: The artifacts of this task, whose error is the distance between the tip and the goal point.
         """
         artifacts = MotionNodeArtifacts()
         root_P_goal = self.root_T_goal_reference_frame @ self.goal_point
 
         # Get current tip position in root frame
-        root_P_current = context.world.compose_forward_kinematics_expression(
+        root_P_current = self.context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
         ).position
 
@@ -222,14 +220,14 @@ class DistanceAlongAxis(ConvergingTask):
     Reference velocity for normalization in m/s.
     """
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         """
         :return: The artifacts of this task, whose error is how far the distance along
             :attr:`axis` lies from :attr:`distance`.
         """
         artifacts = MotionNodeArtifacts()
         root_P_reference, root_P_tip = (
-            context.world.compose_forward_kinematics_expression(
+            self.context.world.compose_forward_kinematics_expression(
                 self.root_link, point.reference_frame
             )
             @ point
@@ -310,22 +308,21 @@ class CartesianPositionTrajectory(CartesianTask):
             [point.to_np()[:-1] for point in self.goal_points]
         )
 
-    def set_up(self, context: StatechartContext) -> None:
+    def set_up(self) -> None:
         """
         Register the target point on the trajectory and the distance left to travel.
         """
-        super().set_up(context)
+        super().set_up()
         self._goal_points_to_np()
         self._init_goal_reference_frame_P_current_target_point(
-            context.float_variable_data
+            self.context.float_variable_data
         )
-        self._init_remaining_distance(context.float_variable_data)
+        self._init_remaining_distance(self.context.float_variable_data)
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         """
         Build motion constraints that pull the tip along the trajectory.
 
-        :param context: Provides access to world model and kinematic expressions.
         :return: The artifacts of this task, whose error is the distance still to travel along the trajectory, which only
             :meth:`on_tick` can compute because it depends on how far along the
             trajectory the tip already is.
@@ -337,7 +334,7 @@ class CartesianPositionTrajectory(CartesianTask):
         )
 
         # Get current tip position in root frame
-        root_P_current = context.world.compose_forward_kinematics_expression(
+        root_P_current = self.context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
         ).position
 
@@ -353,7 +350,7 @@ class CartesianPositionTrajectory(CartesianTask):
             artifacts, goal=root_P_goal, current=root_P_current
         )
 
-        self.compile_current_point_on_tick(context)
+        self.compile_current_point_on_tick()
         artifacts.error = self.remaining_distance
         return artifacts
 
@@ -393,7 +390,7 @@ class CartesianPositionTrajectory(CartesianTask):
         )
         return float(distance_to_path + segment_lengths.sum())
 
-    def compile_current_point_on_tick(self, context: StatechartContext) -> None:
+    def compile_current_point_on_tick(self) -> None:
         """
         Computing the current point relative to the goal reference frame is expensive, this method turns it into
         a compiled expression.
@@ -403,9 +400,8 @@ class CartesianPositionTrajectory(CartesianTask):
             never releases the one bound by the previous build. A statechart that builds its nodes again
             after a change of the world structure therefore keeps one stale compiled function per rebuild.
 
-        :param context: the current context, needed for the world reference.
         """
-        root_T_tip = context.world.compose_forward_kinematics_expression(
+        root_T_tip = self.context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
         )
         goal_reference_frame_T_tip = (
@@ -414,15 +410,15 @@ class CartesianPositionTrajectory(CartesianTask):
         goal_reference_frame_P_tip = goal_reference_frame_T_tip.position[:-1]
         self._compiled_goal_reference_frame_P_tip = goal_reference_frame_P_tip.compile(
             parameters=VariableParameters.from_lists(
-                context.world.state.position_float_variables,
-                context.float_variable_data.variables,
+                self.context.world.state.position_float_variables,
+                self.context.float_variable_data.variables,
             ),
             sparse=False,
         )
         self._compiled_goal_reference_frame_P_tip.bind_args_to_memory_view(
-            0, context.world.state.positions
+            0, self.context.world.state.positions
         )
-        context.float_variable_data.bind_argument(
+        self.context.float_variable_data.bind_argument(
             self._compiled_goal_reference_frame_P_tip, 1
         )
 
@@ -479,7 +475,7 @@ class CartesianPositionTrajectory(CartesianTask):
         # which creates a vector that pulls the robot back to the path AND forward.
         return p_projected + unit_tangent * self.look_ahead_distance
 
-    def on_tick(self, context: StatechartContext) -> ObservationStateValues | None:
+    def on_tick(self) -> ObservationStateValues | None:
         """
         Update the target point on the trajectory and the distance left to travel.
 
@@ -490,10 +486,10 @@ class CartesianPositionTrajectory(CartesianTask):
         )
         self._update_trajectory_index(goal_reference_frame_P_tip_np)
         target_point = self._compute_target_point(goal_reference_frame_P_tip_np)
-        context.float_variable_data.set_value(
+        self.context.float_variable_data.set_value(
             self.goal_reference_frame_P_current_target_point, target_point
         )
-        context.float_variable_data.set_value(
+        self.context.float_variable_data.set_value(
             self.remaining_distance,
             self._distance_left_from(self.current_index, goal_reference_frame_P_tip_np),
         )
@@ -549,20 +545,20 @@ class CartesianPositionStraight(CartesianTask):
     def goal_reference_frame(self) -> KinematicStructureEntity:
         return self.goal_point.reference_frame
 
-    def set_up(self, context: StatechartContext) -> None:
+    def set_up(self) -> None:
         """
         Bind the pose the line starts at, which the constraints are described against.
         """
-        super().set_up(context)
+        super().set_up()
         self._line_start_binding = ForwardKinematicsBinding(
             name=PrefixedName("root_T_line_start", str(self.name)),
             root=self.root_link,
             tip=self.tip_link,
-            float_variable_data=context.float_variable_data,
+            float_variable_data=self.context.float_variable_data,
         )
-        self._line_start_binding.bind(context.world)
+        self._line_start_binding.bind(self.context.world)
 
-    def on_start(self, context: StatechartContext) -> None:
+    def on_start(self) -> None:
         """
         Start the line at the pose the tip has now.
 
@@ -570,23 +566,22 @@ class CartesianPositionStraight(CartesianTask):
         the statechart was built, and independently of :attr:`binding_policy`, which only
         decides when the goal is computed.
         """
-        super().on_start(context)
-        self._line_start_binding.bind(context.world)
+        super().on_start()
+        self._line_start_binding.bind(self.context.world)
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         """
         Build motion constraints for reaching the goal along a straight line.
 
         The tip is driven along the line from the pose the motion starts at to the goal,
         and back onto that line whenever it strays.
 
-        :param context: Provides access to world model and kinematic expressions.
         :return: The artifacts of this task, whose error is the distance between the tip and the goal point.
         """
         artifacts = MotionNodeArtifacts()
         root_P_goal = self.root_T_goal_reference_frame @ self.goal_point
         root_P_line_start = self._line_start_binding.root_T_tip.position
-        root_P_tip = context.world.compose_forward_kinematics_expression(
+        root_P_tip = self.context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
         ).position
 
@@ -657,18 +652,17 @@ class CartesianOrientation(CartesianTask):
     def goal_reference_frame(self) -> KinematicStructureEntity:
         return self.goal_orientation.reference_frame
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         """
         Build motion constraints for reaching the goal orientation.
 
-        :param context: Provides access to world model and kinematic expressions.
         :return: The artifacts of this task, whose error is the angle between the tip orientation and the goal orientation.
         """
         artifacts = MotionNodeArtifacts()
         root_R_goal = self.root_T_goal_reference_frame @ self.goal_orientation
 
         # Get current tip orientation in root frame
-        root_T_current = context.world.compose_forward_kinematics_expression(
+        root_T_current = self.context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
         )
         root_R_current = root_T_current.rotation_matrix
@@ -739,16 +733,16 @@ class CartesianPose(Parallel):
     The position and the orientation task, followed by the nodes this goal was handed.
     """
 
-    def expand(self, context: StatechartContext) -> None:
+    def expand(self) -> None:
         """
         Create the position and the orientation task, then adopt them before the nodes
-        this goal was handed, as :meth:`~cramph.composites.CramLanguageNode.expand`
+        this goal was handed, as :meth:`~cramph.composites.ControlStructureNode.expand`
         does.
         """
         if self.root_link is None:
-            self.root_link = context.world.root
+            self.root_link = self.context.world.root
         self.nodes[:0] = self._create_tasks()
-        super().expand(context)
+        super().expand()
 
     def _create_tasks(self) -> list[MotionStatechartNode]:
         """
@@ -811,32 +805,31 @@ class HoldOrientation(Task):
     _pose_to_keep: ForwardKinematicsBinding = field(init=False, repr=False)
     """The pose of the link bound when this task starts."""
 
-    def set_up(self, context: StatechartContext) -> None:
+    def set_up(self) -> None:
         """
         Bind the pose the link is held at.
         """
-        super().set_up(context)
+        super().set_up()
         self._pose_to_keep = ForwardKinematicsBinding(
             name=PrefixedName("pose_to_keep", str(self.name)),
             root=self.root_link,
             tip=self.tip_link,
-            float_variable_data=context.float_variable_data,
+            float_variable_data=self.context.float_variable_data,
         )
-        self._pose_to_keep.bind(context.world)
+        self._pose_to_keep.bind(self.context.world)
 
-    def on_start(self, context: StatechartContext) -> None:
-        self._pose_to_keep.bind(context.world)
+    def on_start(self) -> None:
+        self._pose_to_keep.bind(self.context.world)
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         """
         Constrain the chain to the orientation bound when this task started.
 
-        :param context: Provides access to world model and kinematic expressions.
         :return: The artifacts of this task, which observes whether the link is within
             :attr:`orientation_threshold` of that orientation.
         """
         artifacts = MotionNodeArtifacts()
-        root_R_tip = context.world.compose_forward_kinematics_expression(
+        root_R_tip = self.context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
         ).rotation_matrix
         root_R_tip_when_started = self._pose_to_keep.root_T_tip.rotation_matrix
@@ -870,14 +863,14 @@ class HoldPose(HoldOrientation):
     translation_threshold: float = 0.01
     """Unit: m. The link counts as held while it is at most this far from its pose."""
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         """
         Differs from :meth:`HoldOrientation.build_artifacts` in also constraining the
         position, and observing whether the link is within
         :attr:`translation_threshold` of it.
         """
-        artifacts = super().build_artifacts(context)
-        root_P_tip = context.world.compose_forward_kinematics_expression(
+        artifacts = super().build_artifacts()
+        root_P_tip = self.context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
         ).position
         root_P_tip_when_started = self._pose_to_keep.root_T_tip.position
@@ -936,9 +929,9 @@ class CartesianPositionVelocityLimit(Task):
     over lower weighted constraints when conflicts occur.
     """
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         artifacts = MotionNodeArtifacts()
-        root_P_tip = context.world.compose_forward_kinematics_expression(
+        root_P_tip = self.context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
         ).position
         artifacts.geometry.add_translational_velocity_limit(
@@ -991,10 +984,10 @@ class CartesianRotationVelocityLimit(Task):
     limit is enforced. Higher weights give this constraint soft priority
     over lower weighted constraints when conflicts occur."""
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         artifacts = MotionNodeArtifacts()
 
-        root_R_tip = context.world.compose_forward_kinematics_expression(
+        root_R_tip = self.context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
         ).rotation_matrix
 
@@ -1050,10 +1043,10 @@ class CartesianVelocityLimit(Parallel):
     The linear and the angular velocity limit.
     """
 
-    def expand(self, context: StatechartContext) -> None:
+    def expand(self) -> None:
         """
         Create the linear and the angular velocity limit, then adopt them as
-        :meth:`~cramph.composites.CramLanguageNode.expand` does.
+        :meth:`~cramph.composites.ControlStructureNode.expand` does.
         """
         self.nodes[:0] = [
             CartesianPositionVelocityLimit(
@@ -1069,4 +1062,4 @@ class CartesianVelocityLimit(Parallel):
                 weight=self.weight,
             ),
         ]
-        super().expand(context)
+        super().expand()

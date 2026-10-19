@@ -9,7 +9,6 @@ from semantic_digital_twin.world_description.geometry import Color
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
-from cramph.context import StatechartContext
 from giskardpy.motion_statechart.data_types import DefaultWeights
 from giskardpy.motion_statechart.graph_node import (
     ConvergingTask,
@@ -55,19 +54,19 @@ class FeatureFunctionGoal(ConvergingTask, ABC):
         """
         raise NotImplementedError
 
-    def build(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build(self) -> MotionNodeArtifacts:
         self.controlled_feature, self.reference_feature = (
             self.get_controlled_and_reference_features()
         )
         feature_debug_expressions: list[DebugExpression] = []
-        root_reference_feature = context.world.transform(
+        root_reference_feature = self.context.world.transform(
             target_frame=self.root_link, spatial_object=self.reference_feature
         )
-        tip_controlled_feature = context.world.transform(
+        tip_controlled_feature = self.context.world.transform(
             target_frame=self.tip_link, spatial_object=self.controlled_feature
         )
 
-        root_T_tip = context.world.compose_forward_kinematics_expression(
+        root_T_tip = self.context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
         )
         if isinstance(self.controlled_feature, Point3):
@@ -114,7 +113,7 @@ class FeatureFunctionGoal(ConvergingTask, ABC):
                 )
             )
 
-        artifacts = super().build(context)
+        artifacts = super().build()
         artifacts.debug_expressions.extend(feature_debug_expressions)
         return artifacts
 
@@ -153,11 +152,10 @@ class AlignPerpendicular(FeatureFunctionGoal):
     def get_controlled_and_reference_features(self):
         return self.tip_normal, self.reference_normal
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         """
         Build a constraint that drives the two normals perpendicular.
 
-        :param context: Provides access to world model and kinematic expressions.
         :return: The artifacts of this task, whose error is how far the dot product of the two normals is from zero.
         """
         artifacts = MotionNodeArtifacts()
@@ -213,11 +211,10 @@ class HeightGoal(FeatureFunctionGoal):
     def get_controlled_and_reference_features(self):
         return self.tip_point, self.reference_point
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         """
         Build a constraint that keeps the height difference within the limits.
 
-        :param context: Provides access to world model and kinematic expressions.
         :return: The artifacts of this task, whose error is how far the height difference lies outside the limits.
         """
         artifacts = MotionNodeArtifacts()
@@ -277,11 +274,10 @@ class DistanceGoal(FeatureFunctionGoal):
     def get_controlled_and_reference_features(self):
         return self.tip_point, self.reference_point
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         """
         Build a constraint that keeps the planar distance within the limits.
 
-        :param context: Provides access to world model and kinematic expressions.
         :return: The artifacts of this task, whose error is how far the planar distance lies outside the limits.
         """
         artifacts = MotionNodeArtifacts()
@@ -343,11 +339,10 @@ class ReachPoint(FeatureFunctionGoal):
     def get_controlled_and_reference_features(self) -> tuple[Point3, Point3]:
         return self.tip_point, self.reference_point
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         """
         Build a constraint that moves the controlled point onto the reference point.
 
-        :param context: Provides access to world model and kinematic expressions.
         :return: The artifacts of this task, whose error is the distance between the two points.
         """
         artifacts = MotionNodeArtifacts()
@@ -402,11 +397,10 @@ class AngleGoal(FeatureFunctionGoal):
     def get_controlled_and_reference_features(self):
         return self.tip_vector, self.reference_vector
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         """
         Build a constraint that keeps the angle between the vectors within the limits.
 
-        :param context: Provides access to world model and kinematic expressions.
         :return: The artifacts of this task, whose error is how far the angle lies outside the limits.
         """
         artifacts = MotionNodeArtifacts()

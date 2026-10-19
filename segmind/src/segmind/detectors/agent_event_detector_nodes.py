@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from cramph.context import StatechartContext
 from typing_extensions import List, Set, Tuple, Type
 
 from segmind.datastructures.events import (
@@ -62,7 +61,6 @@ class GraspDetector(AbstractDetector):
 
     def tool_frames_holding(
         self,
-        context: StatechartContext,
         segmind_context: SegmindContext,
         tracked_objects: List[Body],
     ) -> IndexedBodyPairs:
@@ -72,14 +70,15 @@ class GraspDetector(AbstractDetector):
         A tool frame is a place rather than a thing and has no geometry to touch, so
         what is asked is whether the hand around it holds the body.
 
-        :param context: The current statechart context.
         :param segmind_context: The shared SegmindContext holding what each body
             touches.
         :param tracked_objects: The bodies to check.
         :return: The tool frames holding each body, per body.
         """
         holding: IndexedBodyPairs = {}
-        for end_effector in context.world.get_semantic_annotations_by_type(EndEffector):
+        for end_effector in self.context.world.get_semantic_annotations_by_type(
+            EndEffector
+        ):
             for tracked_object in tracked_objects:
                 bodies_touching = segmind_context.latest_contact_bodies.get(
                     tracked_object, set()
@@ -92,20 +91,18 @@ class GraspDetector(AbstractDetector):
 
     def update_context_and_events(
         self,
-        context: StatechartContext,
         segmind_context: SegmindContext,
         tracked_objects: List[Body],
     ) -> List[DetectionEvent]:
         """
         Detects bodies newly taken hold of and bodies that are no longer held.
 
-        :param context: The current statechart context.
         :param segmind_context: The shared SegmindContext holding what is already known.
         :param tracked_objects: The bodies to check.
         :return: One event per body newly held and one per body let go of, per tool
             frame.
         """
-        holding = self.tool_frames_holding(context, segmind_context, tracked_objects)
+        holding = self.tool_frames_holding(segmind_context, tracked_objects)
         latest_grasps = segmind_context.latest_grasps
         taken_hold_of = self.remember_new_relations(latest_grasps, holding)
         let_go_of = self.forget_lost_relations(latest_grasps, holding, tracked_objects)

@@ -122,7 +122,7 @@ class StatechartPublishing(StateHistoryObserver):
         """
         self.stop()
         self._statechart = statechart
-        statechart.history.add_observer(self)
+        statechart.state_history.add_observer(self)
         self.bridge.begin_plan(statechart)
         self.bridge.observe_chart(statechart)
 
@@ -144,7 +144,7 @@ class StatechartPublishing(StateHistoryObserver):
         Remove the subscription to the history of the published statechart.
         """
         if self._statechart is not None:
-            self._statechart.history.remove_observer(self)
+            self._statechart.state_history.remove_observer(self)
 
 
 def _finalize_recording_at_exit(

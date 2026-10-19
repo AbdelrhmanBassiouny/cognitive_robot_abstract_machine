@@ -24,7 +24,9 @@ from coraplex.robot_plans.mixins import MovesToolCenterPoint
 from cramph.composites import Parallel
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.data_types import DefaultWeights
-from giskardpy.motion_statechart.goals.open_close import Close
+from giskardpy.motion_statechart.goals.grasped_mechanism import (
+    ArticulateGraspedMechanism,
+)
 from giskardpy.motion_statechart.tasks.align_planes import AlignPlanes
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
@@ -198,7 +200,7 @@ class KeepStretchInFrontOfTheContainerItCloses(PlanTransformation[CloseAction]):
         return isinstance(plan_node.robot, Stretch)
 
     @staticmethod
-    def closing_goal(plan_node: CloseAction) -> Close:
+    def closing_goal(plan_node: CloseAction) -> ArticulateGraspedMechanism:
         """
         :param plan_node: The close action.
         :return: The goal closing the container.
@@ -206,7 +208,7 @@ class KeepStretchInFrontOfTheContainerItCloses(PlanTransformation[CloseAction]):
             which it has none of before it is expanded.
         """
         for node in plan_node.descendants:
-            if isinstance(node, Close):
+            if isinstance(node, ArticulateGraspedMechanism):
                 return node
         raise ClosingGoalNotFound(plan_node)
 
@@ -231,7 +233,7 @@ class KeepStretchInFrontOfTheContainerItCloses(PlanTransformation[CloseAction]):
                         goal_normal=Vector3.X(handle),
                         tip_normal=Vector3.NEGATIVE_Y(robot_root),
                     ),
-                    Close(
+                    ArticulateGraspedMechanism(
                         tip_link=tool_frame,
                         environment_link=handle,
                         goal_joint_state=closing_goal.goal_joint_state,

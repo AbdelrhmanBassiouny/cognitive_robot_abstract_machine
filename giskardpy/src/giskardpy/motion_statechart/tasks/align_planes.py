@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 
-from cramph.context import StatechartContext
 from giskardpy.motion_statechart.data_types import DefaultWeights
 from giskardpy.motion_statechart.graph_node import (
     ConvergingTask,
@@ -57,25 +56,24 @@ class AlignPlanes(ConvergingTask):
     Priority weight relative to other tasks.
     """
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         """
         Build motion constraints that rotate the tip plane onto the goal plane.
 
-        :param context: Provides access to world model and kinematic expressions.
         :return: The artifacts of this task, whose error is the angle between the two
             plane normals.
         """
         artifacts = MotionNodeArtifacts()
-        tip_V_tip_normal = context.world.transform(
+        tip_V_tip_normal = self.context.world.transform(
             target_frame=self.tip_link, spatial_object=self.tip_normal
         )
         tip_V_tip_normal.scale(1)
-        root_V_root_normal = context.world.transform(
+        root_V_root_normal = self.context.world.transform(
             target_frame=self.root_link, spatial_object=self.goal_normal
         )
         root_V_root_normal.scale(1)
 
-        root_R_tip = context.world.compose_forward_kinematics_expression(
+        root_R_tip = self.context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
         ).rotation_matrix
         root_V_tip_normal = root_R_tip @ tip_V_tip_normal

@@ -55,7 +55,7 @@ class ChooserAnsweringInTurn(ChildChooser):
         return False
 
     def choose_child(
-        self, node: CompositeNodeChoosingItsChild, context
+        self, node: CompositeNodeChoosingItsChild
     ) -> StatechartNode | None:
         if not self.children:
             return None
@@ -85,7 +85,6 @@ class ChooserGivingUpOnItsChildren(ChooserAnsweringInTurn):
         self,
         node: CompositeNodeChoosingItsChild,
         child: StatechartNode,
-        context,
     ) -> None:
         self.calls.append(f"prepare {child.name}, joined: {child.index is not None}")
 
@@ -93,7 +92,6 @@ class ChooserGivingUpOnItsChildren(ChooserAnsweringInTurn):
         self,
         node: CompositeNodeChoosingItsChild,
         child: StatechartNode,
-        context,
     ) -> list[StatechartNode]:
         self.calls.append(f"monitors {child.name}")
         return self.failure_monitors.pop(0)
@@ -148,7 +146,7 @@ def _run_count(statechart: Statechart, node: StatechartNode) -> int:
     """
     :return: How often `node` went from not started to running.
     """
-    life_cycles = statechart.history.get_life_cycle_history_of_node(node)
+    life_cycles = statechart.state_history.get_life_cycle_history_of_node(node)
     return sum(
         previous == LifeCycleValues.NOT_STARTED and current == LifeCycleValues.RUNNING
         for previous, current in zip(life_cycles, life_cycles[1:])
@@ -294,12 +292,12 @@ def test_choosing_keeps_the_state_and_history_of_the_nodes_already_there(
     statechart_executor.compile(statechart)
     statechart_executor.tick()
     assert earlier.life_cycle_state == LifeCycleValues.SUCCEEDED
-    recorded_before_choosing = len(statechart.history)
+    recorded_before_choosing = len(statechart.state_history)
 
     statechart_executor.tick_until_end(timeout=30)
 
     assert earlier.life_cycle_state == LifeCycleValues.SUCCEEDED
-    assert len(statechart.history) == recorded_before_choosing + (
+    assert len(statechart.state_history) == recorded_before_choosing + (
         statechart_executor.tick_count - 1
     )
 
@@ -373,7 +371,7 @@ class ChooserNotingWhetherTheExtensionHeldStill(ChildChooser):
     """
 
     def choose_child(
-        self, node: CompositeNodeChoosingItsChild, context
+        self, node: CompositeNodeChoosingItsChild
     ) -> StatechartNode | None:
         self.held_still_when_asked.append(self.extension.is_holding_still)
         return self.child

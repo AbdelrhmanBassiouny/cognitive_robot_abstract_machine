@@ -23,7 +23,6 @@ from threading import Lock
 from typing_extensions import Any, Self
 
 from cramph.composites import ChildChooser, CompositeNodeChoosingItsChild
-from cramph.context import StatechartContext
 from cramph.data_types import LifeCycleValues
 from cramph.node import StatechartNode
 from cramph.statechart import Statechart
@@ -262,7 +261,7 @@ class ChildSentByClient(ChildChooser):
         )
 
     def choose_child(
-        self, node: CompositeNodeChoosingItsChild, context: StatechartContext
+        self, node: CompositeNodeChoosingItsChild
     ) -> StatechartNode | None:
         """
         Add the nodes the client sent for `node`.
@@ -366,7 +365,7 @@ class ChildChoiceClient:
             pending.
         """
         first_node_index = len(self.statechart.nodes)
-        if not node.choose_child_with(self.chooser, self.statechart.context):
+        if not node.choose_child_with(self.chooser):
             return None
         nodes = (
             None

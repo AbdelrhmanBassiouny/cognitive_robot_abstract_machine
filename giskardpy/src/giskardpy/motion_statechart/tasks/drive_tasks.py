@@ -8,7 +8,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
 import krrood.symbolic_math.symbolic_math as sm
-from cramph.context import StatechartContext
 from giskardpy.motion_statechart.binding_policy import ForwardKinematicsBinding
 from giskardpy.motion_statechart.graph_node import ConvergingTask, MotionNodeArtifacts
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
@@ -72,15 +71,12 @@ class DrivenBaseTask(ConvergingTask, ABC):
         parent_T_goal.reference_frame = self.drive_parent
         return parent_T_goal
 
-    def parent_T_base(
-        self, context: StatechartContext
-    ) -> HomogeneousTransformationMatrix:
+    def parent_T_base(self) -> HomogeneousTransformationMatrix:
         """
-        :param context: The context this task is built in.
         :return: The pose of :attr:`base` relative to :attr:`drive_parent`, over the
             degrees of freedom of the drive.
         """
-        return context.world.compose_forward_kinematics_expression(
+        return self.context.world.compose_forward_kinematics_expression(
             self.drive_parent, self.base
         )
 
@@ -96,14 +92,14 @@ class BasePosition(DrivenBaseTask):
     Reference velocity for normalization in m/s.
     """
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         """
         :return: The artifacts of this task, whose error is the distance between the
             base and the goal position.
         """
         artifacts = MotionNodeArtifacts()
         parent_P_goal = self.parent_T_goal.position
-        parent_P_base = self.parent_T_base(context).position
+        parent_P_base = self.parent_T_base().position
         artifacts.geometry.add_point_goal_constraints(
             frame_P_goal=parent_P_goal,
             frame_P_current=parent_P_base,
@@ -134,13 +130,13 @@ class DrivenBaseRotation(DrivenBaseTask, ABC):
         :return: The orientation the base should have, relative to the drive's parent.
         """
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         """
         :return: The artifacts of this task, whose error is the angle between the
             orientation of the base and the goal orientation.
         """
         artifacts = MotionNodeArtifacts()
-        parent_T_base = self.parent_T_base(context)
+        parent_T_base = self.parent_T_base()
         parent_R_goal = self.parent_R_goal(parent_T_base)
         parent_R_base = parent_T_base.rotation_matrix
         artifacts.geometry.add_rotation_goal_constraints(
@@ -209,31 +205,33 @@ class BaseTurnTowardsGoalPosition(BaseHeading):
     Fixes the pose of the base relative to the drive's parent when the task starts.
     """
 
-    def set_up(self, context: StatechartContext) -> None:
+    def set_up(self) -> None:
         """
         Bind the pose of the base, which the base faces the goal position from.
         """
-        super().set_up(context)
+        super().set_up()
         self._parent_T_start_binding = ForwardKinematicsBinding(
             name=PrefixedName("parent_T_start", str(self.name)),
             root=self.drive_parent,
             tip=self.base,
-            float_variable_data=context.float_variable_data,
+            float_variable_data=self.context.float_variable_data,
         )
-        self._parent_T_start_binding.bind(context.world)
+        self._parent_T_start_binding.bind(self.context.world)
 
-    def on_start(self, context: StatechartContext) -> None:
-        self._parent_T_start_binding.bind(context.world)
+    def on_start(self) -> None:
+        self._parent_T_start_binding.bind(self.context.world)
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         """
         Differs from :meth:`DrivenBaseRotation.build_artifacts` in first expressing the
         bound start pose relative to the drive's new parent, if the drive was moved
         under another parent.
         """
         if self._parent_T_start_binding.root is not self.drive_parent:
-            self._parent_T_start_binding.change_root(self.drive_parent, context.world)
-        return super().build_artifacts(context)
+            self._parent_T_start_binding.change_root(
+                self.drive_parent, self.context.world
+            )
+        return super().build_artifacts()
 
     def parent_P_viewpoint(
         self, parent_T_base: HomogeneousTransformationMatrix

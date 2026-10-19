@@ -96,7 +96,7 @@ class ChooserGivingAFreshChild(ChildChooser):
     """
 
     def choose_child(
-        self, node: CompositeNodeChoosingItsChild, context: StatechartContext
+        self, node: CompositeNodeChoosingItsChild
     ) -> StatechartNode | None:
         self.given_children += 1
         return _node_succeeding_at_once(f"child {self.given_children}")
@@ -110,10 +110,10 @@ class ChooserGivingUpOnItsFirstChild(ChooserGivingAFreshChild):
     """
 
     def choose_child(
-        self, node: CompositeNodeChoosingItsChild, context: StatechartContext
+        self, node: CompositeNodeChoosingItsChild
     ) -> StatechartNode | None:
         if self.given_children > 0:
-            return super().choose_child(node, context)
+            return super().choose_child(node)
         self.given_children += 1
         return NodeSucceedingOnObservingTrue(
             name="undecided", observation=ObservationStateValues.UNKNOWN
@@ -123,7 +123,6 @@ class ChooserGivingUpOnItsFirstChild(ChooserGivingAFreshChild):
         self,
         node: CompositeNodeChoosingItsChild,
         child: StatechartNode,
-        context: StatechartContext,
     ) -> list[StatechartNode]:
         if child.name != "undecided":
             return []

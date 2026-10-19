@@ -476,7 +476,7 @@ def test_a_plan_releases_its_trial_copy_even_when_an_observer_fails(
     plan = _plan_of_two_underspecified_steps(world)
     executor = simulated_executor(extensions)
     statechart = statechart_of(executor, plan)
-    statechart.history.add_observer(_FailsWhenThePlanEnds(plan=plan))
+    statechart.state_history.add_observer(_FailsWhenThePlanEnds(plan=plan))
 
     executor.compile(statechart)
     with pytest.raises(RuntimeError):

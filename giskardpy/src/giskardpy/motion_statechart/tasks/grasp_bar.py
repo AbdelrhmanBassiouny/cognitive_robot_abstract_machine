@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from cramph.context import StatechartContext
 from giskardpy.motion_statechart.data_types import DefaultWeights
 from giskardpy.motion_statechart.graph_node import MotionNodeArtifacts, ConvergingTask
 from semantic_digital_twin.spatial_types import Point3, Vector3
@@ -68,30 +67,29 @@ class GraspBar(ConvergingTask):
     Priority weight relative to other tasks.
     """
 
-    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+    def build_artifacts(self) -> MotionNodeArtifacts:
         """
         Build motion constraints that pull the tip onto the bar.
 
-        :param context: Provides access to world model and kinematic expressions.
         :return: The artifacts of this task, whose error is the distance between the tip
             and the bar segment.
         """
         artifacts = MotionNodeArtifacts()
-        root_P_bar_center = context.world.transform(
+        root_P_bar_center = self.context.world.transform(
             target_frame=self.root_link, spatial_object=self.bar_center
         )
 
-        tip_V_tip_grasp_axis = context.world.transform(
+        tip_V_tip_grasp_axis = self.context.world.transform(
             target_frame=self.tip_link, spatial_object=self.tip_grasp_axis
         )
         tip_V_tip_grasp_axis.scale(1)
 
-        root_V_bar_axis = context.world.transform(
+        root_V_bar_axis = self.context.world.transform(
             target_frame=self.root_link, spatial_object=self.bar_axis
         )
         root_V_bar_axis.scale(1)
 
-        root_T_tip = context.world.compose_forward_kinematics_expression(
+        root_T_tip = self.context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
         )
         root_V_tip_normal = root_T_tip @ tip_V_tip_grasp_axis

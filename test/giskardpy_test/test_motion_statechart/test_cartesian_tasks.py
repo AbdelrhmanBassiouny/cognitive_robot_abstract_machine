@@ -84,7 +84,7 @@ from cramph.context import StatechartContext
 from cramph.executor import StatechartExecutor, TickingExecutorExtension
 from cramph.world_modification_nodes import MoveBranch
 from giskardpy.motion_control import WorldStateTrajectoryRecording
-from ..motion_control_context import create_context_with_motion_control
+from ..motion_control_context import add_to_statechart_with_motion_control
 
 # %% holding a pose
 
@@ -554,11 +554,13 @@ class TestCartesianPositionTrajectory:
             "r_gripper_tool_frame"
         )
 
-        SetSeedConfiguration(
+        seed = SetSeedConfiguration(
             seed_configuration=JointState.from_str_dict(
                 better_pr2_pose, world=pr2_world_state_reset
             )
-        ).on_start(create_context_with_motion_control(pr2_world_state_reset))
+        )
+        add_to_statechart_with_motion_control(seed, pr2_world_state_reset)
+        seed.on_start()
 
         points = []
         root_points = []
@@ -2336,7 +2338,8 @@ class TestDebugExpressions:
             name="cart_pos",
         )
 
-        artifacts = task.build(create_context_with_motion_control(cylinder_bot_world))
+        add_to_statechart_with_motion_control(task, cylinder_bot_world)
+        artifacts = task.build()
 
         goal = debug_expression_by_name(artifacts.debug_expressions, "cart_pos/goal")
         current = debug_expression_by_name(
@@ -2357,7 +2360,8 @@ class TestDebugExpressions:
             name="straight",
         )
 
-        artifacts = task.build(create_context_with_motion_control(cylinder_bot_world))
+        add_to_statechart_with_motion_control(task, cylinder_bot_world)
+        artifacts = task.build()
 
         goal = debug_expression_by_name(artifacts.debug_expressions, "straight/goal")
         current = debug_expression_by_name(
@@ -2380,7 +2384,8 @@ class TestDebugExpressions:
             name="orient",
         )
 
-        artifacts = task.build(create_context_with_motion_control(cylinder_bot_world))
+        add_to_statechart_with_motion_control(task, cylinder_bot_world)
+        artifacts = task.build()
 
         goal = debug_expression_by_name(artifacts.debug_expressions, "orient/goal")
         current = debug_expression_by_name(
@@ -2404,7 +2409,8 @@ class TestDebugExpressions:
             name="traj",
         )
 
-        artifacts = task.build(create_context_with_motion_control(cylinder_bot_world))
+        add_to_statechart_with_motion_control(task, cylinder_bot_world)
+        artifacts = task.build()
 
         goal = debug_expression_by_name(artifacts.debug_expressions, "traj/goal")
         current = debug_expression_by_name(artifacts.debug_expressions, "traj/current")

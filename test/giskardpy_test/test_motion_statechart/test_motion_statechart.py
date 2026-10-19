@@ -60,8 +60,9 @@ from semantic_digital_twin.robots.pr2 import PR2Joint
 from ...semantic_digital_twin_test.test_orm.test_orm import hsr_world_state_reset
 from giskardpy.motion_control import MotionControl
 from cramph.context import StatechartContext
+from cramph.exceptions import TickLimitReachedError
 from cramph.executor import StatechartExecutor
-from ..motion_control_context import create_context_with_motion_control
+from ..motion_control_context import add_to_statechart_with_motion_control
 
 # %% motion nodes in a statechart
 
@@ -81,7 +82,7 @@ class _ConvergingTaskWithoutErrorSignal(ConvergingTask):
     Converging task whose artifacts leave the error unset.
     """
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         return NodeArtifacts()
 
 
@@ -222,7 +223,7 @@ def test_joint_position_list_alone_times_out_on_stall(
 
     executor.compile(statechart=statechart)
 
-    with pytest.raises(TimeoutError):
+    with pytest.raises(TickLimitReachedError):
         executor.tick_until_end(timeout=200)
 
 
@@ -294,10 +295,10 @@ def test_local_minimum_reached_raises_on_explicitly_empty_degrees_of_freedom(
     the monitor into a constant-true observation that could mask the bug.
     """
     monitor = LocalMinimumReached(degrees_of_freedom=[])
-    context = create_context_with_motion_control(pr2_world_state_reset)
+    add_to_statechart_with_motion_control(monitor, pr2_world_state_reset)
 
     with pytest.raises(EmptyDegreesOfFreedomError):
-        monitor.build(context)
+        monitor.build()
 
 
 def test_long_goal(pr2_world_state_reset: World):
@@ -485,7 +486,7 @@ class TestTemplates:
         statechart.draw("/tmp/muh.pdf")
 
         assert done.observation_state == ObservationStateValues.TRUE
-        cut_life_cycle = statechart.history.get_life_cycle_history_of_node(cut)
+        cut_life_cycle = statechart.state_history.get_life_cycle_history_of_node(cut)
         assert LifeCycleValues.PAUSED in cut_life_cycle
         restarts = sum(
             1

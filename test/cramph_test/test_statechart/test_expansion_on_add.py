@@ -6,7 +6,6 @@ import pytest
 
 from cramph.node import EndedByOwner
 from cramph.composites import Parallel, Sequence
-from cramph.context import StatechartContext
 from cramph.data_types import LifeCycleValues
 from cramph.exceptions import (
     PrerequisiteNotExpandedError,
@@ -45,7 +44,7 @@ class CompositeNodeCountingTheChildrenOfAnother(EndedByOwner, CompositeNode):
     def prerequisite_nodes(self) -> list[StatechartNode]:
         return [self.watched]
 
-    def expand(self, context: StatechartContext) -> None:
+    def expand(self) -> None:
         self.counted_children = len(self.watched.nodes)
 
 

@@ -6,7 +6,6 @@ from semantic_digital_twin.world_description.connections import (
     ActiveConnection1DOF,
 )
 from cramph.node import EndedByOwner
-from cramph.context import StatechartContext
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from cramph.node import NodeArtifacts
 
@@ -32,7 +31,7 @@ class JointPositionReached(EndedByOwner, MotionStatechartNode):
     Threshold for position error.
     """
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         current = self.connection.dof.variables.position
         if (
             isinstance(self.connection, RevoluteConnection)

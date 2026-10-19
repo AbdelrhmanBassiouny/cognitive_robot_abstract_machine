@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from cramph.composites import Sequence, Parallel
-from cramph.context import StatechartContext
 from cramph.node import (
     CompositeNode,
     NodeArtifacts,
@@ -122,12 +121,12 @@ class DifferentialDriveBaseGoal(
         # is read from the base rather than from the connection
         return self.diff_drive_connection.child.parent_kinematic_structure_entity
 
-    def expand(self, context: StatechartContext) -> None:
+    def expand(self) -> None:
         """
         Add the sequence running the three steps.
         """
         if self.diff_drive_connection is None:
-            diff_drives = context.world.get_connections_by_type(DifferentialDrive)
+            diff_drives = self.context.world.get_connections_by_type(DifferentialDrive)
             if len(diff_drives) == 0:
                 raise UnexpectedWorldEntityCountError(
                     node=self,
@@ -177,25 +176,25 @@ class DifferentialDriveBaseGoal(
         self.sequence = Sequence(name=f"{self.name}/sequence", nodes=steps)
         self._add_child_to_statechart(self.sequence)
 
-    def set_up(self, context: StatechartContext) -> None:
+    def set_up(self) -> None:
         """
         Bind :attr:`parent_T_goal_reference_frame`, which the steps are expressed over.
         """
-        super().set_up(context)
+        super().set_up()
         self._forward_kinematics_binding = ForwardKinematicsBinding(
             name=self._goal_reference_frame_name,
             root=self._drive_parent,
             tip=self.goal_pose.reference_frame,
-            float_variable_data=context.float_variable_data,
+            float_variable_data=self.context.float_variable_data,
             root_T_tip=self.parent_T_goal_reference_frame,
         )
-        self._forward_kinematics_binding.bind(context.world)
+        self._forward_kinematics_binding.bind(self.context.world)
 
-    def on_start(self, context: StatechartContext) -> None:
+    def on_start(self) -> None:
         if self.binding_policy == GoalBindingPolicy.Bind_on_start:
-            self._forward_kinematics_binding.bind(context.world)
+            self._forward_kinematics_binding.bind(self.context.world)
 
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
+    def build_artifacts(self) -> NodeArtifacts:
         """
         Report the outcome of the sequence, and express
         :attr:`parent_T_goal_reference_frame` relative to the drive's new parent if the
@@ -205,7 +204,7 @@ class DifferentialDriveBaseGoal(
         """
         if self._forward_kinematics_binding.root is not self._drive_parent:
             self._forward_kinematics_binding.change_root(
-                self._drive_parent, context.world
+                self._drive_parent, self.context.world
             )
         return NodeArtifacts(
             observation=trinary_if_cases(
@@ -272,10 +271,10 @@ class CartesianPoseStraight(Parallel):
     The position and the orientation task, followed by the nodes this goal was handed.
     """
 
-    def expand(self, context: StatechartContext) -> None:
+    def expand(self) -> None:
         """
         Create the position and the orientation task, then adopt them before the nodes
-        this goal was handed, as :meth:`~cramph.composites.CramLanguageNode.expand`
+        this goal was handed, as :meth:`~cramph.composites.ControlStructureNode.expand`
         does.
         """
         self.nodes[:0] = [
@@ -298,4 +297,4 @@ class CartesianPoseStraight(Parallel):
                 binding_policy=self.binding_policy,
             ),
         ]
-        super().expand(context)
+        super().expand()

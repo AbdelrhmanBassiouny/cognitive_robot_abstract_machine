@@ -3,9 +3,11 @@ from ripple_down_rules.datastructures.case import Case, create_case
 from typing_extensions import Optional
 from .placing_detector_get_object_to_track_from_starter_event_output__scrdr_defs import *
 
-
-attribute_name = 'output_'
-conclusion_type = (NoneType, Object,)
+attribute_name = "output_"
+conclusion_type = (
+    NoneType,
+    Object,
+)
 mutually_exclusive = True
 
 

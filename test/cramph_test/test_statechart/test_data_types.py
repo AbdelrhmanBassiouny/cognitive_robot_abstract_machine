@@ -152,58 +152,6 @@ def test_a_transition_that_does_not_end_a_node_has_no_outcome(
         transition_kind.outcome
 
 
-# %% deriving the transition kind of a life cycle change
-
-
-@pytest.mark.parametrize(
-    "previous_state, new_state, expected_kind",
-    [
-        (LifeCycleValues.NOT_STARTED, LifeCycleValues.RUNNING, TransitionKind.START),
-        (LifeCycleValues.NOT_STARTED, LifeCycleValues.PAUSED, TransitionKind.START),
-        (LifeCycleValues.RUNNING, LifeCycleValues.PAUSED, TransitionKind.PAUSE),
-        (LifeCycleValues.PAUSED, LifeCycleValues.RUNNING, TransitionKind.PAUSE),
-        (LifeCycleValues.RUNNING, LifeCycleValues.SUCCEEDED, TransitionKind.SUCCEED),
-        (LifeCycleValues.PAUSED, LifeCycleValues.SUCCEEDED, TransitionKind.SUCCEED),
-        (LifeCycleValues.RUNNING, LifeCycleValues.FAILED, TransitionKind.FAIL),
-        (LifeCycleValues.PAUSED, LifeCycleValues.FAILED, TransitionKind.FAIL),
-        (
-            LifeCycleValues.RUNNING,
-            LifeCycleValues.INTERRUPTED,
-            TransitionKind.INTERRUPT,
-        ),
-        (
-            LifeCycleValues.PAUSED,
-            LifeCycleValues.INTERRUPTED,
-            TransitionKind.INTERRUPT,
-        ),
-        (LifeCycleValues.RUNNING, LifeCycleValues.NOT_STARTED, TransitionKind.RESET),
-        (LifeCycleValues.PAUSED, LifeCycleValues.NOT_STARTED, TransitionKind.RESET),
-        (
-            LifeCycleValues.SUCCEEDED,
-            LifeCycleValues.NOT_STARTED,
-            TransitionKind.RESET,
-        ),
-        (LifeCycleValues.FAILED, LifeCycleValues.NOT_STARTED, TransitionKind.RESET),
-        (
-            LifeCycleValues.INTERRUPTED,
-            LifeCycleValues.NOT_STARTED,
-            TransitionKind.RESET,
-        ),
-    ],
-)
-def test_transition_kind_of_covers_every_reachable_state_pair(
-    previous_state: LifeCycleValues,
-    new_state: LifeCycleValues,
-    expected_kind: TransitionKind,
-) -> None:
-    """
-    Every `(previous_state, new_state)` pair a
-    :class:`~cramph.statechart.LifeCycleChange` can actually hold is classified as the
-    transition kind whose own condition could have caused it.
-    """
-    assert TransitionKind.of(previous_state, new_state) is expected_kind
-
-
 # %% life cycle predicates read off an expression
 
 

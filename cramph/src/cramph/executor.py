@@ -13,6 +13,7 @@ from cramph.exceptions import (
     MissingExecutorExtensionError,
     StatechartOfDifferentContextError,
     NonPositiveRealTimeFactorError,
+    TickLimitReachedError,
 )
 from cramph.statechart import RecompileCallback, Statechart
 from krrood.symbolic_math.symbolic_math import FloatVariable
@@ -511,14 +512,16 @@ class StatechartExecutor(Executor, RecompileCallback):
         returns True.
 
         :param timeout: Max number of ticks to perform.
+        :raises TickLimitReachedError: If the statechart has not ended after `timeout`
+            ticks.
         """
         try:
-            for i in range(timeout):
+            for _ in range(timeout):
                 self.tick()
                 self.pacer.sleep()
                 if self.statechart.is_ended():
                     return
-            raise TimeoutError("Timeout reached while waiting for end of statechart.")
+            raise TickLimitReachedError(tick_limit=timeout)
         finally:
             self.finish_run()
 

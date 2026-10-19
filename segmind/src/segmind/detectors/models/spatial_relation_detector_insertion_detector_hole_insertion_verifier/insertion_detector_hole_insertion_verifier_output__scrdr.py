@@ -3,8 +3,7 @@ from ripple_down_rules.datastructures.case import Case, create_case
 from types import NoneType
 from .insertion_detector_hole_insertion_verifier_output__scrdr_defs import *
 
-
-attribute_name = 'output_'
+attribute_name = "output_"
 conclusion_type = (bool,)
 mutually_exclusive = True
 

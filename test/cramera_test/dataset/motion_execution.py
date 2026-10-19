@@ -68,9 +68,9 @@ class MotionExecution:
         :param state: The state assigned to every chart node.
         """
         self.chart.life_cycle_state.data[:] = state
-        self.chart.history.append(
+        self.chart.state_history.append(
             StateHistoryItem(
-                tick_count=len(self.chart.history),
+                tick_count=len(self.chart.state_history),
                 life_cycle_state=self.chart.life_cycle_state,
                 observation_state=self.chart.observation_state,
             )
