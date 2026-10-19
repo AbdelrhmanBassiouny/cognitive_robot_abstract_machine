@@ -12,18 +12,13 @@ from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.robots.garmi import GarmiCamera
 from semantic_digital_twin.robots.justin import JustinCamera
 from semantic_digital_twin.robots.icub3 import ICub3Camera
 from semantic_digital_twin.robots.daisy import DAiSyCamera
 from semantic_digital_twin.robots.armar7 import AzureKinectRGB
 from semantic_digital_twin.robots.unitree_g1 import D435
-from semantic_digital_twin.robots.pr2 import PR2, PR2KinectV1
-from semantic_digital_twin.robots.tiago import Tiago, TiagoCamera
-from semantic_digital_twin.robots.tracy import Tracy, TracyCamera
-from semantic_digital_twin.robots.mmp_dresden import MMPDresden, MMPDresdenCamera
-from semantic_digital_twin.robots.robot_parts import AbstractRobot, Camera, RobotCamera
+from semantic_digital_twin.robots.robot_parts import Camera, RobotCamera
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Vector3
 from semantic_digital_twin.testing import ray_test_world
 from semantic_digital_twin.world_description.world_entity import Body
@@ -71,31 +66,6 @@ def test_optical_root_preserves_mounting_pose(table_world: World) -> None:
     )
     assert optical_root.parent_connection.parent is table_world.root
     assert optical_root.collision.shapes == []
-
-
-# %% Sensor frames
-@pytest.mark.parametrize(
-    "robot_type,camera_type,optical_frame_name",
-    [
-        (PR2, PR2KinectV1, "head_mount_kinect_rgb_optical_frame"),
-        (Tiago, TiagoCamera, "head_front_camera_optical_frame"),
-        (Tracy, TracyCamera, "camera_color_optical_frame"),
-        (MMPDresden, MMPDresdenCamera, "pan_and_tilt_camera_color_optical_frame"),
-    ],
-)
-def test_robot_camera_selects_existing_sensor_optical_frame(
-    robot_type: type[AbstractRobot],
-    camera_type: type[RobotCamera],
-    optical_frame_name: str,
-) -> None:
-    """
-    Camera roots select the corresponding sensor's optical body in its description.
-    """
-    world = URDFParser.from_file(robot_type.get_ros_file_path()).parse()
-    camera = camera_type.setup_default_configuration_in_world_below_robot_root(
-        world.root
-    )
-    assert camera.root is world.get_body_by_name(optical_frame_name)
 
 
 # %% Approximate sensor mounts

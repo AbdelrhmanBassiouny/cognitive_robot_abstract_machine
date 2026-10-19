@@ -389,6 +389,9 @@ class TracyRightArm(UR10eArm[TracyRightGripper]):
 
 @dataclass(eq=False)
 class TracyCamera(RobotCamera):
+    """
+    Tracy's fixed camera rooted at its calibrated camera link.
+    """
 
     def setup_hardware_interfaces(self) -> None:
         pass
@@ -402,7 +405,7 @@ class TracyCamera(RobotCamera):
     ) -> Self:
         return cls(
             root=robot_root._world.get_body_in_branch_by_name(
-                robot_root, "camera_color_optical_frame"
+                robot_root, "camera_link"
             ),
             camera_model=FieldOfViewCameraModel(
                 angular_extent=FieldOfView(horizontal_angle=1.047, vertical_angle=0.785)
