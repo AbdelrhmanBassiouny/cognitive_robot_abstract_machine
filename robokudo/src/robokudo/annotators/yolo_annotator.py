@@ -39,7 +39,6 @@ from robokudo.types.scene import HumanHypothesis, ObjectHypothesis
 from robokudo.utils.annotator_helper import (
     draw_bounding_boxes_from_object_hypotheses,
     resize_mask,
-    scale_camera_intrinsics,
 )
 from robokudo.utils.comparators import RoiComparator
 from robokudo.utils.cv_helper import crop_image, get_scaled_color_image_for_depth_image
@@ -49,6 +48,7 @@ from robokudo.utils.module_loader import ModuleLoader
 from robokudo.utils.o3d_helper import get_cloud_from_rgb_depth_and_mask
 
 if TYPE_CHECKING:
+    from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
     import numpy.typing as npt
 
 # %% detections
@@ -246,9 +246,9 @@ class YoloAnnotator(ThreadedAnnotator):
         The SAM model refining the hypothesis masks in precision mode, loaded during
         setup.
         """
-        self.camera_intrinsics: Optional[open3d.camera.PinholeCameraIntrinsic] = None
+        self.camera_model: PinholeCameraModel | None = None
         """
-        Intrinsics of the camera at the resolution of the depth image.
+        Projection model at the depth image resolution.
         """
         self.roi_comparator = RoiComparator(weight=1.0)
         """
@@ -287,7 +287,14 @@ class YoloAnnotator(ThreadedAnnotator):
         """
         parameters: YoloAnnotator.Descriptor.Parameters = self.descriptor.parameters
         if parameters.global_with_depth:
-            scale_camera_intrinsics(self)
+            cas = self.get_cas()
+            color_to_depth_ratio = cas.color_to_depth_ratio
+            self.camera_model = (
+                cas.require_camera_observation().effective_camera_model.scaled(
+                    scale_x=color_to_depth_ratio.horizontal,
+                    scale_y=color_to_depth_ratio.vertical,
+                )
+            )
 
         detection_image = self._detection_image()
         existing_hypotheses = (
@@ -492,7 +499,7 @@ class YoloAnnotator(ThreadedAnnotator):
             rgb_image=cv2.cvtColor(detection_image, cv2.COLOR_BGR2RGB),
             depth_image=self.get_cas().get(CASViews.DEPTH_IMAGE),
             mask=detection_mask,
-            camera_intrinsics=self.camera_intrinsics,
+            camera_model=self.camera_model,
             depth_truncate=self.descriptor.parameters.depth_truncate,
             mask_true_value=self.mask_foreground,
         )

@@ -52,6 +52,13 @@ class TestUtilsO3DHelper(object):
         return camera_intrinsics
 
     @pytest.fixture
+    def camera_model(self, cas: CAS) -> PinholeCameraModel:
+        """
+        Provide the projection model associated with the test point cloud.
+        """
+        return cas.pointcloud_camera_model
+
+    @pytest.fixture
     def pointcloud(self) -> open3d.geometry.PointCloud:
         points = np.array([[0, 0, 1], [1, 1, 1], [2, 2, 1]], dtype=np.float64)
         input_cloud = open3d.geometry.PointCloud()
@@ -459,66 +466,70 @@ class TestUtilsO3DHelper(object):
         assert len(output_cloud.points) == 9
         assert np.all(output_cloud.points == all_input_points)
 
-    def test_get_cloud_from_rgb_depth_and_mask(
-        self, kinect_intrinsics: open3d.camera.PinholeCameraIntrinsic
-    ):
+    def test_get_cloud_from_rgb_depth_and_mask(self, camera_model: PinholeCameraModel):
         rgb_image = (
             np.ones(
-                (kinect_intrinsics.height, kinect_intrinsics.width, 3), dtype=np.uint8
+                (camera_model.resolution.height, camera_model.resolution.width, 3),
+                dtype=np.uint8,
             )
             * 255
         )  # White image
         depth_image = (
             np.ones(
-                (kinect_intrinsics.height, kinect_intrinsics.width), dtype=np.uint16
+                (camera_model.resolution.height, camera_model.resolution.width),
+                dtype=np.uint16,
             )
             * 125
         )  # Grey image
 
         mask = np.zeros(
-            (kinect_intrinsics.height, kinect_intrinsics.width), dtype=np.uint8
+            (camera_model.resolution.height, camera_model.resolution.width),
+            dtype=np.uint8,
         )
         mask[100:200, 100:200] = 255
 
         pc = get_cloud_from_rgb_depth_and_mask(
-            rgb_image, depth_image, mask, kinect_intrinsics
+            rgb_image, depth_image, mask, camera_model
         )
 
         assert len(pc.points) == 10000
         assert np.all(np.asarray(pc.colors) == (1.0, 1.0, 1.0))
 
     def test_get_cloud_from_rgb_depth_and_mask_depth_truncate(
-        self, kinect_intrinsics: open3d.camera.PinholeCameraIntrinsic
+        self, camera_model: PinholeCameraModel
     ):
         rgb_image = (
             np.ones(
-                (kinect_intrinsics.height, kinect_intrinsics.width, 3), dtype=np.uint8
+                (camera_model.resolution.height, camera_model.resolution.width, 3),
+                dtype=np.uint8,
             )
             * 255
         )  # White image
         depth_image = (
             np.ones(
-                (kinect_intrinsics.height, kinect_intrinsics.width), dtype=np.uint16
+                (camera_model.resolution.height, camera_model.resolution.width),
+                dtype=np.uint16,
             )
             * 201
             * 1000
         )  # 201mm depth
 
         mask = np.zeros(
-            (kinect_intrinsics.height, kinect_intrinsics.width), dtype=np.uint8
+            (camera_model.resolution.height, camera_model.resolution.width),
+            dtype=np.uint8,
         )
         mask[100:200, 100:200] = 255
 
         pc = get_cloud_from_rgb_depth_and_mask(
-            rgb_image, depth_image, mask, kinect_intrinsics, depth_truncate=0.2
+            rgb_image, depth_image, mask, camera_model, depth_truncate=0.2
         )  # truncate from 200 mm
 
         assert len(pc.points) == 0
 
     def test_get_cloud_from_rgb_depth_and_mask_keeps_pixels_of_mask_true_value(
-        self, kinect_intrinsics: open3d.camera.PinholeCameraIntrinsic
+        self, camera_model: PinholeCameraModel
     ):
-        shape = (kinect_intrinsics.height, kinect_intrinsics.width)
+        shape = (camera_model.resolution.height, camera_model.resolution.width)
         rgb_image = np.zeros((*shape, 3), dtype=np.uint8)
         depth_image = np.full(shape, 1000, dtype=np.uint16)
         mask = np.zeros(shape, dtype=np.uint8)
@@ -526,21 +537,21 @@ class TestUtilsO3DHelper(object):
         mask[300:310, 300:310] = 255
 
         pc = get_cloud_from_rgb_depth_and_mask(
-            rgb_image, depth_image, mask, kinect_intrinsics, mask_true_value=7
+            rgb_image, depth_image, mask, camera_model, mask_true_value=7
         )
 
         assert len(pc.points) == 10 * 20
 
     def test_get_cloud_from_rgb_depth_and_mask_leaves_depth_image_unchanged(
-        self, kinect_intrinsics: open3d.camera.PinholeCameraIntrinsic
+        self, camera_model: PinholeCameraModel
     ):
-        shape = (kinect_intrinsics.height, kinect_intrinsics.width)
+        shape = (camera_model.resolution.height, camera_model.resolution.width)
         depth_image = np.full(shape, 1000, dtype=np.uint16)
         mask = np.zeros(shape, dtype=np.uint8)
         mask[100:200, 100:200] = 255
 
         get_cloud_from_rgb_depth_and_mask(
-            np.zeros((*shape, 3), dtype=np.uint8), depth_image, mask, kinect_intrinsics
+            np.zeros((*shape, 3), dtype=np.uint8), depth_image, mask, camera_model
         )
 
         np.testing.assert_array_equal(
@@ -557,130 +568,145 @@ class TestUtilsO3DHelper(object):
     )
     def test_get_cloud_from_rgb_depth_and_mask_pc_color(
         self,
-        kinect_intrinsics: open3d.camera.PinholeCameraIntrinsic,
+        camera_model: PinholeCameraModel,
         channel: int,
         expected_color: tuple[float, float, float],
     ):
         rgb_image = np.zeros(
-            (kinect_intrinsics.height, kinect_intrinsics.width, 3), dtype=np.uint8
+            (camera_model.resolution.height, camera_model.resolution.width, 3),
+            dtype=np.uint8,
         )
         rgb_image[:, :, channel] = 255  # Red image
 
         depth_image = (
             np.ones(
-                (kinect_intrinsics.height, kinect_intrinsics.width), dtype=np.uint16
+                (camera_model.resolution.height, camera_model.resolution.width),
+                dtype=np.uint16,
             )
             * 125
         )  # Grey image
 
         mask = np.zeros(
-            (kinect_intrinsics.height, kinect_intrinsics.width), dtype=np.uint8
+            (camera_model.resolution.height, camera_model.resolution.width),
+            dtype=np.uint8,
         )
         mask[100:200, 100:200] = 255
 
         pc = get_cloud_from_rgb_depth_and_mask(
-            rgb_image, depth_image, mask, kinect_intrinsics
+            rgb_image, depth_image, mask, camera_model
         )
 
         assert len(pc.points) == 10000
         assert np.all(np.asarray(pc.colors) == expected_color)
 
     def test_get_cloud_from_rgb_depth_and_mask_empty_depth(
-        self, kinect_intrinsics: open3d.camera.PinholeCameraIntrinsic
+        self, camera_model: PinholeCameraModel
     ):
         rgb_image = (
             np.ones(
-                (kinect_intrinsics.height, kinect_intrinsics.width, 3), dtype=np.uint8
+                (camera_model.resolution.height, camera_model.resolution.width, 3),
+                dtype=np.uint8,
             )
             * 255
         )  # White image
         depth_image = np.zeros(
-            (kinect_intrinsics.height, kinect_intrinsics.width), dtype=np.uint16
+            (camera_model.resolution.height, camera_model.resolution.width),
+            dtype=np.uint16,
         )  # Invalid depth
 
         mask = np.zeros(
-            (kinect_intrinsics.height, kinect_intrinsics.width), dtype=np.uint8
+            (camera_model.resolution.height, camera_model.resolution.width),
+            dtype=np.uint8,
         )
 
         pc = get_cloud_from_rgb_depth_and_mask(
-            rgb_image, depth_image, mask, kinect_intrinsics
+            rgb_image, depth_image, mask, camera_model
         )
 
         assert len(pc.points) == 0
 
     def test_get_cloud_from_rgb_depth_and_mask_empty_mask(
-        self, kinect_intrinsics: open3d.camera.PinholeCameraIntrinsic
+        self, camera_model: PinholeCameraModel
     ):
         rgb_image = (
             np.ones(
-                (kinect_intrinsics.height, kinect_intrinsics.width, 3), dtype=np.uint8
+                (camera_model.resolution.height, camera_model.resolution.width, 3),
+                dtype=np.uint8,
             )
             * 255
         )  # White image
         depth_image = (
             np.ones(
-                (kinect_intrinsics.height, kinect_intrinsics.width), dtype=np.uint16
+                (camera_model.resolution.height, camera_model.resolution.width),
+                dtype=np.uint16,
             )
             * 200
             * 1000
         )  # 200mm depth
 
         mask = np.zeros(
-            (kinect_intrinsics.height, kinect_intrinsics.width), dtype=np.uint8
+            (camera_model.resolution.height, camera_model.resolution.width),
+            dtype=np.uint8,
         )
 
         pc = get_cloud_from_rgb_depth_and_mask(
-            rgb_image, depth_image, mask, kinect_intrinsics
+            rgb_image, depth_image, mask, camera_model
         )
 
         assert len(pc.points) == 0
 
     def test_get_cloud_from_rgb_depth_and_mask_invalid_mask(
-        self, kinect_intrinsics: open3d.camera.PinholeCameraIntrinsic
+        self, camera_model: PinholeCameraModel
     ):
         rgb_image = (
             np.ones(
-                (kinect_intrinsics.height, kinect_intrinsics.width, 3), dtype=np.uint8
+                (camera_model.resolution.height, camera_model.resolution.width, 3),
+                dtype=np.uint8,
             )
             * 255
         )  # White image
         depth_image = (
             np.ones(
-                (kinect_intrinsics.height, kinect_intrinsics.width), dtype=np.uint16
+                (camera_model.resolution.height, camera_model.resolution.width),
+                dtype=np.uint16,
             )
             * 200
             * 1000
         )  # 200mm depth
 
         mask = np.ones(
-            (kinect_intrinsics.height, kinect_intrinsics.width), dtype=np.uint8
+            (camera_model.resolution.height, camera_model.resolution.width),
+            dtype=np.uint8,
         )
 
         pc = get_cloud_from_rgb_depth_and_mask(
-            rgb_image, depth_image, mask, kinect_intrinsics
+            rgb_image, depth_image, mask, camera_model
         )
 
         assert len(pc.points) == 0
 
     def test_get_cloud_from_rgb_depth_and_mask_empty_mask_and_depth(
-        self, kinect_intrinsics: open3d.camera.PinholeCameraIntrinsic
+        self, camera_model: PinholeCameraModel
     ):
         rgb_image = (
             np.ones(
-                (kinect_intrinsics.height, kinect_intrinsics.width, 3), dtype=np.uint8
+                (camera_model.resolution.height, camera_model.resolution.width, 3),
+                dtype=np.uint8,
             )
             * 255
         )  # White image
         depth_image = np.zeros(
-            (kinect_intrinsics.height, kinect_intrinsics.width), dtype=np.uint16
+            (camera_model.resolution.height, camera_model.resolution.width),
+            dtype=np.uint16,
         )  # Invalid depth
 
         mask = np.zeros(
-            (kinect_intrinsics.height, kinect_intrinsics.width), dtype=np.uint8
+            (camera_model.resolution.height, camera_model.resolution.width),
+            dtype=np.uint8,
         )
 
         pc = get_cloud_from_rgb_depth_and_mask(
-            rgb_image, depth_image, mask, kinect_intrinsics
+            rgb_image, depth_image, mask, camera_model
         )
 
         assert len(pc.points) == 0
@@ -772,3 +798,41 @@ class TestUtilsO3DHelper(object):
         assert pytest.raises(
             error, create_sphere_from_translation, origin, color, radius
         )
+
+
+# %% Semantic camera calibration
+
+
+def test_masked_cloud_projects_depth_with_semantic_camera_model() -> None:
+    """
+    Masked depth uses the focal lengths and principal point of its camera model.
+    """
+    camera_model = PinholeCameraModel(
+        image_resolution=CameraResolution(width=3, height=2),
+        focal_length_x=2.0,
+        focal_length_y=4.0,
+        principal_point_x=0.5,
+        principal_point_y=0.25,
+    )
+    depth_image = np.zeros((2, 3), dtype=np.uint16)
+    depth_image[1, 2] = 1000
+    mask = np.zeros_like(depth_image, dtype=np.uint8)
+    mask[1, 2] = 255
+
+    cloud = get_cloud_from_rgb_depth_and_mask(
+        rgb_image=np.zeros((2, 3, 3), dtype=np.uint8),
+        depth_image=depth_image,
+        mask=mask,
+        camera_model=camera_model,
+    )
+
+    np.testing.assert_array_equal(
+        np.asarray(cloud.points),
+        [
+            [
+                (2 - camera_model.principal_point_x) / camera_model.focal_length_x,
+                (1 - camera_model.principal_point_y) / camera_model.focal_length_y,
+                1.0,
+            ]
+        ],
+    )

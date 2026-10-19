@@ -27,7 +27,6 @@ from ultralytics import YOLO
 from robokudo.annotators.core import ThreadedAnnotator
 from robokudo.annotators.exceptions import NotAPoseModelException
 from robokudo.cas import CASViews
-from robokudo.io.camera_model_adapters import Open3DCameraModelAdapter
 from robokudo.defs import PACKAGE_NAME
 from robokudo.types.annotation import Classification, CloudAnnotation
 from robokudo.types.cv import Rect
@@ -51,6 +50,7 @@ if TYPE_CHECKING:
     from ultralytics.engine.results import Results
 
     from robokudo.types.cv import ColorToDepthRatio
+    from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
 
 # %% body keypoints
 
@@ -103,9 +103,9 @@ class DepthFrame:
     Size of the depth image relative to the color image.
     """
 
-    camera_intrinsics: open3d.camera.PinholeCameraIntrinsic
+    camera_model: PinholeCameraModel
     """
-    Intrinsics of the camera at the depth image resolution.
+    Projection model at the depth image resolution.
     """
 
     @classproperty
@@ -167,7 +167,7 @@ class DepthFrame:
             rgb_image=self.rgb_image,
             depth_image=self.depth_image,
             mask=mask,
-            camera_intrinsics=self.camera_intrinsics,
+            camera_model=self.camera_model,
             mask_true_value=self.mask_foreground,
             **cloud_settings,
         )
@@ -351,7 +351,7 @@ class HumanAndPoseAnnotator(ThreadedAnnotator):
     def _depth_frame(self) -> DepthFrame:
         """
         Collect the depth measurements of the CAS and scale the color image and the
-        camera intrinsics to the depth image resolution.
+        camera model to the depth image resolution.
 
         :return: The depth measurements of the CAS with the matching color image.
         """
@@ -364,11 +364,9 @@ class HumanAndPoseAnnotator(ThreadedAnnotator):
             depth_image=cas.get(CASViews.DEPTH_IMAGE),
             rgb_image=cv2.cvtColor(scaled_color, cv2.COLOR_BGR2RGB),
             color_to_depth_ratio=color_to_depth_ratio,
-            camera_intrinsics=Open3DCameraModelAdapter.to_intrinsic(
-                cas.require_camera_observation().effective_camera_model.scaled(
-                    scale_x=color_to_depth_ratio.horizontal,
-                    scale_y=color_to_depth_ratio.vertical,
-                )
+            camera_model=cas.require_camera_observation().effective_camera_model.scaled(
+                scale_x=color_to_depth_ratio.horizontal,
+                scale_y=color_to_depth_ratio.vertical,
             ),
         )
 

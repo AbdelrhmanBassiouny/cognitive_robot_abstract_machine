@@ -32,7 +32,6 @@ from robokudo.exceptions import (
     ColorToDepthRatioMissing,
     UnknownMode,
 )
-from robokudo.io.camera_model_adapters import Open3DCameraModelAdapter
 from robokudo.types.annotation import (
     BoundingBox3DAnnotation,
     Classification,
@@ -65,6 +64,7 @@ from robokudo.utils.transform import (
 from robokudo.world_descriptor import PredefinedObject
 
 if TYPE_CHECKING:
+    from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
     from semantic_digital_twin.world_description.shape_collection import ShapeCollection
     import numpy.typing as npt
     import open3d
@@ -172,7 +172,7 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
         self.color: npt.NDArray | None = None
         self.depth: npt.NDArray | None = None
         self.cloud: open3d.geometry.PointCloud | None = None
-        self.camera_intrinsics = None
+        self.camera_model: PinholeCameraModel | None = None
         self.object_body: Body | None = None
         self.object_bodies_by_name: dict[str, Body] = {}
 
@@ -453,9 +453,7 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
                 scale_y=color_to_depth_ratio.vertical,
             )
         )
-        self.camera_intrinsics = Open3DCameraModelAdapter.to_intrinsic(
-            pointcloud_camera_model
-        )
+        self.camera_model = pointcloud_camera_model
 
         color_rgb = cv2.cvtColor(resized_color, cv2.COLOR_BGR2RGB)
 
@@ -585,5 +583,5 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
         mask = np.zeros_like(self.depth, dtype=np.uint8)
         mask[top:bottom, left:right] = 255
         return get_cloud_from_rgb_depth_and_mask(
-            color_rgb, self.depth, mask, self.camera_intrinsics, mask_true_value=255
+            color_rgb, self.depth, mask, self.camera_model, mask_true_value=255
         )

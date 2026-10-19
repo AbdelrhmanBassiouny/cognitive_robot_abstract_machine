@@ -28,6 +28,7 @@ import open3d
 import trimesh
 from typing_extensions import TYPE_CHECKING
 from robokudo.cas import CASViews
+from robokudo.io.camera_model_adapters import Open3DCameraModelAdapter
 from robokudo.utils.transform import (
     get_transform_matrix,
     get_translation_from_transform_matrix,
@@ -314,7 +315,7 @@ def get_cloud_from_rgb_depth_and_mask(
     rgb_image: npt.NDArray,
     depth_image: npt.NDArray,
     mask: npt.NDArray,
-    camera_intrinsics: open3d.camera.PinholeCameraIntrinsic,
+    camera_model: PinholeCameraModel,
     depth_truncate: float = 9.0,
     mask_true_value: int = 255,
 ) -> open3d.geometry.PointCloud:
@@ -326,7 +327,7 @@ def get_cloud_from_rgb_depth_and_mask(
     :param rgb_image: Color image in RGB order.
     :param depth_image: Depth image in millimeters.
     :param mask: Mask on the depth image.
-    :param camera_intrinsics: Intrinsics of the camera at the depth image resolution.
+    :param camera_model: Projection model at the depth image resolution.
     :param depth_truncate: Distance in meters beyond which measurements are left out.
     :param mask_true_value: Value of the mask pixels whose depth measurements the cloud
         is built from.
@@ -343,7 +344,7 @@ def get_cloud_from_rgb_depth_and_mask(
     )
 
     return open3d.geometry.PointCloud.create_from_rgbd_image(
-        rgbd_image, camera_intrinsics
+        rgbd_image, Open3DCameraModelAdapter.to_intrinsic(camera_model)
     )
 
 
