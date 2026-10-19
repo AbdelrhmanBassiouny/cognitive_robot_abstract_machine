@@ -8,12 +8,12 @@ import time
 
 from robokudo.cas import CAS, CASViews
 from robokudo.descriptors.camera_configs.config_semdt_raytracer import (
-    SemDTRayTracerCameraConfig,
+    RayTracingCameraConfiguration,
 )
 from robokudo.io.camera_interface import CameraInterface
 from robokudo.io.semdt_camera_context import (
     RayTracingContext,
-    SemDTCameraContextResolver,
+    RayTracingContextResolver,
 )
 from robokudo.types.camera import CameraObservation
 from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
@@ -22,7 +22,7 @@ from semantic_digital_twin.datastructures.camera_rendering import RenderedRGBDFr
 # %% Semantic Digital Twin ray-tracer interface
 
 
-class SemDTRayTracerCameraInterface(CameraInterface):
+class RayTracingCameraInterface(CameraInterface):
     """
     Render RGB-D camera data from a Semantic Digital Twin world.
 
@@ -30,14 +30,14 @@ class SemDTRayTracerCameraInterface(CameraInterface):
     coherent semantic camera observation into the CAS.
     """
 
-    def __init__(self, camera_config: SemDTRayTracerCameraConfig) -> None:
+    def __init__(self, camera_config: RayTracingCameraConfiguration) -> None:
         """
         Initialize the camera interface.
 
         :param camera_config: Ray-tracer camera configuration descriptor.
         """
         super().__init__(camera_config)
-        self.context_resolver = SemDTCameraContextResolver(camera_config)
+        self.context_resolver = RayTracingContextResolver(camera_config)
         """
         Resolver for the configured world and semantic camera.
         """

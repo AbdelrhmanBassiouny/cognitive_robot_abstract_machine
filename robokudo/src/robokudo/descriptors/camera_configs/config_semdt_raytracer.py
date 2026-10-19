@@ -64,7 +64,7 @@ class RuntimeRobotWorldSource:
 
 
 @dataclass(slots=True)
-class SemDTRayTracerCameraConfig(BaseCameraConfig):
+class RayTracingCameraConfiguration(BaseCameraConfig):
     """
     Configuration for a simulated RGB-D camera backed by SemDT's RayTracer.
     """

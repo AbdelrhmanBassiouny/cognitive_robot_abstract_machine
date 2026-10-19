@@ -19,11 +19,11 @@ from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
 from robokudo.cas import CAS, CASViews
 from robokudo.types.camera import CameraObservation
 from robokudo.descriptors.camera_configs.config_semdt_raytracer import (
-    SemDTRayTracerCameraConfig,
+    RayTracingCameraConfiguration,
     WorldDescriptorSource,
 )
 from robokudo.io.sensor_world import SensorWorldProjector
-from robokudo.io.semdt_raytracer_camera_interface import SemDTRayTracerCameraInterface
+from robokudo.io.semdt_raytracer_camera_interface import RayTracingCameraInterface
 from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
 from semantic_digital_twin.datastructures.camera_rendering import RenderedRGBDFrame
@@ -32,12 +32,12 @@ from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 
 # %% Rectangular rendered observation
 @pytest.fixture
-def optical_interface() -> SemDTRayTracerCameraInterface:
+def optical_interface() -> RayTracingCameraInterface:
     """
     Provide a simulated camera with an nonidentity optical root pose.
     """
-    interface = SemDTRayTracerCameraInterface(
-        SemDTRayTracerCameraConfig(
+    interface = RayTracingCameraInterface(
+        RayTracingCameraConfiguration(
             source=WorldDescriptorSource(
                 descriptor_name="world_semdt_raytracer_cylinders"
             )
@@ -58,7 +58,7 @@ def optical_interface() -> SemDTRayTracerCameraInterface:
 
 @pytest.fixture
 def rectangular_frame(
-    optical_interface: SemDTRayTracerCameraInterface,
+    optical_interface: RayTracingCameraInterface,
 ) -> RenderedRGBDFrame:
     """
     Provide distinct values at every pixel of a width-first rendered frame.
@@ -85,7 +85,7 @@ def rectangular_frame(
     "view", [CASViews.COLOR_IMAGE, CASViews.DEPTH_IMAGE, CASViews.OBJECT_IMAGE]
 )
 def test_interface_publishes_row_first_pixels(
-    optical_interface: SemDTRayTracerCameraInterface,
+    optical_interface: RayTracingCameraInterface,
     rectangular_frame: RenderedRGBDFrame,
     monkeypatch: pytest.MonkeyPatch,
     view: str,
@@ -108,7 +108,7 @@ def test_interface_publishes_row_first_pixels(
 
 
 def test_interface_publishes_rendered_optical_pose(
-    optical_interface: SemDTRayTracerCameraInterface,
+    optical_interface: RayTracingCameraInterface,
     rectangular_frame: RenderedRGBDFrame,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -131,7 +131,7 @@ def test_interface_publishes_rendered_optical_pose(
 
 
 def test_sensor_projection_preserves_optical_root_pose(
-    optical_interface: SemDTRayTracerCameraInterface,
+    optical_interface: RayTracingCameraInterface,
     rectangular_frame: RenderedRGBDFrame,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -162,7 +162,7 @@ def test_sensor_projection_preserves_optical_root_pose(
 
 
 def test_static_optical_pose_binds_camera_root(
-    optical_interface: SemDTRayTracerCameraInterface,
+    optical_interface: RayTracingCameraInterface,
     rectangular_frame: RenderedRGBDFrame,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -203,7 +203,7 @@ def test_static_optical_pose_binds_camera_root(
 
 
 def test_replayed_optical_pose_updates_camera_root(
-    optical_interface: SemDTRayTracerCameraInterface,
+    optical_interface: RayTracingCameraInterface,
     rectangular_frame: RenderedRGBDFrame,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -237,7 +237,7 @@ def test_replayed_optical_pose_updates_camera_root(
 
 
 def test_optical_observation_roundtrip_preserves_root_pose(
-    optical_interface: SemDTRayTracerCameraInterface,
+    optical_interface: RayTracingCameraInterface,
     rectangular_frame: RenderedRGBDFrame,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

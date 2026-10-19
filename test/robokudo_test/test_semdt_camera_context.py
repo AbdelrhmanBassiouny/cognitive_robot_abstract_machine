@@ -7,13 +7,13 @@ import pytest
 import robokudo.world as rk_world
 from robokudo.descriptors.camera_configs.config_semdt_raytracer import (
     RuntimeRobotWorldSource,
-    SemDTRayTracerCameraConfig,
+    RayTracingCameraConfiguration,
     WorldDescriptorSource,
 )
 from robokudo.descriptors.worlds.world_semdt_raytracer_cylinders import WorldDescriptor
 from robokudo.io.semdt_camera_context import (
     RayTracingContext,
-    SemDTCameraContextResolver,
+    RayTracingContextResolver,
 )
 from robokudo.io.exceptions import (
     CameraAnnotationMissing,
@@ -39,9 +39,7 @@ def test_resolver_selects_named_descriptor_camera() -> None:
     [camera] = world.get_semantic_annotations_by_type(Camera)
     source = WorldDescriptorSource(camera_name=camera.name)
 
-    selected_camera = SemDTCameraContextResolver._select_descriptor_camera(
-        world, source
-    )
+    selected_camera = RayTracingContextResolver._select_descriptor_camera(world, source)
 
     assert selected_camera is camera
 
@@ -51,7 +49,7 @@ def test_resolver_rejects_unknown_camera_name() -> None:
     source = WorldDescriptorSource(camera_name=PrefixedName(name="unknown_camera"))
 
     with pytest.raises(CameraAnnotationMissing):
-        SemDTCameraContextResolver._select_descriptor_camera(world, source)
+        RayTracingContextResolver._select_descriptor_camera(world, source)
 
 
 def test_resolver_rejects_world_without_camera_annotation() -> None:
@@ -60,7 +58,7 @@ def test_resolver_rejects_world_without_camera_annotation() -> None:
     """
     world = World()
     with pytest.raises(CameraAnnotationMissing):
-        SemDTCameraContextResolver._select_descriptor_camera(
+        RayTracingContextResolver._select_descriptor_camera(
             world, WorldDescriptorSource()
         )
 
@@ -76,8 +74,8 @@ def test_resolver_uses_runtime_robots_default_camera(monkeypatch) -> None:
     world.get_semantic_annotations_by_type.return_value = [robot]
     monkeypatch.setattr(rk_world, "world_instance", lambda: world)
     monkeypatch.setattr(rk_world, "init_world_entity_tracker_from_world", Mock())
-    resolver = SemDTCameraContextResolver(
-        SemDTRayTracerCameraConfig(source=RuntimeRobotWorldSource())
+    resolver = RayTracingContextResolver(
+        RayTracingCameraConfiguration(source=RuntimeRobotWorldSource())
     )
 
     context = resolver.resolve()
@@ -101,8 +99,8 @@ def test_resolver_retries_runtime_lookup_after_world_becomes_available(
     runtime_worlds = iter((unavailable_world, available_world))
     monkeypatch.setattr(rk_world, "world_instance", lambda: next(runtime_worlds))
     monkeypatch.setattr(rk_world, "init_world_entity_tracker_from_world", Mock())
-    resolver = SemDTCameraContextResolver(
-        SemDTRayTracerCameraConfig(source=RuntimeRobotWorldSource())
+    resolver = RayTracingContextResolver(
+        RayTracingCameraConfiguration(source=RuntimeRobotWorldSource())
     )
 
     with pytest.raises(RobotAnnotationMissing):
@@ -126,7 +124,7 @@ def test_resolver_selects_named_robot_default_camera() -> None:
         selected_robot,
     ]
     source = RuntimeRobotWorldSource(robot_name=selected_robot.name)
-    selected_camera = SemDTCameraContextResolver._select_runtime_robot_camera(
+    selected_camera = RayTracingContextResolver._select_runtime_robot_camera(
         world, source
     )
 
@@ -143,7 +141,7 @@ def test_resolver_rejects_ambiguous_runtime_robot_selection() -> None:
     world.get_semantic_annotations_by_type.return_value = [first_robot, second_robot]
     source = RuntimeRobotWorldSource()
     with pytest.raises(RobotAnnotationAmbiguous):
-        SemDTCameraContextResolver._select_runtime_robot_camera(world, source)
+        RayTracingContextResolver._select_runtime_robot_camera(world, source)
 
 
 # %% Camera pose
@@ -161,11 +159,11 @@ def test_resolver_preserves_camera_pose_without_override(
     descriptor_pose = camera.root.global_transform.to_np().copy()
     module_loader = Mock()
     module_loader.load_world_descriptor.return_value = descriptor
-    resolver = SemDTCameraContextResolver(
-        SemDTRayTracerCameraConfig(source=WorldDescriptorSource()),
+    resolver = RayTracingContextResolver(
+        RayTracingCameraConfiguration(source=WorldDescriptorSource()),
         module_loader=module_loader,
     )
-    apply_camera_pose = Mock(wraps=SemDTCameraContextResolver._apply_camera_pose)
+    apply_camera_pose = Mock(wraps=RayTracingContextResolver._apply_camera_pose)
     monkeypatch.setattr(resolver, "_apply_camera_pose", apply_camera_pose)
 
     context = resolver.resolve()
@@ -189,12 +187,12 @@ def test_resolver_applies_camera_pose_override_once() -> None:
     descriptor = WorldDescriptor()
     world = descriptor.world
     [camera] = world.get_semantic_annotations_by_type(Camera)
-    config = SemDTRayTracerCameraConfig(
+    config = RayTracingCameraConfiguration(
         source=WorldDescriptorSource(camera_pose=camera_pose)
     )
     module_loader = Mock()
     module_loader.load_world_descriptor.return_value = descriptor
-    resolver = SemDTCameraContextResolver(config, module_loader=module_loader)
+    resolver = RayTracingContextResolver(config, module_loader=module_loader)
 
     context = resolver.resolve()
 
@@ -234,7 +232,7 @@ def test_resolver_rejects_pose_override_for_world_root_camera() -> None:
         world.add_body(camera_body)
         world.add_semantic_annotation(camera)
     with pytest.raises(CameraPoseOverrideUnavailable):
-        SemDTCameraContextResolver._apply_camera_pose(
+        RayTracingContextResolver._apply_camera_pose(
             world,
             camera,
             camera_pose=HomogeneousTransformationMatrix(),

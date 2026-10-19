@@ -12,11 +12,11 @@ from sensor_msgs.msg import CameraInfo
 
 from robokudo.cas import CAS, CASViews
 from robokudo.descriptors.camera_configs.config_semdt_raytracer import (
-    SemDTRayTracerCameraConfig,
+    RayTracingCameraConfiguration,
     WorldDescriptorSource,
 )
 from robokudo.io.semdt_raytracer_camera_interface import (
-    SemDTRayTracerCameraInterface,
+    RayTracingCameraInterface,
 )
 from semantic_digital_twin.datastructures.camera_model import FieldOfViewCameraModel
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
@@ -32,8 +32,8 @@ def test_interface_publishes_aligned_semantic_rgbd_frame():
     """
     The complete interface publishes images and matching semantic camera state.
     """
-    interface = SemDTRayTracerCameraInterface(
-        SemDTRayTracerCameraConfig(
+    interface = RayTracingCameraInterface(
+        RayTracingCameraConfiguration(
             source=WorldDescriptorSource(
                 descriptor_name="world_semdt_raytracer_cylinders"
             )
@@ -55,8 +55,8 @@ def test_interface_publishes_effective_model_for_field_of_view_camera():
     """
     An FOV camera produces a calibrated effective observation model.
     """
-    interface = SemDTRayTracerCameraInterface(
-        SemDTRayTracerCameraConfig(
+    interface = RayTracingCameraInterface(
+        RayTracingCameraConfiguration(
             source=WorldDescriptorSource(
                 descriptor_name="world_semdt_raytracer_cylinders"
             )
@@ -93,8 +93,8 @@ def test_interface_publishes_shared_rendered_frame(monkeypatch: MonkeyPatch) -> 
     """
     The camera interface publishes row-first images from a shared width-first frame.
     """
-    interface = SemDTRayTracerCameraInterface(
-        SemDTRayTracerCameraConfig(
+    interface = RayTracingCameraInterface(
+        RayTracingCameraConfiguration(
             source=WorldDescriptorSource(
                 descriptor_name="world_semdt_raytracer_cylinders"
             )

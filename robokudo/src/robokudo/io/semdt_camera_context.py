@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 import robokudo.world as rk_world
 from robokudo.descriptors.camera_configs.config_semdt_raytracer import (
     RuntimeRobotWorldSource,
-    SemDTRayTracerCameraConfig,
+    RayTracingCameraConfiguration,
     WorldDescriptorSource,
 )
 from robokudo.io.exceptions import (
@@ -50,12 +50,12 @@ class RayTracingContext:
 
 
 @dataclass(eq=False)
-class SemDTCameraContextResolver:
+class RayTracingContextResolver:
     """
     Resolve and cache a ray-tracing context from a configured world source.
     """
 
-    camera_config: SemDTRayTracerCameraConfig
+    camera_config: RayTracingCameraConfiguration
     """
     Camera configuration whose source is resolved.
     """
