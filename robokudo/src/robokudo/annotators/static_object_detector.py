@@ -67,7 +67,7 @@ from robokudo.world_descriptor import PredefinedObject
 if TYPE_CHECKING:
     from semantic_digital_twin.world_description.shape_collection import ShapeCollection
     import numpy.typing as npt
-    import open3d as o3d
+    import open3d
 
 
 class StaticObjectMode(Enum):
@@ -171,7 +171,7 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
         self.rk_logger.debug("%s.__init__()" % self.__class__.__name__)
         self.color: npt.NDArray | None = None
         self.depth: npt.NDArray | None = None
-        self.cloud: o3d.geometry.PointCloud | None = None
+        self.cloud: open3d.geometry.PointCloud | None = None
         self.camera_intrinsics = None
         self.object_body: Body | None = None
         self.object_bodies_by_name: dict[str, Body] = {}
@@ -564,7 +564,7 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
 
     def get_cloud_from_2d_bb_roi(
         self, color_rgb: npt.NDArray
-    ) -> o3d.geometry.PointCloud:
+    ) -> open3d.geometry.PointCloud:
         """
         Build the point cloud of the depth measurements inside the configured bounding
         box.

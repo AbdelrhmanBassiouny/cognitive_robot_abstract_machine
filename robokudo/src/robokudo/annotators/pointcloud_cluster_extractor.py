@@ -22,7 +22,7 @@ from timeit import default_timer
 
 import cv2
 import numpy as np
-import open3d as o3d
+import open3d
 from matplotlib import pyplot as plt
 from py_trees.common import Status
 from scipy.spatial.transform import Rotation as R
@@ -57,7 +57,7 @@ def generate_roi_with_mask_from_points(
     image_height: int,
     image_width: int,
     pointcloud_camera_model: PinholeCameraModel,
-    cloud: o3d.geometry.PointCloud,
+    cloud: open3d.geometry.PointCloud,
     color_to_depth_ratio: ColorToDepthRatio,
 ) -> tuple[ImageROI, npt.NDArray]:
     """
@@ -106,7 +106,7 @@ def generate_roi_with_mask_from_points(
 
 
 def cluster_points(
-    input_cloud: o3d.geometry.PointCloud,
+    input_cloud: open3d.geometry.PointCloud,
     eps: float,
     min_points: int,
     rk_logger: logging.Logger,
@@ -209,13 +209,13 @@ class PointCloudClusterExtractor(ThreadedAnnotator):
     def points_and_indices_from_plane(
         self,
         plane_model: Plane,
-        cloud: o3d.geometry.PointCloud,
+        cloud: open3d.geometry.PointCloud,
     ) -> tuple[
-        o3d.geometry.OrientedBoundingBox,
-        o3d.geometry.OrientedBoundingBox,
-        o3d.geometry.PointCloud,
+        open3d.geometry.OrientedBoundingBox,
+        open3d.geometry.OrientedBoundingBox,
+        open3d.geometry.PointCloud,
         list[int],
-        o3d.geometry.PointCloud,
+        open3d.geometry.PointCloud,
     ]:
         """
         Extract points above a detected plane.
@@ -245,9 +245,9 @@ class PointCloudClusterExtractor(ThreadedAnnotator):
         # cloud and was in the analysis of the PlaneAnnotation.
         outlier_cloud = cloud.select_by_index(plane_model.inliers, invert=True)
         plane_obb = plane_cloud.get_oriented_bounding_box()
-        if not isinstance(plane_obb, o3d.geometry.OrientedBoundingBox):
+        if not isinstance(plane_obb, open3d.geometry.OrientedBoundingBox):
             raise InvalidAnalysisData(
-                expected_type=o3d.geometry.OrientedBoundingBox,
+                expected_type=open3d.geometry.OrientedBoundingBox,
                 actual_type=type(plane_obb),
             )
 
@@ -272,7 +272,7 @@ class PointCloudClusterExtractor(ThreadedAnnotator):
 
         # Construct OBB which is used to segment objects on the plane
         # We need to transform it so that it is on top of the found plane
-        above_plane_obb = o3d.geometry.OrientedBoundingBox()
+        above_plane_obb = open3d.geometry.OrientedBoundingBox()
         above_plane_obb.extent = np.array(
             [plane_obb.extent[0], plane_obb.extent[1], 0.8]
         )
@@ -282,9 +282,10 @@ class PointCloudClusterExtractor(ThreadedAnnotator):
         on_plane_cloud_indices = on_plane_obb.get_point_indices_within_bounding_box(
             outlier_cloud.points
         )
-        if not isinstance(on_plane_cloud, o3d.geometry.PointCloud):
+        if not isinstance(on_plane_cloud, open3d.geometry.PointCloud):
             raise InvalidAnalysisData(
-                expected_type=o3d.geometry.PointCloud, actual_type=type(on_plane_cloud)
+                expected_type=open3d.geometry.PointCloud,
+                actual_type=type(on_plane_cloud),
             )
         on_plane_point_count = len(on_plane_cloud.points)
         if on_plane_point_count < self.descriptor.parameters.min_on_plane_point_count:
@@ -429,7 +430,7 @@ class PointCloudClusterExtractor(ThreadedAnnotator):
         # 3D
         visualization_cloud = concatenate_clouds(all_vis_clouds)
 
-        plane_normal = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.2)
+        plane_normal = open3d.geometry.TriangleMesh.create_coordinate_frame(size=0.2)
         t = get_transform_matrix(plane_obb.R, plane_obb.center)
         plane_normal.transform(t)
 

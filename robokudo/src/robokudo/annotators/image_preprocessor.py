@@ -20,7 +20,7 @@ from timeit import default_timer
 
 import cv2
 import numpy
-import open3d as o3d
+import open3d
 from py_trees.common import Status
 from typing_extensions import TYPE_CHECKING
 
@@ -146,21 +146,21 @@ class ImagePreprocessorAnnotator(BaseAnnotator):
             self.get_cas(), self.color
         )
 
-        # o3d expects color images in RGB order
+        # open3d expects color images in RGB order
         color_rgb = cv2.cvtColor(resized_color, cv2.COLOR_BGR2RGB)
-        o3d_color = o3d.geometry.Image(color_rgb)
+        open3d_color_image = open3d.geometry.Image(color_rgb)
         native_depth = numpy.ascontiguousarray(
             self.depth, dtype=self.depth.dtype.newbyteorder("=")
         )
-        o3d_depth = o3d.geometry.Image(native_depth)
-        rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(
-            o3d_color,
-            o3d_depth,
+        open3d_depth_image = open3d.geometry.Image(native_depth)
+        rgbd_image = open3d.geometry.RGBDImage.create_from_color_and_depth(
+            open3d_color_image,
+            open3d_depth_image,
             convert_rgb_to_intensity=False,
             depth_trunc=self.descriptor.parameters.depth_trunc,
         )
 
-        cloud = o3d.geometry.PointCloud.create_from_rgbd_image(
+        cloud = open3d.geometry.PointCloud.create_from_rgbd_image(
             rgbd_image, self.camera_intrinsics
         )
 

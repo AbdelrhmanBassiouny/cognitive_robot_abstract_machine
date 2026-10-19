@@ -18,7 +18,7 @@ from copy import deepcopy
 
 import cv2
 import numpy as np
-import open3d as o3d
+import open3d
 from typing_extensions import Callable, TYPE_CHECKING
 
 from robokudo.cas import CASViews
@@ -96,8 +96,8 @@ def transform_pose_from_world_to_camera(
 
 
 def transform_cloud_from_camera_to_world(
-    cas: CAS, cloud: o3d.geometry.PointCloud, transform_inplace: bool = False
-) -> o3d.geometry.PointCloud:
+    cas: CAS, cloud: open3d.geometry.PointCloud, transform_inplace: bool = False
+) -> open3d.geometry.PointCloud:
     """
     Transform point cloud from camera to world coordinates.
 
@@ -117,8 +117,8 @@ def transform_cloud_from_camera_to_world(
 
 
 def transform_cloud_from_world_to_camera(
-    cas: CAS, cloud: o3d.geometry.PointCloud, transform_inplace: bool = False
-) -> o3d.geometry.PointCloud:
+    cas: CAS, cloud: open3d.geometry.PointCloud, transform_inplace: bool = False
+) -> open3d.geometry.PointCloud:
     """
     Transform point cloud from world to camera coordinates.
 

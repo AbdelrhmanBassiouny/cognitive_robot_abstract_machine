@@ -18,7 +18,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-import open3d as o3d
+import open3d
 from krrood.ormatic.utils import classproperty
 from py_trees.common import Status
 from typing_extensions import TYPE_CHECKING, Any
@@ -103,7 +103,7 @@ class DepthFrame:
     Size of the depth image relative to the color image.
     """
 
-    camera_intrinsics: o3d.camera.PinholeCameraIntrinsic
+    camera_intrinsics: open3d.camera.PinholeCameraIntrinsic
     """
     Intrinsics of the camera at the depth image resolution.
     """
@@ -115,7 +115,7 @@ class DepthFrame:
         """
         return 255
 
-    def box_cloud(self, box: Rect, depth_truncate: float) -> o3d.geometry.PointCloud:
+    def box_cloud(self, box: Rect, depth_truncate: float) -> open3d.geometry.PointCloud:
         """
         Build the point cloud of the depth measurements inside a box.
 
@@ -131,7 +131,7 @@ class DepthFrame:
         mask[top:bottom, left:right] = self.mask_foreground
         return self._masked_cloud(mask, depth_truncate=depth_truncate)
 
-    def disc_cloud(self, x: float, y: float, radius: int) -> o3d.geometry.PointCloud:
+    def disc_cloud(self, x: float, y: float, radius: int) -> open3d.geometry.PointCloud:
         """
         Build the point cloud of the depth measurements inside a disc.
 
@@ -153,7 +153,7 @@ class DepthFrame:
 
     def _masked_cloud(
         self, mask: npt.NDArray[np.uint8], **cloud_settings: float
-    ) -> o3d.geometry.PointCloud:
+    ) -> open3d.geometry.PointCloud:
         """
         Build the point cloud of the depth measurements a mask marks.
 
@@ -488,7 +488,7 @@ class HumanAndPoseAnnotator(ThreadedAnnotator):
                     )
                     if keypoint.confidence
                     >= parameters.keypoint_confidence_threshold_for_clouds
-                    else o3d.geometry.PointCloud()
+                    else open3d.geometry.PointCloud()
                 ),
             )
             for keypoint in keypoints

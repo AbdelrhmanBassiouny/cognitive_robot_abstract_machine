@@ -12,7 +12,7 @@ from __future__ import annotations
 
 # %% Imports
 import numpy as np
-import open3d as o3d
+import open3d
 from py_trees.blackboard import Blackboard
 from py_trees.common import Status
 
@@ -52,8 +52,8 @@ def cas_with_a_noisy_plane() -> CAS:
             random_state.uniform(0.5, 1.0, 600),
         ]
     )
-    cloud = o3d.geometry.PointCloud()
-    cloud.points = o3d.utility.Vector3dVector(
+    cloud = open3d.geometry.PointCloud()
+    cloud.points = open3d.utility.Vector3dVector(
         np.vstack([on_the_plane, above_the_plane])
     )
     cas = CAS()

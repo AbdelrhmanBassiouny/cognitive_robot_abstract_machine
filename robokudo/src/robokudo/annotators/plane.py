@@ -27,7 +27,7 @@ from contextlib import contextmanager, nullcontext
 from timeit import default_timer
 
 import numpy as np
-import open3d as o3d
+import open3d
 from py_trees.common import Status
 
 from robokudo.annotators.core import BaseAnnotator, ThreadedAnnotator
@@ -51,13 +51,13 @@ def _deterministic_ransac(seed: int) -> Iterator[None]:
 
     :param seed: Seed for the random samples RANSAC draws.
     """
-    o3d.utility.random.seed(seed)
-    previous_max_threads = o3d.utility.get_max_threads()
-    o3d.utility.set_max_threads(1)
+    open3d.utility.random.seed(seed)
+    previous_max_threads = open3d.utility.get_max_threads()
+    open3d.utility.set_max_threads(1)
     try:
         yield
     finally:
-        o3d.utility.set_max_threads(previous_max_threads)
+        open3d.utility.set_max_threads(previous_max_threads)
 
 
 class PlaneAnnotator(ThreadedAnnotator):
@@ -178,7 +178,7 @@ class PlaneAnnotator(ThreadedAnnotator):
 
         if self.descriptor.parameters.visualize_plane_model:
             # b) Show the plane model itself by a flat mesh
-            plane_model_mesh = o3d.geometry.TriangleMesh.create_box(
+            plane_model_mesh = open3d.geometry.TriangleMesh.create_box(
                 width=1.0, height=1.0, depth=0.01
             )
             plane_model_mesh.translate(

@@ -3,7 +3,7 @@ import os
 import uuid
 from dataclasses import dataclass
 
-import open3d as o3d
+import open3d
 import pytest
 import pymongo
 import numpy as np
@@ -81,8 +81,8 @@ def create_point_cloud():
     )
 
     # Create the point cloud
-    point_cloud = o3d.geometry.PointCloud()
-    point_cloud.points = o3d.utility.Vector3dVector(points)
+    point_cloud = open3d.geometry.PointCloud()
+    point_cloud.points = open3d.utility.Vector3dVector(points)
 
     return point_cloud
 

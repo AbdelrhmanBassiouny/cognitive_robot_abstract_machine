@@ -8,7 +8,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
-import open3d as o3d
 from krrood.ormatic.utils import classproperty
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
 

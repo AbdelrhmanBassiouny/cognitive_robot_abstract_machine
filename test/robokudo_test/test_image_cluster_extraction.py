@@ -7,7 +7,7 @@ from __future__ import annotations
 # %% Imports
 import cv2
 import numpy as np
-import open3d as o3d
+import open3d
 import pytest
 
 from robokudo.annotators.image_cluster_extractor import ImageClusterExtractor
@@ -65,7 +65,7 @@ def test_point_cloud_excludes_masked_depth_pixels(
     Only foreground depth pixels contribute projected points.
     """
     cluster_extractor.depth = np.full((2, 2), 1000, dtype=np.uint16)
-    cluster_extractor.camera_intrinsics = o3d.camera.PinholeCameraIntrinsic(
+    cluster_extractor.camera_intrinsics = open3d.camera.PinholeCameraIntrinsic(
         2, 2, 1.0, 1.0, 0.0, 0.0
     )
     color_image = np.zeros((2, 2, 3), dtype=np.uint8)
@@ -90,7 +90,7 @@ def test_cluster_annotation_requires_minimum_points(
     cas = CAS()
     monkeypatch.setattr(cluster_extractor, "get_cas", lambda: cas)
     cluster_extractor.depth = np.full((12, 12), 1000, dtype=np.uint16)
-    cluster_extractor.camera_intrinsics = o3d.camera.PinholeCameraIntrinsic(
+    cluster_extractor.camera_intrinsics = open3d.camera.PinholeCameraIntrinsic(
         12, 12, 1.0, 1.0, 0.0, 0.0
     )
     cluster_extractor.descriptor.parameters.min_points_threshold = minimum_points

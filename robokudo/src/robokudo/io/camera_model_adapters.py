@@ -7,7 +7,7 @@ from __future__ import annotations
 # %% Imports
 from dataclasses import dataclass
 
-import open3d as o3d
+import open3d
 from sensor_msgs.msg import CameraInfo
 
 from robokudo.io.exceptions import (
@@ -126,14 +126,14 @@ class Open3DCameraModelAdapter:
     @staticmethod
     def to_intrinsic(
         camera_model: PinholeCameraModel,
-    ) -> o3d.camera.PinholeCameraIntrinsic:
+    ) -> open3d.camera.PinholeCameraIntrinsic:
         """
         Return Open3D calibration matching a semantic model.
 
         :param camera_model: Effective image calibration.
         :return: Open3D intrinsic object.
         """
-        return o3d.camera.PinholeCameraIntrinsic(
+        return open3d.camera.PinholeCameraIntrinsic(
             camera_model.resolution.width,
             camera_model.resolution.height,
             camera_model.focal_length_x,

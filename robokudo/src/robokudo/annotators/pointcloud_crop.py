@@ -18,7 +18,7 @@ from __future__ import annotations
 from timeit import default_timer
 
 import cv2
-import open3d as o3d
+import open3d
 from py_trees.common import Status
 from typing_extensions import TYPE_CHECKING
 
@@ -133,7 +133,7 @@ class PointcloudCropAnnotator(BaseAnnotator):
         if self.descriptor.parameters.relative_to_world:
             cloud = transform_cloud_from_camera_to_world(self.get_cas(), cloud)
 
-        bounding_box = o3d.geometry.AxisAlignedBoundingBox(
+        bounding_box = open3d.geometry.AxisAlignedBoundingBox(
             [
                 self.descriptor.parameters.min_x,
                 self.descriptor.parameters.min_y,

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 # %% Imports
 import numpy as np
-import open3d as o3d
+import open3d
 from geometry_msgs.msg import Pose, PoseStamped
 from sensor_msgs.msg import Image
 from std_msgs.msg import Header
@@ -160,7 +160,7 @@ def get_transform_matrix_from_pose_annotation(
 
 def get_o3d_obb_from_bounding_box_annotation(
     bounding_box_annotation: BoundingBox3DAnnotation,
-) -> o3d.geometry.OrientedBoundingBox:
+) -> open3d.geometry.OrientedBoundingBox:
     """
     Convert a bounding box annotation to an open3d oriented bounding box.
 

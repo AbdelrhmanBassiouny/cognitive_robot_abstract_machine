@@ -23,7 +23,7 @@ from timeit import default_timer
 
 import cv2
 import numpy as np
-import open3d as o3d
+import open3d
 from py_trees.common import Status
 from typing_extensions import TYPE_CHECKING
 
@@ -47,7 +47,7 @@ class ImageClusters:
     object_hypotheses: list[ObjectHypothesis] = field(default_factory=list)
     """Objects whose point clouds meet the minimum size."""
 
-    point_clouds: list[o3d.geometry.PointCloud] = field(default_factory=list)
+    point_clouds: list[open3d.geometry.PointCloud] = field(default_factory=list)
     """Point clouds for all selected contours."""
 
     depth_mask: npt.NDArray | None = None
@@ -316,21 +316,21 @@ class ImageClusterExtractor(BaseAnnotator):
         resized_color: npt.NDArray,
         contour_mask: npt.NDArray,
         maximum_depth: float = 9.0,
-    ) -> o3d.geometry.PointCloud:
+    ) -> open3d.geometry.PointCloud:
         """Project the masked depth image and apply configured outlier removal."""
         color_rgb = cv2.cvtColor(resized_color, cv2.COLOR_BGR2RGB)
         masked_depth = np.where(contour_mask == 255, self.depth, 0)
 
-        color_image = o3d.geometry.Image(color_rgb)
-        depth_image = o3d.geometry.Image(masked_depth)
-        rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(
+        color_image = open3d.geometry.Image(color_rgb)
+        depth_image = open3d.geometry.Image(masked_depth)
+        rgbd_image = open3d.geometry.RGBDImage.create_from_color_and_depth(
             color_image,
             depth_image,
             convert_rgb_to_intensity=False,
             depth_trunc=maximum_depth,
         )
 
-        cloud = o3d.geometry.PointCloud.create_from_rgbd_image(
+        cloud = open3d.geometry.PointCloud.create_from_rgbd_image(
             rgbd_image, self.camera_intrinsics
         )
 

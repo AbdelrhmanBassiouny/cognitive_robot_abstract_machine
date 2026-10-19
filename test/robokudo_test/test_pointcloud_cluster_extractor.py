@@ -2,7 +2,7 @@
 Tests for point cloud cluster extractor preconditions.
 """
 
-import open3d as o3d
+import open3d
 import pytest
 
 from robokudo.annotators.core import ThreadedAnnotator
@@ -28,7 +28,7 @@ def test_cluster_extractor_requires_pointcloud_camera_model(
     Both clustering paths report a missing point cloud projection model.
     """
     cas = CAS()
-    cas.set_ref(CASViews.CLOUD, o3d.geometry.PointCloud())
+    cas.set_ref(CASViews.CLOUD, open3d.geometry.PointCloud())
     cas.set_ref(CASViews.COLOR_TO_DEPTH_RATIO, ColorToDepthRatio())
     extractor = extractor_type()
     monkeypatch.setattr(extractor, "get_cas", lambda: cas)

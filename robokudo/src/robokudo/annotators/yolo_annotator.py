@@ -21,7 +21,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-import open3d as o3d
+import open3d
 import torch
 from krrood.ormatic.utils import classproperty
 from py_trees.common import Status
@@ -246,7 +246,7 @@ class YoloAnnotator(ThreadedAnnotator):
         The SAM model refining the hypothesis masks in precision mode, loaded during
         setup.
         """
-        self.camera_intrinsics: Optional[o3d.camera.PinholeCameraIntrinsic] = None
+        self.camera_intrinsics: Optional[open3d.camera.PinholeCameraIntrinsic] = None
         """
         Intrinsics of the camera at the resolution of the depth image.
         """
@@ -484,7 +484,7 @@ class YoloAnnotator(ThreadedAnnotator):
         self,
         detection_mask: npt.NDArray[np.uint8],
         detection_image: npt.NDArray[np.uint8],
-    ) -> o3d.geometry.PointCloud:
+    ) -> open3d.geometry.PointCloud:
         """
         :return: The point cloud of the depth measurements inside the detection mask.
         """

@@ -24,7 +24,7 @@ from datetime import datetime, timedelta, timezone
 from enum import StrEnum
 
 import numpy as np
-import open3d as o3d
+import open3d
 from typing_extensions import (
     TYPE_CHECKING,
     Any,
@@ -247,11 +247,11 @@ class CAS:
         self.views[CASViews.POINTCLOUD_CAMERA_MODEL] = value
 
     @property
-    def cloud(self) -> Optional[o3d.geometry.PointCloud]:
+    def cloud(self) -> Optional[open3d.geometry.PointCloud]:
         return self.views.get(CASViews.CLOUD)
 
     @cloud.setter
-    def cloud(self, value: o3d.geometry.PointCloud) -> None:
+    def cloud(self, value: open3d.geometry.PointCloud) -> None:
         self.views[CASViews.CLOUD] = value
 
     @property

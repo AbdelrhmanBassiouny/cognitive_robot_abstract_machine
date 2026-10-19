@@ -9,7 +9,7 @@ from __future__ import annotations
 from timeit import default_timer
 
 import numpy as np
-import open3d as o3d
+import open3d
 import py_trees
 from semantic_digital_twin.world_description.world_entity import Body, Region
 
@@ -103,7 +103,7 @@ class WorldVisualizer(robokudo.annotators.core.ThreadedAnnotator):
 
         visualized_geometries.append({"name": "cloud", "geometry": cloud})
 
-        world_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.2)
+        world_frame = open3d.geometry.TriangleMesh.create_coordinate_frame(size=0.2)
         visualized_geometries.append(
             {
                 "name": "world_frame",

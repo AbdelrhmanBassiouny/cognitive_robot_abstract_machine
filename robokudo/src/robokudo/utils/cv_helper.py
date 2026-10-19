@@ -72,7 +72,7 @@ def get_scaled_color_image_for_depth_image(
     If the color-to-depth ratio is not 1,1, we will usually scale the color image to the
     same size the depth image has. This method will get check if a conversion is
     required and will return the correct size. This is usually called before
-    o3d.geometry.RGBDImage.create_from_color_and_depth is called, so that depth and
+    open3d.geometry.RGBDImage.create_from_color_and_depth is called, so that depth and
     color image match.
 
     :param cas: The CAS holding the color-to-depth ratio.

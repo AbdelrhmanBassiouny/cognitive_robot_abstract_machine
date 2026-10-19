@@ -24,7 +24,7 @@ from robokudo.exceptions import BoundingBoxDepthMissing
 # %% Imports
 import cv2
 import numpy as np
-import open3d as o3d
+import open3d
 import trimesh
 from typing_extensions import TYPE_CHECKING
 from robokudo.cas import CASViews
@@ -43,9 +43,9 @@ if TYPE_CHECKING:
 
 
 def put_obb_on_target_obb(
-    input_obb: o3d.geometry.OrientedBoundingBox,
-    target_obb: o3d.geometry.OrientedBoundingBox,
-) -> o3d.geometry.OrientedBoundingBox:
+    input_obb: open3d.geometry.OrientedBoundingBox,
+    target_obb: open3d.geometry.OrientedBoundingBox,
+) -> open3d.geometry.OrientedBoundingBox:
     """
     Place one oriented bounding box on top of another.
 
@@ -67,10 +67,10 @@ def put_obb_on_target_obb(
 
 
 def transform_obb_relative_to_obb_center(
-    input_obb: o3d.geometry.OrientedBoundingBox,
-    target_obb: o3d.geometry.OrientedBoundingBox,
+    input_obb: open3d.geometry.OrientedBoundingBox,
+    target_obb: open3d.geometry.OrientedBoundingBox,
     transform_matrix: npt.NDArray,
-) -> o3d.geometry.OrientedBoundingBox:
+) -> open3d.geometry.OrientedBoundingBox:
     """
     Transform a bounding box relative to another's center.
 
@@ -84,7 +84,7 @@ def transform_obb_relative_to_obb_center(
 
     # Build a new OBB from the input_obb by reusing the size
     # of the input OBB and then use the transformation we computed
-    transformed_obb = o3d.geometry.OrientedBoundingBox(
+    transformed_obb = open3d.geometry.OrientedBoundingBox(
         center=input_to_target_transform[:3, 3],
         R=input_to_target_transform[:3, :3],
         extent=input_obb.extent,
@@ -94,7 +94,7 @@ def transform_obb_relative_to_obb_center(
 
 def create_oriented_bounding_box(
     bounding_box_extent: npt.NDArray, transform_matrix: npt.NDArray
-) -> o3d.geometry.OrientedBoundingBox:
+) -> open3d.geometry.OrientedBoundingBox:
     """
     Create an oriented bounding box from size and transform.
 
@@ -102,7 +102,7 @@ def create_oriented_bounding_box(
     :param transform_matrix: 4x4 numpy array
     :return: Oriented bounding box
     """
-    return o3d.geometry.OrientedBoundingBox(
+    return open3d.geometry.OrientedBoundingBox(
         center=get_translation_from_transform_matrix(transform_matrix),
         R=get_rotation_from_transform_matrix(transform_matrix),
         extent=bounding_box_extent,
@@ -110,7 +110,7 @@ def create_oriented_bounding_box(
 
 
 def get_2d_corner_points_from_3d_bb(
-    cas: CAS, object_bb: o3d.geometry.OrientedBoundingBox
+    cas: CAS, object_bb: open3d.geometry.OrientedBoundingBox
 ) -> cv2t.Rect:
     """
     Project 3D bounding box corners to 2D image points.
@@ -185,7 +185,7 @@ def draw_mesh_wireframe_on_image(
 
 
 def get_2d_bounding_rect_from_3d_bb(
-    cas: CAS, object_bb: o3d.geometry.OrientedBoundingBox
+    cas: CAS, object_bb: open3d.geometry.OrientedBoundingBox
 ) -> cv2t.Rect:
     """
     Get a cv2.boundingRect which represents the space taken by a open3d boundingbox.
@@ -201,7 +201,7 @@ def get_2d_bounding_rect_from_3d_bb(
 
 
 def draw_wireframe_of_obb_into_image(
-    cas: CAS, image: npt.NDArray, obb: o3d.geometry.OrientedBoundingBox
+    cas: CAS, image: npt.NDArray, obb: open3d.geometry.OrientedBoundingBox
 ) -> None:
     """
     Draw 3D bounding box wireframe on image.
@@ -235,7 +235,7 @@ def draw_wireframe_of_obb_into_image(
 
 
 def get_mask_from_pointcloud(
-    input_cloud: o3d.geometry.PointCloud,
+    input_cloud: open3d.geometry.PointCloud,
     ref_image: npt.NDArray,
     camera_intrinsics: PinholeCameraModel,
     mask_scale_factor: float = None,
@@ -290,8 +290,8 @@ def get_mask_from_pointcloud(
 
 
 def concatenate_clouds(
-    clouds: list[o3d.geometry.PointCloud],
-) -> o3d.geometry.PointCloud:
+    clouds: list[open3d.geometry.PointCloud],
+) -> open3d.geometry.PointCloud:
     """
     Combine multiple point clouds into one.
 
@@ -300,12 +300,12 @@ def concatenate_clouds(
     :param clouds: List of point clouds to combine
     :return: Combined point cloud
     """
-    visualization_cloud = o3d.geometry.PointCloud()
+    visualization_cloud = open3d.geometry.PointCloud()
 
     all_points = np.concatenate([c.points for c in clouds])
     all_colors = np.concatenate([c.colors for c in clouds])
-    visualization_cloud.points = o3d.utility.Vector3dVector(all_points)
-    visualization_cloud.colors = o3d.utility.Vector3dVector(all_colors)
+    visualization_cloud.points = open3d.utility.Vector3dVector(all_points)
+    visualization_cloud.colors = open3d.utility.Vector3dVector(all_colors)
 
     return visualization_cloud
 
@@ -314,10 +314,10 @@ def get_cloud_from_rgb_depth_and_mask(
     rgb_image: npt.NDArray,
     depth_image: npt.NDArray,
     mask: npt.NDArray,
-    camera_intrinsics: o3d.camera.PinholeCameraIntrinsic,
+    camera_intrinsics: open3d.camera.PinholeCameraIntrinsic,
     depth_truncate: float = 9.0,
     mask_true_value: int = 255,
-) -> o3d.geometry.PointCloud:
+) -> open3d.geometry.PointCloud:
     """
     Build the colored point cloud of the depth measurements a mask marks.
 
@@ -333,20 +333,25 @@ def get_cloud_from_rgb_depth_and_mask(
     :return: The colored point cloud of the masked depth measurements.
     """
     depth_image = np.where(mask == mask_true_value, depth_image, 0)
-    o3d_color = o3d.geometry.Image(rgb_image)
-    o3d_depth = o3d.geometry.Image(depth_image)
-    rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(
-        o3d_color, o3d_depth, convert_rgb_to_intensity=False, depth_trunc=depth_truncate
+    open3d_color_image = open3d.geometry.Image(rgb_image)
+    open3d_depth_image = open3d.geometry.Image(depth_image)
+    rgbd_image = open3d.geometry.RGBDImage.create_from_color_and_depth(
+        open3d_color_image,
+        open3d_depth_image,
+        convert_rgb_to_intensity=False,
+        depth_trunc=depth_truncate,
     )
 
-    return o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image, camera_intrinsics)
+    return open3d.geometry.PointCloud.create_from_rgbd_image(
+        rgbd_image, camera_intrinsics
+    )
 
 
 def create_line_for_visualization(
     origin: tuple[float, float, float],
     target: tuple[float, float, float],
     color: tuple[float, float, float],
-) -> o3d.geometry.LineSet:
+) -> open3d.geometry.LineSet:
     """
     Create a LineSet that you can use to visualize a line between two points.
 
@@ -355,33 +360,33 @@ def create_line_for_visualization(
     :param color: 3 element list: [r,g,b]
     :return: Line segment geometry
     """
-    o3d_pointing_points = [origin, target]
-    o3d_pointing_lines = [[0, 1]]
-    line_set = o3d.geometry.LineSet()
-    line_set.points = o3d.utility.Vector3dVector(o3d_pointing_points)
-    line_set.lines = o3d.utility.Vector2iVector(o3d_pointing_lines)
-    line_set.colors = o3d.utility.Vector3dVector([color])
+    line_endpoints = [origin, target]
+    line_indices = [[0, 1]]
+    line_set = open3d.geometry.LineSet()
+    line_set.points = open3d.utility.Vector3dVector(line_endpoints)
+    line_set.lines = open3d.utility.Vector2iVector(line_indices)
+    line_set.colors = open3d.utility.Vector3dVector([color])
     return line_set
 
 
 def create_sphere_from_translation(
     origin: npt.NDArray, color: tuple[float, float, float], radius: float
-) -> o3d.geometry.TriangleMesh:
+) -> open3d.geometry.TriangleMesh:
     """
-    Create an o3d sphere for visualization.
+    Create an open3d sphere for visualization.
 
     :param origin: 3d translation vector
     :param color: 3 element list with entries 0-1 for RGB
     :param radius: radius of the sphere in meters
-    :return: o3d sphere mesh
+    :return: open3d sphere mesh
     """
-    sphere = o3d.geometry.TriangleMesh.create_sphere(radius=radius)
+    sphere = open3d.geometry.TriangleMesh.create_sphere(radius=radius)
     sphere.paint_uniform_color(color)
     sphere.translate(origin)
     return sphere
 
 
-def trimesh_to_o3d_mesh(mesh: trimesh.Trimesh) -> o3d.geometry.TriangleMesh:
+def trimesh_to_o3d_mesh(mesh: trimesh.Trimesh) -> open3d.geometry.TriangleMesh:
     """
     Convert the standard mesh representation of semantic_digital_twin (trimesh) to a
     type that the O3DVisualizer can show.
@@ -389,9 +394,9 @@ def trimesh_to_o3d_mesh(mesh: trimesh.Trimesh) -> o3d.geometry.TriangleMesh:
     :param mesh: The mesh to convert
     :return: An open3d compatible triangle mesh
     """
-    o3d_mesh = o3d.geometry.TriangleMesh()
-    o3d_mesh.vertices = o3d.utility.Vector3dVector(np.asarray(mesh.vertices))
-    o3d_mesh.triangles = o3d.utility.Vector3iVector(np.asarray(mesh.faces))
+    triangle_mesh = open3d.geometry.TriangleMesh()
+    triangle_mesh.vertices = open3d.utility.Vector3dVector(np.asarray(mesh.vertices))
+    triangle_mesh.triangles = open3d.utility.Vector3iVector(np.asarray(mesh.faces))
 
     if getattr(mesh, "visual", None) is not None and hasattr(
         mesh.visual, "vertex_colors"
@@ -401,7 +406,7 @@ def trimesh_to_o3d_mesh(mesh: trimesh.Trimesh) -> o3d.geometry.TriangleMesh:
             colors = colors[:, :3]
             if colors.max() > 1.0:
                 colors = colors / 255.0
-            o3d_mesh.vertex_colors = o3d.utility.Vector3dVector(colors)
+            triangle_mesh.vertex_colors = open3d.utility.Vector3dVector(colors)
 
-    o3d_mesh.compute_vertex_normals()
-    return o3d_mesh
+    triangle_mesh.compute_vertex_normals()
+    return triangle_mesh

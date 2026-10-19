@@ -1,6 +1,6 @@
 # %% Imports
 import numpy as np
-import open3d as o3d
+import open3d
 import pytest
 
 from robokudo.types.cv import ColorToDepthRatio
@@ -27,7 +27,7 @@ from semantic_digital_twin.datastructures.camera_resolution import CameraResolut
 # %% Point cloud geometry
 class TestUtilsO3DHelper(object):
     @pytest.fixture
-    def cas(self, kinect_intrinsics: o3d.camera.PinholeCameraIntrinsic) -> CAS:
+    def cas(self, kinect_intrinsics: open3d.camera.PinholeCameraIntrinsic) -> CAS:
         cas = robokudo.cas.CAS()
         intrinsic_matrix = kinect_intrinsics.intrinsic_matrix
         cas.pointcloud_camera_model = PinholeCameraModel(
@@ -44,45 +44,45 @@ class TestUtilsO3DHelper(object):
         return cas
 
     @pytest.fixture
-    def kinect_intrinsics(self) -> o3d.camera.PinholeCameraIntrinsic:
-        camera_intrinsics = o3d.camera.PinholeCameraIntrinsic()
+    def kinect_intrinsics(self) -> open3d.camera.PinholeCameraIntrinsic:
+        camera_intrinsics = open3d.camera.PinholeCameraIntrinsic()
         camera_intrinsics.set_intrinsics(
             width=1024, height=1280, fx=1050.0, fy=1050.0, cx=639.5, cy=479.5
         )
         return camera_intrinsics
 
     @pytest.fixture
-    def pointcloud(self) -> o3d.geometry.PointCloud:
+    def pointcloud(self) -> open3d.geometry.PointCloud:
         points = np.array([[0, 0, 1], [1, 1, 1], [2, 2, 1]], dtype=np.float64)
-        input_cloud = o3d.geometry.PointCloud()
-        input_cloud.points = o3d.utility.Vector3dVector(points)
+        input_cloud = open3d.geometry.PointCloud()
+        input_cloud.points = open3d.utility.Vector3dVector(points)
         return input_cloud
 
     @pytest.mark.parametrize(
-        ["obb1", "obb2", "expected_z"],
+        ["target_bounding_box", "input_bounding_box", "expected_z"],
         [
-            # Zero center obb1, off center obb2, same extents
+            # Zero center target_bounding_box, off center input_bounding_box, same extents
             (
-                o3d.geometry.OrientedBoundingBox(
+                open3d.geometry.OrientedBoundingBox(
                     center=np.array([0.0, 0.0, 0.0], dtype=np.float64),
                     R=np.eye(3, dtype=np.float64),
                     extent=np.array([1.0, 1.0, 1.0], dtype=np.float64),
                 ),
-                o3d.geometry.OrientedBoundingBox(
+                open3d.geometry.OrientedBoundingBox(
                     center=np.array([1.0, 1.0, 0.0], dtype=np.float64),
                     R=np.eye(3, dtype=np.float64),
                     extent=np.array([1.0, 1.0, 1.0], dtype=np.float64),
                 ),
                 1.0,
             ),
-            # Off center obb1 and obb2, varying extents
+            # Off center target_bounding_box and input_bounding_box, varying extents
             (
-                o3d.geometry.OrientedBoundingBox(
+                open3d.geometry.OrientedBoundingBox(
                     center=np.array([1.0, 1.0, 1.0], dtype=np.float64),
                     R=np.eye(3, dtype=np.float64),
                     extent=np.array([2.0, 2.0, 2.0], dtype=np.float64),
                 ),
-                o3d.geometry.OrientedBoundingBox(
+                open3d.geometry.OrientedBoundingBox(
                     center=np.array([1.5, 1.5, 0.5], dtype=np.float64),
                     R=np.eye(3, dtype=np.float64),
                     extent=np.array([3.0, 3.0, 3.0], dtype=np.float64),
@@ -93,22 +93,26 @@ class TestUtilsO3DHelper(object):
     )
     def test_put_obb_on_target_obb(
         self,
-        obb1: o3d.geometry.OrientedBoundingBox,
-        obb2: o3d.geometry.OrientedBoundingBox,
+        target_bounding_box: open3d.geometry.OrientedBoundingBox,
+        input_bounding_box: open3d.geometry.OrientedBoundingBox,
         expected_z: float,
     ):
-        adjusted_obb = put_obb_on_target_obb(obb2, obb1)
+        adjusted_bounding_box = put_obb_on_target_obb(
+            input_bounding_box, target_bounding_box
+        )
 
         assert np.all(
-            obb1.center[:2] == adjusted_obb.center[:2]
+            target_bounding_box.center[:2] == adjusted_bounding_box.center[:2]
         ), "x and y were not adjusted correctly"
-        assert adjusted_obb.center[2] == expected_z, "z was not adjusted correctly"
+        assert (
+            adjusted_bounding_box.center[2] == expected_z
+        ), "z was not adjusted correctly"
 
     def test_transform_obb_relative_to_obb_center_rotation(self):
-        input_obb = o3d.geometry.OrientedBoundingBox(
+        input_bounding_box = open3d.geometry.OrientedBoundingBox(
             center=[0, 0, 0], R=np.eye(3), extent=[1, 1, 1]
         )
-        target_obb = o3d.geometry.OrientedBoundingBox(
+        target_bounding_box = open3d.geometry.OrientedBoundingBox(
             center=[0, 0, 0], R=np.eye(3), extent=[1, 1, 1]
         )
 
@@ -122,37 +126,37 @@ class TestUtilsO3DHelper(object):
             ]
         )
 
-        transformed_obb = transform_obb_relative_to_obb_center(
-            input_obb, target_obb, rotation
+        transformed_bounding_box = transform_obb_relative_to_obb_center(
+            input_bounding_box, target_bounding_box, rotation
         )
 
         expected_R = rotation[:3, :3]
-        assert np.allclose(transformed_obb.R, expected_R)
-        assert np.allclose(transformed_obb.extent, [1, 1, 1])
+        assert np.allclose(transformed_bounding_box.R, expected_R)
+        assert np.allclose(transformed_bounding_box.extent, [1, 1, 1])
 
     def test_transform_obb_relative_to_obb_identity_transform(self):
-        input_obb = o3d.geometry.OrientedBoundingBox(
+        input_bounding_box = open3d.geometry.OrientedBoundingBox(
             center=[1, 2, 3], R=np.eye(3), extent=[1, 1, 1]
         )
-        target_obb = o3d.geometry.OrientedBoundingBox(
+        target_bounding_box = open3d.geometry.OrientedBoundingBox(
             center=[0, 0, 0], R=np.eye(3), extent=[1, 1, 1]
         )
 
         transform = np.eye(4)
 
-        transformed_obb = transform_obb_relative_to_obb_center(
-            input_obb, target_obb, transform
+        transformed_bounding_box = transform_obb_relative_to_obb_center(
+            input_bounding_box, target_bounding_box, transform
         )
 
-        assert np.allclose(transformed_obb.center, target_obb.center)
-        assert np.allclose(transformed_obb.R, target_obb.R)
-        assert np.allclose(transformed_obb.extent, target_obb.extent)
+        assert np.allclose(transformed_bounding_box.center, target_bounding_box.center)
+        assert np.allclose(transformed_bounding_box.R, target_bounding_box.R)
+        assert np.allclose(transformed_bounding_box.extent, target_bounding_box.extent)
 
     def test_transform_obb_relative_to_obb_non_identity_target_rotation(self):
-        input_obb = o3d.geometry.OrientedBoundingBox(
+        input_bounding_box = open3d.geometry.OrientedBoundingBox(
             center=[0, 0, 0], R=np.eye(3), extent=[1, 1, 1]
         )
-        target_obb = o3d.geometry.OrientedBoundingBox(
+        target_bounding_box = open3d.geometry.OrientedBoundingBox(
             center=[0, 0, 0],
             R=np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]]),
             extent=[1, 1, 1],
@@ -160,47 +164,49 @@ class TestUtilsO3DHelper(object):
 
         transform = np.eye(4)
 
-        transformed_obb = transform_obb_relative_to_obb_center(
-            input_obb, target_obb, transform
+        transformed_bounding_box = transform_obb_relative_to_obb_center(
+            input_bounding_box, target_bounding_box, transform
         )
 
-        expected_R = target_obb.R
-        assert np.allclose(transformed_obb.R, expected_R)
-        assert np.allclose(transformed_obb.extent, [1, 1, 1])
+        expected_R = target_bounding_box.R
+        assert np.allclose(transformed_bounding_box.R, expected_R)
+        assert np.allclose(transformed_bounding_box.extent, [1, 1, 1])
 
     def test_transform_obb_relative_to_obb_invalid_transform_matrix(self):
-        input_obb = o3d.geometry.OrientedBoundingBox(
+        input_bounding_box = open3d.geometry.OrientedBoundingBox(
             center=[0, 0, 0], R=np.eye(3), extent=[1, 1, 1]
         )
-        target_obb = o3d.geometry.OrientedBoundingBox(
+        target_bounding_box = open3d.geometry.OrientedBoundingBox(
             center=[0, 0, 0], R=np.eye(3), extent=[1, 1, 1]
         )
 
         transform = np.eye(3)
 
         with pytest.raises(ValueError):
-            transform_obb_relative_to_obb_center(input_obb, target_obb, transform)
+            transform_obb_relative_to_obb_center(
+                input_bounding_box, target_bounding_box, transform
+            )
 
     def test_create_oriented_bounding_box_basic(self):
         bb_size = np.array([1.0, 1.0, 1.0])
         transform = np.eye(4)
-        obb = create_oriented_bounding_box(bb_size, transform)
+        oriented_bounding_box = create_oriented_bounding_box(bb_size, transform)
 
-        assert isinstance(obb, o3d.geometry.OrientedBoundingBox)
-        assert np.allclose(obb.center, [0.0, 0.0, 0.0])
-        assert np.allclose(obb.R, np.eye(3))
-        assert np.allclose(obb.extent, bb_size)
+        assert isinstance(oriented_bounding_box, open3d.geometry.OrientedBoundingBox)
+        assert np.allclose(oriented_bounding_box.center, [0.0, 0.0, 0.0])
+        assert np.allclose(oriented_bounding_box.R, np.eye(3))
+        assert np.allclose(oriented_bounding_box.extent, bb_size)
 
     def test_create_oriented_bounding_box_translated(self):
         bb_size = np.array([2.0, 3.0, 4.0])
         transform = np.eye(4)
         transform[:3, 3] = [1.0, 2.0, 3.0]
-        obb = create_oriented_bounding_box(bb_size, transform)
+        oriented_bounding_box = create_oriented_bounding_box(bb_size, transform)
 
-        assert isinstance(obb, o3d.geometry.OrientedBoundingBox)
-        assert np.allclose(obb.center, [1.0, 2.0, 3.0])
-        assert np.allclose(obb.R, np.eye(3))
-        assert np.allclose(obb.extent, bb_size)
+        assert isinstance(oriented_bounding_box, open3d.geometry.OrientedBoundingBox)
+        assert np.allclose(oriented_bounding_box.center, [1.0, 2.0, 3.0])
+        assert np.allclose(oriented_bounding_box.R, np.eye(3))
+        assert np.allclose(oriented_bounding_box.extent, bb_size)
 
     def test_create_oriented_bounding_box_rotated(self):
         bb_size = np.array([1.0, 1.0, 1.0])
@@ -213,12 +219,12 @@ class TestUtilsO3DHelper(object):
                 [0.0, 0.0, 0.0, 1.0],
             ]
         )
-        obb = create_oriented_bounding_box(bb_size, rotation)
+        oriented_bounding_box = create_oriented_bounding_box(bb_size, rotation)
 
-        assert isinstance(obb, o3d.geometry.OrientedBoundingBox)
-        assert np.allclose(obb.center, [0.0, 0.0, 0.0])
-        assert np.allclose(obb.R, rotation[:3, :3])
-        assert np.allclose(obb.extent, bb_size)
+        assert isinstance(oriented_bounding_box, open3d.geometry.OrientedBoundingBox)
+        assert np.allclose(oriented_bounding_box.center, [0.0, 0.0, 0.0])
+        assert np.allclose(oriented_bounding_box.R, rotation[:3, :3])
+        assert np.allclose(oriented_bounding_box.extent, bb_size)
 
     def test_create_oriented_bounding_box_invalid_size(self):
         bb_size = np.array([1.0, 1.0])
@@ -233,11 +239,11 @@ class TestUtilsO3DHelper(object):
             create_oriented_bounding_box(bb_size, transform)
 
     def test_get_2d_corner_points_from_3d_bb_basic_case(self, cas: CAS):
-        obb = o3d.geometry.OrientedBoundingBox(
+        oriented_bounding_box = open3d.geometry.OrientedBoundingBox(
             center=[0, 0, 1], R=np.eye(3), extent=[1, 1, 1]
         )
 
-        result = get_2d_corner_points_from_3d_bb(cas, obb)
+        result = get_2d_corner_points_from_3d_bb(cas, oriented_bounding_box)
 
         assert isinstance(result, np.ndarray)
         assert result.shape == (8, 2)
@@ -261,11 +267,11 @@ class TestUtilsO3DHelper(object):
             ColorToDepthRatio(horizontal=2.0, vertical=2.0),
         )
 
-        obb = o3d.geometry.OrientedBoundingBox(
+        oriented_bounding_box = open3d.geometry.OrientedBoundingBox(
             center=[0, 0, 1], R=np.eye(3), extent=[1, 1, 1]
         )
 
-        result = get_2d_corner_points_from_3d_bb(cas, obb)
+        result = get_2d_corner_points_from_3d_bb(cas, oriented_bounding_box)
 
         assert isinstance(result, np.ndarray)
         assert result.shape == (8, 2)
@@ -284,11 +290,11 @@ class TestUtilsO3DHelper(object):
         ), f"unexpected corner points, did the camera intrinsics change? {result}"
 
     def test_get_2d_corner_points_from_3d_bb_far_from_camera(self, cas: CAS):
-        obb = o3d.geometry.OrientedBoundingBox(
+        oriented_bounding_box = open3d.geometry.OrientedBoundingBox(
             center=[0, 0, 10], R=np.eye(3), extent=[1, 1, 1]
         )
 
-        result = get_2d_corner_points_from_3d_bb(cas, obb)
+        result = get_2d_corner_points_from_3d_bb(cas, oriented_bounding_box)
 
         assert isinstance(result, np.ndarray)
         assert result.shape == (8, 2)
@@ -314,26 +320,28 @@ class TestUtilsO3DHelper(object):
         """
         cas.views.pop(CASViews.POINTCLOUD_CAMERA_MODEL)
 
-        obb = o3d.geometry.OrientedBoundingBox(
+        oriented_bounding_box = open3d.geometry.OrientedBoundingBox(
             center=[0, 0, 1], R=np.eye(3), extent=[1, 1, 1]
         )
 
         with pytest.raises(PointCloudCameraModelMissing):
-            get_2d_corner_points_from_3d_bb(cas, obb)
+            get_2d_corner_points_from_3d_bb(cas, oriented_bounding_box)
 
     def test_get_2d_corner_points_from_3d_bb_zero_depth(self, cas: CAS):
-        obb = o3d.geometry.OrientedBoundingBox(
+        oriented_bounding_box = open3d.geometry.OrientedBoundingBox(
             center=[0, 0, 0], R=np.eye(3), extent=[0, 0, 0]
         )
 
-        assert pytest.raises(ValueError, get_2d_corner_points_from_3d_bb, cas, obb)
+        assert pytest.raises(
+            ValueError, get_2d_corner_points_from_3d_bb, cas, oriented_bounding_box
+        )
 
     def test_get_2d_bounding_rect_from_3d_bb(self, cas: CAS):
-        obb = o3d.geometry.OrientedBoundingBox(
+        oriented_bounding_box = open3d.geometry.OrientedBoundingBox(
             center=[0, 0, 1], R=np.eye(3), extent=[1, 1, 1]
         )
 
-        rect = get_2d_bounding_rect_from_3d_bb(cas, obb)
+        rect = get_2d_bounding_rect_from_3d_bb(cas, oriented_bounding_box)
 
         assert isinstance(rect, tuple)
         assert len(rect) == 4  # (x, y, w, h)
@@ -342,11 +350,11 @@ class TestUtilsO3DHelper(object):
 
     def test_draw_wireframe_of_obb_into_image(self, cas: CAS):
         image = np.ones((300, 300, 3), dtype=np.uint8) * 255
-        obb = o3d.geometry.OrientedBoundingBox(
+        oriented_bounding_box = open3d.geometry.OrientedBoundingBox(
             center=[0, 0, 1], R=np.eye(3), extent=[1, 1, 1]
         )
 
-        draw_wireframe_of_obb_into_image(cas, image, obb)
+        draw_wireframe_of_obb_into_image(cas, image, oriented_bounding_box)
 
         non_white_pixels = np.any(image != 255, axis=2)
         assert np.any(non_white_pixels), "No lines were drawn on the image."
@@ -354,8 +362,8 @@ class TestUtilsO3DHelper(object):
 
     def test_get_mask_from_pointcloud_basic(
         self,
-        kinect_intrinsics: o3d.camera.PinholeCameraIntrinsic,
-        pointcloud: o3d.geometry.PointCloud,
+        kinect_intrinsics: open3d.camera.PinholeCameraIntrinsic,
+        pointcloud: open3d.geometry.PointCloud,
     ):
         ref_image = np.zeros(
             (kinect_intrinsics.height, kinect_intrinsics.width, 3), dtype=np.uint8
@@ -370,8 +378,8 @@ class TestUtilsO3DHelper(object):
 
     def test_get_mask_from_pointcloud_with_scale_factor(
         self,
-        kinect_intrinsics: o3d.camera.PinholeCameraIntrinsic,
-        pointcloud: o3d.geometry.PointCloud,
+        kinect_intrinsics: open3d.camera.PinholeCameraIntrinsic,
+        pointcloud: open3d.geometry.PointCloud,
     ):
         ref_image = np.zeros(
             (640, 480, 3), dtype=np.uint8
@@ -385,8 +393,8 @@ class TestUtilsO3DHelper(object):
 
     def test_get_mask_from_pointcloud_with_crop(
         self,
-        kinect_intrinsics: o3d.camera.PinholeCameraIntrinsic,
-        pointcloud: o3d.geometry.PointCloud,
+        kinect_intrinsics: open3d.camera.PinholeCameraIntrinsic,
+        pointcloud: open3d.geometry.PointCloud,
     ):
         ref_image = np.zeros(
             (640, 480, 3), dtype=np.uint8
@@ -403,38 +411,40 @@ class TestUtilsO3DHelper(object):
         assert mask.shape == ref_image.shape
 
     def test_get_mask_from_pointcloud_empty_cloud(
-        self, kinect_intrinsics: o3d.camera.PinholeCameraIntrinsic
+        self, kinect_intrinsics: open3d.camera.PinholeCameraIntrinsic
     ):
         ref_image = np.zeros(
             (640, 480, 3), dtype=np.uint8
         )  # Kinect depth image example
 
         mask = get_mask_from_pointcloud(
-            o3d.geometry.PointCloud(), ref_image, kinect_intrinsics
+            open3d.geometry.PointCloud(), ref_image, kinect_intrinsics
         )
 
         assert np.all(mask == 0)
 
-    def test_concatenate_clouds_single_cloud(self, pointcloud: o3d.geometry.PointCloud):
+    def test_concatenate_clouds_single_cloud(
+        self, pointcloud: open3d.geometry.PointCloud
+    ):
         output_cloud = concatenate_clouds([pointcloud])
 
         assert len(output_cloud.points) == 3
         assert np.all(output_cloud.points == pointcloud.points)
 
     def test_concatenate_clouds_multiple_clouds(
-        self, pointcloud: o3d.geometry.PointCloud
+        self, pointcloud: open3d.geometry.PointCloud
     ):
         points1 = np.array(
             [[0.5, 0.5, 1.5], [1.5, 1.5, 1.5], [2.5, 2.5, 1.5]], dtype=np.float64
         )
-        cloud1 = o3d.geometry.PointCloud()
-        cloud1.points = o3d.utility.Vector3dVector(points1)
+        cloud1 = open3d.geometry.PointCloud()
+        cloud1.points = open3d.utility.Vector3dVector(points1)
 
         points2 = np.array(
             [[1.5, 1.5, 2.5], [2.5, 2.5, 2.5], [3.5, 3.5, 3.5]], dtype=np.float64
         )
-        cloud2 = o3d.geometry.PointCloud()
-        cloud2.points = o3d.utility.Vector3dVector(points2)
+        cloud2 = open3d.geometry.PointCloud()
+        cloud2.points = open3d.utility.Vector3dVector(points2)
 
         output_cloud = concatenate_clouds(
             [
@@ -450,7 +460,7 @@ class TestUtilsO3DHelper(object):
         assert np.all(output_cloud.points == all_input_points)
 
     def test_get_cloud_from_rgb_depth_and_mask(
-        self, kinect_intrinsics: o3d.camera.PinholeCameraIntrinsic
+        self, kinect_intrinsics: open3d.camera.PinholeCameraIntrinsic
     ):
         rgb_image = (
             np.ones(
@@ -478,7 +488,7 @@ class TestUtilsO3DHelper(object):
         assert np.all(np.asarray(pc.colors) == (1.0, 1.0, 1.0))
 
     def test_get_cloud_from_rgb_depth_and_mask_depth_truncate(
-        self, kinect_intrinsics: o3d.camera.PinholeCameraIntrinsic
+        self, kinect_intrinsics: open3d.camera.PinholeCameraIntrinsic
     ):
         rgb_image = (
             np.ones(
@@ -506,7 +516,7 @@ class TestUtilsO3DHelper(object):
         assert len(pc.points) == 0
 
     def test_get_cloud_from_rgb_depth_and_mask_keeps_pixels_of_mask_true_value(
-        self, kinect_intrinsics: o3d.camera.PinholeCameraIntrinsic
+        self, kinect_intrinsics: open3d.camera.PinholeCameraIntrinsic
     ):
         shape = (kinect_intrinsics.height, kinect_intrinsics.width)
         rgb_image = np.zeros((*shape, 3), dtype=np.uint8)
@@ -522,7 +532,7 @@ class TestUtilsO3DHelper(object):
         assert len(pc.points) == 10 * 20
 
     def test_get_cloud_from_rgb_depth_and_mask_leaves_depth_image_unchanged(
-        self, kinect_intrinsics: o3d.camera.PinholeCameraIntrinsic
+        self, kinect_intrinsics: open3d.camera.PinholeCameraIntrinsic
     ):
         shape = (kinect_intrinsics.height, kinect_intrinsics.width)
         depth_image = np.full(shape, 1000, dtype=np.uint16)
@@ -547,7 +557,7 @@ class TestUtilsO3DHelper(object):
     )
     def test_get_cloud_from_rgb_depth_and_mask_pc_color(
         self,
-        kinect_intrinsics: o3d.camera.PinholeCameraIntrinsic,
+        kinect_intrinsics: open3d.camera.PinholeCameraIntrinsic,
         channel: int,
         expected_color: tuple[float, float, float],
     ):
@@ -576,7 +586,7 @@ class TestUtilsO3DHelper(object):
         assert np.all(np.asarray(pc.colors) == expected_color)
 
     def test_get_cloud_from_rgb_depth_and_mask_empty_depth(
-        self, kinect_intrinsics: o3d.camera.PinholeCameraIntrinsic
+        self, kinect_intrinsics: open3d.camera.PinholeCameraIntrinsic
     ):
         rgb_image = (
             np.ones(
@@ -599,7 +609,7 @@ class TestUtilsO3DHelper(object):
         assert len(pc.points) == 0
 
     def test_get_cloud_from_rgb_depth_and_mask_empty_mask(
-        self, kinect_intrinsics: o3d.camera.PinholeCameraIntrinsic
+        self, kinect_intrinsics: open3d.camera.PinholeCameraIntrinsic
     ):
         rgb_image = (
             np.ones(
@@ -626,7 +636,7 @@ class TestUtilsO3DHelper(object):
         assert len(pc.points) == 0
 
     def test_get_cloud_from_rgb_depth_and_mask_invalid_mask(
-        self, kinect_intrinsics: o3d.camera.PinholeCameraIntrinsic
+        self, kinect_intrinsics: open3d.camera.PinholeCameraIntrinsic
     ):
         rgb_image = (
             np.ones(
@@ -653,7 +663,7 @@ class TestUtilsO3DHelper(object):
         assert len(pc.points) == 0
 
     def test_get_cloud_from_rgb_depth_and_mask_empty_mask_and_depth(
-        self, kinect_intrinsics: o3d.camera.PinholeCameraIntrinsic
+        self, kinect_intrinsics: open3d.camera.PinholeCameraIntrinsic
     ):
         rgb_image = (
             np.ones(
@@ -714,7 +724,7 @@ class TestUtilsO3DHelper(object):
 
         sphere = create_sphere_from_translation(origin, color, radius)
 
-        assert isinstance(sphere, o3d.geometry.TriangleMesh)
+        assert isinstance(sphere, open3d.geometry.TriangleMesh)
         assert np.allclose(sphere.get_center(), origin)
         assert np.allclose(
             np.asarray(sphere.vertices).max(axis=0)

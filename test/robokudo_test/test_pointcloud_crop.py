@@ -11,7 +11,7 @@ anything even when the camera-to-world transform was available.
 
 # %% Imports
 import numpy as np
-import open3d as o3d
+import open3d
 import pytest
 from dataclasses import replace
 from py_trees.blackboard import Blackboard
@@ -89,8 +89,8 @@ def cas_with_cloud_at_world_origin(
 
     points_inside_the_crop = np.array([[0.0, 0.0, 1.0], [0.05, 0.05, 1.0]])
     points_outside_the_crop = np.array([[5.0, 5.0, 1.0], [-5.0, -5.0, 1.0]])
-    cloud = o3d.geometry.PointCloud()
-    cloud.points = o3d.utility.Vector3dVector(
+    cloud = open3d.geometry.PointCloud()
+    cloud.points = open3d.utility.Vector3dVector(
         np.vstack([points_inside_the_crop, points_outside_the_crop])
     )
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 import copy
 
 import numpy as np
-import open3d as o3d
+import open3d
 import pytest
 
 from robokudo.types.cv import ColorToDepthRatio
@@ -77,8 +77,8 @@ class TestUtilsAnnotatorHelper(object):
         return annotator
 
     @pytest.fixture()
-    def kinect_intrinsics(self) -> o3d.camera.PinholeCameraIntrinsic:
-        camera_intrinsics = o3d.camera.PinholeCameraIntrinsic()
+    def kinect_intrinsics(self) -> open3d.camera.PinholeCameraIntrinsic:
+        camera_intrinsics = open3d.camera.PinholeCameraIntrinsic()
         camera_intrinsics.set_intrinsics(
             width=1024, height=1280, fx=1050.0, fy=1050.0, cx=639.5, cy=479.5
         )
@@ -206,8 +206,8 @@ class TestUtilsAnnotatorHelper(object):
         xx, yy, zz = np.meshgrid(x, y, z)
         points = np.vstack((xx.ravel(), yy.ravel(), zz.ravel())).T
 
-        cloud = o3d.geometry.PointCloud()
-        cloud.points = o3d.utility.Vector3dVector(points)
+        cloud = open3d.geometry.PointCloud()
+        cloud.points = open3d.utility.Vector3dVector(points)
 
         cloud_in_world = transform_cloud_from_camera_to_world(
             camera_to_world_cas, cloud
@@ -229,8 +229,8 @@ class TestUtilsAnnotatorHelper(object):
         xx, yy, zz = np.meshgrid(x, y, z)
         points = np.vstack((xx.ravel(), yy.ravel(), zz.ravel())).T
 
-        cloud = o3d.geometry.PointCloud()
-        cloud.points = o3d.utility.Vector3dVector(points)
+        cloud = open3d.geometry.PointCloud()
+        cloud.points = open3d.utility.Vector3dVector(points)
 
         cloud_in_world = transform_cloud_from_camera_to_world(
             camera_to_world_cas, cloud, transform_inplace=True
@@ -255,8 +255,8 @@ class TestUtilsAnnotatorHelper(object):
         Test cloud transform with identity transform.
         """
         points = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
-        cloud = o3d.geometry.PointCloud()
-        cloud.points = o3d.utility.Vector3dVector(points)
+        cloud = open3d.geometry.PointCloud()
+        cloud.points = open3d.utility.Vector3dVector(points)
 
         cloud_in_world = transform_cloud_from_camera_to_world(identity_cas, cloud)
 
@@ -400,7 +400,7 @@ class TestUtilsAnnotatorHelper(object):
         self,
         scale_factor: tuple[float, float],
         annotator_in_pipeline: BaseAnnotator,
-        kinect_intrinsics: o3d.camera.PinholeCameraIntrinsic,
+        kinect_intrinsics: open3d.camera.PinholeCameraIntrinsic,
         identity_cas: CAS,
     ):
         annotator_in_pipeline.descriptor.parameters.global_with_depth = True
@@ -444,7 +444,7 @@ class TestUtilsAnnotatorHelper(object):
         self,
         scale_factor: tuple[float, float],
         annotator_in_pipeline: BaseAnnotator,
-        kinect_intrinsics: o3d.camera.PinholeCameraIntrinsic,
+        kinect_intrinsics: open3d.camera.PinholeCameraIntrinsic,
     ) -> None:
         annotator_in_pipeline.descriptor.parameters.global_with_depth = True
         cas = annotator_in_pipeline.get_cas()
@@ -471,7 +471,7 @@ class TestUtilsAnnotatorHelper(object):
     def test_get_color_image_no_depth(
         self,
         annotator_in_pipeline: BaseAnnotator,
-        kinect_intrinsics: o3d.camera.PinholeCameraIntrinsic,
+        kinect_intrinsics: open3d.camera.PinholeCameraIntrinsic,
     ) -> None:
         annotator_in_pipeline.descriptor.parameters.global_with_depth = False
         cas = annotator_in_pipeline.get_cas()
@@ -487,7 +487,7 @@ class TestUtilsAnnotatorHelper(object):
     def test_get_color_image_invalid_depth(
         self,
         annotator_in_pipeline: BaseAnnotator,
-        kinect_intrinsics: o3d.camera.PinholeCameraIntrinsic,
+        kinect_intrinsics: open3d.camera.PinholeCameraIntrinsic,
     ) -> None:
         annotator_in_pipeline.descriptor.parameters.global_with_depth = True
         cas = annotator_in_pipeline.get_cas()
@@ -513,7 +513,7 @@ class TestUtilsAnnotatorHelper(object):
         self,
         scale_factor: tuple[float, float],
         annotator_in_pipeline: BaseAnnotator,
-        kinect_intrinsics: o3d.camera.PinholeCameraIntrinsic,
+        kinect_intrinsics: open3d.camera.PinholeCameraIntrinsic,
     ) -> None:
         annotator_in_pipeline.descriptor.parameters.global_with_depth = True
         cas = annotator_in_pipeline.get_cas()
@@ -545,7 +545,7 @@ class TestUtilsAnnotatorHelper(object):
     def test_resize_mask_no_depth(
         self,
         annotator_in_pipeline: BaseAnnotator,
-        kinect_intrinsics: o3d.camera.PinholeCameraIntrinsic,
+        kinect_intrinsics: open3d.camera.PinholeCameraIntrinsic,
     ) -> None:
         annotator_in_pipeline.descriptor.parameters.global_with_depth = False
         width, height = kinect_intrinsics.width, kinect_intrinsics.height

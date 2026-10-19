@@ -7,7 +7,7 @@ from enum import Enum
 
 import cv2
 import numpy as np
-import open3d as o3d
+import open3d
 from py_trees.common import Status
 from typing_extensions import TYPE_CHECKING, Any
 
@@ -196,7 +196,7 @@ class TSDFAnnotator(ThreadedAnnotator):
             self.get_cas().get(CASViews.DEPTH_IMAGE)
         )
 
-        geometries: list[o3d.geometry.Geometry] = []
+        geometries: list[open3d.geometry.Geometry] = []
         masks: list[npt.NDArray[np.uint8]] = []
         for volume_integration_input in volume_integration_inputs:
             object_hypothesis = volume_integration_input.object_hypothesis
@@ -235,10 +235,10 @@ class TSDFAnnotator(ThreadedAnnotator):
             cv2.cvtColor(masked_color, cv2.COLOR_BGR2RGB, dst=masked_color)
 
             # Create RGBD image from masked data
-            rgbd_masked: o3d.geometry.RGBDImage = (
-                o3d.geometry.RGBDImage.create_from_color_and_depth(
-                    color=o3d.geometry.Image(masked_color),
-                    depth=o3d.geometry.Image(masked_depth),
+            rgbd_masked: open3d.geometry.RGBDImage = (
+                open3d.geometry.RGBDImage.create_from_color_and_depth(
+                    color=open3d.geometry.Image(masked_color),
+                    depth=open3d.geometry.Image(masked_depth),
                     depth_scale=self.descriptor.parameters.depth_scale,
                     depth_trunc=self.descriptor.parameters.depth_trunc,
                     convert_rgb_to_intensity=False,
@@ -254,10 +254,10 @@ class TSDFAnnotator(ThreadedAnnotator):
                 volume = tracked_object["volume"]
                 tracked_object["pose"] = pose
             else:
-                volume = o3d.pipelines.integration.ScalableTSDFVolume(
+                volume = open3d.pipelines.integration.ScalableTSDFVolume(
                     voxel_length=self.descriptor.parameters.voxel_length,
                     sdf_trunc=self.descriptor.parameters.sdf_trunc,
-                    color_type=o3d.pipelines.integration.TSDFVolumeColorType.RGB8,
+                    color_type=open3d.pipelines.integration.TSDFVolumeColorType.RGB8,
                 )
                 self.tracked_objects.append(
                     {
@@ -339,7 +339,7 @@ class TSDFAnnotator(ThreadedAnnotator):
 
     def get_visualization_geometries(
         self, volume: TSDFAnnotation
-    ) -> list[o3d.geometry.Geometry]:
+    ) -> list[open3d.geometry.Geometry]:
         """
         Get visualization geometries for the TSDF volume depending on the visualization mode.
 
