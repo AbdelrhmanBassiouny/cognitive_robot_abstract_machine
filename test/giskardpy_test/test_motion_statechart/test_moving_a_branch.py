@@ -76,7 +76,7 @@ def test_a_motion_built_before_a_body_was_moved_moves_it_with_its_new_parent(
                     goal_pose=Pose.from_xyz_rpy(x=0.2, reference_frame=world.root),
                     name="approach",
                 ),
-                MoveBranch(body=box, new_parent=robot),
+                MoveBranch(branch_root=box, new_parent=robot),
                 CartesianPose(
                     root_link=world.root,
                     tip_link=box,

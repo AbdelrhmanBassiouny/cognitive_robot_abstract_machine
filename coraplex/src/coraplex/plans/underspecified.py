@@ -55,8 +55,9 @@ class PlanChildChooser(ChildChooser, ABC):
         context: StatechartContext,
     ) -> None:
         """
-        Rewrite `child`, before the monitor watching it for a stall collects what it
-        watches.
+        Rewrites `child` with the plan transformations of `context`, before the monitor
+        watching it for a stall collects what it watches, see
+        :meth:`~cramph.composites.ChildChooser.prepare_chosen_child`.
         """
         rewriting = context.get_extension(PlanRewriting)
         if rewriting is not None:
@@ -69,6 +70,9 @@ class PlanChildChooser(ChildChooser, ABC):
         context: StatechartContext,
     ) -> list[StatechartNode]:
         """
+        Differs from :meth:`~cramph.composites.ChildChooser.failure_monitors_for` in
+        giving up on `child` once nothing below it approaches its goal.
+
         :return: A monitor firing once nothing below `child` approaches its goal.
         """
         return [Stalled(monitored_node=child)]
@@ -153,7 +157,7 @@ class ActionTrial:
             :class:`~cramph.exceptions.ExecutionFailure`.
         """
         world = self._copy()
-        candidate = self._on_the_copy(action, world)
+        candidate = self._rebind_action_to_world(action, world)
         version = world.get_world_model_manager().version
 
         with world.reset_state_context():
@@ -217,7 +221,7 @@ class ActionTrial:
         ]
 
     @classmethod
-    def _on_the_copy(
+    def _rebind_action_to_world(
         cls, action: DesignatorParameters, world: World
     ) -> DesignatorParameters:
         """
@@ -230,7 +234,7 @@ class ActionTrial:
         return type(action)(
             **{
                 name: (
-                    cls._on_the_copy(value, world)
+                    cls._rebind_action_to_world(value, world)
                     if isinstance(value, DesignatorParameters)
                     else world.rebind_world_entities(value)
                 )

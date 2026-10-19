@@ -6,7 +6,6 @@ which world a run acts on, whether it has to spawn its scene, and who owns the R
 context. None of it needs a controller.
 """
 
-import logging
 import threading
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -24,7 +23,7 @@ from cramph.threaded_nodes import FunctionCall
 
 from ..plan_running import robot_extensions
 from cramph.context import ContextExtension, StatechartContext
-from coraplex.plans.executors import PlanExecutor, SimulatedPlanExecutor
+from coraplex.plans.executors import PlanExecutor, KinematicallySimulatedPlanExecutor
 from coraplex.plans.failures import MotionExceededSimulationTimeLimit
 from cramph.statechart import Statechart
 
@@ -71,11 +70,6 @@ class RecordingDemonstration(RobotDemonstration):
     The executor the plan was run with.
     """
 
-    observed_log_level: int | None = field(default=None)
-    """
-    The level coraplex logged at while the plan ran.
-    """
-
     segmenting_events: bool = False
     """
     Whether the events of the run are being segmented right now.
@@ -118,7 +112,6 @@ class RecordingDemonstration(RobotDemonstration):
         if self.fail_the_plan:
             raise PlanDeliberatelyFailed()
         self.observed_segmenting_events = self.segmenting_events
-        self.observed_log_level = logging.getLogger("coraplex").level
 
     def create_executor(self, world: World) -> PlanExecutor:
         """
@@ -194,13 +187,13 @@ def test_plan_runs_in_the_demonstrations_execution_environment(cylinder_bot_worl
     demonstration = RecordingDemonstration(
         world=cylinder_bot_world,
         used_robot=MinimalRobot,
-        executor_type=SimulatedPlanExecutor,
+        executor_type=KinematicallySimulatedPlanExecutor,
         collision_avoidance=True,
     )
 
     demonstration.run()
 
-    assert type(demonstration.observed_executor) is SimulatedPlanExecutor
+    assert type(demonstration.observed_executor) is KinematicallySimulatedPlanExecutor
     assert demonstration.observed_executor.collision_avoidance is True
 
 
@@ -261,31 +254,23 @@ def test_a_demonstration_runs_without_debugging_by_default(cylinder_bot_world):
     Debugging publishes every copy of the world a candidate is tried in, which a run
     only pays for when someone is watching it.
     """
-    coraplex_logger = logging.getLogger("coraplex")
-    previous_level = coraplex_logger.level
     demonstration = RecordingDemonstration(
         world=cylinder_bot_world, used_robot=MinimalRobot
     )
 
-    try:
-        demonstration.run()
-        assert demonstration.observed_log_level == logging.INFO
-    finally:
-        coraplex_logger.setLevel(previous_level)
+    demonstration.run()
+
+    assert not demonstration.observed_executor.debug
 
 
 def test_a_demonstration_debugs_its_plan_when_asked_to(cylinder_bot_world):
-    coraplex_logger = logging.getLogger("coraplex")
-    previous_level = coraplex_logger.level
     demonstration = RecordingDemonstration(
         world=cylinder_bot_world, used_robot=MinimalRobot, debug=True
     )
 
-    try:
-        demonstration.run()
-        assert demonstration.observed_log_level == logging.DEBUG
-    finally:
-        coraplex_logger.setLevel(previous_level)
+    demonstration.run()
+
+    assert demonstration.observed_executor.debug
 
 
 # %% tear down

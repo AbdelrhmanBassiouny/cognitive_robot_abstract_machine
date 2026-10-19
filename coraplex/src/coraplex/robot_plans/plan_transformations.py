@@ -43,7 +43,7 @@ from coraplex.robot_plans.actions.core.robot_body import (
     MoveFingersToWidthAction,
     ParkArmsAction,
 )
-from coraplex.robot_plans.mixins import ReattachesBodies
+from coraplex.robot_plans.mixins import ReattachesBranches
 from cramph.composites import Sequence, StatementNode
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.goals.gripper import MoveGripper
@@ -542,15 +542,15 @@ class DetectWithRoboKudo(ConfigurationTransformation[DetectAction]):
 
 
 @dataclass
-class LetContactCarryTheBodies(ConfigurationTransformation[ReattachesBodies]):
+class LetContactCarryTheBodies(ConfigurationTransformation[ReattachesBranches]):
     """
     Leaves the world model alone where an action would move a body under a new parent,
     where a running physics moves the world: contact carries the body there, and putting
     a picked object under the gripper would hold it whether or not the grasp did.
     """
 
-    def is_applicable(self, plan_node: ReattachesBodies) -> bool:
+    def is_applicable(self, plan_node: ReattachesBranches) -> bool:
         return True
 
-    def apply(self, plan_node: ReattachesBodies) -> None:
+    def apply(self, plan_node: ReattachesBranches) -> None:
         plan_node.reattaches_in_world_model = False

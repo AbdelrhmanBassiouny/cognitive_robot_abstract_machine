@@ -32,7 +32,7 @@ from coraplex.robot_plans.actions.core.robot_body import (
 from coraplex.testing import attach_tool, setup_world, selected_visualizations
 from coraplex.plans.context_extensions import RobotAccess
 from coraplex.demonstrations import RobotDemonstrationRosSession
-from coraplex.plans.executors import SimulatedPlanExecutor
+from coraplex.plans.executors import KinematicallySimulatedPlanExecutor
 from cramph.statechart import Statechart
 from cramph.composites import Sequence
 
@@ -89,7 +89,7 @@ def main() -> None:
     )
 
     with RobotDemonstrationRosSession.start("cutting_demo") as ros_session:
-        executor = SimulatedPlanExecutor(
+        executor = KinematicallySimulatedPlanExecutor(
             world,
             context_extensions=[RobotAccess(pr2)],
             ros_node=ros_session.node,

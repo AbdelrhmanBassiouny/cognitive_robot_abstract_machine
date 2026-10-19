@@ -48,7 +48,7 @@ from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.world_entity import Body
 from ...plan_running import run_plan, simulated_executor, statechart_of, with_grounding
 from coraplex.plans.context_extensions import StatementGrounding
-from coraplex.plans.executors import SimulatedPlanExecutor
+from coraplex.plans.executors import KinematicallySimulatedPlanExecutor
 
 # %% mimics for testing candidate trials without depending on real motion physics
 
@@ -494,7 +494,7 @@ def test_a_trial_catches_its_copy_up_with_what_the_world_gained(
     world, robot, extensions = apartment_world_pr2_copy_with_context
     trial = ActionTrial(
         executor=simulated_executor(extensions),
-        trial_executor_type=SimulatedPlanExecutor,
+        trial_executor_type=KinematicallySimulatedPlanExecutor,
     )
     copied = trial._copy()
     body = Body(name=PrefixedName("added_after_the_copy"))
@@ -599,7 +599,7 @@ def debugging_executor(apartment_world_pr2_copy_with_context, rclpy_node):
 
 def _compiled_trial_executor(
     trial: ActionTrial,
-) -> tuple[SimulatedPlanExecutor, World]:
+) -> tuple[KinematicallySimulatedPlanExecutor, World]:
     """
     :param trial: The trial whose executor is built.
     :return: An executor of `trial` with one candidate compiled in the copy, and that
@@ -620,7 +620,9 @@ def test_a_trial_publishes_its_copy_while_debugging(debugging_executor) -> None:
     the robot standing still through every candidate it rejects.
     """
     world, robot, executor = debugging_executor
-    trial = ActionTrial(executor=executor, trial_executor_type=SimulatedPlanExecutor)
+    trial = ActionTrial(
+        executor=executor, trial_executor_type=KinematicallySimulatedPlanExecutor
+    )
 
     trial_executor, copied = _compiled_trial_executor(trial)
 
@@ -639,7 +641,9 @@ def test_a_trial_publishes_its_copy_apart_from_the_world_it_copies(
     is published under a prefix and on a topic of its own rather than over that world.
     """
     world, robot, executor = debugging_executor
-    trial = ActionTrial(executor=executor, trial_executor_type=SimulatedPlanExecutor)
+    trial = ActionTrial(
+        executor=executor, trial_executor_type=KinematicallySimulatedPlanExecutor
+    )
 
     trial_executor, copied = _compiled_trial_executor(trial)
 
@@ -659,7 +663,9 @@ def test_a_trial_copy_is_drawn_see_through(debugging_executor) -> None:
     where the two overlap.
     """
     world, robot, executor = debugging_executor
-    trial = ActionTrial(executor=executor, trial_executor_type=SimulatedPlanExecutor)
+    trial = ActionTrial(
+        executor=executor, trial_executor_type=KinematicallySimulatedPlanExecutor
+    )
 
     trial_executor, copied = _compiled_trial_executor(trial)
 
@@ -679,7 +685,7 @@ def test_a_trial_publishes_nothing_without_debugging(
     world, robot, extensions = apartment_world_pr2_copy_with_context
     trial = ActionTrial(
         executor=simulated_executor(extensions),
-        trial_executor_type=SimulatedPlanExecutor,
+        trial_executor_type=KinematicallySimulatedPlanExecutor,
     )
 
     trial_executor = trial._trial_executor(trial._copy())
@@ -698,7 +704,9 @@ def test_a_trial_adapts_a_candidate_to_the_robot_as_its_executor_does(
     """
     world, robot, extensions = apartment_world_pr2_copy_with_context
     executor = simulated_executor(extensions, robot_adaptations=[])
-    trial = ActionTrial(executor=executor, trial_executor_type=SimulatedPlanExecutor)
+    trial = ActionTrial(
+        executor=executor, trial_executor_type=KinematicallySimulatedPlanExecutor
+    )
 
     trial_executor = trial._trial_executor(trial._copy())
 
@@ -716,7 +724,7 @@ def test_a_trial_puts_a_differentially_driven_base_at_its_goal(
     world, robot, extensions = stretch_apartment_context
     trial = ActionTrial(
         executor=simulated_executor(extensions),
-        trial_executor_type=SimulatedPlanExecutor,
+        trial_executor_type=KinematicallySimulatedPlanExecutor,
     )
     copied = trial._copy()
     trial_executor = trial._trial_executor(copied)
@@ -736,7 +744,7 @@ def test_a_trial_moves_the_tool_center_point_the_way_the_robot_does(
     world, robot, extensions = stretch_apartment_context
     trial = ActionTrial(
         executor=simulated_executor(extensions),
-        trial_executor_type=SimulatedPlanExecutor,
+        trial_executor_type=KinematicallySimulatedPlanExecutor,
     )
     copied = trial._copy()
     trial_executor = trial._trial_executor(copied)
@@ -764,7 +772,9 @@ def test_a_trial_stops_publishing_its_copy_once_the_candidate_has_run(
     The copy is only published while a candidate runs in it.
     """
     world, robot, executor = debugging_executor
-    trial = ActionTrial(executor=executor, trial_executor_type=SimulatedPlanExecutor)
+    trial = ActionTrial(
+        executor=executor, trial_executor_type=KinematicallySimulatedPlanExecutor
+    )
     trial_executor, copied = _compiled_trial_executor(trial)
 
     trial_executor.execute()
@@ -784,7 +794,9 @@ def test_a_trial_tries_an_action_that_already_belongs_to_a_plan(
     stand_where_it_is = robot.root.global_pose
     action = NavigateAction(target_location=stand_where_it_is)
     statechart_of(executor, Sequence(nodes=[action]))
-    trial = ActionTrial(executor=executor, trial_executor_type=SimulatedPlanExecutor)
+    trial = ActionTrial(
+        executor=executor, trial_executor_type=KinematicallySimulatedPlanExecutor
+    )
 
     assert trial.succeeds(action)
     trial.discard()

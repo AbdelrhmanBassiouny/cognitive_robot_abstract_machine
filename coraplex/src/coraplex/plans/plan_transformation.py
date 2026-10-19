@@ -236,7 +236,9 @@ class PlanRewriting(ContextExtension):
         """
         return PlanRewriting(transformations=list(self.transformations))
 
-    def preceded_by(self, transformations: list[PlanTransformation]) -> PlanRewriting:
+    def copy_with_preceding_transformations(
+        self, transformations: list[PlanTransformation]
+    ) -> PlanRewriting:
         """
         :param transformations: The transformations to offer every node to first.
         :return: A new rewriting by `transformations` and then this one's, which has

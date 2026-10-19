@@ -59,8 +59,8 @@ class Action(
     :meth:`create_temporary_collision_rules` when the action is expanded.
 
     They belong to the action rather than to a node beside each of its steps, so they
-    also hold between two steps. Sent along with the action, because a receiver does
-    not expand it again.
+    also hold between two steps. Sent along with the action, because a receiver does not
+    expand it again.
     """
 
     @classproperty
@@ -121,7 +121,7 @@ class Action(
         if rewriting is not None:
             rewriting.configure(self)
         self.temporary_collision_rules = self.create_temporary_collision_rules()
-        self._create_what_it_does(context)
+        self._create_children(context)
 
     def create_temporary_collision_rules(self) -> list[CollisionRule]:
         """
@@ -160,7 +160,7 @@ class Action(
             )
 
     @abstractmethod
-    def _create_what_it_does(self, context: StatechartContext) -> None:
+    def _create_children(self, context: StatechartContext) -> None:
         """
         Puts the nodes doing what this action does below it, in the shape of its kind of
         action.
@@ -170,8 +170,8 @@ class Action(
 @dataclass(eq=False, repr=False, kw_only=True)
 class GoalAction(Action, SucceedsOnObservingTrue, FailsOnObservingFalse, ABC):
     """
-    An action reaching a single goal, the node :meth:`create_goal` creates, which stays a
-    node of its own below the action.
+    An action reaching a single goal, the node :meth:`create_goal` creates, which stays
+    a node of its own below the action.
 
     The action reaches its goal once that node did, and declares itself failed as soon
     as the node failed. A goal whose owner decides its success, such as a single task,
@@ -195,7 +195,7 @@ class GoalAction(Action, SucceedsOnObservingTrue, FailsOnObservingFalse, ABC):
             return None
         return self.children[0]
 
-    def _create_what_it_does(self, context: StatechartContext) -> None:
+    def _create_children(self, context: StatechartContext) -> None:
         """
         Puts the goal below this action and ends it once it is at its goal, unless it
         decides its own success.
@@ -223,8 +223,8 @@ class GoalAction(Action, SucceedsOnObservingTrue, FailsOnObservingFalse, ABC):
 class ActionOfSteps(Action, CramLanguageNode, ABC):
     """
     An action that is the plan language node of its own steps, the nodes
-    :meth:`create_steps` creates, so the steps are its children and the language node
-    it also is decides how they run and when they are done.
+    :meth:`create_steps` creates, so the steps are its children and the language node it
+    also is decides how they run and when they are done.
     """
 
     nodes: list[StatechartNode] = field(default_factory=list, init=False, repr=False)
@@ -240,11 +240,12 @@ class ActionOfSteps(Action, CramLanguageNode, ABC):
             action is expanded.
         """
 
-    # expanded as an action, which adopts the steps as a language node in
-    # _create_what_it_does
+    # Action and CramLanguageNode both define expand; deciding it here keeps it from
+    # depending on the order of the bases. Action.expand adopts the steps as a language
+    # node in _create_children.
     expand = Action.expand
 
-    def _create_what_it_does(self, context: StatechartContext) -> None:
+    def _create_children(self, context: StatechartContext) -> None:
         """
         Puts the steps below this action and lets the language node wire them.
         """

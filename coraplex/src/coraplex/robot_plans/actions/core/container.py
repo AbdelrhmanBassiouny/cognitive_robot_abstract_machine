@@ -33,7 +33,9 @@ from semantic_digital_twin.spatial_types.spatial_types import Pose
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class MovesHandle(MovesToolCenterPoint, SequentialAction, HasGraspChoice, ABC):
+class MovesContainerByItsHandle(
+    MovesToolCenterPoint, SequentialAction, HasGraspChoice, ABC
+):
     """
     An action that takes hold of a container's handle by :attr:`grasp`, moves the
     container with it, lets go and clears the handle.
@@ -116,7 +118,7 @@ class MovesHandle(MovesToolCenterPoint, SequentialAction, HasGraspChoice, ABC):
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class OpenAction(MovesHandle):
+class OpenAction(MovesContainerByItsHandle):
     """
     Opens a container like object.
     """
@@ -129,7 +131,7 @@ class OpenAction(MovesHandle):
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class CloseAction(MovesHandle):
+class CloseAction(MovesContainerByItsHandle):
     """
     Closes a container like object.
     """

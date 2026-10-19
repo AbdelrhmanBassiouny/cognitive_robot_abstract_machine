@@ -23,7 +23,7 @@ We will now go through a simple example of how to create and execute a plan.
 
 ```python
 from coraplex.plans.context_extensions import RobotAccess
-from coraplex.plans.executors import SimulatedPlanExecutor
+from coraplex.plans.executors import KinematicallySimulatedPlanExecutor
 from coraplex.testing import setup_world
 from semantic_digital_twin.robots.pr2 import PR2
 
@@ -34,11 +34,11 @@ pr2 = PR2.from_world(world)
 
 ## The Executor
 An executor runs plans in a world. What a plan's nodes read from their context, such as the robot performing them, is
-given to it as context extensions; the executor builds the statechart context out of them. A `SimulatedPlanExecutor`
+given to it as context extensions; the executor builds the statechart context out of them. A `KinematicallySimulatedPlanExecutor`
 ticks the plan in the world itself, a `RealRobotPlanExecutor` sends it to Giskard driving the real robot.
 
 ```python
-executor = SimulatedPlanExecutor(world, context_extensions=[RobotAccess(pr2)])
+executor = KinematicallySimulatedPlanExecutor(world, context_extensions=[RobotAccess(pr2)])
 ```
 
 ## Example Plan
@@ -84,7 +84,7 @@ An executor accepts a `collision_avoidance` flag. When set to `True`, collision 
 statechart, keeping the robot from colliding with the rest of the world while the motions run.
 
 ```python
-executor = SimulatedPlanExecutor(
+executor = KinematicallySimulatedPlanExecutor(
     world, context_extensions=[RobotAccess(pr2)], collision_avoidance=True
 )
 ```

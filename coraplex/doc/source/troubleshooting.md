@@ -35,11 +35,11 @@ statechart in the executor's context. This is also explained in the
 
 ```python
 from coraplex.plans.context_extensions import RobotAccess
-from coraplex.plans.executors import SimulatedPlanExecutor
+from coraplex.plans.executors import KinematicallySimulatedPlanExecutor
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from cramph.statechart import Statechart
 
-executor = SimulatedPlanExecutor(world, context_extensions=[RobotAccess(robot)])
+executor = KinematicallySimulatedPlanExecutor(world, context_extensions=[RobotAccess(robot)])
 statechart = Statechart(context=executor.context)
 statechart.add_node(NavigateAction(target_location=pose))
 executor.compile(statechart)

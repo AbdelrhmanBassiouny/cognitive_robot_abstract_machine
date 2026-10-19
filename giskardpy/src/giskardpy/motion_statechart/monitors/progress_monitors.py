@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 
 import numpy as np
+from numpy.typing import NDArray
 from typing_extensions import List
 
 import krrood.symbolic_math.symbolic_math as sm
@@ -70,7 +71,7 @@ class NoMonitoredTaskApproachingItsGoal(EndedByOwner, MotionStatechartNode):
     every second, or the task counts as not approaching its goal.
     """
 
-    _errors_at_last_progress: np.ndarray = field(init=False, repr=False)
+    _errors_at_last_progress: NDArray[np.float64] = field(init=False, repr=False)
     """
     Each monitored task's error when it last counted as making progress, or infinity
     while there is nothing to compare with yet, so that the first error measured counts
@@ -80,7 +81,7 @@ class NoMonitoredTaskApproachingItsGoal(EndedByOwner, MotionStatechartNode):
     for all the time since, not merely below the lowest value seen.
     """
 
-    _seconds_since_last_progress: np.ndarray = field(init=False, repr=False)
+    _seconds_since_last_progress: NDArray[np.float64] = field(init=False, repr=False)
     """
     Simulated time from each monitored task's last progress up to the previous control
     cycle.
@@ -109,7 +110,7 @@ class NoMonitoredTaskApproachingItsGoal(EndedByOwner, MotionStatechartNode):
     Seconds between control cycles.
     """
 
-    _previous_errors: np.ndarray = field(init=False, repr=False)
+    _previous_errors: NDArray[np.float64] = field(init=False, repr=False)
     """
     Each monitored task's error on the previous control cycle, which the observation of
     that cycle judged, or NaN where there was none.
@@ -192,11 +193,11 @@ class NoMonitoredTaskApproachingItsGoal(EndedByOwner, MotionStatechartNode):
 
     def _fell_too_little(
         self,
-        error_at_last_progress: Scalar | np.ndarray,
-        error: Scalar | np.ndarray,
-        seconds_since_last_progress: Scalar | np.ndarray,
-        threshold: float | np.ndarray,
-    ) -> Scalar | np.ndarray:
+        error_at_last_progress: Scalar | NDArray[np.float64],
+        error: Scalar | NDArray[np.float64],
+        seconds_since_last_progress: Scalar | NDArray[np.float64],
+        threshold: float | NDArray[np.float64],
+    ) -> Scalar | NDArray[np.bool_]:
         """
         The rule deciding whether an error fell by too little to count as progress, for
         symbolic expressions as well as numpy arrays, so that the observation and
@@ -216,7 +217,7 @@ class NoMonitoredTaskApproachingItsGoal(EndedByOwner, MotionStatechartNode):
         )
         return error_at_last_progress - error < required_fall
 
-    def _falls_too_slowly(self, errors: np.ndarray) -> np.ndarray:
+    def _falls_too_slowly(self, errors: NDArray[np.float64]) -> NDArray[np.bool_]:
         """
         :param errors: An error per monitored task, NaN where there is none.
         :return: Per monitored task, whether the error is known and fell by too little
@@ -265,7 +266,7 @@ class NoMonitoredTaskApproachingItsGoal(EndedByOwner, MotionStatechartNode):
         self._compiled_errors.bind_args_to_memory_view(0, context.world.state.positions)
         context.float_variable_data.bind_argument(self._compiled_errors, 1)
 
-    def _judged(self) -> np.ndarray:
+    def _judged(self) -> NDArray[np.bool_]:
         """
         :return: Per monitored task, whether it runs and has not reached its goal, the
             only tasks whose progress is judged.
@@ -307,7 +308,7 @@ class NoMonitoredTaskApproachingItsGoal(EndedByOwner, MotionStatechartNode):
         self._store_progress(context)
         return None
 
-    def _forget_progress(self, tasks: np.ndarray) -> None:
+    def _forget_progress(self, tasks: NDArray[np.bool_]) -> None:
         """
         Start judging the progress of `tasks` afresh, from their next measured errors.
 

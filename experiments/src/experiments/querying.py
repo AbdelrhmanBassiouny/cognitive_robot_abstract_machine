@@ -71,7 +71,7 @@ from experiments.experiment_definitions import (
 )
 from cramph.threaded_nodes import FunctionCall
 from coraplex.plans.context_extensions import RobotAccess
-from coraplex.plans.executors import SimulatedPlanExecutor
+from coraplex.plans.executors import KinematicallySimulatedPlanExecutor
 from cramph.statechart import Statechart
 
 _CORAPLEX_RESOURCES = Path(_coraplex_pkg.__file__).parent.parent.parent / "resources"
@@ -148,7 +148,7 @@ class BehaviourQueryResult(ExperimentResult):
     """
 
 
-def build_executor() -> SimulatedPlanExecutor:
+def build_executor() -> KinematicallySimulatedPlanExecutor:
     """
     Set up the bullet-world scene the plan runs in.
 
@@ -191,7 +191,7 @@ def build_executor() -> SimulatedPlanExecutor:
         ros_node = None
 
     pr2 = PR2.from_world(world)
-    executor = SimulatedPlanExecutor(
+    executor = KinematicallySimulatedPlanExecutor(
         world, context_extensions=[RobotAccess(pr2)], ros_node=ros_node
     )
 
@@ -211,7 +211,7 @@ def build_executor() -> SimulatedPlanExecutor:
     return executor
 
 
-def build_plan(executor: SimulatedPlanExecutor) -> StatechartNode:
+def build_plan(executor: KinematicallySimulatedPlanExecutor) -> StatechartNode:
     """
     Execute the plan in simulation and return it, completed.
 

@@ -23,7 +23,7 @@ from ament_index_python.packages import get_package_share_directory
 
 from coraplex.demonstrations import RobotDemonstration
 from coraplex.plans.context_extensions import RobotAccess, StatementGrounding
-from coraplex.plans.executors import PlanExecutor, SimulatedPlanExecutor
+from coraplex.plans.executors import PlanExecutor, KinematicallySimulatedPlanExecutor
 from coraplex.plans.plan_transformation import PlanRewriting
 from coraplex.robot_plans.actions.composite.transporting import TransportAction
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
@@ -341,7 +341,9 @@ class GarmiApartmentDemonstration(RobotDemonstration):
         return statechart
 
 
-def main(executor_type: type[PlanExecutor] = SimulatedPlanExecutor) -> None:
+def main(
+    executor_type: type[PlanExecutor] = KinematicallySimulatedPlanExecutor,
+) -> None:
     """
     Run the demonstration.
 

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 import numpy as np
+from numpy.typing import NDArray
 import scipy.sparse as sp
 from scipy.sparse import issparse
 from typing_extensions import Self
@@ -199,7 +200,7 @@ class QPDataExplicit(QPData):
             num_inequality_slack_variables=self.num_inequality_slack_variables,
         )
 
-    def without_variables(self, removed_variables: np.ndarray) -> QPDataExplicit:
+    def without_variables(self, removed_variables: NDArray[np.bool_]) -> QPDataExplicit:
         """
         :param removed_variables: Which variables to leave out, one flag per variable.
         :return: This problem without the flagged variables and without the
@@ -232,7 +233,7 @@ class QPDataExplicit(QPData):
 
     def variables_without_coefficients(
         self, number_of_variables: int, number_of_ignored_equalities: int
-    ) -> np.ndarray:
+    ) -> NDArray[np.bool_]:
         """
         :param number_of_variables: How many variables are checked, from the first on.
         :param number_of_ignored_equalities: How many equalities, from the first on, are
@@ -250,7 +251,7 @@ class QPDataExplicit(QPData):
     @classmethod
     def _columns_with_coefficients(
         cls, matrix: sp.csc_matrix, first_row: int, number_of_columns: int
-    ) -> np.ndarray:
+    ) -> NDArray[np.bool_]:
         """
         :param matrix: A constraint matrix.
         :param first_row: The first row of `matrix` that is checked.

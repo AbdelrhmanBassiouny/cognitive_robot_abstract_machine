@@ -2,7 +2,7 @@ import json
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing_extensions import Any, ClassVar, Optional
+from typing_extensions import Any, Generic, Optional, TypeVar
 
 from krrood.adapters.json_serializer import from_json
 from krrood.entity_query_language.backends import ProbabilisticBackend
@@ -10,6 +10,7 @@ from krrood.entity_query_language.factories import a, an, variable
 from krrood.entity_query_language.query.match import Match
 from krrood.parametrization.model_registries import DictRegistry
 from krrood.parametrization.parameterizer import UnderspecifiedParameters
+from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
     ProbabilisticCircuit,
 )
@@ -25,7 +26,7 @@ from coraplex.plans.failures import (
     EmptyUnderspecified,
 )
 from coraplex.plans.context_extensions import RobotAccess, StatementGrounding
-from coraplex.plans.executors import SimulatedPlanExecutor
+from coraplex.plans.executors import KinematicallySimulatedPlanExecutor
 from coraplex.robot_plans.actions.base import Action
 from coraplex.robot_plans.actions.core.misc import MoveToReach
 from cramph.composites import StatementNode
@@ -51,6 +52,8 @@ from semantic_digital_twin.world_description.connections import (
 )
 from semantic_digital_twin.world_description.world_entity import Body
 
+TrainedAction = TypeVar("TrainedAction", bound=Action)
+
 
 @dataclass
 class TrainingEpisode:
@@ -64,21 +67,17 @@ class TrainingEpisode:
     The underspecified action whose grounded variants the episode tries.
     """
 
-    executor: SimulatedPlanExecutor
+    executor: KinematicallySimulatedPlanExecutor
     """
     The executor running the action in the world built for the episode.
     """
 
 
 @dataclass
-class TrainingEnvironment(ABC):
+class TrainingEnvironment(Generic[TrainedAction], SubClassSafeGeneric, ABC):
     """
-    A training environment for generating data for the parameterization of actions.
-    """
-
-    action_type: ClassVar[type[Action]]
-    """
-    The type of action that is trained.
+    A training environment for generating data for the parameterization of the actions
+    of the type it binds.
     """
 
     executed_plans: list[StatechartNode] = field(default_factory=list)
@@ -95,6 +94,13 @@ class TrainingEnvironment(ABC):
     """
     Rather create a visualization of the executed plans or not.
     """
+
+    @property
+    def action_type(self) -> type[TrainedAction]:
+        """
+        :return: The type of action that is trained.
+        """
+        return type(self).get_type_of_generic_parameter(TrainedAction)
 
     @abstractmethod
     def setup_world(self, *kwargs) -> World:
@@ -164,12 +170,10 @@ class TrainingEnvironment(ABC):
 
 
 @dataclass
-class MoveToReachTrainingEnvironment(TrainingEnvironment):
+class MoveToReachTrainingEnvironment(TrainingEnvironment[MoveToReach]):
     """
     Training environment for MoveToReach actions in an empty world using the PR2.
     """
-
-    action_type = MoveToReach
 
     model_path: Optional[Path] = None
     """
@@ -233,7 +237,7 @@ class MoveToReachTrainingEnvironment(TrainingEnvironment):
         else:
             query_backend = self.setup_backend(move_to_reach)
 
-        executor = SimulatedPlanExecutor(
+        executor = KinematicallySimulatedPlanExecutor(
             world,
             context_extensions=[
                 RobotAccess(robot),

@@ -64,7 +64,7 @@ with world.modify_world():
     c_root_bf.has_hardware_interface = True
 
 # 2. Set up the executor with motion control, and create a Motion Statechart in its context
-kin_sim = StatechartExecutor(
+executor = StatechartExecutor(
     context=StatechartContext(world=world),
     pacer=SimulationPacer(real_time_factor=None), # None for fastest execution in docs
     extensions=[
@@ -73,7 +73,7 @@ kin_sim = StatechartExecutor(
         )
     ],
 )
-msc = Statechart(context=kin_sim.context)
+statechart = Statechart(context=executor.context)
 
 # 3. Define a Cartesian Pose Goal
 # We want to move the left gripper to a specific pose relative to the world root
@@ -92,11 +92,11 @@ goal = CartesianPose(
     goal_pose=goal_pose
 )
 
-msc.add_node(goal)
-msc.add_node(EndMotion.when_true(goal))
+statechart.add_node(goal)
+statechart.add_node(EndMotion.when_true(goal))
 
 # 4. Compile and run the statechart
-kin_sim.compile(msc)
-kin_sim.tick_until_end(timeout=100)
-print(f"Motion finished after {kin_sim.tick_count} cycles.")
+executor.compile(statechart)
+executor.tick_until_end(timeout=100)
+print(f"Motion finished after {executor.tick_count} cycles.")
 ```

@@ -6,7 +6,7 @@ import numpy as np
 
 import semantic_digital_twin.spatial_types.spatial_types as cas
 from giskardpy.middleware.ros2.giskard import Giskard
-from giskardpy.middleware.ros2.python_interface import GiskardClientExecutorNode
+from giskardpy.middleware.ros2.giskard_client_executor import GiskardClientExecutorNode
 from giskardpy.middleware.ros2.scripts.iai_robots.stretch.configs import (
     WorldWithStretchConfigDiffDrive,
 )

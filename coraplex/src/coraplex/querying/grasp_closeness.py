@@ -43,7 +43,7 @@ class GraspCloseness:
     """
 
     @classmethod
-    def of(
+    def from_grasp(
         cls,
         grasp: GraspCandidate,
         world_T_object: NDArray[np.float64],
@@ -67,7 +67,7 @@ class GraspCloseness:
         return cls(horizontal_distance, float(np.arccos(np.clip(cosine, -1.0, 1.0))))
 
     @classmethod
-    def ranked(
+    def sort_grasps_by_closeness(
         cls, graspable: HasGraspCandidates, world_P_standing: NDArray[np.float64]
     ) -> list[GraspCandidate]:
         """
@@ -80,7 +80,7 @@ class GraspCloseness:
         world_T_object = graspable.root.global_transform.to_np()
         return sorted(
             graspable.grasp_candidates(),
-            key=lambda grasp: cls.of(grasp, world_T_object, world_P_standing),
+            key=lambda grasp: cls.from_grasp(grasp, world_T_object, world_P_standing),
         )
 
 
@@ -114,9 +114,9 @@ class ClosestGrasps(SymbolicFunction):
         world_P_standing = world.transform(self.standing_position, world.root).to_np()[
             :, 3
         ]
-        return GraspCloseness.ranked(self.graspable, world_P_standing)[
-            : self.number_of_grasps
-        ]
+        return GraspCloseness.sort_grasps_by_closeness(
+            self.graspable, world_P_standing
+        )[: self.number_of_grasps]
 
     @classmethod
     def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
@@ -159,6 +159,6 @@ class GraspsClosestToTheRobot(Iterable[GraspCandidate]):
             rather than while the plan is built. EQL's ``variable`` calls :func:`iter`
             on its domain while the plan is built.
         """
-        yield from GraspCloseness.ranked(
+        yield from GraspCloseness.sort_grasps_by_closeness(
             self.graspable, self.robot.root.global_transform.to_np()[:, 3]
         )

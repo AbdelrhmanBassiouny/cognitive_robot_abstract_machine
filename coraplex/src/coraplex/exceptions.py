@@ -104,6 +104,20 @@ class PlanNotCompiled(DataclassException):
 
 
 @dataclass
+class DebuggingWithoutRosNode(DataclassException):
+    """
+    A plan executor is created in debug mode without a ROS node to show the worlds its
+    candidates are tried in.
+    """
+
+    def error_message(self) -> str:
+        return "Debug mode is selected without a ROS node to publish through."
+
+    def suggest_correction(self) -> str:
+        return "Pass a ROS node to the executor, or leave debug mode off."
+
+
+@dataclass
 class NotAStatementNode(DataclassException):
     """
     Raised when a node asks for a child to be grounded that carries no underspecified

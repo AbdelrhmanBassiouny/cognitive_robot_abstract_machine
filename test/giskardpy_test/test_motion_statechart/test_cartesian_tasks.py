@@ -2037,7 +2037,7 @@ class TestDiffDriveBaseGoal:
         motion_statechart.add_node(
             ride := Sequence(
                 nodes=[
-                    MoveBranch(body=base, new_parent=lift),
+                    MoveBranch(branch_root=base, new_parent=lift),
                     raising := JointPositionList(
                         goal_state=JointState.from_mapping(
                             {lift_connection: lift_height}
@@ -2093,7 +2093,9 @@ class TestDiffDriveBaseGoal:
                 threshold=0.1,
             )
         )
-        motion_statechart.add_node(moving := MoveBranch(body=base, new_parent=platform))
+        motion_statechart.add_node(
+            moving := MoveBranch(branch_root=base, new_parent=platform)
+        )
         moving.start_condition = halfway.observes_true
         motion_statechart.add_node(EndMotion.when_all_true([drive, moving]))
 

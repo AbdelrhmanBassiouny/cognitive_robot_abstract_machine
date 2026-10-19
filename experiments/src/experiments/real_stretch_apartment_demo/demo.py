@@ -42,7 +42,7 @@ from coraplex.demonstrations import RobotDemonstration
 from coraplex.plans.executors import (
     PlanExecutor,
     RealRobotPlanExecutor,
-    SimulatedPlanExecutor,
+    KinematicallySimulatedPlanExecutor,
 )
 from coraplex.robot_plans.actions.core.misc import DetectAction
 from coraplex.robot_plans.actions.core.navigation import LookAtAction, NavigateAction
@@ -270,7 +270,8 @@ class StretchApartmentDemonstration(RobotDemonstration):
 
 
 def main(
-    executor_type: type[PlanExecutor] = SimulatedPlanExecutor, repetitions: int = 1
+    executor_type: type[PlanExecutor] = KinematicallySimulatedPlanExecutor,
+    repetitions: int = 1,
 ) -> None:
     """
     Run the demonstration.

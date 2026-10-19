@@ -32,7 +32,7 @@ from coraplex.plans.context_extensions import RobotAccess
 from coraplex.plans.executors import (
     PlanExecutor,
     RealRobotPlanExecutor,
-    SimulatedPlanExecutor,
+    KinematicallySimulatedPlanExecutor,
 )
 from cramph.statechart import Statechart
 from cramph.composites import Sequence
@@ -57,7 +57,7 @@ thread = threading.Thread(target=executor.spin, daemon=True, name="rclpy-executo
 thread.start()
 
 if drives_real_robot:
-    # 300s matches giskardpy's own client (giskardpy/middleware/ros2/python_interface.py), which waits
+    # 300s matches giskardpy's own client (giskardpy/middleware/ros2/giskard_client_executor.py), which waits
     # this long for the same race: this demo's giskard/world-fetcher server is still parsing the URDF
     # and starting up when the client's default 10s budget would otherwise expire.
     world = fetch_world_from_service(node=node, timeout_seconds=300)
@@ -139,7 +139,7 @@ with world.modify_world():
 
 # The executor needs the ROS node to reach the real robot
 executor_type: type[PlanExecutor] = (
-    RealRobotPlanExecutor if drives_real_robot else SimulatedPlanExecutor
+    RealRobotPlanExecutor if drives_real_robot else KinematicallySimulatedPlanExecutor
 )
 executor = executor_type(world, context_extensions=[RobotAccess(tracy)], ros_node=node)
 

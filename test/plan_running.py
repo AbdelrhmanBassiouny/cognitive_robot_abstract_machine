@@ -12,7 +12,7 @@ from coraplex.plans.context_extensions import RobotAccess, StatementGrounding
 from coraplex.plans.executors import (
     PlanExecutor,
     RealRobotPlanExecutor,
-    SimulatedPlanExecutor,
+    KinematicallySimulatedPlanExecutor,
 )
 from cramph.context import ContextExtension, StatechartContext
 from cramph.executor import SimulationPacer
@@ -21,7 +21,6 @@ from cramph.statechart import Statechart
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.world import World
 from .sampling import SAMPLING_SEED
-
 
 # %% building executors
 
@@ -56,14 +55,14 @@ def with_grounding(
 
 def simulated_executor(
     extensions: list[ContextExtension], **options
-) -> SimulatedPlanExecutor:
+) -> KinematicallySimulatedPlanExecutor:
     """
     :param extensions: The context extensions of the plan, holding a
         :class:`~coraplex.plans.context_extensions.RobotAccess`.
     :param options: Further arguments of the executor.
     :return: An executor simulating plans in the world of the robot in `extensions`.
     """
-    return SimulatedPlanExecutor(
+    return KinematicallySimulatedPlanExecutor(
         world_of(extensions), context_extensions=extensions, **options
     )
 
@@ -150,7 +149,7 @@ def expand(plan: StatechartNode, extensions: list[ContextExtension]) -> Statecha
 
 def run_plan(
     plan: StatechartNode, extensions: list[ContextExtension], **options
-) -> SimulatedPlanExecutor:
+) -> KinematicallySimulatedPlanExecutor:
     """
     Run `plan` simulated until it succeeded.
 

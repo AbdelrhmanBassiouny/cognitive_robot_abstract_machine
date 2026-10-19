@@ -1,18 +1,19 @@
 # Motion Execution in CoraPlex
 
-Motion execution is CoraPlex's bridge from symbolic intentions to concrete robot motions. The actions of a plan expand
-into giskard goals and tasks, all of them nodes of one statechart, and an executor runs that statechart, either in
-simulation or on a real robot. By keeping the "how" of actuation behind the executor, plans remain robot-agnostic and
-execution-aware without being robot-specific.
+Motion execution turns the actions of a plan into the motions a robot performs. The actions of a plan expand into
+giskard goals and tasks, all of them nodes of one statechart, and an executor runs that statechart, either in
+simulation or on a real robot. How the robot is actuated is up to the executor, so the same plan runs on every robot
+and with every executor.
 
 ## Motions
 
-A motion is a giskard node, built by the action that wants it as one of the statechart nodes the action expands
-into. Actions build them straight from the tasks and goals in
-{mod}`giskardpy.motion_statechart` (for example {class}`~giskardpy.motion_statechart.tasks.joint_tasks.JointPositionList`
-to move a joint, or {class}`~giskardpy.motion_statechart.goals.gripper.MoveGripper` to open a gripper).
+A motion is a giskard goal or task. When an action expands, it creates the motions it needs from
+{mod}`giskardpy.motion_statechart` and puts them below itself in the statechart, for example a
+{class}`~giskardpy.motion_statechart.tasks.joint_tasks.JointPositionList` to move a joint, or a
+{class}`~giskardpy.motion_statechart.goals.gripper.MoveGripper` to open a gripper.
 
-An action resolves what is coraplex's own before it builds a goal: an arm's tool frame comes from its
+Before an action creates a goal, it looks up the values that come from coraplex rather than from its own parameters:
+an arm's tool frame comes from its
 {class}`~semantic_digital_twin.robots.robot_parts.EndEffector`, goal-achievement thresholds fall back to
 the {class}`~coraplex.plans.context_extensions.MotionToleranceConfig` of the context, and the link a Cartesian
 goal is expressed relative to comes from
@@ -35,10 +36,10 @@ Which executor runs a plan decides how it is executed:
 
 ```python
 from coraplex.plans.context_extensions import RobotAccess
-from coraplex.plans.executors import RealRobotPlanExecutor, SimulatedPlanExecutor
+from coraplex.plans.executors import RealRobotPlanExecutor, KinematicallySimulatedPlanExecutor
 from cramph.statechart import Statechart
 
-executor = SimulatedPlanExecutor(world, context_extensions=[RobotAccess(robot)])
+executor = KinematicallySimulatedPlanExecutor(world, context_extensions=[RobotAccess(robot)])
 statechart = Statechart(context=executor.context)
 statechart.add_node(plan)
 executor.compile(statechart)
@@ -74,7 +75,7 @@ Both executors build on cramph's {class}`~cramph.executor.Executor`. The simulat
 from giskardpy.motion_control import MotionControl
 from giskardpy.qp.qp_controller_config import QPControllerConfig
 
-executor = SimulatedPlanExecutor(
+executor = KinematicallySimulatedPlanExecutor(
     world,
     context_extensions=[RobotAccess(robot)],
     extensions=[MotionControl(QPControllerConfig(target_frequency=50))],
@@ -84,18 +85,18 @@ executor = SimulatedPlanExecutor(
 Collision avoidance is a setting of the executor:
 
 ```python
-executor = SimulatedPlanExecutor(
+executor = KinematicallySimulatedPlanExecutor(
     world, context_extensions=[RobotAccess(robot)], collision_avoidance=True
 )
 ```
 
 ## What happens for each executor
 
-- {class}`~coraplex.plans.executors.SimulatedPlanExecutor`: the chart is compiled and ticked against the world until
+- {class}`~coraplex.plans.executors.KinematicallySimulatedPlanExecutor`: the chart is compiled and ticked against the world until
   every plan node succeeded. A plan that stops approaching its goal gives up and raises
   {class}`~coraplex.plans.failures.MotionMadeNoProgress`, naming the tasks that stalled; one that keeps converging is
   never cut off for taking many ticks, only once it exceeds the simulated time limit.
-- {class}`~coraplex.plans.executors.PhysicallySimulatedPlanExecutor`: as the simulated one, but the physics advances one
+- {class}`~coraplex.plans.executors.PhysicallySimulatedPlanExecutor`: as the kinematically simulated one, but the physics advances one
   control period after every tick, and the robot is given time to come to a standstill once the plan ended.
 - {class}`~coraplex.plans.executors.RealRobotPlanExecutor`: the chart is sent to giskard via the `GiskardClientExecutor`, which
   grounds underspecified actions while giskard runs it.
@@ -109,7 +110,7 @@ Every executor offers each node of a plan to its
 {attr}`~coraplex.plans.executors.PlanExecutor.plan_adaptations`, and then to the transformations of the plan's own
 {class}`~coraplex.plans.plan_transformation.PlanRewriting`:
 
-- {class}`~coraplex.plans.executors.SimulatedPlanExecutor` puts the base at its goal by writing the odometry
+- {class}`~coraplex.plans.executors.KinematicallySimulatedPlanExecutor` puts the base at its goal by writing the odometry
   ({class}`~coraplex.robot_plans.plan_transformations.WriteTheOdometryInsteadOfDriving`), unless the robot drives
   differentially, and keeps a Stretch in front of the container it closes. The trial of a candidate for an
   underspecified action writes the odometry for a differentially driven robot too.

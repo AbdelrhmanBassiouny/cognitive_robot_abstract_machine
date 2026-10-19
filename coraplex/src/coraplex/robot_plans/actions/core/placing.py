@@ -17,7 +17,7 @@ from coraplex.robot_plans.actions.base import SequentialAction
 from cramph.composites import Parallel
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.robot_plans.mixins import (
-    ReattachesBodies,
+    ReattachesBranches,
     HasApproachesGraspPoses,
     HasGraspDetectionThreshold,
     MovesGripper,
@@ -41,7 +41,7 @@ from semantic_digital_twin.spatial_types.spatial_types import Pose
 @dataclass(eq=False, repr=False, kw_only=True)
 class PlaceAction(
     MovesToolCenterPoint,
-    ReattachesBodies,
+    ReattachesBranches,
     SequentialAction,
     HasApproachesGraspPoses,
     PlaceTuningParameters,

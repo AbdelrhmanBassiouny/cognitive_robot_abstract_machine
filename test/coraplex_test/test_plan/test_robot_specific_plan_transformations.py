@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pytest
 
-from coraplex.plans.executors import PlanExecutor, SimulatedPlanExecutor
+from coraplex.plans.executors import PlanExecutor, KinematicallySimulatedPlanExecutor
 from coraplex.plans.failures import MotionMadeNoProgress
 from coraplex.robot_plans.actions.core.container import CloseAction
 from coraplex.robot_plans.actions.core.misc import MoveToReach
@@ -619,7 +619,7 @@ def test_stretch_holds_the_orientation_of_its_base_only_once_it_drove_there(
 
 def stretch_reaching_milk_from(
     world: World, robot: AbstractRobot, extensions: list, root_T_base: Pose
-) -> tuple[SimulatedPlanExecutor, ReachAction, OrientationWhileRunning]:
+) -> tuple[KinematicallySimulatedPlanExecutor, ReachAction, OrientationWhileRunning]:
     """
     Puts the base of a Stretch at `root_T_base`, and prepares a reach for the milk
     standing at a fixed place in a simulation that records the orientation of the base
@@ -635,7 +635,7 @@ def stretch_reaching_milk_from(
     drive = robot.root.parent_connection
     drive.origin = world.transform(root_T_base, drive.parent).homogeneous_matrix
     recording = OrientationWhileRunning(body=robot.root)
-    executor = SimulatedPlanExecutor(
+    executor = KinematicallySimulatedPlanExecutor(
         world, context_extensions=extensions, extensions=[recording]
     )
     action = ReachAction(

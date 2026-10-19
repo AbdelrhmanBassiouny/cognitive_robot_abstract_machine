@@ -33,6 +33,7 @@ from cramph.composites import Parallel, Sequence
 from cramph.executor import Pacer, RealTimePacer
 from cramph.monitors import CheckTickCount
 from cramph.node import StatechartNode
+from krrood.ormatic.utils import classproperty
 from giskardpy.motion_statechart.context import MotionControlContext
 from giskardpy.motion_statechart.graph_node import EndMotion
 from giskardpy.motion_statechart.monitors.monitors import LocalMinimumReached
@@ -295,16 +296,31 @@ class BenchmarkRobot(GiskardTester):
 # %% scenarios
 
 
+class BenchmarkScenarioName(StrEnum):
+    """
+    The names the scenarios are reported under.
+    """
+
+    CARTESIAN_GOAL_ONE_END_EFFECTOR = "cart_goal_1eef"
+    AVOID_COLLISION_GO_AROUND_CORNER = "avoid_collision_go_around_corner"
+    DRIVE_INTO_APARTMENT = "drive_into_apartment"
+    POINTING_KITCHEN = "pointing_kitchen"
+    LONG_SEQUENCE = "long_sequence"
+    DEEPLY_NESTED_CASCADE = "deeply_nested_cascade"
+
+
 @dataclass
 class BenchmarkScenario(ABC):
     """
     One motion whose control loop is measured.
     """
 
-    name: ClassVar[str]
-    """
-    Name the scenario is reported under.
-    """
+    @classproperty
+    @abstractmethod
+    def name(cls) -> BenchmarkScenarioName:
+        """
+        :return: The name the scenario is reported under.
+        """
 
     @abstractmethod
     def seed_joint_state(self, robot: BenchmarkRobot) -> Dict[str, float]:
@@ -341,7 +357,9 @@ class CartesianGoalScenario(BenchmarkScenario):
     nothing but the robot.
     """
 
-    name: ClassVar[str] = "cart_goal_1eef"
+    @classproperty
+    def name(cls) -> BenchmarkScenarioName:
+        return BenchmarkScenarioName.CARTESIAN_GOAL_ONE_END_EFFECTOR
 
     def seed_joint_state(self, robot: BenchmarkRobot) -> Dict[str, float]:
         return robot.default_joint_state
@@ -368,7 +386,9 @@ class CollisionAvoidanceScenario(BenchmarkScenario):
     Reaches around a table sized box, so collisions are checked in every cycle.
     """
 
-    name: ClassVar[str] = "avoid_collision_go_around_corner"
+    @classproperty
+    def name(cls) -> BenchmarkScenarioName:
+        return BenchmarkScenarioName.AVOID_COLLISION_GO_AROUND_CORNER
 
     def seed_joint_state(self, robot: BenchmarkRobot) -> Dict[str, float]:
         return robot.pocky_pose
@@ -423,7 +443,9 @@ class ApartmentDrivingScenario(BenchmarkScenario):
     Drives the base two meters through a fully loaded apartment.
     """
 
-    name: ClassVar[str] = "drive_into_apartment"
+    @classproperty
+    def name(cls) -> BenchmarkScenarioName:
+        return BenchmarkScenarioName.DRIVE_INTO_APARTMENT
 
     def seed_joint_state(self, robot: BenchmarkRobot) -> Dict[str, float]:
         return robot.better_pose
@@ -460,7 +482,9 @@ class KitchenPointingScenario(BenchmarkScenario):
     arms, so several tasks run at once in a large world.
     """
 
-    name: ClassVar[str] = "pointing_kitchen"
+    @classproperty
+    def name(cls) -> BenchmarkScenarioName:
+        return BenchmarkScenarioName.POINTING_KITCHEN
 
     def seed_joint_state(self, robot: BenchmarkRobot) -> Dict[str, float]:
         return robot.better_pose
@@ -541,7 +565,9 @@ class LongSequenceScenario(BenchmarkScenario):
     something.
     """
 
-    name: ClassVar[str] = "long_sequence"
+    @classproperty
+    def name(cls) -> BenchmarkScenarioName:
+        return BenchmarkScenarioName.LONG_SEQUENCE
 
     def seed_joint_state(self, robot: BenchmarkRobot) -> Dict[str, float]:
         return robot.better_pose
@@ -584,20 +610,20 @@ class DeeplyNestedCascadeScenario(BenchmarkScenario):
     settles such a tick in a number of passes that grows with :attr:`nesting_depth`.
     """
 
-    name: ClassVar[str] = "deeply_nested_cascade"
+    @classproperty
+    def name(cls) -> BenchmarkScenarioName:
+        return BenchmarkScenarioName.DEEPLY_NESTED_CASCADE
 
     nesting_depth: int = 7
     """
     How many sequences wrap each step, and again each stage of steps, so a step sits
     about twice as deep.
     """
-
     instant_steps_per_waypoint: int = 2
     """
     How many steps whose goal holds from the start run before each waypoint, each at the
     bottom of its own nesting.
     """
-
     waypoint_offsets: list[float] = field(
         default_factory=lambda: [-0.1, 0.1, -0.1, 0.1]
     )

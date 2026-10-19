@@ -183,15 +183,6 @@ class ToolMotionAction(
         """
         root = self.controlled_root
         tip = self.tool.get_tool_frame()
-        trajectory_arguments = dict(
-            root_link=root,
-            tip_link=tip,
-            goal_points=self._waypoints,
-            maximum_skip_ahead=self.maximum_skip_ahead,
-            weight=float(DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE),
-        )
-        if self.position_threshold is not None:
-            trajectory_arguments["threshold"] = self.position_threshold
         alignments = [
             AlignPlanes(
                 tip_link=tip,
@@ -202,7 +193,15 @@ class ToolMotionAction(
             )
             for pair in self._alignment_pairs
         ]
-        return [CartesianPositionTrajectory(**trajectory_arguments), *alignments]
+        trajectory = CartesianPositionTrajectory(
+            root_link=root,
+            tip_link=tip,
+            goal_points=self._waypoints,
+            maximum_skip_ahead=self.maximum_skip_ahead,
+            weight=float(DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE),
+            threshold=self.resolved_position_threshold(),
+        )
+        return [trajectory, *alignments]
 
 
 @dataclass(kw_only=True, eq=False, repr=False)

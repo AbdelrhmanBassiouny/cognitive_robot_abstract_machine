@@ -360,32 +360,32 @@ class MovesToolCenterPoint(Action, ABC):
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class ReattachesBodies(Action, ABC):
+class ReattachesBranches(Action, ABC):
     """
-    An action that moves a body under a new parent in the world model, such as an object
-    it picks up or a robot it carries along.
+    An action that moves a branch of the kinematic structure under a new parent in the
+    world model, such as an object it picks up or a robot it carries along.
     """
 
     reattaches_in_world_model: bool = field(default=True, init=False)
     """
-    Whether the world model is told that a body moved under its new parent, rather than
+    Whether the world model is told that a branch moved under its new parent, rather than
     contact carrying it there.
     """
 
     def reattach(
         self,
-        body: KinematicStructureEntity,
+        branch_root: KinematicStructureEntity,
         new_parent: KinematicStructureEntity,
     ) -> list[StatechartNode]:
         """
-        :param body: The root of the branch to move.
-        :param new_parent: The body the branch is moved under.
-        :return: The node moving `body` under `new_parent`, none unless this action
-            :attr:`reattaches_in_world_model`.
+        :param branch_root: The root of the branch to move.
+        :param new_parent: The entity the branch is moved under.
+        :return: The node moving `branch_root` under `new_parent`, none unless this
+            action :attr:`reattaches_in_world_model`.
         """
         if not self.reattaches_in_world_model:
             return []
-        return [MoveBranch(body=body, new_parent=new_parent)]
+        return [MoveBranch(branch_root=branch_root, new_parent=new_parent)]
 
 
 @dataclass

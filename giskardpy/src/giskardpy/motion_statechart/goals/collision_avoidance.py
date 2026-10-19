@@ -151,7 +151,9 @@ class _CancelBecauseCollisionViolated(CancelStatechart):
         )
 
 
-def _the_only_robot(node: CompositeNode, context: StatechartContext) -> AbstractRobot:
+def _single_robot_of_world(
+    node: CompositeNode, context: StatechartContext
+) -> AbstractRobot:
     """
     :param node: The collision avoidance goal that was given no robot.
     :param context: The context `node` is expanded in.
@@ -190,20 +192,13 @@ class _ExternalCollisionAvoidanceTask(_CollisionAvoidanceTask):
     The external collision variable manager of the context this node is built in.
     """
 
-    _avoided_contacts: list[tuple[CollisionGroup, int]] = field(
+    avoided_contacts: list[tuple[CollisionGroup, int]] = field(
         default_factory=list, init=False, repr=False
     )
     """
-    See :attr:`avoided_contacts`.
+    One entry per constraint, in order: the collision group and the rank by distance of
+    the environment object it avoids, 0 for the closest.
     """
-
-    @property
-    def avoided_contacts(self) -> list[tuple[CollisionGroup, int]]:
-        """
-        :return: One entry per constraint, in order: the collision group and the rank by
-            distance of the environment object it avoids, 0 for the closest.
-        """
-        return self._avoided_contacts
 
     def build(self, context: StatechartContext) -> NodeArtifacts:
         """
@@ -214,10 +209,10 @@ class _ExternalCollisionAvoidanceTask(_CollisionAvoidanceTask):
         self._external_collision_manager = context.require_extension(
             MotionControlContext
         ).external_collision_manager
-        self._avoided_contacts = []
+        self.avoided_contacts = []
         for group in self._groups_avoiding_external_collisions(context):
             self._external_collision_manager.register_group_of_body(group.root)
-            self._avoided_contacts.extend(
+            self.avoided_contacts.extend(
                 (group, index)
                 for index in range(
                     group.get_max_avoided_bodies(context.world.collision_manager)
@@ -322,9 +317,10 @@ class ExternalCollisionAvoidance(EndedByOwner, CompositeNode):
         NodePlotSpec.create_collapsed_composite_node_style
     )
 
-    robot: AbstractRobot = None
+    robot: AbstractRobot | None = None
     """
-    The robot for which the collision avoidance goal is defined.
+    The robot for which the collision avoidance goal is defined; ``None`` for the only
+    robot of the world it runs in.
     """
 
     max_velocity: float = 0.2
@@ -350,7 +346,7 @@ class ExternalCollisionAvoidance(EndedByOwner, CompositeNode):
         that runs it.
         """
         if self.robot is None:
-            self.robot = _the_only_robot(self, context)
+            self.robot = _single_robot_of_world(self, context)
         task = _ExternalCollisionAvoidanceTask(
             name=f"{self.name}/task", robot=self.robot, max_velocity=self.max_velocity
         )
@@ -520,20 +516,12 @@ class _SelfCollisionAvoidanceTask(_CollisionAvoidanceTask):
     The self collision variable manager of the context this node is built in.
     """
 
-    _checked_combinations: list[tuple[CollisionGroup, CollisionGroup]] = field(
+    checked_combinations: list[tuple[CollisionGroup, CollisionGroup]] = field(
         default_factory=list, init=False, repr=False
     )
     """
-    See :attr:`checked_combinations`.
+    Every combination of collision groups this task avoids contacts of, in order.
     """
-
-    @property
-    def checked_combinations(self) -> list[tuple[CollisionGroup, CollisionGroup]]:
-        """
-        :return: Every combination of collision groups this task avoids contacts of,
-            in order.
-        """
-        return self._checked_combinations
 
     @property
     def avoided_contacts(self) -> list[tuple[CollisionGroup, CollisionGroup, int]]:
@@ -579,7 +567,7 @@ class _SelfCollisionAvoidanceTask(_CollisionAvoidanceTask):
         ).self_collision_manager
         collision_matrix = self.create_self_collision_matrix(context)
         kinematic_structure_entities = self.robot.kinematic_structure_entities
-        self._checked_combinations = []
+        self.checked_combinations = []
         for group_a, group_b in combinations(
             self._self_collision_manager.collision_groups, 2
         ):
@@ -597,7 +585,7 @@ class _SelfCollisionAvoidanceTask(_CollisionAvoidanceTask):
             self._self_collision_manager.register_groups_of_body_combination(
                 group_a.root, group_b.root
             )
-            self._checked_combinations.append(
+            self.checked_combinations.append(
                 self._self_collision_manager.body_pair_to_group_pair(
                     group_a.root, group_b.root
                 )
@@ -686,9 +674,10 @@ class SelfCollisionAvoidance(EndedByOwner, CompositeNode):
         NodePlotSpec.create_collapsed_composite_node_style
     )
 
-    robot: AbstractRobot = None
+    robot: AbstractRobot | None = None
     """
-    The robot for which the collision avoidance goal is defined.
+    The robot for which the collision avoidance goal is defined; ``None`` for the only
+    robot of the world it runs in.
     """
 
     max_velocity: float = 0.2
@@ -714,7 +703,7 @@ class SelfCollisionAvoidance(EndedByOwner, CompositeNode):
         built, in the context that runs it.
         """
         if self.robot is None:
-            self.robot = _the_only_robot(self, context)
+            self.robot = _single_robot_of_world(self, context)
         task = _SelfCollisionAvoidanceTask(
             name=f"{self.name}/task", robot=self.robot, max_velocity=self.max_velocity
         )

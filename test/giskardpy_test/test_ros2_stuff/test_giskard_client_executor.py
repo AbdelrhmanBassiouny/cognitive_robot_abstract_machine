@@ -10,7 +10,7 @@ from cramph.statechart import Statechart
 from giskardpy.middleware.ros2 import rospy
 from giskardpy.middleware.ros2.action_server import ActionServerHandler, GoalOutcome
 from giskardpy.middleware.ros2.exceptions import ExecutionAbortedException
-from giskardpy.middleware.ros2.python_interface import (
+from giskardpy.middleware.ros2.giskard_client_executor import (
     GiskardClientExecutor,
     GiskardClientExecutorNode,
 )

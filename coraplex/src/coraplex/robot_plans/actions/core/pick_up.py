@@ -9,7 +9,7 @@ from coraplex.robot_plans.actions.base import SequentialAction
 from cramph.composites import Parallel
 from cramph.node import StatechartNode
 from coraplex.robot_plans.mixins import (
-    ReattachesBodies,
+    ReattachesBranches,
     HasApproachesGraspPoses,
     HasGraspDetectionThreshold,
     MovesGripper,
@@ -125,7 +125,7 @@ class ReachAction(
 @dataclass(eq=False, repr=False, kw_only=True)
 class PickUpAction(
     MovesToolCenterPoint,
-    ReattachesBodies,
+    ReattachesBranches,
     SequentialAction,
     HasGraspChoice,
     HasApproachesGraspPoses,

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from time import sleep
 from dataclasses import dataclass, field
 from threading import Thread
 from typing import Dict, List
@@ -8,21 +7,20 @@ from typing import Dict, List
 import rclpy
 from interactive_markers.interactive_marker_server import InteractiveMarkerServer
 from rclpy import Parameter
-from semantic_digital_twin.world_description.world_entity import (
-    KinematicStructureEntity,
-)
 from visualization_msgs.msg import InteractiveMarker, InteractiveMarkerControl, Marker
 from visualization_msgs.msg import InteractiveMarkerFeedback
 
-from giskardpy.data_types.exceptions import UnpairedKinematicChainParametersError
-from giskardpy.motion_statechart.graph_node import EndMotion
 from cramph.monitors import CountSeconds
 from cramph.statechart import Statechart
-from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
-from giskardpy.middleware.ros2.python_interface import GiskardClientExecutor
+from giskardpy.data_types.exceptions import UnpairedKinematicChainParametersError
 from giskardpy.middleware.ros2 import rospy
-from semantic_digital_twin.exceptions import WorldEntityNotFoundError
+from giskardpy.middleware.ros2.giskard_client_executor import GiskardClientExecutor
+from giskardpy.motion_statechart.graph_node import EndMotion
+from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from semantic_digital_twin.world_description.world_entity import (
+    KinematicStructureEntity,
+)
 
 # %% kinematic chain endpoints
 

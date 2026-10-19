@@ -100,12 +100,10 @@ class DifferentialDriveBaseGoal(
     Fixes :attr:`parent_T_goal_reference_frame` to the current pose of the frame.
     """
 
-    @property
-    def sequence(self) -> Sequence:
-        """
-        The sequence running the three steps.
-        """
-        return self.nodes[0]
+    sequence: Sequence = expanded_child_field()
+    """
+    The sequence running the three steps.
+    """
 
     @property
     def _goal_reference_frame_name(self) -> PrefixedName:
@@ -176,9 +174,8 @@ class DifferentialDriveBaseGoal(
                 ],
             ),
         ]
-        self._add_child_to_statechart(
-            Sequence(name=f"{self.name}/sequence", nodes=steps)
-        )
+        self.sequence = Sequence(name=f"{self.name}/sequence", nodes=steps)
+        self._add_child_to_statechart(self.sequence)
 
     def set_up(self, context: StatechartContext) -> None:
         """

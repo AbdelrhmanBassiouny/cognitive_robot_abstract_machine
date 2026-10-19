@@ -94,10 +94,12 @@ class WorldVisualization(ExecutorExtension, ABC):
             case VisualizationBackend.RERUN:
                 return RerunVisualization.from_rerun_options()
             case VisualizationBackend.CRAMERA:
-                return cls._installed(VisualizationBackend.CRAMERA)
+                return cls._create_installed_visualization(VisualizationBackend.CRAMERA)
 
     @classmethod
-    def _installed(cls, backend: VisualizationBackend) -> WorldVisualization:
+    def _create_installed_visualization(
+        cls, backend: VisualizationBackend
+    ) -> WorldVisualization:
         """
         :param backend: The renderer an installed visualization provides.
         :return: A new instance of the visualization installed for `backend`.

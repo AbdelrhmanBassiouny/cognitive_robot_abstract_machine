@@ -26,7 +26,10 @@ from coraplex.exceptions import (
     UnknownVisualizationOption,
     VisualizationBackendUnavailable,
 )
-from coraplex.plans.executors import RealRobotPlanExecutor, SimulatedPlanExecutor
+from coraplex.plans.executors import (
+    RealRobotPlanExecutor,
+    KinematicallySimulatedPlanExecutor,
+)
 from coraplex.visualization import (
     RerunVisualization,
     RvizVisualization,
@@ -454,7 +457,7 @@ def test_a_debugging_action_trial_is_shown_apart_from_the_world_it_copies(
     cylinder_bot_world, rclpy_node
 ) -> None:
     robot = cylinder_bot_world.get_semantic_annotations_by_type(MinimalRobot)[0]
-    executor = SimulatedPlanExecutor(
+    executor = KinematicallySimulatedPlanExecutor(
         cylinder_bot_world,
         context_extensions=robot_extensions(robot),
         ros_node=rclpy_node,

@@ -23,7 +23,7 @@ from typing_extensions import Optional, Tuple, Type
 from coraplex.plans.context_extensions import RobotAccess, StatementGrounding
 from coraplex.plans.plan_transformation import PlanRewriting
 from coraplex.demonstrations import RobotDemonstration
-from coraplex.plans.executors import PlanExecutor, SimulatedPlanExecutor
+from coraplex.plans.executors import PlanExecutor, KinematicallySimulatedPlanExecutor
 from coraplex.robot_plans.actions.composite.transporting import TransportAction
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction, MoveTorsoAction
 from coraplex.robot_plans.plan_transformations import OpenDrawerBeforeMoveAndPickUp
@@ -374,7 +374,7 @@ class BulletWorldDemonstration(RobotDemonstration):
 
 
 def main(
-    executor_type: type[PlanExecutor] = SimulatedPlanExecutor,
+    executor_type: type[PlanExecutor] = KinematicallySimulatedPlanExecutor,
     collision_avoidance: bool = True,
     event_segmentation: bool = True,
     debug: bool = False,

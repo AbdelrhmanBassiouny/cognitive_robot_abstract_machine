@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 import numpy as np
+from numpy.typing import NDArray
 
 from krrood.symbolic_math.float_variable_data import FloatVariableData
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -61,7 +62,9 @@ class ForwardKinematicsBinding:
     if left unset.
     """
 
-    _bound_root_T_tip: np.ndarray | None = field(default=None, init=False, repr=False)
+    _bound_root_T_tip: NDArray[np.float64] | None = field(
+        default=None, init=False, repr=False
+    )
     """
     The forward kinematics :attr:`root_T_tip` was last set to, None until then.
     """
@@ -86,7 +89,7 @@ class ForwardKinematicsBinding:
         new_root_T_root = world.compute_forward_kinematics_np(root, self.root)
         self.root = root
         self.root_T_tip.reference_frame = root
-        self._set(new_root_T_root @ self._bound_root_T_tip)
+        self._set_root_T_tip(new_root_T_root @ self._bound_root_T_tip)
 
     def bind(self, world: World) -> None:
         """
@@ -94,9 +97,9 @@ class ForwardKinematicsBinding:
 
         :param world: The world used for computing the forward kinematics.
         """
-        self._set(world.compute_forward_kinematics_np(self.root, self.tip))
+        self._set_root_T_tip(world.compute_forward_kinematics_np(self.root, self.tip))
 
-    def _set(self, root_T_tip: np.ndarray) -> None:
+    def _set_root_T_tip(self, root_T_tip: NDArray[np.float64]) -> None:
         """
         Set :attr:`root_T_tip` to `root_T_tip`.
 

@@ -125,7 +125,7 @@ def _cases() -> list[NodeRoundTripCase]:
             MoveBranch,
             lambda world: [
                 MoveBranch(
-                    body=world.get_kinematic_structure_entity_by_name("tip"),
+                    branch_root=world.get_kinematic_structure_entity_by_name("tip"),
                     new_parent=world.get_kinematic_structure_entity_by_name("root"),
                 )
             ],
@@ -140,7 +140,10 @@ def _cases() -> list[NodeRoundTripCase]:
             ],
         ),
         NodeRoundTripCase(
-            TryInOrder, lambda world: [TryInOrder(nodes=[_node_that_can_fail(), _node_that_can_fail()])]
+            TryInOrder,
+            lambda world: [
+                TryInOrder(nodes=[_node_that_can_fail(), _node_that_can_fail()])
+            ],
         ),
         NodeRoundTripCase(
             TryAll, lambda world: [TryAll(nodes=[ConstTrueNode(), ConstTrueNode()])]
@@ -156,7 +159,9 @@ def _cases() -> list[NodeRoundTripCase]:
         NodeRoundTripCase(
             RepeatUntil,
             lambda world: [
-                RepeatUntil(task=_node_that_can_fail(), stop_retry_monitor=ConstFalseNode())
+                RepeatUntil(
+                    task=_node_that_can_fail(), stop_retry_monitor=ConstFalseNode()
+                )
             ],
         ),
         NodeRoundTripCase(

@@ -13,7 +13,7 @@ from coraplex.robot_plans.actions.base import (
     ParallelAction,
     SequentialAction,
 )
-from coraplex.robot_plans.mixins import ReattachesBodies
+from coraplex.robot_plans.mixins import ReattachesBranches
 from cramph.composites import Parallel, PausedUntilTrue
 from giskardpy.motion_statechart.goals.cartesian_goals import DifferentialDriveBaseGoal
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
@@ -320,7 +320,7 @@ class PathPlanningNavigateAction(DrivesBase, SequentialAction):
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class ElevatorNavigation(ReattachesBodies, SequentialAction):
+class ElevatorNavigation(ReattachesBranches, SequentialAction):
     """
     Navigates a robot to another level of a building using an elevator, the robot drives
     in the elevator and waits there until the doors open again and the elevator is at

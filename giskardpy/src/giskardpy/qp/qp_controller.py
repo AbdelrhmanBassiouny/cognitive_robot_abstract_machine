@@ -5,6 +5,7 @@ from dataclasses import dataclass, field, InitVar
 from typing import List, TYPE_CHECKING
 
 import numpy as np
+from numpy.typing import NDArray
 
 import krrood.symbolic_math.symbolic_math as sm
 from giskardpy.qp.constraint_collection import ConstraintCollection
@@ -132,8 +133,8 @@ class QPController:
         )
 
     def _solve_without_stopped(
-        self, qp_data: QPDataExplicit, stopped: np.ndarray
-    ) -> np.ndarray:
+        self, qp_data: QPDataExplicit, stopped: NDArray[np.bool_]
+    ) -> NDArray[np.float64]:
         """
         :param qp_data: The problem of this control cycle.
         :param stopped: Which degrees of freedom are stopped instead of solved for,
@@ -189,7 +190,7 @@ class QPController:
         """
         return self.qp_data_factory.qp_data.number_non_slack_variables
 
-    def _stopping_solution(self, qp_data: QPDataExplicit) -> np.ndarray:
+    def _stopping_solution(self, qp_data: QPDataExplicit) -> NDArray[np.float64]:
         """
         :param qp_data: The problem of this control cycle.
         :return: The value of every velocity and jerk variable with which each degree
@@ -208,7 +209,7 @@ class QPController:
 
     def _unconstrained_degrees_of_freedom_able_to_stop(
         self, qp_data: QPData
-    ) -> np.ndarray:
+    ) -> NDArray[np.bool_]:
         """
         A degree of freedom that no constraint of the problem refers to only has to
         stand still. A solver finds that within its tolerance only, which lets the

@@ -21,7 +21,11 @@ from rclpy.node import Node
 from typing_extensions import Type
 
 from coraplex.datastructures.enums import VisualizationBackend
-from coraplex.plans.executors import PlanExecutor, SimulatedPlanExecutor
+from coraplex.plans.executors import (
+    KinematicallySimulatedPlanExecutor,
+    PlanExecutor,
+    SimulatedPlanExecutor,
+)
 from coraplex.visualization import WorldVisualization
 from cramph.context import ContextExtension, StatechartContext
 from cramph.statechart import Statechart
@@ -36,7 +40,7 @@ WORLD_FETCH_TIMEOUT_SECONDS = 300
 """
 How long to wait for a controller to serve its world.
 
-Matches giskardpy's own client (``giskardpy/middleware/ros2/python_interface.py``), which
+Matches giskardpy's own client (``giskardpy/middleware/ros2/giskard_client_executor.py``), which
 waits this long for the same race: the world-fetcher server is still parsing the URDF and
 starting up when a shorter budget would expire.
 """
@@ -152,7 +156,7 @@ class RobotDemonstration(ABC):
     Name of the node a real run registers.
     """
 
-    executor_type: type[PlanExecutor] = SimulatedPlanExecutor
+    executor_type: type[PlanExecutor] = KinematicallySimulatedPlanExecutor
     """
     The executor running the plan, which decides whether it drives the real robot or a
     simulated one.
@@ -171,8 +175,8 @@ class RobotDemonstration(ABC):
 
     debug: bool = False
     """
-    Whether the plan runs in debug mode, logging debug messages and publishing every
-    copy of the world a candidate is tried in.
+    Whether the plan runs in debug mode, publishing every copy of the world a candidate
+    is tried in.
     """
 
     repetitions: int = 1

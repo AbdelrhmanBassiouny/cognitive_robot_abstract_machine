@@ -23,7 +23,7 @@ from coraplex.plans.context_extensions import RobotAccess, StatementGrounding
 from cramph.context import ContextExtension
 from cramph.statechart import Statechart
 from coraplex.orm.ormatic_interface import Base  # type: ignore
-from coraplex.plans.executors import SimulatedPlanExecutor
+from coraplex.plans.executors import KinematicallySimulatedPlanExecutor
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from experiments.experiment_definitions import (
     ExperimentResult,
@@ -225,7 +225,7 @@ def reliability_experiment(
     plan = create_plan(world, plan_size)
 
     t0 = time.perf_counter()
-    executor = SimulatedPlanExecutor(world, context_extensions=extensions)
+    executor = KinematicallySimulatedPlanExecutor(world, context_extensions=extensions)
     statechart = Statechart(context=executor.context)
     statechart.add_node(plan)
     executor.compile(statechart)

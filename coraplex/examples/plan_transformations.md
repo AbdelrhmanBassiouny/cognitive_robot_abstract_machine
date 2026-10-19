@@ -27,7 +27,7 @@ plan it runs.
 
 ```python
 from coraplex.plans.context_extensions import RobotAccess
-from coraplex.plans.executors import SimulatedPlanExecutor
+from coraplex.plans.executors import KinematicallySimulatedPlanExecutor
 from coraplex.plans.plan_transformation import PlanRewriting
 from coraplex.testing import setup_world
 from cramph.statechart import Statechart
@@ -45,7 +45,7 @@ def statechart_for(plan):
     :return: An executor configured with the transformations registered so far, and a
         statechart of its context holding `plan`.
     """
-    executor = SimulatedPlanExecutor(
+    executor = KinematicallySimulatedPlanExecutor(
         world,
         context_extensions=[
             RobotAccess(pr2),

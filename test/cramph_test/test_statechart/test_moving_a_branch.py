@@ -181,7 +181,7 @@ def _compile(executor: StatechartExecutor, *nodes: StatechartNode) -> Statechart
 def test_moving_a_branch_puts_the_body_below_its_new_parent(
     sliding_world: SlidingWorld, sliding_executor: StatechartExecutor
 ) -> None:
-    move = MoveBranch(body=sliding_world.box, new_parent=sliding_world.slider)
+    move = MoveBranch(branch_root=sliding_world.box, new_parent=sliding_world.slider)
     _compile(sliding_executor, move, EndStatechart.when_true(move))
 
     sliding_executor.tick_until_end(timeout=10)
@@ -194,7 +194,7 @@ def test_a_node_moving_a_branch_has_the_chart_rebuilt_on_the_next_tick(
     sliding_world: SlidingWorld, sliding_executor: StatechartExecutor
 ) -> None:
     counting = NodeCountingItsBuilds(name="counting")
-    move = MoveBranch(body=sliding_world.box, new_parent=sliding_world.slider)
+    move = MoveBranch(branch_root=sliding_world.box, new_parent=sliding_world.slider)
     _compile(sliding_executor, counting, move)
     builds_in_the_moving_tick = counting.build_count
 

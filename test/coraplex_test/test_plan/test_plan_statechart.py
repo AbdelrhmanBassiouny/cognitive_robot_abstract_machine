@@ -164,7 +164,7 @@ def test_a_branch_moved_mid_plan_follows_its_new_parent(pr2_apartment_context) -
     plan = Sequence(
         nodes=[
             MoveTorsoAction(torso_state=TorsoState.LOW),
-            MoveBranch(body=milk, new_parent=tool_frame),
+            MoveBranch(branch_root=milk, new_parent=tool_frame),
             MoveTorsoAction(torso_state=TorsoState.HIGH),
         ]
     )

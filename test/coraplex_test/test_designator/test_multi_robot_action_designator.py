@@ -1558,7 +1558,7 @@ def test_a_kinematically_simulated_pick_is_held_by_the_world(
 
     [attaching] = branch_moves_of(motion_nodes_of(pick_up, extensions))
 
-    assert attaching.body is milk.root
+    assert attaching.branch_root is milk.root
     assert attaching.new_parent is arm.end_effector.tool_frame
 
 

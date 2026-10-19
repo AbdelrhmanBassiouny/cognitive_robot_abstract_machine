@@ -34,7 +34,7 @@ from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import Color, Scale
 from coraplex.plans.context_extensions import RobotAccess
-from coraplex.plans.executors import SimulatedPlanExecutor
+from coraplex.plans.executors import KinematicallySimulatedPlanExecutor
 from cramph.context import StatechartContext
 from cramph.executor import ExecutorExtension
 from cramph.statechart import Statechart
@@ -231,7 +231,7 @@ def run(
     Carry the parcel from `source` to `destination` with `robot` in `world`, simulated,
     see :func:`build_statechart`, showing it with `visualizations`.
     """
-    executor = SimulatedPlanExecutor(
+    executor = KinematicallySimulatedPlanExecutor(
         world,
         context_extensions=[RobotAccess(robot)],
         ros_node=ros_node,

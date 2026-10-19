@@ -15,7 +15,10 @@ from coraplex.plans.plan_transformation import (
     PlanTransformation,
 )
 from coraplex.robot_plans.actions.composite.tool_based import ToolMotionAction
-from coraplex.robot_plans.actions.core.container import CloseAction, MovesHandle
+from coraplex.robot_plans.actions.core.container import (
+    CloseAction,
+    MovesContainerByItsHandle,
+)
 from coraplex.robot_plans.actions.core.navigation import DrivesBase
 from coraplex.robot_plans.mixins import MovesToolCenterPoint
 from cramph.composites import Parallel
@@ -129,7 +132,8 @@ class KeepStretchFromTurningWhileMovingItsTool(ParallelInsertion[MovesToolCenter
             isinstance(robot, Stretch)
             and robot.mobile_base.full_body_controlled
             and not any(
-                isinstance(node, MovesHandle) for node in [plan_node, *plan_node.path]
+                isinstance(node, MovesContainerByItsHandle)
+                for node in [plan_node, *plan_node.path]
             )
             and not any(isinstance(node, DrivesBase) for node in plan_node.descendants)
             and not any(

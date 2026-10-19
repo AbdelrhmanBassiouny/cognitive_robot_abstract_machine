@@ -9,6 +9,7 @@ from rclpy.node import Node
 from typing_extensions import TYPE_CHECKING
 
 from coraplex.exceptions import (
+    DebuggingWithoutRosNode,
     MotionDidNotFinish,
     PlanNotCompiled,
 )
@@ -63,7 +64,7 @@ from giskardpy.motion_statechart.goals.collision_avoidance import (
 )
 from giskardpy.motion_statechart.graph_node import ConvergingTask, EndMotion
 from giskardpy.motion_statechart.monitors.progress_monitors import StillProgressing
-from giskardpy.middleware.ros2.python_interface import GiskardClientExecutor
+from giskardpy.middleware.ros2.giskard_client_executor import GiskardClientExecutor
 from giskardpy.motion_statechart.ros_context import RosNodeAccess
 from giskardpy.qp.qp_controller_config import QPControllerConfig
 from krrood.symbolic_math.symbolic_math import logic_or
@@ -131,8 +132,8 @@ class PlanExecutor(Executor, ABC):
 
     debug: bool = field(default=False, kw_only=True)
     """
-    Whether debug messages are logged and every copy of the world a candidate is tried
-    in is published to RViz, which needs :attr:`ros_node`.
+    Whether every copy of the world a candidate is tried in is published to RViz, which
+    needs :attr:`ros_node`.
     """
 
     child_chooser: UnderspecifiedChildChooser = field(init=False)
@@ -172,17 +173,16 @@ class PlanExecutor(Executor, ABC):
 
     def __post_init__(self) -> None:
         if self.debug and self.ros_node is None:
-            raise ValueError("Debug mode requires a ROS node")
-        logging.getLogger("coraplex").setLevel(
-            logging.DEBUG if self.debug else logging.INFO
-        )
+            raise DebuggingWithoutRosNode()
         self.context = StatechartContext(world=self.world)
         for extension in self.context_extensions:
             if isinstance(extension, PlanRewriting):
-                extension = extension.preceded_by(self.adaptations)
+                extension = extension.copy_with_preceding_transformations(
+                    self.adaptations
+                )
             self.context.add_extension(extension)
         self.child_chooser = UnderspecifiedChildChooser(
-            executor=self, trial_executor_type=SimulatedPlanExecutor
+            executor=self, trial_executor_type=KinematicallySimulatedPlanExecutor
         )
         self.context.add_extension(ChildChooserAccess(chooser=self.child_chooser))
         super().__post_init__()
@@ -366,13 +366,12 @@ class PlanExecutor(Executor, ABC):
 
 
 @dataclass
-class SimulatedPlanExecutor(PlanExecutor, StatechartExecutor):
+class SimulatedPlanExecutor(PlanExecutor, StatechartExecutor, ABC):
     """
-    Ticks the plan's statechart in :attr:`world`, driving the robot's motions with the
-    :class:`~giskardpy.motion_control.MotionControl` among its :attr:`extensions`, which
-    is added with the controller of
-    :meth:`~giskardpy.qp.qp_controller_config.QPControllerConfig.create_with_fast_simulation_defaults`
-    unless one is given.
+    Ticks the plan's statechart in a simulated :attr:`world`, driving the robot's
+    motions with the :class:`~giskardpy.motion_control.MotionControl` among its
+    :attr:`extensions`, which is added with the controller of
+    :meth:`create_qp_controller_config` unless one is given.
     """
 
     simulation_time_per_action: timedelta = field(
@@ -390,14 +389,6 @@ class SimulatedPlanExecutor(PlanExecutor, StatechartExecutor):
     once. Counted again whenever nodes join the statechart.
     """
 
-    plan_adaptations: list[PlanTransformation] = field(
-        default_factory=lambda: [
-            WriteTheOdometryInsteadOfDriving(),
-            KeepStretchInFrontOfTheContainerItCloses(),
-        ],
-        kw_only=True,
-    )
-
     def __post_init__(self) -> None:
         super().__post_init__()
         self.simulation_time_limit = self.simulation_time_per_action
@@ -405,10 +396,15 @@ class SimulatedPlanExecutor(PlanExecutor, StatechartExecutor):
     def default_executor_extensions(self) -> list[ExecutorExtension]:
         return [
             RosNodeAccess(self.ros_node),
-            MotionControl(
-                qp_controller_config=QPControllerConfig.create_with_fast_simulation_defaults()
-            ),
+            MotionControl(qp_controller_config=self.create_qp_controller_config()),
         ]
+
+    @abstractmethod
+    def create_qp_controller_config(self) -> QPControllerConfig:
+        """
+        :return: A new configuration of the controller driving the robot's motions,
+            suited to how the world is simulated.
+        """
 
     def compile(self, statechart: Statechart) -> None:
         """
@@ -476,6 +472,25 @@ class SimulatedPlanExecutor(PlanExecutor, StatechartExecutor):
 
 
 @dataclass
+class KinematicallySimulatedPlanExecutor(SimulatedPlanExecutor):
+    """
+    Ticks the plan's statechart in a world whose state follows every command exactly,
+    with no physics in between.
+    """
+
+    plan_adaptations: list[PlanTransformation] = field(
+        default_factory=lambda: [
+            WriteTheOdometryInsteadOfDriving(),
+            KeepStretchInFrontOfTheContainerItCloses(),
+        ],
+        kw_only=True,
+    )
+
+    def create_qp_controller_config(self) -> QPControllerConfig:
+        return QPControllerConfig.create_with_fast_simulation_defaults()
+
+
+@dataclass
 class PhysicallySimulatedPlanExecutor(SimulatedPlanExecutor):
     """
     Ticks the plan's statechart against a physically simulated world, whose servos take
@@ -511,13 +526,8 @@ class PhysicallySimulatedPlanExecutor(SimulatedPlanExecutor):
         self.pacer = SteppedSimulationPacer(self.simulation)
         super().__post_init__()
 
-    def default_executor_extensions(self) -> list[ExecutorExtension]:
-        return [
-            RosNodeAccess(self.ros_node),
-            MotionControl(
-                qp_controller_config=QPControllerConfig.create_with_physical_simulation_defaults()
-            ),
-        ]
+    def create_qp_controller_config(self) -> QPControllerConfig:
+        return QPControllerConfig.create_with_physical_simulation_defaults()
 
 
 @dataclass

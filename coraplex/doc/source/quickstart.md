@@ -111,7 +111,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.datastructures.definitions import TorsoState
 from coraplex.plans.context_extensions import RobotAccess
-from coraplex.plans.executors import SimulatedPlanExecutor
+from coraplex.plans.executors import KinematicallySimulatedPlanExecutor
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction, MoveTorsoAction
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
@@ -120,7 +120,7 @@ from cramph.composites import Sequence
 from cramph.statechart import Statechart
 
 pr2 = PR2.from_world(world)
-executor = SimulatedPlanExecutor(world, context_extensions=[RobotAccess(pr2)])
+executor = KinematicallySimulatedPlanExecutor(world, context_extensions=[RobotAccess(pr2)])
 milk_body = world.get_body_by_name("milk.stl")
 
 # The pick-up is told what it is grasping, so annotate the parsed mesh as milk.
@@ -148,7 +148,7 @@ statechart.add_node(plan)
 
 What did we just do here?
 We first created an executor, which runs the plan in the world, by the PR2 its context extensions name. A
-`SimulatedPlanExecutor` runs it in simulation; a `RealRobotPlanExecutor` would send it to the real robot.
+`KinematicallySimulatedPlanExecutor` runs it in simulation; a `RealRobotPlanExecutor` would send it to the real robot.
 Next, we retrieved the milk bottle body from the world to use it in the pick-up and place actions.
 Finally, we built a plan as a {class}`~cramph.composites.Sequence`, meaning all actions will be executed one after
 another in the order they are defined, and put it into a statechart of the executor's context.

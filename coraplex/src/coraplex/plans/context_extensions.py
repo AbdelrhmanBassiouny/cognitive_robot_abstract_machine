@@ -90,8 +90,8 @@ class MotionToleranceConfig(ContextExtension):
     """
     Default orientation tolerance in rad for tool-center-point poses.
 
-    .. note:: A physically simulated arm's PD-tracked joints settle with a small
-        residual orientation error, so reusing the (much tighter) position tolerance
+    .. note:: The PD-tracked joints of a physically simulated or a real arm settle with
+        a small residual orientation error, so reusing the (much tighter) position tolerance
         as the rotation tolerance can leave the task perpetually unfinished, stalling
         the rest of the plan behind it.
     """

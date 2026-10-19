@@ -1,10 +1,10 @@
-import logging
 from dataclasses import dataclass
 
 import pytest
 
+from coraplex.exceptions import DebuggingWithoutRosNode
 from coraplex.plans.context_extensions import RobotAccess, StatementGrounding
-from coraplex.plans.executors import SimulatedPlanExecutor
+from coraplex.plans.executors import KinematicallySimulatedPlanExecutor
 from coraplex.plans.plan_transformation import PlanRewriting, PlanTransformation
 
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction
@@ -23,42 +23,10 @@ def test_debug_requires_a_ros_node(pr2_apartment_context) -> None:
     """
     world, _, extensions = pr2_apartment_context
 
-    with pytest.raises(ValueError):
-        SimulatedPlanExecutor(world, context_extensions=extensions, debug=True)
-
-
-def test_debug_raises_the_coraplex_log_level(pr2_apartment_context, rclpy_node) -> None:
-    """
-    Creating an executor in debug mode lowers the package's log level, so debug messages
-    are emitted without the caller touching logging.
-    """
-    world, _, extensions = pr2_apartment_context
-    coraplex_logger = logging.getLogger("coraplex")
-    previous_level = coraplex_logger.level
-
-    try:
-        SimulatedPlanExecutor(
-            world, context_extensions=extensions, ros_node=rclpy_node, debug=True
+    with pytest.raises(DebuggingWithoutRosNode):
+        KinematicallySimulatedPlanExecutor(
+            world, context_extensions=extensions, debug=True
         )
-        assert coraplex_logger.level == logging.DEBUG
-    finally:
-        coraplex_logger.setLevel(previous_level)
-
-
-def test_default_executor_logs_at_info(pr2_apartment_context) -> None:
-    """
-    Without debug mode the package logs at info level.
-    """
-    world, _, extensions = pr2_apartment_context
-    coraplex_logger = logging.getLogger("coraplex")
-    previous_level = coraplex_logger.level
-
-    try:
-        executor = SimulatedPlanExecutor(world, context_extensions=extensions)
-        assert not executor.debug
-        assert coraplex_logger.level == logging.INFO
-    finally:
-        coraplex_logger.setLevel(previous_level)
 
 
 # %% the root Cartesian goals are expressed in

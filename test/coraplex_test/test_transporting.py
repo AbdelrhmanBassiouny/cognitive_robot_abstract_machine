@@ -415,7 +415,7 @@ def _assert_each_standing_pose_tries_its_grasps_closest_first(
         standing_position = steps_from_one_pose[0].navigate.target_location
         world_P_standing = world.transform(standing_position, world.root).to_np()[:, 3]
         closeness = [
-            GraspCloseness.of(grasp_of(step), world_T_object, world_P_standing)
+            GraspCloseness.from_grasp(grasp_of(step), world_T_object, world_P_standing)
             for step in steps_from_one_pose
         ]
         assert closeness == sorted(closeness)
@@ -426,7 +426,7 @@ def _closeness(grasp: GraspCandidate, standing_position: Pose) -> GraspCloseness
     :return: How close `grasp` is to `standing_position`.
     """
     world = grasp.graspable.root._world
-    return GraspCloseness.of(
+    return GraspCloseness.from_grasp(
         grasp,
         grasp.graspable.root.global_transform.to_np(),
         world.transform(standing_position, world.root).to_np()[:, 3],

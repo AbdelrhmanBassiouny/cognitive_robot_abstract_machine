@@ -4,6 +4,7 @@ from scipy.spatial.transform import Rotation
 
 from coraplex.datastructures.enums import CuttingTechnique, PouringSide
 from coraplex.exceptions import WipingTargetMissing
+from coraplex.plans.context_extensions import MotionToleranceConfig
 from coraplex.robot_plans.actions.base import ParallelAction
 from coraplex.robot_plans.actions.composite.tool_based import (
     CuttingAction,
@@ -327,6 +328,31 @@ def test_a_tool_motion_moves_the_tool_relative_to_the_world(tool_action_world) -
 
     assert _trajectory_of(goal).root_link is world.root
     assert robot.mobile_base.full_body_controlled == full_body_controlled
+
+
+# %% the tolerance a tool path is followed with
+
+
+def test_a_tool_path_without_a_position_threshold_uses_the_contexts_default(
+    tool_action_world,
+) -> None:
+    """
+    A tool motion given no position threshold follows its path with the default of the
+    context's :class:`MotionToleranceConfig`, like every other tool center point motion.
+    """
+    world, robot, extensions, container, tool_body = tool_action_world
+    action = MixingAction(
+        container=container, arm=robot.right_arm, tool=Whisk(root=tool_body)
+    )
+
+    goal = _tool_path_goals(action, extensions)[0]
+
+    assert (
+        _trajectory_of(goal).threshold
+        == action.context.require_extension(
+            MotionToleranceConfig
+        ).default_tcp_position_threshold
+    )
 
 
 # %% wiping
