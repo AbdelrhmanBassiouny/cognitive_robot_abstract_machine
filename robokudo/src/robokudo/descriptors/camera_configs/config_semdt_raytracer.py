@@ -7,7 +7,7 @@ from typing_extensions import TYPE_CHECKING
 
 from robokudo.types.cv import ColorToDepthRatio
 from robokudo.descriptors.camera_configs.base_camera_config import BaseCameraConfig
-from semantic_digital_twin.datastructures.camera_rendering import SemDTRGBMode
+from semantic_digital_twin.datastructures.camera_rendering import ColorRenderingMode
 
 if TYPE_CHECKING:
     from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -97,7 +97,7 @@ class SemDTRayTracerCameraConfig(BaseCameraConfig):
     Scale factor from RGB image to depth image resolution.
     """
 
-    rgb_mode: SemDTRGBMode = SemDTRGBMode.SEMANTIC
+    rgb_mode: ColorRenderingMode = ColorRenderingMode.SEMANTIC
     """
     Method used to create the rendered color image.
     """

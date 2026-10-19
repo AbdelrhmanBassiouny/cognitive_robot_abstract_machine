@@ -29,7 +29,7 @@ from semantic_digital_twin.datastructures.camera_rendering import (
     DepthMode,
     RenderedRGBDFrame,
     SegmentationDepthFrame,
-    SemDTRGBMode,
+    ColorRenderingMode,
 )
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.spatial_types.spatial_types import (
@@ -431,7 +431,7 @@ class RayTracer:
     def render(
         self,
         camera: Camera,
-        rgb_mode: SemDTRGBMode = SemDTRGBMode.SEMANTIC,
+        rgb_mode: ColorRenderingMode = ColorRenderingMode.SEMANTIC,
         *,
         depth_mode: DepthMode = DepthMode.OPTICAL_AXIS,
     ) -> RenderedRGBDFrame:
@@ -460,7 +460,7 @@ class RayTracer:
                 reason="distorted rendering is not supported"
             )
         resolution = camera_model.resolution
-        if rgb_mode == SemDTRGBMode.TEXTURED and not (
+        if rgb_mode == ColorRenderingMode.TEXTURED and not (
             math.isclose(camera_model.principal_point_x, resolution.width / 2)
             and math.isclose(camera_model.principal_point_y, resolution.height / 2)
             and math.isclose(camera_model.focal_length_x, camera_model.focal_length_y)
@@ -494,7 +494,7 @@ class RayTracer:
         self,
         segmentation: np.ndarray,
         resolution: CameraResolution,
-        rgb_mode: SemDTRGBMode,
+        rgb_mode: ColorRenderingMode,
     ) -> RenderedColorFrame:
         """
         Return BGR colors and their semantic names for the selected rendering mode.
@@ -504,7 +504,7 @@ class RayTracer:
         :param rgb_mode: Source of the rendered color values.
         :return: Width-first BGR colors and the semantic color-to-name mapping.
         """
-        if rgb_mode == SemDTRGBMode.TEXTURED:
+        if rgb_mode == ColorRenderingMode.TEXTURED:
             return RenderedColorFrame(
                 color_image=self._render_textured_color(resolution),
                 object_color_map={},

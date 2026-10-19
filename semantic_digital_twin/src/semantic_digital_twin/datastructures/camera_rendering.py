@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 
 # %% Rendering conventions
-class SemDTRGBMode(StrEnum):
+class ColorRenderingMode(StrEnum):
     """
     Select how the ray tracer produces the color image.
     """

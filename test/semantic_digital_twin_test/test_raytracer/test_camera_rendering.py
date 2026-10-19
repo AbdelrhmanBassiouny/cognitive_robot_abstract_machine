@@ -24,7 +24,7 @@ from semantic_digital_twin.datastructures.camera_rendering import (
     CameraRays,
     RayIntersections,
     DepthMode,
-    SemDTRGBMode,
+    ColorRenderingMode,
 )
 from semantic_digital_twin.robots.robot_parts import Camera
 from semantic_digital_twin.spatial_computations.raytracer import RayTracer
@@ -199,7 +199,9 @@ def test_semantic_rgbd_render_preserves_encodings(
     """
     fixture = camera_intersections
     fixture.body.collision[0].color = Color(R=1.0, G=0.0, B=0.0)
-    frame = fixture.ray_tracer.render(fixture.camera, rgb_mode=SemDTRGBMode.SEMANTIC)
+    frame = fixture.ray_tracer.render(
+        fixture.camera, rgb_mode=ColorRenderingMode.SEMANTIC
+    )
     expected_color = np.zeros(
         (fixture.resolution.width, fixture.resolution.height, 3), dtype=np.uint8
     )
@@ -264,7 +266,9 @@ def test_mesh_render_preserves_rgb_channels(
         "save_image",
         Mock(return_value=image_bytes.getvalue()),
     )
-    frame = fixture.ray_tracer.render(fixture.camera, rgb_mode=SemDTRGBMode.TEXTURED)
+    frame = fixture.ray_tracer.render(
+        fixture.camera, rgb_mode=ColorRenderingMode.TEXTURED
+    )
     expected = np.zeros(
         (fixture.resolution.width, fixture.resolution.height, 3), dtype=np.uint8
     )
@@ -295,7 +299,7 @@ def test_textured_render_propagates_backend_errors(
         fixture.ray_tracer.scene, "save_image", Mock(side_effect=rendering_error)
     )
     with pytest.raises(rendering_error):
-        fixture.ray_tracer.render(fixture.camera, rgb_mode=SemDTRGBMode.TEXTURED)
+        fixture.ray_tracer.render(fixture.camera, rgb_mode=ColorRenderingMode.TEXTURED)
 
 
 # %% Shared hit selection
@@ -311,7 +315,7 @@ def test_textured_render_generates_camera_rays_once(
         fixture.ray_tracer.scene, "save_image", Mock(side_effect=OSError)
     )
     with pytest.raises(OSError):
-        fixture.ray_tracer.render(fixture.camera, rgb_mode=SemDTRGBMode.TEXTURED)
+        fixture.ray_tracer.render(fixture.camera, rgb_mode=ColorRenderingMode.TEXTURED)
     fixture.ray_tracer.create_camera_rays.assert_called_once()
     fixture.query.assert_called_once()
 
@@ -516,5 +520,5 @@ def test_textured_render_rejects_incompatible_projection(
         principal_point_x=original.principal_point_x + (0.25 if off_center else 0.0),
     )
     with pytest.raises(UnsupportedCameraProjection):
-        fixture.ray_tracer.render(fixture.camera, rgb_mode=SemDTRGBMode.TEXTURED)
+        fixture.ray_tracer.render(fixture.camera, rgb_mode=ColorRenderingMode.TEXTURED)
     fixture.query.assert_not_called()
