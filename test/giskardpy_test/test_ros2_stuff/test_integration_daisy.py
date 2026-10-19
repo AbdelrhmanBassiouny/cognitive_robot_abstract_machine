@@ -88,8 +88,8 @@ def robot():
 
 
 def test_joints1(giskard: DAiSyTester) -> None:
-    msc = Statechart(context=giskard.api.context)
-    msc.add_node(
+    statechart = Statechart(context=giskard.api.context)
+    statechart.add_node(
         joint_goal := JointPositionList(
             goal_state=JointState.from_str_dict(
                 {
@@ -101,9 +101,9 @@ def test_joints1(giskard: DAiSyTester) -> None:
             )
         ),
     )
-    msc.add_node(EndMotion.when_true(joint_goal))
-    add_trajectory_length_limit(msc)
-    giskard.api.compile(msc)
+    statechart.add_node(EndMotion.when_true(joint_goal))
+    add_trajectory_length_limit(statechart)
+    giskard.api.compile(statechart)
     giskard.api.execute()
 
     base = giskard.world.get_kinematic_structure_entity_by_name("left_base_link")

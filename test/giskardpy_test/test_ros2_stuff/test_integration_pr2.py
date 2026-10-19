@@ -141,14 +141,14 @@ class TestJointGoals:
             PR2Joint.LEFT_WRIST_FLEX: -0.1,
             PR2Joint.LEFT_WRIST_ROLL: -6.062015047706399,
         }
-        msc = Statechart(context=giskard.api.context)
-        msc.add_node(
+        statechart = Statechart(context=giskard.api.context)
+        statechart.add_node(
             joint_goal := JointPositionList(
                 goal_state=JointState.from_str_dict(js, giskard.api.world),
             )
         )
-        msc.add_node(EndMotion.when_true(joint_goal))
-        giskard.api.compile(msc)
+        statechart.add_node(EndMotion.when_true(joint_goal))
+        giskard.api.compile(statechart)
         giskard.api.execute()
         sleep(0.1)
         for joint, goal in js.items():
@@ -174,16 +174,16 @@ class TestCartGoals:
             pos_x=-0.2, reference_frame=giskard.right_tip
         )
 
-        msc = Statechart(context=giskard.api.context)
-        msc.add_node(
+        statechart = Statechart(context=giskard.api.context)
+        statechart.add_node(
             cart_goal := CartesianPose(
                 root_link=giskard.base_footprint,
                 tip_link=giskard.right_tip,
                 goal_pose=tip_goal,
             )
         )
-        msc.add_node(EndMotion.when_true(cart_goal))
-        giskard.api.compile(msc)
+        statechart.add_node(EndMotion.when_true(cart_goal))
+        giskard.api.compile(statechart)
         giskard.api.execute()
 
 
@@ -248,33 +248,33 @@ def test_bodies_added_relative_to_the_gripper_are_placed_there_on_the_server(
 
 class TestActionServerEvents:
     def test_wrong_params1(self, giskard: PR2Tester):
-        msc = Statechart(context=giskard.api.context)
-        msc.add_node(
+        statechart = Statechart(context=giskard.api.context)
+        statechart.add_node(
             joint_goal := JointPositionList(
                 goal_state=HomogeneousTransformationMatrix(),
             )
         )
-        msc.add_node(EndMotion.when_true(joint_goal))
+        statechart.add_node(EndMotion.when_true(joint_goal))
         with pytest.raises(AttributeError):
-            giskard.api.compile(msc)
+            giskard.api.compile(statechart)
             giskard.api.execute()
 
-        msc = Statechart(context=giskard.api.context)
-        msc.add_node(
+        statechart = Statechart(context=giskard.api.context)
+        statechart.add_node(
             joint_goal := JointPositionList(
                 goal_state=JointState.from_str_dict(
                     giskard.better_pose_left, world=giskard.api.world
                 ),
             )
         )
-        msc.add_node(EndMotion.when_true(joint_goal))
-        giskard.api.compile(msc)
+        statechart.add_node(EndMotion.when_true(joint_goal))
+        giskard.api.compile(statechart)
         giskard.api.execute()
 
     @pytest.mark.asyncio
     async def test_cancel_with_new_goal(self, giskard: PR2Tester):
-        msc = Statechart(context=giskard.api.context)
-        msc.add_node(
+        statechart = Statechart(context=giskard.api.context)
+        statechart.add_node(
             CartesianPose(
                 root_link=giskard.map,
                 tip_link=giskard.base_footprint,
@@ -284,14 +284,14 @@ class TestActionServerEvents:
             )
         )
 
-        giskard.api.compile(msc)
+        giskard.api.compile(statechart)
         goal_accepted_future = giskard.api.execute_async()
         wait_for_future_to_complete(goal_accepted_future)
 
         await asyncio.sleep(2)
 
-        msc = Statechart(context=giskard.api.context)
-        msc.add_node(
+        statechart = Statechart(context=giskard.api.context)
+        statechart.add_node(
             cart_goal := CartesianPose(
                 root_link=giskard.map,
                 tip_link=giskard.base_footprint,
@@ -300,9 +300,9 @@ class TestActionServerEvents:
                 ),
             )
         )
-        msc.add_node(EndMotion.when_true(cart_goal))
+        statechart.add_node(EndMotion.when_true(cart_goal))
 
-        giskard.api.compile(msc)
+        giskard.api.compile(statechart)
         goal_accepted_future = giskard.api.execute_async()
         wait_for_future_to_complete(goal_accepted_future)
 
@@ -310,8 +310,8 @@ class TestActionServerEvents:
 
     @pytest.mark.asyncio
     async def test_interrupt(self, giskard: PR2Tester):
-        msc = Statechart(context=giskard.api.context)
-        msc.add_node(
+        statechart = Statechart(context=giskard.api.context)
+        statechart.add_node(
             CartesianPose(
                 root_link=giskard.map,
                 tip_link=giskard.base_footprint,
@@ -321,7 +321,7 @@ class TestActionServerEvents:
             )
         )
 
-        giskard.api.compile(msc)
+        giskard.api.compile(statechart)
         goal_accepted_future = giskard.api.execute_async()
         wait_for_future_to_complete(goal_accepted_future)
 
@@ -342,8 +342,8 @@ class TestActionServerEvents:
         The motion ends by itself after a while, so that a client that is not noticed
         leaving fails this test instead of keeping the goal running forever.
         """
-        msc = Statechart(context=giskard.api.context)
-        msc.add_node(
+        statechart = Statechart(context=giskard.api.context)
+        statechart.add_node(
             CartesianPose(
                 root_link=giskard.map,
                 tip_link=giskard.base_footprint,
@@ -352,9 +352,9 @@ class TestActionServerEvents:
                 ),
             )
         )
-        msc.add_node(give_up := CountSeconds(seconds=30))
-        msc.add_node(EndMotion.when_true(give_up))
-        giskard.api.compile(msc)
+        statechart.add_node(give_up := CountSeconds(seconds=30))
+        statechart.add_node(EndMotion.when_true(give_up))
+        giskard.api.compile(statechart)
         giskard.api.announce_presence()
         goal_accepted_future = giskard.api.execute_async()
         wait_for_future_to_complete(goal_accepted_future)
@@ -383,8 +383,8 @@ class TestActionServerEvents:
         The running motion was compiled against the structure of the world, so a body
         added by another process ends it instead of being applied underneath it.
         """
-        msc = Statechart(context=giskard.api.context)
-        msc.add_node(
+        statechart = Statechart(context=giskard.api.context)
+        statechart.add_node(
             CartesianPose(
                 root_link=giskard.map,
                 tip_link=giskard.base_footprint,
@@ -394,7 +394,7 @@ class TestActionServerEvents:
             )
         )
 
-        giskard.api.compile(msc)
+        giskard.api.compile(statechart)
         goal_accepted_future = giskard.api.execute_async()
         wait_for_future_to_complete(goal_accepted_future)
 

@@ -25,11 +25,11 @@ def test_grasp_bar(pr2_world_state_reset: World, rclpy_node):
     bar_axis = Vector3.Z(reference_frame=root)
     tip_grasp_axis = Vector3.X(reference_frame=tip)
 
-    kin_sim = StatechartExecutor(
+    executor = StatechartExecutor(
         context=StatechartContext(world=pr2_world_state_reset),
         extensions=[MotionControl()],
     )
-    msc = Statechart(context=kin_sim.context)
+    statechart = Statechart(context=executor.context)
     grasp = GraspBar(
         root_link=root,
         tip_link=tip,
@@ -38,11 +38,11 @@ def test_grasp_bar(pr2_world_state_reset: World, rclpy_node):
         bar_axis=bar_axis,
         bar_length=0.4,
     )
-    msc.add_node(grasp)
-    msc.add_node(EndMotion.when_true(grasp))
+    statechart.add_node(grasp)
+    statechart.add_node(EndMotion.when_true(grasp))
 
-    kin_sim.compile(statechart=msc)
-    kin_sim.tick_until_end()
+    executor.compile(statechart=statechart)
+    executor.tick_until_end()
 
     assert grasp.observation_state == ObservationStateValues.TRUE
 

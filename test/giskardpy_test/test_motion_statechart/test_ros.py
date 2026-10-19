@@ -67,8 +67,8 @@ def test_execute_collision_goal_in_fetched_world(rclpy_node, pr2_world_state_res
         context=StatechartContext(world=pr2_world_state_reset),
         extensions=[MotionControl()],
     )
-    msc = Statechart(context=client_executor.context)
-    msc.add_node(
+    statechart = Statechart(context=client_executor.context)
+    statechart.add_node(
         Sequence(
             nodes=[
                 SetSeedConfiguration(
@@ -101,14 +101,14 @@ def test_execute_collision_goal_in_fetched_world(rclpy_node, pr2_world_state_res
             ]
         )
     )
-    msc.add_node(local_min := LocalMinimumReached())
-    msc.add_node(EndMotion.when_true(local_min))
+    statechart.add_node(local_min := LocalMinimumReached())
+    statechart.add_node(EndMotion.when_true(local_min))
 
-    kin_sim = StatechartExecutor(
+    executor = StatechartExecutor(
         context=StatechartContext(world=pr2_world_copy), extensions=[MotionControl()]
     )
-    msc_copy = to_and_from_json(msc, kin_sim)
+    statechart_copy = to_and_from_json(statechart, executor)
 
-    kin_sim.compile(statechart=msc_copy)
+    executor.compile(statechart=statechart_copy)
 
-    kin_sim.tick_until_end(500)
+    executor.tick_until_end(500)

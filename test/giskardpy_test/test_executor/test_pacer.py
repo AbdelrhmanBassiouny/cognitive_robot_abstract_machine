@@ -10,7 +10,7 @@ from cramph.executor import StatechartExecutor
 
 
 def test_with_executor():
-    kin_sim = StatechartExecutor(
+    executor = StatechartExecutor(
         context=StatechartContext(world=World()),
         pacer=SimulationPacer(real_time_factor=2.0),
         extensions=[
@@ -19,12 +19,12 @@ def test_with_executor():
             )
         ],
     )
-    msc = Statechart(context=kin_sim.context)
-    msc.add_node(counter := CountSeconds(seconds=1.0))
-    msc.add_node(EndMotion.when_true(counter))
+    statechart = Statechart(context=executor.context)
+    statechart.add_node(counter := CountSeconds(seconds=1.0))
+    statechart.add_node(EndMotion.when_true(counter))
 
-    kin_sim.compile(msc)
-    kin_sim.tick_until_end(timeout=1000)
+    executor.compile(statechart)
+    executor.tick_until_end(timeout=1000)
     # we tick 20 (hz) * 2 (real_time_factor) per second and sleep for 1s.
     # +2 because the endmotion needs to extra ticks
-    assert kin_sim.tick_count == 42
+    assert executor.tick_count == 42

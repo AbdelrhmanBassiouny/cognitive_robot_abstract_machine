@@ -48,9 +48,9 @@ def _compile_and_tick(
     executor = StatechartExecutor(
         context=StatechartContext(world=World()), extensions=[MotionControl()]
     )
-    msc = Statechart(context=executor.context)
-    msc.add_node(goal)
-    executor.compile(statechart=msc)
+    statechart = Statechart(context=executor.context)
+    statechart.add_node(goal)
+    executor.compile(statechart=statechart)
     for _ in range(ticks):
         executor.tick()
     return executor
@@ -200,22 +200,22 @@ def test_a_try_all_without_nodes_is_rejected() -> None:
     executor = StatechartExecutor(
         context=StatechartContext(world=World()), extensions=[MotionControl()]
     )
-    msc = Statechart(context=executor.context)
-    msc.add_node(TryAll(nodes=[]))
+    statechart = Statechart(context=executor.context)
+    statechart.add_node(TryAll(nodes=[]))
 
     with pytest.raises(CompositeNodeWithoutChildrenError):
-        executor.compile(statechart=msc)
+        executor.compile(statechart=statechart)
 
 
 def test_a_try_in_order_without_nodes_is_rejected() -> None:
     executor = StatechartExecutor(
         context=StatechartContext(world=World()), extensions=[MotionControl()]
     )
-    msc = Statechart(context=executor.context)
-    msc.add_node(TryInOrder(nodes=[]))
+    statechart = Statechart(context=executor.context)
+    statechart.add_node(TryInOrder(nodes=[]))
 
     with pytest.raises(CompositeNodeWithoutChildrenError):
-        executor.compile(statechart=msc)
+        executor.compile(statechart=statechart)
 
 
 # %% alternatives that cannot fail

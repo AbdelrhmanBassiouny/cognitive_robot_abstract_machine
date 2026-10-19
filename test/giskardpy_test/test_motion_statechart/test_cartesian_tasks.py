@@ -1774,20 +1774,20 @@ class TestCartesianTasks:
         # Define a reachable Cartesian target point relative to the base root
         goal_point = Point3(0.3, 0.0, 0.6, reference_frame=world.root)
 
-        kin_sim = StatechartExecutor(
+        executor = StatechartExecutor(
             context=StatechartContext(world=world), extensions=[MotionControl()]
         )
-        msc = Statechart(context=kin_sim.context)
+        statechart = Statechart(context=executor.context)
         goal = CartesianPosition(
             root_link=world.root,
             tip_link=trunk.arms[0].tip,
             goal_point=goal_point,
         )
-        msc.add_node(goal)
-        msc.add_node(EndMotion.when_true(goal))
+        statechart.add_node(goal)
+        statechart.add_node(EndMotion.when_true(goal))
 
-        kin_sim.compile(statechart=msc)
-        kin_sim.tick_until_end()
+        executor.compile(statechart=statechart)
+        executor.tick_until_end()
 
         # Retrieve the final tip pose
         tip_body = trunk.arms[0].tip
@@ -2141,7 +2141,7 @@ class TestDiffDriveBaseGoal:
 
 
 class TestVelocityTasks:
-    def _build_msc(
+    def _build_statechart(
         self, executor: StatechartExecutor, goal_node, limit_node
     ) -> Statechart:
         """
@@ -2154,7 +2154,9 @@ class TestVelocityTasks:
         motion_statechart.add_node(EndMotion.when_true(goal_node))
         return motion_statechart
 
-    def _compile_msc_and_run_until_end(self, world: World, goal_node, limit_node):
+    def _compile_statechart_and_run_until_end(
+        self, world: World, goal_node, limit_node
+    ):
         """
         Build the MSC (no extra nodes), compile into a StatechartExecutor, run until end
         and return (control_cycles, executor)
@@ -2162,7 +2164,7 @@ class TestVelocityTasks:
         executor = StatechartExecutor(
             context=StatechartContext(world=world), extensions=[MotionControl()]
         )
-        motion_statechart = self._build_msc(
+        motion_statechart = self._build_statechart(
             executor=executor, goal_node=goal_node, limit_node=limit_node
         )
         executor.compile(statechart=motion_statechart)
@@ -2219,7 +2221,7 @@ class TestVelocityTasks:
             context=StatechartContext(world=pr2_world_state_reset),
             extensions=[MotionControl()],
         )
-        motion_statechart = self._build_msc(
+        motion_statechart = self._build_statechart(
             executor=executor, goal_node=goal, limit_node=low_weight_limit
         )
         cancel_motion = CancelStatechart(exception=Exception("test"))
@@ -2261,10 +2263,10 @@ class TestVelocityTasks:
             max_linear_velocity=(usual_limit.max_linear_velocity / 2.1),
         )
 
-        loose_cycles, _ = self._compile_msc_and_run_until_end(
+        loose_cycles, _ = self._compile_statechart_and_run_until_end(
             world=pr2_world_state_reset, goal_node=position_goal, limit_node=usual_limit
         )
-        tight_cycles, _ = self._compile_msc_and_run_until_end(
+        tight_cycles, _ = self._compile_statechart_and_run_until_end(
             world=pr2_world_state_reset,
             goal_node=position_goal,
             limit_node=half_velocity_limit,
@@ -2304,10 +2306,10 @@ class TestVelocityTasks:
             max_angular_velocity=(usual_limit.max_angular_velocity / 2.1),
         )
 
-        loose_cycles, _ = self._compile_msc_and_run_until_end(
+        loose_cycles, _ = self._compile_statechart_and_run_until_end(
             world=pr2_world_state_reset, goal_node=orientation, limit_node=usual_limit
         )
-        tight_cycles, _ = self._compile_msc_and_run_until_end(
+        tight_cycles, _ = self._compile_statechart_and_run_until_end(
             world=pr2_world_state_reset,
             goal_node=orientation,
             limit_node=half_velocity_limit,

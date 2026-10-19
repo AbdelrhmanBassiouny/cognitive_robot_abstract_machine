@@ -28,8 +28,8 @@ def test_force_impact_node(rclpy_node):
     msg_above = WrenchStamped()
     msg_above.wrench.force.x = 20.0
 
-    msc = Statechart(context=StatechartContext(world=World()))
-    msc.add_node(
+    statechart = Statechart(context=StatechartContext(world=World()))
+    statechart.add_node(
         parallel := Parallel(
             nodes=[
                 ForceImpactMonitor(topic_name=topic_name, threshold=10),
@@ -43,31 +43,31 @@ def test_force_impact_node(rclpy_node):
             ]
         )
     )
-    msc.add_node(EndMotion.when_true(parallel))
+    statechart.add_node(EndMotion.when_true(parallel))
 
-    json_data = msc.to_json()
+    json_data = statechart.to_json()
     json_str = json.dumps(json_data)
     new_json_data = json.loads(json_str)
-    kin_sim = StatechartExecutor(
+    executor = StatechartExecutor(
         context=StatechartContext(world=World()),
         extensions=[RosNodeAccess(rclpy_node), MotionControl()],
     )
-    msc_copy = Statechart.from_json(new_json_data, context=kin_sim.context)
-    kin_sim.compile(statechart=msc_copy)
+    statechart_copy = Statechart.from_json(new_json_data, context=executor.context)
+    executor.compile(statechart=statechart_copy)
 
-    ft_node = msc_copy.nodes[0].nodes[0]
+    ft_node = statechart_copy.nodes[0].nodes[0]
 
-    kin_sim.tick_until_end(timeout=5_000)
-    msc_copy.draw("muh.pdf")
+    executor.tick_until_end(timeout=5_000)
+    statechart_copy.draw("muh.pdf")
     assert (
-        msc_copy.history.get_observation_history_of_node(ft_node)[0]
+        statechart_copy.history.get_observation_history_of_node(ft_node)[0]
         == ObservationStateValues.UNKNOWN
     )
     assert (
         ObservationStateValues.FALSE
-        in msc_copy.history.get_observation_history_of_node(ft_node)
+        in statechart_copy.history.get_observation_history_of_node(ft_node)
     )
     assert (
-        msc_copy.history.get_observation_history_of_node(ft_node)[-1]
+        statechart_copy.history.get_observation_history_of_node(ft_node)[-1]
         == ObservationStateValues.TRUE
     )

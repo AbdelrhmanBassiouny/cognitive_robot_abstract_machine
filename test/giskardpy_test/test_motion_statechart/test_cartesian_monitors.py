@@ -41,11 +41,11 @@ def _create_executor(world: World) -> StatechartExecutor:
     )
 
 
-def _run(executor: StatechartExecutor, msc: Statechart) -> None:
+def _run(executor: StatechartExecutor, statechart: Statechart) -> None:
     """
-    Compiles `msc` with `executor` and ticks it until it ends.
+    Compiles `statechart` with `executor` and ticks it until it ends.
     """
-    executor.compile(statechart=msc)
+    executor.compile(statechart=statechart)
     executor.tick_until_end()
 
 
@@ -57,7 +57,7 @@ def test_position_reached(pr2_world_state_reset: World):
     goal_point = Point3(0.6, -0.3, 1.0, reference_frame=root)
 
     executor = _create_executor(pr2_world_state_reset)
-    msc = Statechart(context=executor.context)
+    statechart = Statechart(context=executor.context)
     drive = CartesianPosition(root_link=root, tip_link=tip, goal_point=goal_point)
     monitor = PositionReached(
         root_link=root,
@@ -65,10 +65,10 @@ def test_position_reached(pr2_world_state_reset: World):
         goal_point=goal_point,
         binding_policy=GoalBindingPolicy.Bind_at_build,
     )
-    msc.add_nodes([drive, monitor])
-    msc.add_node(EndMotion.when_true(monitor))
+    statechart.add_nodes([drive, monitor])
+    statechart.add_node(EndMotion.when_true(monitor))
 
-    _run(executor, msc)
+    _run(executor, statechart)
 
     assert monitor.observation_state == ObservationStateValues.TRUE
 
@@ -91,7 +91,7 @@ def test_position_reached_binding_policies(
     goal_point = Point3(0.2, 0, 0, reference_frame=tip)
 
     executor = _create_executor(pr2_world_state_reset)
-    msc = Statechart(context=executor.context)
+    statechart = Statechart(context=executor.context)
     drive = CartesianPosition(
         root_link=root,
         tip_link=tip,
@@ -104,10 +104,10 @@ def test_position_reached_binding_policies(
         goal_point=goal_point,
         binding_policy=binding_policy,
     )
-    msc.add_nodes([drive, monitor])
-    msc.add_node(EndMotion.when_true(monitor))
+    statechart.add_nodes([drive, monitor])
+    statechart.add_node(EndMotion.when_true(monitor))
 
-    _run(executor, msc)
+    _run(executor, statechart)
 
     assert monitor.observation_state == ObservationStateValues.TRUE
 
@@ -123,7 +123,7 @@ def test_orientation_reached(pr2_world_state_reset: World):
     goal_orientation.reference_frame = root
 
     executor = _create_executor(pr2_world_state_reset)
-    msc = Statechart(context=executor.context)
+    statechart = Statechart(context=executor.context)
     drive = CartesianOrientation(
         root_link=root, tip_link=tip, goal_orientation=goal_orientation
     )
@@ -133,10 +133,10 @@ def test_orientation_reached(pr2_world_state_reset: World):
         goal_orientation=goal_orientation,
         binding_policy=GoalBindingPolicy.Bind_at_build,
     )
-    msc.add_nodes([drive, monitor])
-    msc.add_node(EndMotion.when_true(monitor))
+    statechart.add_nodes([drive, monitor])
+    statechart.add_node(EndMotion.when_true(monitor))
 
-    _run(executor, msc)
+    _run(executor, statechart)
 
     assert monitor.observation_state == ObservationStateValues.TRUE
 
@@ -151,7 +151,7 @@ def test_pose_reached(pr2_world_state_reset: World):
     )
 
     executor = _create_executor(pr2_world_state_reset)
-    msc = Statechart(context=executor.context)
+    statechart = Statechart(context=executor.context)
     drive = CartesianPose(root_link=root, tip_link=tip, goal_pose=goal_pose)
     monitor = PoseReached(
         root_link=root,
@@ -159,10 +159,10 @@ def test_pose_reached(pr2_world_state_reset: World):
         goal_pose=goal_pose,
         binding_policy=GoalBindingPolicy.Bind_at_build,
     )
-    msc.add_nodes([drive, monitor])
-    msc.add_node(EndMotion.when_true(monitor))
+    statechart.add_nodes([drive, monitor])
+    statechart.add_node(EndMotion.when_true(monitor))
 
-    _run(executor, msc)
+    _run(executor, statechart)
 
     assert monitor.observation_state == ObservationStateValues.TRUE
 
@@ -176,17 +176,17 @@ def test_pointing_at(pr2_world_state_reset: World):
     pointing_axis = Vector3.X(reference_frame=tip)
 
     executor = _create_executor(pr2_world_state_reset)
-    msc = Statechart(context=executor.context)
+    statechart = Statechart(context=executor.context)
     drive = Pointing(
         root_link=root, tip_link=tip, goal_point=goal_point, pointing_axis=pointing_axis
     )
     monitor = PointingAt(
         root_link=root, tip_link=tip, goal_point=goal_point, pointing_axis=pointing_axis
     )
-    msc.add_nodes([drive, monitor])
-    msc.add_node(EndMotion.when_true(monitor))
+    statechart.add_nodes([drive, monitor])
+    statechart.add_node(EndMotion.when_true(monitor))
 
-    _run(executor, msc)
+    _run(executor, statechart)
 
     assert monitor.observation_state == ObservationStateValues.TRUE
 
@@ -200,17 +200,17 @@ def test_vectors_aligned(pr2_world_state_reset: World):
     tip_normal = Vector3.X(reference_frame=tip)
 
     executor = _create_executor(pr2_world_state_reset)
-    msc = Statechart(context=executor.context)
+    statechart = Statechart(context=executor.context)
     drive = AlignPlanes(
         root_link=root, tip_link=tip, goal_normal=goal_normal, tip_normal=tip_normal
     )
     monitor = VectorsAligned(
         root_link=root, tip_link=tip, goal_normal=goal_normal, tip_normal=tip_normal
     )
-    msc.add_nodes([drive, monitor])
-    msc.add_node(EndMotion.when_true(monitor))
+    statechart.add_nodes([drive, monitor])
+    statechart.add_node(EndMotion.when_true(monitor))
 
-    _run(executor, msc)
+    _run(executor, statechart)
 
     assert monitor.observation_state == ObservationStateValues.TRUE
 
@@ -224,7 +224,7 @@ def test_distance_to_line(pr2_world_state_reset: World):
     line_axis = Vector3.Y(reference_frame=root)
 
     executor = _create_executor(pr2_world_state_reset)
-    msc = Statechart(context=executor.context)
+    statechart = Statechart(context=executor.context)
     drive = CartesianPosition(root_link=root, tip_link=tip, goal_point=center_point)
     monitor = DistanceToLine(
         root_link=root,
@@ -233,9 +233,9 @@ def test_distance_to_line(pr2_world_state_reset: World):
         line_axis=line_axis,
         line_length=0.4,
     )
-    msc.add_nodes([drive, monitor])
-    msc.add_node(EndMotion.when_true(monitor))
+    statechart.add_nodes([drive, monitor])
+    statechart.add_node(EndMotion.when_true(monitor))
 
-    _run(executor, msc)
+    _run(executor, statechart)
 
     assert monitor.observation_state == ObservationStateValues.TRUE

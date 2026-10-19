@@ -31,11 +31,11 @@ def _create_executor(world: World) -> StatechartExecutor:
     )
 
 
-def _run(executor: StatechartExecutor, msc: Statechart) -> None:
+def _run(executor: StatechartExecutor, statechart: Statechart) -> None:
     """
-    Compiles `msc` with `executor` and ticks it until it ends.
+    Compiles `statechart` with `executor` and ticks it until it ends.
     """
-    executor.compile(statechart=msc)
+    executor.compile(statechart=statechart)
     executor.tick_until_end()
 
 
@@ -51,7 +51,7 @@ def test_height_monitor(pr2_world_state_reset: World):
     lower_limit, upper_limit = 0.3, 0.5
 
     executor = _create_executor(pr2_world_state_reset)
-    msc = Statechart(context=executor.context)
+    statechart = Statechart(context=executor.context)
     drive = HeightGoal(
         root_link=root,
         tip_link=tip,
@@ -68,10 +68,10 @@ def test_height_monitor(pr2_world_state_reset: World):
         lower_limit=lower_limit,
         upper_limit=upper_limit,
     )
-    msc.add_nodes([drive, monitor])
-    msc.add_node(EndMotion.when_true(monitor))
+    statechart.add_nodes([drive, monitor])
+    statechart.add_node(EndMotion.when_true(monitor))
 
-    _run(executor, msc)
+    _run(executor, statechart)
 
     assert monitor.observation_state == ObservationStateValues.TRUE
 
@@ -88,7 +88,7 @@ def test_distance_monitor(pr2_world_state_reset: World):
     lower_limit, upper_limit = 0.4, 0.6
 
     executor = _create_executor(pr2_world_state_reset)
-    msc = Statechart(context=executor.context)
+    statechart = Statechart(context=executor.context)
     drive = DistanceGoal(
         root_link=root,
         tip_link=tip,
@@ -105,10 +105,10 @@ def test_distance_monitor(pr2_world_state_reset: World):
         lower_limit=lower_limit,
         upper_limit=upper_limit,
     )
-    msc.add_nodes([drive, monitor])
-    msc.add_node(EndMotion.when_true(monitor))
+    statechart.add_nodes([drive, monitor])
+    statechart.add_node(EndMotion.when_true(monitor))
 
-    _run(executor, msc)
+    _run(executor, statechart)
 
     assert monitor.observation_state == ObservationStateValues.TRUE
 
@@ -123,7 +123,7 @@ def test_angle_monitor(pr2_world_state_reset: World):
     lower_angle, upper_angle = radians(30), radians(32)
 
     executor = _create_executor(pr2_world_state_reset)
-    msc = Statechart(context=executor.context)
+    statechart = Statechart(context=executor.context)
     drive = AngleGoal(
         root_link=root,
         tip_link=tip,
@@ -140,10 +140,10 @@ def test_angle_monitor(pr2_world_state_reset: World):
         lower_angle=lower_angle,
         upper_angle=upper_angle,
     )
-    msc.add_nodes([drive, monitor])
-    msc.add_node(EndMotion.when_true(monitor))
+    statechart.add_nodes([drive, monitor])
+    statechart.add_node(EndMotion.when_true(monitor))
 
-    _run(executor, msc)
+    _run(executor, statechart)
 
     assert monitor.observation_state == ObservationStateValues.TRUE
 
@@ -157,7 +157,7 @@ def test_perpendicular_monitor(pr2_world_state_reset: World):
     reference_normal = Vector3.X(reference_frame=root)
 
     executor = _create_executor(pr2_world_state_reset)
-    msc = Statechart(context=executor.context)
+    statechart = Statechart(context=executor.context)
     drive = AlignPerpendicular(
         root_link=root,
         tip_link=tip,
@@ -170,9 +170,9 @@ def test_perpendicular_monitor(pr2_world_state_reset: World):
         tip_normal=tip_normal,
         reference_normal=reference_normal,
     )
-    msc.add_nodes([drive, monitor])
-    msc.add_node(EndMotion.when_true(monitor))
+    statechart.add_nodes([drive, monitor])
+    statechart.add_node(EndMotion.when_true(monitor))
 
-    _run(executor, msc)
+    _run(executor, statechart)
 
     assert monitor.observation_state == ObservationStateValues.TRUE

@@ -73,8 +73,8 @@ def robot():
 
 
 def test_move_base(giskard: HSRTester) -> None:
-    msc = Statechart(context=giskard.api.context)
-    msc.add_node(
+    statechart = Statechart(context=giskard.api.context)
+    statechart.add_node(
         node := Sequence(
             nodes=[
                 SetOdometry(
@@ -99,6 +99,6 @@ def test_move_base(giskard: HSRTester) -> None:
             ]
         )
     )
-    msc.add_node(EndMotion.when_true(node))
-    giskard.api.compile(msc)
+    statechart.add_node(EndMotion.when_true(node))
+    giskard.api.compile(statechart)
     giskard.api.execute()

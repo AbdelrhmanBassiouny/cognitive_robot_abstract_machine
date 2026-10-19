@@ -44,11 +44,11 @@ def test_wiggle_insert_reaches_hole(pr2_world_state_reset: World, rclpy_node):
     root = pr2_world_state_reset.get_kinematic_structure_entity_by_name("odom_combined")
     hole_point = _hole_at_current_tip(pr2_world_state_reset, tip, root)
 
-    kin_sim = StatechartExecutor(
+    executor = StatechartExecutor(
         context=StatechartContext(world=pr2_world_state_reset),
         extensions=[MotionControl()],
     )
-    msc = Statechart(context=kin_sim.context)
+    statechart = Statechart(context=executor.context)
     wiggle = WiggleInsert(
         root_link=root,
         tip_link=tip,
@@ -59,11 +59,11 @@ def test_wiggle_insert_reaches_hole(pr2_world_state_reset: World, rclpy_node):
         down_velocity=0.05,
         threshold=0.02,
     )
-    msc.add_node(wiggle)
-    msc.add_node(EndMotion.when_true(wiggle))
+    statechart.add_node(wiggle)
+    statechart.add_node(EndMotion.when_true(wiggle))
 
-    kin_sim.compile(statechart=msc)
-    kin_sim.tick_until_end()
+    executor.compile(statechart=statechart)
+    executor.tick_until_end()
 
     assert wiggle.observation_state == ObservationStateValues.TRUE
 
@@ -115,11 +115,11 @@ def test_wiggle_insert_on_tick_updates_noise(pr2_world_state_reset: World):
     hole_point = _hole_at_current_tip(pr2_world_state_reset, tip, root)
 
     motion_control = MotionControl()
-    kin_sim = StatechartExecutor(
+    executor = StatechartExecutor(
         context=StatechartContext(world=pr2_world_state_reset),
         extensions=[motion_control],
     )
-    msc = Statechart(context=kin_sim.context)
+    statechart = Statechart(context=executor.context)
     wiggle = WiggleInsert(
         root_link=root,
         tip_link=tip,
@@ -129,14 +129,14 @@ def test_wiggle_insert_on_tick_updates_noise(pr2_world_state_reset: World):
         noise_angle=0.2,
         down_velocity=0.05,
     )
-    msc.add_node(wiggle)
-    msc.add_node(EndMotion.when_true(wiggle))
+    statechart.add_node(wiggle)
+    statechart.add_node(EndMotion.when_true(wiggle))
 
-    kin_sim.compile(statechart=msc)
+    executor.compile(statechart=statechart)
 
-    kin_sim.tick()
+    executor.tick()
     first_translation = wiggle._random_translation.evaluate().flatten()[:3].copy()
-    kin_sim.tick()
+    executor.tick()
     second_translation = wiggle._random_translation.evaluate().flatten()[:3].copy()
 
     # The injected noise must change between control cycles.
@@ -159,13 +159,13 @@ def test_wiggle_insert(hsr_world_state_reset):
 
     hole_point = Point3(x=0.5, z=0.3, reference_frame=root_link)
 
-    kin_sim = StatechartExecutor(
+    executor = StatechartExecutor(
         context=StatechartContext(world=hsr_world_state_reset),
         pacer=SimulationPacer(real_time_factor=1),
         extensions=[MotionControl()],
     )
-    msc = Statechart(context=kin_sim.context)
-    msc.add_node(
+    statechart = Statechart(context=executor.context)
+    statechart.add_node(
         motion := Sequence(
             nodes=[
                 SetSeedConfiguration(
@@ -201,10 +201,10 @@ def test_wiggle_insert(hsr_world_state_reset):
         )
     )
     barrier.success_condition = barrier.observes_true
-    msc.add_node(EndMotion.when_true(motion))
+    statechart.add_node(EndMotion.when_true(motion))
 
-    kin_sim.compile(statechart=msc)
-    kin_sim.tick_until_end()
+    executor.compile(statechart=statechart)
+    executor.tick_until_end()
 
     assert motion.last_observation_state == ObservationStateValues.TRUE
     assert not np.allclose(wiggle._current_vector, np.zeros(3))

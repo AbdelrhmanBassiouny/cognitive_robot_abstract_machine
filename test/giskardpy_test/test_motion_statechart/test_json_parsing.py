@@ -105,38 +105,38 @@ def test_executing_json_parsed_statechart(tmp_path):
         )
         world.add_connection(root_C_tip2)
 
-    msc = Statechart(context=_create_executor(world).context)
+    statechart = Statechart(context=_create_executor(world).context)
 
     task1 = JointPositionList(goal_state=JointState.from_mapping({root_C_tip: 0.5}))
     always_true = ConstTrueNode()
-    msc.add_node(always_true)
-    msc.add_node(task1)
+    statechart.add_node(always_true)
+    statechart.add_node(task1)
     end = EndMotion()
-    msc.add_node(end)
+    statechart.add_node(end)
 
     task1.start_condition = always_true.observes_true
     end.start_condition = logic_and(task1.observes_true, always_true.observes_true)
 
-    json_data = msc.to_json()
+    json_data = statechart.to_json()
     json_str = json.dumps(json_data)
     new_json_data = json.loads(json_str)
     tracker = WorldEntityWithIDKwargsTracker.from_world(world)
-    kin_sim = _create_executor(world)
-    msc_copy = Statechart.from_json(
-        new_json_data, context=kin_sim.context, **tracker.create_kwargs()
+    executor = _create_executor(world)
+    statechart_copy = Statechart.from_json(
+        new_json_data, context=executor.context, **tracker.create_kwargs()
     )
 
-    kin_sim.compile(statechart=msc_copy)
+    executor.compile(statechart=statechart_copy)
 
-    task1_copy = msc_copy.get_node_by_index(task1.index)
-    end_copy = msc_copy.get_node_by_index(end.index)
+    task1_copy = statechart_copy.get_node_by_index(task1.index)
+    end_copy = statechart_copy.get_node_by_index(end.index)
     assert task1_copy.observation_state == ObservationStateValues.UNKNOWN
     assert end_copy.observation_state == ObservationStateValues.UNKNOWN
     assert task1_copy.life_cycle_state == LifeCycleValues.NOT_STARTED
     assert end_copy.life_cycle_state == LifeCycleValues.NOT_STARTED
-    msc.draw(str(tmp_path / "muh.pdf"))
-    kin_sim.tick_until_end()
-    msc.draw(str(tmp_path / "muh.pdf"))
+    statechart.draw(str(tmp_path / "muh.pdf"))
+    executor.tick_until_end()
+    statechart.draw(str(tmp_path / "muh.pdf"))
     assert task1_copy.observation_state == ObservationStateValues.TRUE
     assert end_copy.observation_state == ObservationStateValues.TRUE
     assert task1_copy.life_cycle_state == LifeCycleValues.RUNNING
@@ -150,28 +150,30 @@ def test_cart_goal_simple(pr2_world_state_reset: World):
         pos_x=-0.2, reference_frame=tip
     )
 
-    msc = Statechart(context=_create_executor(pr2_world_state_reset).context)
+    statechart = Statechart(context=_create_executor(pr2_world_state_reset).context)
     cart_goal = CartesianPose(
         root_link=root,
         tip_link=tip,
         goal_pose=tip_goal,
     )
-    msc.add_node(cart_goal)
+    statechart.add_node(cart_goal)
     end = EndMotion()
-    msc.add_node(end)
+    statechart.add_node(end)
     end.start_condition = cart_goal.observes_true
 
-    json_data = msc.to_json()
+    json_data = statechart.to_json()
     json_str = json.dumps(json_data)
     new_json_data = json.loads(json_str)
 
     tracker = WorldEntityWithIDKwargsTracker.from_world(pr2_world_state_reset)
     kwargs = tracker.create_kwargs()
-    kin_sim = _create_executor(pr2_world_state_reset)
-    msc_copy = Statechart.from_json(new_json_data, context=kin_sim.context, **kwargs)
+    executor = _create_executor(pr2_world_state_reset)
+    statechart_copy = Statechart.from_json(
+        new_json_data, context=executor.context, **kwargs
+    )
 
-    kin_sim.compile(statechart=msc_copy)
-    kin_sim.tick_until_end()
+    executor.compile(statechart=statechart_copy)
+    executor.tick_until_end()
 
     fk = pr2_world_state_reset.compute_forward_kinematics_np(root, tip)
     assert np.allclose(fk, tip_goal, atol=cart_goal.translation_threshold)
@@ -206,22 +208,22 @@ def test_nested_sequence_goal_json_round_trip_compilation() -> None:
     A statechart with nested goals watched by a progress monitor can be deserialized and
     compiled.
     """
-    msc = Statechart(context=_create_executor(World()).context)
+    statechart = Statechart(context=_create_executor(World()).context)
     leaf_node = ConstTrueNode(name="ConstTrue")
     child_sequence = Sequence(nodes=[leaf_node], name="SequentialNode")
     root = Sequence(nodes=[child_sequence], name="ActionNode")
-    msc.add_node(root)
-    msc.add_node(still_progressing := StillProgressing(monitored_node=root))
-    msc.add_node(still_progressing.cancel_motion())
-    msc.add_node(EndMotion.when_true(root))
+    statechart.add_node(root)
+    statechart.add_node(still_progressing := StillProgressing(monitored_node=root))
+    statechart.add_node(still_progressing.cancel_motion())
+    statechart.add_node(EndMotion.when_true(root))
 
-    json_data = msc.to_json()
+    json_data = statechart.to_json()
     json_str = json.dumps(json_data)
     new_json_data = json.loads(json_str)
 
     executor = _create_executor(World())
-    msc_copy = Statechart.from_json(new_json_data, context=executor.context)
-    executor.compile(statechart=msc_copy)
+    statechart_copy = Statechart.from_json(new_json_data, context=executor.context)
+    executor.compile(statechart=statechart_copy)
 
 
 # %% statecharts sent after their goals expanded
@@ -235,19 +237,21 @@ def test_an_expanded_differential_drive_goal_reaches_its_pose_after_a_json_round
     orientations are expressions over the base's forward kinematics.
     """
     goal_pose = Pose.from_xyz_rpy(x=0.5, reference_frame=cylinder_bot_diff_world.root)
-    msc = Statechart(context=_create_executor(cylinder_bot_diff_world).context)
-    msc.add_node(goal := DifferentialDriveBaseGoal(goal_pose=goal_pose, threshold=0.05))
-    msc.add_node(EndMotion.when_true(goal))
-    new_json_data = json.loads(json.dumps(msc.to_json()))
-    msc.context.cleanup()
+    statechart = Statechart(context=_create_executor(cylinder_bot_diff_world).context)
+    statechart.add_node(
+        goal := DifferentialDriveBaseGoal(goal_pose=goal_pose, threshold=0.05)
+    )
+    statechart.add_node(EndMotion.when_true(goal))
+    new_json_data = json.loads(json.dumps(statechart.to_json()))
+    statechart.context.cleanup()
 
     executor = _create_executor(cylinder_bot_diff_world)
     tracker = WorldEntityWithIDKwargsTracker.from_world(cylinder_bot_diff_world)
-    msc_copy = Statechart.from_json(
+    statechart_copy = Statechart.from_json(
         new_json_data, context=executor.context, **tracker.create_kwargs()
     )
-    goal_copy = msc_copy.get_node_by_index(goal.index)
-    executor.compile(statechart=msc_copy)
+    goal_copy = statechart_copy.get_node_by_index(goal.index)
+    executor.compile(statechart=statechart_copy)
     executor.tick_until_end(1000)
 
     assert [step.name for step in goal_copy.sequence.nodes] == [
@@ -265,8 +269,8 @@ def test_an_expanded_differential_drive_goal_binds_its_goal_frame_after_a_json_r
     base.
     """
     bot = cylinder_bot_diff_world.get_body_by_name("bot")
-    msc = Statechart(context=_create_executor(cylinder_bot_diff_world).context)
-    msc.add_node(
+    statechart = Statechart(context=_create_executor(cylinder_bot_diff_world).context)
+    statechart.add_node(
         first_leg := DifferentialDriveBaseGoal(
             goal_pose=Pose.from_xyz_rpy(
                 x=1, reference_frame=cylinder_bot_diff_world.root
@@ -274,23 +278,23 @@ def test_an_expanded_differential_drive_goal_binds_its_goal_frame_after_a_json_r
             threshold=0.05,
         )
     )
-    msc.add_node(
+    statechart.add_node(
         second_leg := DifferentialDriveBaseGoal(
             goal_pose=Pose.from_xyz_rpy(x=0.5, reference_frame=bot), threshold=0.05
         )
     )
     second_leg.start_condition = first_leg.observes_true
-    msc.add_node(EndMotion.when_true(second_leg))
-    new_json_data = json.loads(json.dumps(msc.to_json()))
-    msc.context.cleanup()
+    statechart.add_node(EndMotion.when_true(second_leg))
+    new_json_data = json.loads(json.dumps(statechart.to_json()))
+    statechart.context.cleanup()
 
     executor = _create_executor(cylinder_bot_diff_world)
     tracker = WorldEntityWithIDKwargsTracker.from_world(cylinder_bot_diff_world)
-    msc_copy = Statechart.from_json(
+    statechart_copy = Statechart.from_json(
         new_json_data, context=executor.context, **tracker.create_kwargs()
     )
-    second_leg_copy = msc_copy.get_node_by_index(second_leg.index)
-    executor.compile(statechart=msc_copy)
+    second_leg_copy = statechart_copy.get_node_by_index(second_leg.index)
+    executor.compile(statechart=statechart_copy)
     executor.tick_until_end(2000)
 
     assert second_leg_copy.life_cycle_state == LifeCycleValues.SUCCEEDED

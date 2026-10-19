@@ -49,7 +49,7 @@ except Exception as e:
 
 @pytest.mark.parametrize("solver", installed_qp_solvers)
 def test_joint_goal(solver, pr2_world_state_reset):
-    kin_sim = StatechartExecutor(
+    executor = StatechartExecutor(
         context=StatechartContext(world=pr2_world_state_reset),
         extensions=[
             MotionControl(
@@ -61,8 +61,8 @@ def test_joint_goal(solver, pr2_world_state_reset):
             )
         ],
     )
-    msc = Statechart(context=kin_sim.context)
-    msc.add_node(
+    statechart = Statechart(context=executor.context)
+    statechart.add_node(
         sequence := Sequence(
             nodes=[
                 JointPositionList(
@@ -78,7 +78,7 @@ def test_joint_goal(solver, pr2_world_state_reset):
             ]
         )
     )
-    msc.add_node(EndMotion.when_true(sequence))
+    statechart.add_node(EndMotion.when_true(sequence))
 
-    kin_sim.compile(statechart=msc)
-    kin_sim.tick_until_end()
+    executor.compile(statechart=statechart)
+    executor.tick_until_end()

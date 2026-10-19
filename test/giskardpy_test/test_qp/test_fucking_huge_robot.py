@@ -164,7 +164,7 @@ def execute(link_length: float, vel_limit: float):
     fucking_huge_robot = robot_factory(
         fucking_huge_link_length=link_length, vel_limit=vel_limit
     )
-    kin_sim = StatechartExecutor(
+    executor = StatechartExecutor(
         context=StatechartContext(world=fucking_huge_robot),
         extensions=[
             MotionControl(
@@ -175,11 +175,11 @@ def execute(link_length: float, vel_limit: float):
             )
         ],
     )
-    msc = Statechart(context=kin_sim.context)
+    statechart = Statechart(context=executor.context)
     goal = 1
     eef = fucking_huge_robot.get_kinematic_structure_entity_by_name("eef")
 
-    msc.add_node(
+    statechart.add_node(
         node1 := Sequence(
             nodes=[
                 SetSeedConfiguration(
@@ -204,11 +204,11 @@ def execute(link_length: float, vel_limit: float):
             ]
         )
     )
-    msc.add_node(EndMotion.when_true(node1))
+    statechart.add_node(EndMotion.when_true(node1))
 
-    kin_sim.compile(statechart=msc)
+    executor.compile(statechart=statechart)
 
-    kin_sim.tick_until_end(10_000)
+    executor.tick_until_end(10_000)
 
 
 def test_cart_goal01():
