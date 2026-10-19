@@ -88,6 +88,10 @@ jobs:
           bazel build //test:test_all
           bazel test //test:test_all
 
+      # Physics test outcomes differ between runner CPU models; the log records which one ran.
+      - name: Show CPU
+        run: lscpu
+
       - name: Run tests
         run: |
           source /opt/ros/cram-env/bin/activate
