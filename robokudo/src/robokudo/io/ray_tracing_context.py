@@ -7,7 +7,7 @@ from __future__ import annotations
 # %% Imports
 from dataclasses import dataclass, field
 
-import robokudo.world as rk_world
+import robokudo.world
 from robokudo.descriptors.camera_configs.config_ray_tracing import (
     RuntimeRobotWorldSource,
     RayTracingCameraConfiguration,
@@ -88,12 +88,12 @@ class RayTracingContextResolver:
             camera = self._select_descriptor_camera(world, source)
             if source.camera_pose is not None:
                 self._apply_camera_pose(world, camera, source.camera_pose)
-            rk_world.set_world(world)
+            robokudo.world.set_world(world)
         else:
-            world = rk_world.world_instance()
+            world = robokudo.world.world_instance()
             camera = self._select_runtime_robot_camera(world, source)
 
-        rk_world.init_world_entity_tracker_from_world(world)
+        robokudo.world.init_world_entity_tracker_from_world(world)
         self._context = RayTracingContext(world=world, camera=camera)
         return self._context
 
