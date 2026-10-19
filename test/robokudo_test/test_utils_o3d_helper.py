@@ -8,12 +8,12 @@ import robokudo.cas
 from robokudo.cas import CAS, CASViews
 from robokudo.exceptions import PointCloudCameraModelMissing
 from robokudo.utils.o3d_helper import (
-    put_obb_on_target_obb,
-    transform_obb_relative_to_obb_center,
+    place_bounding_box_on_target,
+    position_bounding_box_relative_to_target,
     create_oriented_bounding_box,
     get_2d_corner_points_from_3d_bb,
     get_2d_bounding_rect_from_3d_bb,
-    draw_wireframe_of_obb_into_image,
+    draw_bounding_box_wireframe,
     get_mask_from_pointcloud,
     concatenate_clouds,
     get_cloud_from_rgb_depth_and_mask,
@@ -98,13 +98,13 @@ class TestUtilsO3DHelper(object):
             ),
         ],
     )
-    def test_put_obb_on_target_obb(
+    def test_place_bounding_box_on_target(
         self,
         target_bounding_box: open3d.geometry.OrientedBoundingBox,
         input_bounding_box: open3d.geometry.OrientedBoundingBox,
         expected_z: float,
     ):
-        adjusted_bounding_box = put_obb_on_target_obb(
+        adjusted_bounding_box = place_bounding_box_on_target(
             input_bounding_box, target_bounding_box
         )
 
@@ -115,7 +115,7 @@ class TestUtilsO3DHelper(object):
             adjusted_bounding_box.center[2] == expected_z
         ), "z was not adjusted correctly"
 
-    def test_transform_obb_relative_to_obb_center_rotation(self):
+    def test_position_bounding_box_relative_to_target_rotation(self):
         input_bounding_box = open3d.geometry.OrientedBoundingBox(
             center=[0, 0, 0], R=np.eye(3), extent=[1, 1, 1]
         )
@@ -133,7 +133,7 @@ class TestUtilsO3DHelper(object):
             ]
         )
 
-        transformed_bounding_box = transform_obb_relative_to_obb_center(
+        transformed_bounding_box = position_bounding_box_relative_to_target(
             input_bounding_box, target_bounding_box, rotation
         )
 
@@ -141,7 +141,7 @@ class TestUtilsO3DHelper(object):
         assert np.allclose(transformed_bounding_box.R, expected_R)
         assert np.allclose(transformed_bounding_box.extent, [1, 1, 1])
 
-    def test_transform_obb_relative_to_obb_identity_transform(self):
+    def test_position_bounding_box_relative_to_target_identity_transform(self):
         input_bounding_box = open3d.geometry.OrientedBoundingBox(
             center=[1, 2, 3], R=np.eye(3), extent=[1, 1, 1]
         )
@@ -151,7 +151,7 @@ class TestUtilsO3DHelper(object):
 
         transform = np.eye(4)
 
-        transformed_bounding_box = transform_obb_relative_to_obb_center(
+        transformed_bounding_box = position_bounding_box_relative_to_target(
             input_bounding_box, target_bounding_box, transform
         )
 
@@ -159,7 +159,9 @@ class TestUtilsO3DHelper(object):
         assert np.allclose(transformed_bounding_box.R, target_bounding_box.R)
         assert np.allclose(transformed_bounding_box.extent, target_bounding_box.extent)
 
-    def test_transform_obb_relative_to_obb_non_identity_target_rotation(self):
+    def test_position_bounding_box_relative_to_target_non_identity_target_rotation(
+        self,
+    ):
         input_bounding_box = open3d.geometry.OrientedBoundingBox(
             center=[0, 0, 0], R=np.eye(3), extent=[1, 1, 1]
         )
@@ -171,7 +173,7 @@ class TestUtilsO3DHelper(object):
 
         transform = np.eye(4)
 
-        transformed_bounding_box = transform_obb_relative_to_obb_center(
+        transformed_bounding_box = position_bounding_box_relative_to_target(
             input_bounding_box, target_bounding_box, transform
         )
 
@@ -179,7 +181,7 @@ class TestUtilsO3DHelper(object):
         assert np.allclose(transformed_bounding_box.R, expected_R)
         assert np.allclose(transformed_bounding_box.extent, [1, 1, 1])
 
-    def test_transform_obb_relative_to_obb_invalid_transform_matrix(self):
+    def test_position_bounding_box_relative_to_target_invalid_transform_matrix(self):
         input_bounding_box = open3d.geometry.OrientedBoundingBox(
             center=[0, 0, 0], R=np.eye(3), extent=[1, 1, 1]
         )
@@ -190,7 +192,7 @@ class TestUtilsO3DHelper(object):
         transform = np.eye(3)
 
         with pytest.raises(ValueError):
-            transform_obb_relative_to_obb_center(
+            position_bounding_box_relative_to_target(
                 input_bounding_box, target_bounding_box, transform
             )
 
@@ -355,13 +357,13 @@ class TestUtilsO3DHelper(object):
         assert np.all(rect == (-410, -570, 2100, 2100))
         assert all(isinstance(val, int) for val in rect)
 
-    def test_draw_wireframe_of_obb_into_image(self, cas: CAS):
+    def test_draw_bounding_box_wireframe(self, cas: CAS):
         image = np.ones((300, 300, 3), dtype=np.uint8) * 255
         oriented_bounding_box = open3d.geometry.OrientedBoundingBox(
             center=[0, 0, 1], R=np.eye(3), extent=[1, 1, 1]
         )
 
-        draw_wireframe_of_obb_into_image(cas, image, oriented_bounding_box)
+        draw_bounding_box_wireframe(cas, image, oriented_bounding_box)
 
         non_white_pixels = np.any(image != 255, axis=2)
         assert np.any(non_white_pixels), "No lines were drawn on the image."

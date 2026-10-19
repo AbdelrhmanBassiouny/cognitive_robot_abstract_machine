@@ -41,7 +41,7 @@ from robokudo.types.cv import ImageROI
 from robokudo.types.scene import ObjectHypothesis
 from robokudo.utils.annotator_helper import draw_bounding_boxes_from_object_hypotheses
 from robokudo.utils.error_handling import catch_and_raise_to_blackboard
-from robokudo.utils.o3d_helper import concatenate_clouds, put_obb_on_target_obb
+from robokudo.utils.o3d_helper import concatenate_clouds, place_bounding_box_on_target
 from robokudo.utils.transform import get_transform_matrix
 from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
 
@@ -277,7 +277,7 @@ class PointCloudClusterExtractor(ThreadedAnnotator):
             [plane_obb.extent[0], plane_obb.extent[1], 0.8]
         )
 
-        on_plane_obb = put_obb_on_target_obb(above_plane_obb, plane_obb)
+        on_plane_obb = place_bounding_box_on_target(above_plane_obb, plane_obb)
         on_plane_cloud = outlier_cloud.crop(on_plane_obb)
         on_plane_cloud_indices = on_plane_obb.get_point_indices_within_bounding_box(
             outlier_cloud.points

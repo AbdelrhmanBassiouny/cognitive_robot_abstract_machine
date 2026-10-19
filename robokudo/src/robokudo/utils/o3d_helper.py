@@ -43,54 +43,57 @@ if TYPE_CHECKING:
     from semantic_digital_twin.world_description.geometry import Mesh
 
 
-def put_obb_on_target_obb(
-    input_obb: open3d.geometry.OrientedBoundingBox,
-    target_obb: open3d.geometry.OrientedBoundingBox,
+def place_bounding_box_on_target(
+    input_bounding_box: open3d.geometry.OrientedBoundingBox,
+    target_bounding_box: open3d.geometry.OrientedBoundingBox,
 ) -> open3d.geometry.OrientedBoundingBox:
     """
     Place one oriented bounding box on top of another.
 
-    Places input_obb on top of target_obb by aligning their centers and adjusting height
-    based on extents. Assumes positive Z is up.
+    The boxes share an orientation, and their centers are aligned along the target's
+    local vertical axis. Their faces touch along that axis.
 
-    :param input_obb: Bounding box to place
-    :param target_obb: Target bounding box to place on
+    :param input_bounding_box: Bounding box to place
+    :param target_bounding_box: Target bounding box to place on
     :return: Transformed input bounding box
     """
     put_on_translation = np.eye(4)
-    # set the z(height) based on the extents of the input_obb
-    # OBB origins are center of bounds
-    put_on_translation[2, 3] = input_obb.extent[2] / 2 + target_obb.extent[2] / 2
+    put_on_translation[2, 3] = (
+        input_bounding_box.extent[2] / 2 + target_bounding_box.extent[2] / 2
+    )
 
-    return transform_obb_relative_to_obb_center(
-        input_obb, target_obb, put_on_translation
+    return position_bounding_box_relative_to_target(
+        input_bounding_box, target_bounding_box, put_on_translation
     )
 
 
-def transform_obb_relative_to_obb_center(
-    input_obb: open3d.geometry.OrientedBoundingBox,
-    target_obb: open3d.geometry.OrientedBoundingBox,
+def position_bounding_box_relative_to_target(
+    input_bounding_box: open3d.geometry.OrientedBoundingBox,
+    target_bounding_box: open3d.geometry.OrientedBoundingBox,
     transform_matrix: npt.NDArray,
 ) -> open3d.geometry.OrientedBoundingBox:
     """
-    Transform a bounding box relative to another's center.
+    Position a bounding box relative to the target's center and orientation.
 
-    :param input_obb: Bounding box to transform
-    :param target_obb: Reference bounding box
+    Preserve the input box's extent and replace its pose with the supplied relative
+    transform composed with the target's pose.
+
+    :param input_bounding_box: Bounding box whose extent is preserved
+    :param target_bounding_box: Reference bounding box
     :param transform_matrix: 4x4 transform matrix relative to target center
     :return: Transformed bounding box
     """
-    target_obb_transform = get_transform_matrix(target_obb.R, target_obb.center)
-    input_to_target_transform = np.matmul(target_obb_transform, transform_matrix)
-
-    # Build a new OBB from the input_obb by reusing the size
-    # of the input OBB and then use the transformation we computed
-    transformed_obb = open3d.geometry.OrientedBoundingBox(
-        center=input_to_target_transform[:3, 3],
-        R=input_to_target_transform[:3, :3],
-        extent=input_obb.extent,
+    target_transform = get_transform_matrix(
+        target_bounding_box.R, target_bounding_box.center
     )
-    return transformed_obb
+    positioned_transform = np.matmul(target_transform, transform_matrix)
+
+    positioned_bounding_box = open3d.geometry.OrientedBoundingBox(
+        center=positioned_transform[:3, 3],
+        R=positioned_transform[:3, :3],
+        extent=input_bounding_box.extent,
+    )
+    return positioned_bounding_box
 
 
 def create_oriented_bounding_box(
@@ -201,19 +204,17 @@ def get_2d_bounding_rect_from_3d_bb(
     return cv2.boundingRect(corner_points_in_2d_xy)
 
 
-def draw_wireframe_of_obb_into_image(
-    cas: CAS, image: npt.NDArray, obb: open3d.geometry.OrientedBoundingBox
+def draw_bounding_box_wireframe(
+    cas: CAS, image: npt.NDArray, bounding_box: open3d.geometry.OrientedBoundingBox
 ) -> None:
     """
-    Draw 3D bounding box wireframe on image.
-
-    Projects 3D box edges to image plane and draws lines.
+    Draw a projected bounding box wireframe into an image.
 
     :param cas: CAS containing camera parameters
     :param image: Image to draw on
-    :param obb: 3D bounding box to visualize
+    :param bounding_box: 3D bounding box to visualize
     """
-    projected_corners = get_2d_corner_points_from_3d_bb(cas, obb)
+    projected_corners = get_2d_corner_points_from_3d_bb(cas, bounding_box)
     edges = [
         (0, 1),
         (1, 7),
@@ -230,9 +231,9 @@ def draw_wireframe_of_obb_into_image(
     ]
 
     for edge in edges:
-        pt1 = tuple(projected_corners[edge[0]])
-        pt2 = tuple(projected_corners[edge[1]])
-        cv2.line(image, pt1, pt2, (0, 255, 0), 2)
+        start_point = tuple(projected_corners[edge[0]])
+        end_point = tuple(projected_corners[edge[1]])
+        cv2.line(image, start_point, end_point, (0, 255, 0), 2)
 
 
 def get_mask_from_pointcloud(
