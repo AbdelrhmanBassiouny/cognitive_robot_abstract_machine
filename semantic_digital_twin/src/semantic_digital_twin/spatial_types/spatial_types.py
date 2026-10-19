@@ -2550,10 +2550,10 @@ class Pose2D(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     """
     Represents a 2D pose consisting of an x coordinate, a y coordinate, and a yaw angle.
 
-    Internally stored as a 3×1 symbolic vector ``[x, y, yaw]``. Behaves similarly to
-    :class:`Pose`, but lives in the 2D plane (z=0, roll=0, pitch=0). Whenever 3D
-    calculations are required, use :attr:`pose` to obtain the equivalent 3D
-    :class:`Pose`.
+    Internally stored as a 3×1 symbolic vector ``[x, y, yaw]``. It lies on its reference
+    frame's x-y plane and has no height or tilt of its own, so it carries no ``z``,
+    ``roll`` or ``pitch``. Whenever 3D calculations are required, use :attr:`pose` to
+    obtain the equivalent 3D :class:`Pose`.
     """
 
     def __init__(
@@ -2606,18 +2606,6 @@ class Pose2D(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     @yaw.setter
     def yaw(self, value: sm.ScalarData):
         self[2] = value
-
-    @property
-    def z(self) -> float:
-        return 0
-
-    @property
-    def roll(self) -> float:
-        return 0
-
-    @property
-    def pitch(self) -> float:
-        return 0
 
     # %% Conversion to 3D
 
@@ -2673,13 +2661,20 @@ class Pose2D(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     def from_pose(
         cls,
         pose: Pose,
-        reference_frame: Optional[KinematicStructureEntity] = None,
+        reference_frame: KinematicStructureEntity | None = None,
     ) -> Pose2D:
         """
         Extract a Pose2D from a 3D Pose by dropping z, roll, pitch.
+
+        :param pose: The pose to extract from.
+        :param reference_frame: The frame to express the result in. Defaults to
+            ``pose``'s; any other frame must belong to the same world as ``pose``'s.
+        :return: The Pose2D on the x-y plane of ``reference_frame``.
         """
-        _, _, yaw = pose.rotation_matrix.rpy
         frame = reference_frame if reference_frame is not None else pose.reference_frame
+        if frame is not pose.reference_frame:
+            pose = frame._world.transform(pose, frame)
+        _, _, yaw = pose.rotation_matrix.rpy
         return cls.from_xy_yaw(x=pose.x, y=pose.y, yaw=yaw, reference_frame=frame)
 
     def transform(
