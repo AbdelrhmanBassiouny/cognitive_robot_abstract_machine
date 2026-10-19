@@ -21,7 +21,7 @@ from robokudo.types.cv import ColorToDepthRatio
 from robokudo.cas import CAS
 from robokudo.types.image import ImageRotation
 from robokudo.descriptors.camera_configs.base_camera_config import BaseCameraConfig
-from robokudo.exceptions import InvalidCameraObservation
+from robokudo.exceptions import CameraPoseMissing, InvalidCameraObservation
 from robokudo.io.camera_interface import (
     CameraInterface,
     KinectCameraInterface,
@@ -570,8 +570,9 @@ def test_live_reader_uses_robot_optical_body_for_tf_pose(
     interface.lookup_viewpoint = True
     interface.tf_from = "color_optical_frame"
     interface.tf_to = "map"
-    interface.camera_translation = [0.4, 0.2, 1.3]
-    interface.camera_quaternion = [0.0, 0.0, 0.0, 1.0]
+    interface._world_T_camera = HomogeneousTransformationMatrix.from_xyz_quaternion(
+        pos_x=0.4, pos_y=0.2, pos_z=1.3
+    )
     interface.color = np.zeros(
         (camera_info.height, camera_info.width, 3), dtype=np.uint8
     )
@@ -604,8 +605,9 @@ def test_live_reader_creates_isolated_camera_mount_for_tf_pose(
     interface.lookup_viewpoint = True
     interface.tf_from = "color_optical_frame"
     interface.tf_to = "map"
-    interface.camera_translation = [0.4, 0.2, 1.3]
-    interface.camera_quaternion = [0.0, 0.0, 0.0, 1.0]
+    interface._world_T_camera = HomogeneousTransformationMatrix.from_xyz_quaternion(
+        pos_x=0.4, pos_y=0.2, pos_z=1.3
+    )
     interface.color = np.zeros(
         (camera_info.height, camera_info.width, 3), dtype=np.uint8
     )
@@ -879,6 +881,7 @@ def transform_camera() -> ROSCameraInterface:
     camera.tf_from = "camera_optical_frame"
     camera.tf_to = "map"
     camera.tf_buffer = Mock()
+    camera._world_T_camera = None
     return camera
 
 
@@ -895,7 +898,7 @@ def test_unavailable_transform_returns_false(
 
 def test_available_transform_updates_pose(transform_camera: ROSCameraInterface) -> None:
     """
-    A sampled pose retains its translation and quaternion components.
+    A sampled pose is cached as a homogeneous transformation matrix.
     """
     sample = TransformStamped()
     sample.transform.translation.x = 1.0
@@ -906,19 +909,18 @@ def test_available_transform_updates_pose(transform_camera: ROSCameraInterface) 
     transform_camera.tf_buffer.lookup_transform.return_value = sample
     timestamp = ROSClockTime(nanoseconds=123)
     assert transform_camera.lookup_transform(timestamp) is True
-    translation = sample.transform.translation
-    rotation = sample.transform.rotation
-    assert transform_camera.camera_translation == [
-        translation.x,
-        translation.y,
-        translation.z,
-    ]
-    assert transform_camera.camera_quaternion == [
-        rotation.x,
-        rotation.y,
-        rotation.z,
-        rotation.w,
-    ]
+    expected_pose = HomogeneousTransformationMatrix.from_xyz_quaternion(
+        pos_x=sample.transform.translation.x,
+        pos_y=sample.transform.translation.y,
+        pos_z=sample.transform.translation.z,
+        quat_x=sample.transform.rotation.x,
+        quat_y=sample.transform.rotation.y,
+        quat_z=sample.transform.rotation.z,
+        quat_w=sample.transform.rotation.w,
+    )
+    np.testing.assert_array_equal(
+        transform_camera._world_T_camera.to_np(), expected_pose.to_np()
+    )
     transform_camera.tf_buffer.lookup_transform.assert_called_once_with(
         target_frame=transform_camera.tf_to,
         source_frame=transform_camera.tf_from,
@@ -961,3 +963,14 @@ def runtime_world() -> Iterator[World]:
     robokudo_world.set_world(world)
     yield world
     robokudo_world.set_world(previous_world)
+
+
+# %% Missing sampled camera pose
+
+
+def test_camera_pose_requires_a_sampled_transform(
+    transform_camera: ROSCameraInterface,
+) -> None:
+    """A camera pose cannot be bound before its first successful TF lookup."""
+    with pytest.raises(CameraPoseMissing):
+        transform_camera.world_T_camera_from_tf(Time())

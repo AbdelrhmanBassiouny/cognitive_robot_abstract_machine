@@ -105,14 +105,6 @@ class ROSCameraWithoutDepthInterface(ROSCameraInterface):
         """
         Always (1.0, 1.0) since no depth data.
         """
-        self.camera_translation: list[float] | None = None
-        """
-        Camera translation from TF.
-        """
-        self.camera_quaternion: list[float] | None = None
-        """
-        Camera rotation as quaternion from TF.
-        """
         self.timestamp: builtin_interfaces.msg.Time | None = None
         """
         Timestamp of latest data.

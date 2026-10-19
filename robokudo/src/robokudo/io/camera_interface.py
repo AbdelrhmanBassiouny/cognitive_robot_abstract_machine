@@ -43,7 +43,11 @@ from typing_extensions import Any, TYPE_CHECKING
 from krrood.ormatic.utils import classproperty
 from robokudo.cas import CASViews, CAS
 from robokudo.defs import PACKAGE_NAME
-from robokudo.exceptions import CameraDataMissing, InvalidCameraObservation
+from robokudo.exceptions import (
+    CameraDataMissing,
+    CameraPoseMissing,
+    InvalidCameraObservation,
+)
 from robokudo.io.exceptions import CameraAnnotationAmbiguous
 from robokudo.io.camera_model_adapters import RosCameraModelAdapter
 from robokudo.io.tf_listener_proxy import TFListenerProxy
@@ -390,19 +394,12 @@ class ROSCameraInterface(CameraInterface):
         else:
             self.lookup_viewpoint: bool = False
             """
-            Whether to look up camera transforms
+            Whether to look up camera transforms.
             """
-
-        self.camera_translation: list[float] = [0.0, 0.0, 0.0]
+        self._world_T_camera: HomogeneousTransformationMatrix | None = None
         """
-        Camera translation from TF
+        Camera pose from the most recent successful TF lookup.
         """
-
-        self.camera_quaternion: list[float] = [0.0, 0.0, 0.0, 1.0]
-        """
-        Camera rotation from TF
-        """
-
         if self.lookup_viewpoint:
             self.tf_buffer: Buffer = TFListenerProxy().buffer_for_node(self.node)
             """
@@ -431,17 +428,15 @@ class ROSCameraInterface(CameraInterface):
         )
         translation = world_T_camera.transform.translation
         rotation = world_T_camera.transform.rotation
-        self.camera_translation = [
-            float(translation.x),
-            float(translation.y),
-            float(translation.z),
-        ]
-        self.camera_quaternion = [
-            float(rotation.x),
-            float(rotation.y),
-            float(rotation.z),
-            float(rotation.w),
-        ]
+        self._world_T_camera = HomogeneousTransformationMatrix.from_xyz_quaternion(
+            pos_x=float(translation.x),
+            pos_y=float(translation.y),
+            pos_z=float(translation.z),
+            quat_x=float(rotation.x),
+            quat_y=float(rotation.y),
+            quat_z=float(rotation.z),
+            quat_w=float(rotation.w),
+        )
         return True
 
     def world_T_camera_from_tf(
@@ -455,19 +450,12 @@ class ROSCameraInterface(CameraInterface):
         """
         if not self.lookup_viewpoint:
             return None
-        world_T_camera = HomogeneousTransformationMatrix.from_xyz_quaternion(
-            pos_x=self.camera_translation[0],
-            pos_y=self.camera_translation[1],
-            pos_z=self.camera_translation[2],
-            quat_x=self.camera_quaternion[0],
-            quat_y=self.camera_quaternion[1],
-            quat_z=self.camera_quaternion[2],
-            quat_w=self.camera_quaternion[3],
-        )
+        if self._world_T_camera is None:
+            raise CameraPoseMissing()
         return self.bind_world_T_camera(
             world_frame=self.tf_to,
             camera_frame=self.tf_from,
-            world_T_camera=world_T_camera,
+            world_T_camera=self._world_T_camera,
         )
 
     def validate_camera_frame_for_tf(self, camera_frame: str) -> None:
@@ -573,16 +561,14 @@ class KinectCameraInterface(ROSCameraInterface):
             camera_config.topic_depth,
         )
         """
-        Depth image subscriber
+        Depth image subscriber.
         """
-
         self.camera_info_subscriber: message_filters.Subscriber = Subscriber(
             self.node, CameraInfo, camera_config.topic_camera_info
         )
         """
-        Camera info subscriber
+        Camera info subscriber.
         """
-
         ts = ApproximateTimeSynchronizer(
             [self.color_subscriber, self.depth_subscriber, self.camera_info_subscriber],
             queue_size=10,
@@ -601,29 +587,24 @@ class KinectCameraInterface(ROSCameraInterface):
         """
         self.depth: npt.NDArray | None = None
         """
-        Latest depth image
+        Latest depth image.
         """
-
         self.camera_info: CameraInfo | None = None
         """
-        Latest camera info message
+        Latest camera info message.
         """
-
         self.color_to_depth_ratio: ColorToDepthRatio | None = None
         """
-        Ratio between color and depth image sizes
+        Ratio between color and depth image sizes.
         """
-
         self.timestamp: builtin_interfaces.msg.Time | None = None
         """
-        Latest message timestamp
+        Latest message timestamp.
         """
-
         self.lock: Lock = Lock()
         """
-        Thread synchronization lock
+        Thread synchronization lock.
         """
-
         self.bridge: CVBridgeWorkaround = CVBridgeWorkaround()
         """
         NumPy-compatible replacement for cv_bridge.
