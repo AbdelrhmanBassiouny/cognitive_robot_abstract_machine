@@ -1,0 +1,35 @@
+schema_version: 1
+id: basstler-package
+title: 'The basstler package: what is left of it in CRAM'
+description: The basstler tooling and its plan live in AbdelrhmanBassiouny/basstler, on that
+  repository's claude/personal-notes. What stays here is CRAM's own move onto the plugin.
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 102
+waves:
+- id: extraction
+  name: CRAM sheds the tooling
+tracks:
+- id: extraction
+  name: CRAM uses the basstler plugin
+  wave: extraction
+items:
+- id: cram-basstler-removal
+  title: Move CRAM onto the basstler plugin, keeping only its configuration
+  branch: null
+  status: not_started
+  track: extraction
+  depends_on: []
+  pull_request_number: null
+  session: https://claude.ai/code/session_013kCsTQdNToBZd8YixgPFwG
+  notes: >
+    Commit .claude/basstler/stack.toml naming upstream_repository =
+    "cram2/cognitive_robot_abstract_machine" and upstream_remote = "cram2", and relabel the fork's
+    pull requests from cram2-link-sent to promotion-link-sent. Then, from fork main: delete
+    basstler/, test/basstler_test/, .claude/hooks|skills|stack|shared|SETUP.md, the test_basstler
+    job in ci.yml and the sync_version.py entry; enable the plugin in settings.json (local and CI
+    sessions) and add a caller of basstler's reusable upstream-reviews workflow. Cloud sessions get
+    the plugin from the user's or org's claude.ai plugins, not from the repo. Promote to cram2 only
+    with the user's OK in-session.
+  blockers:
+  - 'Cross-repository dependency, not representable in depends_on: basstler-package/cram-uses-basstler-plugin
+    and cram-basstler-removal in AbdelrhmanBassiouny/basstler''s notes track the same work there.'
