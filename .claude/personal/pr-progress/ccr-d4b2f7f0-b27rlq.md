@@ -1,8 +1,8 @@
 Plan:
-- Reify the Point2/Point3 relation as OrthogonalProjection (project/embed/preimage) + Line3; remove Point2.from_point3/from_pose/to_point3
+- PR #518 (draft): OrthogonalProjection/Line3 replace Point2.from_point3/from_pose/to_point3
 
 Done:
-- Code, caller migration, tests written
+- Implemented, callers migrated, tests pass locally, draft PR opened
 
 Next:
-- Run spatial_types tests, format docstrings, commit, push, open draft PR
+- Await review/CI; optional follow-up: Pose2D fake z/roll/pitch
