@@ -28,6 +28,7 @@ from typing import Any, TypeVar, ClassVar
 import tomllib
 
 from basstler.locations import PackageLocation
+from basstler.maintenance_constants import GitHubClient
 from basstler.repository import Repository
 from basstler.standard_streams import StandardStreamHandler
 
@@ -747,7 +748,7 @@ class GitHubCommandLineClient(GraphQLClient):
     holds no credential handling of its own.
     """
 
-    executable: str = "gh"
+    executable: str = GitHubClient.COMMAND_LINE
     """
     The command to invoke, overridable for testing.
     """

@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from pathlib import Path
 
 from basstler.class_property import classproperty
 from basstler.locations import PackageLocation
@@ -58,13 +59,18 @@ class MaintenancePass:
     The runner every git command goes through.
     """
 
+    board: Path = PackageLocation.BOARD.value
+    """
+    The exported board this run writes, derives its stack from and discards at its end.
+    """
+
     def fork(self) -> GitHubRepository:
         """:return: The fork, as this run's credential can read and write it."""
         return GitHubRepository.from_environment(self.configuration.fork_repository)
 
     def stack(self) -> Stack:
         """:return: The derived stack, read from the exported board."""
-        return load_stack()
+        return load_stack(self.board)
 
 
 @dataclass(frozen=True)
@@ -151,7 +157,9 @@ class BoardCommand(MaintenanceCommand):
         :param arguments: The parsed command line.
         :return: The process exit code."""
         export = BoardExport.from_api_records(maintenance.fork().open_pull_requests())
-        print_board_export(export, export.write() if arguments.write else None)
+        print_board_export(
+            export, export.write(maintenance.board) if arguments.write else None
+        )
         return MaintenanceExitCode.SUCCESS
 
 
@@ -304,7 +312,7 @@ class RunReportCommand(MaintenanceCommand):
             promote(stack, fork),
             clear_spent_promotion_labels(stack, fork),
         )
-        PackageLocation.BOARD.value.unlink(missing_ok=True)
+        maintenance.board.unlink(missing_ok=True)
         if arguments.json:
             logger.info(report.as_json())
         else:
