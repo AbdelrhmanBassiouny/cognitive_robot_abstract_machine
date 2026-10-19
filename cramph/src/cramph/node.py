@@ -1339,19 +1339,6 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
         for transition_kind in TransitionKind.owner_wired_kinds():
             self.set_condition(transition_kind, transition_kind.unwired_condition)
 
-    def _take_place_of(
-        self, replaced: StatechartNode, join_statechart: Callable[[], None]
-    ) -> None:
-        """
-        Joins the statechart in place of `replaced`, which leaves the statechart
-        together with everything below it.
-
-        :param replaced: The node this one replaces, which belongs to a statechart.
-        :param join_statechart: Puts this node in the statechart where `replaced` was.
-        """
-        join_statechart()
-        replaced.statechart.remove_node(replaced)
-
     def _get_transition(self, transition_kind: TransitionKind) -> TransitionCondition:
         """
         :param transition_kind: The kind of transition to look up.
@@ -2258,6 +2245,31 @@ class CompositeNode(StatechartNode):
                 raise ChildTransitionAlreadyWiredError(
                     node=self, child=node, transition_kind=transition_kind
                 )
+
+    def list_in_place_of(
+        self, child: StatechartNode, substitute: StatechartNode
+    ) -> None:
+        """
+        Lists `substitute` among :attr:`nodes` where `child` itself is listed, leaving
+        the statechart as it is.
+
+        :param child: One of :attr:`nodes`.
+        :param substitute: The node to list in its place.
+        """
+        position = next(
+            index for index, listed in enumerate(self.nodes) if listed is child
+        )
+        self.nodes[position] = substitute
+
+    def take_over(self, node: StatechartNode) -> None:
+        """
+        Becomes the parent of `node`, which forgets the transitions its former parent
+        decided for it, so that this node decides them anew.
+
+        :param node: A node of the statechart this node belongs to.
+        """
+        node._clear_owner_wiring()
+        node.parent_node = self
 
     def _succeed_at_its_goal(self, child: StatechartNode) -> None:
         """

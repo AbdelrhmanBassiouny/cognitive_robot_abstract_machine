@@ -101,7 +101,6 @@ from giskardpy.motion_statechart.tasks.joint_tasks import (
 )
 from giskardpy.motion_statechart.tasks.pointing import (
     Pointing,
-    PointingBeside,
     PointingCone,
 )
 from giskardpy.motion_statechart.tasks.weight_scaling_goals import MaxManipulability
@@ -392,20 +391,6 @@ def _cartesian_cases() -> list[NodeRoundTripCase]:
                     tip_link=_tip(world),
                     goal_point=_point(world),
                     pointing_axis=_tip_axis(world),
-                )
-            ],
-            WorldFixture.PR2_WORLD,
-        ),
-        NodeRoundTripCase(
-            PointingBeside,
-            lambda world: [
-                PointingBeside(
-                    root_link=_root(world),
-                    tip_link=_tip(world),
-                    goal_point=_point(world),
-                    pointing_axis=_tip_axis(world),
-                    viewpoint=_root(world),
-                    sideways_offset=0.5,
                 )
             ],
             WorldFixture.PR2_WORLD,

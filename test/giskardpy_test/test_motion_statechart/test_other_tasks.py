@@ -1,6 +1,7 @@
 from math import radians
 
 import numpy as np
+import pytest
 
 from giskardpy.motion_statechart.data_types import DefaultWeights
 from cramph.data_types import LifeCycleValues, ObservationStateValues
@@ -10,7 +11,6 @@ from giskardpy.motion_statechart.graph_node import (
     EndMotion,
 )
 from giskardpy.motion_statechart.monitors.joint_monitors import JointPositionReached
-from giskardpy.motion_statechart.monitors.overwrite_state_monitors import SetOdometry
 from giskardpy.motion_statechart.monitors.progress_monitors import StillProgressing
 from cramph.statechart import (
     Statechart,
@@ -19,7 +19,7 @@ from giskardpy.motion_statechart.tasks.align_planes import AlignPlanes
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
 )
-from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList
+from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList, JointState
 from giskardpy.motion_statechart.tasks.feature_functions import (
     AngleGoal,
     AlignPerpendicular,
@@ -29,7 +29,6 @@ from giskardpy.motion_statechart.tasks.feature_functions import (
 )
 from giskardpy.motion_statechart.tasks.pointing import (
     Pointing,
-    PointingBeside,
     PointingCone,
 )
 from semantic_digital_twin.specifications.connections import (
@@ -50,6 +49,8 @@ from semantic_digital_twin.spatial_types import (
     Point3,
 )
 from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import PrismaticConnection
+from semantic_digital_twin.world_description.world_entity import Body
 from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedomLimits,
 )
@@ -660,58 +661,62 @@ def test_pointing_lowers_the_torso_when_the_head_cannot_tilt_far_enough(
     assert torso.position < torso.dof.limits.upper.position - 0.05
 
 
-def test_pointing_beside_a_goal_takes_sideways_from_where_the_viewpoint_stands_at_start(
-    pr2_world_state_reset: World,
+def test_pointing_follows_a_goal_point_given_as_an_expression_of_a_moving_frame(
+    pr2_world_copy: World,
 ) -> None:
     """
-    Sideways is across the line of sight from the viewpoint as it stands when the task
-    starts, so a base moved by an earlier step of the chart changes the point aimed at.
+    A goal given as the expression of where its frame is follows that frame while the
+    pointing runs, and the joint moving the frame still reaches its own goal.
     """
-    world = pr2_world_state_reset
+    world = pr2_world_copy
     base = world.get_kinematic_structure_entity_by_name("base_link")
     head = world.get_kinematic_structure_entity_by_name("head_tilt_link")
-    goal_point = Point3(2, 0, 1, reference_frame=world.root)
+    with world.modify_world():
+        region = Body(name=PrefixedName("region"))
+        world.add_kinematic_structure_entity(region)
+        region_joint = PrismaticConnection.create_with_dofs(
+            world=world,
+            parent=world.root,
+            child=region,
+            parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                2, 0, 1, reference_frame=world.root
+            ),
+            axis=Vector3.Y(),
+            dof_limits=DegreeOfFreedomLimits.from_position_range_and_speed(
+                lower_position=-1.0, upper_position=1.0, maximum_speed=0.5
+            ),
+        )
+        world.add_connection(region_joint)
 
     kin_sim = StatechartExecutor(
         context=StatechartContext(world=world),
         extensions=[MotionControl()],
     )
     msc = Statechart(context=kin_sim.context)
-    pointing = PointingBeside(
+    world_T_region = world.compose_forward_kinematics_expression(world.root, region)
+    world_T_region.reference_frame = world.root
+    pointing = Pointing(
         root_link=base,
         tip_link=head,
-        goal_point=goal_point,
+        goal_point=world_T_region.position,
         pointing_axis=Vector3.X(reference_frame=head),
-        viewpoint=base,
-        sideways_offset=0.5,
     )
-    msc.add_node(
-        sequence := Sequence(
-            nodes=[
-                SetOdometry(
-                    base_pose=HomogeneousTransformationMatrix.from_xyz_rpy(
-                        0, -2, 0, reference_frame=world.root
-                    )
-                ),
-                pointing,
-            ]
-        )
+    region_goal = JointPositionList(
+        goal_state=JointState.from_mapping({region_joint: 0.8})
     )
+    msc.add_node(both := Parallel(nodes=[pointing, region_goal]))
     end = EndMotion()
-    end.start_condition = sequence.observes_true
+    end.start_condition = both.observes_true
     msc.add_node(end)
     kin_sim.compile(statechart=msc)
 
     kin_sim.tick_until_end()
 
-    world_P_goal = goal_point.to_np()[:3]
-    line_of_sight = world_P_goal - base.global_pose.to_np()[:3, 3]
-    left = np.array([-line_of_sight[1], line_of_sight[0], 0.0])
-    world_P_aim = world_P_goal + pointing.sideways_offset * left / np.linalg.norm(left)
+    assert region_joint.position == pytest.approx(0.8, abs=region_goal.threshold)
     head_pose = head.global_pose.to_np()
-    head_to_aim = world_P_aim - head_pose[:3, 3]
+    head_to_region = region.global_pose.to_np()[:3, 3] - head_pose[:3, 3]
     angle = np.arccos(
-        np.dot(head_pose[:3, 0], head_to_aim) / np.linalg.norm(head_to_aim)
+        np.dot(head_pose[:3, 0], head_to_region) / np.linalg.norm(head_to_region)
     )
     assert angle <= pointing.threshold
 

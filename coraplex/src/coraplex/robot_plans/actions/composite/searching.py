@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
 from coraplex.datastructures.enums import DetectionTechnique
 from coraplex.locations.locations import VisibilityLocation
 from coraplex.robot_plans.actions.base import SequentialAction
@@ -25,8 +24,9 @@ class SearchAction(SequentialAction):
     Searches for an object around a location.
 
     The robot drives to a pose the location is visible from and looks at the location,
-    then to either side of it, until the object is detected. The action fails if the
-    object is seen from none of them.
+    then at the ends of a cross around it along the x- and y-axes of the location's
+    reference frame, until the object is detected. The action fails if the object is
+    seen from none of them.
     """
 
     target_location: Pose
@@ -39,10 +39,9 @@ class SearchAction(SequentialAction):
     Type of the object which is searched for.
     """
 
-    sideways_look_offsets: tuple[float, ...] = (0.0, -0.5, 0.5)
+    cross_arm_length: float = 0.5
     """
-    How far to the left of :attr:`target_location` the robot looks, as seen from where
-    it stands, in the order the looks are tried; negative offsets look to the right.
+    How far from :attr:`target_location` the ends of the cross lie.
     """
 
     detection_margin: float = 0.5
@@ -67,10 +66,7 @@ class SearchAction(SequentialAction):
                 nodes=[
                     Sequence(
                         nodes=[
-                            LookAtAction(
-                                target=self.target_location,
-                                sideways_offset=sideways_offset,
-                            ),
+                            LookAtAction(target=look_target),
                             DetectAction(
                                 technique=DetectionTechnique.TYPES,
                                 object_sem_annotation=self.object_semantic_annotation,
@@ -78,9 +74,26 @@ class SearchAction(SequentialAction):
                             ),
                         ]
                     )
-                    for sideways_offset in self.sideways_look_offsets
+                    for look_target in self.look_targets()
                 ]
             ),
+        ]
+
+    def look_targets(self) -> list[Pose]:
+        """
+        :return: :attr:`target_location`, then the ends of the cross around it, in the
+            order the robot looks at them.
+        """
+        x, y, z = self.target_location.position.to_np().flatten()[:3]
+        arm = self.cross_arm_length
+        return [
+            Pose.from_xyz_rpy(
+                x + x_offset,
+                y + y_offset,
+                z,
+                reference_frame=self.target_location.reference_frame,
+            )
+            for x_offset, y_offset in [(0, 0), (arm, 0), (-arm, 0), (0, arm), (0, -arm)]
         ]
 
     def _detection_box(self) -> VolumetricBoundingBox:
@@ -88,10 +101,7 @@ class SearchAction(SequentialAction):
         :return: The cube around :attr:`target_location` that holds every point looked
             at, widened by :attr:`detection_margin`.
         """
-        half_extent = (
-            max(abs(offset) for offset in self.sideways_look_offsets)
-            + self.detection_margin
-        )
+        half_extent = self.cross_arm_length + self.detection_margin
         x, y, z = self.target_location.position.to_np().flatten()[:3]
         return VolumetricBoundingBox(
             origin=HomogeneousTransformationMatrix(

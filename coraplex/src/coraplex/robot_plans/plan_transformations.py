@@ -18,7 +18,7 @@ from coraplex.locations.locations import ReachabilityLocation
 from coraplex.querying.grasp_closeness import ClosestGrasps
 from coraplex.plans.plan_transformation import (
     ConfigurationTransformation,
-    InsertionTransformation,
+    SequentialInsertion,
     MatchedType,
     PlanTransformation,
 )
@@ -44,7 +44,7 @@ from coraplex.robot_plans.actions.core.robot_body import (
     ParkArmsAction,
 )
 from coraplex.robot_plans.mixins import ReattachesBodies
-from cramph.composites import CramLanguageNode, Sequence, StatementNode
+from cramph.composites import Sequence, StatementNode
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from giskardpy.motion_statechart.goals.cartesian_goals import CartesianPoseStraight
@@ -83,7 +83,7 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class DetectBeforeGrasp(InsertionTransformation[ReachAction]):
+class DetectBeforeGrasp(SequentialInsertion[ReachAction]):
     """
     Looks at the object and detects it before a reach makes its final approach, so that
     the approach acts on a freshly perceived pose instead of the one the world holds.
@@ -157,7 +157,7 @@ class DetectBeforeGrasp(InsertionTransformation[ReachAction]):
 
 @dataclass
 class DrawerOpening(
-    InsertionTransformation[MatchedType],
+    SequentialInsertion[MatchedType],
     Generic[MatchedType],
     SubClassSafeGeneric,
     ABC,
@@ -392,7 +392,7 @@ class ParkArmsAroundPickAndPlaceSteps(PlanTransformation[PickAndPlaceAction]):
 
 
 @dataclass
-class ParkArmsBeforeFirstAction(InsertionTransformation[Action]):
+class ParkArmsBeforeFirstAction(SequentialInsertion[Action]):
     """
     Parks the robot's arms in front of the first action of a plan.
 
@@ -412,7 +412,17 @@ class ParkArmsBeforeFirstAction(InsertionTransformation[Action]):
         )
 
     def anchor(self, plan_node: Action) -> StatechartNode:
-        return plan_node
+        """
+        :return: The node that holds `plan_node` as a step of the nearest
+            :class:`~cramph.composites.Sequence` above it, or the plan itself when no
+            sequence runs `plan_node`, so the parking ends before anything running
+            alongside `plan_node` starts.
+        """
+        holders = [plan_node, *plan_node.path]
+        return next(
+            (holder for holder in holders if isinstance(holder.parent_node, Sequence)),
+            holders[-1],
+        )
 
     def nodes_to_insert(self, plan_node: Action) -> list[StatechartNode]:
         return [ParkArmsAction(arms=plan_node.robot.all_arms)]
@@ -466,7 +476,7 @@ class CloseFingersToObjectWidth(PlanTransformation[GraspingAction]):
 
     def apply(self, plan_node: GraspingAction) -> None:
         closing_step = self.closing_step(plan_node)
-        CramLanguageNode.closest_above(closing_step).replace(
+        plan_node.statechart.replace(
             closing_step,
             plan_node.closing_step(
                 MoveFingersToWidthAction(

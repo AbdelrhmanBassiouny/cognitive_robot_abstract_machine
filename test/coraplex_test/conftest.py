@@ -15,7 +15,6 @@ from functools import partial
 import numpy as np
 import pytest
 
-
 from coraplex.plans.context_extensions import RobotAccess
 from coraplex.plans.executors import PhysicallySimulatedPlanExecutor
 from cramph.context import ContextExtension
@@ -238,6 +237,17 @@ def motion_nodes_of(
     """
     root = expand(plan, extensions)
     return [root, *root.descendants]
+
+
+def nodes_of_type(
+    plan: StatechartNode, node_type: type[StatechartNode]
+) -> list[StatechartNode]:
+    """
+    :param plan: An expanded plan.
+    :param node_type: The type of the nodes to collect.
+    :return: Every node of `node_type` the plan runs, in tree order.
+    """
+    return [node for node in plan.descendants if isinstance(node, node_type)]
 
 
 # %% a physically simulated world without the physics

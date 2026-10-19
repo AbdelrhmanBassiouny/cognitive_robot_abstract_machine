@@ -739,18 +739,27 @@ class NoLanguageNodeAboveError(NodeInitializationError):
 
 
 @dataclass
-class NotATopLevelNodeError(NodeInitializationError):
+class NotHeldByLanguageNodeError(NodeInitializationError):
     """
-    Raised when the statechart is asked to replace a node that is the child of another
-    node, which is the replacement that node's parent has to make.
+    Raised when a node is to be replaced whose parent is not a plan language node, which
+    leaves nothing that could run another node in its place.
+    """
+
+    parent: StatechartNode
+    """
+    The parent of the node.
     """
 
     def error_message(self) -> str:
-        return f"{self.node.name} is not a top-level node of its statechart."
+        return (
+            f"{self.parent.name} holds {self.node.name}, and is no plan language node "
+            f"that could run another node in its place."
+        )
 
     def suggest_correction(self) -> str:
         return (
-            f"Replace {self.node.name} through the closest plan language node above it."
+            f"Replace the node above {self.node.name} that a plan language node or the "
+            f"top level holds."
         )
 
 

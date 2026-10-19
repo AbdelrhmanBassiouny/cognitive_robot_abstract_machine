@@ -13,14 +13,16 @@ from cramph.composites import (
 from cramph.data_types import LifeCycleValues, ObservationStateValues
 from cramph.exceptions import (
     NodeAlreadyAChildError,
+    NodeAlreadyBelongsToDifferentNodeError,
     NodeIsNotAChildError,
+    NotHeldByLanguageNodeError,
     NoLanguageNodeAboveError,
-    NotATopLevelNodeError,
     StatechartAlreadyCompiledError,
 )
 from cramph.executor import StatechartExecutor
 from cramph.node import EndStatechart, StatechartNode
 from cramph.nodes_for_testing import (
+    CompositeNodeWithChainedChildren,
     ConstFalseNode,
     ConstTrueNode,
     NodeFailingOnObservingFalse,
@@ -145,7 +147,7 @@ def test_a_replaced_step_leaves_the_statechart_and_its_replacement_runs_in_its_p
     second = _succeeding("2")
     statechart.add_node(sequence := Sequence(nodes=[first, replaced, third]))
 
-    sequence.replace(replaced, second)
+    statechart.replace(replaced, second)
     _run(statechart_executor, statechart, sequence)
 
     assert replaced not in statechart.nodes
@@ -250,7 +252,7 @@ def test_a_step_replaced_by_a_node_holding_it_stays_in_the_statechart_below_that
     beside = _at_goal("beside")
     statechart.add_node(sequence := Sequence(nodes=[first, held, third]))
 
-    sequence.replace(held, replacement := Parallel(nodes=[beside, held]))
+    statechart.replace(held, replacement := Parallel(nodes=[beside, held]))
     _run(statechart_executor, statechart, sequence)
 
     assert sequence.nodes == [first, replacement, third]
@@ -276,7 +278,7 @@ def test_a_held_step_keeps_its_position_among_the_children_of_its_new_parent(
     )
     statechart.add_node(sequence := Sequence(nodes=[held]))
 
-    sequence.replace(held, replacement := Sequence(nodes=[before, held, after]))
+    statechart.replace(held, replacement := Sequence(nodes=[before, held, after]))
     _run(statechart_executor, statechart, sequence)
 
     assert replacement.nodes == [before, held, after]
@@ -292,8 +294,8 @@ def test_a_held_step_is_no_longer_ended_by_its_former_parent(
     """
     statechart = Statechart(context=statechart_executor.context)
     held = _at_goal("held")
-    statechart.add_node(sequence := Sequence(nodes=[held]))
-    sequence.replace(
+    statechart.add_node(Sequence(nodes=[held]))
+    statechart.replace(
         held,
         Parallel(
             nodes=[
@@ -321,7 +323,7 @@ def test_replacing_a_step_of_a_compiled_statechart_is_rejected_and_changes_nothi
     replacement = Parallel(nodes=[_at_goal("beside"), held])
 
     with pytest.raises(StatechartAlreadyCompiledError):
-        sequence.replace(held, replacement)
+        statechart.replace(held, replacement)
 
     assert sequence.nodes == [held]
     assert replacement.nodes[1] is held
@@ -357,16 +359,6 @@ def test_a_replaced_top_level_node_leaves_the_statechart(
 
     assert statechart.nodes == [replacement]
     assert not replaced.belongs_to_statechart()
-
-
-def test_only_a_top_level_node_is_replaced_by_the_statechart(
-    statechart_executor: StatechartExecutor,
-) -> None:
-    statechart = Statechart(context=statechart_executor.context)
-    statechart.add_node(Sequence(nodes=[step := _succeeding("step")]))
-
-    with pytest.raises(NotATopLevelNodeError):
-        statechart.replace(step, _succeeding("instead"))
 
 
 def test_replacing_a_top_level_node_of_a_compiled_statechart_is_rejected(
@@ -424,6 +416,59 @@ def test_a_node_without_a_language_node_above_it_has_none_closest_above_it(
 
     with pytest.raises(NoLanguageNodeAboveError):
         CramLanguageNode.closest_above(top_level)
+
+
+# %% a failed replacement
+
+
+def test_a_failed_replacement_by_a_node_holding_the_step_leaves_it_where_it_was(
+    statechart_executor: StatechartExecutor,
+) -> None:
+    statechart = Statechart(context=statechart_executor.context)
+    first, second = _succeeding("1"), _succeeding("2")
+    statechart.add_node(sequence := Sequence(nodes=[first, second]))
+    replacement = Sequence(nodes=[first, second])
+
+    with pytest.raises(NodeAlreadyBelongsToDifferentNodeError):
+        statechart.replace(second, replacement)
+    _run(statechart_executor, statechart, sequence)
+
+    assert not replacement.belongs_to_statechart()
+    assert sequence.nodes == [first, second]
+    assert second.parent_node is sequence
+    assert _start_order(statechart, [second, first]) == [first, second]
+
+
+def test_a_failed_replacement_by_another_node_leaves_the_step_where_it_was(
+    statechart_executor: StatechartExecutor,
+) -> None:
+    statechart = Statechart(context=statechart_executor.context)
+    first, second = _succeeding("1"), _succeeding("2")
+    statechart.add_node(sequence := Sequence(nodes=[first, second]))
+    replacement = Sequence(nodes=[first])
+
+    with pytest.raises(NodeAlreadyBelongsToDifferentNodeError):
+        statechart.replace(second, replacement)
+    _run(statechart_executor, statechart, sequence)
+
+    assert not replacement.belongs_to_statechart()
+    assert sequence.nodes == [first, second]
+    assert second.parent_node is sequence
+    assert _start_order(statechart, [second, first]) == [first, second]
+
+
+def test_only_a_node_a_language_node_or_the_top_level_holds_can_be_replaced(
+    statechart_executor: StatechartExecutor,
+) -> None:
+    statechart = Statechart(context=statechart_executor.context)
+    holder = CompositeNodeWithChainedChildren(name="holder")
+    statechart.add_node(holder)
+    nested = holder.sub_node1
+
+    with pytest.raises(NotHeldByLanguageNodeError) as raised:
+        statechart.replace(nested, Sequence(nodes=[_succeeding("1"), nested]))
+
+    assert raised.value.node is nested
 
 
 # %% misuse

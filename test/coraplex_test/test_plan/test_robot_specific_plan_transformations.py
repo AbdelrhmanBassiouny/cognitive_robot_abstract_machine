@@ -512,7 +512,7 @@ def test_stretch_lifts_in_a_straight_line(
 def held_orientations_of(action: StatechartNode) -> list[HoldOrientation]:
     """
     :return: The tasks holding the orientation of a link beside `action`, in the
-        parallel that took its place, or below it.
+        parallel running it, or below it.
     """
     beside = action.parent_node.nodes if type(action.parent_node) is Parallel else []
     return [

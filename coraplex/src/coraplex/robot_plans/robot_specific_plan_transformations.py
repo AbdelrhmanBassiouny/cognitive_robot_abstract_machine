@@ -8,19 +8,17 @@ from __future__ import annotations
 from abc import ABC
 from dataclasses import dataclass
 
-
-from coraplex.datastructures.enums import InsertionPosition
 from coraplex.exceptions import ClosingGoalNotFound, ToolPathNotFound
 from coraplex.plans.plan_transformation import (
     ConfigurationTransformation,
-    InsertionTransformation,
+    ParallelInsertion,
     PlanTransformation,
 )
 from coraplex.robot_plans.actions.composite.tool_based import ToolMotionAction
 from coraplex.robot_plans.actions.core.container import CloseAction, MovesHandle
 from coraplex.robot_plans.actions.core.navigation import DrivesBase
 from coraplex.robot_plans.mixins import MovesToolCenterPoint
-from cramph.composites import CramLanguageNode, Parallel
+from cramph.composites import Parallel
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.data_types import DefaultWeights
 from giskardpy.motion_statechart.goals.open_close import Close
@@ -39,30 +37,24 @@ from semantic_digital_twin.spatial_types.spatial_types import Pose, Vector3
 
 
 @dataclass
-class KeepTheTorsoUprightWhileUsingATool(InsertionTransformation[ToolMotionAction]):
+class KeepTheTorsoUprightWhileUsingATool(ParallelInsertion[ToolMotionAction]):
     """
     Keeps Justin's torso upright while it moves a tool, which no other robot needs: its
     torso would otherwise lean into the motion.
     """
-
-    @property
-    def position(self) -> InsertionPosition:
-        return InsertionPosition.LAST_CHILD
 
     def is_applicable(self, plan_node: ToolMotionAction) -> bool:
         return isinstance(plan_node.robot, Justin)
 
     def anchor(self, plan_node: ToolMotionAction) -> StatechartNode:
         """
-        :return: The goal holding the tool on its path, beside which the torso is held,
-            which is the action itself where it runs its tool path side by side.
+        :return: The goal moving the tool along its path, alongside which the torso is
+            held.
         :raises ToolPathNotFound: If the action holds no goal moving the tool along a
             path.
         """
-        for node in [plan_node, *plan_node.descendants]:
-            if isinstance(node, Parallel) and any(
-                isinstance(child, CartesianPositionTrajectory) for child in node.nodes
-            ):
+        for node in plan_node.descendants:
+            if isinstance(node, CartesianPositionTrajectory):
                 return node
         raise ToolPathNotFound(plan_node)
 
@@ -120,9 +112,7 @@ class DriveTiagoWithItsDifferentialDrive(DriveWithTheDifferentialDrive):
 
 
 @dataclass
-class KeepStretchFromTurningWhileMovingItsTool(
-    PlanTransformation[MovesToolCenterPoint]
-):
+class KeepStretchFromTurningWhileMovingItsTool(ParallelInsertion[MovesToolCenterPoint]):
     """
     Holds the orientation of a Stretch's base while its tool moves, so that the base
     only drives along its heading, as the tool's sixth degree of freedom.
@@ -147,33 +137,15 @@ class KeepStretchFromTurningWhileMovingItsTool(
             )
         )
 
-    def apply(self, plan_node: MovesToolCenterPoint) -> None:
-        """
-        Puts the hold beside the action, in a parallel taking the action's place in the
-        closest plan language node above it, or on the top layer of the statechart if
-        there is none; the parallel holds whatever below that place holds the action.
-        """
-        language_node = next(
-            (node for node in plan_node.path if isinstance(node, CramLanguageNode)),
-            None,
-        )
-        held = next(
-            node
-            for node in [plan_node, *plan_node.path]
-            if node.parent_node is language_node
-        )
-        holding = Parallel(
-            nodes=[
-                held,
-                HoldOrientation(
-                    root_link=plan_node.world.root, tip_link=plan_node.robot.root
-                ),
-            ]
-        )
-        if language_node is None:
-            plan_node.statechart.replace(held, holding)
-        else:
-            language_node.replace(held, holding)
+    def anchor(self, plan_node: MovesToolCenterPoint) -> StatechartNode:
+        return plan_node
+
+    def nodes_to_insert(self, plan_node: MovesToolCenterPoint) -> list[StatechartNode]:
+        return [
+            HoldOrientation(
+                root_link=plan_node.world.root, tip_link=plan_node.robot.root
+            )
+        ]
 
     @staticmethod
     def _holds_the_base(node: StatechartNode, robot: Stretch) -> bool:
@@ -239,7 +211,7 @@ class KeepStretchInFrontOfTheContainerItCloses(PlanTransformation[CloseAction]):
         handle = closing_goal.environment_link
         tool_frame = closing_goal.tip_link
         robot_root = plan_node.robot.root
-        CramLanguageNode.closest_above(closing_goal).replace(
+        plan_node.statechart.replace(
             closing_goal,
             Parallel(
                 nodes=[

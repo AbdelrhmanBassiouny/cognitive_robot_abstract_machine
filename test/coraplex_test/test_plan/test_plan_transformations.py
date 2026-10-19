@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import pytest
-from typing_extensions import Callable, Iterable, List
+from typing_extensions import Callable, Iterable
 
 from coraplex.datastructures.enums import InsertionPosition, ReachFraction
 from coraplex.exceptions import (
@@ -11,9 +11,10 @@ from coraplex.exceptions import (
     ReachHasNoFinalApproach,
 )
 from coraplex.plans.plan_transformation import (
-    InsertionTransformation,
+    ParallelInsertion,
     PlanRewriting,
     PlanTransformation,
+    SequentialInsertion,
     logger as transformation_logger,
 )
 from coraplex.plans.underspecified import PlanChildChooser
@@ -41,6 +42,7 @@ from coraplex.robot_plans.actions.core.robot_body import (
     MoveFingersToWidthAction,
     MoveTorsoAction,
     ParkArmsAction,
+    SetGripperAction,
 )
 from coraplex.robot_plans.plan_transformations import (
     CloseFingersToObjectWidth,
@@ -51,12 +53,12 @@ from coraplex.robot_plans.plan_transformations import (
     ParkArmsBeforeFirstAction,
 )
 from cramph.composites import (
+    Parallel,
     Sequence,
     StatementNode,
 )
 from cramph.context import ContextExtension
 from cramph.context import StatechartContext
-from cramph.exceptions import NoLanguageNodeAboveError
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.goals.cartesian_goals import CartesianPoseStraight
 from giskardpy.motion_statechart.goals.gripper import MoveGripper
@@ -115,6 +117,22 @@ def rewritten(
     return plan
 
 
+def prepared_plan_nodes(
+    plan: StatechartNode,
+    extensions: list[ContextExtension],
+    plan_transformations: Iterable[PlanTransformation],
+) -> list[StatechartNode]:
+    """
+    :return: The nodes the plan runs on the top level once the statechart running
+        `plan` is prepared, which rewrites it with `plan_transformations`.
+    """
+    executor = simulated_executor(
+        [*extensions, PlanRewriting(transformations=list(plan_transformations))]
+    )
+    executor.prepare(statechart_of(executor, plan))
+    return executor.plan_nodes
+
+
 def steps_of(node: StatechartNode) -> list[StatechartNode]:
     """
     :param node: An expanded action, or a plan language node.
@@ -164,7 +182,7 @@ def joint_goal_of(torso_move: MoveTorsoAction) -> JointPositionList:
 
 
 @dataclass
-class MoveGrippersBeforeTorsoMotion(InsertionTransformation[MoveTorsoAction]):
+class MoveGrippersBeforeTorsoMotion(SequentialInsertion[MoveTorsoAction]):
     """
     Puts two distinguishable gripper goals in front of the goal a torso move expands
     into.
@@ -199,7 +217,7 @@ class MoveGrippersAfterTorsoMotion(MoveGrippersBeforeTorsoMotion):
 
 
 @dataclass
-class ParkArmsBeforeTorsoMotion(InsertionTransformation[MoveTorsoAction]):
+class ParkArmsBeforeTorsoMotion(SequentialInsertion[MoveTorsoAction]):
     """
     Puts an action, which expands in turn, in front of the goal a torso move expands
     into.
@@ -220,20 +238,20 @@ class ParkArmsBeforeTorsoMotion(InsertionTransformation[MoveTorsoAction]):
 
 
 @dataclass
-class MoveGripperLastInTheReachBody(InsertionTransformation[ReachAction]):
+class MoveGripperLastInTheReachBody(SequentialInsertion[ReachAction]):
     """
     Puts a gripper goal at the end of the sequence a reach expands into.
     """
 
     @property
     def position(self) -> InsertionPosition:
-        return InsertionPosition.LAST_CHILD
+        return InsertionPosition.AFTER
 
     def is_applicable(self, plan_node: ReachAction) -> bool:
         return True
 
     def anchor(self, plan_node: ReachAction) -> StatechartNode:
-        return plan_node
+        return plan_node.nodes[-1]
 
     def nodes_to_insert(self, plan_node: ReachAction) -> list[StatechartNode]:
         return [
@@ -281,7 +299,7 @@ class TransformationWithoutApplicability(PlanTransformation[MoveTorsoAction]):
 
 
 @dataclass
-class MoveGripperBeforeEveryAction(InsertionTransformation[Action]):
+class MoveGripperBeforeEveryAction(SequentialInsertion[Action]):
     """
     Puts a gripper goal in front of every action, whatever its type.
     """
@@ -303,7 +321,7 @@ class MoveGripperBeforeEveryAction(InsertionTransformation[Action]):
 
 
 @dataclass
-class TransformationWithoutPosition(InsertionTransformation[MoveTorsoAction]):
+class TransformationWithoutPosition(SequentialInsertion[MoveTorsoAction]):
     """
     Inserts nodes without saying where they go.
     """
@@ -389,7 +407,7 @@ def test_a_transformation_that_says_no_position_cannot_be_built():
 
 
 @dataclass
-class MoveGripperBeforeHighTorso(InsertionTransformation[MoveTorsoAction]):
+class MoveGripperBeforeHighTorso(SequentialInsertion[MoveTorsoAction]):
     """
     Puts a gripper goal in front of a torso move, but only when the torso goes up.
     """
@@ -550,22 +568,6 @@ def test_a_transformation_inserts_its_nodes_after_the_anchor(pr2_apartment_conte
     ]
 
 
-def test_a_transformation_inserts_its_nodes_as_the_last_child_of_the_anchor(
-    pr2_apartment_context,
-):
-    """
-    Inserting as the last child makes the node a child of the anchor instead of its
-    sibling.
-    """
-    world, view, extensions = pr2_apartment_context
-    milk = world.get_semantic_annotations_by_type(Milk)[0]
-    plan_transformations = [MoveGripperLastInTheReachBody()]
-
-    plan = rewritten(reach_action(milk, view), extensions, plan_transformations)
-
-    assert kinds_of_the_steps_of(plan) == [CartesianPose, CartesianPose, MoveGripper]
-
-
 def test_a_transformation_leaves_actions_of_another_type_alone(pr2_apartment_context):
     """
     A transformation bound to one action type must not rewrite the plan of another one.
@@ -594,24 +596,6 @@ def test_an_inserted_action_is_expanded(pr2_apartment_context):
 
     [park] = [node for node in plan.descendants if isinstance(node, ParkArmsAction)]
     assert kinds_of_the_steps_of(park) == [JointPositionList]
-
-
-def test_a_neighbour_of_a_node_without_a_language_node_above_it_is_rejected(
-    pr2_apartment_context,
-) -> None:
-    """
-    Only a plan language node can hold a new neighbour, so a plan that is a single
-    action has no place for one in front of it.
-    """
-    world, view, extensions = pr2_apartment_context
-    plan_transformations = [MoveGripperBeforeEveryAction()]
-
-    with pytest.raises(NoLanguageNodeAboveError):
-        rewritten(
-            MoveTorsoAction(torso_state=TorsoState.HIGH),
-            extensions,
-            plan_transformations,
-        )
 
 
 # %% detecting before a grasp
@@ -1105,6 +1089,50 @@ def test_the_first_action_of_a_plan_is_preceded_by_parking(
     assert kinds_of_the_steps_of(plan) == [ParkArmsAction, MoveTorsoAction]
 
 
+def test_parking_ends_before_a_first_action_running_in_parallel_starts(
+    pr2_apartment_context,
+):
+    """
+    Parking alongside the actions that start the plan would pull their arms back while
+    they move.
+    """
+    world, view, extensions = pr2_apartment_context
+    started_together = [
+        MoveTorsoAction(torso_state=TorsoState.HIGH),
+        SetGripperAction(gripper=view.right_arm.end_effector, motion=GripperState.OPEN),
+    ]
+    in_parallel = Parallel(nodes=list(started_together))
+
+    plan = rewritten(
+        Sequence(nodes=[in_parallel]), extensions, [ParkArmsBeforeFirstAction()]
+    )
+
+    [parking, running_in_parallel] = steps_of(plan)
+    assert isinstance(parking, ParkArmsAction)
+    assert running_in_parallel is in_parallel
+    assert in_parallel.nodes == started_together
+
+
+def test_parking_ends_before_a_plan_that_starts_in_parallel(pr2_apartment_context):
+    world, view, extensions = pr2_apartment_context
+    in_parallel = Parallel(
+        nodes=[
+            MoveTorsoAction(torso_state=TorsoState.HIGH),
+            SetGripperAction(
+                gripper=view.right_arm.end_effector, motion=GripperState.OPEN
+            ),
+        ]
+    )
+
+    [plan_node] = prepared_plan_nodes(
+        in_parallel, extensions, [ParkArmsBeforeFirstAction()]
+    )
+
+    [parking, running_in_parallel] = steps_of(plan_node)
+    assert isinstance(parking, ParkArmsAction)
+    assert running_in_parallel is in_parallel
+
+
 def underspecified_move_and_pick_up_in(plan: StatechartNode) -> StatementNode:
     """
     :param plan: A node whose descendants hold one move-and-pick-up left to be grounded.
@@ -1302,11 +1330,142 @@ def test_the_arms_are_parked_around_every_step_of_a_pick_and_place(
     ]
 
 
+# %% inserting where no fitting plan language node runs the anchor
+
+
+@dataclass
+class MoveLeftGripperAfterTorso(SequentialInsertion[MoveTorsoAction]):
+    """
+    Puts a left gripper goal behind a torso move.
+    """
+
+    @property
+    def position(self) -> InsertionPosition:
+        return InsertionPosition.AFTER
+
+    def is_applicable(self, plan_node: MoveTorsoAction) -> bool:
+        return True
+
+    def anchor(self, plan_node: MoveTorsoAction) -> StatechartNode:
+        return plan_node
+
+    def nodes_to_insert(self, plan_node: MoveTorsoAction) -> list[StatechartNode]:
+        return [gripper_goal(plan_node.robot.left_arm.end_effector, GripperState.OPEN)]
+
+
+@dataclass
+class ParkArmsAfterTorso(MoveLeftGripperAfterTorso):
+    """
+    Puts an action behind a torso move instead.
+    """
+
+    def nodes_to_insert(self, plan_node: MoveTorsoAction) -> list[StatechartNode]:
+        return [ParkArmsAction(arms=plan_node.robot.all_arms)]
+
+
+@dataclass
+class MoveLeftGripperAlongsideTorso(ParallelInsertion[MoveTorsoAction]):
+    """
+    Moves the left gripper while the torso moves.
+    """
+
+    def is_applicable(self, plan_node: MoveTorsoAction) -> bool:
+        return True
+
+    def anchor(self, plan_node: MoveTorsoAction) -> StatechartNode:
+        return plan_node
+
+    def nodes_to_insert(self, plan_node: MoveTorsoAction) -> list[StatechartNode]:
+        return [gripper_goal(plan_node.robot.left_arm.end_effector, GripperState.OPEN)]
+
+
+def test_a_node_inserted_before_one_running_in_parallel_runs_right_before_it(
+    pr2_apartment_context,
+):
+    world, view, extensions = pr2_apartment_context
+    torso_move = MoveTorsoAction(torso_state=TorsoState.HIGH)
+    parking = ParkArmsAction(arms=view.all_arms)
+    in_parallel = Parallel(nodes=[torso_move, parking])
+
+    rewritten(Sequence(nodes=[in_parallel]), extensions, [MoveLeftGripperBeforeTorso()])
+
+    [torso_move_in_turn, still_parking] = in_parallel.nodes
+    assert still_parking is parking
+    assert isinstance(torso_move_in_turn, Sequence)
+    assert kinds_of_the_steps_of(torso_move_in_turn) == [MoveGripper, MoveTorsoAction]
+    assert torso_move_in_turn.nodes[1] is torso_move
+
+
+def test_a_node_inserted_after_a_top_level_one_runs_right_after_it(
+    pr2_apartment_context,
+):
+    world, view, extensions = pr2_apartment_context
+    torso_move = MoveTorsoAction(torso_state=TorsoState.HIGH)
+
+    [plan_node] = prepared_plan_nodes(
+        torso_move, extensions, [MoveLeftGripperAfterTorso()]
+    )
+
+    assert isinstance(plan_node, Sequence)
+    assert kinds_of_the_steps_of(plan_node) == [MoveTorsoAction, MoveGripper]
+    assert plan_node.nodes[0] is torso_move
+
+
+def test_the_nodes_inserted_around_a_top_level_node_are_rewritten_too(
+    pr2_apartment_context,
+):
+    world, view, extensions = pr2_apartment_context
+
+    [plan_node] = prepared_plan_nodes(
+        MoveTorsoAction(torso_state=TorsoState.HIGH),
+        extensions,
+        [ParkArmsAfterTorso(), MoveGripperBeforeEveryAction()],
+    )
+
+    assert kinds_of_the_steps_of(plan_node) == [
+        MoveGripper,
+        MoveTorsoAction,
+        MoveGripper,
+        ParkArmsAction,
+    ]
+
+
+def test_a_node_inserted_alongside_a_step_runs_alongside_it(pr2_apartment_context):
+    world, view, extensions = pr2_apartment_context
+    torso_move = MoveTorsoAction(torso_state=TorsoState.HIGH)
+
+    plan = rewritten(
+        Sequence(nodes=[torso_move]), extensions, [MoveLeftGripperAlongsideTorso()]
+    )
+
+    [alongside] = steps_of(plan)
+    assert isinstance(alongside, Parallel)
+    assert alongside.nodes[0] is torso_move
+    assert isinstance(alongside.nodes[1], MoveGripper)
+
+
+def test_a_node_inserted_alongside_one_running_in_parallel_joins_that_parallel(
+    pr2_apartment_context,
+):
+    world, view, extensions = pr2_apartment_context
+    torso_move = MoveTorsoAction(torso_state=TorsoState.HIGH)
+    parking = ParkArmsAction(arms=view.all_arms)
+    in_parallel = Parallel(nodes=[torso_move, parking])
+
+    plan = rewritten(
+        Sequence(nodes=[in_parallel]), extensions, [MoveLeftGripperAlongsideTorso()]
+    )
+
+    assert steps_of(plan) == [in_parallel]
+    assert in_parallel.nodes[:2] == [torso_move, parking]
+    assert isinstance(in_parallel.nodes[2], MoveGripper)
+
+
 # %% transformations that collide on one node
 
 
 @dataclass
-class MoveLeftGripperBeforeTorso(InsertionTransformation[MoveTorsoAction]):
+class MoveLeftGripperBeforeTorso(SequentialInsertion[MoveTorsoAction]):
     """
     Puts a left gripper goal in front of a torso move.
     """
@@ -1337,7 +1496,7 @@ class MoveRightGripperBeforeTorso(MoveLeftGripperBeforeTorso):
         ]
 
 
-def warnings_of(caplog) -> List[str]:
+def warnings_of(caplog) -> list[str]:
     """
     :param caplog: The capture of this test's log records.
     :return: The message of every warning the rewriting reported.

@@ -9,7 +9,6 @@ from krrood.entity_query_language.factories import (
     variable,
 )
 from krrood.entity_query_language.query.match import Match
-from coraplex.config.action_conf import ActionConfig
 from coraplex.querying.grasp_closeness import GraspsClosestToTheRobot
 from coraplex.robot_plans.actions.base import SequentialAction
 from cramph.node import StatechartNode
@@ -135,9 +134,15 @@ class CloseAction(MovesHandle):
     Closes a container like object.
     """
 
+    closed_joint_position: float = 0.01
+    """
+    The joint position, in meters or radians, the container's mechanism is driven to, or
+    its lower limit if that lies above.
+    """
+
     def create_mechanism_goal(self) -> MotionStatechartNode:
         return Close(
             tip_link=self.arm.end_effector.tool_frame,
             environment_link=self.grasp.graspable.root,
-            goal_joint_state=ActionConfig.closed_container_joint_state,
+            goal_joint_state=self.closed_joint_position,
         )

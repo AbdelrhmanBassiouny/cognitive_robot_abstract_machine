@@ -25,7 +25,7 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
     CartesianPosition,
 )
-from giskardpy.motion_statechart.tasks.pointing import Pointing, PointingBeside
+from giskardpy.motion_statechart.tasks.pointing import Pointing
 from semantic_digital_twin.exceptions import MissingMovableJointError
 from semantic_digital_twin.reasoning.predicates import InsideOf
 from semantic_digital_twin.robots.robot_parts import Camera
@@ -117,7 +117,8 @@ class NavigateAction(DrivesBase, GoalAction):
 @dataclass(eq=False, repr=False, kw_only=True)
 class LookAtAction(ParallelAction):
     """
-    Lets the robot look at a position.
+    Lets the robot look at a position, following it while the look runs when it is given
+    relative to a body that moves.
     """
 
     target: Pose
@@ -130,23 +131,28 @@ class LookAtAction(ParallelAction):
     Camera that should be looking at the target.
     """
 
-    sideways_offset: float = 0.0
-    """
-    How far to the left of the target the robot looks instead, as seen from where its
-    base stands when the look starts; a negative offset looks to the right.
-    """
-
     def create_steps(self) -> list[StatechartNode]:
         camera = self.camera or self.robot.get_default_camera()
-        pointing = PointingBeside(
+        pointing = Pointing(
             root_link=self.robot.get_torso().root,
             tip_link=camera.root,
-            goal_point=self.target.position,
+            goal_point=self._world_P_target(),
             pointing_axis=camera.forward_facing_axis,
-            viewpoint=self.robot.root,
-            sideways_offset=self.sideways_offset,
         )
         return [pointing, *self.keep_base_still()]
+
+    def _world_P_target(self) -> Point3:
+        """
+        :return: Where :attr:`target` is in the world frame, as an expression of where
+            the body it is given relative to stands while the look runs.
+        """
+        target_frame = self.target.reference_frame or self.world.root
+        world_T_target_frame = self.world.compose_forward_kinematics_expression(
+            self.world.root, target_frame
+        )
+        world_T_target_frame.reference_frame = self.world.root
+        world_T_target_frame.child_frame = target_frame
+        return world_T_target_frame @ self.target.position
 
 
 @dataclass(eq=False, repr=False, kw_only=True)

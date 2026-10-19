@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
+import numpy as np
 
 from coraplex.robot_plans.actions.base import SequentialAction
 from cramph.composites import Parallel
@@ -21,8 +22,13 @@ from semantic_digital_twin.collision_checking.collision_rules import (
     AllowCollisionForEndEffector,
 )
 from semantic_digital_twin.datastructures.definitions import GripperState
-from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
+from semantic_digital_twin.grasping.grasp_candidates import (
+    GraspCandidate,
+    HasGraspCandidates,
+)
 from semantic_digital_twin.robots.robot_parts import Arm
+from semantic_digital_twin.spatial_types import RotationMatrix
+from semantic_digital_twin.spatial_types.spatial_types import Pose
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +147,23 @@ class PickUpAction(
     -- it crashes on Tracy's real-execution gripper, whose connections do not all have
     one.
     """
+
+    @classmethod
+    def from_above(cls, graspable: HasGraspCandidates, arm: Arm) -> PickUpAction:
+        """
+        :param graspable: The annotation of an object standing upright.
+        :param arm: The arm that picks it up.
+        :return: The pick-up that comes down onto the origin of `graspable` along its
+            z-axis.
+        """
+        grasp = GraspCandidate(
+            graspable,
+            Pose(
+                orientation=RotationMatrix.from_rpy(pitch=np.pi / 2).quaternion,
+                reference_frame=graspable.root,
+            ),
+        )
+        return cls(grasp=grasp, arm=arm)
 
     def _grasp_steps(self) -> list[StatechartNode]:
         """

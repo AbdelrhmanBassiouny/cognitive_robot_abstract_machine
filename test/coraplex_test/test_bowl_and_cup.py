@@ -29,10 +29,6 @@ from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
 )
 from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.grasping.grasp_candidates import (
-    GraspCandidate,
-    HasGraspCandidates,
-)
 from semantic_digital_twin.robots.pr2 import PR2
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Bowl,
@@ -41,7 +37,6 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
 )
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
-    RotationMatrix,
 )
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
@@ -198,20 +193,6 @@ def kitchen_with_filled_drawer(
     )
 
 
-def grasp_from_above(graspable: HasGraspCandidates) -> GraspCandidate:
-    """
-    :param graspable: The annotation of an object standing upright.
-    :return: The grasp that comes down onto the origin of `graspable` along its z-axis.
-    """
-    return GraspCandidate(
-        graspable,
-        Pose(
-            orientation=RotationMatrix.from_rpy(pitch=np.pi / 2).quaternion,
-            reference_frame=graspable.root,
-        ),
-    )
-
-
 # %% taking both objects out of the drawer and setting them down
 
 
@@ -245,12 +226,8 @@ def transport_plan(kitchen: KitchenWithFilledDrawer) -> Sequence:
                     HoldPose(
                         root_link=kitchen.world.root, tip_link=robot.mobile_base.root
                     ),
-                    PickUpAction(
-                        grasp=grasp_from_above(kitchen.bowl), arm=robot.left_arm
-                    ),
-                    PickUpAction(
-                        grasp=grasp_from_above(kitchen.cup), arm=robot.right_arm
-                    ),
+                    PickUpAction.from_above(kitchen.bowl, robot.left_arm),
+                    PickUpAction.from_above(kitchen.cup, robot.right_arm),
                 ]
             ),
             ParkArmsAction(arms=robot.all_arms),
