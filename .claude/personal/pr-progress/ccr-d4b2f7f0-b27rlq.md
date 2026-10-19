@@ -2,7 +2,7 @@ Plan:
 - PR #518 (draft): OrthogonalProjection/Line3 + Point2 helpers built on it
 
 Done:
-- Review round 2 (b829715e2): all 3 helpers back on OrthogonalProjection; TestInverseLaws per case
+- Review round 3 (fcc0e5eee): citations removed, None-frame mixing raises, test names unabbreviated
 
 Next:
-- Owner verdict on helper threads (r4315316650, r4315343922) and raise-on-law question (r4315504268); all 3 left open
+- Owner verdict on open threads: helpers (r4315316650, r4315343922), raise-on-law (r4315504268), contains without to_point3 (r4315760268)
