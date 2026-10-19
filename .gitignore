@@ -162,3 +162,8 @@ class_diagram.pdf
 # Personal, per-user Claude Code memory (populated by .claude/hooks/session-start.sh
 # from the claude/personal-notes branch). Never committed on any branch.
 CLAUDE.local.md
+
+# Session-generated state and cache files
+.claude/.personal-settings-sync-hash
+.claude/.plan-state-sync-sha
+.claude/settings.local.json
