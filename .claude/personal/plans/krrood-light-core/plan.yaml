@@ -106,8 +106,8 @@ items:
   depends_on: [matplotlib-optional, core-boundary-guard, serializer-without-heavy-dependencies, eql-probabilistic-split, verbalization-realization-split]
   notes: 'Breaking for outside users: pip has no default extras. Every workspace package that lists krrood
     switches to krrood[all]. Core-only CI job on Linux and Windows runs the guard and core tests; the
-    guard''s offender lists must be empty. basstler (#508, basstler-package plan) then depends on plain
-    krrood.'
+    guard''s offender lists must be empty. basstler (basstler#12, item basstler-krrood-dependency in
+    basstler''s notes) then depends on plain krrood.'
 - id: core-weight-regression-check
   title: CI compares core install size and import time against the base branch
   branch: null

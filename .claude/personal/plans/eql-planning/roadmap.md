@@ -28,7 +28,7 @@ The design, the concepts behind it and the decisions taken are in the
 - Jonas Dech's cramph work on `Tigul/plan-cramp-second-iter` (statecharts, converted coraplex
   actions, the RoboCasa condition survey) gates the cram-robocasa track.
 - #511 (EQL showcase) holds `SortPieceAction`; #261 (scenario model) is the RoboCasa harness.
-- basstler-package and actions-budget reach a stable state first (Oct 15-31); the other tooling
+- The basstler tooling (now in AbdelrhmanBassiouny/basstler) and actions-budget reach a stable state first (Oct 15-31); the other tooling
   plans pause until the freeze.
 
 ## Calendar

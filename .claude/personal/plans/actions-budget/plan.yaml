@@ -50,16 +50,17 @@ items:
   status: in_progress
   session: https://claude.ai/code/session_01RiyB21wDi8SaFucjBG6K3Y
   pull_request_number: 10
-  notes: 'Moved to basstler as draft basstler#10 (carried from CRAM #503, which the
-    cram-tooling-pull-requests-moved item closes); it stays in this plan until depends_on can
-    name an item in another repository''s plan, then moves with cram-notes-cleanup. The CRAM-side
-    ci.yml and .github/actions_budget.py belong to cram-uses-basstler-plugin. Reworked after review: no per-workflow manifest. basstler checks every workflow
-    file against generic rules (no schedule, cancel on every pull-request push, job timeouts,
-    fork-push skip, label check, and at most jobs_per_push_run jobs on every push). The repository''s
-    `.github/actions_budget.py` (`actions_budget()` returning an `ActionsBudget`) holds only
-    limits plus per-workflow overrides (ci.yml 16 jobs, update_docker 120 min / fork pushes),
-    and an override naming no workflow file is reported; `python -m basstler.actions_budget`
-    writes its first version.'
+  notes: >-
+    Moved to basstler as draft basstler#10 (carried from CRAM #503, now closed); it stays in
+    this plan until depends_on can name an item in another repository's plan, then moves with
+    cram-notes-cleanup. The CRAM-side ci.yml and .github/actions_budget.py belong to
+    cram-uses-basstler-plugin. Reworked after review: no per-workflow manifest. basstler checks
+    every workflow file against generic rules (no schedule, cancel on every pull-request push,
+    job timeouts, fork-push skip, label check, and at most jobs_per_push_run jobs on every
+    push). The repository's `.github/actions_budget.py` (`actions_budget()` returning an
+    `ActionsBudget`) holds only limits plus per-workflow overrides (ci.yml 16 jobs,
+    update_docker 120 min / fork pushes), and an override naming no workflow file is reported;
+    `python -m basstler.actions_budget` writes its first version.
 - id: changed-library-matrix
   title: Pull request CI tests the libraries a change touches and their dependents
   branch: ccr-81db28df-4rban1
@@ -75,6 +76,11 @@ items:
     exclude, which basstler counts by its axes. The ci.yml override stays at 16 (worst case, a
     krrood change; decided with the user). Needs a real run to confirm the run-time exclude and
     the all-excluded skip on GitHub.'
+  blockers:
+  - >-
+    #515's base is the branch of CRAM #503, which is closed and carried to basstler as #10. Its
+    basstler/changed_libraries.py belongs in basstler beside #10, and its ci.yml change here
+    once CRAM runs on the plugin: decide with the user how to split it.
 - id: usage-monitor
   title: Measure run volume against the manifest and warn before it is exceeded
   branch: null
@@ -94,33 +100,26 @@ items:
   track: pipelines
   depends_on:
   - budget-manifest
-  pull_request_number: 211
-  status: not_started
-  notes: >
-    Edits to #211, the open pull request that carries `integration-refresh.yml` (#282, #285 and #291
-    stack on it), not a branch of its own. Drop the four-a-day `schedule`, keeping `workflow_run`,
-    `ready_for_review` and dispatch. A candidate pull request runs CI only, which the
-    budget-manifest Examples trigger already gives it since it is opened ready. Probes bisect the
-    merge order instead of dispatching every prefix, and run one at a time.
-
-    Also folded in from dead-workflows-and-branches: take-down-unreferenced-builds matches only
-    `integration-[0-9]*` (BUILD_BRANCH_PATTERN), so a probe round that dies before `take_down`
-    leaves its `integration-probe-*` branches forever. Extend the take-down to probe branches that
-    no in-flight localisation owns, test first.
+  pull_request_number: null
+  status: deferred
+  notes: >-
+    No longer needed: the integration stack is retired (CRAM #211 and the branches stacked on it
+    are closed, recorded in basstler #28-#31), and main carries no integration workflow. Its
+    leftover-probe-branch fix goes with it.
 - id: stack-maintenance-event-only
   title: Stack maintenance runs on events only and bounds a restack's CI fan-out
   branch: null
   track: pipelines
   depends_on:
   - budget-manifest
-  pull_request_number: 280
+  pull_request_number: 16
   status: not_started
-  notes: 'Edits to #280. Drop the six-hourly `schedule`. A restack pushes to every branch
-    above a moved parent at once, and each push started a full 24-job matrix - the `action_required`
-    runs pushed by `github-actions[bot]` across ten branches in the audit window are those.
-    With the changed-library matrix a rebase-only push costs little, and the pass additionally
-    pushes the restacked branches of one stack in sequence rather than all together. The branch
-    belongs to the workflow-cutover plan, so it is not repeated here.'
+  notes: >-
+    CRAM #280 is closed and carried to basstler as draft #16, whose reusable workflow already
+    runs on events only, with no schedule. What remains: a restack pushes the restacked branches
+    of one stack in sequence rather than all together, so a rebase-only push does not fan out a
+    full matrix on every branch at once.
+  repository: AbdelrhmanBassiouny/basstler
 - id: dead-workflows-and-branches
   title: Disable dead workflows and delete stale build and probe branches
   branch: null
@@ -134,12 +133,12 @@ items:
       Mark done once they are gone.
   depends_on: []
   status: blocked
-  notes: >
-    No branch or pull request of its own: what remains is two repository actions. Dead workflows are
-    done - Coraplex hang diagnosis, Integration token probe and board (plus every other fork
+  notes: >-
+    No branch or pull request of its own: what remains is two repository actions. Dead workflows
+    are done - Coraplex hang diagnosis, Integration token probe and board (plus every other fork
     pipeline) were disabled on 2026-10-13, and the user chose to leave them disabled rather than
     delete their run history. Build branches: the integration-<date> builds are already gone
     (take-down-unreferenced-builds removes them); the 12
-    integration-probe-20260913-085124-narrowing-0..11 branches are left from a localisation round
-    that never reached take_down. The user approved deleting them; the fix that stops this recurring
-    is folded into integration-pipeline-event-only (#211).
+    integration-probe-20260913-085124-narrowing-0..11 branches are left from a localisation
+    round that never reached take_down. The user approved deleting them; nothing recurs, since
+    the integration stack that made them is retired.
