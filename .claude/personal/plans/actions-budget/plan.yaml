@@ -44,21 +44,22 @@ items:
 - id: budget-manifest
   title: Declare every workflow in a tested budget manifest, and make main's workflows conform
   branch: claude/inspiring-pascal-u7ruus
+  repository: AbdelrhmanBassiouny/basstler
   track: manifest
   depends_on: []
   status: in_progress
   session: https://claude.ai/code/session_01RiyB21wDi8SaFucjBG6K3Y
-  pull_request_number: 503
-  notes: 'Reworked after review: no per-workflow manifest. basstler checks every workflow
+  pull_request_number: 10
+  notes: 'Moved to basstler as draft basstler#10 (carried from CRAM #503, which the
+    cram-tooling-pull-requests-moved item closes); it stays in this plan until depends_on can
+    name an item in another repository''s plan, then moves with cram-notes-cleanup. The CRAM-side
+    ci.yml and .github/actions_budget.py belong to cram-uses-basstler-plugin. Reworked after review: no per-workflow manifest. basstler checks every workflow
     file against generic rules (no schedule, cancel on every pull-request push, job timeouts,
     fork-push skip, label check, and at most jobs_per_push_run jobs on every push). The repository''s
     `.github/actions_budget.py` (`actions_budget()` returning an `ActionsBudget`) holds only
     limits plus per-workflow overrides (ci.yml 16 jobs, update_docker 120 min / fork pushes),
     and an override naming no workflow file is reported; `python -m basstler.actions_budget`
     writes its first version.'
-  blockers:
-  - 'Based on #501 (basstler src layout) at the user''s request; retargets to main once #501
-    lands.'
 - id: changed-library-matrix
   title: Pull request CI tests the libraries a change touches and their dependents
   branch: ccr-81db28df-4rban1
