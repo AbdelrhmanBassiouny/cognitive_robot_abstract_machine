@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Protocol
 
 from griplink_interfaces.action import Flexgrip, Flexrelease, Grip, Release
 from semantic_digital_twin.robots.griplink_gripper import GriplinkGripPreset
@@ -51,67 +50,19 @@ class GriplinkStatus(IntEnum):
     PENDING = 27
 
 
-# %% griplink message protocols
-
-
-class GriplinkGoal(Protocol):
-    """
-    A griplink action goal; every griplink action addresses one port of the controller.
-    """
-
-    port: int
-
-
-class GriplinkResult(Protocol):
-    """
-    The result every griplink action reports: a status code, a human-readable message
-    and the controller's device state.
-    """
-
-    status: int
-    message: str
-    device_state: int
-
-
-class GriplinkFeedback(Protocol):
-    """
-    The feedback every griplink action streams: the controller's device state.
-    """
-
-    device_state: int
-
-
-class GriplinkResultResponse(Protocol):
-    """
-    The response the action client resolves a result future with, wrapping the
-    :class:`GriplinkResult` the server reported and the goal state it reached.
-    """
-
-    status: int
-    result: GriplinkResult
-
-
-class GriplinkAction(Protocol):
-    """
-    A griplink action, carrying the goal, result and feedback message classes the action
-    client sends and receives.
-    """
-
-    Goal: type[GriplinkGoal]
-    Result: type[GriplinkResult]
-    Feedback: type[GriplinkFeedback]
-
-
 # %% griplink action server tasks
 
 
 @dataclass(eq=False, repr=False)
 class GriplinkActionServerTask(
     ActionServerTask[
-        GriplinkAction,
-        GriplinkGoal,
-        GriplinkResultResponse,
-        GriplinkFeedback,
+        Grip | Release | Flexgrip | Flexrelease,
+        Grip.Goal | Release.Goal | Flexgrip.Goal | Flexrelease.Goal,
+        Grip.Impl.GetResultService.Response
+        | Release.Impl.GetResultService.Response
+        | Flexgrip.Impl.GetResultService.Response
+        | Flexrelease.Impl.GetResultService.Response,
+        Grip.Feedback | Release.Feedback | Flexgrip.Feedback | Flexrelease.Feedback,
     ]
 ):
     """

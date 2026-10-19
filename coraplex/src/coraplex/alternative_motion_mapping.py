@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC
 from collections.abc import Iterable
 from inspect import isabstract
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING
 
 from krrood.adapters.json_serializer import list_like_classes
 from krrood.ormatic.data_access_objects.base import HasGeneric
@@ -27,7 +27,7 @@ BaseMotionType = TypeVar("BaseMotionType", bound=BaseMotion)
 
 
 class AlternativeMotion(HasGeneric[AbstractRobotType], ABC):
-    execution_type: ClassVar[ExecutionType | Iterable[ExecutionType]]
+    execution_type: ExecutionType | Iterable[ExecutionType]
     """
     Execution type(s) for which this alternative motion applies.
 

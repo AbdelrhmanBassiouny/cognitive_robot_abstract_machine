@@ -20,10 +20,8 @@ from coraplex.language import CodeNode, ParallelNode, SequentialNode
 from coraplex.plans.executables import GiskardExecutable
 from coraplex.plans.plan_node import MotionNode, PlanNode
 from experiments.daisy_gripper_demo.demo import (
-    EXECUTION_CHOICES,
-    PAUSE_AFTER_MOTION_SECONDS,
-    STATE_VERBS,
     DAiSyGripperDemonstration,
+    ExecutionChoice,
 )
 from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.robots.daisy import (
@@ -132,7 +130,7 @@ class TestBuildContext:
 
 class TestExecutionSwitch:
     def test_switch_covers_all_execution_types(self):
-        assert set(EXECUTION_CHOICES.values()) == {
+        assert {choice.execution_type for choice in ExecutionChoice} == {
             ExecutionType.KINEMATICALLY_SIMULATED,
             ExecutionType.SEMI_REAL,
             ExecutionType.REAL,
@@ -227,6 +225,12 @@ class TestAnnouncements:
             step[0].code()
             messages.append(caplog.records[-1].getMessage())
 
+        expected_verbs = {
+            GripperState.OPEN: "Opening",
+            GripperState.CLOSE: "Closing",
+            GripperState.FLEXOPEN: "Flex-opening",
+            GripperState.FLEXCLOSE: "Flex-closing",
+        }
         expected = []
         for step in steps(demonstration_plan):
             motion_or_parallel = step[1]
@@ -242,7 +246,7 @@ class TestAnnouncements:
                 specification = motion_or_parallel.children[0].designator.configuration
                 subject = "both grippers"
             state_type = specification.joint_state.state_type
-            expected.append(f"{STATE_VERBS[state_type].capitalize()} {subject}.")
+            expected.append(f"{expected_verbs[state_type]} {subject}.")
         assert messages == expected
 
 
@@ -251,7 +255,8 @@ class TestPauses:
         self, demonstration_plan, monkeypatch
     ):
         """
-        Calling a pause sleeps :data:`PAUSE_AFTER_MOTION_SECONDS`, once per step.
+        Calling a pause sleeps :attr:`DAiSyGripperDemonstration.pause_after_motion_seconds`,
+        once per step.
         """
         sleeps = []
         monkeypatch.setattr(
@@ -259,7 +264,10 @@ class TestPauses:
         )
         for step in steps(demonstration_plan):
             step[2].code()
-        assert sleeps == [PAUSE_AFTER_MOTION_SECONDS] * len(steps(demonstration_plan))
+        pause_seconds = DAiSyGripperDemonstration(
+            used_robot=DAiSy
+        ).pause_after_motion_seconds
+        assert sleeps == [pause_seconds] * len(steps(demonstration_plan))
 
 
 class RecordingHandler(logging.Handler):

@@ -4,8 +4,9 @@ from abc import ABC
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
-from typing import ClassVar, Self
+from typing import Self
 
+from krrood.ormatic.utils import classproperty
 from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -104,16 +105,21 @@ class GriplinkFlexConfiguration(GriplinkGripperConfiguration):
     ``Flexgrip``/``Flexrelease`` actions.
     """
 
-    maximum_opening_width_mm: ClassVar[float] = 120.0
-    """
-    Maximum opening width of the gripper in millimetres, the scale the flex
-    configuration interpolates ``grip_position`` on.
-    """
+    @classproperty
+    def maximum_opening_width(cls) -> float:
+        """
+        Maximum opening width of the gripper, in the unit of ``grip_position``; the
+        scale the flex configuration interpolates ``grip_position`` on.
+        """
+        return 120.0
 
-    fully_closed_opening_width_mm: ClassVar[float] = 0.0
-    """
-    Opening width of the gripper in millimetres that commands the fully closed state.
-    """
+    @classproperty
+    def fully_closed_opening_width(cls) -> float:
+        """
+        Opening width of the gripper, in the unit of ``grip_position``, that commands
+        the fully closed state.
+        """
+        return 0.0
 
     grip_position: float | None = None
     """
@@ -221,14 +227,14 @@ class GriplinkFlexConfiguration(GriplinkGripperConfiguration):
         """
         if grip_position is None:
             grip_position = (
-                cls.fully_closed_opening_width_mm
+                cls.fully_closed_opening_width
                 if state_type is GripperState.FLEXCLOSE
-                else cls.maximum_opening_width_mm
+                else cls.maximum_opening_width
             )
         open_state = end_effector.get_joint_state_by_type(GripperState.OPEN)
         close_state = end_effector.get_joint_state_by_type(GripperState.CLOSE)
         close_targets = dict(close_state.items())
-        fraction = 1 - grip_position / cls.maximum_opening_width_mm
+        fraction = 1 - grip_position / cls.maximum_opening_width
         target_values = [
             open_target + fraction * (close_targets[connection] - open_target)
             for connection, open_target in open_state.items()
@@ -253,11 +259,13 @@ class GriplinkGripper(EndEffector, ABC):
     appropriate configurations without naming the robot.
     """
 
-    griplink_endpoints: ClassVar[Mapping[GripperState, GriplinkEndpoint]]
-    """
-    Griplink action server endpoints of this gripper, by the state each endpoint's
-    action commands; a gripper declares the table for the states it serves.
-    """
+    @classproperty
+    def griplink_endpoints(cls) -> Mapping[GripperState, GriplinkEndpoint]:
+        """
+        Griplink action server endpoints of this gripper, by the state each endpoint's
+        action commands; a gripper overrides this for the states it serves.
+        """
+        return {}
 
     def default_configuration(
         self,

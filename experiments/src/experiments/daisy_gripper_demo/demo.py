@@ -32,7 +32,7 @@ import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import ClassVar
+from enum import StrEnum
 
 from coraplex.datastructures.dataclasses import Context
 from coraplex.datastructures.enums import ExecutionType
@@ -48,6 +48,7 @@ from coraplex.plans.plan import Plan
 from coraplex.plans.plan_node import PlanNode
 from coraplex.robot_plans import MoveGripperMotion
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
+from krrood.entity_query_language.verbalization.morphology import present_participle
 from coraplex.visualization import VisualizationSession
 from semantic_digital_twin.adapters.ros.world_synchronizer import WorldSynchronizer
 from semantic_digital_twin.datastructures.definitions import GripperState
@@ -59,30 +60,40 @@ from semantic_digital_twin.world import World
 
 logger = logging.getLogger(__name__)
 
-EXECUTION_CHOICES = {
-    "simulated": ExecutionType.KINEMATICALLY_SIMULATED,
-    "semi-real": ExecutionType.SEMI_REAL,
-    "real": ExecutionType.REAL,
-}
-"""
-Execution types the ``--execution`` switch selects between.
-"""
 
-PAUSE_AFTER_MOTION_SECONDS = 1.0
-"""
-How long a run waits after a gripper motion before the next step announces itself,
-letting the fingers settle into the state they just reached.
-"""
+# %% command line choices
 
-STATE_VERBS = {
-    GripperState.OPEN: "opening",
-    GripperState.CLOSE: "closing",
-    GripperState.FLEXOPEN: "flex-opening",
-    GripperState.FLEXCLOSE: "flex-closing",
-}
-"""
-The human-readable action each gripper state commands, used in the step announcements.
-"""
+
+class ExecutionChoice(StrEnum):
+    """
+    The values of the ``--execution`` switch, each selecting an execution type.
+    """
+
+    SIMULATED = "simulated"
+    """
+    Perform the plan in the kinematic simulation of this process.
+    """
+
+    SEMI_REAL = "semi-real"
+    """
+    Send the joint goals to a running controller that simulates the joints.
+    """
+
+    REAL = "real"
+    """
+    Send the griplink actions to the griplink servers of the grippers.
+    """
+
+    @property
+    def execution_type(self) -> ExecutionType:
+        """
+        :return: The execution type this choice runs the plan with.
+        """
+        return {
+            ExecutionChoice.SIMULATED: ExecutionType.KINEMATICALLY_SIMULATED,
+            ExecutionChoice.SEMI_REAL: ExecutionType.SEMI_REAL,
+            ExecutionChoice.REAL: ExecutionType.REAL,
+        }[self]
 
 
 def plan_node(root: PlanNode, action_likes: list, context: Context) -> PlanNode:
@@ -146,7 +157,13 @@ class DAiSyGripperDemonstration(RobotDemonstration):
     individual/parallel matrix.
     """
 
-    ros_node_name: ClassVar[str] = "daisy_gripper_demo_node"
+    ros_node_name: str = "daisy_gripper_demo_node"
+
+    pause_after_motion_seconds: float = 1.0
+    """
+    How long a run waits after a gripper motion before the next step announces itself,
+    letting the fingers settle into the state they just reached.
+    """
 
     def build_simulated_world(self) -> World:
         """
@@ -262,14 +279,14 @@ class DAiSyGripperDemonstration(RobotDemonstration):
             side: str, gripper, state_type: GripperState
         ) -> list[PlanNode]:
             return [
-                code(announce(f"the {side} gripper", state_type), context=context),
+                code(self.announce(f"the {side} gripper", state_type), context=context),
                 gripper_motion(gripper, state_type),
-                code(pause_after_motion, context=context),
+                code(self.pause_after_motion, context=context),
             ]
 
         def both_grippers_step(state_type: GripperState) -> list[PlanNode]:
             return [
-                code(announce("both grippers", state_type), context=context),
+                code(self.announce("both grippers", state_type), context=context),
                 plan_node(
                     ExecutesChildrenTogether(),
                     [
@@ -278,7 +295,7 @@ class DAiSyGripperDemonstration(RobotDemonstration):
                     ],
                     context,
                 ),
-                code(pause_after_motion, context=context),
+                code(self.pause_after_motion, context=context),
             ]
 
         return plan_node(
@@ -306,28 +323,28 @@ class DAiSyGripperDemonstration(RobotDemonstration):
             context,
         )
 
+    def announce(self, subject: str, state_type: GripperState) -> Callable[[], None]:
+        """
+        Build the code step that logs what the following gripper motion commands.
 
-def announce(subject: str, state_type: GripperState) -> Callable[[], None]:
-    """
-    Build the code step that logs what the following gripper motion commands.
+        :param subject: Which gripper or grippers the following motion drives, e.g.
+            ``the left gripper`` or ``both grippers``.
+        :param state_type: The state the following motion drives the gripper to.
+        :return: The announcement to run as a plan's code step.
+        """
+        name = state_type.name.lower()
+        action = name.replace("flex", "flex-") if name.startswith("flex") else name
 
-    :param subject: Which gripper or grippers the following motion drives, e.g. ``the
-        left gripper`` or ``both grippers``.
-    :param state_type: The state the following motion drives the gripper to.
-    :return: The announcement to run as a plan's code step.
-    """
+        def announce_step() -> None:
+            logger.info(f"{present_participle(action).capitalize()} {subject}.")
 
-    def announce_step() -> None:
-        logger.info(f"{STATE_VERBS[state_type].capitalize()} {subject}.")
+        return announce_step
 
-    return announce_step
-
-
-def pause_after_motion() -> None:
-    """
-    Let the grippers settle after the motion that just finished.
-    """
-    time.sleep(PAUSE_AFTER_MOTION_SECONDS)
+    def pause_after_motion(self) -> None:
+        """
+        Let the grippers settle after the motion that just finished.
+        """
+        time.sleep(self.pause_after_motion_seconds)
 
 
 def run_from_command_line() -> None:
@@ -339,13 +356,14 @@ def run_from_command_line() -> None:
     parser = argparse.ArgumentParser(description="DAiSy gripper open/close demo.")
     parser.add_argument(
         "--execution",
-        choices=sorted(EXECUTION_CHOICES),
-        default="simulated",
+        type=ExecutionChoice,
+        choices=list(ExecutionChoice),
+        default=ExecutionChoice.SIMULATED,
         help="Where the plan executes: in the simulation, on the semi-real joints, or "
         "on the real griplink servers.",
     )
     arguments = parser.parse_args()
-    main(execution_type=EXECUTION_CHOICES[arguments.execution])
+    main(execution_type=arguments.execution.execution_type)
 
 
 def show_announcements_in_terminal() -> None:

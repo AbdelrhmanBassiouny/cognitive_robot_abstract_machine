@@ -49,21 +49,6 @@ class GripperConfiguration(SubClassSafeGeneric, ABC, Generic[TGripperConfigurati
     ``None`` leaves the speed unconstrained.
     """
 
-    @classmethod
-    def from_state_type(
-        cls, end_effector: EndEffector, state_type: GripperState
-    ) -> Self:
-        """
-        :param end_effector: The end effector whose declared state is used.
-        :param state_type: The state type to build the configuration for.
-        :return: The configuration for the declared state of the given type.
-        :raises NoJointStateWithType: If the end effector declares no such state.
-        """
-        return cls(
-            end_effector=end_effector,
-            joint_state=end_effector.get_joint_state_by_type(state_type),
-        )
-
     def __post_init__(self):
         """
         Validates that the joint state only commands connections inside the end
@@ -87,6 +72,21 @@ class GripperConfiguration(SubClassSafeGeneric, ABC, Generic[TGripperConfigurati
                     str(c.name) for c in connections_outside_end_effector
                 ],
             )
+
+    @classmethod
+    def from_state_type(
+        cls, end_effector: EndEffector, state_type: GripperState
+    ) -> Self:
+        """
+        :param end_effector: The end effector whose declared state is used.
+        :param state_type: The state type to build the configuration for.
+        :return: The configuration for the declared state of the given type.
+        :raises NoJointStateWithType: If the end effector declares no such state.
+        """
+        return cls(
+            end_effector=end_effector,
+            joint_state=end_effector.get_joint_state_by_type(state_type),
+        )
 
 
 # %% Default configuration

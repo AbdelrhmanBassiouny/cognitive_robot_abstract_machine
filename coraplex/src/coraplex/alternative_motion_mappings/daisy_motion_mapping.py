@@ -3,8 +3,8 @@ from __future__ import annotations
 import logging
 from abc import abstractmethod
 from dataclasses import dataclass
-from typing import ClassVar
 
+from krrood.ormatic.utils import classproperty
 from giskardpy.motion_statechart.goals.templates import Parallel
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from giskardpy.motion_statechart.ros2_nodes.griplink import (
@@ -54,13 +54,16 @@ class DAiSyGripperMotion(MoveGripperMotion[TGripperConfiguration]):
     fall back to the joint position goal the configuration describes.
     """
 
-    _commanded_actions: ClassVar[frozenset[type]]
-    """
-    Griplink actions this motion's task builds goals for.
+    @classproperty
+    def _commanded_actions(cls) -> frozenset[type]:
+        """
+        Griplink actions this motion's task builds goals for.
 
-    The gripper declares an endpoint for every state it serves, so the endpoint lookup
-    accepts only endpoints whose action this motion executes.
-    """
+        The gripper declares an endpoint for every state it serves, so the endpoint
+        lookup accepts only endpoints whose action this motion executes. A motion
+        overrides this to name its actions.
+        """
+        return frozenset()
 
     def perform(self):
         """
@@ -120,7 +123,9 @@ class DAiSyGripMotion(
     real DAiSy, or a joint position goal for semi-real execution.
     """
 
-    _commanded_actions = frozenset((Grip, Release))
+    @classproperty
+    def _commanded_actions(cls) -> frozenset[type]:
+        return frozenset((Grip, Release))
 
     @property
     def _action_server_task(self) -> GriplinkPresetActionServerTask:
@@ -145,7 +150,9 @@ class DAiSyFlexGripMotion(
     joint position goal for semi-real execution.
     """
 
-    _commanded_actions = frozenset((Flexgrip, Flexrelease))
+    @classproperty
+    def _commanded_actions(cls) -> frozenset[type]:
+        return frozenset((Flexgrip, Flexrelease))
 
     @property
     def _action_server_task(self) -> GriplinkFlexActionServerTask:

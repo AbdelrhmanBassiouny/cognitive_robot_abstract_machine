@@ -81,8 +81,8 @@ def test_flex_configuration_interpolates_between_the_declared_states(daisy_world
     )
 
     fraction = (
-        GriplinkFlexConfiguration.maximum_opening_width_mm - 60
-    ) / GriplinkFlexConfiguration.maximum_opening_width_mm
+        GriplinkFlexConfiguration.maximum_opening_width - 60
+    ) / GriplinkFlexConfiguration.maximum_opening_width
     close_targets = dict(close_state.items())
     expected = [
         open_target + fraction * (close_targets[connection] - open_target)

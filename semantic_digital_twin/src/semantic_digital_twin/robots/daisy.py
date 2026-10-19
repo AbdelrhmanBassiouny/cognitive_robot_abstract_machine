@@ -6,9 +6,10 @@ from dataclasses import dataclass
 from enum import StrEnum
 from importlib.resources import files
 from pathlib import Path
-from typing import ClassVar, Self
+from typing import Self
 
 from griplink_interfaces.action import Flexgrip, Flexrelease, Grip, Release
+from krrood.ormatic.utils import classproperty
 
 from semantic_digital_twin.collision_checking.collision_rules import (
     AvoidCollisionBetweenGroups,
@@ -164,23 +165,25 @@ class DAiSyLeftGripper(
     GriplinkGripper,
     HasTwoFingers[DAiSyLeftGripperLeftFinger, DAiSyLeftGripperRightFinger],
 ):
-    griplink_endpoints: ClassVar[Mapping[GripperState, GriplinkEndpoint]] = {
-        GripperState.OPEN: GriplinkEndpoint(
-            action_topic="/left_gripper/release", message_type=Release
-        ),
-        GripperState.CLOSE: GriplinkEndpoint(
-            action_topic="/left_gripper/grip", message_type=Grip
-        ),
-        GripperState.FLEXCLOSE: GriplinkEndpoint(
-            action_topic="/left_gripper/flexgrip", message_type=Flexgrip
-        ),
-        GripperState.FLEXOPEN: GriplinkEndpoint(
-            action_topic="/left_gripper/flexrelease", message_type=Flexrelease
-        ),
-    }
-    """
-    Griplink action server endpoints of the left gripper, by the state each commands.
-    """
+    @classproperty
+    def griplink_endpoints(cls) -> Mapping[GripperState, GriplinkEndpoint]:
+        """
+        Griplink action server endpoints of the left gripper, by the state each commands.
+        """
+        return {
+            GripperState.OPEN: GriplinkEndpoint(
+                action_topic="/left_gripper/release", message_type=Release
+            ),
+            GripperState.CLOSE: GriplinkEndpoint(
+                action_topic="/left_gripper/grip", message_type=Grip
+            ),
+            GripperState.FLEXCLOSE: GriplinkEndpoint(
+                action_topic="/left_gripper/flexgrip", message_type=Flexgrip
+            ),
+            GripperState.FLEXOPEN: GriplinkEndpoint(
+                action_topic="/left_gripper/flexrelease", message_type=Flexrelease
+            ),
+        }
 
     def setup_hardware_interfaces(self):
         self._setup_hardware_interfaces_for_active_connections()
@@ -237,23 +240,25 @@ class DAiSyRightGripper(
     GriplinkGripper,
     HasTwoFingers[DAiSyRightGripperLeftFinger, DAiSyRightGripperRightFinger],
 ):
-    griplink_endpoints: ClassVar[Mapping[GripperState, GriplinkEndpoint]] = {
-        GripperState.OPEN: GriplinkEndpoint(
-            action_topic="/right_gripper/release", message_type=Release
-        ),
-        GripperState.CLOSE: GriplinkEndpoint(
-            action_topic="/right_gripper/grip", message_type=Grip
-        ),
-        GripperState.FLEXCLOSE: GriplinkEndpoint(
-            action_topic="/right_gripper/flexgrip", message_type=Flexgrip
-        ),
-        GripperState.FLEXOPEN: GriplinkEndpoint(
-            action_topic="/right_gripper/flexrelease", message_type=Flexrelease
-        ),
-    }
-    """
-    Griplink action server endpoints of the right gripper, by the state each commands.
-    """
+    @classproperty
+    def griplink_endpoints(cls) -> Mapping[GripperState, GriplinkEndpoint]:
+        """
+        Griplink action server endpoints of the right gripper, by the state each commands.
+        """
+        return {
+            GripperState.OPEN: GriplinkEndpoint(
+                action_topic="/right_gripper/release", message_type=Release
+            ),
+            GripperState.CLOSE: GriplinkEndpoint(
+                action_topic="/right_gripper/grip", message_type=Grip
+            ),
+            GripperState.FLEXCLOSE: GriplinkEndpoint(
+                action_topic="/right_gripper/flexgrip", message_type=Flexgrip
+            ),
+            GripperState.FLEXOPEN: GriplinkEndpoint(
+                action_topic="/right_gripper/flexrelease", message_type=Flexrelease
+            ),
+        }
 
     def setup_hardware_interfaces(self):
         self._setup_hardware_interfaces_for_active_connections()

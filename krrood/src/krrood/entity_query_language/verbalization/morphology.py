@@ -154,6 +154,22 @@ def third_person_singular(lemma: str) -> str:
     return forms[0] if forms else lemma + "s"
 
 
+def present_participle(lemma: str) -> str:
+    """
+    :param lemma: A verb in its base (lemma) form.
+    :return: The present participle (*"open"* → *"opening"*, *"close"* → *"closing"*),
+        via ``lemminflect``'s ``VBG`` inflection; falls back to ``lemma + "ing"`` for an
+        unknown word.
+
+    >>> present_participle("open")
+    'opening'
+    >>> present_participle("close")
+    'closing'
+    """
+    forms = getInflection(lemma, tag="VBG")
+    return forms[0] if forms else lemma + "ing"
+
+
 def verb_lemma(word: str) -> str:
     """
     :param word: An English verb surface form.
