@@ -30,6 +30,17 @@ claude/general-figure-scenes	general-video-production
 claude/video-manim-scenes	general-video-production
 claude/icra-experiments-simulation-pipeline-w4ep7n	icra-foundation
 tracy_icra	icra-foundation
+icra-upstream/probabilistic-relational-circuit	icra-upstream
+icra-upstream/giskardpy-executor-statecharts	icra-upstream
+icra-upstream/krrood-eql-changes	icra-upstream
+icra-upstream/coraplex-actions-on-cramph	icra-upstream
+icra-upstream/montessori-world-and-actions	icra-upstream
+icra-upstream/montessori-monitoring-and-results	icra-upstream
+icra-upstream/scenarios-and-episodes	icra-upstream
+icra-upstream/questions-and-corpus	icra-upstream
+icra-upstream/tracy-lab-and-demos	icra-upstream
+icra-upstream/open-slots	icra-upstream
+icra-upstream/paper-and-reproduction	icra-upstream
 claude/episode-replayed-world-kickoff-6ye5bb	knowledge-directed-expectation
 claude/plan-item-kickoff-expectations-2zvpmn	knowledge-directed-expectation
 perception_robokudo_detector	knowledge-directed-expectation

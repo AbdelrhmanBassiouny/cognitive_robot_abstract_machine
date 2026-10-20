@@ -1,0 +1,154 @@
+schema_version: 1
+id: icra-upstream
+title: "ICRA work lands upstream, one final-tree pull request at a time"
+description: >-
+  The ICRA tip (real-experiments-tracy-icra-2026) holds 669 files not on main. Each item cuts
+  one layer of that final tree into a pull request based on main or on the layer below, so every
+  file is reviewed once; libraries first, then Montessori, experiments, Tracy and the paper. The
+  pull requests each item supersedes close naming it. Replaces icra-foundation, icra-evidence
+  and icra-mechanism.
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 521
+
+waves:
+  - id: libraries
+    name: Library packages
+    description: Every experiment imports these; smallest first so other teams see them early.
+  - id: montessori
+    name: Montessori
+  - id: experiments
+    name: Experiments
+  - id: tracy-and-paper
+    name: Tracy and paper
+
+tracks:
+  - id: libraries
+    name: Libraries
+    wave: libraries
+  - id: montessori
+    name: Montessori world, actions and monitoring
+    wave: montessori
+  - id: experiments
+    name: Scenarios, episodes and questions
+    wave: experiments
+  - id: tracy-and-paper
+    name: Tracy, open slots and paper
+    wave: tracy-and-paper
+
+items:
+  - id: probabilistic-relational-circuit
+    title: "probabilistic_model gains the relational circuit"
+    branch: icra-upstream/probabilistic-relational-circuit
+    track: libraries
+    status: not_started
+    notes: >-
+      About 660 lines, all from #265. First to promote to cram2: smallest and self-contained.
+
+  - id: giskardpy-executor-statecharts
+    title: "giskardpy executor and motion statechart changes"
+    branch: icra-upstream/giskardpy-executor-statecharts
+    track: libraries
+    status: not_started
+    notes: >-
+      About 290 source lines from #265. Overlaps Simon's statechart work on his fork: send him
+      the patch first and land whatever he does not absorb.
+
+  - id: krrood-eql-changes
+    title: "krrood EQL: backends, match, mapped variables, predicates, JSON serializer"
+    branch: icra-upstream/krrood-eql-changes
+    track: libraries
+    status: not_started
+    notes: >-
+      About 4,400 source lines from #265, the #355 chain, #408, #416 and #417; split in two if
+      review needs it. Check each change against ontomatic-port first, which lands the AAMAS EQL
+      work, and fold any overlap into that item instead.
+
+  - id: coraplex-actions-on-cramph
+    title: "coraplex pick-up, place and insertion, ported onto cramph statechart nodes"
+    branch: icra-upstream/coraplex-actions-on-cramph
+    track: libraries
+    depends_on: [krrood-eql-changes]
+    status: blocked
+    blockers:
+      - "cramph (Jonas Dech, Tigul/plan-cramp-second-iter) has to reach main; it retires the PlanNode, executables and underspecified classes the ICRA changes edit."
+    notes: >-
+      About 2,100 source lines from #265, #422, #423 and the #355 chain. Ported onto cramph
+      (decided Oct 20) rather than landed on the classes cramph retires; eql-planning builds on
+      the same actions.
+
+  - id: montessori-world-and-actions
+    title: "Montessori world, board and insert action"
+    branch: icra-upstream/montessori-world-and-actions
+    track: montessori
+    depends_on: [coraplex-actions-on-cramph, krrood-eql-changes]
+    status: not_started
+    notes: >-
+      First half of the Montessori layer (#265, #296, #355 chain). Needs #409 from
+      montessori-eql-stack (Panda, bounds, MuJoCo pacing; without the numeric spatial types,
+      dropped Oct 20 since CasADi is locked on main).
+
+  - id: montessori-monitoring-and-results
+    title: "Montessori scenarios, monitoring and results database"
+    branch: icra-upstream/montessori-monitoring-and-results
+    track: montessori
+    depends_on: [montessori-world-and-actions, probabilistic-relational-circuit]
+    status: not_started
+    notes: >-
+      Second half of the Montessori layer (#265, #296, #256). Needs #410 from
+      montessori-eql-stack (segmind detectors and hole events, numeric poses dropped), the RDR
+      backend from rdr-core-engine and the ORMatic EQL interface from ontomatic-port.
+      Supersedes #256 and #296.
+
+  - id: scenarios-and-episodes
+    title: "Scenario model, episodes recorded and asked"
+    branch: icra-upstream/scenarios-and-episodes
+    track: experiments
+    depends_on: [montessori-monitoring-and-results]
+    status: not_started
+    notes: >-
+      About 4,600 source lines. Supersedes #261, #262, #271, #278 and #294, and replaces
+      icra-foundation's simulated-tracy-demo-runs-scenarios (TracyOnItsOwnTable is already on
+      the ICRA tip).
+
+  - id: questions-and-corpus
+    title: "Question set and headless episode corpus generation"
+    branch: icra-upstream/questions-and-corpus
+    track: experiments
+    depends_on: [scenarios-and-episodes]
+    status: not_started
+    notes: >-
+      About 3,700 source lines; take the ICRA tip's questions, query cards, ask_episode and
+      experiment_definitions, newer than any PR. Supersedes #295 and the corpus chain #344-#356;
+      replaces icra-foundation's episode-corpus-generated-at-scale (run_corpus.py).
+
+  - id: tracy-lab-and-demos
+    title: "Tracy lab: equipment, gripper, recording, pick-up, sorting and stacking in MuJoCo and on the robot"
+    branch: icra-upstream/tracy-lab-and-demos
+    track: tracy-and-paper
+    depends_on: [montessori-world-and-actions]
+    status: not_started
+    notes: >-
+      About 10,500 source lines from #265 and #369-#381. Takes over review-reaches-main's
+      tracy-demo-recut and icra-foundation's integration items. Needs Montessori perception
+      (montessori-perception-split and review-reaches-main's perception items).
+
+  - id: open-slots
+    title: "Open slots: one backend per open part of a plan"
+    branch: icra-upstream/open-slots
+    track: tracy-and-paper
+    depends_on: [krrood-eql-changes]
+    status: not_started
+    notes: >-
+      About 740 lines from #366 and #368. #511 (EQL showcase) carries overlapping open-slots
+      code: reconcile so #511 lands after this item or keeps only the showcase.
+
+  - id: paper-and-reproduction
+    title: "Paper tables, figures, reproduction scripts and README"
+    branch: icra-upstream/paper-and-reproduction
+    track: tracy-and-paper
+    depends_on: [questions-and-corpus, tracy-lab-and-demos, open-slots]
+    status: not_started
+    notes: >-
+      About 11,600 source lines from #297, #388-#396 and the ICRA tip, plus MONOREPO.md and the
+      reproduction scripts. The 16 MB video stays out of git; the README links to it, published
+      through general-video-production.
