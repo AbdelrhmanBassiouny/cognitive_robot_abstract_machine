@@ -41,14 +41,6 @@ items:
   depends_on: []
   status: in_progress
   session: https://claude.ai/code/session_01MotUMLrQxbZKQWs4BADwkj
-  blockers:
-  - '`test_each_lib (krrood)` is red on #222, and every branch stacked on it inherits it -
-    #227, #231, #238, #239, #259 and everything past them. The failure is not this item''s
-    diff at all, and it was already fixed before this item looked at it: **#251**, open off
-    `main` since 2026-09-03, is the fix.'
-  - The `needs-resolution` label the maintenance routine set on the 2026-09-02 conflict is
-    still on the branch, so it stays withheld from promotion until the routine's own next
-    pass clears it, which it can now that the branch merges cleanly.
   notes: 'Answers a query by looking, as a `PerceptionBackend` beside `EntityQueryLanguageBackend`
     and `SQLAlchemyBackend` - `SQLAlchemyBackend` already sets the shape (translate the query
     into another engine''s plan, run it there), and the compiler from a query to a detection
