@@ -1,10 +1,14 @@
-Draft PR #520 (bug): a query evaluated during another evaluation gets its own EvaluationContext.
+PR #520 (fork, draft, label bug): nested query evaluation gets its own context.
 
 Plan
-- Public evaluate() starts a new evaluation (SymbolicExpression._start_evaluation_); _evaluate_ still joins the running one.
+- Fix: a query evaluated during another evaluation joins the outer context.
 
 Done
-- Failing test + mimics; fix; krrood EQL dirs green; draft PR #520 opened with bug label.
+- 365d4f3d4: evaluate() starts its own context; test with rule tree in lazy domain.
+- 9a4230055: reuse a context set before evaluating (fixes experiments confidence
+  guard CI failure); rename to _create_new_context_and_evaluate_ (review); added
+  test_evaluation_runs_in_the_context_set_before_it_starts. Review thread resolved.
 
 Next
-- Wait for review/CI prompts. After merge, remove the contextvars.Context().run workaround in HoleRulesBackend.concluded_kind (PR #511).
+- Confirm experiments CI is green on 9a4230055 (could not run locally: sdt ORM needs ROS).
+- After landing: remove contextvars workaround in HoleRulesBackend.concluded_kind (#511).
