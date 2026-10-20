@@ -12,8 +12,7 @@ from coraplex.datastructures.enums import (
 from coraplex.plans.failures import PlanFailure
 
 if TYPE_CHECKING:
-    from coraplex.plans.designator import DesignatorParameters
-    from cramph.composites import CompositeNodeChoosingItsChild
+    from coraplex.robot_plans.actions.base import Action
     from cramph.node import StatechartNode
     from semantic_digital_twin.robots.robot_parts import AbstractRobot, Arm
     from semantic_digital_twin.grasping.grasp_candidates import HasGraspCandidates
@@ -115,29 +114,6 @@ class DebuggingWithoutRosNode(DataclassException):
 
     def suggest_correction(self) -> str:
         return "Pass a ROS node to the executor, or leave debug mode off."
-
-
-@dataclass
-class NotAStatementNode(DataclassException):
-    """
-    Raised when a node asks for a child to be grounded that carries no underspecified
-    statement.
-    """
-
-    node: CompositeNodeChoosingItsChild
-    """
-    The node that asked.
-    """
-
-    def error_message(self) -> str:
-        return (
-            f"{self.node} carries no underspecified statement to ground a child from."
-        )
-
-    def suggest_correction(self) -> str:
-        return (
-            "build nodes that choose their child in a plan with `a(...)` or `an(...)`."
-        )
 
 
 @dataclass
@@ -249,7 +225,7 @@ class MissingWaypoints(DataclassException):
     Raised when a waypoint motion or tool action produced no waypoints to follow.
     """
 
-    instance: DesignatorParameters
+    instance: Action
     """
     The designator that has no waypoints.
     """
@@ -267,7 +243,7 @@ class WipingTargetMissing(DataclassException):
     Raised when a wiping action is created without a surface to wipe.
     """
 
-    instance: DesignatorParameters
+    instance: Action
     """
     The wiping action that has no target.
     """

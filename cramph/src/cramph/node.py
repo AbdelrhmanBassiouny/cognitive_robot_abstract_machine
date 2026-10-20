@@ -55,7 +55,7 @@ from krrood.adapters.json_serializer import (
 )
 from krrood.exceptions import DataclassException
 from krrood.ormatic.utils import classproperty
-from krrood.patterns.field_metadata import JSONMetadata, ParameterMetadata
+from krrood.patterns.field_metadata import JSONMetadata
 from krrood.symbolic_math.symbolic_math import (
     FloatVariable,
     GenericSymbolicType,
@@ -760,10 +760,7 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
     :class:`SucceedsOnObservingTrue`, and may inherit :class:`FailsOnObservingFalse`.
     """
 
-    name: str = field(
-        default=None,
-        metadata=ParameterMetadata(is_parameter=False).as_dict(),
-    )
+    name: str = None
     """
     A name for the node within a statechart.
     The name is not unique, use :attr:`unique_name`, if you need a unique identifier.

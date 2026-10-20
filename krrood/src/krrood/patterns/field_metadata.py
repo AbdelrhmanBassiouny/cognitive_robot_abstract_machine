@@ -57,18 +57,3 @@ class JSONMetadata(FieldMetadata):
     """
     Whether the field should be serialized to JSON.
     """
-
-
-@dataclass
-class ParameterMetadata(FieldMetadata):
-    """
-    Tells which fields of a dataclass describe what an object is asked to do.
-
-    A field without this metadata counts as a parameter if the caller sets it.
-    """
-
-    is_parameter: bool = True
-    """
-    Whether the field is one of the parameters a caller describes the object with,
-    rather than machinery the object carries along.
-    """

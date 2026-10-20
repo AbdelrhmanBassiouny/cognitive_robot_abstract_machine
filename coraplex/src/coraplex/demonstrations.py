@@ -288,8 +288,9 @@ class RobotDemonstration(ABC):
             performs its plan, showing its runs with :attr:`visualization`.
         """
         executor = self.executor_type(
-            world,
-            context_extensions=self.build_context_extensions(world),
+            StatechartContext.with_extensions(
+                world, self.build_context_extensions(world)
+            ),
             ros_node=self.ros_node,
             collision_avoidance=self.collision_avoidance,
             debug=self.debug,

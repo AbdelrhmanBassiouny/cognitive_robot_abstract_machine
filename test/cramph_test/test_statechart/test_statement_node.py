@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from cramph.composites import (
     ChildChooser,
     ChildChooserAccess,
-    CompositeNodeChoosingItsChild,
     Parallel,
     Sequence,
     StatementNode,
@@ -29,7 +28,7 @@ from krrood.entity_query_language.query.match import Match
 
 
 @dataclass
-class ChooserRunningEveryCandidate(ChildChooser):
+class ChooserRunningEveryCandidate(ChildChooser[StatementNode]):
     """
     Runs the next candidate of a statement node's statement as its child.
     """
@@ -39,9 +38,7 @@ class ChooserRunningEveryCandidate(ChildChooser):
     How many candidates a statement without a limit of its own yields.
     """
 
-    def choose_child(
-        self, node: CompositeNodeChoosingItsChild
-    ) -> StatechartNode | None:
+    def choose_child(self, node: StatementNode) -> StatechartNode | None:
         return node.next_candidate(
             EntityQueryLanguageGenerativeBackend(), self.default_candidate_limit
         )
@@ -76,7 +73,7 @@ def _run(
 
     :return: The statechart that ran.
     """
-    executor.context.add_extension(ChildChooserAccess(chooser=chooser))
+    executor.context.add_extension(ChildChooserAccess(choosers=[chooser]))
     statechart = Statechart(context=executor.context)
     statechart.add_node(goal)
     statechart.add_node(EndStatechart.when_true(goal))
@@ -122,7 +119,7 @@ def test_a_statement_inserted_into_a_joined_sequence_runs_as_a_statement_node(
     statement = _succeeding_statement("inserted")
     sequence = Sequence(nodes=[first])
     statechart_executor.context.add_extension(
-        ChildChooserAccess(chooser=ChooserRunningEveryCandidate())
+        ChildChooserAccess(choosers=[ChooserRunningEveryCandidate()])
     )
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(sequence)
@@ -144,7 +141,7 @@ def test_a_statement_replacing_a_step_runs_as_a_statement_node(
     statement = _succeeding_statement("replacement")
     sequence = Sequence(nodes=[replaced])
     statechart_executor.context.add_extension(
-        ChildChooserAccess(chooser=ChooserRunningEveryCandidate())
+        ChildChooserAccess(choosers=[ChooserRunningEveryCandidate()])
     )
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(sequence)

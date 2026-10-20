@@ -86,6 +86,32 @@ def test_adding_a_second_extension_of_the_same_type_raises(
         statechart_context.add_extension(ExtensionRecordingItsCleanup())
 
 
+def test_a_context_created_with_extensions_holds_each_under_its_own_type(
+    statechart_context: StatechartContext,
+) -> None:
+    extension = ExtensionRecordingItsCleanup()
+    specialized_extension = SpecializedExtensionRecordingItsCleanup()
+
+    context = StatechartContext.with_extensions(
+        statechart_context.world, [extension, specialized_extension]
+    )
+
+    assert context.extensions == {
+        ExtensionRecordingItsCleanup: extension,
+        SpecializedExtensionRecordingItsCleanup: specialized_extension,
+    }
+
+
+def test_creating_a_context_with_two_extensions_of_the_same_type_raises(
+    statechart_context: StatechartContext,
+) -> None:
+    with pytest.raises(DuplicateContextExtensionError):
+        StatechartContext.with_extensions(
+            statechart_context.world,
+            [ExtensionRecordingItsCleanup(), ExtensionRecordingItsCleanup()],
+        )
+
+
 # %% extensions standing in for the type they specialize
 
 

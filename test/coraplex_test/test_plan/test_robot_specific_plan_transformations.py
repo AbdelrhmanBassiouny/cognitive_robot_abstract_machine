@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pytest
 
+from cramph.context import StatechartContext
 from coraplex.plans.executors import PlanExecutor, KinematicallySimulatedPlanExecutor
 from coraplex.plans.failures import MotionMadeNoProgress
 from coraplex.robot_plans.actions.core.container import CloseAction
@@ -638,7 +639,7 @@ def stretch_reaching_milk_from(
     drive.origin = world.transform(root_T_base, drive.parent).homogeneous_matrix
     recording = OrientationWhileRunning(body=robot.root)
     executor = KinematicallySimulatedPlanExecutor(
-        world, context_extensions=extensions, extensions=[recording]
+        StatechartContext.with_extensions(world, extensions), extensions=[recording]
     )
     action = ReachAction(
         grasp=GraspCandidate(milk, Pose(reference_frame=milk.root)),

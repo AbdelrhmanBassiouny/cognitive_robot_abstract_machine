@@ -55,7 +55,10 @@ from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.adapters.mesh import STLParser
 from semantic_digital_twin.world import World
 from semantic_digital_twin.robots.pr2 import PR2
-from semantic_digital_twin.spatial_types.spatial_types import HomogeneousTransformationMatrix, Pose
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Pose,
+)
 from coraplex.testing import setup_world
 
 world = setup_world()
@@ -64,24 +67,28 @@ pr2 = PR2.from_world(world)
 # A location samples its candidates from a costmap, so a seed is what makes this
 # example run the same way twice.
 from coraplex.plans.context_extensions import RobotAccess, StatementGrounding
+from cramph.context import StatechartContext
 from coraplex.plans.executors import KinematicallySimulatedPlanExecutor
 from cramph.statechart import Statechart
 
 extensions = [RobotAccess(pr2), StatementGrounding(sampling_seed=0)]
-context = KinematicallySimulatedPlanExecutor(world, context_extensions=extensions).context
+context = KinematicallySimulatedPlanExecutor(
+    StatechartContext.with_extensions(world, extensions)
+).context
+
 
 def run(plan):
     """
     Run `plan` simulated in `world`, with the robot and settings in `extensions`.
     """
-    executor = KinematicallySimulatedPlanExecutor(world, context_extensions=extensions)
+    executor = KinematicallySimulatedPlanExecutor(
+        StatechartContext.with_extensions(world, extensions)
+    )
     statechart = Statechart(context=executor.context)
     statechart.add_node(plan)
     executor.compile(statechart)
     executor.execute()
     return executor
-
-
 ```
 
 To move the robot we need to create a description which will be resolved to the actual designator. The description of navigation

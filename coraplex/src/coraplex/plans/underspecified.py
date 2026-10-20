@@ -10,17 +10,18 @@ from typing_extensions import (
 )
 
 from coraplex.datastructures.enums import ActionTrialVisualization
-from coraplex.exceptions import NotAStatementNode
 from coraplex.plans.context_extensions import StatementGrounding
-from coraplex.plans.designator import DesignatorParameters
-from coraplex.plans.plan_transformation import PlanRewriting
+from coraplex.plans.plan_transformation import PlanRewriting, PlanTransformation
+from coraplex.robot_plans.actions.base import Action
+from coraplex.robot_plans.plan_transformations import WriteTheOdometryInsteadOfDriving
 from coraplex.robot_plans.robot_specific_plan_transformations import (
-    DriveWithTheDifferentialDrive,
+    KeepStretchInFrontOfTheContainerItCloses,
 )
 from coraplex.visualization import RvizVisualization
+from cramph.context import StatechartContext
 from cramph.composites import (
     ChildChooser,
-    CompositeNodeChoosingItsChild,
+    ChoosingNode,
     Sequence,
     StatementNode,
 )
@@ -40,7 +41,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class PlanChildChooser(ChildChooser, ABC):
+class PlanChildChooser(ChildChooser[ChoosingNode], ABC):
     """
     Chooses children that are part of a plan: each is rewritten by the plan
     transformations of its statechart, and given up on once it stops approaching its
@@ -49,7 +50,7 @@ class PlanChildChooser(ChildChooser, ABC):
 
     def prepare_chosen_child(
         self,
-        node: CompositeNodeChoosingItsChild,
+        node: ChoosingNode,
         child: StatechartNode,
     ) -> None:
         """
@@ -63,7 +64,7 @@ class PlanChildChooser(ChildChooser, ABC):
 
     def failure_monitors_for(
         self,
-        node: CompositeNodeChoosingItsChild,
+        node: ChoosingNode,
         child: StatechartNode,
     ) -> list[StatechartNode]:
         """
@@ -88,7 +89,8 @@ class ActionTrial:
 
     Trials never publish to a synchronizer and always run simulated, in an executor of
     :attr:`trial_executor_type` over the copy, with the context extensions of
-    :attr:`executor` rebound to the copy, and the base put where a candidate drives it.
+    :attr:`executor` rebound to the copy, and the base put where a candidate drives it
+    by :attr:`plan_adaptations`.
     While the executor is debugging, the copy is shown in RViz under its own frame
     prefix and marker topic.
     """
@@ -104,6 +106,18 @@ class ActionTrial:
     trial_executor_type: type[PlanExecutor]
     """
     The executor that runs a candidate in the copy, which simulates the robot.
+    """
+
+    plan_adaptations: list[PlanTransformation] = field(
+        default_factory=lambda: [
+            WriteTheOdometryInsteadOfDriving(),
+            KeepStretchInFrontOfTheContainerItCloses(),
+        ],
+        kw_only=True,
+    )
+    """
+    The plan transformations adapting every candidate to being tried, in place of the
+    plan adaptations of :attr:`trial_executor_type`.
     """
 
     copy_marker_alpha: float = field(default=0.9, kw_only=True)
@@ -135,9 +149,9 @@ class ActionTrial:
         """
         :return: The world the candidates are grounded in.
         """
-        return self.executor.world
+        return self.executor.context.world
 
-    def succeeds(self, action: DesignatorParameters) -> bool:
+    def succeeds(self, action: Action) -> bool:
         """
         Run `action` against the copy and restore the copy afterwards.
 
@@ -180,21 +194,19 @@ class ActionTrial:
         :param world: The copy a candidate is tried in.
         :return: An executor running a candidate in `world`, configured like
             :attr:`executor`, the robot and everything else its context extensions refer
-            to rebound to `world`, and showing `world` in RViz while it is debugging. It
-            puts the base where a candidate drives it instead of driving it there, so a
-            robot driving differentially does not do so in a trial.
+            to rebound to `world`, adapting the candidate with :attr:`plan_adaptations`,
+            and showing `world` in RViz while it is debugging.
         """
         return self.trial_executor_type(
-            world,
-            context_extensions=[
-                world.rebind_world_entities(extension)
-                for extension in self.executor.context_extensions
-            ],
-            robot_adaptations=[
-                adaptation
-                for adaptation in self.executor.robot_adaptations
-                if not isinstance(adaptation, DriveWithTheDifferentialDrive)
-            ],
+            StatechartContext.with_extensions(
+                world,
+                [
+                    world.rebind_world_entities(extension)
+                    for extension in self.executor.supplied_context_extensions
+                ],
+            ),
+            robot_adaptations=self.executor.robot_adaptations,
+            plan_adaptations=self.plan_adaptations,
             collision_avoidance=self.executor.collision_avoidance,
             extensions=self._trial_visualizations(),
         )
@@ -218,9 +230,7 @@ class ActionTrial:
         ]
 
     @classmethod
-    def _rebind_action_to_world(
-        cls, action: DesignatorParameters, world: World
-    ) -> DesignatorParameters:
+    def _rebind_action_to_world(cls, action: Action, world: World) -> Action:
         """
         :param action: The grounded action to try out.
         :param world: The copy to try it against.
@@ -232,7 +242,7 @@ class ActionTrial:
             **{
                 name: (
                     cls._rebind_action_to_world(value, world)
-                    if isinstance(value, DesignatorParameters)
+                    if isinstance(value, Action)
                     else world.rebind_world_entities(value)
                 )
                 for name, value in action.designator_parameter.items()
@@ -294,7 +304,7 @@ class ActionTrial:
 
 
 @dataclass
-class UnderspecifiedChildChooser(PlanChildChooser):
+class UnderspecifiedChildChooser(PlanChildChooser[StatementNode]):
     """
     Grounds the statement of every :class:`~cramph.composites.StatementNode` of a
     statechart into the action it runs next, in a sequence of its own for the nodes a
@@ -326,17 +336,12 @@ class UnderspecifiedChildChooser(PlanChildChooser):
             executor=self.executor, trial_executor_type=self.trial_executor_type
         )
 
-    def choose_child(
-        self, node: CompositeNodeChoosingItsChild
-    ) -> StatechartNode | None:
+    def choose_child(self, node: StatementNode) -> StatechartNode | None:
         """
         :return: The sequence holding the next grounded action that succeeds its
             trial, or None once the statement ran out of actions that succeed their
             trial.
-        :raises NotAStatementNode: If `node` carries no statement to ground.
         """
-        if not isinstance(node, StatementNode):
-            raise NotAStatementNode(node=node)
         grounding = node.context.require_extension(StatementGrounding)
         proposal = node.next_candidate(
             grounding.query_backend, grounding.candidates_to_try

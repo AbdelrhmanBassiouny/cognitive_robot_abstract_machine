@@ -13,15 +13,17 @@ from cramph.composites import (
     ChildChooser,
     ChildChooserAccess,
     CompositeNodeChoosingItsChild,
+    RepeatUntil,
 )
 from cramph.context import StatechartContext
-from cramph.data_types import ObservationStateValues
+from cramph.data_types import LifeCycleValues, ObservationStateValues
 from cramph.executor import (
     ExecutorExtension,
     StatechartExecutor,
     TickingExecutorExtension,
 )
-from cramph.node import StatechartNode
+from cramph.monitors import CountNodeResets
+from cramph.node import EndStatechart, StatechartNode
 from cramph.nodes_for_testing import NodeSucceedingOnObservingTrue
 from cramph.statechart import Statechart
 
@@ -54,7 +56,7 @@ class ExtensionComingToRest(TickingExecutorExtension):
 
 
 @dataclass
-class ChooserNotingTheTick(ChildChooser):
+class ChooserNotingTheTick(ChildChooser[CompositeNodeChoosingItsChild]):
     """
     Chooses one prepared child, noting the tick it was asked on.
     """
@@ -114,7 +116,7 @@ def _choosing_statechart(
             name="child", observation=ObservationStateValues.TRUE
         ),
     )
-    executor.context.add_extension(ChildChooserAccess(chooser=chooser))
+    executor.context.add_extension(ChildChooserAccess(choosers=[chooser]))
     statechart = Statechart(context=executor.context)
     choosing = CompositeNodeChoosingItsChild(name="choosing")
     statechart.add_node(choosing)
@@ -166,3 +168,95 @@ def test_the_extensions_are_asked_to_hold_still_once_per_choice(
         ExtensionRecordingCompiles.before_recompile.__name__,
         ExtensionRecordingCompiles.after_compile.__name__,
     ]
+
+
+# %% resetting while not at rest
+
+
+@dataclass
+class ExtensionBrakingOnceAskedToHoldStill(TickingExecutorExtension):
+    """
+    An executor extension that starts moving after the first tick and comes to rest on
+    the tick after it was first asked to hold still while moving, the way a robot
+    braking does.
+
+    It counts every compile it is told about while not at rest.
+    """
+
+    is_at_rest: bool = True
+    """
+    Whether what this extension drives is at rest.
+    """
+
+    has_started_moving: bool = False
+    """
+    Whether what this extension drives started moving.
+    """
+
+    is_braking: bool = False
+    """
+    Whether it was asked to hold still while moving, and comes to rest after this tick.
+    """
+
+    compiles_while_not_at_rest: int = 0
+    """
+    How often the statechart compiled again while this extension was not at rest.
+    """
+
+    def before_recompile(self, executor: StatechartExecutor) -> bool:
+        if not self.is_at_rest:
+            self.is_braking = True
+        return self.is_at_rest
+
+    def after_recompile(self, executor: StatechartExecutor) -> None:
+        if not self.is_at_rest:
+            self.compiles_while_not_at_rest += 1
+
+    def after_tick(self, executor: StatechartExecutor) -> None:
+        if self.is_braking:
+            self.is_at_rest = True
+            self.is_braking = False
+        elif not self.has_started_moving:
+            self.is_at_rest = False
+            self.has_started_moving = True
+
+
+@dataclass
+class ChooserWithoutChildren(ChildChooser[CompositeNodeChoosingItsChild]):
+    """
+    Says that no child is left whenever it is asked.
+    """
+
+    def choose_child(
+        self, node: CompositeNodeChoosingItsChild
+    ) -> StatechartNode | None:
+        return None
+
+
+def test_resetting_a_node_choosing_its_child_compiles_nothing_while_moving(
+    statechart_context,
+) -> None:
+    """
+    A node that ran out of children is reset to choose again, which must not compile the
+    statechart while what the executor drives is not at rest.
+    """
+    extension = ExtensionBrakingOnceAskedToHoldStill()
+    executor = StatechartExecutor(context=statechart_context, extensions=[extension])
+    executor.context.add_extension(
+        ChildChooserAccess(choosers=[ChooserWithoutChildren()])
+    )
+    statechart = Statechart(context=executor.context)
+    choosing = CompositeNodeChoosingItsChild(name="choosing")
+    loop = RepeatUntil(
+        name="loop",
+        task=choosing,
+        stop_retry_monitor=CountNodeResets(name="resets", node=choosing, target=2),
+    )
+    statechart.add_node(loop)
+    statechart.add_node(EndStatechart.when_failed(loop))
+    executor.compile(statechart)
+
+    executor.tick_until_end(timeout=60)
+
+    assert loop.life_cycle_state == LifeCycleValues.FAILED
+    assert extension.compiles_while_not_at_rest == 0

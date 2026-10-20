@@ -4,6 +4,7 @@ import pytest
 
 from coraplex.exceptions import DebuggingWithoutRosNode
 from coraplex.plans.context_extensions import RobotAccess, StatementGrounding
+from cramph.context import StatechartContext
 from coraplex.plans.executors import KinematicallySimulatedPlanExecutor
 from coraplex.plans.plan_transformation import PlanRewriting, PlanTransformation
 
@@ -25,7 +26,7 @@ def test_debug_requires_a_ros_node(pr2_apartment_context) -> None:
 
     with pytest.raises(DebuggingWithoutRosNode):
         KinematicallySimulatedPlanExecutor(
-            world, context_extensions=extensions, debug=True
+            StatechartContext.with_extensions(world, extensions), debug=True
         )
 
 

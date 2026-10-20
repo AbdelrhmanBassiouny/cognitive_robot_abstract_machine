@@ -132,7 +132,7 @@ How many ticks a test waits for the robot to come to rest before it gives up.
 
 
 @dataclass
-class ChooserNotingTheSpeed(ChildChooser):
+class ChooserNotingTheSpeed(ChildChooser[CompositeNodeChoosingItsChild]):
     """
     Chooses one prepared child, noting how fast the robot was moving when it was asked.
     """
@@ -180,7 +180,7 @@ def test_a_moving_robot_decelerates_to_rest_before_a_child_is_chosen(
         context=StatechartContext(world=world), extensions=[motion_control]
     )
     chooser = ChooserNotingTheSpeed(world=world, child=ConstTrueNode())
-    executor.context.add_extension(ChildChooserAccess(chooser=chooser))
+    executor.context.add_extension(ChildChooserAccess(choosers=[chooser]))
     statechart = Statechart(context=executor.context)
     statechart.add_node(
         CartesianPose(

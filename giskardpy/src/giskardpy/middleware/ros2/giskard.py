@@ -263,7 +263,7 @@ class Giskard:
         chooser = ChildSentByClient(
             world_updates=world_updates, action_server=action_server
         )
-        self.executor.context.add_extension(ChildChooserAccess(chooser=chooser))
+        self.executor.context.add_extension(ChildChooserAccess(choosers=[chooser]))
         node = rospy.get_node()
         node.create_subscription(
             String,

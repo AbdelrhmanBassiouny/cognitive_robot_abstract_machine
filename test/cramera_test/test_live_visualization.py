@@ -16,13 +16,14 @@ from semantic_digital_twin.world_description.connections import (
 )
 from semantic_digital_twin.world_description.world_entity import Body
 
-from coraplex.plans.designator import DesignatorParameters
-from cramph.context import StatechartContext
+from coraplex.robot_plans.actions.base import GoalAction
+from cramph.context import ContextExtension, StatechartContext
 from cramph.data_types import LifeCycleValues
 from cramph.executor import StatechartExecutor
-from cramph.node import EndStatechart
+from cramph.node import EndStatechart, StatechartNode
 from cramph.nodes_for_testing import ConstTrueNode
 from cramph.statechart import Statechart
+from krrood.ormatic.utils import classproperty
 
 from cramera import paths
 from cramera.live import visualization as visualization_module
@@ -222,10 +223,20 @@ class TestWorldSync:
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class ActionNamingTheChart(ConstTrueNode, DesignatorParameters):
+class ActionNamingTheChart(GoalAction):
     """
-    A node that is an action, as far as naming the published chart goes.
+    An action reaching a goal that is always reached, expandable without a robot, as far
+    as naming the published chart goes.
     """
+
+    @classproperty
+    def context_extensions_required_to_expand(
+        cls,
+    ) -> tuple[type[ContextExtension], ...]:
+        return ()
+
+    def create_goal(self) -> StatechartNode:
+        return ConstTrueNode()
 
 
 class TestStatechartPublishing:

@@ -226,7 +226,11 @@ def test_the_debug_expressions_recorded_before_a_node_joined_are_kept(
 def test_a_debug_expression_of_a_joined_node_has_no_value_before_it_joined(
     cylinder_bot_world: World,
 ) -> None:
-    ticks = TicksAroundARecompile()
+    """
+    A node added while the robot moves joins once the robot came to rest, so its debug
+    expressions have no value up to that recompile and follow the robot after it.
+    """
+    ticks = TicksAroundARecompile(after=60)
     world = cylinder_bot_world
     executor = _compile_a_recorded_drive(world)
     _tick(executor, ticks.before)
@@ -236,10 +240,14 @@ def test_a_debug_expression_of_a_joined_node_has_no_value_before_it_joined(
 
     joined = _recorded(executor, "joined/current")
     driven = _recorded(executor, f"{_robot(cylinder_bot_world).name}/current")
-    assert np.all(np.isnan(joined.values[: ticks.recorded_before]))
-    assert np.array_equal(
-        joined.values[ticks.recorded_before :], driven.values[ticks.recorded_before :]
+    joined_from = next(
+        index
+        for index, value in enumerate(joined.values)
+        if not np.all(np.isnan(value))
     )
+    assert joined_from > ticks.recorded_before
+    assert np.all(np.isnan(joined.values[:joined_from]))
+    assert np.array_equal(joined.values[joined_from:], driven.values[joined_from:])
 
 
 # %% a kinematic structure that changes while the statechart runs

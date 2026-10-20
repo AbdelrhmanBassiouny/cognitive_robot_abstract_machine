@@ -30,6 +30,7 @@ from coraplex.ros_utils.robot_state_updater import WorldStateUpdater
 from tf.transformations import quaternion_from_matrix
 from coraplex.robot_plans import *
 from coraplex.plans.context_extensions import RobotAccess
+from cramph.context import StatechartContext
 from coraplex.plans.executors import RealRobotPlanExecutor
 from cramph.statechart import Statechart
 from coraplex.external_interfaces.giskard import sync_worlds
@@ -65,7 +66,9 @@ giskard_wrapper.execute()
 ```python
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
 
-executor = RealRobotPlanExecutor(world, context_extensions=[RobotAccess(robot)])
+executor = RealRobotPlanExecutor(
+    StatechartContext.with_extensions(world, [RobotAccess(robot)])
+)
 statechart = Statechart(context=executor.context)
 statechart.add_node(ParkArmsAction(arms=robot.all_arms))
 executor.compile(statechart)
@@ -107,7 +110,7 @@ A {class}`~cramph.composites.Sequence` of Cartesian goals moves the specified ar
 For the path that we provide here the first value is skipped as that is equal to the start pose from earlier.
 
 ```python
-print('move along path to goal pose...')
+print("move along path to goal pose...")
 
 
 def follow_path(waypoints):
@@ -124,7 +127,9 @@ def follow_path(waypoints):
     )
 
 
-executor = RealRobotPlanExecutor(world, context_extensions=[RobotAccess(robot)])
+executor = RealRobotPlanExecutor(
+    StatechartContext.with_extensions(world, [RobotAccess(robot)])
+)
 statechart = Statechart(context=executor.context)
 statechart.add_node(follow_path(path[1:]))
 executor.compile(statechart)
@@ -158,8 +163,10 @@ print(len(new_path))
 ```
 
 ```python
-print('move along path to goal pose...')
-executor = RealRobotPlanExecutor(world, context_extensions=[RobotAccess(robot)])
+print("move along path to goal pose...")
+executor = RealRobotPlanExecutor(
+    StatechartContext.with_extensions(world, [RobotAccess(robot)])
+)
 statechart = Statechart(context=executor.context)
 statechart.add_node(follow_path(filter_path(path)))
 executor.compile(statechart)

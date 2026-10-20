@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+import pytest
 
 from cramph.composites import (
     ChildChooser,
@@ -11,6 +12,7 @@ from cramph.composites import (
     StoppedWhenTrue,
 )
 from cramph.data_types import LifeCycleValues, ObservationStateValues
+from cramph.exceptions import NoChildChooserForNodeError
 from cramph.executor import StatechartExecutor, TickingExecutorExtension
 from cramph.monitors import CountNodeResets, CountTicks
 from cramph.node import EndStatechart, StatechartNode
@@ -26,7 +28,7 @@ from cramph.statechart import Statechart
 
 
 @dataclass
-class ChooserAnsweringInTurn(ChildChooser):
+class ChooserAnsweringInTurn(ChildChooser[CompositeNodeChoosingItsChild]):
     """
     Has no choice for the first few questions, then gives the prepared children one
     after another, then says no child is left.
@@ -165,7 +167,7 @@ def _run_repeated_until_decided(
 
     :return: The statechart that ran.
     """
-    executor.context.add_extension(ChildChooserAccess(chooser=chooser))
+    executor.context.add_extension(ChildChooserAccess(choosers=[chooser]))
     statechart = Statechart(context=executor.context)
     loop = RepeatUntil(
         name="loop",
@@ -192,7 +194,7 @@ def _run_choosing_node(
 
     :return: The choosing node.
     """
-    executor.context.add_extension(ChildChooserAccess(chooser=chooser))
+    executor.context.add_extension(ChildChooserAccess(choosers=[chooser]))
     statechart = Statechart(context=executor.context)
     choosing_node = CompositeNodeChoosingItsChild(name="choosing")
     statechart.add_node(choosing_node)
@@ -262,7 +264,7 @@ def test_a_node_that_is_not_running_is_not_asked(
     statechart_executor: StatechartExecutor,
 ) -> None:
     chooser = ChooserAnsweringInTurn([_succeeding_child("child")])
-    statechart_executor.context.add_extension(ChildChooserAccess(chooser=chooser))
+    statechart_executor.context.add_extension(ChildChooserAccess(choosers=[chooser]))
     statechart = Statechart(context=statechart_executor.context)
     never_true = ConstFalseNode(name="never true")
     statechart.add_node(never_true)
@@ -281,7 +283,7 @@ def test_choosing_keeps_the_state_and_history_of_the_nodes_already_there(
     statechart_executor: StatechartExecutor,
 ) -> None:
     chooser = ChooserAnsweringInTurn([_succeeding_child("child")])
-    statechart_executor.context.add_extension(ChildChooserAccess(chooser=chooser))
+    statechart_executor.context.add_extension(ChildChooserAccess(choosers=[chooser]))
     statechart = Statechart(context=statechart_executor.context)
     earlier = _succeeding_child("earlier")
     statechart.add_node(earlier)
@@ -309,7 +311,7 @@ def test_a_choice_compiles_the_statechart_once(
     executor = StatechartExecutor(context=statechart_context, extensions=[counting])
     child = _succeeding_child("child")
     executor.context.add_extension(
-        ChildChooserAccess(chooser=ChooserAnsweringInTurn([child]))
+        ChildChooserAccess(choosers=[ChooserAnsweringInTurn([child])])
     )
     statechart = Statechart(context=executor.context)
     choosing_node = CompositeNodeChoosingItsChild(name="choosing")
@@ -350,7 +352,9 @@ class ExtensionHoldingStill(TickingExecutorExtension):
 
 
 @dataclass
-class ChooserNotingWhetherTheExtensionHeldStill(ChildChooser):
+class ChooserNotingWhetherTheExtensionHeldStill(
+    ChildChooser[CompositeNodeChoosingItsChild]
+):
     """
     Notes whether the extension held still by the time it was asked.
     """
@@ -386,13 +390,75 @@ def test_the_extensions_hold_still_before_a_node_chooses(statechart_context) -> 
     chooser = ChooserNotingWhetherTheExtensionHeldStill(
         extension=extension, child=_succeeding_child("child")
     )
-    executor.context.add_extension(ChildChooserAccess(chooser=chooser))
+    executor.context.add_extension(ChildChooserAccess(choosers=[chooser]))
     statechart = Statechart(context=executor.context)
     statechart.add_node(CompositeNodeChoosingItsChild(name="choosing"))
 
     executor.compile(statechart)
 
     assert chooser.held_still_when_asked == [True]
+
+
+# %% choosing with the chooser of the node's kind
+
+
+@dataclass(eq=False, repr=False, kw_only=True)
+class NodeChoosingItsChildByItsOwnRule(CompositeNodeChoosingItsChild):
+    """
+    A kind of node choosing its child that has a chooser of its own.
+    """
+
+
+@dataclass
+class ChooserOfItsOwnKind(ChildChooser[NodeChoosingItsChildByItsOwnRule]):
+    """
+    Chooses for nodes of :class:`NodeChoosingItsChildByItsOwnRule` only, and never has a
+    child for them.
+    """
+
+    asked_nodes: list[NodeChoosingItsChildByItsOwnRule] = field(default_factory=list)
+    """
+    Every node that asked, once per question.
+    """
+
+    def choose_child(
+        self, node: NodeChoosingItsChildByItsOwnRule
+    ) -> StatechartNode | None:
+        self.asked_nodes.append(node)
+        return None
+
+
+def test_a_node_asks_the_chooser_of_its_own_kind(
+    statechart_executor: StatechartExecutor,
+) -> None:
+    general_chooser = ChooserAnsweringInTurn([_succeeding_child("general")])
+    own_kind_chooser = ChooserOfItsOwnKind()
+    statechart_executor.context.add_extension(
+        ChildChooserAccess(choosers=[general_chooser, own_kind_chooser])
+    )
+    statechart = Statechart(context=statechart_executor.context)
+    choosing_node = NodeChoosingItsChildByItsOwnRule(name="choosing")
+    statechart.add_node(choosing_node)
+    statechart.add_node(EndStatechart.when_failed(choosing_node))
+
+    statechart_executor.compile(statechart)
+    statechart_executor.tick_until_end(timeout=30)
+
+    assert own_kind_chooser.asked_nodes == [choosing_node]
+    assert general_chooser.asked_nodes == []
+
+
+def test_a_node_without_a_chooser_of_its_kind_cannot_choose(
+    statechart_executor: StatechartExecutor,
+) -> None:
+    statechart_executor.context.add_extension(
+        ChildChooserAccess(choosers=[ChooserOfItsOwnKind()])
+    )
+    statechart = Statechart(context=statechart_executor.context)
+    statechart.add_node(CompositeNodeChoosingItsChild(name="choosing"))
+
+    with pytest.raises(NoChildChooserForNodeError):
+        statechart_executor.compile(statechart)
 
 
 # %% giving up on a child

@@ -21,7 +21,7 @@ from typing_extensions import (
     Optional,
     TYPE_CHECKING,
 )
-from coraplex.plans.designator import DesignatorParameters
+from coraplex.robot_plans.actions.base import Action
 from cramph.data_types import LifeCycleValues
 from cramph.node import StatechartNode
 from cramph.world_modification_nodes import MoveBranch
@@ -611,7 +611,7 @@ class Bridge:
         if self._query_attachment == attachment:
             self._query_attachment = None
 
-    def observe_action_started(self, action: DesignatorParameters) -> None:
+    def observe_action_started(self, action: Action) -> None:
         """
         Record that an action of the plan started running, which names the statechart
         shown while it runs.
@@ -1351,7 +1351,7 @@ class Bridge:
         :param node: A node of the plan.
         :return: The kind of plan node `node` is, in the vocabulary recordings use.
         """
-        if isinstance(node, DesignatorParameters):
+        if isinstance(node, Action):
             return PlanNodeKind.ACTION
         if isinstance(node, MotionStatechartNode):
             return PlanNodeKind.MOTION
@@ -1376,7 +1376,7 @@ class Bridge:
             traversal order, to build the tree's signature.
         """
         node_id = "plan_node_%d" % id(node)
-        designator = node if isinstance(node, DesignatorParameters) else None
+        designator = node if isinstance(node, Action) else None
         kind = self._plan_node_kind(node)
         entry = PlanNodeEntry(
             id=node_id,
@@ -1395,7 +1395,7 @@ class Bridge:
             self._serialize_plan_node(child, node_id, nodes, order)
 
     def _add_designator_metadata(
-        self, entry: PlanNodeEntry, designator: DesignatorParameters | None
+        self, entry: PlanNodeEntry, designator: Action | None
     ) -> None:
         """
         Describe the designator's parameters and retain its published target identity.
@@ -1412,7 +1412,7 @@ class Bridge:
         if target:
             entry.target = target
 
-    def _designator_target(self, designator: DesignatorParameters) -> str | None:
+    def _designator_target(self, designator: Action) -> str | None:
         """
         Published key of the object a designator refers to, if any.
 

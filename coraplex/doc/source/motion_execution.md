@@ -36,10 +36,16 @@ Which executor runs a plan decides how it is executed:
 
 ```python
 from coraplex.plans.context_extensions import RobotAccess
-from coraplex.plans.executors import RealRobotPlanExecutor, KinematicallySimulatedPlanExecutor
+from cramph.context import StatechartContext
+from coraplex.plans.executors import (
+    RealRobotPlanExecutor,
+    KinematicallySimulatedPlanExecutor,
+)
 from cramph.statechart import Statechart
 
-executor = KinematicallySimulatedPlanExecutor(world, context_extensions=[RobotAccess(robot)])
+executor = KinematicallySimulatedPlanExecutor(
+    StatechartContext.with_extensions(world, [RobotAccess(robot)])
+)
 statechart = Statechart(context=executor.context)
 statechart.add_node(plan)
 executor.compile(statechart)
@@ -47,7 +53,7 @@ executor.execute()
 ```
 
 A plan for the real robot is built and run the same way in a
-`RealRobotPlanExecutor(world, context_extensions=[RobotAccess(robot)], ros_node=node)`.
+`RealRobotPlanExecutor(StatechartContext.with_extensions(world, [RobotAccess(robot)]), ros_node=node)`.
 Code that is told how to execute at run time takes the executor type, as
 {attr}`~coraplex.demonstrations.RobotDemonstration.executor_type` does. A plan does not ask what executes it: each
 executor adapts it with its own {attr}`~coraplex.plans.executors.PlanExecutor.plan_adaptations`, see below.
@@ -59,7 +65,8 @@ A plan can also be performed against a physically simulated world, which has to 
 from coraplex.plans.executors import PhysicallySimulatedPlanExecutor
 
 executor = PhysicallySimulatedPlanExecutor(
-    world, context_extensions=[RobotAccess(robot)], simulation=simulation
+    StatechartContext.with_extensions(world, [RobotAccess(robot)]),
+    simulation=simulation,
 )
 ```
 
@@ -76,8 +83,7 @@ from giskardpy.motion_control import MotionControl
 from giskardpy.qp.qp_controller_config import QPControllerConfig
 
 executor = KinematicallySimulatedPlanExecutor(
-    world,
-    context_extensions=[RobotAccess(robot)],
+    StatechartContext.with_extensions(world, [RobotAccess(robot)]),
     extensions=[MotionControl(QPControllerConfig(target_frequency=50))],
 )
 ```
@@ -86,7 +92,8 @@ Collision avoidance is a setting of the executor:
 
 ```python
 executor = KinematicallySimulatedPlanExecutor(
-    world, context_extensions=[RobotAccess(robot)], collision_avoidance=True
+    StatechartContext.with_extensions(world, [RobotAccess(robot)]),
+    collision_avoidance=True,
 )
 ```
 
@@ -111,9 +118,11 @@ Every executor offers each node of a plan to its
 {class}`~coraplex.plans.plan_transformation.PlanRewriting`:
 
 - {class}`~coraplex.plans.executors.KinematicallySimulatedPlanExecutor` puts the base at its goal by writing the odometry
-  ({class}`~coraplex.robot_plans.plan_transformations.WriteTheOdometryInsteadOfDriving`), unless the robot drives
-  differentially, and keeps a Stretch in front of the container it closes. The trial of a candidate for an
-  underspecified action writes the odometry for a differentially driven robot too.
+  ({class}`~coraplex.robot_plans.plan_transformations.WriteTheOdometryInsteadOfCommandingAPose`), unless the robot
+  drives differentially, and keeps a Stretch in front of the container it closes. The trial of a candidate for an
+  underspecified action writes the odometry for a differentially driven robot too
+  ({class}`~coraplex.robot_plans.plan_transformations.WriteTheOdometryInsteadOfDriving`), see
+  {attr}`~coraplex.plans.underspecified.ActionTrial.plan_adaptations`.
 - {class}`~coraplex.plans.executors.PhysicallySimulatedPlanExecutor` closes a grasp to the object's width
   ({class}`~coraplex.robot_plans.plan_transformations.CloseFingersToObjectWidth`) and lets contact carry a picked
   object ({class}`~coraplex.robot_plans.plan_transformations.LetContactCarryTheBodies`).

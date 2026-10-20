@@ -61,39 +61,47 @@ from cramph.composites import Sequence
 world = setup_world()
 pr2_view = PR2.from_world(world)
 from coraplex.plans.context_extensions import RobotAccess
+from cramph.context import StatechartContext
 from coraplex.plans.executors import KinematicallySimulatedPlanExecutor
 from cramph.statechart import Statechart
 
 extensions = [RobotAccess(pr2_view)]
 
+
 def run(plan):
     """
     Run `plan` simulated in `world`, with the robot and settings in `extensions`.
     """
-    executor = KinematicallySimulatedPlanExecutor(world, context_extensions=extensions)
+    executor = KinematicallySimulatedPlanExecutor(
+        StatechartContext.with_extensions(world, extensions)
+    )
     statechart = Statechart(context=executor.context)
     statechart.add_node(plan)
     executor.compile(statechart)
     executor.execute()
     return executor
 
+
 milk = world.get_semantic_annotations_by_type(Milk)[0]
 description = TransportAction(
     pick_up=MoveAndPickUpAction.from_standing_position(
-        standing_position=Pose.from_xyz_rpy(1.63, 1.98, 0.0, reference_frame=world.root),
+        standing_position=Pose.from_xyz_rpy(
+            1.63, 1.98, 0.0, reference_frame=world.root
+        ),
         grasp=milk.grasp_candidates()[0],
         arm=pr2_view.left_arm,
     ),
     place=MoveAndPlaceAction.from_standing_position(
-        standing_position=Pose.from_xyz_rpy(1.64, 3.24, 0.0, reference_frame=world.root),
+        standing_position=Pose.from_xyz_rpy(
+            1.64, 3.24, 0.0, reference_frame=world.root
+        ),
         target_location=Pose.from_xyz_quaternion(
             2.4, 3, 1.05, 0.0, 0.0, 0.0, 1.0, reference_frame=world.root
         ),
         object_designator=milk,
     ),
 )
-plan = Sequence(nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH),
-                   description])
+plan = Sequence(nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH), description])
 run(plan)
 ```
 

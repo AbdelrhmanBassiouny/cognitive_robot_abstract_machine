@@ -9,6 +9,7 @@ from coraplex.robot_plans.actions.base import Action, ParallelAction
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.robot_plans.actions.core.placing import PlaceAction
+from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
 from giskardpy.motion_statechart.tasks.align_planes import AlignPlanes
 from semantic_digital_twin.robots.robot_parts import Arm
 from semantic_digital_twin.spatial_types.spatial_types import Vector3
@@ -23,7 +24,7 @@ if TYPE_CHECKING:
 class CarryAction(ParallelAction):
     """
     Drives the robot's base to a pose while every object the robot holds keeps its
-    z-axis pointing up.
+    z-axis pointing up and every arm holding nothing is parked.
 
     An object counts as held when it hangs below a gripper's tool frame, or when a pick-
     up earlier in the plan takes it and no placing puts it down again before this
@@ -32,7 +33,7 @@ class CarryAction(ParallelAction):
 
     navigate: NavigateAction
     """
-    The drive, or an underspecified statement of it.
+    The drive.
     """
 
     upright_threshold: float = AlignPlanes.threshold
@@ -42,6 +43,9 @@ class CarryAction(ParallelAction):
     """
 
     def create_steps(self) -> list[StatechartNode]:
+        held_bodies = {arm: self._held_body(arm) for arm in self.robot.all_arms}
+        free_arms = [arm for arm, held_body in held_bodies.items() if held_body is None]
+        park_free_arms = [ParkArmsAction(arms=free_arms)] if free_arms else []
         keep_upright = [
             AlignPlanes(
                 root_link=self.world.root,
@@ -50,24 +54,23 @@ class CarryAction(ParallelAction):
                 goal_normal=Vector3.Z(reference_frame=self.world.root),
                 threshold=self.upright_threshold,
             )
-            for held_body in self._held_bodies()
+            for held_body in held_bodies.values()
+            if held_body is not None
         ]
-        return [self.navigate, *keep_upright]
+        return [self.navigate, *park_free_arms, *keep_upright]
 
-    def _held_bodies(self) -> list[Body]:
+    def _held_body(self, arm: Arm) -> Body | None:
         """
-        :return: The body each arm holds, for every arm that holds one.
+        :param arm: The arm to look at.
+        :return: The body `arm` holds, or None if it holds nothing.
         """
-        held_bodies = []
-        for arm in self.robot.all_arms:
-            held_body = arm.end_effector.held_body
-            if held_body is not None:
-                held_bodies.append(held_body)
-                continue
-            pick_up = self._earlier_pick_up_still_holding(arm)
-            if pick_up is not None:
-                held_bodies.append(pick_up.grasp.graspable.root)
-        return held_bodies
+        held_body = arm.end_effector.held_body
+        if held_body is not None:
+            return held_body
+        pick_up = self._earlier_pick_up_still_holding(arm)
+        if pick_up is None:
+            return None
+        return pick_up.grasp.graspable.root
 
     def _earlier_pick_up_still_holding(self, arm: Arm) -> PickUpAction | None:
         """

@@ -232,8 +232,7 @@ def run(
     see :func:`build_statechart`, showing it with `visualizations`.
     """
     executor = KinematicallySimulatedPlanExecutor(
-        world,
-        context_extensions=[RobotAccess(robot)],
+        StatechartContext.with_extensions(world, [RobotAccess(robot)]),
         ros_node=ros_node,
         extensions=visualizations,
     )

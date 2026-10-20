@@ -27,6 +27,7 @@ plan it runs.
 
 ```python
 from coraplex.plans.context_extensions import RobotAccess
+from cramph.context import StatechartContext
 from coraplex.plans.executors import KinematicallySimulatedPlanExecutor
 from coraplex.plans.plan_transformation import PlanRewriting
 from coraplex.testing import setup_world
@@ -46,11 +47,13 @@ def statechart_for(plan):
         statechart of its context holding `plan`.
     """
     executor = KinematicallySimulatedPlanExecutor(
-        world,
-        context_extensions=[
-            RobotAccess(pr2),
-            PlanRewriting(transformations=plan_transformations),
-        ],
+        StatechartContext.with_extensions(
+            world,
+            [
+                RobotAccess(pr2),
+                PlanRewriting(transformations=plan_transformations),
+            ],
+        ),
     )
     statechart = Statechart(context=executor.context)
     statechart.add_node(plan)

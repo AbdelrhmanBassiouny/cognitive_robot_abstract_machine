@@ -178,7 +178,9 @@ def test_one_visualization_shows_each_run_of_sequential_executors() -> None:
 def test_a_plan_run_on_the_real_robot_is_shown_once_compiled() -> None:
     visualization = VisualizationRecordingItsRuns()
     world = World()
-    executor = RealRobotPlanExecutor(world, extensions=[visualization])
+    executor = RealRobotPlanExecutor(
+        StatechartContext(world=world), extensions=[visualization]
+    )
     statechart = Statechart(context=executor.context)
     statechart.add_node(ConstTrueNode(name="step"))
 
@@ -458,8 +460,7 @@ def test_a_debugging_action_trial_is_shown_apart_from_the_world_it_copies(
 ) -> None:
     robot = cylinder_bot_world.get_semantic_annotations_by_type(MinimalRobot)[0]
     executor = KinematicallySimulatedPlanExecutor(
-        cylinder_bot_world,
-        context_extensions=robot_extensions(robot),
+        StatechartContext.with_extensions(cylinder_bot_world, robot_extensions(robot)),
         ros_node=rclpy_node,
         debug=True,
     )

@@ -38,7 +38,7 @@ from semantic_digital_twin.world_description.shape_collection import ShapeCollec
 from semantic_digital_twin.world_description.world_entity import Body
 from typing_extensions import Any, Dict, List, Optional, Self, Tuple
 
-from coraplex.plans.designator import DesignatorParameters
+from coraplex.robot_plans.actions.base import GoalAction
 
 from cramera.knowledge.enums import PlanNodeGroup
 from cramera.live.chart_structure import ChartEdgeEntry
@@ -85,7 +85,8 @@ def make_plan_node(
     """
     A plan-node mimic of the given class name, as the serializer walks it.
 
-    Given a designator, it is an action carrying those parameters.
+    Given a designator, it is an action carrying those parameters, whose life cycle
+    state and children are set directly instead of read off a statechart.
     """
     if designator is None:
         node = type(kind, (object,), {})()
@@ -93,8 +94,15 @@ def make_plan_node(
         node_class = make_dataclass(
             kind,
             [(name, Any) for name in designator.designator_parameter],
-            bases=(DesignatorParameters,),
+            bases=(GoalAction,),
+            namespace={
+                "life_cycle_state": None,
+                "children": (),
+                "create_goal": lambda self: None,
+            },
             eq=False,
+            repr=False,
+            kw_only=True,
         )
         node = node_class(**designator.designator_parameter)
     node.life_cycle_state = life_cycle_state

@@ -31,7 +31,7 @@ from coraplex.robot_plans.plan_transformations import (
     CloseFingersToObjectWidth,
     DetectWithRoboKudo,
     LetContactCarryTheBodies,
-    WriteTheOdometryInsteadOfDriving,
+    WriteTheOdometryInsteadOfCommandingAPose,
 )
 from coraplex.robot_plans.robot_specific_plan_transformations import (
     DriveStretchWithItsDifferentialDrive,
@@ -42,7 +42,7 @@ from coraplex.robot_plans.robot_specific_plan_transformations import (
     MoveStretchToolCenterPointInAStraightLine,
 )
 from cramph.composites import ChildChooserAccess, StatementNode
-from cramph.context import ContextExtension, StatechartContext
+from cramph.context import ContextExtension
 from cramph.data_types import LifeCycleValues
 from cramph.exceptions import EmptyStatechartError
 from cramph.executor import (
@@ -68,7 +68,6 @@ from giskardpy.middleware.ros2.giskard_client_executor import GiskardClientExecu
 from giskardpy.motion_statechart.ros_context import RosNodeAccess
 from giskardpy.qp.qp_controller_config import QPControllerConfig
 from krrood.symbolic_math.symbolic_math import logic_or
-from semantic_digital_twin.world import World
 
 if TYPE_CHECKING:
     from semantic_digital_twin.adapters.multi_sim import MujocoSim
@@ -84,40 +83,24 @@ class PlanExecutor(Executor, ABC):
     """
     Executes a plan: the top-level nodes of a statechart built in :attr:`context`.
 
-    The executor builds that context over :attr:`world` from the extensions it is given,
-    which are what describes the robot and how the plan is grounded, so the same
-    extensions can configure the executors of several plans. :meth:`compile` adds what a
-    plan runs with: the collision avoidance if asked for, one
+    The extensions of :attr:`context` describe the robot and how the plan is grounded,
+    such as the :class:`~coraplex.plans.context_extensions.RobotAccess` of the robot
+    performing it. A :class:`~coraplex.plans.context_extensions.StatementGrounding`, a
+    :class:`~coraplex.plans.context_extensions.MotionToleranceConfig` and a
+    :class:`~coraplex.plans.plan_transformation.PlanRewriting` with default values are
+    added unless one is there; the executor replaces the latter with one offering every
+    node to :attr:`robot_adaptations` and :attr:`plan_adaptations` first. A context
+    serves one executor. :meth:`compile` adds what a plan runs with: the collision avoidance if asked for, one
     :class:`~giskardpy.motion_statechart.graph_node.EndMotion` once every plan node
     succeeded or one of them ended without succeeding, and the stall detection.
     Underspecified actions are grounded while it runs, see
     :class:`~coraplex.plans.underspecified.UnderspecifiedChildChooser`.
     """
 
-    context: StatechartContext = field(init=False)
+    supplied_context_extensions: list[ContextExtension] = field(init=False)
     """
-    The context the plan's statechart is built and run in, built from
-    :attr:`context_extensions`.
-    """
-
-    world: World
-    """
-    The world the plan is executed in.
-    """
-
-    context_extensions: list[ContextExtension] = field(
-        default_factory=list, kw_only=True
-    )
-    """
-    What the plan's nodes read from the context, such as the
-    :class:`~coraplex.plans.context_extensions.RobotAccess` of the robot performing it.
-
-    A :class:`~coraplex.plans.context_extensions.StatementGrounding`, a
-    :class:`~coraplex.plans.context_extensions.MotionToleranceConfig` and a
-    :class:`~coraplex.plans.plan_transformation.PlanRewriting` with default values are
-    added unless one is given; the latter holds the transformations rewriting the plan
-    once it is expanded, and every action that joins it while it runs, after
-    :attr:`robot_adaptations` and :attr:`plan_adaptations`.
+    The extensions :attr:`context` held when it was given to this executor, before the
+    executor added its own.
     """
 
     ros_node: Node | None = field(default=None, kw_only=True)
@@ -174,17 +157,16 @@ class PlanExecutor(Executor, ABC):
     def __post_init__(self) -> None:
         if self.debug and self.ros_node is None:
             raise DebuggingWithoutRosNode()
-        self.context = StatechartContext(world=self.world)
-        for extension in self.context_extensions:
-            if isinstance(extension, PlanRewriting):
-                extension = extension.copy_with_preceding_transformations(
-                    self.adaptations
-                )
-            self.context.add_extension(extension)
+        self.supplied_context_extensions = list(self.context.extensions.values())
+        rewriting = self.context.get_extension(PlanRewriting)
+        if rewriting is not None:
+            self.context.extensions[type(rewriting)] = (
+                rewriting.copy_with_preceding_transformations(self.adaptations)
+            )
         self.child_chooser = UnderspecifiedChildChooser(
             executor=self, trial_executor_type=KinematicallySimulatedPlanExecutor
         )
-        self.context.add_extension(ChildChooserAccess(chooser=self.child_chooser))
+        self.context.add_extension(ChildChooserAccess(choosers=[self.child_chooser]))
         super().__post_init__()
 
     def default_context_extensions(self) -> list[ContextExtension]:
@@ -368,10 +350,10 @@ class PlanExecutor(Executor, ABC):
 @dataclass
 class SimulatedPlanExecutor(PlanExecutor, StatechartExecutor, ABC):
     """
-    Ticks the plan's statechart in a simulated :attr:`world`, driving the robot's
-    motions with the :class:`~giskardpy.motion_control.MotionControl` among its
-    :attr:`extensions`, which is added with the controller of
-    :meth:`create_qp_controller_config` unless one is given.
+    Ticks the plan's statechart in a simulated world, driving the robot's motions with
+    the :class:`~giskardpy.motion_control.MotionControl` among its :attr:`extensions`,
+    which is added with the controller of :meth:`create_qp_controller_config` unless one
+    is given.
     """
 
     simulation_time_per_action: timedelta = field(
@@ -449,11 +431,11 @@ class SimulatedPlanExecutor(PlanExecutor, StatechartExecutor, ABC):
                 self.tick()
                 self.pacer.sleep()
             # The controller stops commanding, so a velocity-servoed base stops too.
-            MotionControl.set_velocity_acceleration_jerk_to_zero(self.world)
-            self.world.notify_state_change()
+            MotionControl.set_velocity_acceleration_jerk_to_zero(self.context.world)
+            self.context.world.notify_state_change()
             self.pacer.wait_for_standstill()
         finally:
-            MotionControl.set_velocity_acceleration_jerk_to_zero(self.world)
+            MotionControl.set_velocity_acceleration_jerk_to_zero(self.context.world)
             self.finish_run()
 
     def _is_over(self) -> bool:
@@ -480,7 +462,7 @@ class KinematicallySimulatedPlanExecutor(SimulatedPlanExecutor):
 
     plan_adaptations: list[PlanTransformation] = field(
         default_factory=lambda: [
-            WriteTheOdometryInsteadOfDriving(),
+            WriteTheOdometryInsteadOfCommandingAPose(),
             KeepStretchInFrontOfTheContainerItCloses(),
         ],
         kw_only=True,

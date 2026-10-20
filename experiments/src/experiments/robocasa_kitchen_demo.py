@@ -61,6 +61,7 @@ from semantic_digital_twin.spatial_types.spatial_types import (
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import OmniDrive
 from coraplex.plans.context_extensions import RobotAccess
+from cramph.context import StatechartContext
 from coraplex.plans.executors import KinematicallySimulatedPlanExecutor
 from cramph.statechart import Statechart
 from cramph.composites import Sequence
@@ -387,7 +388,7 @@ def _spawn_robot_and_prepare_pick_up(
         logger.info("Spawned PR2; parking arms, raising torso, picking up an apple ...")
         try:
             executor = KinematicallySimulatedPlanExecutor(
-                world, context_extensions=[RobotAccess(pr2)]
+                StatechartContext.with_extensions(world, [RobotAccess(pr2)])
             )
             statechart = Statechart(context=executor.context)
             statechart.add_node(plan)

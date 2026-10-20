@@ -319,8 +319,8 @@ class GiskardRecordingTheGoal:
 
     def execute(self) -> None:
         self.executed.append(self.compiled)
-        self.child_choosers.append(
-            self.compiled.context.require_extension(ChildChooserAccess).chooser
+        self.child_choosers.extend(
+            self.compiled.context.require_extension(ChildChooserAccess).choosers
         )
 
     def close(self) -> None:

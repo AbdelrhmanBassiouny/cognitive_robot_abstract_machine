@@ -232,7 +232,7 @@ class GiskardClientExecutor(Executor):
         """
         client = ChildChoiceClient(
             statechart=self.statechart,
-            chooser=child_chooser_access.chooser,
+            child_chooser_access=child_chooser_access,
             world_updates=self.world_updates,
             required_position=self.world_updates.required_position(),
         )

@@ -15,7 +15,7 @@ from coraplex.exceptions import (
     ReachHasNoFinalApproach,
 )
 from coraplex.locations.locations import ReachabilityLocation
-from coraplex.querying.grasp_closeness import ClosestGrasps
+from coraplex.querying.grasp_closeness import GraspsByCloseness
 from coraplex.plans.plan_transformation import (
     ConfigurationTransformation,
     SequentialInsertion,
@@ -31,8 +31,10 @@ from coraplex.robot_plans.actions.composite.transporting import (
 from coraplex.robot_plans.actions.core.misc import DetectAction
 from coraplex.robot_plans.actions.core.navigation import (
     DrivesBase,
+    HolonomicBaseMotion,
     LookAtAction,
     NavigateAction,
+    OdometryOverwriteBaseMotion,
 )
 from coraplex.robot_plans.actions.core.pick_up import (
     GraspingAction,
@@ -353,7 +355,7 @@ class OpenDrawerBeforeMoveAndPickUp(DrawerOpening[MoveAndPickUpAction]):
         if (
             isinstance(grasp, FlatVariable)
             and isinstance(grasp._child_, InstantiatedVariable)
-            and grasp._child_._type_ is ClosestGrasps
+            and grasp._child_._type_ is GraspsByCloseness
         ):
             return PickUpTarget(graspable=grasp._child_._kwargs_["graspable"], arm=arm)
         grasps = grasp._domain_ if isinstance(grasp, Variable) else [grasp]
@@ -510,15 +512,27 @@ class CloseFingersToObjectWidth(PlanTransformation[GraspingAction]):
 @dataclass
 class WriteTheOdometryInsteadOfDriving(ConfigurationTransformation[DrivesBase]):
     """
-    Puts the base at the poses it drives to by writing the odometry, where the world is
-    moved kinematically and so has no drive to follow a commanded pose.
+    Puts the base at the poses it drives to by writing the odometry, however it would be
+    driven there.
     """
 
     def is_applicable(self, plan_node: DrivesBase) -> bool:
         return True
 
     def apply(self, plan_node: DrivesBase) -> None:
-        plan_node.writes_odometry = True
+        plan_node.base_motion = OdometryOverwriteBaseMotion()
+
+
+@dataclass
+class WriteTheOdometryInsteadOfCommandingAPose(WriteTheOdometryInsteadOfDriving):
+    """
+    Puts the base at the poses it drives to by writing the odometry where the controller
+    would drive it there in any direction, which a world moved kinematically has no
+    drive to follow.
+    """
+
+    def is_applicable(self, plan_node: DrivesBase) -> bool:
+        return isinstance(plan_node.base_motion, HolonomicBaseMotion)
 
 
 # %% detecting with the real robot's perception

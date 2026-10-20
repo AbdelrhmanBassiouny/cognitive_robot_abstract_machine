@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from rustworkx import NoEdgeBetweenNodes
 
-from cramph.context import ContextExtension
+from cramph.context import ContextExtension, StatechartContext
 
 from giskardpy.utils.utils_for_tests import compare_axis_angle, compare_orientations
 from coraplex.datastructures.trajectory import PoseTrajectory
@@ -406,8 +406,7 @@ def perform_in_physics(
     :param simulation: The running physics to perform it in.
     """
     executor = PhysicallySimulatedPlanExecutor(
-        world_of(extensions),
-        context_extensions=extensions,
+        StatechartContext.with_extensions(world_of(extensions), extensions),
         simulation=simulation,
     )
     executor.compile(statechart_of(executor, plan))

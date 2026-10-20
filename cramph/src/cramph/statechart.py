@@ -2034,10 +2034,12 @@ class Statechart(SubclassJSONSerializer):
         Compiling again, once nodes joined, keeps the state and the history of the
         nodes already there: only the joined nodes are completed and built, and the
         tick is compiled over every node. Every :class:`RecompileCallback` is told.
+        Compiling again waits until every :class:`RecompileCallback` is at rest; until
+        then the statechart goes on ticking as it compiled last, see :meth:`tick`.
         """
         is_recompile = self.is_compiled
-        if is_recompile:
-            self._hold_still()
+        if is_recompile and not self._hold_still():
+            return
         self.sanity_check()
         self._compile_nodes(self._nodes[self._compiled_node_count :])
         if is_recompile:
@@ -2100,17 +2102,19 @@ class Statechart(SubclassJSONSerializer):
         """
         return self._world_revision() != self._compiled_world_revision
 
-    def _rebuild_if_world_structure_changed(self) -> None:
+    def _compile_if_changed(self) -> None:
         """
-        Compiles again, building every node again, if the kinematic structure of the
-        world changed since they were built, because expressions reading the
-        structure, such as forward kinematics, describe the old one.
+        Compiles again once every :class:`RecompileCallback` is at rest, if the
+        statechart changed since it compiled last, which a compile left waiting for
+        them does, or if the kinematic structure of the world changed since the nodes
+        were built, because expressions reading the structure, such as forward
+        kinematics, describe the old one; the latter builds every node again.
 
         The state, the history and what each node registered in
         :meth:`~cramph.node.StatechartNode.set_up` are kept, so the statechart goes on
         from where it was.
         """
-        if self._world_structure_changed():
+        if self._changed_since_compile or self._world_structure_changed():
             self._when_held_still(self.compile)
 
     def _hold_still(self) -> bool:
@@ -2185,16 +2189,19 @@ class Statechart(SubclassJSONSerializer):
         tick ends the statechart only after that, even if a
         :class:`StateHistoryObserver` of the record failed.
 
-        If the kinematic structure of the world changed since the previous tick, every
-        node is built again before this tick settles, see
-        :meth:`~cramph.node.StatechartNode.build`; a change made by a callback of this
-        tick is picked up by the next one.
+        If the statechart changed since it compiled last, or the kinematic structure of
+        the world did, it compiles again before this tick settles once every
+        :class:`RecompileCallback` is at rest, see :meth:`compile`; a change made by a
+        callback of this tick is picked up by the next one. While a change of the
+        statechart waits for that, no node changes its state, so nothing runs on the
+        tick compiled before the change.
         """
-        self._rebuild_if_world_structure_changed()
-        changes = self._compiled_tick.settle()
-        for change in changes:
-            change.run_callback()
-        self._let_waiting_nodes_choose_their_child()
+        self._compile_if_changed()
+        if not self._changed_since_compile:
+            changes = self._compiled_tick.settle()
+            for change in changes:
+                change.run_callback()
+            self._let_waiting_nodes_choose_their_child()
         try:
             self.state_history.append(
                 next_item=StateHistoryItem(

@@ -39,7 +39,7 @@ parts:
         - file: notebooks/action_designator
         - file: notebooks/object_designator
         - file: notebooks/location_designator
-        - file: notebooks/motion_designator
+        - file: notebooks/giskard_goals_in_actions
       - file: orm.md
         sections:
         - file: notebooks/orm_example

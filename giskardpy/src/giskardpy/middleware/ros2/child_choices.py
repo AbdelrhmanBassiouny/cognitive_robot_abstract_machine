@@ -22,7 +22,11 @@ from threading import Lock
 
 from typing_extensions import Any, Self
 
-from cramph.composites import ChildChooser, CompositeNodeChoosingItsChild
+from cramph.composites import (
+    ChildChooser,
+    ChildChooserAccess,
+    CompositeNodeChoosingItsChild,
+)
 from cramph.data_types import LifeCycleValues
 from cramph.node import StatechartNode
 from cramph.statechart import Statechart
@@ -181,7 +185,7 @@ class ChildChoiceMessage(SubclassJSONSerializer):
 
 
 @dataclass
-class ChildSentByClient(ChildChooser):
+class ChildSentByClient(ChildChooser[CompositeNodeChoosingItsChild]):
     """
     Lets every node of a running goal run the child the client sent for it, and wait
     until one arrived.
@@ -290,9 +294,9 @@ class ChildChoiceClient:
     The client's copy of the statechart that was sent as the goal.
     """
 
-    chooser: ChildChooser
+    child_chooser_access: ChildChooserAccess
     """
-    Chooses the children.
+    Holds the choosers that choose the children.
     """
 
     world_updates: ClientWorldUpdates
@@ -365,7 +369,7 @@ class ChildChoiceClient:
             pending.
         """
         first_node_index = len(self.statechart.nodes)
-        if not node.choose_child_with(self.chooser):
+        if not node.choose_child_with(self.child_chooser_access.chooser_for(node)):
             return None
         nodes = (
             None

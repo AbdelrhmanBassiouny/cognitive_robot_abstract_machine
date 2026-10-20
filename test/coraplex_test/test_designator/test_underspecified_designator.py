@@ -449,7 +449,8 @@ def _child_chooser_of(plan: StatechartNode) -> UnderspecifiedChildChooser:
     :return: The chooser grounding the underspecified steps of the statechart running
         `plan`.
     """
-    return plan.statechart.context.require_extension(ChildChooserAccess).chooser
+    [chooser] = plan.statechart.context.require_extension(ChildChooserAccess).choosers
+    return chooser
 
 
 def test_a_plan_releases_its_trial_copy_once_it_has_run(
@@ -704,6 +705,25 @@ def test_a_trial_adapts_a_candidate_to_the_robot_as_its_executor_does(
     """
     world, robot, extensions = apartment_world_pr2_copy_with_context
     executor = simulated_executor(extensions, robot_adaptations=[])
+    trial = ActionTrial(
+        executor=executor, trial_executor_type=KinematicallySimulatedPlanExecutor
+    )
+
+    trial_executor = trial._trial_executor(trial._copy())
+
+    assert trial_executor.robot_adaptations == executor.robot_adaptations
+    trial.discard()
+
+
+def test_a_trial_keeps_how_its_executor_drives_a_differentially_driven_base(
+    stretch_apartment_context,
+) -> None:
+    """
+    The trial overrides how the base gets to its goal with a transformation of its own,
+    so it keeps every robot adaptation of its executor.
+    """
+    world, robot, extensions = stretch_apartment_context
+    executor = simulated_executor(extensions)
     trial = ActionTrial(
         executor=executor, trial_executor_type=KinematicallySimulatedPlanExecutor
     )

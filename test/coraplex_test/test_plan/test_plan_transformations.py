@@ -1015,7 +1015,7 @@ def test_an_object_that_lies_in_no_drawer_is_picked_up_unchanged(pr2_apartment_c
 
 
 @dataclass
-class ChoosesTheGivenChild(PlanChildChooser):
+class ChoosesTheGivenChild(PlanChildChooser[StatementNode]):
     """
     Answers a node choosing its child with the child it was given, once, and prepares it
     as a plan's child.

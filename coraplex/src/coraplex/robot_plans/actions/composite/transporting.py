@@ -19,7 +19,7 @@ from coraplex.robot_plans.actions.core.navigation import (
     LookAtAction,
     NavigateAction,
 )
-from coraplex.querying.grasp_closeness import ClosestGrasps
+from coraplex.querying.grasp_closeness import GraspsByCloseness
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.robot_plans.actions.core.placing import PlaceAction
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
@@ -43,13 +43,12 @@ class TransportAction(SequentialAction):
 
     pick_up: MoveAndPickUpAction
     """
-    The step that picks the object up, or an underspecified statement of it.
+    The step that picks the object up.
     """
 
     place: MoveAndPlaceAction
     """
-    The step that puts down what :attr:`pick_up` picked up, or an underspecified
-    statement of it.
+    The step that puts down what :attr:`pick_up` picked up.
     """
 
     @classmethod
@@ -59,7 +58,7 @@ class TransportAction(SequentialAction):
         target_location: Pose,
         arm: Arm,
         context: StatechartContext,
-        number_of_grasps: int = ClosestGrasps.number_of_grasps,
+        number_of_grasps: int = GraspsByCloseness.number_of_grasps,
         seed: int | None = None,
     ) -> Self:
         """
@@ -127,13 +126,12 @@ class PickAndPlaceAction(SequentialAction):
 
     pick_up: PickUpAction
     """
-    The step that picks the object up, or an underspecified statement of it.
+    The step that picks the object up.
     """
 
     place: PlaceAction
     """
-    The step that puts down what :attr:`pick_up` picked up, or an underspecified
-    statement of it.
+    The step that puts down what :attr:`pick_up` picked up.
     """
 
     def create_steps(self) -> list[StatechartNode]:
@@ -152,19 +150,17 @@ class MoveAndPlaceAction(SequentialAction):
 
     navigate: NavigateAction
     """
-    The step to where the robot stands while placing, or an underspecified statement of
-    it.
+    The step to where the robot stands while placing.
     """
 
     face_and_look_at: FaceAndLookAtAction
     """
-    The turn towards the target and the look at it, or an underspecified statement of
-    them.
+    The turn towards the target and the look at it.
     """
 
     place: PlaceAction
     """
-    The step that puts the object down, or an underspecified statement of it.
+    The step that puts the object down.
     """
 
     @classmethod
@@ -207,19 +203,17 @@ class MoveAndPickUpAction(SequentialAction):
 
     navigate: NavigateAction
     """
-    The step to where the robot stands while picking up, or an underspecified statement
-    of it.
+    The step to where the robot stands while picking up.
     """
 
     face_and_look_at: FaceAndLookAtAction
     """
-    The turn towards the object and the look at it, or an underspecified statement of
-    them.
+    The turn towards the object and the look at it.
     """
 
     pick_up: PickUpAction
     """
-    The step that picks the object up, or an underspecified statement of it.
+    The step that picks the object up.
     """
 
     @classmethod
@@ -260,7 +254,7 @@ class MoveAndPickUpAction(SequentialAction):
         graspable: HasGraspCandidates,
         arm: Arm,
         context: StatechartContext,
-        number_of_grasps: int = ClosestGrasps.number_of_grasps,
+        number_of_grasps: int = GraspsByCloseness.number_of_grasps,
         seed: int | None = None,
     ) -> Match:
         """
@@ -291,7 +285,7 @@ class MoveAndPickUpAction(SequentialAction):
             ),
             pick_up=a(PickUpAction)(
                 grasp=flat_variable(
-                    ClosestGrasps(graspable, standing_position, number_of_grasps)
+                    GraspsByCloseness(graspable, standing_position, number_of_grasps)
                 ),
                 arm=arm,
             ),
@@ -313,19 +307,17 @@ class MoveAndOpenAction(SequentialAction):
 
     navigate: NavigateAction
     """
-    The step to where the robot stands while opening, or an underspecified statement of
-    it.
+    The step to where the robot stands while opening.
     """
 
     face_and_look_at: FaceAndLookAtAction
     """
-    The turn towards the handle and the look at it, or an underspecified statement of
-    them.
+    The turn towards the handle and the look at it.
     """
 
     open_container: OpenAction
     """
-    The step that opens the container, or an underspecified statement of it.
+    The step that opens the container.
     """
 
     @classmethod
@@ -354,7 +346,7 @@ class MoveAndOpenAction(SequentialAction):
         handle: Handle,
         arm: Arm,
         context: StatechartContext,
-        number_of_grasps: int = ClosestGrasps.number_of_grasps,
+        number_of_grasps: int = GraspsByCloseness.number_of_grasps,
         seed: int | None = None,
     ) -> Match:
         """
@@ -390,7 +382,7 @@ class MoveAndOpenAction(SequentialAction):
             ),
             open_container=a(OpenAction)(
                 grasp=flat_variable(
-                    ClosestGrasps(handle, standing_position, number_of_grasps)
+                    GraspsByCloseness(handle, standing_position, number_of_grasps)
                 ),
                 arm=arm,
             ),

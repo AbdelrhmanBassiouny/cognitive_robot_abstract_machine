@@ -10,6 +10,7 @@ from krrood.exceptions import DataclassException
 from krrood.symbolic_math.symbolic_math import FloatVariable, Scalar
 
 if TYPE_CHECKING:
+    from cramph.composites import ChildChooser, CompositeNodeChoosingItsChild
     from cramph.context import ContextExtension
     from cramph.data_types import TransitionKind
     from cramph.node import NodeStateVariable, StatechartNode, TransitionCondition
@@ -681,6 +682,37 @@ class StatechartOfDifferentContextError(StatechartError):
 
     def suggest_correction(self) -> str:
         return "Create the statechart with the context of the executor that runs it."
+
+
+@dataclass
+class NoChildChooserForNodeError(StatechartError):
+    """
+    Raised when a node choosing its child finds no chooser of its kind of node in its
+    context.
+    """
+
+    node: CompositeNodeChoosingItsChild
+    """
+    The node that asked for its child.
+    """
+
+    choosers: list[ChildChooser]
+    """
+    The choosers the context holds.
+    """
+
+    def error_message(self) -> str:
+        node_types = [chooser.node_type.__name__ for chooser in self.choosers]
+        return (
+            f"{self.node} is no {' or '.join(node_types) or 'node any chooser chooses for'}"
+            f", so no chooser of the context chooses its child."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            f"add a chooser for {type(self.node).__name__} to the ChildChooserAccess of "
+            f"the context."
+        )
 
 
 @dataclass

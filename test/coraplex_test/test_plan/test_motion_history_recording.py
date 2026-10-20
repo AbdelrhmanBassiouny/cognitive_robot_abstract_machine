@@ -4,6 +4,7 @@ Statechart execution preserves its final state in a Cramera recording.
 
 from unittest.mock import Mock
 
+from cramph.context import StatechartContext
 from coraplex.plans.executors import KinematicallySimulatedPlanExecutor
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction
 from cramera.live import visualization as visualization_module
@@ -42,7 +43,7 @@ def test_motion_recording_retains_completed_chart(
     bridge = Bridge()
     live = LiveVisualization(bridge=bridge)
     executor = KinematicallySimulatedPlanExecutor(
-        world, context_extensions=extensions, extensions=[live]
+        StatechartContext.with_extensions(world, extensions), extensions=[live]
     )
 
     executor.compile(statechart_of(executor, plan))

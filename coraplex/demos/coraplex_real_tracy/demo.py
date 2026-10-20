@@ -29,6 +29,7 @@ from semantic_digital_twin.world_description.geometry import Box, Scale, Color
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
 from coraplex.plans.context_extensions import RobotAccess
+from cramph.context import StatechartContext
 from coraplex.plans.executors import (
     PlanExecutor,
     RealRobotPlanExecutor,
@@ -141,7 +142,9 @@ with world.modify_world():
 executor_type: type[PlanExecutor] = (
     RealRobotPlanExecutor if drives_real_robot else KinematicallySimulatedPlanExecutor
 )
-executor = executor_type(world, context_extensions=[RobotAccess(tracy)], ros_node=node)
+executor = executor_type(
+    StatechartContext.with_extensions(world, [RobotAccess(tracy)]), ros_node=node
+)
 
 plan = Sequence(
     nodes=[

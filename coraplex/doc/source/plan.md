@@ -70,10 +70,13 @@ statechart:
 
 ```python
 from coraplex.plans.context_extensions import RobotAccess
+from cramph.context import StatechartContext
 from coraplex.plans.executors import KinematicallySimulatedPlanExecutor
 from cramph.statechart import Statechart
 
-executor = KinematicallySimulatedPlanExecutor(world, context_extensions=[RobotAccess(robot)])
+executor = KinematicallySimulatedPlanExecutor(
+    StatechartContext.with_extensions(world, [RobotAccess(robot)])
+)
 statechart = Statechart(context=executor.context)
 statechart.add_node(plan)
 executor.compile(statechart)

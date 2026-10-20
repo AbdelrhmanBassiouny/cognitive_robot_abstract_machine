@@ -19,7 +19,10 @@ from coraplex.robot_plans.actions.core.container import (
     CloseAction,
     MovesContainerByItsHandle,
 )
-from coraplex.robot_plans.actions.core.navigation import DrivesBase
+from coraplex.robot_plans.actions.core.navigation import (
+    DifferentialDriveBaseMotion,
+    DrivesBase,
+)
 from coraplex.robot_plans.mixins import MovesToolCenterPoint
 from cramph.composites import Parallel
 from cramph.node import StatechartNode
@@ -89,7 +92,7 @@ class DriveWithTheDifferentialDrive(ConfigurationTransformation[DrivesBase], ABC
     """
 
     def apply(self, plan_node: DrivesBase) -> None:
-        plan_node.drives_differentially = True
+        plan_node.base_motion = DifferentialDriveBaseMotion()
 
 
 @dataclass

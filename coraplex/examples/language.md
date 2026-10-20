@@ -41,16 +41,20 @@ world = setup_world()
 pr2 = PR2.from_world(world)
 
 from coraplex.plans.context_extensions import RobotAccess
+from cramph.context import StatechartContext
 from coraplex.plans.executors import KinematicallySimulatedPlanExecutor
 from cramph.statechart import Statechart
 
 extensions = [RobotAccess(pr2)]
 
+
 def run(plan):
     """
     Run `plan` simulated in `world`, with the robot and settings in `extensions`.
     """
-    executor = KinematicallySimulatedPlanExecutor(world, context_extensions=extensions)
+    executor = KinematicallySimulatedPlanExecutor(
+        StatechartContext.with_extensions(world, extensions)
+    )
     statechart = Statechart(context=executor.context)
     statechart.add_node(plan)
     executor.compile(statechart)

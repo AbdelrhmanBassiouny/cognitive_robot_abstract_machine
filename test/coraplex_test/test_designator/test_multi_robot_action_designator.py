@@ -22,6 +22,7 @@ from coraplex.robot_plans.plan_transformations import (
     ParkArmsBeforeFirstAction,
 )
 from coraplex.robot_plans.actions.composite.searching import (
+    LookAtAndDetectAction,
     SearchAction,
 )
 from coraplex.robot_plans.actions.composite.transporting import TransportAction
@@ -1104,8 +1105,8 @@ def test_search_action(multiple_robot_apartment_context) -> None:
     milk_body.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
         6, -2, 1.2, reference_frame=world.root
     )
-    search = SearchAction(
-        target_location=milk_body.global_pose, object_semantic_annotation=Milk
+    search = SearchAction.looking_around(
+        milk_body.global_pose, Milk, context_of(extensions), seed=SAMPLING_SEED
     )
 
     run_plan(search, extensions)
@@ -1122,13 +1123,14 @@ def test_a_search_looks_at_the_target_then_at_the_ends_of_a_cross_around_it(
 ):
     world, robot, extensions = multiple_robot_apartment_context
     target = Pose.from_xyz_rpy(6, -2, 1.2, reference_frame=world.root)
-    search = SearchAction(target_location=target, object_semantic_annotation=Milk)
+    arm = 0.3
 
-    expand(search, extensions)
+    search = SearchAction.looking_around(
+        target, Milk, context_of(extensions), cross_arm_length=arm
+    )
 
-    arm = search.cross_arm_length
     x, y, z = target.position.to_np()[:3]
-    looks = nodes_of_type(search, LookAtAction)
+    looks = [look.look_at for look in search.looks]
     np.testing.assert_allclose(
         [look.target.position.to_np()[:3] for look in looks],
         [
@@ -1151,13 +1153,38 @@ def test_a_search_leaves_the_world_as_it_found_it(multiple_robot_apartment_conte
     bodies_before = list(world.kinematic_structure_entities)
 
     run_plan(
-        SearchAction(
-            target_location=milk_body.global_pose, object_semantic_annotation=Milk
+        SearchAction.looking_around(
+            milk_body.global_pose, Milk, context_of(extensions), seed=SAMPLING_SEED
         ),
         extensions,
     )
 
     assert list(world.kinematic_structure_entities) == bodies_before
+
+
+def test_a_search_tries_the_looks_it_is_given_in_turn(
+    multiple_robot_apartment_context,
+):
+    """
+    Where a search looks is up to whoever builds it, such as a look a bit further up.
+    """
+    world, robot, extensions = multiple_robot_apartment_context
+    above_the_target = Pose.from_xyz_rpy(6, -2, 1.6, reference_frame=world.root)
+    look_up = LookAtAndDetectAction(
+        look_at=LookAtAction(target=above_the_target),
+        detect=DetectAction(
+            technique=DetectionTechnique.TYPES, object_sem_annotation=Milk
+        ),
+    )
+    search = SearchAction(
+        navigate=NavigateAction(target_location=robot.root.global_pose),
+        looks=[look_up],
+    )
+
+    expand(search, extensions)
+
+    [try_in_order] = nodes_of_type(search, TryInOrder)
+    assert try_in_order.nodes == [look_up]
 
 
 # %% what an action expands into
@@ -1776,13 +1803,37 @@ def test_a_cup_picked_up_earlier_in_the_plan_ends_upright(
     )
 
 
-def test_a_robot_holding_nothing_only_drives(multiple_robot_apartment_context) -> None:
+def test_a_robot_holding_nothing_drives_with_its_arms_parked(
+    multiple_robot_apartment_context,
+) -> None:
     _, robot, extensions = multiple_robot_apartment_context
     carry = CarryAction(navigate=drive_ahead(robot))
 
     expand(carry, extensions)
 
-    assert carry.nodes == [carry.navigate]
+    navigate, park_arms = carry.nodes
+    assert navigate is carry.navigate
+    assert isinstance(park_arms, ParkArmsAction)
+    assert park_arms.arms == robot.all_arms
+
+
+def test_only_the_arms_holding_nothing_are_parked(
+    multiple_robot_apartment_context,
+) -> None:
+    _, robot, extensions = multiple_robot_apartment_context
+    cup_held_tilted(robot)
+    carry = CarryAction(navigate=drive_ahead(robot))
+
+    expand(carry, extensions)
+
+    parked_arms = [
+        arm
+        for node in carry.nodes
+        if isinstance(node, ParkArmsAction)
+        for arm in node.arms
+    ]
+    holding_arm = left_or_only_arm(robot)
+    assert parked_arms == [arm for arm in robot.all_arms if arm is not holding_arm]
 
 
 def test_a_cup_put_down_earlier_in_the_plan_is_not_carried(
@@ -1806,7 +1857,7 @@ def test_a_cup_put_down_earlier_in_the_plan_is_not_carried(
         extensions,
     )
 
-    assert carry.nodes == [carry.navigate]
+    assert [type(node) for node in carry.nodes] == [NavigateAction, ParkArmsAction]
 
 
 def test_a_placing_carries_its_object_to_where_it_stands(
@@ -1998,7 +2049,7 @@ def allowances_while_reattaching(
                 any(
                     isinstance(rule, AllowCollisionForEndEffector)
                     and rule.end_effector is end_effector
-                    for rule in executor.world.collision_manager.temporary_rules
+                    for rule in executor.context.world.collision_manager.temporary_rules
                 )
             )
     assert plan.life_cycle_state == LifeCycleValues.SUCCEEDED

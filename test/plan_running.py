@@ -63,7 +63,7 @@ def simulated_executor(
     :return: An executor simulating plans in the world of the robot in `extensions`.
     """
     return KinematicallySimulatedPlanExecutor(
-        world_of(extensions), context_extensions=extensions, **options
+        StatechartContext.with_extensions(world_of(extensions), extensions), **options
     )
 
 
@@ -77,7 +77,7 @@ def robot_executor(
     :return: An executor sending plans to the real robot in `extensions`.
     """
     return RealRobotPlanExecutor(
-        world_of(extensions), context_extensions=extensions, **options
+        StatechartContext.with_extensions(world_of(extensions), extensions), **options
     )
 
 
@@ -113,10 +113,7 @@ def context_of(extensions: list[ContextExtension]) -> StatechartContext:
     :return: A context holding `extensions`, over the world of their robot, for building
         the parts of a plan that read the context before the plan joins a statechart.
     """
-    context = StatechartContext(world=world_of(extensions))
-    for extension in extensions:
-        context.add_extension(extension)
-    return context
+    return StatechartContext.with_extensions(world_of(extensions), extensions)
 
 
 # %% running plans

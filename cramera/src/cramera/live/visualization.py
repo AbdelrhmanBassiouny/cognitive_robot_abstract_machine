@@ -14,7 +14,7 @@ from functools import partial
 
 from typing_extensions import TYPE_CHECKING, Any, Callable, Optional
 
-from coraplex.plans.designator import DesignatorParameters
+from coraplex.robot_plans.actions.base import Action
 from coraplex.visualization import WorldVisualization
 from cramph.statechart import StateHistory, StateHistoryObserver, Statechart
 from semantic_digital_twin.callbacks.callback import (
@@ -134,7 +134,7 @@ class StatechartPublishing(StateHistoryObserver):
         :param history: The subscribed history containing the changed state.
         """
         for node in history.nodes_started_in_latest_item():
-            if isinstance(node, DesignatorParameters):
+            if isinstance(node, Action):
                 self.bridge.observe_action_started(node)
         self.bridge.observe_chart(self._statechart)
         self.bridge.snapshot_plan()

@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from typing_extensions import Self
+
 from coraplex.datastructures.enums import DetectionTechnique
 from coraplex.locations.locations import VisibilityLocation
 from coraplex.robot_plans.actions.base import SequentialAction
 from coraplex.robot_plans.actions.core.misc import DetectAction
 from coraplex.robot_plans.actions.core.navigation import LookAtAction, NavigateAction
-from cramph.composites import Sequence, TryInOrder
+from cramph.composites import TryInOrder
+from cramph.context import StatechartContext
 from cramph.node import StatechartNode
 from krrood.entity_query_language.factories import a, variable
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
@@ -15,98 +18,82 @@ from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
 from semantic_digital_twin.world_description.world_entity import SemanticAnnotation
 
+# %% looking for an object at one place
+
+
+@dataclass(eq=False, repr=False, kw_only=True)
+class LookAtAndDetectAction(SequentialAction):
+    """
+    Looks at a place, then detects an object while looking there.
+    """
+
+    look_at: LookAtAction
+    """
+    The look at the place.
+    """
+
+    detect: DetectAction
+    """
+    The detection once the robot looks at the place.
+    """
+
+    def create_steps(self) -> list[StatechartNode]:
+        return [self.look_at, self.detect]
+
+
 # %% searching for an object
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
 class SearchAction(SequentialAction):
     """
-    Searches for an object around a location.
+    Searches for an object: drives to where it may be seen from, then tries its looks in
+    turn until one detects the object.
 
-    The robot drives to a pose the location is visible from and looks at the location,
-    then at the ends of a cross around it along the x- and y-axes of the location's
-    reference frame, until the object is detected. The action fails if the object is
-    seen from none of them.
+    The action fails if none does.
     """
 
-    target_location: Pose
+    navigate: NavigateAction
     """
-    Location around which to look for the object.
-    """
-
-    object_semantic_annotation: type[SemanticAnnotation]
-    """
-    Type of the object which is searched for.
+    The drive to where the robot looks from.
     """
 
-    cross_arm_length: float = 0.5
+    looks: list[LookAtAndDetectAction]
     """
-    How far from :attr:`target_location` the ends of the cross lie.
-    """
-
-    detection_margin: float = 0.5
-    """
-    How far beyond the points looked at an object may lie and still be detected.
+    The looks tried in turn, until one detects the object.
     """
 
-    def create_steps(self) -> list[StatechartNode]:
-        detection_box = self._detection_box()
-        return [
-            a(NavigateAction)(
-                target_location=variable(
-                    Pose,
-                    domain=VisibilityLocation(
-                        target_pose=self.target_location,
-                        context=self.context,
-                        seed=self.sampling_seed,
-                    ),
-                )
-            ),
-            TryInOrder(
-                nodes=[
-                    Sequence(
-                        nodes=[
-                            LookAtAction(target=look_target),
-                            DetectAction(
-                                technique=DetectionTechnique.TYPES,
-                                object_sem_annotation=self.object_semantic_annotation,
-                                detection_box=detection_box,
-                            ),
-                        ]
-                    )
-                    for look_target in self.look_targets()
-                ]
-            ),
-        ]
-
-    def look_targets(self) -> list[Pose]:
+    @classmethod
+    def looking_around(
+        cls,
+        target_location: Pose,
+        object_semantic_annotation: type[SemanticAnnotation],
+        context: StatechartContext,
+        cross_arm_length: float = 0.5,
+        detection_margin: float = 0.5,
+        seed: int | None = None,
+    ) -> Self:
         """
-        :return: :attr:`target_location`, then the ends of the cross around it, in the
-            order the robot looks at them.
-        """
-        x, y, z = self.target_location.position.to_np().flatten()[:3]
-        arm = self.cross_arm_length
-        return [
-            Pose.from_xyz_rpy(
-                x + x_offset,
-                y + y_offset,
-                z,
-                reference_frame=self.target_location.reference_frame,
-            )
-            for x_offset, y_offset in [(0, 0), (arm, 0), (-arm, 0), (0, arm), (0, -arm)]
-        ]
+        A search driving to a pose `target_location` is visible from, looking at
+        `target_location` and then at the ends of a cross around it along the x- and
+        y-axes of its reference frame.
 
-    def _detection_box(self) -> VolumetricBoundingBox:
+        :param target_location: Where to look for the object.
+        :param object_semantic_annotation: The type of the object searched for.
+        :param context: The context of the plan the search runs in, whose robot performs
+            it.
+        :param cross_arm_length: How far from `target_location` the ends of the cross
+            lie.
+        :param detection_margin: How far beyond the places looked at an object may lie
+            and still be detected.
+        :param seed: Seed for sampling the standing poses; ``None`` samples afresh.
+        :return: The search, with the standing pose left open.
         """
-        :return: The cube around :attr:`target_location` that holds every point looked
-            at, widened by :attr:`detection_margin`.
-        """
-        half_extent = self.cross_arm_length + self.detection_margin
-        x, y, z = self.target_location.position.to_np().flatten()[:3]
-        return VolumetricBoundingBox(
-            origin=HomogeneousTransformationMatrix(
-                reference_frame=self.target_location.reference_frame
-            ),
+        x, y, z = target_location.position.to_np().flatten()[:3]
+        reference_frame = target_location.reference_frame
+        half_extent = cross_arm_length + detection_margin
+        detection_box = VolumetricBoundingBox(
+            origin=HomogeneousTransformationMatrix(reference_frame=reference_frame),
             min_x=x - half_extent,
             min_y=y - half_extent,
             min_z=z - half_extent,
@@ -114,3 +101,41 @@ class SearchAction(SequentialAction):
             max_y=y + half_extent,
             max_z=z + half_extent,
         )
+        cross = [
+            (0, 0),
+            (cross_arm_length, 0),
+            (-cross_arm_length, 0),
+            (0, cross_arm_length),
+            (0, -cross_arm_length),
+        ]
+        return cls(
+            navigate=a(NavigateAction)(
+                target_location=variable(
+                    Pose,
+                    domain=VisibilityLocation(
+                        target_pose=target_location, context=context, seed=seed
+                    ),
+                )
+            ),
+            looks=[
+                LookAtAndDetectAction(
+                    look_at=LookAtAction(
+                        target=Pose.from_xyz_rpy(
+                            x + x_offset,
+                            y + y_offset,
+                            z,
+                            reference_frame=reference_frame,
+                        )
+                    ),
+                    detect=DetectAction(
+                        technique=DetectionTechnique.TYPES,
+                        object_sem_annotation=object_semantic_annotation,
+                        detection_box=detection_box,
+                    ),
+                )
+                for x_offset, y_offset in cross
+            ],
+        )
+
+    def create_steps(self) -> list[StatechartNode]:
+        return [self.navigate, TryInOrder(nodes=list(self.looks))]

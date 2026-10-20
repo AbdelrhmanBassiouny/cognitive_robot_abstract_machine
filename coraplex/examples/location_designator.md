@@ -36,26 +36,32 @@ given a seed, which makes this example run the same way every time.
 from coraplex.testing import setup_world
 from semantic_digital_twin.robots.pr2 import PR2
 
-
 world = setup_world()
 pr2_view = PR2.from_world(world)
 from coraplex.plans.context_extensions import RobotAccess, StatementGrounding
+from cramph.context import StatechartContext
 from coraplex.plans.executors import KinematicallySimulatedPlanExecutor
 from cramph.statechart import Statechart
 
 extensions = [RobotAccess(pr2_view), StatementGrounding(sampling_seed=0)]
-context = KinematicallySimulatedPlanExecutor(world, context_extensions=extensions).context
+context = KinematicallySimulatedPlanExecutor(
+    StatechartContext.with_extensions(world, extensions)
+).context
+
 
 def run(plan):
     """
     Run `plan` simulated in `world`, with the robot and settings in `extensions`.
     """
-    executor = KinematicallySimulatedPlanExecutor(world, context_extensions=extensions)
+    executor = KinematicallySimulatedPlanExecutor(
+        StatechartContext.with_extensions(world, extensions)
+    )
     statechart = Statechart(context=executor.context)
     statechart.add_node(plan)
     executor.compile(statechart)
     executor.execute()
     return executor
+
 
 origin_pose = pr2_view.root.global_pose
 ```

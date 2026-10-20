@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from abc import ABC
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
 from typing_extensions import Optional
@@ -44,6 +44,70 @@ from semantic_digital_twin.spatial_types.spatial_types import (
 )
 from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
 
+# %% how the base gets to a pose
+
+
+@dataclass
+class BaseMotion(ABC):
+    """
+    How the base of a robot gets to a pose an action drives it to.
+    """
+
+    @abstractmethod
+    def create_goal(self, action: DrivesBase, target: Pose) -> MotionStatechartNode:
+        """
+        :param action: The action driving the base.
+        :param target: Where the base should end up.
+        :return: A new node putting the base of the robot performing `action` at
+            `target`.
+        """
+
+
+@dataclass
+class HolonomicBaseMotion(BaseMotion):
+    """
+    The controller drives the base to the pose in whatever direction it lies, sideways
+    included.
+    """
+
+    def create_goal(self, action: DrivesBase, target: Pose) -> MotionStatechartNode:
+        return CartesianPose(
+            root_link=action.world.root,
+            tip_link=action.robot.root,
+            goal_pose=target,
+        )
+
+
+@dataclass
+class DifferentialDriveBaseMotion(BaseMotion):
+    """
+    The base turns towards the pose, drives there and turns again, within the
+    :attr:`~DrivesBase.base_pose_threshold` of the action.
+    """
+
+    def create_goal(self, action: DrivesBase, target: Pose) -> MotionStatechartNode:
+        return DifferentialDriveBaseGoal(
+            diff_drive_connection=action.robot.drive,
+            goal_pose=target,
+            threshold=action.base_pose_threshold,
+        )
+
+
+@dataclass
+class OdometryOverwriteBaseMotion(BaseMotion):
+    """
+    The base is put at the pose by writing the odometry, without being driven there.
+    """
+
+    def create_goal(self, action: DrivesBase, target: Pose) -> MotionStatechartNode:
+        return SetOdometry(
+            base_pose=target.homogeneous_matrix,
+            odom_connection=action.robot.root.parent_connection,
+        )
+
+
+# %% driving the base
+
 
 @dataclass(eq=False, repr=False, kw_only=True)
 class DrivesBase(Action, ABC):
@@ -56,46 +120,14 @@ class DrivesBase(Action, ABC):
     How far the base may be from a pose it drives to, in meters and in radians, to count
     as arrived.
 
-    .. note:: Only read while the base :attr:`drives_differentially`.
+    .. note:: Only read by a :class:`DifferentialDriveBaseMotion`.
     """
 
-    drives_differentially: bool = field(default=False, init=False)
+    base_motion: BaseMotion = field(default_factory=HolonomicBaseMotion, init=False)
     """
-    Whether the base is moved with a goal for its differential drive, which turns
-    towards a pose, drives there and turns again, instead of a goal that asks the base
-    to move sideways.
+    How the base gets to the poses this action drives it to, as set by the plan
+    transformations configuring the action.
     """
-
-    writes_odometry: bool = field(default=False, init=False)
-    """
-    Whether the base is put at a pose by writing the odometry, instead of being driven
-    there.
-    """
-
-    def _drive_to(self, target: Pose) -> MotionStatechartNode:
-        """
-        :param target: Where the base should end up.
-        :return: The node that puts the base there: a goal of its own for a
-            differential drive, otherwise the odometry written directly where the base
-            :attr:`writes_odometry`, and otherwise the commanded pose the controller
-            drives to.
-        """
-        if self.drives_differentially:
-            return DifferentialDriveBaseGoal(
-                diff_drive_connection=self.robot.drive,
-                goal_pose=target,
-                threshold=self.base_pose_threshold,
-            )
-        if self.writes_odometry:
-            return SetOdometry(
-                base_pose=target.homogeneous_matrix,
-                odom_connection=self.robot.root.parent_connection,
-            )
-        return CartesianPose(
-            root_link=self.world.root,
-            tip_link=self.robot.root,
-            goal_pose=target,
-        )
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
@@ -111,7 +143,9 @@ class NavigateAction(DrivesBase, GoalAction):
     """
 
     def create_goal(self) -> StatechartNode:
-        return self._drive_to(self.robot.mobile_base.pose_facing(self.target_location))
+        return self.base_motion.create_goal(
+            self, self.robot.mobile_base.pose_facing(self.target_location)
+        )
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
@@ -215,7 +249,9 @@ class PathPlanningNavigateAction(DrivesBase, SequentialAction):
     """
 
     def create_steps(self) -> list[StatechartNode]:
-        return [self._drive_to(waypoint) for waypoint in self._path()]
+        return [
+            self.base_motion.create_goal(self, waypoint) for waypoint in self._path()
+        ]
 
     @property
     def _floor(self) -> Floor:

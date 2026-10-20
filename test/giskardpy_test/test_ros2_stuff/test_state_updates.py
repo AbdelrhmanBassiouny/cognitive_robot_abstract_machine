@@ -286,10 +286,12 @@ def test_the_client_follows_a_child_it_chose_once_giskard_runs_it(
 ) -> None:
     motion_server.executor.context.add_extension(
         ChildChooserAccess(
-            chooser=ChildSentByClient(
-                world_updates=motion_server.world_updates,
-                action_server=motion_server.action_server,
-            )
+            choosers=[
+                ChildSentByClient(
+                    world_updates=motion_server.world_updates,
+                    action_server=motion_server.action_server,
+                )
+            ]
         )
     )
     goal = ChoosingGoal.ending_when(EndMotion.when_true)
@@ -300,12 +302,14 @@ def test_the_client_follows_a_child_it_chose_once_giskard_runs_it(
         action_server=motion_server.action_server,
         child_choice_client=ChildChoiceClient(
             statechart=goal.statechart,
-            chooser=ChooserAnsweringInTurn([child]),
+            child_chooser_access=ChildChooserAccess(
+                choosers=[ChooserAnsweringInTurn([child])]
+            ),
             world_updates=client_world_updates(),
         ),
         server_chooser=motion_server.executor.context.require_extension(
             ChildChooserAccess
-        ).chooser,
+        ).choosers[0],
     )
     motion_server.control_loop.inputs.synchronizers.append(following)
     motion_server.action_server.goal_json = goal.goal_json()

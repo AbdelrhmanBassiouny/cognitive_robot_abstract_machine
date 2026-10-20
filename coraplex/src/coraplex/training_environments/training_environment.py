@@ -26,6 +26,7 @@ from coraplex.plans.failures import (
     EmptyUnderspecified,
 )
 from coraplex.plans.context_extensions import RobotAccess, StatementGrounding
+from cramph.context import StatechartContext
 from coraplex.plans.executors import KinematicallySimulatedPlanExecutor
 from coraplex.robot_plans.actions.base import Action
 from coraplex.robot_plans.actions.core.misc import MoveToReach
@@ -144,7 +145,7 @@ class TrainingEnvironment(Generic[TrainedAction], SubClassSafeGeneric, ABC):
             import rclpy
 
             pub = VizMarkerPublisher(
-                _world=episode.executor.world,
+                _world=episode.executor.context.world,
                 node=rclpy.create_node("test_node"),
             )
 
@@ -238,11 +239,13 @@ class MoveToReachTrainingEnvironment(TrainingEnvironment[MoveToReach]):
             query_backend = self.setup_backend(move_to_reach)
 
         executor = KinematicallySimulatedPlanExecutor(
-            world,
-            context_extensions=[
-                RobotAccess(robot),
-                StatementGrounding(query_backend=query_backend),
-            ],
+            StatechartContext.with_extensions(
+                world,
+                [
+                    RobotAccess(robot),
+                    StatementGrounding(query_backend=query_backend),
+                ],
+            ),
         )
 
         return TrainingEpisode(

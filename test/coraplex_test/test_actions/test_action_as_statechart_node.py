@@ -46,7 +46,6 @@ from giskardpy.motion_statechart.goals.collision_avoidance import (
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
 )
-from krrood.patterns.field_metadata import ParameterMetadata
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
     WorldEntityWithIDKwargsTracker,
 )
@@ -512,20 +511,6 @@ class ActionWithKeywordOnlyParameter(ActionRunningHandedInSteps):
     """
 
 
-@dataclass(eq=False, repr=False, kw_only=True)
-class ActionWithHelperField(ActionRunningHandedInSteps):
-    """
-    An action carrying a field its caller sets that is not one of its parameters.
-    """
-
-    helper: int = field(
-        default=0, metadata=ParameterMetadata(is_parameter=False).as_dict()
-    )
-    """
-    A value the action needs that does not describe what it does.
-    """
-
-
 def test_a_keyword_only_field_is_a_parameter() -> None:
     action = ActionWithKeywordOnlyParameter(speed=2.0)
 
@@ -536,12 +521,6 @@ def test_the_name_of_an_action_is_not_a_parameter() -> None:
     action = MoveTorsoAction(torso_state=TorsoState.HIGH, name="lift")
 
     assert action.designator_parameter == {"torso_state": TorsoState.HIGH}
-
-
-def test_a_field_marked_as_no_parameter_is_left_out() -> None:
-    action = ActionWithHelperField(helper=3)
-
-    assert action.designator_parameter == {"steps": []}
 
 
 # %% an action keeps its collision allowances in force while it runs

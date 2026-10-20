@@ -20,7 +20,7 @@ from sqlalchemy.orm import sessionmaker
 
 import coraplex.orm.ormatic_interface  # type: ignore  # noqa: F401
 from coraplex.plans.context_extensions import RobotAccess, StatementGrounding
-from cramph.context import ContextExtension
+from cramph.context import ContextExtension, StatechartContext
 from cramph.statechart import Statechart
 from coraplex.orm.ormatic_interface import Base  # type: ignore
 from coraplex.plans.executors import KinematicallySimulatedPlanExecutor
@@ -225,7 +225,9 @@ def reliability_experiment(
     plan = create_plan(world, plan_size)
 
     t0 = time.perf_counter()
-    executor = KinematicallySimulatedPlanExecutor(world, context_extensions=extensions)
+    executor = KinematicallySimulatedPlanExecutor(
+        StatechartContext.with_extensions(world, extensions)
+    )
     statechart = Statechart(context=executor.context)
     statechart.add_node(plan)
     executor.compile(statechart)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import TypeVar
+from typing_extensions import Self, TypeVar
 
 from krrood.symbolic_math.float_variable_data import FloatVariableData
 from krrood.symbolic_math.symbolic_math import FloatVariable
@@ -15,7 +15,6 @@ from cramph.exceptions import (
 )
 
 from semantic_digital_twin.world import World
-
 
 # %% context extensions
 
@@ -80,6 +79,21 @@ class StatechartContext:
     Executor extensions add the context extensions they need when an executor is
     created, see :meth:`~cramph.executor.ExecutorExtension.extend_context`.
     """
+
+    @classmethod
+    def with_extensions(cls, world: World, extensions: list[ContextExtension]) -> Self:
+        """
+        :param world: The world in which the statechart is executed.
+        :param extensions: The extensions the new context holds.
+        :return: A new context in `world` holding `extensions`, see
+            :meth:`add_extension`.
+        :raises DuplicateContextExtensionError: If two of `extensions` are of the same
+            type.
+        """
+        context = cls(world=world)
+        for extension in extensions:
+            context.add_extension(extension)
+        return context
 
     def set_tick_duration(self, tick_duration: float) -> None:
         """

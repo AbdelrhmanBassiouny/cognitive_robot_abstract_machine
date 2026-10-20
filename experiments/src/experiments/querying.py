@@ -71,6 +71,7 @@ from experiments.experiment_definitions import (
 )
 from cramph.threaded_nodes import FunctionCall
 from coraplex.plans.context_extensions import RobotAccess
+from cramph.context import StatechartContext
 from coraplex.plans.executors import KinematicallySimulatedPlanExecutor
 from cramph.statechart import Statechart
 
@@ -192,7 +193,7 @@ def build_executor() -> KinematicallySimulatedPlanExecutor:
 
     pr2 = PR2.from_world(world)
     executor = KinematicallySimulatedPlanExecutor(
-        world, context_extensions=[RobotAccess(pr2)], ros_node=ros_node
+        StatechartContext.with_extensions(world, [RobotAccess(pr2)]), ros_node=ros_node
     )
 
     with world.modify_world():
@@ -222,7 +223,7 @@ def build_plan(executor: KinematicallySimulatedPlanExecutor) -> StatechartNode:
     :param executor: The executor running the plan.
     :return: The fully executed plan, ready for EQL queries.
     """
-    world = executor.world
+    world = executor.context.world
     pr2 = executor.context.require_extension(RobotAccess).robot
 
     def _failing_step():
@@ -588,7 +589,7 @@ def main() -> None:
     plan = build_plan(executor)
     session, engine = persist_plan(plan)
     try:
-        table = run_experiment(plan, executor.world, session)
+        table = run_experiment(plan, executor.context.world, session)
     finally:
         session.close()
         engine.dispose()

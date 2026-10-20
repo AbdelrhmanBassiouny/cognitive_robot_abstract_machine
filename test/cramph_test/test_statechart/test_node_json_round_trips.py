@@ -78,7 +78,7 @@ def _context(world: World) -> StatechartContext:
     """
     context = StatechartContext(world=world)
     context.add_extension(
-        ChildChooserAccess(chooser=ChooserAnsweringInTurn(children=[]))
+        ChildChooserAccess(choosers=[ChooserAnsweringInTurn(children=[])])
     )
     return context
 

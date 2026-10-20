@@ -17,7 +17,7 @@ import pytest
 
 from coraplex.plans.context_extensions import RobotAccess
 from coraplex.plans.executors import PhysicallySimulatedPlanExecutor
-from cramph.context import ContextExtension
+from cramph.context import ContextExtension, StatechartContext
 from cramph.node import StatechartNode
 from cramph.statechart import Statechart
 from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
@@ -287,8 +287,7 @@ def physically_simulated_executor(
         counts its steps while the controller moves the world.
     """
     return PhysicallySimulatedPlanExecutor(
-        world_of(extensions),
-        context_extensions=extensions,
+        StatechartContext.with_extensions(world_of(extensions), extensions),
         simulation=SimulationThatCountsItsSteps(),
         **options,
     )
