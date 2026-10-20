@@ -10,7 +10,11 @@ from types import UnionType, EllipsisType
 import numpy as np
 from typing_extensions import (
     Any,
+    Dict,
+    Hashable,
     Iterable,
+    Iterator,
+    List,
     Optional,
     TYPE_CHECKING,
     Type,
@@ -18,6 +22,8 @@ from typing_extensions import (
     get_args,
 )
 from krrood.parametrization.exceptions import (
+    AmbiguousVariableName,
+    DomainElementsIndistinguishableInSamples,
     EmptyVariableDomain,
     InvalidEllipsis,
     JointQueryAcrossClassesNotSupported,
@@ -41,8 +47,6 @@ from krrood.entity_query_language.operators.core_logical_operators import (
     flatten_operands,
 )
 from krrood.entity_query_language.query.match import Match, AttributeMatch
-from krrood.ormatic.data_access_objects.helper import to_dao
-from krrood.ormatic.data_access_objects.to_dao import ToDataAccessObjectState
 from krrood.parametrization.random_events_translator import (
     WhereExpressionToRandomEventTranslator,
 )
@@ -142,6 +146,47 @@ class DomainObjectFeature:
         :return: The value of the feature for that object.
         """
         return self.values_by_object_hash[hash(domain_object)]
+
+
+@dataclass
+class SampleColumn:
+    """
+    How one column of the samples of a probabilistic model binds the variable assigned
+    to an attribute of a match's pattern.
+    """
+
+    index: int
+    """
+    The index of the column.
+    """
+
+    assigned_variable: SymbolicExpression
+    """
+    The variable assigned to the attribute, which the column binds.
+    """
+
+    values_by_sample_value: Optional[Dict[float, Hashable]] = None
+    """
+    The value of the attribute for every value of a symbolic column, or ``None`` if the
+    samples are the values themselves.
+    """
+
+    is_integer: bool = False
+    """
+    Whether the attribute holds whole numbers, which the samples store as floats.
+    """
+
+    def value_in(self, sample: np.ndarray) -> Any:
+        """
+        :param sample: A sample of the model.
+        :return: The value the sample gives the assigned variable.
+        """
+        value = sample[self.index]
+        if self.values_by_sample_value is not None:
+            return self.values_by_sample_value[float(value)]
+        if self.is_integer:
+            return int(value)
+        return value.item()
 
 
 @dataclass
@@ -576,8 +621,7 @@ class UnderspecifiedParameters(ModelQueryParameters):
         """
         Extract variables from a single non-primitive literal value.
 
-        Converts ``value`` to a DAO, runs feature extraction, and registers a
-        conditioning assignment for every discovered feature.
+        Runs feature extraction on ``value`` and registers a conditioning assignment for every discovered feature.
 
         :param value: The non-primitive literal to decompose.
         :param name_prefix: Attribute access path used to namespace the feature names
@@ -585,8 +629,7 @@ class UnderspecifiedParameters(ModelQueryParameters):
         :return: A dictionary mapping prefixed feature names to their variables.
         """
         result = {}
-        dao_state = ToDataAccessObjectState()
-        extractor = FeatureExtractor.from_instances([to_dao(value, dao_state)])
+        extractor = FeatureExtractor.from_instances([value])
         for feature in extractor.features:
             feature_name = (
                 f"{name_prefix}.{feature.get_clean_name_from_mapped_variable()}"
@@ -676,11 +719,9 @@ class UnderspecifiedParameters(ModelQueryParameters):
         :param domain_objects: The objects in the variable's domain.
         :return: A dictionary of extracted variables.
         """
-        state = ToDataAccessObjectState()
         hashes = [hash(obj) for obj in domain_objects]
-        data_access_objects = [to_dao(obj, state=state) for obj in domain_objects]
 
-        extractor = FeatureExtractor.from_instances(data_access_objects)
+        extractor = FeatureExtractor.from_instances(domain_objects)
 
         result = {}
 
@@ -702,8 +743,8 @@ class UnderspecifiedParameters(ModelQueryParameters):
         result[identifier_variable.name] = identifier_variable
 
         simple_events = []
-        for hash_, dao in zip(hashes, data_access_objects):
-            current_feature_values = extractor.apply_mapping(dao)
+        for hash_, domain_object in zip(hashes, domain_objects):
+            current_feature_values = extractor.apply_mapping(domain_object)
 
             data = {identifier_variable: hash_}
             for feature, value in zip(extractor.features, current_feature_values):
@@ -726,39 +767,92 @@ class UnderspecifiedParameters(ModelQueryParameters):
         return result
 
     @cached_property
-    def _attribute_matches_by_name(self) -> dict[str, AttributeMatch]:
+    def _attribute_matches_by_name(self) -> Dict[str, List[AttributeMatch]]:
         """
         :return: The attribute matches of the statement's pattern that assign a
             variable, keyed by the name of the random events variable they correspond
             to.
         """
-        return {
-            attribute_match.name_from_variable_access_path: attribute_match
-            for attribute_match in self.statement._matches_with_variables_
-        }
+        attribute_matches_by_name: Dict[str, List[AttributeMatch]] = {}
+        for attribute_match in self.statement._matches_with_variables_:
+            attribute_matches_by_name.setdefault(
+                attribute_match.name_from_variable_access_path, []
+            ).append(attribute_match)
+        return attribute_matches_by_name
 
-    def bindings_from_model_sample(
+    def _attribute_match_of(
+        self, variable_: random_events.variable.Variable
+    ) -> Optional[AttributeMatch]:
+        """
+        :param variable_: A variable of a probabilistic model.
+        :return: The attribute match of the statement that has the name of the
+            variable, or ``None`` if there is none.
+        :raises AmbiguousVariableName: If several attributes of the statement have the
+            name of the variable.
+        """
+        attribute_matches = self._attribute_matches_by_name.get(variable_.name, [])
+        if len(attribute_matches) > 1:
+            raise AmbiguousVariableName(
+                variable=variable_, attribute_matches=attribute_matches
+            )
+        if not attribute_matches:
+            return None
+        [attribute_match] = attribute_matches
+        return attribute_match
+
+    def bindings_from_model_samples(
         self,
         variables: Iterable[random_events.variable.Variable],
-        sample: np.ndarray,
-    ) -> Bindings:
+        samples: np.ndarray,
+    ) -> Iterator[Bindings]:
         """
-        Bind the statement's pattern variables to a sample of a probabilistic model.
+        Bind the statement's pattern variables to every sample of a probabilistic model.
 
-        :param variables: The variables from a probabilistic model.
-        :param sample: A sample from the same model.
+        :param variables: The variables of the model, in the order of the columns of
+            the samples.
+        :param samples: Samples of the model.
         :return: The value of every sampled variable of the pattern, keyed by the
-            identifier of the variable assigned to its attribute.
+            identifier of the variable assigned to its attribute, one row per sample in
+            the order of the samples.
+        :raises AmbiguousVariableName: If several attributes of the statement have the
+            name of a variable.
+        :raises DomainElementsIndistinguishableInSamples: If two elements of the domain
+            of a symbolic variable have hashes that a sample cannot tell apart.
         """
-        bindings = {}
-        for variable_, value in zip(variables, sample):
-            attribute_match = self._attribute_matches_by_name.get(variable_.name)
-            if attribute_match is None:
+        columns = self._sample_columns_of(variables)
+        for sample in samples:
+            yield {
+                column.assigned_variable._id_: column.value_in(sample)
+                for column in columns
+            }
+
+    def _sample_columns_of(
+        self, variables: Iterable[random_events.variable.Variable]
+    ) -> List[SampleColumn]:
+        """
+        :param variables: The variables of a model, in the order of the columns of its
+            samples.
+        :return: How every column that belongs to an attribute of the statement binds
+            the variable assigned to that attribute.
+        :raises AmbiguousVariableName: If several attributes of the statement have the
+            name of a variable.
+        """
+        columns = []
+        for index, variable_ in enumerate(variables):
+            attribute_match = self._attribute_match_of(variable_)
+            if attribute_match is None or attribute_match.assigned_variable is None:
                 continue
-            bindings[attribute_match.assigned_variable._id_] = (
-                self._value_from_model_sample(attribute_match, variable_, value)
+            columns.append(
+                SampleColumn(
+                    index=index,
+                    assigned_variable=attribute_match.assigned_variable,
+                    values_by_sample_value=self._values_by_sample_value(
+                        variable_, attribute_match
+                    ),
+                    is_integer=isinstance(variable_, random_events.variable.Integer),
+                )
             )
-        return bindings
+        return columns
 
     def model_sample_from_bindings(
         self,
@@ -767,7 +861,7 @@ class UnderspecifiedParameters(ModelQueryParameters):
     ) -> np.ndarray:
         """
         Translate bindings of the statement's pattern variables into a sample of a
-        probabilistic model, the inverse of :meth:`bindings_from_model_sample`.
+        probabilistic model, the inverse of :meth:`bindings_from_model_samples`.
 
         A variable the statement states a literal value for takes that value, and a
         feature of an object the bindings give a pattern variable takes that object's
@@ -800,8 +894,10 @@ class UnderspecifiedParameters(ModelQueryParameters):
         :return: The value of the variable in a model sample.
         :raises ModelVariableNotBound: If neither the bindings nor the literal values
             give the variable a value.
+        :raises AmbiguousVariableName: If several attributes of the statement have the
+            name of the variable.
         """
-        attribute_match = self._attribute_matches_by_name.get(variable_.name)
+        attribute_match = self._attribute_match_of(variable_)
         if (
             attribute_match is not None
             and attribute_match.assigned_variable._id_ in bindings
@@ -840,40 +936,6 @@ class UnderspecifiedParameters(ModelQueryParameters):
         ) and not isinstance(attribute_match.assigned_value, Literal)
 
     @classmethod
-    def _value_from_model_sample(
-        cls,
-        attribute_match: AttributeMatch,
-        variable_: random_events.variable.Variable,
-        value: Any,
-    ) -> Any:
-        """
-        :param attribute_match: The attribute match the sampled variable corresponds to.
-        :param variable_: The sampled variable.
-        :param value: The value the model sampled for the variable.
-        :return: The attribute's value the sampled value stands for.
-        """
-        if cls._is_assigned_a_domain_variable(attribute_match):
-            [domain_hash] = [
-                domain_hash
-                for key, domain_hash in variable_.domain.hash_map.items()
-                if key == value
-            ]
-            [value] = [
-                domain_value
-                for domain_value in attribute_match.assigned_value.tolist()
-                if hash(domain_value) == domain_hash
-            ]
-            return value
-        if not variable_.is_numeric:
-            [value] = [
-                domain_value.element
-                for domain_value in variable_.domain
-                if hash(domain_value) == value
-            ]
-            return value
-        return value.item()
-
-    @classmethod
     def _value_to_model_sample(
         cls,
         variable_: random_events.variable.Variable,
@@ -881,7 +943,7 @@ class UnderspecifiedParameters(ModelQueryParameters):
         attribute_match: Optional[AttributeMatch] = None,
     ) -> Any:
         """
-        The inverse of :meth:`_value_from_model_sample`.
+        The inverse of :meth:`SampleColumn.value_in`.
 
         :param variable_: A variable of a probabilistic model.
         :param value: A value of the attribute the variable corresponds to.
@@ -907,6 +969,68 @@ class UnderspecifiedParameters(ModelQueryParameters):
             ]
             return domain_hash
         return value
+
+    @classmethod
+    def _values_by_sample_value(
+        cls,
+        variable_: random_events.variable.Variable,
+        attribute_match: AttributeMatch,
+    ) -> Optional[Dict[float, Hashable]]:
+        """
+        :param variable_: A variable of a model.
+        :param attribute_match: The attribute the variable belongs to.
+        :return: The value of the attribute for every value a sample of a symbolic
+            variable can have, or ``None`` for a numeric variable, whose samples are the
+            values themselves.
+        :raises DomainElementsIndistinguishableInSamples: If two elements of the domain
+            of a symbolic variable have hashes that a sample cannot tell apart.
+        """
+        if cls._is_assigned_a_domain_variable(attribute_match):
+            domain_values_by_hash = {
+                hash(domain_value): domain_value
+                for domain_value in attribute_match.assigned_value.tolist()
+            }
+            return cls._by_sample_value(
+                variable_,
+                {
+                    sample_value: domain_values_by_hash[domain_index]
+                    for sample_value, domain_index in variable_.domain.hash_map.items()
+                    if domain_index in domain_values_by_hash
+                },
+            )
+        if not variable_.is_numeric:
+            return cls._by_sample_value(
+                variable_,
+                {
+                    hash(domain_value): domain_value.element
+                    for domain_value in variable_.domain
+                },
+            )
+        return None
+
+    @staticmethod
+    def _by_sample_value(
+        variable_: random_events.variable.Variable,
+        values_by_hash: Dict[int, Hashable],
+    ) -> Dict[float, Hashable]:
+        """
+        :param variable_: A symbolic variable of a model.
+        :param values_by_hash: The value of the attribute for the hash of every element
+            of the domain of the variable.
+        :return: The value of the attribute for every hash as a sample holds it, which
+            is a float and rounds hashes larger than ``2**53``.
+        :raises DomainElementsIndistinguishableInSamples: If two hashes round to the
+            same float.
+        """
+        result: Dict[float, Hashable] = {}
+        for hash_, value in values_by_hash.items():
+            sample_value = float(hash_)
+            if sample_value in result:
+                raise DomainElementsIndistinguishableInSamples(
+                    variable=variable_, elements=[result[sample_value], value]
+                )
+            result[sample_value] = value
+        return result
 
     @staticmethod
     def _process_attribute_match_type(type_):

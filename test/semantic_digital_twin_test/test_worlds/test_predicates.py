@@ -43,7 +43,7 @@ from semantic_digital_twin.reasoning.robot_predicates import (
 )
 from semantic_digital_twin.robots.robot_parts import Camera, EndEffector, TCamera
 from semantic_digital_twin.robots.pr2 import PR2
-from semantic_digital_twin.spatial_types.spatial_types import Pose, Quaternion
+from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.testing import *
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
@@ -247,7 +247,7 @@ def test_camera_view_frame_x_axis_is_the_forward_axis(pr2_world_copy: World):
 
     root_T_view = camera.root_T_forward_view.to_np()
     root_V_forward = (
-        root_T_camera.to_rotation_matrix() @ camera.forward_facing_axis
+        root_T_camera.rotation_matrix @ camera.forward_facing_axis
     ).to_np()
 
     assert np.allclose(root_T_view[:3, 0], root_V_forward.flatten()[:3], atol=1e-9)
@@ -486,12 +486,8 @@ def test_is_body_in_gripper(pr2_world_copy):
     test_box.collision = ShapeCollection([box_collision])
 
     # Calculate position between fingers
-    finger1_pos = (
-        left_gripper.finger.tip.collision.center_of_mass_in_world().to_vector3()
-    )
-    finger2_pos = (
-        left_gripper.thumb.tip.collision.center_of_mass_in_world().to_vector3()
-    )
+    finger1_pos = left_gripper.finger.tip.collision.center_of_mass_in_world().vector3
+    finger2_pos = left_gripper.thumb.tip.collision.center_of_mass_in_world().vector3
     between_fingers = (finger1_pos + finger2_pos) / 2.0
 
     # Add box to world
@@ -707,6 +703,14 @@ def test_empty_gripper_is_not_holding_something():
         Minimal concrete EndEffector for predicate tests.
         """
 
+        @property
+        def approach_axis(self) -> Vector3:
+            return Vector3.X(reference_frame=self.tool_frame)
+
+        @property
+        def closing_axis(self) -> Vector3:
+            return Vector3.Y(reference_frame=self.tool_frame)
+
         def setup_hardware_interfaces(self):
             pass
 
@@ -738,7 +742,6 @@ def test_empty_gripper_is_not_holding_something():
             name=PrefixedName("gripper", prefix="review"),
             root=palm,
             tool_frame=tool_frame,
-            front_facing_orientation=Quaternion(0, 0, 0, 1),
         )
         world.add_semantic_annotation(gripper)
 
@@ -751,6 +754,10 @@ class ReviewCamera(Camera):
     """
     Minimal concrete Camera for predicate tests.
     """
+
+    @property
+    def forward_facing_axis(self) -> Vector3:
+        return Vector3.X(reference_frame=self.root)
 
     def setup_hardware_interfaces(self):
         pass
@@ -801,7 +808,6 @@ def test_nothing_occludes_a_body_in_clear_line_of_sight():
         camera = ReviewCamera(
             name=PrefixedName("camera", prefix="review"),
             root=camera_body,
-            forward_facing_axis=Vector3.X(),
             field_of_view=FieldOfView(horizontal_angle=0.99, vertical_angle=0.75),
         )
         world.add_semantic_annotation(camera)

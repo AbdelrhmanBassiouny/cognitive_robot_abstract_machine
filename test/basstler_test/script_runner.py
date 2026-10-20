@@ -18,6 +18,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from basstler.locations import PackageLocation, ProjectLocation
+
+from .constants import EnvironmentVariable
+
 
 @dataclass(frozen=True, kw_only=True)
 class ScriptRunner(ABC):
@@ -100,6 +104,27 @@ class PythonModuleRunner(ScriptRunner):
         """:return: This interpreter, running that module."""
         return (sys.executable, "-m", self.module_name)
 
+    def environment(self, overrides: Mapping[str, str]) -> dict[str, str]:
+        """
+        Put the project root's own package source first on the import path, as the shell
+        configuration does for every caller, so the module run is that checkout's copy.
+
+        :param overrides: Variables this call sets.
+        :return: The environment of :meth:`ScriptRunner.environment`, with that path
+            ahead of any it inherited.
+        """
+        environment = super().environment(overrides)
+        import_directory = str(
+            self.project_root / ProjectLocation.PACKAGE_IMPORT_DIRECTORY
+        )
+        inherited_path = environment.get(EnvironmentVariable.IMPORT_PATH)
+        environment[EnvironmentVariable.IMPORT_PATH] = (
+            os.pathsep.join((import_directory, inherited_path))
+            if inherited_path
+            else import_directory
+        )
+        return environment
+
 
 @dataclass(frozen=True, kw_only=True)
 class BashScriptRunner(ScriptRunner):
@@ -117,3 +142,24 @@ class BashScriptRunner(ScriptRunner):
     def command(self) -> tuple[str, ...]:
         """:return: bash, running that script."""
         return ("bash", str(self.script_path))
+
+
+def configuration_value(variable_name: str) -> str:
+    """
+    :param variable_name: A variable the shell configuration assigns.
+    :return: Its value once this repository's shell configuration is sourced.
+    """
+    return subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$0" && printf "%s" "${!1}"',
+            PackageLocation.REPOSITORY_ROOT
+            / ProjectLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT,
+            variable_name,
+        ],
+        cwd=PackageLocation.REPOSITORY_ROOT.value,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout

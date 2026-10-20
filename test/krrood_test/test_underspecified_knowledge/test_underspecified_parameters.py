@@ -158,17 +158,18 @@ def test_list_of_enum_field_produces_indexed_variables():
 # %% translating between model samples and bindings
 
 
-def test_model_sample_from_bindings_inverts_bindings_from_model_sample():
+def test_model_sample_from_bindings_inverts_bindings_from_model_samples():
     query = an(EnumAction)(obj=Body(name="body"), enum=...)
     parameters = UnderspecifiedParameters(query)
     model = parameters.resolve_conditioned_and_truncated_model(
         FullyFactorizedRegistry().get_model(parameters)
     )
-    [sample] = model.sample(1)
-    bindings = parameters.bindings_from_model_sample(model.variables, sample)
-    assert parameters.model_sample_from_bindings(
-        model.variables, bindings
-    ).tolist() == [sample.tolist()]
+    samples = model.sample(1)
+    [bindings] = parameters.bindings_from_model_samples(model.variables, samples)
+    assert (
+        parameters.model_sample_from_bindings(model.variables, bindings).tolist()
+        == samples.tolist()
+    )
 
 
 def test_model_sample_from_bindings_rejects_an_unbound_model_variable():
@@ -190,7 +191,8 @@ def test_model_sample_from_bindings_derives_the_features_of_a_bound_domain_objec
         FullyFactorizedRegistry().get_model(parameters)
     )
     bindings = {position._id_: positions[1]}
-    [sample] = parameters.model_sample_from_bindings(model.variables, bindings)
+    samples = parameters.model_sample_from_bindings(model.variables, bindings)
+    [sample] = samples
     sample_values = {
         model_variable.name: value
         for model_variable, value in zip(model.variables, sample)
@@ -200,4 +202,6 @@ def test_model_sample_from_bindings_derives_the_features_of_a_bound_domain_objec
         sample_values["KRROODPose.position.y"],
         sample_values["KRROODPose.position.z"],
     ] == [positions[1].x, positions[1].y, positions[1].z]
-    assert parameters.bindings_from_model_sample(model.variables, sample) == bindings
+    assert list(parameters.bindings_from_model_samples(model.variables, samples)) == [
+        bindings
+    ]

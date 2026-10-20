@@ -412,12 +412,14 @@ class ProbabilisticBackend(GenerativeBackend):
         samples = model.sample(number_of_samples)
         log_likelihoods = model.log_likelihood(samples)
         most_likely_first = log_likelihoods.argsort()[::-1]
-        for sample, log_likelihood in zip(
-            samples[most_likely_first], log_likelihoods[most_likely_first]
+        for bindings, log_likelihood in zip(
+            parameters.bindings_from_model_samples(
+                model.variables, samples[most_likely_first]
+            ),
+            log_likelihoods[most_likely_first],
         ):
             yield ProbabilisticOperationResult(
-                parameters.bindings_from_model_sample(model.variables, sample),
-                log_likelihood=float(log_likelihood),
+                bindings, log_likelihood=float(log_likelihood)
             )
 
     def compute_log_likelihood(

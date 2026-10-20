@@ -35,7 +35,7 @@ naming both in one run is one commit on the notes branch instead of two:
 
 ```bash
 source .claude/hooks/resolve-personal-notes-config.sh
-python3 -m "${PLAN_ITEM_MODE_MODULE}" set \
+"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_MODE_MODULE}" set \
     --skill kickoff --skill resolve --mode <mode>
 ```
 
@@ -45,8 +45,8 @@ pinned, the mode, and the file it wrote.
 ## 3. Confirm it from the file, not from the write
 
 ```bash
-python3 -m "${PLAN_ITEM_MODE_MODULE}" resolve --skill kickoff
-python3 -m "${PLAN_ITEM_MODE_MODULE}" resolve --skill resolve
+"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_MODE_MODULE}" resolve --skill kickoff
+"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_MODE_MODULE}" resolve --skill resolve
 ```
 
 Report the `mode` and `source` these come back with. `source` is the part worth

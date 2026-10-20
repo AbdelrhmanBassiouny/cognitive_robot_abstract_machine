@@ -3,7 +3,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from functools import lru_cache
 
-from typing_extensions import Callable, Dict, Any, Generic, TypeVar
+from typing_extensions import Callable, Dict, Any, Generic, Iterator, TypeVar
 
 from krrood.adapters.json_serializer import list_like_classes
 from krrood.patterns.exceptions import KeywordNamesNoFactoryParameter
@@ -76,6 +76,14 @@ class HasFactoryAndKwargs(Generic[T]):
                 )
             factory_keyword_arguments[key] = value
         return factory_keyword_arguments
+
+    def _stated_values_(self, keyword: str) -> Iterator[Any]:
+        """
+        :param keyword: A keyword argument.
+        :return: The value given for that keyword, or nothing when none was given.
+        """
+        if keyword in self._kwargs_:
+            yield self._kwargs_[keyword]
 
     def _is_factory_parameter_(self, keyword: str) -> bool:
         """
