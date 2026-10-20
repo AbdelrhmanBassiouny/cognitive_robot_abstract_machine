@@ -22,10 +22,10 @@ items:
   pull_request_number: 523
   session: https://claude.ai/code/session_01JtoHXNAfe5rxy2nN5e23fk
   notes: >
-    Draft PR #523 removes every basstler file and mention from CRAM (plugin is per-user; upstream
-    setting now in personal stack.toml) and adds krrood PathEnumeration. Two review threads await
-    the user: /upstream-reviews needs a basstler-side fix to work without a committed workflow, and
-    how the plugin keeps its stamp files out of commits. Promote to cram2 only with their OK.
+    Draft PR #523 removes every basstler file and mention from CRAM and adds krrood
+    PathEnumeration. Promotion link to cram2 is built and recorded on #523 (label
+    promotion-link-sent); the upstream PR opens when the user clicks Create. Its two gaps are
+    basstler items upstream-reviews-without-project-files and stamps-in-git-directory.
   blockers:
   - 'Cross-repository dependency, not representable in depends_on: basstler-package/cram-uses-basstler-plugin
     and cram-basstler-removal in AbdelrhmanBassiouny/basstler''s notes track the same work there.'
