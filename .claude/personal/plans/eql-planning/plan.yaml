@@ -42,7 +42,7 @@ items:
   session: https://claude.ai/code/session_01RZNdyMVHF5vjN8QRUu5i7s
   title: An EQL evaluation started inside another one sees its own context
   track: eql-prerequisites
-  status: in_progress
+  status: done
   notes: 'Bug found in #511: a rule tree evaluated during another evaluation returns nothing (shared ContextVar).
     Fixed in draft #520 (bug label, off main): every public evaluate() starts its own EvaluationContext.
     Once it lands, drop the contextvars workaround in #511''s HoleRulesBackend.concluded_kind.'
