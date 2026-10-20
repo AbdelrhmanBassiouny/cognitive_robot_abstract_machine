@@ -31,9 +31,10 @@ items:
   status: in_progress
   pull_request_number: 487
   session: https://claude.ai/code/session_01HMdRorbzSe9pWVXLCKk8mX
-  notes: 'experiments/network_limits.py and test/experiments_test/test_network_limits.py -
-    2 files, 424 lines. Off main. Imports nothing else in #202; only perception/node.py (the
-    top layer) reads it.'
+  notes: 'experiments/network_limits.py and its test, off main. Reshaped per review round 1
+    (612f307b8): requirements are an EQL query and the check lives on LargeMessageReceiver,
+    so the files no longer match #202. All 6 threads resolved; waiting on CI and the
+    reviewer.'
 - id: shape-vocabulary-on-main
   title: Land the Montessori shape vocabulary, the board's hole geometry and the piece set
   branch: claude/ecstatic-knuth-curscv
@@ -42,15 +43,12 @@ items:
   status: in_progress
   pull_request_number: 488
   session: https://claude.ai/code/session_01T25zXQPBeES9MrL6i2dE1K
-  notes: 'montessori/semantics.py, montessori/exceptions.py, montessori/hole_geometry.py with
-    resources/board.stl (loaded at import time), montessori/pieces.py, semantic_digital_twin''s
-    world_description/geometry.py (main plus Polygon2D, Hue and Color.from_hsv/Color.hue),
-    and the tests test_montessori_semantics.py, test_montessori_hole_geometry.py, test_montessori_pieces.py,
-    test_polygon.py, test_hue.py and test_footprint.py, plus SemDT''s shape_collection.py
-    and exceptions.py - 14 files. Off main. Cut from #202 at 136ea6888: KnownPiece is replaced
-    by PieceSet worlds of bodies, and hole_for finds a hole by fit alone. One review thread
-    (pieces.py:203) stays open for the developer: whether to track EQL matching of an
-    observation against the PieceSet instances as its own item (#265 has none).'
+  notes: 'montessori semantics, exceptions, hole_geometry (+ resources/board.stl), pieces;
+    SemDT geometry.py, shape_collection.py, exceptions.py; their tests - 14 files (list on
+    #488). Off main, cut from #202 at 136ea6888: KnownPiece is replaced by PieceSet worlds of
+    bodies, and hole_for finds a hole by fit alone. Open for the developer: review thread
+    pieces.py:203 - whether EQL matching of an observation against PieceSet instances is its
+    own item (#265 has none).'
 - id: simulated-world-on-main
   title: Land the simulated Montessori world
   branch: null
@@ -122,5 +120,6 @@ items:
     tracy_experiments/equipment.py and tracy_experiments/__init__.py - 7 files, ~1,770 lines,
     all importing rclpy, so nothing here can run their tests. The item is to merge the top
     of the stack, and network-limits-on-main''s branch, into montessori_perception_on_main
-    (a merge that changes no file), retarget #202''s base to captures-on-main''s branch, and
+    (node.py''s check_large_messages_can_arrive() call becomes
+    LargeMessageReceiver().check_messages_can_arrive(), per #487), retarget #202''s base to captures-on-main''s branch, and
     rewrite #202''s description to cover only this layer.'
