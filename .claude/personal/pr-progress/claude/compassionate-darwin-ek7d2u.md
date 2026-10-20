@@ -1,11 +1,39 @@
 PR #523, item basstler-package/cram-basstler-removal (auto mode). Draft.
 
 Plan
-- Plugin config + delete in-tree tooling, one PR (two commits).
+- Strip every basstler file and mention from CRAM; plugin is per-user.
 
 Done
-- Pushed: settings.json enables the plugin, .claude/basstler/stack.toml, upstream-reviews.yml calls basstler@v0.1.5; basstler/, tests, hooks, stack, SETUP.md, plugin skills, test_basstler job removed; README, .gitignore, AGENTS.md tidied.
-- Open PRs #488, #265, #202 relabelled to promotion-link-sent (label created plain grey); closed PRs keep cram2-link-sent.
+- Review round 1 (f1d380d8c): settings.json, stack.toml, upstream-reviews.yml removed; README/.gitignore cleaned; PathEnumeration moved to krrood with tests. Upstream setting moved to personal stack.toml. 11 threads resolved.
 
 Next
-- User review. Promote to cram2 only on the user's OK. Copy basstler#16's stack-maintenance caller once released.
+- User's call on 2 open threads: /upstream-reviews needs a basstler-side fix; stamp files kept out of commits how (proposed: git dir). Promote to cram2 only on OK.
+
+id: basstler-package
+title: 'The basstler package: what is left of it in CRAM'
+tracking_issue: 102
+item:
+  id: cram-basstler-removal
+  title: Move CRAM onto the basstler plugin, keeping only its configuration
+  branch: claude/compassionate-darwin-ek7d2u
+  status: in progress
+  track: extraction
+  depends_on: []
+  pull_request_number: 523
+  session: https://claude.ai/code/session_01JtoHXNAfe5rxy2nN5e23fk
+  notes: 'Draft PR #523: enables the basstler plugin in settings.json, adds .claude/basstler/stack.toml
+    and an upstream-reviews.yml calling basstler@v0.1.5, and deletes basstler/, its tests,
+    .claude/hooks|stack|SETUP.md, the plugin''s skills and the test_basstler job. Open PRs
+    #488, #265, #202 relabelled to promotion-link-sent. Next: the user''s review; promote
+    to cram2 only with their OK. Copy basstler#16''s stack-maintenance caller once released.
+
+    '
+  blockers:
+  - 'Cross-repository dependency, not representable in depends_on: basstler-package/cram-uses-basstler-plugin
+    and cram-basstler-removal in AbdelrhmanBassiouny/basstler''s notes track the same work
+    there.'
+<!-- END-PLAN-ITEM -->
+
+# basstler-package
+
+- Everything else about basstler, its items and its standing rules, lives in AbdelrhmanBassiouny/basstler's notes: its `claude/personal-notes` branch, `.claude/personal/plans/basstler-package/`.
