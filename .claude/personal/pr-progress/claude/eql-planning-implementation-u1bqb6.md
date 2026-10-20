@@ -3,4 +3,4 @@ Plan
 Done
 - Inventory: 669 files not on main; 52 in main-based PRs, 284 only in #265, 165 only in untracked PRs. Branch pushed (= main).
 Next
-- User answers the doc's 7 decisions, then /plan-create icra-upstream and tracking-issue notes on review-reaches-main, montessori-perception-split, icra-foundation.
+- Decided: video out of git; close icra-foundation with icra-upstream; drop sdt numeric types (keep Panda, Mujoco pacing, bounds). Remaining doc decisions, then /plan-create icra-upstream and tracking-issue notes on review-reaches-main, montessori-perception-split, icra-foundation.
