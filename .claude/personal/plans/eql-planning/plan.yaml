@@ -37,12 +37,15 @@ items:
   notes: Already merged into aamas27-unification-revision. Also listed in ontomatic-port as eql-correlated-quantifiers,
     which records no PR; overlaps eql-existential-semantics.
 - id: nested-evaluation-context
-  branch: eql-planning/nested-evaluation-context
+  branch: ccr-149bfc8c-nxzj39
+  pull_request_number: 520
+  session: https://claude.ai/code/session_01RZNdyMVHF5vjN8QRUu5i7s
   title: An EQL evaluation started inside another one sees its own context
   track: eql-prerequisites
-  status: not_started
+  status: in_progress
   notes: 'Bug found in #511: a rule tree evaluated during another evaluation returns nothing (shared ContextVar).
-    Bug-fix PR off main with the bug label. Near #142.'
+    Fixed in draft #520 (bug label, off main): every public evaluate() starts its own EvaluationContext.
+    Once it lands, drop the contextvars workaround in #511''s HoleRulesBackend.concluded_kind.'
 - id: state-aware-predicate-cache
   branch: eql-planning/state-aware-predicate-cache
   title: Predicate results cached per state, not per argument tuple alone
