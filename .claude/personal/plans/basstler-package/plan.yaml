@@ -16,7 +16,7 @@ items:
 - id: cram-basstler-removal
   title: Remove basstler from CRAM, which uses it as a per-user plugin
   branch: claude/compassionate-darwin-ek7d2u
-  status: in progress
+  status: done
   track: extraction
   depends_on: []
   pull_request_number: 523
