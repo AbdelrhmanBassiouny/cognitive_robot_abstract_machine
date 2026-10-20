@@ -15,12 +15,12 @@ tracks:
 items:
 - id: cram-basstler-removal
   title: Move CRAM onto the basstler plugin, keeping only its configuration
-  branch: null
-  status: not_started
+  branch: claude/compassionate-darwin-ek7d2u
+  status: in progress
   track: extraction
   depends_on: []
-  pull_request_number: null
-  session: https://claude.ai/code/session_013kCsTQdNToBZd8YixgPFwG
+  pull_request_number: 523
+  session: https://claude.ai/code/session_01JtoHXNAfe5rxy2nN5e23fk
   notes: >
     Commit .claude/basstler/stack.toml naming upstream_repository =
     "cram2/cognitive_robot_abstract_machine" and upstream_remote = "cram2", and relabel the fork's
