@@ -63,24 +63,26 @@ items:
     `python -m basstler.actions_budget` writes its first version.
 - id: changed-library-matrix
   title: Pull request CI tests the libraries a change touches and their dependents
-  branch: ccr-81db28df-4rban1
+  branch: claude/changed-library-matrix
+  repository: AbdelrhmanBassiouny/basstler
   track: manifest
   depends_on:
   - budget-manifest
   status: in_progress
-  pull_request_number: 515
+  pull_request_number: 55
   session: https://claude.ai/code/session_015LhBh1bQL2RDTPBjwCgtpQ
-  notes: 'Implemented on #515 (draft, on #503). basstler.changed_libraries selects the ci.yml
-    matrix libraries a draft changes plus their pyproject dependents; tooling-only runs test_basstler
-    alone, docs run nothing, other paths run everything. The matrix is a lib axis with a run-time
-    exclude, which basstler counts by its axes. The ci.yml override stays at 16 (worst case, a
-    krrood change; decided with the user). Needs a real run to confirm the run-time exclude and
-    the all-excluded skip on GitHub.'
+  notes: >-
+    Split from CRAM #515 (closed). Package half is draft basstler#55 on #10:
+    basstler.changed_libraries selects a project's matrix libraries a change touches plus their
+    pyproject dependents (.claude and --tooling dirs run the tooling alone, docs nothing, other
+    paths everything), with --project-root; a run-time matrix exclude counts by its axes. CRAM
+    half (ci.yml changed-libraries job, actions_budget.py comment; override stays 16, decided
+    with the user) is kept on CRAM ccr-81db28df-4rban1 at 9c946ecb3.
   blockers:
   - >-
-    #515's base is the branch of CRAM #503, which is closed and carried to basstler as #10. Its
-    basstler/changed_libraries.py belongs in basstler beside #10, and its ci.yml change here
-    once CRAM runs on the plugin: decide with the user how to split it.
+    The CRAM ci.yml half waits for basstler-package/cram-basstler-removal, which puts the plugin
+    in CRAM's CI; it then needs a real run to confirm the run-time exclude and the all-excluded
+    skip on GitHub.
 - id: usage-monitor
   title: Measure run volume against the manifest and warn before it is exceeded
   branch: null
