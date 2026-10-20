@@ -6,6 +6,13 @@ claude/split-performatives-prs-xbluus-agreement	eql-performatives
 claude/split-performatives-prs-xbluus	eql-performatives
 claude/performatives-clean	eql-performatives
 claude/eql-performatives-unify	eql-performatives
+eql-planning-robots/montessori-planning-domain	eql-planning-robots
+eql-planning-robots/planner-as-showcase-backend	eql-planning-robots
+eql-planning-robots/coraplex-action-effects	eql-planning-robots
+eql-planning-robots/cramph-achieve-node	eql-planning-robots
+eql-planning-robots/robocasa-goals	eql-planning-robots
+eql-planning-robots/robocasa-slice	eql-planning-robots
+eql-planning-robots/iros-experiments	eql-planning-robots
 fix/eql-correlated-quantifiers	eql-planning
 eql-planning/nested-evaluation-context	eql-planning
 eql-planning/state-aware-predicate-cache	eql-planning
@@ -16,13 +23,6 @@ eql-planning/regression-and-explanation	eql-planning
 eql-planning/compiled-search-ff	eql-planning
 eql-planning/trajectory-constraints	eql-planning
 eql-planning/unified-planning-backend	eql-planning
-eql-planning-robots/montessori-planning-domain	eql-planning-robots
-eql-planning-robots/planner-as-showcase-backend	eql-planning-robots
-eql-planning-robots/coraplex-action-effects	eql-planning-robots
-eql-planning-robots/cramph-achieve-node	eql-planning-robots
-eql-planning-robots/robocasa-goals	eql-planning-robots
-eql-planning-robots/robocasa-slice	eql-planning-robots
-eql-planning-robots/iros-experiments	eql-planning-robots
 eql-symbolic-function-sdt	eql-verbalization
 claude/eql-verbalization-aggregate-repeat-gdz9g2	eql-verbalization
 claude/pensive-albattani-2j50zr	general-video-production
