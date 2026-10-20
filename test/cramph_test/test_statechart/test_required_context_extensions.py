@@ -214,19 +214,33 @@ def test_a_node_joining_a_compiled_statechart_is_checked(
 # %% checking before a composite node expands
 
 
-def test_a_composite_node_is_checked_before_it_expands(
+def test_a_composite_node_expands_without_what_it_requires_once_compiled(
     statechart_context: StatechartContext,
 ) -> None:
+    """
+    A statechart may be expanded in one context and compiled in another, so what a
+    composite node requires to be compiled is not required to expand it.
+    """
     statechart = Statechart(context=statechart_context)
     composite = CompositeRequiringAnExtension(name="composite")
 
+    statechart.add_node(composite)
+
+    assert composite.expanded
+
+
+def test_compiling_raises_for_an_expanded_composite_node_missing_a_required_extension(
+    statechart_context: StatechartContext,
+) -> None:
+    statechart = Statechart(context=statechart_context)
+    statechart.add_node(composite := CompositeRequiringAnExtension(name="composite"))
+
     with pytest.raises(NodesMissingContextExtensionsError) as raised:
-        statechart.add_node(composite)
+        statechart.compile()
 
     assert raised.value.nodes_by_missing_extension == {
         ExtensionANodeRequires: [composite]
     }
-    assert not composite.expanded
 
 
 def test_a_composite_node_is_checked_for_what_it_reads_while_expanding(
