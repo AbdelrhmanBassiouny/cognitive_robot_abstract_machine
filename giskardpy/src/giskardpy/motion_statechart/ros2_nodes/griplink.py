@@ -133,7 +133,7 @@ class GriplinkFlexActionServerTask(GriplinkActionServerTask):
 
     grip_position: float | None = None
     """
-    Opening width of the gripper in mm [-5..120], rounded to one decimal.
+    Opening width of the gripper in m [-0.005..0.12].
 
     Converted to µm when building the goal message.
     """
@@ -148,14 +148,14 @@ class GriplinkFlexActionServerTask(GriplinkActionServerTask):
 
     grip_velocity: float | None = None
     """
-    Motion velocity of the gripper in mm/s [5..350], rounded to one decimal.
+    Motion velocity of the gripper in m/s [0.005..0.35].
 
     Converted to µm/s when building the goal message.
     """
 
     grip_acceleration: float | None = None
     """
-    Motion acceleration of the gripper in mm/s² [100..4000], rounded to one decimal.
+    Motion acceleration of the gripper in m/s² [0.1..4].
 
     Converted to µm/s² when building the goal message.
     """
@@ -173,22 +173,22 @@ class GriplinkFlexActionServerTask(GriplinkActionServerTask):
         if self.message_type is Flexgrip:
             position = 0 if self.grip_position is None else self.grip_position
             force = 90 if self.grip_force is None else self.grip_force
-            velocity = 150 if self.grip_velocity is None else self.grip_velocity
+            velocity = 0.15 if self.grip_velocity is None else self.grip_velocity
             acceleration = (
-                600 if self.grip_acceleration is None else self.grip_acceleration
+                0.6 if self.grip_acceleration is None else self.grip_acceleration
             )
             self._msg = Flexgrip.Goal(
                 port=0,
                 position=self._to_micrometres(position),
-                force=self._to_micrometres(force),
+                force=self._to_millinewtons(force),
                 speed=self._to_micrometres(velocity),
                 acceleration=self._to_micrometres(acceleration),
             )
         elif self.message_type is Flexrelease:
-            position = 120 if self.grip_position is None else self.grip_position
-            velocity = 250 if self.grip_velocity is None else self.grip_velocity
+            position = 0.12 if self.grip_position is None else self.grip_position
+            velocity = 0.25 if self.grip_velocity is None else self.grip_velocity
             acceleration = (
-                2000 if self.grip_acceleration is None else self.grip_acceleration
+                2 if self.grip_acceleration is None else self.grip_acceleration
             )
             self._msg = Flexrelease.Goal(
                 port=0,
@@ -202,9 +202,16 @@ class GriplinkFlexActionServerTask(GriplinkActionServerTask):
     @staticmethod
     def _to_micrometres(value: float) -> int:
         """
-        :param value: A gripper parameter in millimetres, newtons or the per-second
-            derivations of them, rounded to one decimal.
+        :param value: A length in metres or its per-second derivations.
         :return: The value the griplink controller expects, in the matching µm-scaled
             integer unit.
+        """
+        return round(value * 1_000_000)
+
+    @staticmethod
+    def _to_millinewtons(value: float) -> int:
+        """
+        :param value: A force in newtons.
+        :return: The force the griplink controller expects, in integer millinewtons.
         """
         return round(value * 1000)

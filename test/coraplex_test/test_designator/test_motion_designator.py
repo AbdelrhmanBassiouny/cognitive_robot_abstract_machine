@@ -1242,7 +1242,7 @@ class TestDAiSyFlexGripMotion:
         motion = self._flex_motion(
             immutable_daisy_world,
             state_type=GripperState.FLEXCLOSE,
-            grip_position=60,
+            grip_position=0.06,
         )
         with semi_real_robot:
             chart = motion._motion_chart
@@ -1261,7 +1261,7 @@ class TestDAiSyFlexGripMotion:
         motion = self._flex_motion(
             immutable_daisy_world,
             state_type=GripperState.FLEXOPEN,
-            grip_position=120,
+            grip_position=0.12,
         )
         with semi_real_robot:
             chart = motion._motion_chart
@@ -1419,10 +1419,10 @@ class TestDAiSyGripperConfigurationRouting:
         configuration = GriplinkFlexConfiguration.from_state_type(
             end_effector,
             GripperState.FLEXCLOSE,
-            grip_position=60,
+            grip_position=0.06,
             grip_force=100,
-            grip_velocity=50,
-            grip_acceleration=2000,
+            grip_velocity=0.05,
+            grip_acceleration=2,
         )
         motion = self._motion_through_dispatch(immutable_daisy_world, configuration)
         with real_robot:
@@ -1442,9 +1442,9 @@ class TestDAiSyGripperConfigurationRouting:
         configuration = GriplinkFlexConfiguration.from_state_type(
             end_effector,
             GripperState.FLEXOPEN,
-            grip_position=30,
-            grip_velocity=80,
-            grip_acceleration=1500,
+            grip_position=0.03,
+            grip_velocity=0.08,
+            grip_acceleration=1.5,
         )
         motion = self._motion_through_dispatch(immutable_daisy_world, configuration)
         with real_robot:

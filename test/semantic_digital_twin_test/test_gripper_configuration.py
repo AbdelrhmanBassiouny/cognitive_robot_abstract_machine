@@ -77,11 +77,11 @@ def test_flex_configuration_interpolates_between_the_declared_states(daisy_world
     close_state = end_effector.get_joint_state_by_type(GripperState.CLOSE)
 
     configuration = GriplinkFlexConfiguration.from_state_type(
-        end_effector, GripperState.FLEXCLOSE, grip_position=60
+        end_effector, GripperState.FLEXCLOSE, grip_position=0.06
     )
 
     fraction = (
-        GriplinkFlexConfiguration.maximum_opening_width - 60
+        GriplinkFlexConfiguration.maximum_opening_width - 0.06
     ) / GriplinkFlexConfiguration.maximum_opening_width
     close_targets = dict(close_state.items())
     expected = [

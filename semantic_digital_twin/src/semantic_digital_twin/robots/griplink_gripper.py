@@ -108,22 +108,21 @@ class GriplinkFlexConfiguration(GriplinkGripperConfiguration):
     @classproperty
     def maximum_opening_width(cls) -> float:
         """
-        Maximum opening width of the gripper, in the unit of ``grip_position``; the
+        Maximum opening width of the gripper, in metres; the
         scale the flex configuration interpolates ``grip_position`` on.
         """
-        return 120.0
+        return 0.12
 
     @classproperty
     def fully_closed_opening_width(cls) -> float:
         """
-        Opening width of the gripper, in the unit of ``grip_position``, that commands
-        the fully closed state.
+        Opening width of the gripper in metres that commands the fully closed state.
         """
         return 0.0
 
     grip_position: float | None = None
     """
-    Opening width of the gripper in millimetres [-5..120], used by ``Flexgrip``/
+    Opening width of the gripper in metres [-0.005..0.12], used by ``Flexgrip``/
     ``Flexrelease``.
 
     ``None`` commands the declared open or close state, depending on the state type.
@@ -139,20 +138,20 @@ class GriplinkFlexConfiguration(GriplinkGripperConfiguration):
 
     grip_velocity: float | None = None
     """
-    Motion velocity of the gripper in millimetres per second [5..350], used by
+    Motion velocity of the gripper in metres per second [0.005..0.35], used by
     ``Flexgrip``/``Flexrelease``.
 
-    ``None`` defers to the per-motion default the griplink action server picks (150 for
-    ``Flexgrip``, 250 for ``Flexrelease``).
+    ``None`` defers to the per-motion default the griplink action server picks (0.15 for
+    ``Flexgrip``, 0.25 for ``Flexrelease``).
     """
 
     grip_acceleration: float | None = None
     """
-    Motion acceleration of the gripper in millimetres per second squared [100..4000],
+    Motion acceleration of the gripper in metres per second squared [0.1..4],
     used by ``Flexgrip``/``Flexrelease``.
 
-    ``None`` defers to the per-motion default the griplink action server picks (600 for
-    ``Flexgrip``, 2000 for ``Flexrelease``).
+    ``None`` defers to the per-motion default the griplink action server picks (0.6 for
+    ``Flexgrip``, 2 for ``Flexrelease``).
     """
 
     @classmethod
@@ -166,26 +165,26 @@ class GriplinkFlexConfiguration(GriplinkGripperConfiguration):
         grip_acceleration: float | None = None,
     ) -> Self:
         """
-        The hardware parameters are rounded to one decimal, the precision the griplink
-        controller works with.
+        The opening width, velocity and acceleration are rounded to 0.1 millimetres and the
+        force to 0.1 newtons, the precision the griplink controller works with.
 
         :param end_effector: The griplink gripper to build the configuration for.
         :param state_type: The state type the configuration is labelled with.
-        :param grip_position: Opening width in millimetres; ``None`` commands the
+        :param grip_position: Opening width in metres; ``None`` commands the
             declared open or close state.
         :param grip_force: Force in newtons; ``None`` defers to the action server
             default.
-        :param grip_velocity: Velocity in millimetres per second; ``None`` defers to the
+        :param grip_velocity: Velocity in metres per second; ``None`` defers to the
             action server default.
-        :param grip_acceleration: Acceleration in millimetres per second squared;
+        :param grip_acceleration: Acceleration in metres per second squared;
             ``None`` defers to the action server default.
         :return: The configuration for the given state type, commanding the joint state
             the parameters describe.
         """
-        grip_position = cls._rounded_to_one_decimal(grip_position)
-        grip_force = cls._rounded_to_one_decimal(grip_force)
-        grip_velocity = cls._rounded_to_one_decimal(grip_velocity)
-        grip_acceleration = cls._rounded_to_one_decimal(grip_acceleration)
+        grip_position = cls._rounded(grip_position, decimals=4)
+        grip_force = cls._rounded(grip_force, decimals=1)
+        grip_velocity = cls._rounded(grip_velocity, decimals=4)
+        grip_acceleration = cls._rounded(grip_acceleration, decimals=4)
         return cls(
             end_effector=end_effector,
             joint_state=cls._build_joint_state(end_effector, state_type, grip_position),
@@ -196,14 +195,15 @@ class GriplinkFlexConfiguration(GriplinkGripperConfiguration):
         )
 
     @staticmethod
-    def _rounded_to_one_decimal(value: float | None) -> float | None:
+    def _rounded(value: float | None, decimals: int) -> float | None:
         """
         :param value: A gripper hardware parameter in its own unit.
-        :return: The value rounded to one decimal, or ``None`` if it was ``None``.
+        :param decimals: The number of decimals to keep.
+        :return: The value rounded to ``decimals``, or ``None`` if it was ``None``.
         """
         if value is None:
             return None
-        return round(value, 1)
+        return round(value, decimals)
 
     @classmethod
     def _build_joint_state(
@@ -221,7 +221,7 @@ class GriplinkFlexConfiguration(GriplinkGripperConfiguration):
 
         :param end_effector: The griplink gripper whose connections are commanded.
         :param state_type: The flex state type the joint state is labelled with.
-        :param grip_position: The opening width in millimetres driving the joint state.
+        :param grip_position: The opening width in metres driving the joint state.
         :return: The joint state driving the gripper's connections to the interpolated
             position.
         """
