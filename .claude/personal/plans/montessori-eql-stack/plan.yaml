@@ -1,13 +1,12 @@
 schema_version: 1
 id: montessori-eql-stack
 title: Montessori demo EQL stack
-description: 'The six-PR stacked chain that takes the Montessori demo from a fast inline monitor
-  to a fully interactive EQL console: workspace-wide class naming with as-you-type completion,
-  "where is ...?" queries with viewer highlighting, demo recording with replay around queried
-  events, the asked question read back in English, and spoken questions answered by matching
-  presets. One strict stack: each PR is based on the previous one (GitHub stack #173). A second
-  wave extends the landed stack with acting from the console, annotated replay, and live tabbed
-  panels.'
+description: 'The six-PR stacked chain that takes the Montessori demo from a fast inline monitor to a
+  fully interactive EQL console: workspace-wide class naming with as-you-type completion, "where is ...?"
+  queries with viewer highlighting, demo recording with replay around queried events, the asked question
+  read back in English, and spoken questions answered by matching presets. One strict stack: each PR is
+  based on the previous one (GitHub stack #173). A second wave extends the landed stack with acting from
+  the console, annotated replay, and live tabbed panels.'
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 174
 waves:
@@ -16,8 +15,8 @@ waves:
   description: A single sequential stack; each item lands on top of the previous.
 - id: interactive-ui
   name: Interactive UI extensions
-  description: 'Features on top of the stack: performing actions from the console, annotating
-    event replay, and live tabbed panels. Unlike the stack, these tracks can run in parallel.'
+  description: 'Features on top of the stack: performing actions from the console, annotating event replay,
+    and live tabbed panels. Unlike the stack, these tracks can run in parallel.'
 tracks:
 - id: montessori-eql
   name: Montessori demo EQL features
@@ -33,13 +32,13 @@ tracks:
 - id: underspecified-queries
   name: Questions the demo answers by construction
   wave: interactive-ui
-  description: 'Asking the console what could be done rather than what is: a question leaves
-    a field open and the answer is built once per value it could take.'
+  description: 'Asking the console what could be done rather than what is: a question leaves a field open
+    and the answer is built once per value it could take.'
 - id: live-panels
   name: Live tabbed panels
   wave: interactive-ui
-  description: A tabbed panel area in the viewer with live views of the running demo, and
-    the window management to arrange those tabs freely.
+  description: A tabbed panel area in the viewer with live views of the running demo, and the window management
+    to arrange those tabs freely.
 items:
 - id: krrood_eql_orm_fixes
   title: ORMatic EQL interface and verbalization fixes
@@ -50,13 +49,12 @@ items:
   status: in_progress
   session: https://claude.ai/code/session_018BRw6aQGWWkAfdikDGE4iq
   blockers: []
-  notes: 'One of three pull requests #244 (sdt_segmind_krrood_from_fast_monitor) split into
-    on 2026-09-18, so each package could be reviewed on its own instead of under one 54-file
-    review. The krrood third: the ORMatic entity query language interface and wrapped-table
-    fixes, the aggregator fix, and the conditional verbalization rules (CaseWhenRule) with
-    their vocabulary.'
+  notes: 'One of three pull requests #244 (sdt_segmind_krrood_from_fast_monitor) split into on 2026-09-18,
+    so each package could be reviewed on its own instead of under one 54-file review. The krrood third:
+    the ORMatic entity query language interface and wrapped-table fixes, the aggregator fix, and the conditional
+    verbalization rules (CaseWhenRule) with their vocabulary.'
 - id: sdt_numeric_geometry_and_panda
-  title: Numeric poses, bounds and the Panda
+  title: Bounds, MuJoCo pacing and the Panda
   branch: sdt_numeric_geometry_and_panda
   pull_request_number: 409
   track: montessori-eql
@@ -64,15 +62,13 @@ items:
   status: in_progress
   session: https://claude.ai/code/session_018BRw6aQGWWkAfdikDGE4iq
   blockers: []
-  notes: 'One of three pull requests #244 split into on 2026-09-18. The semantic_digital_twin
-    third, and the real foot of the montessori-eql-stack chain going forward (not the whole
-    of #244 as the pre-split notes assumed): numeric (non-CasADi) poses, transforms and bounds,
-    AxisAlignedBox.from_points/empty/overlaps/contains and axis_bounds returning Bounds per
-    axis, an analytic Shape.surface_area, bounds-based rejection in InsideOf/is_supported_by/is_body_in_region,
-    the Mujoco adapter''s ControlSetpointRamp and real_time_factor pacing, and the Panda robot
-    with its mesh assets. Based on main directly.'
+  notes: 'Brought to the ICRA tip''s final semantic_digital_twin layer (icra-upstream relies on it). Keeps
+    AxisAlignedBox.from_points/empty/overlaps/contains, Bounds per axis, Shape.surface_area, bounds-based
+    rejection in InsideOf/is_supported_by/is_body_in_region, the MuJoCo ControlSetpointRamp and real_time_factor
+    pacing, and the Panda with its meshes. Drops the numeric spatial types (decided Oct 20: CasadiLock
+    on main makes CasADi thread-safe). Based on main.'
 - id: segmind_numeric_hole_events
-  title: Numeric detector poses and hole contact events
+  title: Region tracking and hole contact events
   branch: segmind_numeric_hole_events
   pull_request_number: 410
   track: montessori-eql
@@ -81,11 +77,10 @@ items:
   status: in_progress
   session: https://claude.ai/code/session_018BRw6aQGWWkAfdikDGE4iq
   blockers: []
-  notes: 'One of three pull requests #244 split into on 2026-09-18. The segmind third: detectors
-    read poses numerically instead of through CasADi, regions can be tracked beside bodies,
-    and hole contact gets its own detectors and events (HoleContactDetector, LossOfHoleContactDetector).
-    The geometry_msgs import in datastructures/events.py goes with it, so segmind imports,
-    and its tests run, without a ROS installation.'
+  notes: Brought to the ICRA tip's final segmind layer (expectations, detector rules, grasp detector,
+    event changes). Keeps region tracking and HoleContactDetector/LossOfHoleContactDetector, and segmind
+    importing without ROS. Detectors read poses through CasADi again, numeric poses dropped (Oct 20);
+    add a threaded stress test.
 - id: montessori_monitor_and_recording
   title: The event monitor, the grasp attachment and the results recording, without the viewer
   branch: montessori_monitor_and_recording
@@ -96,11 +91,10 @@ items:
   status: in_progress
   session: https://claude.ai/code/session_01PQvyunW5okcgiEHmJZAu8N
   blockers: []
-  notes: 'Split out of #169 on 2026-09-03 at the developer''s request, so `icra-experiments`
-    can take what it needs without taking the console: its foot item names the segmind event
-    monitor, the attach/detach of a grasped shape behind `Context.update_world_model_attachment`,
-    and the results recording, and #169 is 164 cramera files out of 272. 35 files against
-    #169''s 272, and nothing in it imports `cramera`.'
+  notes: 'Split out of #169 on 2026-09-03 at the developer''s request, so `icra-experiments` can take
+    what it needs without taking the console: its foot item names the segmind event monitor, the attach/detach
+    of a grasped shape behind `Context.update_world_model_attachment`, and the results recording, and
+    #169 is 164 cramera files out of 272. 35 files against #169''s 272, and nothing in it imports `cramera`.'
 - id: montessori_fast_inline_monitor
   title: A monitor tick cheap enough to stay on the planning thread
   branch: montessori_fast_inline_monitor
@@ -111,12 +105,12 @@ items:
   status: in_progress
   session: https://claude.ai/code/session_01PQvyunW5okcgiEHmJZAu8N
   blockers: []
-  notes: 'Base of the stack. On 2026-08-18 main was merged in twice. The first merge (608bc7fe6)
-    cleared the conflicts that had left it dirty, plus the two integration breaks it exposed:
-    the giskardpy/executor.py semantic conflict and a pacer built the way main no longer allows.
-    7a9af9cd0 then fixed the ORMatic bug failing this branch''s experiments job at collection,
-    and 9877e5b99 restored PickUpAction''s AttachNode and PlacingAction''s DetachNode behind
-    Context.update_world_model_attachment, which is what 8cc3cf69 had commented out wholesale.'
+  notes: 'Base of the stack. On 2026-08-18 main was merged in twice. The first merge (608bc7fe6) cleared
+    the conflicts that had left it dirty, plus the two integration breaks it exposed: the giskardpy/executor.py
+    semantic conflict and a pacer built the way main no longer allows. 7a9af9cd0 then fixed the ORMatic
+    bug failing this branch''s experiments job at collection, and 9877e5b99 restored PickUpAction''s AttachNode
+    and PlacingAction''s DetachNode behind Context.update_world_model_attachment, which is what 8cc3cf69
+    had commented out wholesale.'
 - id: cramera_eql_autocomplete
   title: Name any class of the workspace in a query, and complete as you type
   branch: cramera_eql_autocomplete
@@ -126,12 +120,11 @@ items:
   - montessori_fast_inline_monitor
   status: in_progress
   session: https://claude.ai/code/session_01PwwiAsZeaJSjECjsWEtkog
-  notes: 'Marked ready for review. Also carries the local-environment fixes (lark, sdt ORM
-    duplicate table, costmaps inflation memory, detector-test frames) and the Symbol/Match-default
-    rounds; per-round detail in pr-progress/cramera_eql_autocomplete.md. On 2026-08-18 cram2/main
-    was merged in and the branch force-pushed as 03b3130a5; its one conflict (Body.has_collision)
-    went to main''s version, and the giskardpy executor NameError that a5080fd08 fixed on
-    #169 was fixed here too.'
+  notes: 'Marked ready for review. Also carries the local-environment fixes (lark, sdt ORM duplicate table,
+    costmaps inflation memory, detector-test frames) and the Symbol/Match-default rounds; per-round detail
+    in pr-progress/cramera_eql_autocomplete.md. On 2026-08-18 cram2/main was merged in and the branch
+    force-pushed as 03b3130a5; its one conflict (Body.has_collision) went to main''s version, and the
+    giskardpy executor NameError that a5080fd08 fixed on #169 was fixed here too.'
 - id: montessori_eql_where_is_highlighting
   title: EQL "where is ...?" queries with general viewer highlighting
   branch: montessori_eql_where_is_highlighting
@@ -141,10 +134,9 @@ items:
   - cramera_eql_autocomplete
   status: in_progress
   notes: 'Rebased onto cramera_eql_autocomplete on 2026-08-18 (was based on montessori_fast_inline_monitor);
-    reparent needed a native GitHub-stack dissolve, see roadmap. Restacked the same day by
-    merging the base''s current tip in rather than rebasing: 10ca075c2, cramera suite 488,
-    then again onto the post-main-merge base, once more for 06582ca32, and again for the ORM-untracking
-    fix: dc28b7d56.'
+    reparent needed a native GitHub-stack dissolve, see roadmap. Restacked the same day by merging the
+    base''s current tip in rather than rebasing: 10ca075c2, cramera suite 488, then again onto the post-main-merge
+    base, once more for 06582ca32, and again for the ORM-untracking fix: dc28b7d56.'
 - id: montessori_event_replay
   title: Record the live demo and replay it around queried segmind events
   branch: montessori_event_replay
@@ -153,12 +145,12 @@ items:
   depends_on:
   - montessori_eql_where_is_highlighting
   status: in_progress
-  notes: 'Restacked on 2026-08-18 by merging the base in: 4d9d9ad33, cramera suite 544, then
-    again onto the post-main-merge base, once more for 06582ca32, and again for the ORM-untracking
-    fix: b8f970a93. Its history carries stale duplicates of #164''s commits and internal pre/post-merge
-    duplicates, which is why the rounds merged rather than rebased. Restacked again on 2026-08-18
-    onto #164''s 2a2e76a7c, which brought down the plan-graph fold and the ORM-generation
-    fix: f9fee84ac, the only branch of the chain that had fallen behind.'
+  notes: 'Restacked on 2026-08-18 by merging the base in: 4d9d9ad33, cramera suite 544, then again onto
+    the post-main-merge base, once more for 06582ca32, and again for the ORM-untracking fix: b8f970a93.
+    Its history carries stale duplicates of #164''s commits and internal pre/post-merge duplicates, which
+    is why the rounds merged rather than rebased. Restacked again on 2026-08-18 onto #164''s 2a2e76a7c,
+    which brought down the plan-graph fold and the ORM-generation fix: f9fee84ac, the only branch of the
+    chain that had fallen behind.'
 - id: cramera-question-readback
   title: Read the asked query back big under the bar, linked to its docs
   branch: claude/cramera-verbalization-voice-ttwcza
@@ -167,11 +159,11 @@ items:
   depends_on:
   - montessori_event_replay
   status: in_progress
-  notes: 'The 2026-08-18 restack dropped this branch''s stale copies of #164/#165 commits
-    and amended an EqlSuggestions stub into its panel test harness (a semantic conflict with
-    the autocomplete feature git could not see). Restacked again later that day by merging
-    the base in: 408f4511b, cramera suite 566, then onto the post-main-merge base, once more
-    for 06582ca32, and again for the ORM-untracking fix: 3964d20eb.'
+  notes: 'The 2026-08-18 restack dropped this branch''s stale copies of #164/#165 commits and amended
+    an EqlSuggestions stub into its panel test harness (a semantic conflict with the autocomplete feature
+    git could not see). Restacked again later that day by merging the base in: 408f4511b, cramera suite
+    566, then onto the post-main-merge base, once more for 06582ca32, and again for the ORM-untracking
+    fix: 3964d20eb.'
 - id: cramera-voice-questions
   title: Answer a spoken question by running the preset it asks for
   branch: claude/cramera-voice-questions-ttwcza
@@ -180,10 +172,9 @@ items:
   depends_on:
   - cramera-question-readback
   status: in_progress
-  notes: 'Top of the stack. rapidfuzz dependency is declared in cramera/requirements.txt.
-    Restacked on 2026-08-18 by merging the base in: 5acc3d83f, cramera suite 598 and all 216
-    node tests green, then onto the post-main-merge base, once more for 06582ca32, and again
-    for the ORM-untracking fix: c567ee221.'
+  notes: 'Top of the stack. rapidfuzz dependency is declared in cramera/requirements.txt. Restacked on
+    2026-08-18 by merging the base in: 5acc3d83f, cramera suite 598 and all 216 node tests green, then
+    onto the post-main-merge base, once more for 06582ca32, and again for the ORM-untracking fix: c567ee221.'
 - id: montessori_perform_queried_action
   title: Perform a queried action from a perform button on its result
   branch: claude/queried-action-perform-button-vg2vz3
@@ -194,16 +185,14 @@ items:
   status: blocked
   session: https://claude.ai/code/session_018omV81SkveD53Q5mvEiKtP
   blockers:
-  - 'stacked-pr-maintenance: Fork PR #176 (branch `claude/queried-action-perform-button-vg2vz3`)
-    still conflicts against its base `montessori_event_replay` as of the 2026-08-29 stacked-pr-maintenance
-    pass.'
-  notes: 'Mirrors the replay button queried segmind events get in #165: an action returned
-    by a query carries a perform button that executes it on the robot when pressed. Implemented
-    on 2026-08-18 and pushed as 2dee8f57, based on #165 and restacked onto its post-main-merge
-    tip b76c8ede8 in the same session, then onto its 06582ca32 restack as acc2a1c0a and onto
-    the ORM-untracking fix as 7a73346df. The branch keeps the session''s own designated name
-    rather than the manifest''s, as montessori_replay_event_annotations already does - the
-    harness allows pushing nowhere else.'
+  - 'stacked-pr-maintenance: Fork PR #176 (branch `claude/queried-action-perform-button-vg2vz3`) still
+    conflicts against its base `montessori_event_replay` as of the 2026-08-29 stacked-pr-maintenance pass.'
+  notes: 'Mirrors the replay button queried segmind events get in #165: an action returned by a query
+    carries a perform button that executes it on the robot when pressed. Implemented on 2026-08-18 and
+    pushed as 2dee8f57, based on #165 and restacked onto its post-main-merge tip b76c8ede8 in the same
+    session, then onto its 06582ca32 restack as acc2a1c0a and onto the ORM-untracking fix as 7a73346df.
+    The branch keeps the session''s own designated name rather than the manifest''s, as montessori_replay_event_annotations
+    already does - the harness allows pushing nowhere else.'
 - id: montessori_run_written_action
   title: Write a new under-specified action and run it with a run button
   branch: montessori_run_written_action
@@ -212,9 +201,9 @@ items:
   depends_on:
   - montessori_perform_queried_action
   status: not_started
-  notes: The user types an under-specified action into the console; pressing the run button
-    resolves the missing parameters and executes it. Builds on the execute-from-the-console
-    machinery the perform button introduces.
+  notes: The user types an under-specified action into the console; pressing the run button resolves the
+    missing parameters and executes it. Builds on the execute-from-the-console machinery the perform button
+    introduces.
 - id: montessori_replay_event_annotations
   title: Label a replayed event in the video, with arrows tracking its objects
   branch: claude/label-replayed-event-tracking-vj0x2z
@@ -224,9 +213,9 @@ items:
   - montessori_event_replay
   status: in_progress
   session: https://claude.ai/code/session_01XVBfkBE9UCvRtcarKufjUH
-  notes: 'During replay of a segmind event, show the event''s name in the video with an arrow
-    from the label to each involved object; the arrow tips follow the objects as they move.
-    Started 2026-08-18 on the session''s own designated branch rather than the planned `montessori_replay_event_annotations`,
+  notes: 'During replay of a segmind event, show the event''s name in the video with an arrow from the
+    label to each involved object; the arrow tips follow the objects as they move. Started 2026-08-18
+    on the session''s own designated branch rather than the planned `montessori_replay_event_annotations`,
     based on #165''s current tip 5cf53c5a.'
 - id: montessori_underspecified_queries
   title: Leave a field open with `...` and read back what it could be
@@ -237,13 +226,12 @@ items:
   - cramera_eql_autocomplete
   status: in_progress
   session: https://claude.ai/code/session_01SmNyQsR4yhwF5wGyfrj6sH
-  notes: 'A section of its own in the console, beside Current State and Episodic Memory: a
-    question writes `...` for an enumerable field, and every value that field could take is
-    built into an answer. Based on #170 rather than the stack top because naming a workspace
-    class in a query is exactly what #170 adds, and nothing above it is needed. cramera gains
-    `QueryScope.UNDERSPECIFIED`, a `GenerativeEvaluation` over krrood''s `EntityQueryLanguageGenerativeBackend`,
-    and `QueryEvaluation.names()` so that evaluation puts `generate` in reach of a follow-up
-    question about what was built.'
+  notes: 'A section of its own in the console, beside Current State and Episodic Memory: a question writes
+    `...` for an enumerable field, and every value that field could take is built into an answer. Based
+    on #170 rather than the stack top because naming a workspace class in a query is exactly what #170
+    adds, and nothing above it is needed. cramera gains `QueryScope.UNDERSPECIFIED`, a `GenerativeEvaluation`
+    over krrood''s `EntityQueryLanguageGenerativeBackend`, and `QueryEvaluation.names()` so that evaluation
+    puts `generate` in reach of a follow-up question about what was built.'
 - id: montessori_detachable_panels
   title: Detach, reattach, resize, and maximize any of the panel tabs
   branch: montessori_detachable_panels
@@ -251,5 +239,5 @@ items:
   track: live-panels
   depends_on: []
   status: not_started
-  notes: Every tab in the panel widget can be detached into its own window, reattached, resized
-    freely, or expanded to take the full page.
+  notes: Every tab in the panel widget can be detached into its own window, reattached, resized freely,
+    or expanded to take the full page.
