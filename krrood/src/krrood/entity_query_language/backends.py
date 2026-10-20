@@ -434,6 +434,8 @@ class ProbabilisticBackend(GenerativeBackend):
             of the variable assigned to each attribute.
         :return: The bindings with their log-likelihood.
         :raises NoSolutionFound: If the match's conditions leave the model no solution.
+        :raises ValueOutsideVariableDomain: If a value the bindings give is outside the
+            domain of a variable of the model.
         """
         parameters = UnderspecifiedParameters(expression)
         model = self._resolve_model_to_sample(parameters, expression)

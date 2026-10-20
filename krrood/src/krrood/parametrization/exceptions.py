@@ -115,6 +115,38 @@ class ModelVariableNotBound(DataclassException):
 
 
 @dataclass
+class ValueOutsideVariableDomain(DataclassException):
+    """
+    Raised when bindings are translated into a sample of a probabilistic model, but a
+    value they give is outside the domain of a variable of the model, so no sample holds
+    it.
+    """
+
+    variable: random_events.variable.Variable
+    """
+    The variable of the model that has no value for the bound value.
+    """
+
+    value: Any
+    """
+    The bound value outside the domain of the variable.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The model variable {self.variable.name} has no value for {self.value!r}, "
+            f"which is outside the domain the match gives it."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Bind the variable assigned to the attribute only to values in its domain: "
+            "an object the pattern variable ranges over, or an element of the "
+            "attribute's type."
+        )
+
+
+@dataclass
 class DoRequiresCausalCircuitModel(DataclassException):
     """
     Raised when a match has a ``cause`` intervention but the model registry resolved a

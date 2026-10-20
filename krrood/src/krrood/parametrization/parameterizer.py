@@ -29,6 +29,7 @@ from krrood.parametrization.exceptions import (
     InvalidEllipsis,
     JointQueryAcrossClassesNotSupported,
     ModelVariableNotBound,
+    ValueOutsideVariableDomain,
 )
 import random_events.variable
 from krrood.entity_query_language.core.base_expressions import (
@@ -148,6 +149,11 @@ class DomainObjectFeature:
     The attribute match whose assigned variable ranges over the objects.
     """
 
+    variable: random_events.variable.Variable
+    """
+    The variable of the model that represents the feature.
+    """
+
     values_by_object_hash: dict[int, Any] = field(default_factory=dict)
     """
     The value of the feature for every object in the domain, keyed by the object's
@@ -158,7 +164,13 @@ class DomainObjectFeature:
         """
         :param domain_object: An object in the domain of the assigned variable.
         :return: The value of the feature for that object.
+        :raises ValueOutsideVariableDomain: If the object is not in the domain of the
+            assigned variable.
         """
+        if hash(domain_object) not in self.values_by_object_hash:
+            raise ValueOutsideVariableDomain(
+                variable=self.variable, value=domain_object
+            )
         return self.values_by_object_hash[hash(domain_object)]
 
 
@@ -747,7 +759,7 @@ class UnderspecifiedParameters(ModelQueryParameters):
             re_variable = variable_from_name_and_type(name=name, type_=feature._type_)
             result[re_variable.name] = re_variable
             self._domain_object_features[re_variable.name] = DomainObjectFeature(
-                attribute_match
+                attribute_match=attribute_match, variable=re_variable
             )
 
         identifier_name = f"{attribute_match.name_from_variable_access_path}"
@@ -887,6 +899,8 @@ class UnderspecifiedParameters(ModelQueryParameters):
         :return: A sample holding a single row over the variables.
         :raises ModelVariableNotBound: If neither the bindings nor the literal values
             give a variable a value.
+        :raises ValueOutsideVariableDomain: If a value the bindings give is outside the
+            domain of a variable of the model.
         """
         return np.array(
             [
@@ -910,6 +924,8 @@ class UnderspecifiedParameters(ModelQueryParameters):
             give the variable a value.
         :raises AmbiguousVariableName: If several attributes of the statement have the
             name of the variable.
+        :raises ValueOutsideVariableDomain: If a value the bindings give is outside the
+            domain of the variable.
         """
         attribute_match = self._attribute_match_of(variable_)
         if (
@@ -965,24 +981,51 @@ class UnderspecifiedParameters(ModelQueryParameters):
             the statement has one.
         :return: The value the model samples for the variable to stand for the given
             value.
+        :raises ValueOutsideVariableDomain: If the value is outside the domain of a
+            symbolic variable.
         """
         if attribute_match is not None and cls._is_assigned_a_domain_variable(
             attribute_match
         ):
-            [key] = [
-                key
-                for key, domain_hash in variable_.domain.hash_map.items()
-                if domain_hash == hash(value)
-            ]
-            return key
+            return cls._single_sample_value(
+                variable_,
+                value,
+                [
+                    key
+                    for key, domain_hash in variable_.domain.hash_map.items()
+                    if domain_hash == hash(value)
+                ],
+            )
         if not variable_.is_numeric:
-            [domain_hash] = [
-                hash(domain_value)
-                for domain_value in variable_.domain
-                if domain_value.element == value
-            ]
-            return domain_hash
+            return cls._single_sample_value(
+                variable_,
+                value,
+                [
+                    hash(domain_value)
+                    for domain_value in variable_.domain
+                    if domain_value.element == value
+                ],
+            )
         return value
+
+    @staticmethod
+    def _single_sample_value(
+        variable_: random_events.variable.Variable,
+        value: Any,
+        sample_values: list[Any],
+    ) -> Any:
+        """
+        :param variable_: A symbolic variable of a model.
+        :param value: A value of the attribute the variable corresponds to.
+        :param sample_values: The values a sample of the variable holds for the value.
+        :return: The one value a sample of the variable holds for the value.
+        :raises ValueOutsideVariableDomain: If a sample of the variable holds no value
+            for the value, as it is outside the variable's domain.
+        """
+        if not sample_values:
+            raise ValueOutsideVariableDomain(variable=variable_, value=value)
+        [sample_value] = sample_values
+        return sample_value
 
     @classmethod
     def _values_by_sample_value(
