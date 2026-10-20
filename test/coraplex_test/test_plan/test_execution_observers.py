@@ -12,7 +12,11 @@ from coraplex.datastructures.dataclasses import Context
 from giskardpy.motion_statechart.graph_node import EndMotion, Goal, Task
 from semantic_digital_twin.robots.minimal_robot import MinimalRobot
 
-from coraplex.execution_environment import kinematically_simulated_robot
+from coraplex.datastructures.enums import ExecutionType
+from coraplex.execution_environment import (
+    ExecutionEnvironment,
+    kinematically_simulated_robot,
+)
 from coraplex.plans.attachment_nodes import ReAttachNode
 from coraplex.plans.executables import MotionPlanHistory
 from coraplex.plans.factories import code, parallel, sequential
@@ -305,6 +309,31 @@ def test_native_attachment_reports_its_own_completion(pr2_apartment_context) -> 
         NodeEvent(ExecutionEvent.END, attachment, LifeCycleValues.SUCCEEDED),
     ]
     assert attachment.body.parent_connection.parent is robot.root
+
+
+def test_an_attachment_left_to_the_physics_reports_its_completion(
+    pr2_apartment_context,
+) -> None:
+    """
+    A physically simulated world holds the body by contact, so the attachment leaves
+    the world model alone, and still reports that it ran.
+    """
+    world, robot, context = pr2_apartment_context
+    milk = world.get_body_by_name("milk.stl")
+    parent_before = milk.parent_connection.parent
+    attachment = ReAttachNode(body=milk, new_parent=robot.root)
+    plan = sequential([attachment], context=context).plan
+    recorder = ExecutionRecorder(plan=plan)
+    plan.node_callbacks.append(recorder)
+
+    with ExecutionEnvironment(ExecutionType.PHYSICALLY_SIMULATED):
+        plan.perform()
+
+    assert [event for event in recorder.events if event.node is attachment] == [
+        NodeEvent(ExecutionEvent.START, attachment, LifeCycleValues.RUNNING),
+        NodeEvent(ExecutionEvent.END, attachment, LifeCycleValues.SUCCEEDED),
+    ]
+    assert milk.parent_connection.parent is parent_before
 
 
 def test_failed_plan_reports_failure_before_end(monkeypatch) -> None:
@@ -829,7 +858,9 @@ def test_parallel_plan_reports_failed_native_verdict(
 
 
 # %% node-owned execution scopes
-def test_direct_attachment_reports_one_pair_of_boundaries(pr2_apartment_context) -> None:
+def test_direct_attachment_reports_one_pair_of_boundaries(
+    pr2_apartment_context,
+) -> None:
     world, robot, context = pr2_apartment_context
     attachment = ReAttachNode(
         body=world.get_body_by_name("milk.stl"), new_parent=robot.root
