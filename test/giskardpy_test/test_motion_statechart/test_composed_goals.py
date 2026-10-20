@@ -6,10 +6,8 @@ from cramph.data_types import ObservationStateValues
 from cramph.executor import StatechartExecutor
 from cramph.statechart import Statechart
 from giskardpy.motion_control import MotionControl
-from giskardpy.motion_statechart.goals.cartesian_goals import (
-    CartesianPoseStraight,
-    DifferentialDriveBaseGoal,
-)
+from giskardpy.motion_statechart.goals.base_pose_goals import DifferentialDriveBaseGoal
+from giskardpy.motion_statechart.goals.cartesian_goals import CartesianPoseStraight
 from giskardpy.motion_statechart.graph_node import EndMotion
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianOrientation,

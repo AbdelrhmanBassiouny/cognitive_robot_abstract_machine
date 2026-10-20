@@ -21,10 +21,11 @@ from cramph.composites import Parallel, Sequence, StatementNode
 from cramph.data_types import LifeCycleValues
 from cramph.executor import StatechartExecutor, TickingExecutorExtension
 from cramph.node import StatechartNode
-from giskardpy.motion_statechart.goals.cartesian_goals import (
-    CartesianPoseStraight,
+from giskardpy.motion_statechart.goals.base_pose_goals import (
     DifferentialDriveBaseGoal,
+    HolonomicBaseGoal,
 )
+from giskardpy.motion_statechart.goals.cartesian_goals import CartesianPoseStraight
 from giskardpy.motion_statechart.goals.grasped_mechanism import (
     ArticulateGraspedMechanism,
 )
@@ -247,7 +248,7 @@ def test_a_simulated_tiago_without_its_robot_adaptations_writes_the_odometry(
 
 @pytest.mark.parametrize(
     "build_executor, goal_type",
-    [(simulated_executor, SetOdometry), (robot_executor, CartesianPose)],
+    [(simulated_executor, SetOdometry), (robot_executor, HolonomicBaseGoal)],
 )
 def test_a_robot_of_another_type_keeps_its_drive_goal(
     pr2_apartment_context, build_executor, goal_type
@@ -268,7 +269,7 @@ def test_stretch_keeps_its_drive_goal_without_its_robot_adaptations(
         navigation_to(world), robot_executor(extensions, robot_adaptations=[])
     )
 
-    assert type(action.goal) is CartesianPose
+    assert type(action.goal) is HolonomicBaseGoal
 
 
 def test_a_simulated_stretch_arrives_driving_with_its_differential_drive(

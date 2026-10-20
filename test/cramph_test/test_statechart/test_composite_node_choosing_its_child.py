@@ -12,7 +12,10 @@ from cramph.composites import (
     StoppedWhenTrue,
 )
 from cramph.data_types import LifeCycleValues, ObservationStateValues
-from cramph.exceptions import NoChildChooserForNodeError
+from cramph.exceptions import (
+    NoChildChooserForNodeError,
+    SeveralChildChoosersForNodeError,
+)
 from cramph.executor import StatechartExecutor, TickingExecutorExtension
 from cramph.monitors import CountNodeResets, CountTicks
 from cramph.node import EndStatechart, StatechartNode
@@ -458,6 +461,19 @@ def test_a_node_without_a_chooser_of_its_kind_cannot_choose(
     statechart.add_node(CompositeNodeChoosingItsChild(name="choosing"))
 
     with pytest.raises(NoChildChooserForNodeError):
+        statechart_executor.compile(statechart)
+
+
+def test_a_node_with_two_choosers_of_its_kind_cannot_choose(
+    statechart_executor: StatechartExecutor,
+) -> None:
+    statechart_executor.context.add_extension(
+        ChildChooserAccess(choosers=[ChooserOfItsOwnKind(), ChooserOfItsOwnKind()])
+    )
+    statechart = Statechart(context=statechart_executor.context)
+    statechart.add_node(NodeChoosingItsChildByItsOwnRule(name="choosing"))
+
+    with pytest.raises(SeveralChildChoosersForNodeError):
         statechart_executor.compile(statechart)
 
 

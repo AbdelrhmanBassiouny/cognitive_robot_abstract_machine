@@ -716,6 +716,36 @@ class NoChildChooserForNodeError(StatechartError):
 
 
 @dataclass
+class SeveralChildChoosersForNodeError(StatechartError):
+    """
+    Raised when a node choosing its child finds more than one chooser for the most
+    specific kind of node it is of.
+    """
+
+    node: CompositeNodeChoosingItsChild
+    """
+    The node that asked for its child.
+    """
+
+    choosers: list[ChildChooser]
+    """
+    The equally specific choosers for the node.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{len(self.choosers)} choosers are equally specific for {self.node}: "
+            f"{', '.join(type(chooser).__name__ for chooser in self.choosers)}."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            f"keep one chooser for {type(self.node).__name__} in the ChildChooserAccess "
+            f"of the context."
+        )
+
+
+@dataclass
 class StatechartAlreadyCompiledError(StatechartError):
     """
     Raised when a compiled part of a statechart is changed: a node is removed, or a node
