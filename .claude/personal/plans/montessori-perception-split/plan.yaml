@@ -31,9 +31,9 @@ items:
   status: in_progress
   pull_request_number: 487
   session: https://claude.ai/code/session_01HMdRorbzSe9pWVXLCKk8mX
-  notes: 'experiments/network_limits.py and its test, off main. Reshaped per review round 1
-    (612f307b8): requirements are an EQL query and the check lives on LargeMessageReceiver,
-    so the files no longer match #202. All 6 threads resolved; waiting on CI and the
+  notes: 'experiments/network_limits.py and its test, off main. Reshaped over two review
+    rounds (612f307b8, 7ad177fe1): requirements are one EQL query on LargeMessageReceiver,
+    so the files no longer match #202. All 9 threads resolved; waiting on CI and the
     reviewer.'
 - id: shape-vocabulary-on-main
   title: Land the Montessori shape vocabulary, the board's hole geometry and the piece set
