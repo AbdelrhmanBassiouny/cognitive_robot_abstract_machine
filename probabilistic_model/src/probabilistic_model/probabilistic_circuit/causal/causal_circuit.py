@@ -737,6 +737,16 @@ class CausalCircuit(Generic[RepresentationType], SubClassSafeGeneric):
                 regions.append(SupportRegion(region_event, float(probability)))
         return regions
 
+    def number_of_regions_of(self, variable: Variable) -> int:
+        """
+        :param variable: The Variable to count the regions of.
+        :returns: How many disjoint support regions the circuit splits the Variable
+            into, which is how many branches :meth:`backdoor_adjustment` builds for it
+            as a cause, and how many values it enumerates for it as an adjustment
+            variable.
+        """
+        return len(self._extract_disjoint_regions_for_variable(variable))
+
     def _extract_disjoint_regions_for_variable(
         self,
         variable: Variable,

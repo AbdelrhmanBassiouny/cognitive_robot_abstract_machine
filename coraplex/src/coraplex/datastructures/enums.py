@@ -234,21 +234,6 @@ class JointType(Enum):
     FLOATING = 7
 
 
-class AxisIdentifier(Enum):
-    """
-    Enum for translating the axis name to a vector along that axis.
-    """
-
-    X = (1, 0, 0)
-    Y = (0, 1, 0)
-    Z = (0, 0, 1)
-    Undefined = (0, 0, 0)
-
-    @classmethod
-    def from_tuple(cls, axis_tuple):
-        return next((axis for axis in cls if axis.value == axis_tuple), None)
-
-
 class GripperType(Enum):
     """
     Enum for the different types of grippers.

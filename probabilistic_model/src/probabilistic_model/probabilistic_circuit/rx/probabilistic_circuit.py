@@ -13,7 +13,6 @@ from enum import IntEnum
 import numpy as np
 import rustworkx as rx
 import rustworkx.visualization
-import tqdm
 from sortedcontainers import SortedSet
 from typing_extensions import (
     List,
@@ -93,6 +92,23 @@ class PlotAlignment(IntEnum):
 
 
 @dataclass
+class WeightedLeafProduct:
+    """
+    A product of leaves with the logarithmic weight it carries in a mixture.
+    """
+
+    log_weight: float
+    """
+    The logarithmic weight of the product.
+    """
+
+    leaves: list[LeafUnit]
+    """
+    The leaves whose distributions are multiplied.
+    """
+
+
+@dataclass
 class Unit(SubclassJSONSerializer, ABC):
     """
     Class for all units of a probabilistic circuit.
@@ -140,6 +156,14 @@ class Unit(SubclassJSONSerializer, ABC):
     def support(self):
         """
         Calculate the support of this unit.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def weighted_leaf_products(self) -> list[WeightedLeafProduct]:
+        """
+        :return: The weighted products of leaves whose mixture is the distribution of
+            this unit.
         """
         raise NotImplementedError
 
@@ -322,6 +346,9 @@ class LeafUnit(Unit):
     @property
     def leaves(self) -> List[LeafUnit]:
         return [self]
+
+    def weighted_leaf_products(self) -> list[WeightedLeafProduct]:
+        return [WeightedLeafProduct(log_weight=0.0, leaves=[self])]
 
     def log_likelihood(self, events: npt.NDArray):
         self.result_of_current_query = self.distribution.log_likelihood(events)
@@ -549,6 +576,15 @@ class SumUnit(InnerUnit):
                 subcircuit,
             )
             for subcircuit in self.subcircuits
+        ]
+
+    def weighted_leaf_products(self) -> list[WeightedLeafProduct]:
+        return [
+            WeightedLeafProduct(
+                log_weight=log_weight + product.log_weight, leaves=product.leaves
+            )
+            for log_weight, subcircuit in self.log_weighted_subcircuits
+            for product in subcircuit.weighted_leaf_products()
         ]
 
     @property
@@ -914,6 +950,20 @@ class ProductUnit(InnerUnit):
             support &= subcircuit.result_of_current_query
 
         self.result_of_current_query = support
+
+    def weighted_leaf_products(self) -> list[WeightedLeafProduct]:
+        return [
+            WeightedLeafProduct(
+                log_weight=sum(factor.log_weight for factor in factors),
+                leaves=[leaf_unit for factor in factors for leaf_unit in factor.leaves],
+            )
+            for factors in itertools.product(
+                *(
+                    subcircuit.weighted_leaf_products()
+                    for subcircuit in self.subcircuits
+                )
+            )
+        ]
 
     def is_decomposable(self):
         for index, subcircuit in enumerate(self.subcircuits):
@@ -1978,9 +2028,8 @@ class ProbabilisticCircuit(GroundableCircuit[Unit], SubclassJSONSerializer):
         :param node: The root of the subgraph.
         :return: The subgraph.
         """
-        nodes_to_keep = list(rx.descendants(self.graph, node)) + [node]
         result = self.__class__()
-        result.graph = self.graph.subgraph(nodes_to_keep)
+        result.mount(node)
         return result
 
     def fill_node_colors(self, node_colors: Dict[Unit, str]):
@@ -2188,188 +2237,104 @@ class ShallowProbabilisticCircuit(ProbabilisticCircuit):
     """
 
     @classmethod
-    def from_probabilistic_circuit(cls, probabilistic_circuit: ProbabilisticCircuit):
+    def from_probabilistic_circuit(
+        cls, probabilistic_circuit: ProbabilisticCircuit
+    ) -> Self:
         """
-        Initialization function, to input a PC to create its shallow version.
+        Create the shallow circuit with the same distribution as a circuit, leaving that
+        circuit unchanged.
+
+        :param probabilistic_circuit: The circuit to convert.
+        :return: The shallow circuit.
         """
         result = cls()
-        shallow_pc = probabilistic_circuit.__copy__()
-        cls.shallowing(result, node=shallow_pc.root, presucc=None)
-        result.add_nodes_from(shallow_pc.nodes)
-        result.add_edges_from(shallow_pc.edges)
-        result.add_weighted_edges_from(shallow_pc.log_weighted_edges)
+        root = SumUnit(probabilistic_circuit=result)
+        copies_of_leaves: dict[int, LeafUnit] = {}
+        for weighted_product in probabilistic_circuit.root.weighted_leaf_products():
+            product = ProductUnit(probabilistic_circuit=result)
+            for leaf_unit in weighted_product.leaves:
+                if leaf_unit.index not in copies_of_leaves:
+                    copies_of_leaves[leaf_unit.index] = leaf_unit.copy_without_graph()
+                product.add_subcircuit(copies_of_leaves[leaf_unit.index])
+            root.add_subcircuit(product, weighted_product.log_weight)
         return result
 
-    def shallowing(self, node: Unit, presucc: Unit | None):
+    def cells_of_constant_density(self, other: Self) -> list[Event]:
         """
-        This function transforms the PC into it shallow form, in place.
+        Partition the union of the supports of this and another shallow circuit into
+        disjoint cells that each lie either entirely inside or entirely outside the
+        support of every product unit of both circuits.
 
-        This function uses recursion and need to be called on the root of the PC. :node:
-        the Node in focus to be shallowed :presucc: the predecessor of the node of
-        before shallowing.
+        :param other: The other shallow circuit.
+        :return: The cells of the partition.
         """
-        probabilistic_circuit = node.probabilistic_circuit
-        succ_list: List = list(probabilistic_circuit.successors(node))
-        if not isinstance(node, SumUnit) and not isinstance(node, ProductUnit):
-            sum_unit = SumUnit()
-            product_unit = ProductUnit()
-            probabilistic_circuit.add_node(sum_unit)
-            probabilistic_circuit.add_node(product_unit)
-            probabilistic_circuit.add_edge(product_unit, node)
-            probabilistic_circuit.add_edge(sum_unit, product_unit, log_weight=0.0)
-            if presucc is not None:
-                data = probabilistic_circuit.get_edge_data(presucc, node, {"weight": 1})
-                probabilistic_circuit.add_edge(presucc, sum_unit, **data)
-                probabilistic_circuit.remove_edge(presucc, node)
-            return
-        elif isinstance(node, SumUnit):
-            for succ in succ_list:
-                self.shallowing(succ, presucc=node)
-            new_succ_list = list(probabilistic_circuit.successors(node))
-            for sum_succ in new_succ_list:
-                first_weight = probabilistic_circuit.get_edge_data(
-                    node, sum_succ, {"log_weight": 0}
-                ).get("log_weight", 0)
-                for succ_succ in list(probabilistic_circuit.successors(sum_succ)):
-                    second_weight = probabilistic_circuit.get_edge_data(
-                        sum_succ, succ_succ, {"log_weight": 0}
-                    ).get("weight", 1)
-                    probabilistic_circuit.add_edge(
-                        node, succ_succ, log_weight=first_weight + second_weight
+        cells: list[Event] = []
+        for circuit in [self, other]:
+            for product in circuit.root.subcircuits:
+                support = circuit.subgraph_of(product).support
+                uncovered = support
+                refined_cells = []
+                for cell in cells:
+                    refined_cells.extend(
+                        part
+                        for part in [cell & support, cell - support]
+                        if not part.is_empty()
                     )
-                probabilistic_circuit.remove_edge(node, sum_succ)
-                if len(list(probabilistic_circuit.predecessors(sum_succ))) == 0:
-                    self.remove_node_and_successor_structure(sum_succ)
-            return
-        elif isinstance(node, ProductUnit):
-            for succ in succ_list:
-                self.shallowing(succ, presucc=node)
-            new_succ_list = list(probabilistic_circuit.successors(node))
-            combination_li = list()
-            sum_unit = SumUnit()
-            probabilistic_circuit.add_node(sum_unit)
-            if presucc is not None:
-                data = probabilistic_circuit.get_edge_data(presucc, node, {"weight": 1})
-                probabilistic_circuit.add_edge(presucc, sum_unit, **data)
-                probabilistic_circuit.remove_edge(presucc, node)
-                if len(list(probabilistic_circuit.predecessors(node))) == 0:
-                    probabilistic_circuit.remove_node(node)
-            elif presucc is None:
-                # None only happen if this Instance is root
-                probabilistic_circuit.remove_node(node)
-            for sum_succ in new_succ_list:
-                pro_li = []
-                for pro_succ in list(probabilistic_circuit.successors(sum_succ)):
-                    data = probabilistic_circuit.get_edge_data(
-                        sum_succ, pro_succ, {"weight": 1}
-                    )
-                    pro_li.append((pro_succ, data.get("weight", 1)))
-                combination_li.append(pro_li)
-            for combination in itertools.product(*combination_li):
-                product_unit = ProductUnit()
-                probabilistic_circuit.add_node(product_unit)
-                total_weight = 1
-                for pro_tuple in combination:
-                    under_node, weight = pro_tuple[0], pro_tuple[1]
-                    total_weight *= weight
-                    under_succ_li = probabilistic_circuit.successors(under_node)
-                    for under_succ in under_succ_li:
-                        data = probabilistic_circuit.get_edge_data(
-                            under_node, under_succ, {"log_weight": 0.0}
-                        )
-                        probabilistic_circuit.add_edge(product_unit, under_succ, **data)
-                probabilistic_circuit.add_edge(
-                    sum_unit, product_unit, log_weight=total_weight
-                )
-            for sum_succ in new_succ_list:
-                if len(list(probabilistic_circuit.predecessors(sum_succ))) == 0:
-                    self.remove_node_and_successor_structure(sum_succ)
-            return
+                    uncovered = uncovered - cell
+                if not uncovered.is_empty():
+                    refined_cells.append(uncovered)
+                cells = refined_cells
+        return cells
 
-        else:
-            raise TypeError(f"{type(node)} is not supported")
-
-    def events_of_higher_density_product(
-        self, other: Self, own_pro_unit, other_pro_unit, tolerance: float = 10e-8
-    ):
+    def event_of_higher_density(self, other: Self, tolerance: float = 10e-8) -> Event:
         """
-        Construct E_p of a product unit in a shallow context.
+        Construct the event where this shallow circuit has a higher density than
+        another one.
 
-        :own_pro_unit: product unit which is part of E_p :other: other product unit
-        which is part of E_p :tolerance: float as how close to zero is zero, because of
-        imprecision.
+        .. note::
+
+            The densities are compared at one point per cell of
+            :meth:`cells_of_constant_density`, which is exact when every leaf is
+            uniform.
+
+        :param other: The other shallow circuit.
+        :param tolerance: The likelihood difference below which two likelihoods count
+            as equal.
+        :return: The event where this circuit is more likely.
         """
-        # supp_own = own_pro_unit.support
-        # supp_other = other_pro_unit.support
-        # intersection: Event = (supp_own & supp_other)
-        own_copy = self.subgraph_of(own_pro_unit)
-        other_copy = other.subgraph_of(other_pro_unit)
-        intersection = own_copy.support & other_copy.support
-
-        if intersection.is_empty():
-            return Event()
-
-        center = np.array(
-            [
-                assignment.simple_sets[0].center()
-                for variable, assignment in intersection.simple_sets[0].items()
-            ]
-        ).reshape(1, -1)
-
-        likelihood_own = self.likelihood(center)
-        likelihood_other = other.likelihood(center)
-        diff = likelihood_own - likelihood_other
-        if diff > tolerance:
-            return intersection
-        else:
-            return Event()
-
-    def events_of_higher_density_sum(self, other: Self, tolerance: float = 10e-8):
-        """
-        Construct E_p of a sum unit in a shallow context.
-
-        :other: the other Root shallow PC node to create the E_p :tolerance: float as
-        how close to zero is zero, because of imprecisions
-        """
-        progress_bar = tqdm.tqdm(
-            total=len(self.root.subcircuits) * len(other.root.subcircuits)
-        )
-        result = self.support - other.support
-        for own_prod, other_prod in itertools.product(
-            self.root.subcircuits, other.root.subcircuits
-        ):
-            result |= self.events_of_higher_density_product(
-                other, own_prod, other_prod, tolerance
+        result = Event.from_simple_sets()
+        for cell in self.cells_of_constant_density(other):
+            point = np.array(
+                [
+                    [
+                        assignment.simple_sets[0].center()
+                        for assignment in cell.simple_sets[0].values()
+                    ]
+                ]
             )
-            progress_bar.update()
+            if self.likelihood(point)[0] - other.likelihood(point)[0] > tolerance:
+                result |= cell
         return result
 
-    def l1(self, other: Self, tolerance: float = 10e-8) -> float:
+    def total_variation_distance(self, other: Self, tolerance: float = 10e-8) -> float:
         """
-        The L1 metric between shallow Circuits are calculated.
+        Calculate the total variation distance :math:`\\frac{1}{2} \\int |p(x) - q(x)| dx`
+        between this circuit and another shallow circuit, which lies in :math:`[0, 1]`.
 
-        It is important, that before the shallowing the PC replace_discrete_distribution_with_deterministic_sum called on.´
-        :other: the other shallow PC which the L1 metric is calculated
-        :tolerance: float as how close to zero is zero, because of imprecision for the Creation of E_p.
+        .. note::
+
+            Call :meth:`replace_discrete_distribution_with_deterministic_sum` on a
+            circuit before making it shallow.
+
+        :param other: The other shallow circuit.
+        :param tolerance: The likelihood difference below which two likelihoods count
+            as equal when constructing the event where this circuit is more likely.
+        :return: The total variation distance between the two circuits.
         """
-        e = self.events_of_higher_density_sum(other, tolerance)
-        p_e = self.probability(e)
-        q_e = other.probability(e)
-
-        return 2 * (p_e - q_e)
-
-    def remove_node_and_successor_structure(self, node: Unit):
-        """
-        This is an assist function for pruning disconnected subgraphs from the PC.
-
-        :node: the node that needs to be checked if to be pruned and its children.
-        """
-        probabilistic_circuit = node.probabilistic_circuit
-        succ_list: List = list(probabilistic_circuit.successors(node))
-        probabilistic_circuit.remove_node(node)
-        for succ in succ_list:
-            if len(list(probabilistic_circuit.predecessors(succ))) == 0:
-                self.remove_node_and_successor_structure(succ)
+        event_of_higher_density = self.event_of_higher_density(other, tolerance)
+        return self.probability(event_of_higher_density) - other.probability(
+            event_of_higher_density
+        )
 
 
 @dataclass

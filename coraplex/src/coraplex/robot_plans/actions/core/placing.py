@@ -11,13 +11,11 @@ from krrood.entity_query_language.factories import (
     variable_from,
 )
 from semantic_digital_twin.datastructures.definitions import GripperState
-from semantic_digital_twin.grasping.grasp_candidates import (
-    GraspCandidate,
-    HasGraspCandidates,
-)
+from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.reasoning.predicates import allclose
 from semantic_digital_twin.reasoning.robot_predicates import is_body_gripped
 from semantic_digital_twin.robots.robot_parts import Arm
+from semantic_digital_twin.semantic_annotations.mixins import HasGraspCandidates
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from typing_extensions import Any, Dict, List, Tuple
 
