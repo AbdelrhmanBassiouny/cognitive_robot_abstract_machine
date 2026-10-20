@@ -4,10 +4,11 @@ Plan
 - Strip every basstler file and mention from CRAM; plugin is per-user.
 
 Done
+- Promotion link built + promotion-link-sent label.
 - Review round 1 (f1d380d8c): settings.json, stack.toml, upstream-reviews.yml removed; README/.gitignore cleaned; PathEnumeration moved to krrood with tests. Upstream setting moved to personal stack.toml. 11 threads resolved.
 
 Next
-- User's call on 2 open threads: /upstream-reviews needs a basstler-side fix; stamp files kept out of commits how (proposed: git dir). Promote to cram2 only on OK.
+- Promotion link recorded on #523; user clicks Create upstream, then adds in-review. Open threads (upstream-reviews, stamps) now tracked as basstler items.
 
 id: basstler-package
 title: 'The basstler package: what is left of it in CRAM'
