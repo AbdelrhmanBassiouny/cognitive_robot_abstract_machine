@@ -1,12 +1,11 @@
-PR #523, item basstler-package/cram-basstler-removal (auto mode).
+PR #523, item basstler-package/cram-basstler-removal (auto mode). Draft.
 
 Plan
-- Add .claude/basstler/stack.toml, plugin in settings.json, upstream-reviews.yml calling basstler@v0.1.5.
-- Delete basstler/, test/basstler_test/, .claude/hooks|stack|SETUP.md, plugin skills (keep local-code-review), test_basstler job; tidy README, .gitignore, AGENTS.md PathEnumeration line.
-- Relabel fork PRs cram2-link-sent -> promotion-link-sent.
+- Plugin config + delete in-tree tooling, one PR (two commits).
 
 Done
-- Branch, draft PR, manifest and roadmap recorded.
+- Pushed: settings.json enables the plugin, .claude/basstler/stack.toml, upstream-reviews.yml calls basstler@v0.1.5; basstler/, tests, hooks, stack, SETUP.md, plugin skills, test_basstler job removed; README, .gitignore, AGENTS.md tidied.
+- Open PRs #488, #265, #202 relabelled to promotion-link-sent (label created plain grey); closed PRs keep cram2-link-sent.
 
 Next
-- Implement the plan above, then update the PR description.
+- User review. Promote to cram2 only on the user's OK. Copy basstler#16's stack-maintenance caller once released.
