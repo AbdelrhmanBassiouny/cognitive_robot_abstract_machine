@@ -3,4 +3,5 @@ Plan
 Done
 - Inventory: 669 files not on main; 52 in main-based PRs, 284 only in #265, 165 only in untracked PRs. Branch pushed (= main).
 Next
+- Tooling: basstler v0.1.5 plugin not installed in cloud; run hooks from a clone with BASSTLER_PLUGIN_ROOT, BASSTLER_PYTHON=~/.local/share/basstler/venv/bin/python and PYTHONSAFEPATH=1.
 - Decided: video out of git; close icra-foundation with icra-upstream; drop sdt numeric types (keep Panda, Mujoco pacing, bounds). Remaining doc decisions, then /plan-create icra-upstream and tracking-issue notes on review-reaches-main, montessori-perception-split, icra-foundation.
