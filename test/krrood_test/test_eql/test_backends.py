@@ -15,6 +15,10 @@ from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
 from random_events.variable import Continuous
 
 from ..dataset.derived_attributes import Rectangle
+from ..dataset.identity_hashed_values_created_on_access import (
+    PlacementOnAPoint,
+    PointsCreatedOnEveryAccess,
+)
 from ..dataset.semantic_world_like_classes import Apple, Body
 from krrood.entity_query_language.backends import (
     SQLAlchemyBackend,
@@ -449,3 +453,68 @@ def test_generative_backend_grounds_a_keyword_bound_to_an_attribute_of_a_variabl
     assert [pose.position for pose in poses] == [
         each_holder.positions2 for each_holder in holders
     ]
+
+
+def test_probabilistic_backend_grounds_a_keyword_bound_to_a_flattening_of_a_variable() -> (
+    None
+):
+    """
+    A keyword bound to the flattened values of a variable's attribute takes its sampled
+    values only from those flattened values.
+    """
+    holders = [
+        KRROODPositions([KRROODPosition(1, 0, 0), KRROODPosition(2, 0, 0)], []),
+        KRROODPositions([KRROODPosition(3, 0, 0)], []),
+    ]
+    holder = variable_from(holders)
+    query = a(KRROODPose)(position=flat_variable(holder.positions), orientation=UPRIGHT)
+
+    flattened_positions = [
+        position for each_holder in holders for position in each_holder.positions
+    ]
+
+    poses = list(query.evaluate(backend=ProbabilisticBackend()))
+
+    assert poses
+    assert {pose.position for pose in poses} <= set(flattened_positions)
+
+
+def test_probabilistic_backend_grounds_a_keyword_bound_to_an_attribute_of_a_variable() -> (
+    None
+):
+    holders = [
+        KRROODPositionsSubclassWithAnotherKRROODPosition(
+            [], [], KRROODPosition(1, 0, 0)
+        ),
+        KRROODPositionsSubclassWithAnotherKRROODPosition(
+            [], [], KRROODPosition(2, 0, 0)
+        ),
+    ]
+    holder = variable_from(holders)
+    query = a(KRROODPose)(position=holder.positions2, orientation=UPRIGHT)
+
+    poses = list(query.evaluate(backend=ProbabilisticBackend()))
+
+    assert poses
+    assert {pose.position for pose in poses} <= {
+        each_holder.positions2 for each_holder in holders
+    }
+
+
+def test_probabilistic_backend_grounds_a_keyword_bound_to_values_created_on_every_evaluation() -> (
+    None
+):
+    """
+    A keyword bound to an expression whose values are created anew on every evaluation
+    takes values that expression created.
+    """
+    points_holder = PointsCreatedOnEveryAccess([1.0, 2.0])
+    holder = variable_from([points_holder])
+    query = a(PlacementOnAPoint)(point=flat_variable(holder.points))
+
+    placements = list(query.evaluate(backend=ProbabilisticBackend()))
+
+    assert placements
+    assert {placement.point.coordinate for placement in placements} <= set(
+        points_holder.coordinates
+    )
