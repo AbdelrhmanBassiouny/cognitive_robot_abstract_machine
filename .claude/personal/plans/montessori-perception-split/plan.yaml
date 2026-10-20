@@ -31,10 +31,11 @@ items:
   status: in_progress
   pull_request_number: 487
   session: https://claude.ai/code/session_01HMdRorbzSe9pWVXLCKk8mX
-  notes: 'experiments/network_limits.py and its test, off main. Reshaped over two review
-    rounds (612f307b8, 7ad177fe1): requirements are one EQL query on LargeMessageReceiver,
-    so the files no longer match #202. All 9 threads resolved; waiting on CI and the
-    reviewer.'
+  notes: 'experiments/network_limits.py and its test, off main. Reshaped over three review
+    rounds (latest a4b815ce4): unmet_requirements() returns an EQL query on
+    LargeMessageReceiver, so the files no longer match #202. All 10 threads resolved.
+    Promotion link recorded on #487 (promotion-link-sent); waiting on CI and the developer
+    clicking Create.'
 - id: shape-vocabulary-on-main
   title: Land the Montessori shape vocabulary, the board's hole geometry and the piece set
   branch: claude/ecstatic-knuth-curscv
