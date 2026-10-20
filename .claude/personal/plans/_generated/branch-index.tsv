@@ -13,15 +13,8 @@ eql-planning/action-schema-progression	eql-planning
 eql-planning/planning-backend-search	eql-planning
 eql-planning/regression-and-explanation	eql-planning
 eql-planning/compiled-search-ff	eql-planning
-eql-planning/montessori-planning-domain	eql-planning
-eql-planning/planner-as-showcase-backend	eql-planning
-eql-planning/coraplex-action-effects	eql-planning
-eql-planning/cramph-achieve-node	eql-planning
-eql-planning/robocasa-goals	eql-planning
-eql-planning/robocasa-slice	eql-planning
 eql-planning/trajectory-constraints	eql-planning
 eql-planning/unified-planning-backend	eql-planning
-eql-planning/iros-experiments	eql-planning
 eql-planning-robots/montessori-planning-domain	eql-planning-robots
 eql-planning-robots/planner-as-showcase-backend	eql-planning-robots
 eql-planning-robots/coraplex-action-effects	eql-planning-robots

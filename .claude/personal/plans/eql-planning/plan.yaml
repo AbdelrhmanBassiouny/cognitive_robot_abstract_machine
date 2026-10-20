@@ -1,182 +1,106 @@
 schema_version: 1
 id: eql-planning
-title: "EQL planning: goals as EQL conditions, planners as EQL backends"
-description: >-
-  Domain-agnostic planning over EQL in krrood: fluents and a State overlay, action
-  schemas with assignment effects, and a PlanningBackend that answers a goal query
-  with plans. Tried first on Montessori sorting, then on RoboCasa through a cramph
-  Achieve node. Feature freeze 2026-12-18; target IROS 2027.
+title: 'EQL planning: goals as EQL conditions, planners as EQL backends'
+description: 'Domain-agnostic planning over EQL in krrood: fluents and a State overlay, action schemas
+  with assignment effects, and a PlanningBackend that answers a goal query with plans, with compiled heuristic
+  search, regression-based explanation, trajectory constraints and a unified-planning backend. Its robot
+  use is eql-planning-robots (#522). Core by Nov 13; target IROS 2027.'
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 513
-
 waves:
-  - id: foundation
-    name: "EQL prerequisites (Oct 15-31)"
-    description: EQL fixes the planner cannot run correctly without.
-  - id: core
-    name: "Planning core in krrood (Nov 2-13)"
-    description: The domain-agnostic planner, tested on blocksworld, gripper and logistics.
-  - id: robot
-    name: "Robot domains (Nov 16-Dec 18)"
-    description: Montessori sorting first, then RoboCasa through cramph; freeze on Dec 18.
-  - id: evaluation
-    name: "Evaluation and paper (January)"
-    description: Constraints, the external-planner comparison, experiments and writing.
-
+- id: foundation
+  name: EQL prerequisites (Oct 15-31)
+  description: EQL fixes the planner cannot run correctly without.
+- id: core
+  name: Planning core in krrood (Nov 2-13)
+  description: The domain-agnostic planner, tested on blocksworld, gripper and logistics.
+- id: evaluation
+  name: Constraints and external planners (January)
+  description: Trajectory constraints and the comparison with external planners.
 tracks:
-  - id: eql-prerequisites
-    name: EQL prerequisites
-    wave: foundation
-  - id: planning-core
-    name: Planning core
-    wave: core
-  - id: montessori
-    name: Montessori domain
-    wave: robot
-    description: Nov 16-Dec 2; the AAMAS rebuttal (Nov 20-24) falls inside it.
-  - id: cram-robocasa
-    name: cramph Achieve node and RoboCasa
-    wave: robot
-    description: Dec 3-18, with Jonas's cramph statecharts.
-  - id: evaluation
-    name: Evaluation
-    wave: evaluation
-
+- id: eql-prerequisites
+  name: EQL prerequisites
+  wave: foundation
+- id: planning-core
+  name: Planning core
+  wave: core
+- id: evaluation
+  name: Constraints and external planners
+  wave: evaluation
 items:
-  - id: correlated-quantifiers
-    title: "Quantifiers range per outer binding, so goals with exists, not_ and for_all are correct"
-    branch: fix/eql-correlated-quantifiers
-    pull_request_number: 495
-    track: eql-prerequisites
-    status: in_progress
-    notes: >-
-      Already merged into aamas27-unification-revision. Also listed in ontomatic-port as
-      eql-correlated-quantifiers, which records no PR; overlaps eql-existential-semantics.
-
-  - id: nested-evaluation-context
-    branch: eql-planning/nested-evaluation-context
-    title: "An EQL evaluation started inside another one sees its own context"
-    track: eql-prerequisites
-    status: not_started
-    notes: >-
-      Bug found in #511: a rule tree evaluated during another evaluation returns nothing
-      (shared ContextVar). Bug-fix PR off main with the bug label. Near #142.
-
-  - id: state-aware-predicate-cache
-    branch: eql-planning/state-aware-predicate-cache
-    title: "Predicate results cached per state, not per argument tuple alone"
-    track: eql-prerequisites
-    status: not_started
-    notes: >-
-      Changes the per-argument cache from aamas27-unification-revision ("Call each
-      predicate and symbolic function once per distinct argument tuple"), which has no PR
-      yet: fold into whichever PR lands that cache.
-    blockers:
-      - The per-argument cache has not been opened as a PR.
-
-  - id: fluent-state-overlay
-    branch: eql-planning/fluent-state-overlay
-    title: "Fluents and a State overlay that EQL queries are evaluated against"
-    track: planning-core
-    depends_on: [nested-evaluation-context]
-    status: not_started
-
-  - id: action-schema-progression
-    branch: eql-planning/action-schema-progression
-    title: "ActionSchema with an EQL precondition and assignment effects, applied to a State"
-    track: planning-core
-    depends_on: [fluent-state-overlay]
-    status: not_started
-
-  - id: planning-backend-search
-    branch: eql-planning/planning-backend-search
-    title: "PlanningBackend answers a goal query with plans; breadth-first search on test domains"
-    track: planning-core
-    depends_on: [action-schema-progression, correlated-quantifiers]
-    status: not_started
-
-  - id: regression-and-explanation
-    branch: eql-planning/regression-and-explanation
-    title: "Successor state axioms generated from effects; regression explains each step"
-    track: planning-core
-    depends_on: [action-schema-progression]
-    status: not_started
-
-  - id: compiled-search-ff
-    branch: eql-planning/compiled-search-ff
-    title: "Grounding through EQL, compiled integer state, greedy best-first and A* with the FF heuristic"
-    track: planning-core
-    depends_on: [planning-backend-search, state-aware-predicate-cache]
-    status: not_started
-
-  - id: montessori-planning-domain
-    branch: eql-planning/montessori-planning-domain
-    title: "Montessori sorting as a planning domain: SortPieceAction effects and the for_all goal"
-    track: montessori
-    depends_on: [planning-backend-search]
-    status: not_started
-    notes: SortPieceAction exists only on the unlanded showcase PR #511.
-    blockers:
-      - "#511 (EQL showcase) has not landed."
-
-  - id: planner-as-showcase-backend
-    branch: eql-planning/planner-as-showcase-backend
-    title: "The planner answers the plan's open steps as #511's fifth backend, through the Achieve act"
-    track: montessori
-    depends_on: [montessori-planning-domain]
-    status: not_started
-    notes: The Achieve act is eql-performatives' giskardpy-acts item.
-
-  - id: coraplex-action-effects
-    branch: eql-planning/coraplex-action-effects
-    title: "Effects for pick, place, open, close and navigate, separate from post_condition monitors"
-    track: cram-robocasa
-    depends_on: [action-schema-progression]
-    status: not_started
-    blockers:
-      - "cramph and the converted coraplex actions are only on Tigul/plan-cramp-second-iter."
-
-  - id: cramph-achieve-node
-    branch: eql-planning/cramph-achieve-node
-    title: "A cramph Achieve(goal) node that plans when expanded and replans when a step fails"
-    track: cram-robocasa
-    depends_on: [planning-backend-search, regression-and-explanation]
-    status: not_started
-    blockers:
-      - "cramph is only on Tigul/plan-cramp-second-iter."
-
-  - id: robocasa-goals
-    branch: eql-planning/robocasa-goals
-    title: "RoboCasa task goals as EQL conditions, read from the tasks' success checks"
-    track: cram-robocasa
-    status: not_started
-    notes: Builds on Jonas's RoboCasa condition survey and the semantic_digital_twin RoboCasa loader.
-
-  - id: robocasa-slice
-    branch: eql-planning/robocasa-slice
-    title: "5-10 RoboCasa tasks end to end on the #261 scenario harness"
-    track: cram-robocasa
-    depends_on: [cramph-achieve-node, coraplex-action-effects, robocasa-goals]
-    status: not_started
-    notes: Feature freeze 2026-12-18.
-
-  - id: trajectory-constraints
-    branch: eql-planning/trajectory-constraints
-    title: "Trajectory constraints (PDDL3 subset) checked in search and monitored during execution"
-    track: evaluation
-    depends_on: [planning-backend-search]
-    status: not_started
-
-  - id: unified-planning-backend
-    branch: eql-planning/unified-planning-backend
-    title: "Compile EQL domains to unified-planning; cross-check against Fast Downward on IPC domains"
-    track: evaluation
-    depends_on: [planning-backend-search]
-    status: not_started
-
-  - id: iros-experiments
-    branch: eql-planning/iros-experiments
-    title: "IROS 2027 experiments, ablations and writing"
-    track: evaluation
-    depends_on: [robocasa-slice]
-    status: not_started
+- id: correlated-quantifiers
+  title: Quantifiers range per outer binding, so goals with exists, not_ and for_all are correct
+  branch: fix/eql-correlated-quantifiers
+  pull_request_number: 495
+  track: eql-prerequisites
+  status: in_progress
+  notes: Already merged into aamas27-unification-revision. Also listed in ontomatic-port as eql-correlated-quantifiers,
+    which records no PR; overlaps eql-existential-semantics.
+- id: nested-evaluation-context
+  branch: eql-planning/nested-evaluation-context
+  title: An EQL evaluation started inside another one sees its own context
+  track: eql-prerequisites
+  status: not_started
+  notes: 'Bug found in #511: a rule tree evaluated during another evaluation returns nothing (shared ContextVar).
+    Bug-fix PR off main with the bug label. Near #142.'
+- id: state-aware-predicate-cache
+  branch: eql-planning/state-aware-predicate-cache
+  title: Predicate results cached per state, not per argument tuple alone
+  track: eql-prerequisites
+  status: not_started
+  notes: 'Changes the per-argument cache from aamas27-unification-revision ("Call each predicate and symbolic
+    function once per distinct argument tuple"), which has no PR yet: fold into whichever PR lands that
+    cache.'
+  blockers:
+  - The per-argument cache has not been opened as a PR.
+- id: fluent-state-overlay
+  branch: eql-planning/fluent-state-overlay
+  title: Fluents and a State overlay that EQL queries are evaluated against
+  track: planning-core
+  depends_on:
+  - nested-evaluation-context
+  status: not_started
+- id: action-schema-progression
+  branch: eql-planning/action-schema-progression
+  title: ActionSchema with an EQL precondition and assignment effects, applied to a State
+  track: planning-core
+  depends_on:
+  - fluent-state-overlay
+  status: not_started
+- id: planning-backend-search
+  branch: eql-planning/planning-backend-search
+  title: PlanningBackend answers a goal query with plans; breadth-first search on test domains
+  track: planning-core
+  depends_on:
+  - action-schema-progression
+  - correlated-quantifiers
+  status: not_started
+- id: regression-and-explanation
+  branch: eql-planning/regression-and-explanation
+  title: Successor state axioms generated from effects; regression explains each step
+  track: planning-core
+  depends_on:
+  - action-schema-progression
+  status: not_started
+- id: compiled-search-ff
+  branch: eql-planning/compiled-search-ff
+  title: Grounding through EQL, compiled integer state, greedy best-first and A* with the FF heuristic
+  track: planning-core
+  depends_on:
+  - planning-backend-search
+  - state-aware-predicate-cache
+  status: not_started
+- id: trajectory-constraints
+  branch: eql-planning/trajectory-constraints
+  title: Trajectory constraints (PDDL3 subset) checked in search and monitored during execution
+  track: evaluation
+  depends_on:
+  - planning-backend-search
+  status: not_started
+- id: unified-planning-backend
+  branch: eql-planning/unified-planning-backend
+  title: Compile EQL domains to unified-planning; cross-check against Fast Downward on IPC domains
+  track: evaluation
+  depends_on:
+  - planning-backend-search
+  status: not_started
