@@ -22,20 +22,11 @@ items:
   pull_request_number: 523
   session: https://claude.ai/code/session_01JtoHXNAfe5rxy2nN5e23fk
   notes: >
-    Commit .claude/basstler/stack.toml naming upstream_repository =
-    "cram2/cognitive_robot_abstract_machine" and upstream_remote = "cram2", and relabel the fork's
-    pull requests from cram2-link-sent to promotion-link-sent. Then, from fork main: delete
-    basstler/, test/basstler_test/, .claude/hooks|skills|stack|shared|SETUP.md, the test_basstler
-    job in ci.yml and the sync_version.py entry; enable the plugin in settings.json (local and CI
-    sessions) and add a caller of basstler's reusable upstream-reviews workflow. Cloud sessions get
-    the plugin from the user's or org's claude.ai plugins, not from the repo. Promote to cram2 only
-    with the user's OK in-session.
-
-    State on 2026-10-20: nothing of this is on fork main yet (basstler/ and the in-tree hooks are
-    still there, no stack.toml, no promotion-link-sent label). Already done elsewhere: every
-    CRAM-fork tooling pull request is closed (2026-10-19, #515 on 2026-10-20), basstler v0.1.5
-    is released with #11, #13 and #14, and cloud sessions already run the plugin's session start.
-    Still open on basstler: #16, the stack-maintenance example caller to copy here.
+    Draft PR #523: enables the basstler plugin in settings.json, adds .claude/basstler/stack.toml
+    and an upstream-reviews.yml calling basstler@v0.1.5, and deletes basstler/, its tests,
+    .claude/hooks|stack|SETUP.md, the plugin's skills and the test_basstler job. Open PRs #488,
+    #265, #202 relabelled to promotion-link-sent. Next: the user's review; promote to cram2 only
+    with their OK. Copy basstler#16's stack-maintenance caller once released.
   blockers:
   - 'Cross-repository dependency, not representable in depends_on: basstler-package/cram-uses-basstler-plugin
     and cram-basstler-removal in AbdelrhmanBassiouny/basstler''s notes track the same work there.'
