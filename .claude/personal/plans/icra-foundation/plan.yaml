@@ -1,56 +1,49 @@
 schema_version: 1
 id: icra-foundation
 title: 'ICRA experiments: one pipeline every scenario runs on'
-description: 'The foot of icra-experiments (split 2026-09-05 for the plan size budget -- see
-  plan-size-limits'' roadmap.md for why). One representation every subsystem reads and writes:
-  the integrated simulation pipeline every scenario, demo and experiment stacks on, the dataclass
-  scenario/goal/condition/perturbation/metric domain model with its runner, and every trial,
-  robot plan, event, query, answer and failure recorded through ORMatic into SQL and read
-  back as long-term memory.'
+description: 'The foot of icra-experiments (split 2026-09-05 for the plan size budget -- see plan-size-limits''
+  roadmap.md for why). One representation every subsystem reads and writes: the integrated simulation
+  pipeline every scenario, demo and experiment stacks on, the dataclass scenario/goal/condition/perturbation/metric
+  domain model with its runner, and every trial, robot plan, event, query, answer and failure recorded
+  through ORMatic into SQL and read back as long-term memory.'
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 252
 waves:
 - id: foundation
   name: One pipeline every scenario runs on
-  description: The integrated simulation pipeline, the scenario domain model and the episode
-    recording. Everything later stacks on these three, and all three can start today in parallel.
+  description: The integrated simulation pipeline, the scenario domain model and the episode recording.
+    Everything later stacks on these three, and all three can start today in parallel.
 tracks:
 - id: integration
   name: The integrated pipeline
   wave: foundation
-  description: Lane 1. One branch carrying the perception stack, the monitor stack, the predicates
-    and a simulated camera, on which the simulated demo runs the same pipeline the robot will.
+  description: Lane 1. One branch carrying the perception stack, the monitor stack, the predicates and
+    a simulated camera, on which the simulated demo runs the same pipeline the robot will.
 - id: scenario-model
   name: Scenarios as data
   wave: foundation
-  description: Lane 2. The dataclass domain model that describes a scenario, its goal, the
-    knowledge conditions it runs under, the perturbations applied to it and the metrics it
-    reports, plus the runner that executes it with logs and a report.
+  description: Lane 2. The dataclass domain model that describes a scenario, its goal, the knowledge conditions
+    it runs under, the perturbations applied to it and the metrics it reports, plus the runner that executes
+    it with logs and a report.
 - id: long-term-memory
   name: Episodes recorded and queried
   wave: foundation
-  description: Lane 2, and the programme's critical path since 2026-09-08. Every trial, robot
-    plan, event, query, answer, failure and self-model recorded through ORMatic into SQL,
-    in simulation and on the robot alike, generated at corpus scale headless, and read back
-    through the SQL backend as long-term memory. Nothing in this track waits on the perception
-    lane.
+  description: Lane 2, and the programme's critical path since 2026-09-08. Every trial, robot plan, event,
+    query, answer, failure and self-model recorded through ORMatic into SQL, in simulation and on the
+    robot alike, generated at corpus scale headless, and read back through the SQL backend as long-term
+    memory. Nothing in this track waits on the perception lane.
 items:
 - id: integrated-simulation-pipeline
-  title: One branch on which the simulated demo runs perception, monitor, predicates and events
-    together
+  title: One branch on which the simulated demo runs perception, monitor, predicates and events together
   branch: claude/icra-experiments-simulation-pipeline-w4ep7n
   pull_request_number: 265
   track: integration
   depends_on: []
-  status: in_progress
+  status: deferred
   session: https://claude.ai/code/session_0155Lgy4BZ7QcZHiRuxxJJyA
-  blockers:
-  - 'Cross-plan: this item merges montessori-eql-stack''s montessori_monitor_and_recording
-    (#256) rather than montessori_fast_inline_monitor (#169), as of 2026-09-03 - #256 was
-    split out of #169 so this plan need not take the cramera console with the monitor.'
-  - CI has now spoken on this lineage, for the first time since the tracy_icra merge, and
-    it found one defect.
-  notes: The foot of the plan.
+  blockers: []
+  notes: 'Closed Oct 20: replaced by icra-upstream''s tracy-lab-and-demos, which lands this work from
+    the ICRA tip''s final tree (#265 is the source tree and never merges).'
 - id: tracy-demo-takes-the-integrated-branch
   title: tracy_icra takes the integrated branch and the real robot runs it
   branch: null
@@ -58,39 +51,29 @@ items:
   track: integration
   depends_on:
   - integrated-simulation-pipeline
-  status: not_started
-  notes: The bridge to the robot, and the one item on this plan that needs the robot before
-    any experiment does. Merge the integrated branch into tracy_icra, run the demo on the
-    UR10 with the live camera, and keep a capture of the run. This is knowledge-directed-perception's
-    demo-runs-on-grounded-perception in that plan's words; it is tracked here because the
-    branch it runs is this plan's. From then on every later merge into tracy_icra is a merge
-    of the integrated branch, never of individual stacks.
+  status: deferred
+  notes: 'Closed Oct 20: replaced by icra-upstream''s tracy-lab-and-demos, which lands this work from
+    the ICRA tip''s final tree.'
+  blockers: []
 - id: simulated-tracy-demo-runs-scenarios
-  title: The simulated Tracy world becomes a MontessoriWorldBuilder, so montessori-scenarios'
-    scripted runs execute on it headless, with no robot needed
+  title: The simulated Tracy world becomes a MontessoriWorldBuilder, so montessori-scenarios' scripted
+    runs execute on it headless, with no robot needed
   branch: tracy_icra
   pull_request_number: null
   track: scenario-model
   depends_on: []
-  status: not_started
-  notes: 'The seam montessori-scenarios (#296) left closed, named in its own fifth-round notes:
-    "tracy_icra''s ~1,200 lines of actuation stay where they live; tracy-demo-takes-the-integrated-branch
-    is where they meet these scenarios." Checked directly against the merged tree: TracyWatchesTheSceneStandStill,
-    TracySortsAPiece, TracyIsIdleWhileAPieceIsPushed and TracyHoldsAPiece already exist and
-    bind the robot type to Tracy, but the only MontessoriWorldBuilder implementation is this
-    package''s own BoardOnItsOwnTable, which mounts a robot generically (URDFParser.from_file(robot_type.get_ros_file_path())
-    at…'
+  status: deferred
+  notes: 'Closed Oct 20: replaced by icra-upstream''s scenarios-and-episodes, which lands this work from
+    the ICRA tip''s final tree.'
+  blockers: []
 - id: episode-corpus-generated-at-scale
-  title: Thousands of episodes generated headless in MuJoCo, each with its video, its plan
-    and its event log in SQL
+  title: Thousands of episodes generated headless in MuJoCo, each with its video, its plan and its event
+    log in SQL
   branch: null
   pull_request_number: null
   track: long-term-memory
   depends_on: []
-  status: not_started
-  notes: 'What makes long-term memory a corpus rather than a schema, and the item one person
-    can carry alone from the day the episode model lands. A headless generator runs the scenarios
-    repeatedly over seeded randomised layouts, conditions and perturbations, and records per
-    episode: the realized coraplex Plan, the segmind event log tick by tick, the twin''s state,
-    every query with its answer and latency, the typed failure and its resolution, and the
-    video MujocoVideoRecorder rendered.'
+  status: deferred
+  notes: 'Closed Oct 20: replaced by icra-upstream''s questions-and-corpus, which lands this work from
+    the ICRA tip''s final tree.'
+  blockers: []
