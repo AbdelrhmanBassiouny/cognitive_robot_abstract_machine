@@ -1,0 +1,21 @@
+# Written by basstler's /setup-personal-notes (python -m basstler.setup_steps
+# install-upstream-reviews-action); re-run that to update it rather than editing it here.
+name: Upstream reviews
+
+on:
+  push:
+    branches: [basstler/upstream-reviews]
+    paths: [request.json]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: basstler-upstream-reviews
+  cancel-in-progress: false
+
+jobs:
+  read:
+    uses: AbdelrhmanBassiouny/basstler/.github/workflows/upstream-reviews-action.yml@claude/upstream-reviews-no-project-files-m09n3k
+    with:
+      basstler_ref: claude/upstream-reviews-no-project-files-m09n3k
