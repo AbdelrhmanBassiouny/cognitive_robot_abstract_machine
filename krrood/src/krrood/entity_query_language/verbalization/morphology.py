@@ -95,8 +95,8 @@ class AdjectivalSuffix(enum.StrEnum):
     """
     Word endings that mark an English word as adjectival.
 
-    A best-effort shape test — not a part-of-speech tagger — used only as the fallback after the
-    deterministic :func:`is_past_participle` check.
+    A best-effort shape test — not a part-of-speech tagger — used only as the fallback
+    after the deterministic :func:`is_past_participle` check.
     """
 
     IC = "ic"

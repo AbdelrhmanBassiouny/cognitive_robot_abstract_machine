@@ -358,7 +358,9 @@ def _motion_task(motion_chart, robot):
     return task
 
 
-def test_an_arm_motion_holds_the_base_of_a_robot_that_stands_still(pr2_apartment_context):
+def test_an_arm_motion_holds_the_base_of_a_robot_that_stands_still(
+    pr2_apartment_context,
+):
     """
     A base that is not full body controlled stands still while an arm moves, so the
     motion has to hold it there rather than leave it for another task to command.
@@ -380,7 +382,9 @@ def test_an_arm_motion_holds_the_base_of_a_robot_that_stands_still(pr2_apartment
     assert hold_base.weight == DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE
 
 
-def test_an_arm_motion_leaves_a_full_body_controlled_base_free(full_body_controlled_pr2):
+def test_an_arm_motion_leaves_a_full_body_controlled_base_free(
+    full_body_controlled_pr2,
+):
     """
     A robot that may move its whole body drives while it reaches, so its base is not
     held.
@@ -1119,7 +1123,6 @@ def test_grasping_action_frees_the_gripper_for_its_whole_approach(
     assert all(node.designator.allow_gripper_collision is True for node in reach_nodes)
 
 
-
 @pytest.mark.skipif(
     not daisy_mappings_available,
     reason="DAiSy motion mappings not available",
@@ -1270,9 +1273,9 @@ class TestDAiSyFlexGripMotion:
         open_state = end_effector.get_joint_state_by_type(GripperState.OPEN)
         for connection, target in chart.goal_state.items():
             expected = dict(open_state.items())[connection]
-            assert abs(target - expected) < 0.001, (
-                f"Expected open state {expected}, got {target}"
-            )
+            assert (
+                abs(target - expected) < 0.001
+            ), f"Expected open state {expected}, got {target}"
 
     def test_semi_real_full_close_maps_to_the_close_state(self, immutable_daisy_world):
         """
@@ -1292,9 +1295,9 @@ class TestDAiSyFlexGripMotion:
         close_state = end_effector.get_joint_state_by_type(GripperState.CLOSE)
         for connection, target in chart.goal_state.items():
             expected = dict(close_state.items())[connection]
-            assert abs(target - expected) < 0.001, (
-                f"Expected close state {expected}, got {target}"
-            )
+            assert (
+                abs(target - expected) < 0.001
+            ), f"Expected close state {expected}, got {target}"
 
     def test_real_returns_griplink_action_server_task(self, immutable_daisy_world):
         motion = self._flex_motion(immutable_daisy_world)
@@ -1454,6 +1457,31 @@ class TestDAiSyGripperConfigurationRouting:
         assert task.grip_position == configuration.grip_position
         assert task.grip_velocity == configuration.grip_velocity
         assert task.grip_acceleration == configuration.grip_acceleration
+
+    @pytest.mark.parametrize(
+        "state_type, expected_defaults",
+        [
+            (GripperState.FLEXCLOSE, (0.0, 90.0, 0.15, 0.6)),
+            (GripperState.FLEXOPEN, (0.12, 90.0, 0.25, 2.0)),
+        ],
+    )
+    def test_flex_task_fills_unset_parameters_with_the_action_defaults(
+        self, immutable_daisy_world, state_type, expected_defaults
+    ):
+        _, robot, _ = immutable_daisy_world
+        end_effector = robot.left_arm.end_effector
+        configuration = GriplinkFlexConfiguration.from_state_type(
+            end_effector, state_type
+        )
+        motion = self._motion_through_dispatch(immutable_daisy_world, configuration)
+        with real_robot:
+            task = motion.motion_chart.nodes[0]
+        assert (
+            task.grip_position,
+            task.grip_force,
+            task.grip_velocity,
+            task.grip_acceleration,
+        ) == expected_defaults
 
 
 # %% sending the fingers to a width

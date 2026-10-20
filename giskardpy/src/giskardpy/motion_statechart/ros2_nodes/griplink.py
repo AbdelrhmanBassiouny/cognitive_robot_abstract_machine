@@ -53,16 +53,107 @@ class GriplinkStatus(IntEnum):
 # %% griplink action server tasks
 
 
+# %% griplink message types
+
+
+@dataclass
+class GriplinkGoal:
+    """
+    A griplink action goal; every griplink action addresses one port of the controller.
+    """
+
+    port: int
+    """
+    The port of the controller the goal addresses.
+    """
+
+
+@dataclass
+class GriplinkResult:
+    """
+    The result every griplink action reports: a status code, a human-readable message
+    and the controller's device state.
+    """
+
+    status: int
+    """
+    The status code the action ended with, a :class:`GriplinkStatus` value.
+    """
+
+    message: str
+    """
+    Human-readable description of the status.
+    """
+
+    device_state: int
+    """
+    The state of the controller's device.
+    """
+
+
+@dataclass
+class GriplinkFeedback:
+    """
+    The feedback every griplink action streams: the controller's device state.
+    """
+
+    device_state: int
+    """
+    The state of the controller's device.
+    """
+
+
+@dataclass
+class GriplinkResultResponse:
+    """
+    The response the action client resolves a result future with, wrapping the
+    :class:`GriplinkResult` the server reported and the goal state it reached.
+    """
+
+    status: int
+    """
+    The goal state the action reached.
+    """
+
+    result: GriplinkResult
+    """
+    The result the server reported.
+    """
+
+
+@dataclass
+class GriplinkAction:
+    """
+    A griplink action, carrying the goal, result and feedback message classes the action
+    client sends and receives.
+    """
+
+    Goal: type[GriplinkGoal]
+    """
+    The goal message class of the action.
+    """
+
+    Result: type[GriplinkResult]
+    """
+    The result message class of the action.
+    """
+
+    Feedback: type[GriplinkFeedback]
+    """
+    The feedback message class of the action.
+    """
+
+
+# %% griplink action server tasks
+
+
 @dataclass(eq=False, repr=False)
 class GriplinkActionServerTask(
     ActionServerTask[
-        Grip | Release | Flexgrip | Flexrelease,
-        Grip.Goal | Release.Goal | Flexgrip.Goal | Flexrelease.Goal,
-        Grip.Impl.GetResultService.Response
-        | Release.Impl.GetResultService.Response
-        | Flexgrip.Impl.GetResultService.Response
-        | Flexrelease.Impl.GetResultService.Response,
-        Grip.Feedback | Release.Feedback | Flexgrip.Feedback | Flexrelease.Feedback,
+        GriplinkAction,
+        GriplinkGoal,
+        GriplinkResultResponse,
+        GriplinkFeedback,
     ]
 ):
     """
@@ -160,10 +251,32 @@ class GriplinkFlexActionServerTask(GriplinkActionServerTask):
     Converted to µm/s² when building the goal message.
     """
 
+    def __post_init__(self):
+        """
+        Fills the parameters left unset with the defaults of the commanded action.
+
+        :raises UnknownGriplinkActionError: If the task was built for neither
+            ``Flexgrip`` nor ``Flexrelease``.
+        """
+        super().__post_init__()
+        if self.message_type is Flexgrip:
+            default_position, default_velocity, default_acceleration = 0.0, 0.15, 0.6
+        elif self.message_type is Flexrelease:
+            default_position, default_velocity, default_acceleration = 0.12, 0.25, 2.0
+        else:
+            raise UnknownGriplinkActionError(message_type=self.message_type)
+        if self.grip_position is None:
+            self.grip_position = default_position
+        if self.grip_force is None:
+            self.grip_force = 90.0
+        if self.grip_velocity is None:
+            self.grip_velocity = default_velocity
+        if self.grip_acceleration is None:
+            self.grip_acceleration = default_acceleration
+
     def build_msg(self, context: MotionStatechartContext):
         """
-        Builds the ``Flexgrip`` or ``Flexrelease`` goal, filling unset parameters with
-        the defaults of the commanded action.
+        Builds the ``Flexgrip`` or ``Flexrelease`` goal from the task's parameters.
 
         :param context: The motion statechart context the task runs in.
         :return: None; the goal is stored for :meth:`on_start` to send.
@@ -171,30 +284,19 @@ class GriplinkFlexActionServerTask(GriplinkActionServerTask):
             ``Flexgrip`` nor ``Flexrelease``.
         """
         if self.message_type is Flexgrip:
-            position = 0 if self.grip_position is None else self.grip_position
-            force = 90 if self.grip_force is None else self.grip_force
-            velocity = 0.15 if self.grip_velocity is None else self.grip_velocity
-            acceleration = (
-                0.6 if self.grip_acceleration is None else self.grip_acceleration
-            )
             self._msg = Flexgrip.Goal(
                 port=0,
-                position=self._to_micrometres(position),
-                force=self._to_millinewtons(force),
-                speed=self._to_micrometres(velocity),
-                acceleration=self._to_micrometres(acceleration),
+                position=self._to_micrometres(self.grip_position),
+                force=self._to_millinewtons(self.grip_force),
+                speed=self._to_micrometres(self.grip_velocity),
+                acceleration=self._to_micrometres(self.grip_acceleration),
             )
         elif self.message_type is Flexrelease:
-            position = 0.12 if self.grip_position is None else self.grip_position
-            velocity = 0.25 if self.grip_velocity is None else self.grip_velocity
-            acceleration = (
-                2 if self.grip_acceleration is None else self.grip_acceleration
-            )
             self._msg = Flexrelease.Goal(
                 port=0,
-                position=self._to_micrometres(position),
-                speed=self._to_micrometres(velocity),
-                acceleration=self._to_micrometres(acceleration),
+                position=self._to_micrometres(self.grip_position),
+                speed=self._to_micrometres(self.grip_velocity),
+                acceleration=self._to_micrometres(self.grip_acceleration),
             )
         else:
             raise UnknownGriplinkActionError(message_type=self.message_type)

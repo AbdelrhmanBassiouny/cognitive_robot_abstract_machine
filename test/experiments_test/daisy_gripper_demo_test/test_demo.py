@@ -8,17 +8,16 @@ two grippers move together. Execution itself needs a controller and is not cover
 
 from __future__ import annotations
 
-import logging
 from unittest.mock import Mock
 
 import experiments.daisy_gripper_demo.demo as demo_module
 import pytest
 from coraplex.datastructures.enums import ExecutionType, VisualizationBackend
 from coraplex.demonstrations import RobotDemonstrationRosSession
-from coraplex.execution_environment import ExecutionEnvironment
-from coraplex.language import CodeNode, ParallelNode, SequentialNode
-from coraplex.plans.executables import GiskardExecutable
+from coraplex.execution_environment import kinematically_simulated_robot
+from coraplex.language import ParallelNode, SequentialNode
 from coraplex.plans.plan_node import MotionNode, PlanNode
+from coraplex.robot_plans import MoveGripperMotion, PrintMotion, WaitMotion
 from experiments.daisy_gripper_demo.demo import (
     DAiSyGripperDemonstration,
     ExecutionChoice,
@@ -32,8 +31,6 @@ from semantic_digital_twin.robots.daisy import (
 from semantic_digital_twin.utils import daisy_installed
 
 pytestmark = pytest.mark.skipif(not daisy_installed(), reason="DAiSy not installed")
-
-DEMO_LOGGER_NAME = "experiments.daisy_gripper_demo.demo"
 
 
 @pytest.fixture(scope="module")
@@ -70,7 +67,9 @@ def gripper_commands(plan_node: PlanNode):
     """
     commands = []
     for child in plan_node.children:
-        if isinstance(child, MotionNode):
+        if isinstance(child, MotionNode) and isinstance(
+            child.designator, MoveGripperMotion
+        ):
             specification = child.designator.configuration
             commands.append(
                 (
@@ -95,12 +94,12 @@ def gripper_commands(plan_node: PlanNode):
 def steps(plan_node: PlanNode):
     """
     Group the plan's children into steps of announcement, motion or parallel plan, and
-    pause, skipping the park action that homes the arms before the gripper steps.
+    wait, skipping the park action that homes the arms before the gripper steps.
     """
     children = [
         child
         for child in plan_node.children
-        if isinstance(child, (CodeNode, MotionNode, ParallelNode))
+        if isinstance(child, (MotionNode, ParallelNode))
     ]
     assert len(children) % 3 == 0
     return [
@@ -196,16 +195,14 @@ class TestPlan:
 
 
 class TestStepStructure:
-    def test_every_step_announces_motions_then_pauses(self, demonstration_plan):
+    def test_every_step_announces_motions_then_waits(self, demonstration_plan):
         """
-        Every gripper step is wrapped in a code node announcing it and a code node
-        pausing after it, so a run reports what happens next and settles between
-        motions.
+        Every gripper step is wrapped in a motion announcing it and a motion waiting
+        after it, so a run reports what happens next and settles between motions.
         """
-        for step in steps(demonstration_plan):
-            announcement, motion_or_parallel, pause = step
-            assert isinstance(announcement, CodeNode)
-            assert isinstance(pause, CodeNode)
+        for announcement, motion_or_parallel, wait in steps(demonstration_plan):
+            assert isinstance(announcement.designator, PrintMotion)
+            assert isinstance(wait.designator, WaitMotion)
             assert isinstance(motion_or_parallel, (MotionNode, ParallelNode))
 
     def test_twelve_steps_wrap_sixteen_motions(self, demonstration_plan):
@@ -214,17 +211,11 @@ class TestStepStructure:
 
 
 class TestAnnouncements:
-    def test_each_step_announces_its_motion_before_it(self, demonstration_plan, caplog):
+    def test_each_step_announces_its_motion_before_it(self, demonstration_plan):
         """
-        Calling an announcement logs what the following motion commands, naming the
-        gripper side and the state it is driven to.
+        Each announcement names the gripper side and the state the following motion
+        drives it to.
         """
-        caplog.set_level(logging.INFO, logger=DEMO_LOGGER_NAME)
-        messages = []
-        for step in steps(demonstration_plan):
-            step[0].code()
-            messages.append(caplog.records[-1].getMessage())
-
         expected_verbs = {
             GripperState.OPEN: "Opening",
             GripperState.CLOSE: "Closing",
@@ -247,40 +238,21 @@ class TestAnnouncements:
                 subject = "both grippers"
             state_type = specification.joint_state.state_type
             expected.append(f"{expected_verbs[state_type]} {subject}.")
-        assert messages == expected
+        assert [
+            step[0].designator.message for step in steps(demonstration_plan)
+        ] == expected
 
 
-class TestPauses:
-    def test_every_step_pauses_one_second_after_its_motion(
-        self, demonstration_plan, monkeypatch
+class TestWaits:
+    def test_every_step_waits_the_configured_time_after_its_motion(
+        self, demonstration_plan
     ):
-        """
-        Calling a pause sleeps :attr:`DAiSyGripperDemonstration.pause_after_motion_seconds`,
-        once per step.
-        """
-        sleeps = []
-        monkeypatch.setattr(
-            demo_module.time, "sleep", lambda seconds: sleeps.append(seconds)
-        )
-        for step in steps(demonstration_plan):
-            step[2].code()
         pause_seconds = DAiSyGripperDemonstration(
             used_robot=DAiSy
         ).pause_after_motion_seconds
-        assert sleeps == [pause_seconds] * len(steps(demonstration_plan))
-
-
-class RecordingHandler(logging.Handler):
-    """
-    Logging handler that records the message of every record in a shared list.
-    """
-
-    def __init__(self, events: list):
-        super().__init__()
-        self.events = events
-
-    def emit(self, record: logging.LogRecord) -> None:
-        self.events.append(("announcement", record.getMessage()))
+        assert [step[2].designator.seconds for step in steps(demonstration_plan)] == [
+            pause_seconds
+        ] * len(steps(demonstration_plan))
 
 
 class TestSemiRealWorld:
@@ -314,77 +286,14 @@ class TestSemiRealWorld:
         assert demonstration.visualization is None
 
 
-class TestSeparateExecution:
-    def test_perform_executes_each_step_in_its_own_chart(
-        self, demonstration_context, monkeypatch
-    ):
+class TestSimulatedRun:
+    def test_plan_performs_in_the_simulation(self, demonstration_context):
         """
-        Performing the plan runs every step's motions in their own motion state chart,
-        with the two grippers of a parallel step sharing one chart.
+        The whole plan, announcements and waits included, runs through the kinematic
+        simulation as one motion chart without failing.
         """
         plan = DAiSyGripperDemonstration(used_robot=DAiSy).build_plan(
             demonstration_context
         )
-        monkeypatch.setattr(demo_module.time, "sleep", lambda seconds: None)
-        motions_per_chart = []
-        original_execute = GiskardExecutable.execute
-
-        def recording_execute(self):
-            motions_per_chart.append(len(self.motion_mappings))
-            return original_execute(self)
-
-        monkeypatch.setattr(GiskardExecutable, "execute", recording_execute)
-        with ExecutionEnvironment(ExecutionType.NO_EXECUTION):
+        with kinematically_simulated_robot:
             plan.perform()
-        # Code steps build empty executables that execute nothing; only the steps'
-        # motion charts count, the first being the park step's chart.
-        assert [n for n in motions_per_chart if n] == [
-            1,  # park arms
-            1,  # left open
-            1,  # left close
-            1,  # right open
-            1,  # right close
-            2,  # both open
-            2,  # both close
-            1,  # left flex-open
-            1,  # left flex-close
-            1,  # right flex-open
-            1,  # right flex-close
-            2,  # both flex-open
-            2,  # both flex-close
-        ]
-
-    def test_announcements_interleave_with_motion_execution(
-        self, demonstration_context, monkeypatch
-    ):
-        """
-        Each announcement runs right before its own motion chart, so the logged
-        announcement and the executed chart alternate instead of every announcement
-        playing before any motion.
-
-        The park step runs first without an announcement.
-        """
-        plan = DAiSyGripperDemonstration(used_robot=DAiSy).build_plan(
-            demonstration_context
-        )
-        monkeypatch.setattr(demo_module.time, "sleep", lambda seconds: None)
-        events: list = []
-        handler = RecordingHandler(events)
-        original_execute = GiskardExecutable.execute
-
-        def recording_execute(self):
-            if self.motion_mappings:
-                events.append(("chart", len(self.motion_mappings)))
-            return original_execute(self)
-
-        monkeypatch.setattr(GiskardExecutable, "execute", recording_execute)
-        demo_logger = logging.getLogger(DEMO_LOGGER_NAME)
-        demo_logger.addHandler(handler)
-        demo_logger.setLevel(logging.INFO)
-        try:
-            with ExecutionEnvironment(ExecutionType.NO_EXECUTION):
-                plan.perform()
-        finally:
-            demo_logger.removeHandler(handler)
-        kinds = [kind for kind, _ in events]
-        assert kinds == ["chart"] + ["announcement", "chart"] * 12

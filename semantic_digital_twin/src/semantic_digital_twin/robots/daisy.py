@@ -168,7 +168,8 @@ class DAiSyLeftGripper(
     @classproperty
     def griplink_endpoints(cls) -> Mapping[GripperState, GriplinkEndpoint]:
         """
-        Griplink action server endpoints of the left gripper, by the state each commands.
+        Griplink action server endpoints of the left gripper, by the state each
+        commands.
         """
         return {
             GripperState.OPEN: GriplinkEndpoint(
@@ -243,7 +244,8 @@ class DAiSyRightGripper(
     @classproperty
     def griplink_endpoints(cls) -> Mapping[GripperState, GriplinkEndpoint]:
         """
-        Griplink action server endpoints of the right gripper, by the state each commands.
+        Griplink action server endpoints of the right gripper, by the state each
+        commands.
         """
         return {
             GripperState.OPEN: GriplinkEndpoint(
