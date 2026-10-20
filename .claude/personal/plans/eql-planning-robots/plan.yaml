@@ -1,0 +1,84 @@
+schema_version: 1
+id: eql-planning-robots
+title: 'EQL planning on robots: Montessori sorting, cramph Achieve nodes and RoboCasa'
+description: 'The planner from eql-planning (#513) put to work on robots: Montessori sorting as a planning
+  domain and #511''s fifth backend, effects for the coraplex actions, a cramph Achieve(goal) node that
+  plans and replans, RoboCasa goals read from the tasks'' success checks, and 5-10 RoboCasa tasks end
+  to end. Feature freeze 2026-12-18; IROS 2027 experiments in January.'
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 522
+waves:
+- id: robot
+  name: Robot domains (Nov 16-Dec 18)
+  description: Montessori sorting first, then RoboCasa through cramph; freeze on Dec 18.
+- id: evaluation
+  name: Constraints and external planners (January)
+  description: Trajectory constraints and the comparison with external planners.
+tracks:
+- id: montessori
+  name: Montessori domain
+  wave: robot
+  description: Nov 16-Dec 2; the AAMAS rebuttal (Nov 20-24) falls inside it.
+- id: cram-robocasa
+  name: cramph Achieve node and RoboCasa
+  wave: robot
+  description: Dec 3-18, with Jonas's cramph statecharts.
+- id: paper
+  name: IROS experiments and paper
+  wave: evaluation
+items:
+- id: montessori-planning-domain
+  branch: eql-planning-robots/montessori-planning-domain
+  title: 'Montessori sorting as a planning domain: SortPieceAction effects and the for_all goal'
+  track: montessori
+  status: not_started
+  notes: SortPieceAction exists only on the unlanded showcase PR Needs eql-planning's planning-backend-search.
+  blockers:
+  - '#511 (EQL showcase) has not landed.'
+- id: planner-as-showcase-backend
+  branch: eql-planning-robots/planner-as-showcase-backend
+  title: 'The planner answers the plan''s open steps as #511''s fifth backend, through the Achieve act'
+  track: montessori
+  depends_on:
+  - montessori-planning-domain
+  status: not_started
+  notes: The Achieve act is eql-performatives' giskardpy-acts item.
+- id: coraplex-action-effects
+  branch: eql-planning-robots/coraplex-action-effects
+  title: Effects for pick, place, open, close and navigate, separate from post_condition monitors
+  track: cram-robocasa
+  status: not_started
+  blockers:
+  - cramph and the converted coraplex actions are only on Tigul/plan-cramp-second-iter.
+  notes: Needs eql-planning's action-schema-progression.
+- id: cramph-achieve-node
+  branch: eql-planning-robots/cramph-achieve-node
+  title: A cramph Achieve(goal) node that plans when expanded and replans when a step fails
+  track: cram-robocasa
+  status: not_started
+  blockers:
+  - cramph is only on Tigul/plan-cramp-second-iter.
+  notes: Needs eql-planning's planning-backend-search and regression-and-explanation.
+- id: robocasa-goals
+  branch: eql-planning-robots/robocasa-goals
+  title: RoboCasa task goals as EQL conditions, read from the tasks' success checks
+  track: cram-robocasa
+  status: not_started
+  notes: Builds on Jonas's RoboCasa condition survey and the semantic_digital_twin RoboCasa loader.
+- id: robocasa-slice
+  branch: eql-planning-robots/robocasa-slice
+  title: '5-10 RoboCasa tasks end to end on the #261 scenario harness'
+  track: cram-robocasa
+  depends_on:
+  - cramph-achieve-node
+  - coraplex-action-effects
+  - robocasa-goals
+  status: not_started
+  notes: Feature freeze 2026-12-18.
+- id: iros-experiments
+  branch: eql-planning-robots/iros-experiments
+  title: IROS 2027 experiments, ablations and writing
+  track: paper
+  depends_on:
+  - robocasa-slice
+  status: not_started
