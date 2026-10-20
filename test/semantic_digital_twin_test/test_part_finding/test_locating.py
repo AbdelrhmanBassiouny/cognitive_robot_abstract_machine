@@ -42,6 +42,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Leg,
     Mug,
     Pot,
+    Rim,
 )
 from semantic_digital_twin.spatial_computations.mesh_rendering import (
     CameraRing,
@@ -134,14 +135,19 @@ def stand_in_locator(
 # %% the parts an annotation calls for
 
 
-def test_a_mug_calls_for_one_optional_handle():
-    [relationship] = PartRelationshipInspector.all_of_type(Mug)
+def test_a_mug_calls_for_one_optional_handle_and_one_optional_rim():
+    relationships = {
+        relationship.name: relationship
+        for relationship in PartRelationshipInspector.all_of_type(Mug)
+    }
 
-    assert relationship.name == "handle"
-    assert relationship.part_type is Handle
-    assert relationship.part_name == "handle"
-    assert relationship.may_be_empty
-    assert not relationship.holds_many
+    assert relationships.keys() == {"handle", "rim"}
+    for name, part_type in (("handle", Handle), ("rim", Rim)):
+        relationship = relationships[name]
+        assert relationship.part_type is part_type
+        assert relationship.part_name == name
+        assert relationship.may_be_empty
+        assert not relationship.holds_many
 
 
 def test_a_dining_table_calls_for_any_number_of_legs():
@@ -299,7 +305,8 @@ def test_a_part_the_annotation_has_already_is_not_looked_for():
     locator = KnownPartLocator()
 
     assert AnnotationPartFinder(locator=locator).find_parts(mug) == []
-    assert locator.queries == []
+    [query] = locator.queries
+    assert query.relationship_names == ["rim"]
 
 
 def test_each_located_leg_becomes_a_leg_of_the_table():
