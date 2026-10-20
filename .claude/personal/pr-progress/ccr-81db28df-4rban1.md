@@ -1,12 +1,10 @@
-PR #515 (draft, on #503), item actions-budget/changed-library-matrix.
+CRAM #515 is closed: split into basstler#55 (package half, draft on basstler#10) and this branch's ci.yml half, kept at 9c946ecb3.
 
 Plan
-- Implemented as settled; see the PR description for the design and the decisions to check.
+- basstler#55 lands after basstler#10; the ci.yml half comes back via basstler-package/cram-basstler-removal.
 
 Done
-- basstler.changed_libraries + tests (dataset workspace), run-time-exclude counting, ci.yml changed-libraries job, override kept at 16 (user-approved), packaging dependency (user-approved). Pushed 9c946ecb3.
-- Full basstler suite: only the 18 failures #503's head has in this environment.
+- basstler#55: changed_libraries with --project-root/--tooling, run-time-exclude counting, 21 tests; full basstler suite 914 passed.
 
 Next
-- Watch the draft's first real CI run: confirm the run-time `exclude` expression works and that test_each_lib skips cleanly when every library is excluded.
-- Retarget with #503 when it lands; converge with #284's classifier if it lands.
+- When cram-basstler-removal lands: re-apply 9c946ecb3's ci.yml/actions_budget.py onto CRAM main, passing the plugin's flags, and confirm the run-time exclude on a real draft run.
