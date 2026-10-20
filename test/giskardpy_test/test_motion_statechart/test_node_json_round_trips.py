@@ -12,10 +12,11 @@ from cramph.node import StatechartNode
 from giskardpy import motion_statechart
 from giskardpy.motion_control import MotionControl
 from giskardpy.motion_statechart import ros2_nodes
-from giskardpy.motion_statechart.goals.cartesian_goals import (
-    CartesianPoseStraight,
+from giskardpy.motion_statechart.goals.base_pose_goals import (
     DifferentialDriveBaseGoal,
+    HolonomicBaseGoal,
 )
+from giskardpy.motion_statechart.goals.cartesian_goals import CartesianPoseStraight
 from giskardpy.motion_statechart.goals.collision_avoidance import (
     ExternalCollisionAvoidance,
     ExternalCollisionDistanceMonitor,
@@ -248,6 +249,16 @@ def _cartesian_cases() -> list[NodeRoundTripCase]:
             lambda world: [
                 CartesianPose(
                     root_link=_root(world), tip_link=_tip(world), goal_pose=_pose(world)
+                )
+            ],
+            WorldFixture.PR2_WORLD,
+        ),
+        NodeRoundTripCase(
+            HolonomicBaseGoal,
+            lambda world: [
+                HolonomicBaseGoal(
+                    base=world.get_kinematic_structure_entity_by_name("base_footprint"),
+                    goal_pose=_pose(world),
                 )
             ],
             WorldFixture.PR2_WORLD,

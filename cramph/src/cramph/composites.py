@@ -11,6 +11,7 @@ from krrood.entity_query_language.backends import QueryBackend
 from krrood.entity_query_language.query.match import Match
 from krrood.ormatic.utils import classproperty
 from krrood.patterns.field_metadata import JSONMetadata
+from krrood.patterns.specificity_ranking import mro_depth, sole_maximum
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood.utils import get_full_class_name
 from cramph.node import EndedByOwner, SucceedsOnObservingTrue, FailsOnObservingFalse
@@ -22,6 +23,7 @@ from cramph.data_types import (
 )
 from cramph.exceptions import (
     NoChildChooserForNodeError,
+    SeveralChildChoosersForNodeError,
     NoControlStructureNodeAboveError,
     ChildCannotFailError,
     NodeAlreadyAChildError,
@@ -942,17 +944,23 @@ class ChildChooserAccess(ContextExtension):
         :param node: The node asking for its next child.
         :return: The chooser whose node type is the most specific one `node` is of.
         :raises NoChildChooserForNodeError: If `node` is of the node type of no chooser.
+        :raises SeveralChildChoosersForNodeError: If several choosers are equally
+            specific for `node`.
         """
-        node_type_order = type(node).__mro__
-        choosers_of_the_node = [
-            chooser for chooser in self.choosers if isinstance(node, chooser.node_type)
-        ]
-        if not choosers_of_the_node:
-            raise NoChildChooserForNodeError(node=node, choosers=self.choosers)
-        return min(
-            choosers_of_the_node,
-            key=lambda chooser: node_type_order.index(chooser.node_type),
+        chooser = sole_maximum(
+            [
+                chooser
+                for chooser in self.choosers
+                if isinstance(node, chooser.node_type)
+            ],
+            key=lambda chooser: mro_depth(chooser.node_type),
+            collision_error=lambda choosers: SeveralChildChoosersForNodeError(
+                node=node, choosers=choosers
+            ),
         )
+        if chooser is None:
+            raise NoChildChooserForNodeError(node=node, choosers=self.choosers)
+        return chooser
 
     def cleanup(self) -> None:
         for chooser in self.choosers:

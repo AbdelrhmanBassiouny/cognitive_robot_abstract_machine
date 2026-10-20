@@ -38,6 +38,20 @@ def test_rotation_goal_writes_three_equality_constraints():
     assert len(collection.inequality_constraints) == 0
 
 
+def test_yaw_goal_writes_one_equality_constraint():
+    collection = ConstraintCollection()
+    builder = GeometricConstraintBuilder(collection)
+    builder.add_yaw_goal_constraint(
+        frame_R_current=RotationMatrix(),
+        frame_R_goal=RotationMatrix.from_rpy(roll=0.2, pitch=-0.1, yaw=0.5),
+        reference_velocity=0.1,
+        quadratic_weight=1.0,
+        name="goal",
+    )
+    assert len(collection.equality_constraints) == 1
+    assert len(collection.inequality_constraints) == 0
+
+
 def test_node_artifacts_geometry_writes_into_its_constraints():
     artifacts = MotionNodeArtifacts()
     artifacts.geometry.add_point_goal_constraints(

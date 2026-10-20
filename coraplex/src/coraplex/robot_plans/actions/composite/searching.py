@@ -89,17 +89,18 @@ class SearchAction(SequentialAction):
         :param seed: Seed for sampling the standing poses; ``None`` samples afresh.
         :return: The search, with the standing pose left open.
         """
-        x, y, z = target_location.position.to_np().flatten()[:3]
         reference_frame = target_location.reference_frame
         half_extent = cross_arm_length + detection_margin
         detection_box = VolumetricBoundingBox(
-            origin=HomogeneousTransformationMatrix(reference_frame=reference_frame),
-            min_x=x - half_extent,
-            min_y=y - half_extent,
-            min_z=z - half_extent,
-            max_x=x + half_extent,
-            max_y=y + half_extent,
-            max_z=z + half_extent,
+            origin=HomogeneousTransformationMatrix.from_point_rotation_matrix(
+                point=target_location.position, reference_frame=reference_frame
+            ),
+            min_x=-half_extent,
+            min_y=-half_extent,
+            min_z=-half_extent,
+            max_x=half_extent,
+            max_y=half_extent,
+            max_z=half_extent,
         )
         cross = [
             (0, 0),
@@ -121,9 +122,9 @@ class SearchAction(SequentialAction):
                 LookAtAndDetectAction(
                     look_at=LookAtAction(
                         target=Pose.from_xyz_rpy(
-                            x + x_offset,
-                            y + y_offset,
-                            z,
+                            target_location.x + x_offset,
+                            target_location.y + y_offset,
+                            target_location.z,
                             reference_frame=reference_frame,
                         )
                     ),

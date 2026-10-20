@@ -65,6 +65,7 @@ from giskardpy.motion_statechart.goals.collision_avoidance import (
 )
 from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from giskardpy.motion_statechart.monitors.overwrite_state_monitors import SetOdometry
+from giskardpy.motion_statechart.goals.base_pose_goals import HolonomicBaseGoal
 from giskardpy.motion_statechart.goals.cartesian_goals import CartesianPoseStraight
 from giskardpy.motion_statechart.goals.grasped_mechanism import (
     ArticulateGraspedMechanism,
@@ -1144,6 +1145,38 @@ def test_a_search_looks_at_the_target_then_at_the_ends_of_a_cross_around_it(
     assert all(look.target.reference_frame is world.root for look in looks)
 
 
+def test_a_search_detects_within_its_cross_and_the_detection_margin(
+    multiple_robot_apartment_context,
+):
+    world, robot, extensions = multiple_robot_apartment_context
+    target = Pose.from_xyz_rpy(6, -2, 1.2, reference_frame=world.root)
+    arm = 0.3
+    margin = 0.2
+
+    search = SearchAction.looking_around(
+        target,
+        Milk,
+        context_of(extensions),
+        cross_arm_length=arm,
+        detection_margin=margin,
+    )
+
+    half_extent = arm + margin
+    for look in search.looks:
+        box = look.detect.detection_box
+        np.testing.assert_allclose(
+            [
+                [interval.lower, interval.upper]
+                for interval in (box.x_interval, box.y_interval, box.z_interval)
+            ],
+            [
+                [coordinate - half_extent, coordinate + half_extent]
+                for coordinate in target.position.to_np()[:3]
+            ],
+        )
+        assert box.origin.reference_frame is world.root
+
+
 def test_a_search_leaves_the_world_as_it_found_it(multiple_robot_apartment_context):
     world, robot, extensions = multiple_robot_apartment_context
     milk_body = world.get_body_by_name("milk.stl")
@@ -1403,8 +1436,8 @@ def test_navigating_drives_the_base_towards_what_it_should_face(
 
     statechart_of(robot_executor(extensions), action)
 
-    [drive] = nodes_of_type(action, CartesianPose)
-    assert drive.tip_link == robot.root
+    [drive] = nodes_of_type(action, HolonomicBaseGoal)
+    assert drive.base == robot.root
 
 
 def test_navigating_writes_the_odometry_when_simulated(
@@ -1419,7 +1452,7 @@ def test_navigating_writes_the_odometry_when_simulated(
     expand(action, extensions)
 
     assert len(nodes_of_type(action, SetOdometry)) == 1
-    assert nodes_of_type(action, CartesianPose) == []
+    assert nodes_of_type(action, HolonomicBaseGoal) == []
 
 
 def test_navigating_drives_the_base_when_physically_simulated(
@@ -1435,8 +1468,8 @@ def test_navigating_drives_the_base_when_physically_simulated(
     statechart_of(physically_simulated_executor(extensions), action)
 
     assert nodes_of_type(action, SetOdometry) == []
-    [drive] = nodes_of_type(action, CartesianPose)
-    assert drive.tip_link == robot.root
+    [drive] = nodes_of_type(action, HolonomicBaseGoal)
+    assert drive.base == robot.root
 
 
 # %% a robot that does not move its whole body stands still while it moves an arm

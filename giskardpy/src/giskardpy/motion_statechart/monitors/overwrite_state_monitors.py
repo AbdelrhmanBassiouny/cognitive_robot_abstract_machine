@@ -1,16 +1,19 @@
 from __future__ import division
 
 from dataclasses import field, dataclass
-from typing_extensions import Type, Tuple
+from typing_extensions import Self, Type, Tuple
 
 import krrood.symbolic_math.symbolic_math as sm
+from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world_description.connections import (
     OmniDrive,
 )
 from semantic_digital_twin.world_description.world_entity import Connection
 from cramph.node import SucceedsOnObservingTrue
 from giskardpy.motion_statechart.exceptions import UnexpectedWorldEntityCountError
+from giskardpy.motion_statechart.goals.base_pose_goals import BasePoseGoal
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from cramph.node import NodeArtifacts
 from giskardpy.motion_statechart.tasks.joint_tasks import JointState
@@ -42,7 +45,7 @@ class SetSeedConfiguration(SucceedsOnObservingTrue, MotionStatechartNode):
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class SetOdometry(SucceedsOnObservingTrue, MotionStatechartNode):
+class SetOdometry(SucceedsOnObservingTrue, MotionStatechartNode, BasePoseGoal):
     """
     Sets the odometry of the robot to the given pose.
     """
@@ -60,6 +63,19 @@ class SetOdometry(SucceedsOnObservingTrue, MotionStatechartNode):
     """
 
     _odom_joints: Tuple[Type[Connection], ...] = field(default=(OmniDrive,), init=False)
+
+    @classmethod
+    def moving_base_of(
+        cls, robot: AbstractRobot, goal_pose: Pose, threshold: float
+    ) -> Self:
+        """
+        Differs from :meth:`BasePoseGoal.moving_base_of` in ignoring `threshold`,
+        because the base is put exactly at `goal_pose`.
+        """
+        return cls(
+            base_pose=goal_pose.homogeneous_matrix,
+            odom_connection=robot.root.parent_connection,
+        )
 
     def build_artifacts(self) -> NodeArtifacts:
         self.odom_connection = self._current_odom_connection()

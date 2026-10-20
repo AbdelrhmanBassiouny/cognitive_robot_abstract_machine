@@ -53,7 +53,7 @@
 
 ### Naming
 - Names are technically correct, simple and descriptive, in that order. An inaccurate name is worse than a vague one, because a reader who trusts it stops reading
-- A name stays correct and understandable when read on its own, without its class or a keyword argument next to it - after `value = instance.attribute`, in a log line, in a traceback, or when passed on positionally. A `Pipe` field `size` says nothing once it leaves the class; `inner_diameter` does. A generic word that would fit anything never passes this test
+- A name stays correct and understandable when read on its own, without its class or a keyword argument next to it - after `value = instance.attribute`, in a log line, in a traceback, or when passed on positionally. A `Pipe` field `size` says nothing once it leaves the class, or a classmethod `for_robot` of `BasePoseGoal` doesn't say much when you are reading its implementation; `inner_diameter` does. A generic word that would fit anything never passes this test
 - Use the plain word every reader already knows. Use a specialist, metaphorical or in-house term only where it is genuinely the precise word, never as shorthand between the people who were in the discussion
 - Where the domain or file format already has a word for something, use that word
 - Never abbreviate an identifier

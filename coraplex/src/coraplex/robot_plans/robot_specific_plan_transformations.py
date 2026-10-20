@@ -19,14 +19,12 @@ from coraplex.robot_plans.actions.core.container import (
     CloseAction,
     MovesContainerByItsHandle,
 )
-from coraplex.robot_plans.actions.core.navigation import (
-    DifferentialDriveBaseMotion,
-    DrivesBase,
-)
+from coraplex.robot_plans.actions.core.navigation import DrivesBase
 from coraplex.robot_plans.mixins import MovesToolCenterPoint
 from cramph.composites import Parallel
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.data_types import DefaultWeights
+from giskardpy.motion_statechart.goals.base_pose_goals import DifferentialDriveBaseGoal
 from giskardpy.motion_statechart.goals.grasped_mechanism import (
     ArticulateGraspedMechanism,
 )
@@ -92,7 +90,7 @@ class DriveWithTheDifferentialDrive(ConfigurationTransformation[DrivesBase], ABC
     """
 
     def apply(self, plan_node: DrivesBase) -> None:
-        plan_node.base_motion = DifferentialDriveBaseMotion()
+        plan_node.base_goal_type = DifferentialDriveBaseGoal
 
 
 @dataclass

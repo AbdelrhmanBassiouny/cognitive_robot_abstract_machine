@@ -15,7 +15,7 @@ from giskardpy.motion_statechart.graph_node import (
 from giskardpy.motion_statechart.monitors.monitors import LocalMinimumReached
 from giskardpy.motion_statechart.monitors.progress_monitors import StillProgressing
 from cramph.statechart import Statechart
-from giskardpy.motion_statechart.goals.cartesian_goals import DifferentialDriveBaseGoal
+from giskardpy.motion_statechart.goals.base_pose_goals import DifferentialDriveBaseGoal
 from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList
 from cramph.nodes_for_testing import ConstTrueNode

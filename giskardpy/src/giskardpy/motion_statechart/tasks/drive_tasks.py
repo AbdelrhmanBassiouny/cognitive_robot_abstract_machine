@@ -1,5 +1,6 @@
 """
-Tasks moving the base a drive carries, relative to the parent of that drive.
+Tasks moving the base a drive carries along the floor and about the vertical, relative
+to the parent of that drive.
 """
 
 from __future__ import annotations
@@ -84,7 +85,7 @@ class DrivenBaseTask(ConvergingTask, ABC):
 @dataclass(eq=False, repr=False, kw_only=True)
 class BasePosition(DrivenBaseTask):
     """
-    Drives the base to the position of :attr:`goal_pose`.
+    Drives the base along the floor to below the position of :attr:`goal_pose`.
     """
 
     reference_velocity: float = CartesianPosition.default_reference_velocity
@@ -94,26 +95,33 @@ class BasePosition(DrivenBaseTask):
 
     def build_artifacts(self) -> MotionNodeArtifacts:
         """
-        :return: The artifacts of this task, whose error is the distance between the
-            base and the goal position.
+        :return: The artifacts of this task, whose error is the distance along the floor
+            between the base and the goal position.
         """
         artifacts = MotionNodeArtifacts()
         parent_P_goal = self.parent_T_goal.position
         parent_P_base = self.parent_T_base().position
-        artifacts.geometry.add_point_goal_constraints(
-            frame_P_goal=parent_P_goal,
-            frame_P_current=parent_P_base,
-            reference_velocity=self.reference_velocity,
-            quadratic_weight=self.weight,
-        )
-        artifacts.error = parent_P_goal.euclidean_distance(parent_P_base)
+        for base_coordinate, goal_coordinate in [
+            (parent_P_base.x, parent_P_goal.x),
+            (parent_P_base.y, parent_P_goal.y),
+        ]:
+            artifacts.geometry.add_position_constraint(
+                expression_current=base_coordinate,
+                expression_goal=goal_coordinate,
+                reference_velocity=self.reference_velocity,
+                quadratic_weight=self.weight,
+            )
+        parent_V_base_to_goal = parent_P_goal - parent_P_base
+        parent_V_base_to_goal.z = 0
+        artifacts.error = parent_V_base_to_goal.norm()
         return artifacts
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
 class DrivenBaseRotation(DrivenBaseTask, ABC):
     """
-    Turns the base until it has the orientation :meth:`parent_R_goal` describes.
+    Turns the base about the vertical until it faces the way the orientation
+    :meth:`parent_R_goal` describes does.
     """
 
     reference_velocity: float = CartesianOrientation.default_reference_velocity
@@ -132,20 +140,23 @@ class DrivenBaseRotation(DrivenBaseTask, ABC):
 
     def build_artifacts(self) -> MotionNodeArtifacts:
         """
-        :return: The artifacts of this task, whose error is the angle between the
-            orientation of the base and the goal orientation.
+        :return: The artifacts of this task, whose error is the angle about the vertical
+            between the orientation of the base and the goal orientation.
         """
         artifacts = MotionNodeArtifacts()
         parent_T_base = self.parent_T_base()
-        parent_R_goal = self.parent_R_goal(parent_T_base)
         parent_R_base = parent_T_base.rotation_matrix
-        artifacts.geometry.add_rotation_goal_constraints(
+        parent_R_goal = self.parent_R_goal(parent_T_base)
+        artifacts.geometry.add_yaw_goal_constraint(
             frame_R_current=parent_R_base,
             frame_R_goal=parent_R_goal,
             reference_velocity=self.reference_velocity,
             quadratic_weight=self.weight,
         )
-        artifacts.error = sm.abs(parent_R_base.rotational_distance(parent_R_goal))
+        yaw_error = sm.shortest_angular_distance(
+            parent_R_base.rpy[2], parent_R_goal.rpy[2]
+        )
+        artifacts.error = sm.abs(yaw_error)
         return artifacts
 
 

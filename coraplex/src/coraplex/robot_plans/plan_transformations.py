@@ -31,10 +31,8 @@ from coraplex.robot_plans.actions.composite.transporting import (
 from coraplex.robot_plans.actions.core.misc import DetectAction
 from coraplex.robot_plans.actions.core.navigation import (
     DrivesBase,
-    HolonomicBaseMotion,
     LookAtAction,
     NavigateAction,
-    OdometryOverwriteBaseMotion,
 )
 from coraplex.robot_plans.actions.core.pick_up import (
     GraspingAction,
@@ -48,6 +46,8 @@ from coraplex.robot_plans.actions.core.robot_body import (
 from coraplex.robot_plans.mixins import ReattachesBranches
 from cramph.composites import Sequence, StatementNode
 from cramph.node import StatechartNode
+from giskardpy.motion_statechart.goals.base_pose_goals import HolonomicBaseGoal
+from giskardpy.motion_statechart.monitors.overwrite_state_monitors import SetOdometry
 from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from giskardpy.motion_statechart.goals.cartesian_goals import CartesianPoseStraight
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
@@ -520,7 +520,7 @@ class WriteTheOdometryInsteadOfDriving(ConfigurationTransformation[DrivesBase]):
         return True
 
     def apply(self, plan_node: DrivesBase) -> None:
-        plan_node.base_motion = OdometryOverwriteBaseMotion()
+        plan_node.base_goal_type = SetOdometry
 
 
 @dataclass
@@ -532,7 +532,7 @@ class WriteTheOdometryInsteadOfCommandingAPose(WriteTheOdometryInsteadOfDriving)
     """
 
     def is_applicable(self, plan_node: DrivesBase) -> bool:
-        return isinstance(plan_node.base_motion, HolonomicBaseMotion)
+        return issubclass(plan_node.base_goal_type, HolonomicBaseGoal)
 
 
 # %% detecting with the real robot's perception
