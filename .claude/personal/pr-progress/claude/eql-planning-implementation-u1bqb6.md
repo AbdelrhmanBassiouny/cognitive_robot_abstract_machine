@@ -1,7 +1,7 @@
 Plan
-- eql-planning (17 items, tracking #513). ICRA landing proposal: https://claude.ai/code/artifact/18b38769-a496-4596-a52e-e416133681cd (15 items, 4 waves, final-tree layers).
+- eql-planning (17 items, tracking #513; readings per item in the plan doc's Readings tab). icra-upstream (11 items, tracking #521, dashboard https://claude.ai/artifact/A2rYe3tfz8uxYcY5YvNiAq).
 Done
-- Inventory: 669 files not on main; 52 in main-based PRs, 284 only in #265, 165 only in untracked PRs. Branch pushed (= main).
+- icra-upstream created; icra-foundation closed (#252); tracy-demo-recut moved; #409/#410 rescoped without numeric types (#174); perception re-cut proposed on #426.
 Next
-- Tooling: basstler v0.1.5 plugin not installed in cloud; run hooks from a clone with BASSTLER_PLUGIN_ROOT, BASSTLER_PYTHON=~/.local/share/basstler/venv/bin/python and PYTHONSAFEPATH=1.
-- Decided: video out of git; close icra-foundation with icra-upstream; drop sdt numeric types (keep Panda, Mujoco pacing, bounds). Remaining doc decisions, then /plan-create icra-upstream and tracking-issue notes on review-reaches-main, montessori-perception-split, icra-foundation.
+- eql-planning breaks the plugin's 15-item limit: merge two items before its next save (ask the user which).
+- Tooling: run plugin hooks from the basstler v0.1.5 clone with BASSTLER_PLUGIN_ROOT, BASSTLER_PYTHON=~/.local/share/basstler/venv/bin/python and PYTHONSAFEPATH=1.
