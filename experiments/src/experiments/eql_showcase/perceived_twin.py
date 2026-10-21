@@ -29,7 +29,7 @@ from experiments.montessori.semantics import MontessoriShape
 from experiments.montessori.world import _BOARD_MESH, _HOLE_FOOTPRINTS, _board_body
 from krrood.entity_query_language.utils import camel_case_to_words
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.grasping.grasp_candidates import HasGraspCandidates
+from semantic_digital_twin.semantic_annotations.mixins import HasGraspCandidates
 from semantic_digital_twin.robots.robot_parts import MountingTable
 from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Table

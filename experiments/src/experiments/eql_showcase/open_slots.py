@@ -14,7 +14,6 @@ what each answered and the reasoning that led to it.
 from __future__ import annotations
 
 import base64
-import contextvars
 import enum
 import time
 from abc import ABC, abstractmethod
@@ -972,9 +971,7 @@ class HoleRulesBackend(SlotBackend):
             for kind in rest:
                 with alternative(case.kind == kind):
                     add(concluded, inference(HoleShape)(kind=kind))
-        # the rules may be asked while another query is being answered, whose
-        # evaluation state they must not conclude into
-        shape = contextvars.Context().run(lambda: next(iter(rules.evaluate()), None))
+        shape = next(iter(rules.evaluate()), None)
         return None if shape is None else shape.kind
 
     def reasoning_for(self, statement: Match, answers: List[Any]) -> Reasoning:
