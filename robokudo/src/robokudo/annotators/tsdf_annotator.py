@@ -38,7 +38,7 @@ class VolumeIntegrationInput:
     pose: PoseAnnotation
     """Object pose relative to the camera."""
 
-    roi: Rect
+    depth_image_region: Rect
     """Object bounds in depth-image coordinates."""
 
 
@@ -173,10 +173,14 @@ class TSDFAnnotator(ThreadedAnnotator):
                 )
                 continue
 
-            roi = color_to_depth_ratio.depth_region(object_hypothesis.roi.roi)
+            depth_image_region = color_to_depth_ratio.depth_region(
+                object_hypothesis.roi.roi
+            )
             volume_integration_inputs.append(
                 VolumeIntegrationInput(
-                    object_hypothesis=object_hypothesis, pose=poses[0], roi=roi
+                    object_hypothesis=object_hypothesis,
+                    pose=poses[0],
+                    depth_image_region=depth_image_region,
                 )
             )
 
@@ -201,7 +205,9 @@ class TSDFAnnotator(ThreadedAnnotator):
         for volume_integration_input in volume_integration_inputs:
             object_hypothesis = volume_integration_input.object_hypothesis
             pose = volume_integration_input.pose
-            left, top, right, bottom = volume_integration_input.roi.get_corner_points()
+            left, top, right, bottom = (
+                volume_integration_input.depth_image_region.get_corner_points()
+            )
             mask: npt.NDArray[np.uint8] = object_hypothesis.roi.mask
             if mask is None:
                 self.rk_logger.debug(
@@ -320,7 +326,9 @@ class TSDFAnnotator(ThreadedAnnotator):
         for hypothesis_index, volume_integration_input in enumerate(
             volume_integration_inputs
         ):
-            left, top, right, bottom = volume_integration_input.roi.get_corner_points()
+            left, top, right, bottom = (
+                volume_integration_input.depth_image_region.get_corner_points()
+            )
             cv2.rectangle(image, (left, top), (right, bottom), (0, 255, 0), 2)
 
             mask = masks[hypothesis_index]  # (H, W)

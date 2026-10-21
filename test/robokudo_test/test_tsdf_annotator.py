@@ -23,7 +23,9 @@ def test_visualization_places_object_mask_in_its_roi(full_image_mask: bool) -> N
     image = np.zeros((16, 16, 3), dtype=np.uint8)
     roi = Rect(pos=Point2D(x=4, y=4), width=8, height=8)
     volume_integration_input = VolumeIntegrationInput(
-        object_hypothesis=ObjectHypothesis(), pose=PoseAnnotation(), roi=roi
+        object_hypothesis=ObjectHypothesis(),
+        pose=PoseAnnotation(),
+        depth_image_region=roi,
     )
     mask = np.zeros(
         image.shape[:2] if full_image_mask else (roi.height, roi.width), dtype=np.uint8
