@@ -1,13 +1,13 @@
 Plan
-- Draft PR #511: EQL showcase in cramera for supervisor demo (2026-10-15).
+- Draft PR #511: EQL showcase in cramera for supervisor demo.
 Done
-- Place-setting + perception showcases; SQL episodic memory; video gallery artifact.
-- Tracy Montessori: SortPieceAction resolved by 4 backends BEFORE execution;
-  ICRA-style stage (plan / resolved by / resolved plan + reasoning cards).
-- resolve(...) for any statement or plan from EQL; Execute button runs it.
-- Top grasp + parked start (no table/board collisions); fall at release.
+- Tracy Montessori: plan resolved by 4 backends before execution, ICRA stage,
+  resolve(...) + Execute; top grasp, fall at release.
+- Merged main (fork main synced to cram2); krrood nested-eval fix made the
+  HoleRules contextvars workaround unnecessary (removed).
+- krrood QueryObservation; stepper (queries panel, Next, inspector); loops on
+  the path are EQL queries; video 15 is gallery lead.
 Next
-- Video 14 (resolution before execution) into gallery as lead. User dry-run.
+- User dry-run of stepping (montessori main(steps_through_queries=True)).
 - Ask user: derive action status in Plan view (JS test pins NOT_STARTED).
-- Krrood: rule tree evaluated inside another EQL evaluation returns nothing (worked
-  around with a fresh contextvars.Context in HoleRulesBackend).
+- Ask user: evaluate action pre/post-conditions so execution asks queries.
