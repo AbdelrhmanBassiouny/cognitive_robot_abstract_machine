@@ -11,6 +11,9 @@ from krrood.entity_query_language.factories import (
     or_,
     not_,
     and_,
+    an,
+    entity,
+    variable,
     variable_from,
     ConditionType,
 )
@@ -133,13 +136,19 @@ class PlaceAction(
         :raises ObjectIsNotHeld: If no arm holds the object and no pick-up precedes this
             place.
         """
-        object_body = self.object_designator.root
-        for arm in self.robot.all_arms:
-            end_effector = arm.end_effector
-            if GripperHolds(end_effector, object_body)():
-                return arm, GraspCandidate(
-                    self.object_designator, end_effector.held_body_T_grasp
+        arm = variable(Arm, self.robot.all_arms)
+        holding_arm = next(
+            an(
+                entity(arm).where(
+                    GripperHolds(arm.end_effector, self.object_designator.root)
                 )
+            ).evaluate(),
+            None,
+        )
+        if holding_arm is not None:
+            return holding_arm, GraspCandidate(
+                self.object_designator, holding_arm.end_effector.held_body_T_grasp
+            )
         previous_pick = self.plan_node.get_previous_node_by_designator_type(
             PickUpAction
         )

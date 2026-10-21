@@ -30,7 +30,7 @@ from krrood.adapters.json_serializer import list_like_classes
 from krrood.class_diagrams.attribute_introspector import (
     DataclassOnlyIntrospector,
 )
-from krrood.entity_query_language.factories import variable, contains, a, entity
+from krrood.entity_query_language.factories import variable, contains, a, an, entity
 from krrood.ormatic.utils import classproperty
 from krrood.utils import get_generic_type_parameters
 from semantic_digital_twin.adapters.package_resolver import CompositePathResolver
@@ -315,11 +315,18 @@ class AbstractRobotPart(HasRootBody, HasRobotParts, ABC):
 
         :param state_type: The state type to search for
         :return: The joint state with the given type
+        :raises NoJointStateWithType: If this part has no joint state of the type.
         """
-        for j in self.joint_states:
-            if j.state_type == state_type:
-                return j
-        raise NoJointStateWithType(state_type)
+        joint_state = variable(JointState, self.joint_states)
+        found = next(
+            an(
+                entity(joint_state).where(joint_state.state_type == state_type)
+            ).evaluate(),
+            None,
+        )
+        if found is None:
+            raise NoJointStateWithType(state_type)
+        return found
 
     def has_joint_state_of_type(self, state_type: JointStateType) -> bool:
         """

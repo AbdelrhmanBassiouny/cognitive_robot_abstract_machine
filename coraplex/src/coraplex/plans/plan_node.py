@@ -16,6 +16,8 @@ from coraplex.plans.designator import Designator
 from coraplex.plans.failures import PlanFailure
 from giskardpy.motion_statechart.goals.templates import NodeListGoal
 from giskardpy.motion_statechart.graph_node import Goal
+from krrood.entity_query_language.factories import an, entity, variable
+from krrood.entity_query_language.predicate import HasTypes
 from krrood.entity_query_language.query.match import Match
 from krrood.patterns.field_metadata import JSONMetadata
 from giskardpy.motion_statechart.data_types import LifeCycleValues
@@ -256,14 +258,13 @@ class PlanNode(PlanEntity):
     ) -> Optional[DesignatorNode]:
         """
         :param type_: The types of the designator to search for.
-        :return: The previous node with a designator of the specified type, or None if not found.
+        :return: The latest previous node with a designator of the specified type, or
+            None if not found.
         """
-        for sibling in reversed(self.previous_nodes):
-            if isinstance(sibling, DesignatorNode) and isinstance(
-                sibling.designator, type_
-            ):
-                return sibling
-        return None
+        node = variable(DesignatorNode, list(reversed(self.previous_nodes)))
+        return next(
+            an(entity(node).where(HasTypes(node.designator, type_))).evaluate(), None
+        )
 
     def __hash__(self):
         return id(self)
