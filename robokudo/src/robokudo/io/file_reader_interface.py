@@ -15,6 +15,9 @@ The module is primarily used for:
 * Development and debugging
 """
 
+from __future__ import annotations
+
+# %% Imports
 import json
 import pathlib
 import re
@@ -62,8 +65,8 @@ class FileReaderInterface(CameraInterface):
 
         def __init__(
             self,
-            data: Optional[Dict[str, Dict[str, Any]]] = None,
-            data_sequence: Optional[List[str]] = None,
+            data: dict[str, dict[str, Any]] | None = None,
+            data_sequence: list[str] | None = None,
         ) -> None:
             """Initialize the dictionary iterator.
 
@@ -85,7 +88,8 @@ class FileReaderInterface(CameraInterface):
             self.reset_cursor()
 
         def reset_cursor(self) -> None:
-            """Reset the iterator to the beginning of the sequence.
+            """
+            Reset the iterator to the beginning of the sequence.
 
             Sets index to 0 if there is data, None otherwise.
             """
@@ -95,7 +99,8 @@ class FileReaderInterface(CameraInterface):
                 self.index = None
 
         def cursor_has_data(self) -> bool:
-            """Check if there is more data to read.
+            """
+            Check if there is more data to read.
 
             :return: True if more data is available, False otherwise
             """
@@ -104,8 +109,9 @@ class FileReaderInterface(CameraInterface):
 
             return self.index < len(self.data_sequence)
 
-        def get_next_data(self) -> Optional[Dict]:
-            """Get the next data item in the sequence.
+        def get_next_data(self) -> dict | None:
+            """
+            Get the next data item in the sequence.
 
             :return: Next data item if available, None otherwise
             """
@@ -138,8 +144,9 @@ class FileReaderInterface(CameraInterface):
             )
 
         self.initialized: bool = False
-        """Whether the interface was successfully initialized"""
-
+        """
+        Whether the interface was successfully initialized.
+        """
         # Compute the targeted directory by considering the target_ros_package variable
         if camera_config.target_ros_package:
             # rospack = rospkg.RosPack()
@@ -235,15 +242,17 @@ class FileReaderInterface(CameraInterface):
         self.data_reader = FileReaderInterface.DictIteratorReader(
             data=self.loaded_data, data_sequence=list(iter(self.loaded_data))
         )
-        """Iterator for accessing loaded data"""
-
+        """
+        Iterator for accessing loaded data.
+        """
         self.initialized = True
 
     def has_new_data(self) -> bool:
-        """Check if new data is available to read.
+        """
+        Check if new data is available to read.
 
-        Handles looping behavior based on camera configuration and
-        maintains cursor position in the data sequence.
+        Handles looping behavior based on camera configuration and maintains cursor
+        position in the data sequence.
 
         :return: True if new data is available, False otherwise
         """

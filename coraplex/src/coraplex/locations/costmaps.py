@@ -48,11 +48,11 @@ class Costmap(Location):
     """
     The distance in metre in the real-world which is represented by a single entry in the locations. 
     """
-    height: Optional[int] = field(kw_only=True, default=None)
+    height: int | None = field(kw_only=True, default=None)
     """
     Height of the locations.
     """
-    width: Optional[int] = field(kw_only=True, default=None)
+    width: int | None = field(kw_only=True, default=None)
     """
     Width of the locations.
     """
@@ -87,7 +87,7 @@ class Costmap(Location):
     """
     The world from which this locations was created.
     """
-    visualization_ids: List[int] = field(default_factory=list, init=False)
+    visualization_ids: list[int] = field(default_factory=list, init=False)
 
     def close_visualization(self) -> None:
         """
@@ -173,9 +173,7 @@ class Costmap(Location):
     def candidates(self) -> Iterator[Pose]:
         return self.sample(self.number_of_samples, self.seed)
 
-    def sample(
-        self, number_of_samples: int, seed: Optional[int] = None
-    ) -> Iterator[Pose]:
+    def sample(self, number_of_samples: int, seed: int | None = None) -> Iterator[Pose]:
         """
         Sample pose candidates from this map.
 
@@ -217,8 +215,8 @@ class Costmap(Location):
         return RotationMatrix.from_rpy(0, 0, angle).quaternion
 
     def _budget_per_segment(
-        self, segments: List[np.ndarray], number_of_samples: int
-    ) -> List[int]:
+        self, segments: list[np.ndarray], number_of_samples: int
+    ) -> list[int]:
         """
         Split a sample budget over this map's segments in proportion to their summed
         ratings; what a segment cannot take goes to the best rated segments that can.
@@ -303,7 +301,7 @@ class Costmap(Location):
                     self.world.root,
                 )
 
-    def segment_map(self) -> List[np.ndarray]:
+    def segment_map(self) -> list[np.ndarray]:
         """
         Finds partitions in the locations and isolates them, a partition is a number of entries in the locations which are
         neighbours. Returns a list of numpy arrays with one partition per array.
@@ -354,7 +352,7 @@ class OccupancyCostmap(Costmap):
     Conversion of the distance_to_obstacle to index range for the internal representation.
     """
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self._distance_to_obstacle_index = max(
             int(self.distance_to_obstacle / self.resolution), 1
         )
@@ -426,7 +424,7 @@ class OccupancyCostmap(Costmap):
             floor.root for floor in self.world.get_semantic_annotations_by_type(Floor)
         }
 
-    def inflate_obstacles(self, map: np.ndarray):
+    def inflate_obstacles(self, map: np.ndarray) -> np.ndarray:
         """
         Inflates found obstacles in the environment by the distance_to_obstacle factor.
 
@@ -522,7 +520,7 @@ class VisibilityCostmap(Costmap):
 
     target_object: Optional[Union[Body, Pose]] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.origin: Pose = (
             Pose(reference_frame=self.world.root) if not self.origin else self.origin
         )
@@ -756,7 +754,7 @@ class GaussianCostmap(Costmap):
     The world to use.
     """
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.gaussian_window: np.ndarray = self._create_gaussian_window(
             self.mean, self.sigma
         )
@@ -804,7 +802,7 @@ class RingCostmap(Costmap):
     Distance between the center of the locations and the center of the ring. A distance of 0 results in a gaussian locations
     """
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.map = self.ring()
 
     @classmethod

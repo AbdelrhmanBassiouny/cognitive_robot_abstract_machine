@@ -132,7 +132,7 @@ def get_2d_corner_points_from_3d_bb(
 
 def project_points_to_image(
     cas: CAS, points_camera: npt.NDArray
-) -> Tuple[npt.NDArray, npt.NDArray]:
+) -> tuple[npt.NDArray, npt.NDArray]:
     """
     Project 3D camera-frame points to 2D image pixels and validity mask.
     """
@@ -153,7 +153,7 @@ def draw_mesh_wireframe_on_image(
     mesh_shape: Mesh,
     object_transform: npt.NDArray,
     cas: CAS,
-    color: Tuple[int, int, int] = (0, 255, 0),
+    color: tuple[int, int, int] = (0, 255, 0),
     thickness: int = 1,
 ) -> None:
     """

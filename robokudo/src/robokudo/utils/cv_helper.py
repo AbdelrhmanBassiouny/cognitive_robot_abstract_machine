@@ -98,7 +98,7 @@ def get_scaled_color_image_for_depth_image(
     )
 
 
-def get_hsv_for_rgb_color(rgb: Tuple[int, int, int]) -> npt.NDArray:
+def get_hsv_for_rgb_color(rgb: tuple[int, int, int]) -> npt.NDArray:
     """
     Convert RGB color to HSV color space.
 
@@ -108,7 +108,7 @@ def get_hsv_for_rgb_color(rgb: Tuple[int, int, int]) -> npt.NDArray:
     return cv2.cvtColor(np.uint8([[list(rgb)]]), cv2.COLOR_RGB2HSV_FULL)
 
 
-def get_hsv_for_bgr_color(bgr: Tuple[int, int, int]) -> npt.NDArray:
+def get_hsv_for_bgr_color(bgr: tuple[int, int, int]) -> npt.NDArray:
     """
     Convert BGR color to HSV color space.
 

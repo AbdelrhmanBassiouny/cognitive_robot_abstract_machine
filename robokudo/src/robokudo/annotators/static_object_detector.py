@@ -83,7 +83,8 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
     """
 
     class Descriptor(BaseAnnotator.Descriptor):
-        """Configuration descriptor for the StaticObjectDetectorAnnotator.
+        """
+        Configuration descriptor for the StaticObjectDetectorAnnotator.
 
         Defines all configurable parameters including:
 
@@ -94,7 +95,9 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
         """
 
         class Parameters:
-            """Parameters controlling the static object detection behavior."""
+            """
+            Parameters controlling the static object detection behavior.
+            """
 
             def __init__(self) -> None:
                 self.bounding_box_x: int = 1
@@ -103,7 +106,9 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
                 self.bounding_box_height: int = 10
 
                 self.mode: StaticObjectMode = StaticObjectMode.BOUNDING_BOX
-                """Defines the mode which mainly decide which sources of information are used to generate the Object Hypothesis"""
+                """
+                Defines the mode which mainly decide which sources of information are used to generate the Object Hypothesis
+                """
 
                 # # If setting this to True, we detect a certain object stored in the ObjectKnowledgeBase
                 # # This allows us to automatically infer the BoundingBox coordinates
@@ -115,23 +120,29 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
                 Only used for StaticObjectMode.BOUNDING_BOX
                 """
 
-                self.class_names: List[str] = []
-                """Used for StaticObjectMode.WORLD_DESCRIPTOR"""
+                self.class_names: list[str] = []
+                """
+                Used for StaticObjectMode.WORLD_DESCRIPTOR
+                """
 
                 self.create_pose_annotation: bool = False
-                """If True a Pose will be created for the object. Pose is relative to the camera frame by default.
+                """
+                If True a Pose will be created for the object. Pose is relative to the camera frame by default.
 
                 Only effective in Mode=StaticObjectDetectorAnnotator.Mode.WORLD_DESCRIPTOR
                 """
 
                 self.create_bounding_box_annotation: bool = False
-                """If True a BoundingBox will be created for the object.
+                """
+                If True a BoundingBox will be created for the object.
 
                 Only effective in Mode=StaticObjectDetectorAnnotator.Mode.WORLD_DESCRIPTOR
                 """
 
                 self.create_mask: bool = True
-                """If this is a true, a mask based on the ROI will be generated that marks every pixel as ON"""
+                """
+                If this is a true, a mask based on the ROI will be generated that marks every pixel as ON
+                """
 
         # Overwrite the parameters explicitly to enable auto-completion
         parameters = Parameters()
@@ -157,7 +168,7 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
 
     def detect_from_bb_descriptor(self, color_rgb: npt.NDArray) -> ObjectHypothesis:
         """
-        Detect only based on the BB.
+        Detect objects using the configured bounding box.
 
         :param color_rgb: Image in RGB order
         """
@@ -312,8 +323,8 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
         return object_hypothesis
 
     def detect_from_body_base(
-        self, world_to_camera_transform_matrix: Optional[npt.NDArray] = None
-    ) -> List[ObjectHypothesis]:
+        self, world_to_camera_transform_matrix: npt.NDArray | None = None
+    ) -> list[ObjectHypothesis]:
         """
         Detect from a completed world descriptor
 
@@ -481,7 +492,8 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
     def add_classification_annotation(
         object_hypothesis: ObjectHypothesis, class_name: str
     ) -> None:
-        """Add a classification annotation to the given object hypothesis.
+        """
+        Add a classification annotation to the given object hypothesis.
 
         :param object_hypothesis: The object hypothesis to annotate.
         :param class_name: The name of the annotation class.

@@ -78,16 +78,14 @@ class BaseAnnotator(Behaviour):
         Configuration descriptor for annotator parameters and capabilities.
 
         This class defines the structure for specifying annotator parameters and
-        capabilities. It provides access to global parameters through the Parameters
-        class.
+        capabilities.
         """
 
         class Parameters:
             """
             Container for annotator parameters.
 
-            This class provides access to both annotator-specific and global parameters.
-            Global parameters are accessed through the global_ prefix.
+            Subclasses declare the parameters of their annotation operation.
             """
 
             None
@@ -141,7 +139,7 @@ class BaseAnnotator(Behaviour):
     def __init__(
         self,
         name: str = "Annotator",
-        descriptor: Optional[BaseAnnotator.Descriptor] = None,
+        descriptor: BaseAnnotator.Descriptor | None = None,
         ros_pkg_name: str = PACKAGE_NAME,
     ) -> None:
         """
@@ -242,7 +240,7 @@ class BaseAnnotator(Behaviour):
         """
         return self.get_parent_pipeline().cas
 
-    def get_parent_pipeline(self) -> Optional[robokudo.pipeline.Pipeline]:
+    def get_parent_pipeline(self) -> robokudo.pipeline.Pipeline | None:
         """
         Get the pipeline containing this annotator.
 
@@ -344,7 +342,7 @@ class BaseAnnotator(Behaviour):
         :return: Dict mapping requested types to corresponding data
         :raises ValueError: If result would be empty
         """
-        result: Dict[Union[str, Type], Any] = {}
+        result: dict[str | type, Any] = {}
 
         for content in analysis_scope:
             # CASViews are string values
@@ -419,7 +417,7 @@ class BaseAnnotator(Behaviour):
                 JointState,
                 queue_size=10,
             )
-            self.published_variables: Dict[str, float] = dict()
+            self.published_variables: dict[str, float] = dict()
 
     def update_published_variable(self, name: str, value: float) -> None:
         """
@@ -482,7 +480,7 @@ class Worker(object):
     execute a callback when the function completes.
     """
 
-    def __init__(self, fn: Callable, args: Tuple = ()) -> None:
+    def __init__(self, fn: Callable, args: tuple = ()) -> None:
         """
         Initialize the worker.
 
@@ -493,7 +491,7 @@ class Worker(object):
         self._fn: Callable = fn
         self._args: Tuple = args
 
-    def start(self, callback: Optional[Callable] = None) -> threading.Thread:
+    def start(self, callback: Callable | None = None) -> threading.Thread:
         """
         Start executing the function in a separate thread.
 
@@ -530,7 +528,7 @@ class ThreadedAnnotator(BaseAnnotator):
     def __init__(
         self,
         name: str = "ThreadedAnnotator",
-        descriptor: Optional[BaseAnnotator.Descriptor] = None,
+        descriptor: BaseAnnotator.Descriptor | None = None,
     ) -> None:
         """
         Initialize the ThreadedAnnotator.
@@ -540,7 +538,7 @@ class ThreadedAnnotator(BaseAnnotator):
         """
         super().__init__(name, descriptor)
         self.rk_logger.debug("%s.__init__()" % self.__class__.__name__)
-        self.compute_worker: Optional[Worker] = None
+        self.compute_worker: Worker | None = None
         self.compute_worker_started: bool = False
         self.compute_worker_thread: Optional[threading.Thread] = None
 

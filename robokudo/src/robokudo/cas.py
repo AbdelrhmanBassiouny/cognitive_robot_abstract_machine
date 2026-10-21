@@ -58,10 +58,14 @@ class CASViews(StrEnum):
     """
 
     COLOR_IMAGE = "color_image"
-    """RGB image data"""
+    """
+    RGB image data
+    """
 
     DEPTH_IMAGE = "depth_image"
-    """Depth image data"""
+    """
+    Depth image data
+    """
 
     COLOR_TO_DEPTH_RATIO = "color_to_depth_ratio"
     """
@@ -80,7 +84,9 @@ class CASViews(StrEnum):
     because depth and RGB resolutions might mismatch."""
 
     CLOUD = "cloud"
-    """Point cloud data"""
+    """
+    Point cloud data
+    """
 
     QUERY = "query"
     """Query information"""
@@ -106,19 +112,25 @@ class CASViews(StrEnum):
     """
 
     CAS_ID = "cas_id"
-    """Monotonic ID of the CAS instance within a single pipeline run.
+    """
+    Monotonic ID of the CAS instance within a single pipeline run.
     type: Int
     """
 
     OBJECT_IMAGE = "object_image"
-    """Object image data. This view is used in imagistic reasoning pipelines where a 
-    rendered scene can be fully segmented per object."""
+    """
+    Object image data. This view is used in imagistic reasoning pipelines where a
+    rendered scene can be fully segmented per object.
+    """
 
     OBJECT_COLOR_MAP = "object_color_map"
-    """Object color mapping data which assigns objects visible in OBJECT_IMAGE to entity names."""
+    """
+    Object color mapping data which assigns objects visible in OBJECT_IMAGE to entity names.
+    """
 
     GROUND_TRUTH_WORLD_REFERENCE = "ground_truth_world_ref"
-    """Read-only reference to the SemDT ground-truth world used for this CAS frame.
+    """
+    Read-only reference to the SemDT ground-truth world used for this CAS frame.
 
     This view is intended for in-process consumers only and should be written
     by producers via `CAS.set_ref(...)` to avoid deep-copying the world object.
@@ -140,14 +152,19 @@ class CAS:
     """
 
     timestamp: float = field(default_factory=time.time_ns)
-    """Unix timestamp when this CAS was created. In Nanoseconds since Epoch."""
+    """
+    Unix timestamp when this CAS was created. In Nanoseconds since Epoch.
+    """
 
     timestamp_readable: str = field(init=False)
-    """Human readable timestamp string."""
+    """
+    Human readable timestamp string.
+    """
 
     views: Dict[str, Any] = field(default_factory=dict)
-    """Dictionary storing view data, each view stores data that is typically singular for a single CAS.
-    
+    """
+    Dictionary storing view data, each view stores data that is typically singular for a single CAS.
+
     Example: Sensor data, camera info and cloud which are read from the sensors.
     """
 
@@ -180,9 +197,11 @@ class CAS:
         self.views[CASViews.DEPTH_IMAGE] = value
 
     @property
-    def color_to_depth_ratio(self) -> ColorToDepthRatio | None:
+    def color_to_depth_ratio(self) -> ColorToDepthRatio:
         """
-        Size of the depth image relative to the color image, or None without depth.
+        Return required color-to-depth scaling.
+
+        :raises ColorToDepthRatioMissing: If scaling is absent or unset.
         """
         return self.views.get(CASViews.COLOR_TO_DEPTH_RATIO)
 
@@ -305,7 +324,8 @@ class CAS:
         self.views[CASViews.GROUND_TRUTH_WORLD_REFERENCE] = value
 
     def get(self, view_name: str) -> Any:
-        """Get a view by name.
+        """
+        Get a view by name.
 
         :param view_name: Name of the view to retrieve
         :return: The view data
@@ -314,7 +334,8 @@ class CAS:
         return self.views[view_name]
 
     def contains(self, view_name: str) -> bool:
-        """Check if a view exists.
+        """
+        Check if a view exists.
 
         :param view_name: Name of the view to check
         :return: True if the view exists
@@ -322,7 +343,8 @@ class CAS:
         return view_name in self.views
 
     def get_copy(self, view_name: str) -> Any:
-        """Get a deep copy of a view.
+        """
+        Get a deep copy of a view.
 
         :param view_name: Name of the view to copy
         :return: Deep copy of the view data
@@ -331,7 +353,8 @@ class CAS:
         return copy.deepcopy(self.views[view_name])
 
     def set(self, view_name: str, value: Any) -> None:
-        """Put data in the CAS index by a given view name. This method will make a deepcopy of value.
+        """
+        Put data in the CAS index by a given view name. This method will make a deepcopy of value.
 
         :param view_name: The name of the view which should be selected from constants in the CASView class.
         :param value: The value that will be placed in the CAS under view_name by making a deepcopy of it.
@@ -339,7 +362,8 @@ class CAS:
         self.views[view_name] = copy.deepcopy(value)
 
     def set_ref(self, view_name: str, value: Any) -> None:
-        """Put data in the CAS index by a given view name. In contrast to set(), this will not make a copy but just
+        """
+        Put data in the CAS index by a given view name. In contrast to set(), this will not make a copy but just
         does an assignment.
 
         :param view_name: The name of the view which should be selected from constants in the CASView class.
@@ -351,7 +375,8 @@ class CAS:
 
     @staticmethod
     def filter_by_type(type_to_include: Type[T], input_list: List[Any]) -> List[T]:
-        """Filter a list to include only objects of a specific type.
+        """
+        Filter a list to include only objects of a specific type.
 
         :param type_to_include: Type to filter for
         :param input_list: List to filter
@@ -412,7 +437,8 @@ class CAS:
         input_list: List[Any],
         criteria: Dict[str, Tuple[str, Any]],
     ) -> List[Any]:
-        """Filters a list of objects based on specified criteria. Objects must be of type 'type_to_include'
+        """
+        Filters a list of objects based on specified criteria. Objects must be of type 'type_to_include'
 
         :param type_to_include: All the returned objects must be of this type.
         :param input_list: List of objects to be filtered.

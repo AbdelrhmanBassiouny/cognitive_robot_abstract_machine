@@ -63,8 +63,9 @@ class ROSCameraWithoutDepthInterface(ROSCameraInterface):
         self.color_subscriber: Subscriber = message_filters.Subscriber(
             camera_config.topic_color, Image
         )
-        """Subscriber for RGB image topic"""
-
+        """
+        Subscriber for RGB image topic.
+        """
         self.camera_info_subscriber: Subscriber = message_filters.Subscriber(
             camera_config.topic_camera_info, CameraInfo
         )
@@ -106,8 +107,9 @@ class ROSCameraWithoutDepthInterface(ROSCameraInterface):
         """Timestamp of latest data"""
 
         self.lock: Lock = Lock()
-        """Thread synchronization lock"""
-
+        """
+        Thread synchronization lock.
+        """
         self.bridge: CVBridgeWorkaround = CVBridgeWorkaround()
         """NumPy-compatible replacement for cv_bridge."""
 
@@ -182,15 +184,10 @@ class ROSCameraWithoutDepthInterface(ROSCameraInterface):
     def callback(
         self,
         color_data: Image,
-        camera_info: Optional[CameraInfo] = None,
+        camera_info: CameraInfo | None = None,
     ) -> None:
         """
         Process synchronized RGB image and camera info messages.
-
-        TODO make this generic. handle the encoding and order properly. For standard and
-        compressed images. this might also depend on the fix of image_transport_plugins
-        being published as a package. Startpoint can be found at the bottom of this
-        method.
 
         :param color_data: RGB image message
         :param camera_info: Camera calibration info message, defaults to None

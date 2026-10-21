@@ -63,11 +63,12 @@ class OpenCVCameraConfig(BaseCameraConfig):
     """
 
     loop_mode: int = -1
-    """Loop after iterating over all frames of the video file
+    """
+    Loop after iterating over all frames of the video file
     > 0: number of repetitions before to stop
     = 0: never loop
     < 0: infinite loop
-    
+
     ... note::
         Only works with a file as source
     """

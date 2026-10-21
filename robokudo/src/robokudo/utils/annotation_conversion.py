@@ -49,7 +49,7 @@ class Annotation2AnnotationConverter(ABC, Generic[T]):
     """
 
     @abstractmethod
-    def can_convert(self, annotation: Annotation, target_annotation_type: Type) -> bool:
+    def can_convert(self, annotation: Annotation, target_annotation_type: type) -> bool:
         """
         Checks whether the converter can convert the given annotation to the given
         target annotation type.
@@ -63,7 +63,7 @@ class Annotation2AnnotationConverter(ABC, Generic[T]):
         pass
 
     @abstractmethod
-    def convert(self, annotation: T, cas: Optional[CAS] = None) -> Annotation:
+    def convert(self, annotation: T, cas: CAS | None = None) -> Annotation:
         """
         Converts the given annotation to the given target annotation type.
 
@@ -126,14 +126,14 @@ class PoseAnnotationToStampedPoseAnnotationConverter(
     `StampedPoseAnnotation`.
     """
 
-    def can_convert(self, annotation: Annotation, target_annotation_type: Type) -> bool:
+    def can_convert(self, annotation: Annotation, target_annotation_type: type) -> bool:
         return (
             isinstance(annotation, PoseAnnotation)
             and target_annotation_type == StampedPoseAnnotation
         )
 
     def convert(
-        self, annotation: PoseAnnotation, cas: Optional[CAS] = None
+        self, annotation: PoseAnnotation, cas: CAS | None = None
     ) -> StampedPoseAnnotation:
         spa = StampedPoseAnnotation()
         spa.source = annotation.source

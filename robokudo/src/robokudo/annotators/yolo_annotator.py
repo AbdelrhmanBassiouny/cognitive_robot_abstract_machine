@@ -248,7 +248,7 @@ class YoloAnnotator(ThreadedAnnotator):
         """
         self.camera_intrinsics: Optional[o3d.camera.PinholeCameraIntrinsic] = None
         """
-        Intrinsics of the camera at the resolution of the depth image.
+        Projection model at the depth image resolution.
         """
         self.roi_comparator = RoiComparator(weight=1.0)
         """

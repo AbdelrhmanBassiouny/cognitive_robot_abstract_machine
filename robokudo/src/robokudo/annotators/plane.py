@@ -1,4 +1,5 @@
-"""Plane detection and visualization in point clouds.
+"""
+Plane detection and visualization in point clouds.
 
 This module provides an annotator for:
 
@@ -74,17 +75,25 @@ class PlaneAnnotator(ThreadedAnnotator):
     """
 
     class Descriptor(BaseAnnotator.Descriptor):
-        """Configuration descriptor for plane detection."""
+        """
+        Configuration descriptor for plane detection.
+        """
 
         class Parameters:
-            """Parameters for configuring plane detection."""
+            """
+            Parameters for configuring plane detection.
+            """
 
             def __init__(self) -> None:
                 self.visualize_plane_model: bool = True
-                """Show plane model mesh"""
+                """
+                Show plane model mesh
+                """
 
                 self.distance_threshold: float = 0.02
-                """"""
+                """
+
+                """
 
                 self.num_iterations: int = 50
                 """"""
@@ -103,7 +112,8 @@ class PlaneAnnotator(ThreadedAnnotator):
         name: str = "PlaneAnnotator",
         descriptor: PlaneAnnotator.Descriptor | None = None,
     ) -> None:
-        """Initialize the plane detector.
+        """
+        Initialize the plane detector.
 
         :param name: Name of this annotator instance
         :param descriptor: Configuration descriptor

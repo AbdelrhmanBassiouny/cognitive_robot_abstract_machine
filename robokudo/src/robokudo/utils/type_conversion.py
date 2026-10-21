@@ -3,12 +3,10 @@ Type conversion utilities for Robokudo.
 
 This module provides functions for converting between different type representations:
 
-* ROS message types to Python dictionaries
 * Robokudo annotations to ROS geometry messages
 * Pose and position annotations to transform matrices
 
 The module supports bidirectional conversion between:
-* ROS CameraInfo messages
 * Geometry messages (Pose, PoseStamped)
 * Robokudo annotation types
 * Transform matrices
