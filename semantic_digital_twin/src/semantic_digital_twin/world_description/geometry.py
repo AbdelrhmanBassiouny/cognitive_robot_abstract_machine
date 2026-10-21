@@ -829,6 +829,20 @@ class Mesh(Shape):
             )
         return mesh
 
+    @cached_property
+    def is_textured(self) -> bool:
+        """
+        Whether the mesh's file paints its surface with a texture.
+
+        Answering it leaves :attr:`mesh` unloaded and the textures of the file's parts
+        unmerged.
+        """
+        file_scene = trimesh.load_scene(str(self.local_file), process=False)
+        return any(
+            isinstance(part.visual, TextureVisuals)
+            for part in file_scene.geometry.values()
+        )
+
     @classmethod
     def from_file(
         cls, file_path: str, texture_file_path: Optional[str] = None, **kwargs
