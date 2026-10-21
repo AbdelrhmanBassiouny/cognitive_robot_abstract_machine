@@ -26,6 +26,7 @@ Panels.define('queries', function (root, bus) {
   // the gap between this panel's column and the inspector laid beside it, in pixels
   const STAGE_GAP = 6;
   const PHASES = {
+    setup: { css: 'qs-setup', label: 'setting up' },
     resolution: { css: 'qs-resolution', label: 'resolving the plan' },
     expansion: { css: 'qs-expansion', label: 'expanding into motions' },
     execution: { css: 'qs-execution', label: 'carrying it out' },

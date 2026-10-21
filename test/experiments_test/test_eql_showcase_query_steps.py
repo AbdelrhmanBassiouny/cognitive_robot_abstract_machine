@@ -195,3 +195,27 @@ def test_a_robot_no_longer_stepped_through_carries_on(unsorted: MontessoriSortin
 
     assert not asking.is_alive()
     assert stepper.steps[0].moment is StepMoment.ANSWERED
+
+
+def test_a_query_answered_with_kinds_names_each_kind(unsorted: MontessoriSorting):
+    stepper = QueryStepper(situation_of=lambda: resolving("sorting"))
+
+    with stepper.observing():
+        kinds = unsorted.kinds_to_sort()
+
+    [step] = stepper.steps
+    assert step.to_payload()["answers"] == [kind.__name__ for kind in kinds]
+
+
+def test_a_query_over_the_twin_shows_which_candidates_answer_it(
+    unsorted: MontessoriSorting,
+):
+    stepper = QueryStepper(situation_of=lambda: resolving("sorting"))
+
+    with stepper.observing():
+        pieces = unsorted.pieces()
+
+    [step] = stepper.steps
+    readings = step.reasoning.readings
+    assert [reading.thing for reading in readings] == step.candidates()
+    assert [reading.thing for reading in readings if reading.selected] == pieces

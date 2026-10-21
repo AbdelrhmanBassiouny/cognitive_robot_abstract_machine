@@ -31,6 +31,8 @@ from krrood.entity_query_language.backends import (
     EntityQueryLanguageGenerativeBackend,
     ProbabilisticBackend,
 )
+from krrood.entity_query_language.core.variable import Variable
+from krrood.entity_query_language.query.query import Query
 from krrood.entity_query_language.query_observation import (
     AskedQuery,
     QueryLanguagePackage,
@@ -45,6 +47,8 @@ from semantic_digital_twin.world_description.world_entity import (
 )
 
 from experiments.eql_showcase.open_slots import (
+    ContactReading,
+    ContactReasoning,
     Faculty,
     Insertion,
     OpenSlotAnswerer,
@@ -72,6 +76,11 @@ class SituationLabel(StrEnum):
 class Phase(StrEnum):
     """
     What the robot is doing when it asks a query.
+    """
+
+    SETUP = "setup"
+    """
+    Setting up the twin and the robot, before any plan exists.
     """
 
     RESOLUTION = "resolution"
@@ -253,6 +262,22 @@ class SourceExcerpt:
 # %% what an answer is about in the scene
 
 
+class CandidateVerdict(StrEnum):
+    """
+    Whether a value a query selected among answers it.
+    """
+
+    ANSWERS = "answers the query"
+    """
+    The value satisfies every condition of the query.
+    """
+
+    DOES_NOT_ANSWER = "does not answer it"
+    """
+    The value fails a condition of the query.
+    """
+
+
 @dataclass
 class AnswerBodies:
     """
@@ -326,7 +351,7 @@ class QueryStep:
 
     started: float = field(default_factory=time.perf_counter, repr=False)
     """
-    When the query was asked, by the performance counter.
+    When answering the query started, by the performance counter.
     """
 
     seconds: float | None = None
@@ -347,6 +372,38 @@ class QueryStep:
         backend = self.asked.backend
         if isinstance(backend, SlotBackend):
             self.reasoning = backend.reasoning_for(self.asked.query, self.asked.answers)
+            return
+        candidates = self.candidates()
+        if candidates:
+            self.reasoning = ContactReasoning(
+                [
+                    ContactReading(
+                        candidate,
+                        candidate in self.asked.answers,
+                        (
+                            CandidateVerdict.ANSWERS
+                            if candidate in self.asked.answers
+                            else CandidateVerdict.DOES_NOT_ANSWER
+                        ),
+                    )
+                    for candidate in candidates
+                ],
+                "",
+            )
+
+    def candidates(self, most_shown: int = 16) -> List[Any]:
+        """
+        :param most_shown: How many candidates are shown at most.
+        :return: The values the query selected among as far as it looked, where it
+            selects one variable, else nothing.
+        """
+        query = self.asked.query
+        if not isinstance(query, Query):
+            return []
+        selected = query.selected_variable
+        if not isinstance(selected, Variable):
+            return []
+        return selected._re_enterable_domain_generator_.materialized_values[:most_shown]
 
     @property
     def moment(self) -> StepMoment:
@@ -470,9 +527,10 @@ class QueryStepper(QueryObserver, QueryStepControl):
     Tells what the robot is doing at the moment.
     """
 
-    publish: Callable[[Dict[str, Any]], None] | None = None
+    publish: Callable[[Dict[str, Any]], bool] | None = None
     """
-    Shows the steps in the viewer, if this run is shown in one.
+    Shows the steps in the viewer and tells whether one showed them; without it, the
+    steps are moved on through :meth:`advance` alone.
     """
 
     steps: List[QueryStep] = field(default_factory=list)
@@ -540,6 +598,8 @@ class QueryStepper(QueryObserver, QueryStepControl):
         self.steps.append(step)
         self._by_asked[id(asked)] = step
         self._hold(step)
+        # answering starts once the viewer has let the robot go on
+        step.started = time.perf_counter()
 
     def on_query_answered(self, asked: AskedQuery) -> None:
         step = self._by_asked.pop(id(asked), None)
@@ -558,7 +618,9 @@ class QueryStepper(QueryObserver, QueryStepControl):
         with self._change:
             if self.is_stepping and (self.holds_nested or step.asked.depth == 0):
                 self.held = step
-            self._publish()
+            if not self._publish():
+                # no viewer can move the robot on from a step it is not shown
+                self.held = None
             self._change.wait_for(lambda: self.held is not step)
 
     def advance(self) -> None:
@@ -576,12 +638,14 @@ class QueryStepper(QueryObserver, QueryStepControl):
             self._publish()
             self._change.notify_all()
 
-    def _publish(self) -> None:
+    def _publish(self) -> bool:
         """
         Show the steps in the viewer, if this run is shown in one.
+
+        :return: Whether a viewer showed them, or that the steps are moved on without
+            one.
         """
-        if self.publish is not None:
-            self.publish(self.to_payload())
+        return self.publish is None or self.publish(self.to_payload())
 
     def to_payload(self) -> Dict[str, Any]:
         """

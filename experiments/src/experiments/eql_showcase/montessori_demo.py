@@ -139,6 +139,11 @@ class TracyActivity(StrEnum):
     What Tracy is said to be doing when it asks a query outside any plan.
     """
 
+    SETTING_UP = "setting up the twin"
+    """
+    It builds the twin it acts in, before any plan.
+    """
+
     PLANNING = "planning what to sort"
     """
     It neither resolves a plan nor carries one out.
@@ -634,9 +639,16 @@ class TracyMontessoriDemonstration(ShowcasedDemonstration):
     them.
     """
 
+    steps_through_queries: bool = False
+    """
+    Whether Tracy starts held at every query it asks until the viewer moves on.
+    """
+
     def __post_init__(self) -> None:
         self.stepper = QueryStepper(
-            situation_of=self.situation, publish=self._publish_query_steps
+            situation_of=self.situation,
+            publish=self._publish_query_steps,
+            is_stepping=self.steps_through_queries,
         )
 
     def run(self) -> World:
@@ -738,14 +750,15 @@ class TracyMontessoriDemonstration(ShowcasedDemonstration):
 
     def situation(self) -> StepSituation:
         """
-        :return: What Tracy is doing at the moment: resolving a plan, carrying out an
-            action, or planning what to sort.
+        :return: What Tracy is doing at the moment: setting up, resolving a plan,
+            expanding or carrying out a plan, or planning what to sort.
         """
-        if self.sorting is not None:
-            resolution = variable(PlanResolution, self.sorting.answerer.resolutions)
-            resolving = an(entity(resolution).where(resolution.done == False)).tolist()
-            if resolving:
-                return StepSituation(Phase.RESOLUTION, resolving[-1].name)
+        if self.sorting is None:
+            return StepSituation(Phase.SETUP, TracyActivity.SETTING_UP)
+        resolution = variable(PlanResolution, self.sorting.answerer.resolutions)
+        resolving = an(entity(resolution).where(resolution.done == False)).tolist()
+        if resolving:
+            return StepSituation(Phase.RESOLUTION, resolving[-1].name)
         performing = (
             None
             if self.showcase is None
@@ -753,20 +766,22 @@ class TracyMontessoriDemonstration(ShowcasedDemonstration):
         )
         return performing or StepSituation(Phase.RESOLUTION, TracyActivity.PLANNING)
 
-    def _publish_query_steps(self, steps: Dict[str, Any]) -> None:
+    def _publish_query_steps(self, steps: Dict[str, Any]) -> bool:
         """
         Show the viewer the queries Tracy asked and let it step through them, if this
         run is shown in one.
 
         :param steps: The steps, as JSON.
+        :return: Whether a viewer was shown them.
         """
         if not isinstance(self.visualization, PluginVisualization):
-            return
+            return False
         if not isinstance(self.visualization.provider, LiveVisualization):
-            return
+            return False
         bridge = self.visualization.provider.bridge
         bridge.query_step_control = self.stepper
         bridge.publish_query_steps(steps)
+        return True
 
     def _show_resolution(self, resolution: PlanResolution) -> None:
         """
@@ -797,6 +812,7 @@ def main(
     capture_name: str = DEFAULT_CAPTURE,
     takes_commands: bool = True,
     real_time_factor: float = 1.0,
+    steps_through_queries: bool = False,
 ) -> None:
     """
     Have Tracy sort what it saw in a capture, then let the viewer command it.
@@ -804,6 +820,8 @@ def main(
     :param capture_name: The capture the robot looks at.
     :param takes_commands: Whether the robot takes commands once the sorting is done.
     :param real_time_factor: How much faster than the clock Tracy moves.
+    :param steps_through_queries: Whether Tracy starts held at every query it asks
+        until the viewer moves on.
     """
     TracyMontessoriDemonstration(
         capture_name=capture_name,
@@ -813,6 +831,7 @@ def main(
         takes_commands=takes_commands,
         collision_avoidance=False,
         real_time_factor=real_time_factor,
+        steps_through_queries=steps_through_queries,
     ).run()
 
 

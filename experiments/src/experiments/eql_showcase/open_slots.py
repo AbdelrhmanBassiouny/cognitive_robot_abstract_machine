@@ -1476,6 +1476,8 @@ class OpenSlotAnswerer:
         :param answer: One answer.
         :return: How it is named to a person.
         """
+        if isinstance(answer, type):
+            return answer.__name__
         if isinstance(answer, Insertion):
             return answer.hole.region.name.name
         if isinstance(answer, SeenHole):
