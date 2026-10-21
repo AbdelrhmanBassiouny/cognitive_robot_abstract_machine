@@ -12,6 +12,7 @@ from abc import ABC, abstractmethod
 
 from typing_extensions import Iterator, List, Optional, TYPE_CHECKING
 
+from krrood.entity_query_language.query_observation import QueryObservation
 from krrood.entity_query_language.utils import make_list
 
 if TYPE_CHECKING:
@@ -38,7 +39,10 @@ class Evaluable(ABC):
 
     def evaluate(self, backend: Optional[QueryBackend] = None) -> Iterator:
         """
-        Evaluate using the given backend, returning an iterator over the results.
+        Evaluate using the given backend, returning an iterator over the results, and
+        report the evaluation to the
+        :class:`~krrood.entity_query_language.query_observation.QueryObserver` observing
+        it.
 
         :param backend: The query backend to evaluate with. Defaults to the
             ``EntityQueryLanguageBackend`` (native in-process evaluation / generation).
@@ -48,7 +52,7 @@ class Evaluable(ABC):
             from krrood.entity_query_language.backends import EntityQueryLanguageBackend
 
             backend = EntityQueryLanguageBackend()
-        return backend.evaluate(self)
+        return QueryObservation().answers_of(self, backend, backend.evaluate(self))
 
     def tolist(self, backend: Optional[QueryBackend] = None) -> List:
         """
