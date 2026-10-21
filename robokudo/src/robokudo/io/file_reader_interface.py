@@ -22,6 +22,7 @@ import json
 import re
 import warnings
 from dataclasses import dataclass, field
+from enum import StrEnum
 from pathlib import Path
 
 import ament_index_python.packages
@@ -40,6 +41,16 @@ type RecordedTimestamp = str
 """
 Timestamp text extracted from a recorded frame's filename.
 """
+
+# %% Legacy recording metadata
+
+
+class LegacyRecordingSuffix(StrEnum):
+    """Obsolete recording metadata excluded from playback."""
+
+    CAMERA_INFO = "cam_info"
+    """Camera calibration superseded by camera observation metadata."""
+
 
 # %% File playback
 
@@ -163,6 +174,8 @@ class FileReaderInterface(CameraInterface):
                 continue
             matched_timestamp = regexp_result.groups()[0]
             matched_suffix = regexp_result.groups()[1]
+            if matched_suffix in LegacyRecordingSuffix:
+                continue
             if matched_suffix not in CASViews:
                 raise InvalidFileSource(
                     reason=f"Unknown data suffix {matched_suffix!r} in {file_path.name}"

@@ -73,6 +73,20 @@ def test_empty_directory_has_no_frames(tmp_path: Path, loop: bool) -> None:
 # %% Filename validation
 
 
+def test_ignores_legacy_camera_info_file(tmp_path: Path) -> None:
+    """
+    Legacy camera-info files do not create playback frames.
+    """
+    configuration = FileReaderCameraConfig(target_dir=str(tmp_path))
+    (tmp_path / f"{configuration.filename_prefix}0_cam_info.json").touch()
+
+    reader = FileReaderInterface(configuration)
+
+    assert reader.loaded_paths == {}
+    assert reader.loaded_data == {}
+    assert reader.has_new_data() is False
+
+
 def test_rejects_unknown_view_suffix(tmp_path: Path) -> None:
     """
     A recording with an unknown view suffix is an invalid file source.
