@@ -90,9 +90,10 @@ class JointServo:
     How hard the servo pulls the joint towards the commanded position.
     """
 
-    dynamics: JointDynamics
+    dynamics: JointDynamics | None = None
     """
-    The joint's own inertia and friction, felt on top of the servo's torque.
+    The joint's own inertia and friction, felt on top of the servo's torque; ``None``
+    keeps those the robot's description states.
     """
 
 
