@@ -191,7 +191,6 @@ class RayTracer:
         min_distance: float = 0,
         max_distance: float = np.inf,
         field_of_view: FieldOfView | None = None,
-        *,
         depth_mode: DepthMode = DepthMode.RAY_DISTANCE,
     ) -> np.ndarray:
         """
@@ -225,7 +224,6 @@ class RayTracer:
         min_distance: float = 0,
         max_distance: float = np.inf,
         field_of_view: FieldOfView | None = None,
-        *,
         depth_mode: DepthMode = DepthMode.RAY_DISTANCE,
         camera_model: PinholeCameraModel | None = None,
     ) -> SegmentationDepthFrame:
@@ -306,7 +304,6 @@ class RayTracer:
         camera_pose: GenericSpatialType,
         resolution: CameraResolution | None = None,
         field_of_view: FieldOfView | None = None,
-        *,
         camera_model: PinholeCameraModel | None = None,
     ) -> CameraRays:
         """
@@ -432,7 +429,6 @@ class RayTracer:
         self,
         camera: Camera,
         rgb_mode: ColorRenderingMode = ColorRenderingMode.SEMANTIC,
-        *,
         depth_mode: DepthMode = DepthMode.OPTICAL_AXIS,
     ) -> RenderedRGBDFrame:
         """
