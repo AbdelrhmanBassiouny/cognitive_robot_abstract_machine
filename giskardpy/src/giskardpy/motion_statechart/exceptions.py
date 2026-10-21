@@ -12,6 +12,7 @@ from semantic_digital_twin.collision_checking.collision_variable_managers import
 
 if TYPE_CHECKING:
     from giskardpy.motion_statechart.monitors.progress_monitors import StillProgressing
+    from semantic_digital_twin.robots.robot_parts import AbstractRobot
     from semantic_digital_twin.world_description.world_entity import (
         KinematicStructureEntity,
     )
@@ -256,6 +257,24 @@ class ActionClientTypeMismatchError(MotionStatechartError):
 
     def suggest_correction(self) -> str:
         return "Use a unique action_topic per message type."
+
+
+@dataclass
+class RobotWithoutMobileBaseError(MotionStatechartError):
+    """
+    Raised when a goal is to drive the mobile base of a robot that has none.
+    """
+
+    robot: AbstractRobot
+    """
+    The robot without a mobile base.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.robot.name} has no mobile base to drive."
+
+    def suggest_correction(self) -> str:
+        return "Move the base of this robot with a goal that needs no mobile base."
 
 
 @dataclass

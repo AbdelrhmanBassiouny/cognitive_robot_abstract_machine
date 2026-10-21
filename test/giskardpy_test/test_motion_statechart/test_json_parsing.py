@@ -24,6 +24,7 @@ from krrood.adapters.json_serializer import to_json, from_json
 from krrood.symbolic_math.symbolic_math import (
     logic_and,
 )
+from semantic_digital_twin.robots.robot_parts import MobileBase
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
     WorldEntityWithIDKwargsTracker,
 )
@@ -239,7 +240,13 @@ def test_an_expanded_differential_drive_goal_reaches_its_pose_after_a_json_round
     goal_pose = Pose.from_xyz_rpy(x=0.5, reference_frame=cylinder_bot_diff_world.root)
     statechart = Statechart(context=_create_executor(cylinder_bot_diff_world).context)
     statechart.add_node(
-        goal := DifferentialDriveBaseGoal(goal_pose=goal_pose, threshold=0.05)
+        goal := DifferentialDriveBaseGoal(
+            mobile_base=cylinder_bot_diff_world.get_semantic_annotations_by_type(
+                MobileBase
+            )[0],
+            goal_pose=goal_pose,
+            threshold=0.05,
+        )
     )
     statechart.add_node(EndMotion.when_true(goal))
     new_json_data = json.loads(json.dumps(statechart.to_json()))
@@ -272,6 +279,9 @@ def test_an_expanded_differential_drive_goal_binds_its_goal_frame_after_a_json_r
     statechart = Statechart(context=_create_executor(cylinder_bot_diff_world).context)
     statechart.add_node(
         first_leg := DifferentialDriveBaseGoal(
+            mobile_base=cylinder_bot_diff_world.get_semantic_annotations_by_type(
+                MobileBase
+            )[0],
             goal_pose=Pose.from_xyz_rpy(
                 x=1, reference_frame=cylinder_bot_diff_world.root
             ),
@@ -280,7 +290,11 @@ def test_an_expanded_differential_drive_goal_binds_its_goal_frame_after_a_json_r
     )
     statechart.add_node(
         second_leg := DifferentialDriveBaseGoal(
-            goal_pose=Pose.from_xyz_rpy(x=0.5, reference_frame=bot), threshold=0.05
+            mobile_base=cylinder_bot_diff_world.get_semantic_annotations_by_type(
+                MobileBase
+            )[0],
+            goal_pose=Pose.from_xyz_rpy(x=0.5, reference_frame=bot),
+            threshold=0.05,
         )
     )
     second_leg.start_condition = first_leg.observes_true

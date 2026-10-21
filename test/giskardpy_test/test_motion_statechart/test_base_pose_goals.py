@@ -6,6 +6,7 @@ same way, and moving the base only along the floor and about the vertical.
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from cramph.context import StatechartContext
 from cramph.executor import StatechartExecutor
@@ -16,6 +17,7 @@ from giskardpy.motion_statechart.goals.base_pose_goals import (
     DifferentialDriveBaseGoal,
     HolonomicBaseGoal,
 )
+from giskardpy.motion_statechart.exceptions import RobotWithoutMobileBaseError
 from giskardpy.motion_statechart.graph_node import EndMotion
 from giskardpy.motion_statechart.monitors.overwrite_state_monitors import SetOdometry
 from giskardpy.motion_statechart.tasks.drive_tasks import (
@@ -24,6 +26,7 @@ from giskardpy.motion_statechart.tasks.drive_tasks import (
 )
 from semantic_digital_twin.robots.minimal_robot import MinimalRobot
 from semantic_digital_twin.robots.pr2 import PR2
+from semantic_digital_twin.robots.robot_parts import MobileBase
 from semantic_digital_twin.robots.stretch import Stretch
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
@@ -46,7 +49,7 @@ def test_a_holonomic_base_goal_moves_the_root_of_the_robot(
 
     goal = HolonomicBaseGoal.moving_base_of(robot, target, threshold=0.05)
 
-    assert goal.base is robot.root
+    assert goal.mobile_base is robot.mobile_base
     assert goal.goal_pose is target
     assert goal.threshold == 0.05
 
@@ -59,9 +62,21 @@ def test_a_differential_drive_goal_drives_the_drive_of_the_robot(
 
     goal = DifferentialDriveBaseGoal.moving_base_of(robot, target, threshold=0.05)
 
-    assert goal.diff_drive_connection is robot.drive
+    assert goal.mobile_base is robot.mobile_base
     assert goal.goal_pose is target
     assert goal.threshold == 0.05
+
+
+@pytest.mark.parametrize("goal_type", [HolonomicBaseGoal, DifferentialDriveBaseGoal])
+def test_a_drive_goal_cannot_move_a_robot_without_a_mobile_base(
+    self_collision_bot_world: World, goal_type: type[BasePoseGoal]
+) -> None:
+    robot = self_collision_bot_world.get_semantic_annotations_by_type(MinimalRobot)[0]
+
+    with pytest.raises(RobotWithoutMobileBaseError) as raised:
+        goal_type.moving_base_of(robot, _target(self_collision_bot_world), 0.05)
+
+    assert raised.value.robot is robot
 
 
 def test_setting_the_odometry_writes_the_connection_above_the_robot(
@@ -119,7 +134,12 @@ def test_a_holonomic_base_goal_constrains_only_x_y_and_yaw(
 def test_a_differential_drive_goal_constrains_only_x_y_and_yaw(
     cylinder_bot_diff_world: World,
 ) -> None:
-    goal = DifferentialDriveBaseGoal(goal_pose=_target(cylinder_bot_diff_world))
+    goal = DifferentialDriveBaseGoal(
+        mobile_base=cylinder_bot_diff_world.get_semantic_annotations_by_type(
+            MobileBase
+        )[0],
+        goal_pose=_target(cylinder_bot_diff_world),
+    )
 
     _compiled(cylinder_bot_diff_world, goal)
 

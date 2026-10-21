@@ -264,12 +264,9 @@ class UndeclaredTopicError(RobotPartValidationError):
 @dataclass
 class MissingDriveConnectionError(RobotPartValidationError):
     """
-    Raised when a mobile base is read from odometry although there is no drive the
-    reported pose could be written into.
+    Raised when the drive of a mobile base is needed, but its robot is not attached to
+    its parent by a drive.
     """
 
     def error_message(self) -> str:
-        return (
-            f"{type(self.robot_part).__name__} has no drive connection its pose could "
-            f"be written into."
-        )
+        return f"{type(self.robot_part).__name__} is not moved by a drive."

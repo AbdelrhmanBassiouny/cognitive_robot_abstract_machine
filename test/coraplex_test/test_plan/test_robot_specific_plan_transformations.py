@@ -131,7 +131,7 @@ def assert_drives_differentially_to(
     the base, within the threshold of `action`.
     """
     assert type(goal) is DifferentialDriveBaseGoal
-    assert goal.diff_drive_connection is robot.drive
+    assert goal.mobile_base is robot.mobile_base
     assert goal.threshold == action.base_pose_threshold
     np.testing.assert_allclose(
         goal.goal_pose.to_np(),
@@ -215,7 +215,7 @@ def test_stretch_drives_every_leg_of_a_path_with_its_differential_drive(
     assert [type(leg) for leg in legs] == [DifferentialDriveBaseGoal] * len(
         unchanged.nodes
     )
-    assert all(leg.diff_drive_connection is robot.drive for leg in legs)
+    assert all(leg.mobile_base is robot.mobile_base for leg in legs)
     assert all(leg.threshold == action.base_pose_threshold for leg in legs)
     np.testing.assert_allclose(legs[-1].goal_pose.to_np(), target.to_np())
 

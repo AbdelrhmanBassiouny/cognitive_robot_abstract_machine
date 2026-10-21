@@ -23,6 +23,7 @@ from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedomLimits,
 )
 
+from .dataset.robots_on_a_drive import RobotOnADifferentialDrive, RobotOnAnOmniDrive
 from .living_worlds import (
     LivingWorlds,
 )
@@ -325,7 +326,7 @@ def cylinder_bot_world():
             collision=ShapeCollection(shapes=[Cylinder(width=0.1, height=0.5)]),
         )
         robot_world.add_body(robot)
-        MinimalRobot.from_world(robot_world)
+        RobotOnAnOmniDrive.from_world(robot_world)
     world = World()
     with world.modify_world():
         body = Body(
@@ -506,7 +507,7 @@ def cylinder_bot_diff_world():
             collision=ShapeCollection(shapes=[Cylinder(width=0.1, height=0.5)]),
         )
         robot_world.add_body(robot)
-        MinimalRobot.from_world(robot_world)
+        RobotOnADifferentialDrive.from_world(robot_world)
     world = World()
     with world.modify_world():
         body = Body(

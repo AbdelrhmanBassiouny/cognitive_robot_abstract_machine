@@ -1437,7 +1437,7 @@ def test_navigating_drives_the_base_towards_what_it_should_face(
     statechart_of(robot_executor(extensions), action)
 
     [drive] = nodes_of_type(action, HolonomicBaseGoal)
-    assert drive.base == robot.root
+    assert drive.mobile_base is robot.mobile_base
 
 
 def test_navigating_writes_the_odometry_when_simulated(
@@ -1469,7 +1469,7 @@ def test_navigating_drives_the_base_when_physically_simulated(
 
     assert nodes_of_type(action, SetOdometry) == []
     [drive] = nodes_of_type(action, HolonomicBaseGoal)
-    assert drive.base == robot.root
+    assert drive.mobile_base is robot.mobile_base
 
 
 # %% a robot that does not move its whole body stands still while it moves an arm

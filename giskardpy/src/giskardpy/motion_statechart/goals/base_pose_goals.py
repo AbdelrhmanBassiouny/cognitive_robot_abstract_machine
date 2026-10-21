@@ -14,12 +14,12 @@ from cramph.node import (
     SucceedsOnObservingTrue,
     expanded_child_field,
 )
+from giskardpy.motion_statechart.exceptions import RobotWithoutMobileBaseError
 from giskardpy.motion_statechart.binding_policy import (
     ForwardKinematicsBinding,
     GoalBindingPolicy,
 )
 from giskardpy.motion_statechart.weights import DefaultWeights
-from giskardpy.motion_statechart.exceptions import UnexpectedWorldEntityCountError
 from giskardpy.motion_statechart.tasks.drive_tasks import (
     BaseHeading,
     BaseOrientation,
@@ -28,7 +28,8 @@ from giskardpy.motion_statechart.tasks.drive_tasks import (
 )
 from krrood.symbolic_math.symbolic_math import Scalar, trinary_if_cases
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.robots.robot_parts import AbstractRobot
+from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
+from semantic_digital_twin.robots.robot_parts import AbstractRobot, MobileBase
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world_description.connections import DifferentialDrive
@@ -76,6 +77,11 @@ class DrivenBaseGoal(
     :attr:`binding_policy` says.
     """
 
+    mobile_base: MobileBase
+    """
+    The base moved, by the drive attaching its robot to its parent.
+    """
+
     goal_pose: Pose
     """
     Pose to reach.
@@ -113,11 +119,11 @@ class DrivenBaseGoal(
     """
 
     @property
-    @abstractmethod
     def driven_body(self) -> KinematicStructureEntity:
         """
-        :return: The body this goal moves.
+        :return: The body the drive of :attr:`mobile_base` carries.
         """
+        return self.mobile_base.drive.child
 
     @property
     @abstractmethod
@@ -133,6 +139,22 @@ class DrivenBaseGoal(
 
         :param task_parameters: The parameters every task is created with.
         """
+
+    @classmethod
+    def moving_base_of(
+        cls, robot: AbstractRobot, goal_pose: Pose, threshold: float
+    ) -> Self:
+        """
+        Differs from :meth:`BasePoseGoal.moving_base_of` in requiring `robot` to have a
+        mobile base.
+
+        :raises RobotWithoutMobileBaseError: If `robot` has no mobile base.
+        """
+        if not isinstance(robot, HasMobileBase) or robot.mobile_base is None:
+            raise RobotWithoutMobileBaseError(robot=robot)
+        return cls(
+            mobile_base=robot.mobile_base, goal_pose=goal_pose, threshold=threshold
+        )
 
     @property
     def _goal_reference_frame_name(self) -> PrefixedName:
@@ -218,30 +240,14 @@ class HolonomicBaseGoal(DrivenBaseGoal):
     turning it.
     """
 
-    base: KinematicStructureEntity
-    """
-    The body moved, whose connection to its parent can move it in any direction along
-    the floor.
-    """
-
     parallel: Parallel = expanded_child_field()
     """
     The parallel running the position and the orientation task.
     """
 
     @property
-    def driven_body(self) -> KinematicStructureEntity:
-        return self.base
-
-    @property
     def motion(self) -> StatechartNode:
         return self.parallel
-
-    @classmethod
-    def moving_base_of(
-        cls, robot: AbstractRobot, goal_pose: Pose, threshold: float
-    ) -> Self:
-        return cls(base=robot.root, goal_pose=goal_pose, threshold=threshold)
 
     def _create_motion(self, task_parameters: dict[str, Any]) -> None:
         self.parallel = Parallel(
@@ -264,11 +270,9 @@ class DifferentialDriveBaseGoal(DrivenBaseGoal):
     3. Orient to goal orientation
     """
 
-    diff_drive_connection: DifferentialDrive | None = None
+    mobile_base: MobileBase[DifferentialDrive]
     """
-    Drive connection to use.
-
-    If it is None and there is only one diff drive in the world, it will be used.
+    The base moved, by the differential drive attaching its robot to its parent.
     """
 
     sequence: Sequence = expanded_child_field()
@@ -277,39 +281,8 @@ class DifferentialDriveBaseGoal(DrivenBaseGoal):
     """
 
     @property
-    def driven_body(self) -> KinematicStructureEntity:
-        # moving the base under another parent replaces its connection, so the parent
-        # is read from the base rather than from the connection
-        return self.diff_drive_connection.child
-
-    @property
     def motion(self) -> StatechartNode:
         return self.sequence
-
-    @classmethod
-    def moving_base_of(
-        cls, robot: AbstractRobot, goal_pose: Pose, threshold: float
-    ) -> Self:
-        return cls(
-            diff_drive_connection=robot.drive, goal_pose=goal_pose, threshold=threshold
-        )
-
-    def expand(self) -> None:
-        """
-        Differs from :meth:`DrivenBaseGoal.expand` in first finding the only
-        differential drive of the world if :attr:`diff_drive_connection` is None.
-        """
-        if self.diff_drive_connection is None:
-            diff_drives = self.context.world.get_connections_by_type(DifferentialDrive)
-            if len(diff_drives) != 1:
-                raise UnexpectedWorldEntityCountError(
-                    node=self,
-                    expected_count=1,
-                    actual_count=len(diff_drives),
-                    entity_type=DifferentialDrive,
-                )
-            self.diff_drive_connection = diff_drives[0]
-        super().expand()
 
     def _create_motion(self, task_parameters: dict[str, Any]) -> None:
         steps = [

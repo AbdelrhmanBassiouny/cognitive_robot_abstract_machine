@@ -37,6 +37,7 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import (
 )
 from giskardpy.motion_statechart.tasks.drive_tasks import DrivenBaseTask
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList, JointState
+from semantic_digital_twin.robots.robot_parts import MobileBase
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import EndEffector
 from semantic_digital_twin.robots.hsrb import HSRB
@@ -1872,7 +1873,12 @@ class TestDiffDriveBaseGoal:
         motion_statechart = Statechart(context=executor.context)
         goal_pose.reference_frame = cylinder_bot_diff_world.root
         motion_statechart.add_node(
-            goal := DifferentialDriveBaseGoal(goal_pose=goal_pose)
+            goal := DifferentialDriveBaseGoal(
+                mobile_base=cylinder_bot_diff_world.get_semantic_annotations_by_type(
+                    MobileBase
+                )[0],
+                goal_pose=goal_pose,
+            )
         )
         motion_statechart.add_node(EndMotion.when_true(goal))
 
@@ -1904,7 +1910,13 @@ class TestDiffDriveBaseGoal:
         )
         motion_statechart = Statechart(context=executor.context)
         motion_statechart.add_node(
-            goal := DifferentialDriveBaseGoal(goal_pose=goal_pose, threshold=0.3)
+            goal := DifferentialDriveBaseGoal(
+                mobile_base=cylinder_bot_diff_world.get_semantic_annotations_by_type(
+                    MobileBase
+                )[0],
+                goal_pose=goal_pose,
+                threshold=0.3,
+            )
         )
         motion_statechart.add_node(EndMotion.when_true(goal))
 
@@ -1938,10 +1950,20 @@ class TestDiffDriveBaseGoal:
         )
         motion_statechart = Statechart(context=executor.context)
         motion_statechart.add_node(
-            first_leg := DifferentialDriveBaseGoal(goal_pose=first_goal_pose)
+            first_leg := DifferentialDriveBaseGoal(
+                mobile_base=cylinder_bot_diff_world.get_semantic_annotations_by_type(
+                    MobileBase
+                )[0],
+                goal_pose=first_goal_pose,
+            )
         )
         motion_statechart.add_node(
-            second_leg := DifferentialDriveBaseGoal(goal_pose=second_goal_pose)
+            second_leg := DifferentialDriveBaseGoal(
+                mobile_base=cylinder_bot_diff_world.get_semantic_annotations_by_type(
+                    MobileBase
+                )[0],
+                goal_pose=second_goal_pose,
+            )
         )
         second_leg.start_condition = first_leg.observes_true
         motion_statechart.add_node(EndMotion.when_true(second_leg))
@@ -1981,13 +2003,19 @@ class TestDiffDriveBaseGoal:
         motion_statechart = Statechart(context=executor.context)
         motion_statechart.add_node(
             first_leg := DifferentialDriveBaseGoal(
+                mobile_base=cylinder_bot_diff_world.get_semantic_annotations_by_type(
+                    MobileBase
+                )[0],
                 goal_pose=Pose.from_xyz_rpy(
                     x=1, reference_frame=cylinder_bot_diff_world.root
-                )
+                ),
             )
         )
         motion_statechart.add_node(
             second_leg := DifferentialDriveBaseGoal(
+                mobile_base=cylinder_bot_diff_world.get_semantic_annotations_by_type(
+                    MobileBase
+                )[0],
                 goal_pose=Pose.from_xyz_rpy(x=0.5, reference_frame=bot),
                 binding_policy=binding_policy,
             )
@@ -2044,7 +2072,10 @@ class TestDiffDriveBaseGoal:
                         )
                     ),
                     DifferentialDriveBaseGoal(
-                        goal_pose=Pose.from_xyz_rpy(x=1, reference_frame=lift)
+                        mobile_base=world.get_semantic_annotations_by_type(MobileBase)[
+                            0
+                        ],
+                        goal_pose=Pose.from_xyz_rpy(x=1, reference_frame=lift),
                     ),
                 ]
             )
@@ -2082,7 +2113,8 @@ class TestDiffDriveBaseGoal:
         motion_statechart = Statechart(context=executor.context)
         motion_statechart.add_node(
             drive := DifferentialDriveBaseGoal(
-                goal_pose=Pose.from_xyz_rpy(x=1, reference_frame=base)
+                mobile_base=world.get_semantic_annotations_by_type(MobileBase)[0],
+                goal_pose=Pose.from_xyz_rpy(x=1, reference_frame=base),
             )
         )
         motion_statechart.add_node(
@@ -2125,7 +2157,8 @@ class TestDiffDriveBaseGoal:
         motion_statechart = Statechart(context=executor.context)
         motion_statechart.add_node(
             drive := DifferentialDriveBaseGoal(
-                goal_pose=Pose.from_xyz_rpy(y=1, reference_frame=world.root)
+                mobile_base=world.get_semantic_annotations_by_type(MobileBase)[0],
+                goal_pose=Pose.from_xyz_rpy(y=1, reference_frame=world.root),
             )
         )
         recording.node = drive.sequence.nodes[0]

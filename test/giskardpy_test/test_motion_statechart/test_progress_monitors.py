@@ -33,6 +33,7 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPositionVelocityLimit,
 )
 from krrood.symbolic_math.symbolic_math import Scalar
+from semantic_digital_twin.robots.robot_parts import MobileBase
 from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
     VizMarkerPublisher,
 )
@@ -243,9 +244,12 @@ class TestStallDetection:
         )
         motion_statechart = Statechart(context=executor.context)
         goal = DifferentialDriveBaseGoal(
+            mobile_base=cylinder_bot_diff_world.get_semantic_annotations_by_type(
+                MobileBase
+            )[0],
             goal_pose=Pose.from_xyz_rpy(
                 x=1, y=1, reference_frame=cylinder_bot_diff_world.root
-            )
+            ),
         )
         motion_statechart.add_node(goal)
         motion_statechart.add_node(EndMotion.when_true(goal))
