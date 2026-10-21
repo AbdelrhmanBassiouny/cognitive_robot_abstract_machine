@@ -1,5 +1,5 @@
 """
-Project recorded camera references into a small reasoning world.
+Restore recorded camera context for sensor replay.
 """
 
 from __future__ import annotations
@@ -22,12 +22,12 @@ from semantic_digital_twin.world_description.world_entity import Body
 
 
 @dataclass(frozen=True)
-class SensorWorldProjector:
+class RecordedCameraWorld:
     """
-    Create a world containing the recorded camera and its optical-root pose.
+    Restore the recorded camera and its pose for reprocessing sensor data.
 
-    The sampled pose connects to its reference frame. A camera root with an equivalent
-    ROS frame name attaches directly to that pose's child frame.
+    Camera identities are retained while unrelated entities from the recorded world,
+    including previous perception results, are excluded.
     """
 
     observation: CameraObservation

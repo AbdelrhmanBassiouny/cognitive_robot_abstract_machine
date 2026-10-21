@@ -17,7 +17,7 @@ from robokudo.cas import CAS, CASViews
 from robokudo.descriptors.camera_configs.config_mongodb_playback import MongoReplayMode
 from robokudo.exceptions import InvalidCameraObservation, CameraObservationMissing
 from robokudo.io.cas_view_codecs import CameraObservationCodec, ViewPayload
-from robokudo.io.sensor_world import SensorWorldProjector
+from robokudo.io.sensor_world import RecordedCameraWorld
 from robokudo.io.storage import Storage, StorageDocumentField
 from robokudo.io.exceptions import RecordedViewMissing
 from robokudo.io.storage_reader_interface import StorageReaderInterface
@@ -167,7 +167,7 @@ def test_sensor_world_projection_excludes_inferred_entities() -> None:
     """
     scene = _recorded_scene()
 
-    sensor_world = SensorWorldProjector(scene.observation).project()
+    sensor_world = RecordedCameraWorld(scene.observation).project()
 
     camera = sensor_world.get_semantic_annotations_by_type(Camera)[0]
     assert camera.id == scene.observation.camera.id
@@ -198,10 +198,10 @@ def test_full_snapshot_replays_only_camera_context() -> None:
     )
     rk_world.init_world_with_entity_tracker()
     reasoning_world = rk_world.world_instance()
-    SensorWorldProjector(restored_observation).install(reasoning_world)
+    RecordedCameraWorld(restored_observation).install(reasoning_world)
     rk_world.init_world_entity_tracker_from_world(reasoning_world)
     _, replayed = Storage.decode_view_document(document)
-    SensorWorldProjector.apply_pose(reasoning_world, replayed)
+    RecordedCameraWorld.apply_pose(reasoning_world, replayed)
 
     assert replayed.camera is not scene.observation.camera
     assert replayed.camera.id == scene.observation.camera.id
@@ -241,7 +241,7 @@ def test_replay_resolves_leading_slash_pose_frame_alias() -> None:
         {**frame, StorageDocumentField.VIEW_IDS: {CASViews.CAMERA_OBSERVATION: 1}}
     )
     _, replayed = Storage.decode_view_document(document)
-    SensorWorldProjector.apply_pose(rk_world.world_instance(), replayed)
+    RecordedCameraWorld.apply_pose(rk_world.world_instance(), replayed)
 
     assert replayed.camera.root.id == scene.observation.camera.root.id
     assert replayed.world_T_camera.child_frame.id == (
@@ -267,7 +267,7 @@ def test_later_frame_updates_same_camera_connection(pose_frame_alias: bool) -> N
     scene = _recorded_scene(pose_frame_alias=pose_frame_alias)
     rk_world.init_world_with_entity_tracker()
     reasoning_world = rk_world.world_instance()
-    SensorWorldProjector(scene.observation).install(reasoning_world)
+    RecordedCameraWorld(scene.observation).install(reasoning_world)
     rk_world.init_world_entity_tracker_from_world(reasoning_world)
     first_document = Storage.encode_view_document(
         CASViews.CAMERA_OBSERVATION, scene.observation
@@ -292,7 +292,7 @@ def test_later_frame_updates_same_camera_connection(pose_frame_alias: bool) -> N
         CASViews.CAMERA_OBSERVATION, second_observation
     )
     _, second = Storage.decode_view_document(second_document)
-    SensorWorldProjector.apply_pose(reasoning_world, second)
+    RecordedCameraWorld.apply_pose(reasoning_world, second)
 
     assert second.camera is first.camera
     assert second.timestamp_nanoseconds == second_observation.timestamp_nanoseconds
@@ -312,7 +312,7 @@ def test_missing_pose_merges_camera_into_existing_world() -> None:
     unrelated = Body(name=PrefixedName(name="runtime_entity"))
     with reasoning_world.modify_world():
         reasoning_world.add_body(unrelated)
-    SensorWorldProjector(scene.observation).install(reasoning_world)
+    RecordedCameraWorld(scene.observation).install(reasoning_world)
     rk_world.init_world_entity_tracker_from_world(reasoning_world)
 
     _, replayed = Storage.decode_view_document(
@@ -336,7 +336,7 @@ def test_camera_pose_child_must_match_camera_root() -> None:
     )
 
     with pytest.raises(InvalidCameraObservation):
-        SensorWorldProjector(
+        RecordedCameraWorld(
             replace(scene.observation, world_T_camera=wrong_pose)
         ).project()
 
@@ -349,7 +349,7 @@ def test_camera_pose_requires_a_reference_frame() -> None:
     pose = HomogeneousTransformationMatrix(child_frame=scene.observation.camera.root)
 
     with pytest.raises(InvalidCameraObservation):
-        SensorWorldProjector(replace(scene.observation, world_T_camera=pose)).project()
+        RecordedCameraWorld(replace(scene.observation, world_T_camera=pose)).project()
 
 
 # %% Reader behavior
@@ -471,7 +471,7 @@ def test_sensor_projection_copies_camera_data_and_sampled_pose(
     Projection preserves the sampled optical pose without sharing camera calibration.
     """
     scene = _recorded_scene(pose_frame_alias=pose_frame_alias)
-    projected_world = SensorWorldProjector(scene.observation).project()
+    projected_world = RecordedCameraWorld(scene.observation).project()
     projected_camera = projected_world.get_semantic_annotation_by_id(
         scene.observation.camera.id
     )

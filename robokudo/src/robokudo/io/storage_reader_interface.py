@@ -51,7 +51,7 @@ from robokudo.exceptions import (
 )
 from robokudo.io.camera_interface import CameraInterface
 from robokudo.io.cas_view_codecs import CameraObservationCodec, ViewPayload
-from robokudo.io.sensor_world import SensorWorldProjector
+from robokudo.io.sensor_world import RecordedCameraWorld
 from robokudo.io.storage import Storage, StorageDocumentField
 
 if TYPE_CHECKING:
@@ -146,7 +146,7 @@ class StorageReaderInterface(CameraInterface):
         projection_started = perf_counter()
         reasoning_world = rk_world.world_instance()
         self._check_sensor_conflicts(observation, reasoning_world)
-        SensorWorldProjector(observation).install(reasoning_world)
+        RecordedCameraWorld(observation).install(reasoning_world)
         rk_world.init_world_entity_tracker_from_world(reasoning_world)
         self._recorded_camera_id = observation.camera.id
         self.rk_logger.debug(
@@ -292,7 +292,7 @@ class StorageReaderInterface(CameraInterface):
                 raise InvalidCameraObservation(
                     reason="recorded camera identity changed during playback"
                 )
-            SensorWorldProjector.apply_pose(rk_world.world_instance(), observation)
+            RecordedCameraWorld.apply_pose(rk_world.world_instance(), observation)
 
         # Restore annotations
         if self.camera_config.restore_annotations:

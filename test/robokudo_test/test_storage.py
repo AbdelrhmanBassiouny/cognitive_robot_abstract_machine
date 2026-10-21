@@ -12,7 +12,7 @@ import robokudo.cas
 from robokudo import world as rk_world
 from robokudo.cas import CAS, CASViews
 from robokudo.io.storage import Storage
-from robokudo.io.sensor_world import SensorWorldProjector
+from robokudo.io.sensor_world import RecordedCameraWorld
 from robokudo.types.camera import CameraObservation
 from robokudo.types.cv import ImageROI
 from robokudo.types.scene import ObjectHypothesis
@@ -348,7 +348,7 @@ class TestStorage:
         assert retrieved_cas_record is not None
         retrieved_cas_record["views"] = {}
         rk_world.init_world_with_entity_tracker()
-        SensorWorldProjector(observation).install(rk_world.world_instance())
+        RecordedCameraWorld(observation).install(rk_world.world_instance())
         rk_world.init_world_entity_tracker_from_world(rk_world.world_instance())
         storage_instance.load_views_from_mongo_in_cas(retrieved_cas_record)
         restored_observation = retrieved_cas_record["views"][

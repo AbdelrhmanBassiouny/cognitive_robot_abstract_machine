@@ -22,7 +22,7 @@ from robokudo.descriptors.camera_configs.config_ray_tracing import (
     RayTracingCameraConfiguration,
     WorldDescriptorSource,
 )
-from robokudo.io.sensor_world import SensorWorldProjector
+from robokudo.io.sensor_world import RecordedCameraWorld
 from robokudo.io.ray_tracing_camera_interface import RayTracingCameraInterface
 from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
@@ -144,7 +144,7 @@ def test_sensor_projection_preserves_optical_root_pose(
     )
     cas = CAS()
     optical_interface.set_data(cas)
-    world = SensorWorldProjector(cas.camera_observation).project()
+    world = RecordedCameraWorld(cas.camera_observation).project()
     camera = world.get_semantic_annotation_by_id(context.camera.id)
     np.testing.assert_allclose(
         camera.root.global_transform.to_np(),
@@ -216,7 +216,7 @@ def test_replayed_optical_pose_updates_camera_root(
     )
     cas = CAS()
     optical_interface.set_data(cas)
-    world = SensorWorldProjector(cas.camera_observation).project()
+    world = RecordedCameraWorld(cas.camera_observation).project()
     camera = world.get_semantic_annotation_by_id(context.camera.id)
     world_T_optical = HomogeneousTransformationMatrix.from_xyz_rpy(
         x=1.0, y=2.0, z=3.0, roll=0.2, reference_frame=world.root
@@ -227,7 +227,7 @@ def test_replayed_optical_pose_updates_camera_root(
         world_T_camera=world_T_optical,
         timestamp_nanoseconds=0,
     )
-    SensorWorldProjector.apply_pose(world, observation)
+    RecordedCameraWorld.apply_pose(world, observation)
     np.testing.assert_allclose(
         camera.root.global_transform.to_np(), world_T_optical.to_np(), atol=1e-12
     )
@@ -255,7 +255,7 @@ def test_optical_observation_roundtrip_preserves_root_pose(
         codec.encode(cas.camera_observation),
         WorldEntityWithIDKwargsTracker.from_world(context.world),
     )
-    world = SensorWorldProjector(restored).project()
+    world = RecordedCameraWorld(restored).project()
     camera = world.get_semantic_annotation_by_id(context.camera.id)
     np.testing.assert_allclose(
         camera.root.global_transform.to_np(),
