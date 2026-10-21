@@ -7,6 +7,7 @@ from typing_extensions import Any, Hashable, List, Set, TYPE_CHECKING, Type
 import random_events.variable
 from krrood.entity_query_language.core.variable import Variable
 from krrood.exceptions import DataclassException, InputError
+from probabilistic_model.exceptions import ProbabilisticModelException
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.core.mapped_variable import MappedVariable
@@ -89,7 +90,7 @@ class InvalidEllipsis(InputError):
 
 
 @dataclass
-class ModelVariableNotBound(DataclassException):
+class ModelVariableNotBound(ProbabilisticModelException):
     """
     Raised when bindings are translated into a sample of a probabilistic model, but
     neither the bindings nor the literal values of the match give a variable of the
@@ -115,7 +116,7 @@ class ModelVariableNotBound(DataclassException):
 
 
 @dataclass
-class ValueOutsideVariableDomain(DataclassException):
+class ValueOutsideVariableDomain(ProbabilisticModelException):
     """
     Raised when bindings are translated into a sample of a probabilistic model, but a
     value they give is outside the domain of a variable of the model, so no sample holds
@@ -147,7 +148,7 @@ class ValueOutsideVariableDomain(DataclassException):
 
 
 @dataclass
-class DoRequiresCausalCircuitModel(DataclassException):
+class DoRequiresCausalCircuitModel(ProbabilisticModelException):
     """
     Raised when a match has a ``cause`` intervention but the model registry resolved a
     model that is not a
@@ -171,7 +172,7 @@ class DoRequiresCausalCircuitModel(DataclassException):
 
 
 @dataclass
-class MultipleEffectVariablesNotSupported(DataclassException):
+class MultipleEffectVariablesNotSupported(ProbabilisticModelException):
     """
     Raised when a query declares more than one effect variable via
     ``causes_effect(...)``.
@@ -200,7 +201,7 @@ class MultipleEffectVariablesNotSupported(DataclassException):
 
 
 @dataclass
-class JointQueryAcrossClassesNotSupported(DataclassException):
+class JointQueryAcrossClassesNotSupported(ProbabilisticModelException):
     """
     Raised when a probabilistic query (``probability_of(...)``, ``average(...)``)
     doesn't reference attributes of exactly one EQL class -- either none at all, e.g.
@@ -244,7 +245,7 @@ class JointQueryAcrossClassesNotSupported(DataclassException):
 
 
 @dataclass
-class RelationalCircuitRegistryRequiresMatch(DataclassException):
+class RelationalCircuitRegistryRequiresMatch(ProbabilisticModelException):
     """
     Raised when a
     :class:`~krrood.parametrization.model_registries.RelationalCircuitRegistry` is asked
@@ -276,7 +277,7 @@ class RelationalCircuitRegistryRequiresMatch(DataclassException):
 
 
 @dataclass
-class AmbiguousVariableName(DataclassException):
+class AmbiguousVariableName(ProbabilisticModelException):
     """
     Raised when several attributes of a match have the name of a variable of a
     probabilistic model, so it is unclear which of them a sample of the variable sets.
@@ -307,7 +308,7 @@ class AmbiguousVariableName(DataclassException):
 
 
 @dataclass
-class DomainElementsIndistinguishableInSamples(DataclassException):
+class DomainElementsIndistinguishableInSamples(ProbabilisticModelException):
     """
     Raised when two elements of the domain of a symbolic variable have hashes that a
     sample of a probabilistic model cannot tell apart.
@@ -342,7 +343,7 @@ class DomainElementsIndistinguishableInSamples(DataclassException):
 
 
 @dataclass
-class UnboundedParameterError(DataclassException):
+class UnboundedParameterError(ProbabilisticModelException):
     """
     Raised when a uniform prior is asked for a parameter that the statement's ``where``
     conditions do not bound from below and above.
