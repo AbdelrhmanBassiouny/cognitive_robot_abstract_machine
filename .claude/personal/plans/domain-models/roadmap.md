@@ -5,3 +5,4 @@
 - casadi is an optional extra (`krrspatial[symbolic]`); numeric types import none of it.
 - Spatial types are generic over their coordinate type. Integer coordinates get no operations whose results leave the integers (norms, scaling, rotations, transforms).
 - Package names (krrspatial, krrimage, krrollywood) are open to change in review.
+- Coordinates2/Coordinates3 hold only x, y (, z); a pose is its own SpatialType composed of a point and an orientation, never a subclass of a point.
