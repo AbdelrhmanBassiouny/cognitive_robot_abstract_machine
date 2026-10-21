@@ -5,8 +5,7 @@ Done
   resolve(...) + Execute; top grasp, fall at release.
 - krrood QueryObservation; stepper with Next (guarded by held step), query
   stack (plan parts, actions/motions, askers, variables), holes outlined,
-  pieces drawn as their kind; video 15 is gallery lead (16 recording).
+  pieces drawn as their kind; video 16 is gallery lead (v6).
 Next
-- Add video 16 to gallery as lead.
 - Ask user: derive action status in Plan view (JS test pins NOT_STARTED).
 - Ask user: evaluate action pre/post-conditions so execution asks queries.
