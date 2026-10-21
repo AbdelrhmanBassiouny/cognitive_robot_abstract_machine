@@ -1,24 +1,10 @@
-"""
-Image-based object cluster extraction.
-
-This module provides functionality for extracting object clusters from color images using HSV color segmentation.
-The main class :class:`ImageClusterExtractor` implements color-based segmentation and contour detection to identify
-object clusters in RGB images.
-
-Key features:
-
-* HSV color space thresholding
-* Contour detection and filtering
-* 3D point cloud generation from depth data
-* ROI and mask generation
-* Query-based color parameter adjustment
-* Visualization of detected clusters
-"""
+"""Extract object clusters using hue, saturation, and value bounds and depth images."""
 
 from __future__ import annotations
 
 # %% Imports
 from dataclasses import dataclass, field
+from enum import StrEnum
 from timeit import default_timer
 
 import cv2
@@ -31,12 +17,27 @@ from robokudo.annotators.core import BaseAnnotator
 from robokudo.cas import CASViews
 from robokudo.exceptions import ImageContourMissing
 from robokudo.io.camera_model_adapters import Open3DCameraModelAdapter
+from robokudo.io.color_adapters import OpenCVHueSaturationValueAdapter
+from semantic_digital_twin.world_description.geometry import HueSaturationValue
 from robokudo.types.scene import ObjectHypothesis
 from robokudo.utils.cv_helper import get_scaled_color_image_for_depth_image
 from robokudo.utils.error_handling import catch_and_raise_to_blackboard
 
 if TYPE_CHECKING:
     import numpy.typing as npt
+
+
+# %% Color range bounds
+
+
+class ColorRangeBound(StrEnum):
+    """Identify the lower and upper channel bounds of a color range."""
+
+    LOWER = "minimum_hue_saturation_value"
+    """Inclusive lower channel bounds."""
+
+    UPPER = "maximum_hue_saturation_value"
+    """Inclusive upper channel bounds."""
 
 
 # %% Cluster extraction result
@@ -63,14 +64,14 @@ class ImageClusterExtractor(BaseAnnotator):
 
     This annotator performs the following steps:
 
-    * Converts RGB image to HSV color space
-    * Applies HSV thresholding based on configured parameters
+    * Converts RGB image to hue, saturation, and value color space
+    * Applies hue, saturation, and value thresholding based on configured parameters
     * Detects and filters contours based on size
     * Generates point clouds from depth data for each contour
     * Creates ObjectHypothesis annotations with ROIs and masks
     * Provides visualization of detected clusters
 
-    The HSV thresholds can be adjusted dynamically based on color queries.
+    The hue, saturation, and value thresholds can be adjusted dynamically based on color queries.
     """
 
     class ViewMode:
@@ -94,10 +95,10 @@ class ImageClusterExtractor(BaseAnnotator):
 
         Parameters:
 
-        * HSV thresholding ranges
+        * hue, saturation, and value thresholding ranges
         * Contour filtering parameters
         * Point cloud generation settings
-        * Color name to HSV range mappings
+        * Color name to hue, saturation, and value range mappings
         * Outlier removal parameters
         """
 
@@ -110,28 +111,39 @@ class ImageClusterExtractor(BaseAnnotator):
                 """
                 Initialize default parameter values.
                 """
-                self.hsv_min: tuple[int, int, int] = (150, 130, 85)
-                self.hsv_max: tuple[int, int, int] = (200, 255, 255)
+                self.minimum_hue_saturation_value: HueSaturationValue = (
+                    OpenCVHueSaturationValueAdapter.from_channels(
+                        hue=150, saturation=130, value=85
+                    )
+                )
+                """Lower normalized hue, saturation, and value bound for color segmentation."""
+                self.maximum_hue_saturation_value: HueSaturationValue = (
+                    OpenCVHueSaturationValueAdapter.from_channels(
+                        hue=200, saturation=255, value=255
+                    )
+                )
+                """Upper normalized hue, saturation, and value bound for color segmentation."""
                 self.erosion_iterations: int = 2
 
                 # This parameter controls the filtering of the initial list of contours.
                 # It is used to avoid very small contours when calculating 3d points etc.
                 self.contour_min_size: int = 1000
 
-                self.color_name_to_hsv_range: dict[
-                    str, dict[str, tuple[int, int, int]]
+                self.color_ranges: dict[
+                    str, dict[ColorRangeBound, HueSaturationValue]
                 ] = dict()
-                self.color_name_to_hsv_range["blue"] = {
-                    "hsv_min": (150, 130, 85),
-                    "hsv_max": (200, 255, 255),
+                self.color_ranges["blue"] = {
+                    ColorRangeBound.LOWER: self.minimum_hue_saturation_value,
+                    ColorRangeBound.UPPER: self.maximum_hue_saturation_value,
                 }
-                # Red sits at the hue wheel's 0/255 seam, so its hue wraps around rather
-                # than falling in one contiguous range: hsv_min's hue exceeding hsv_max's
-                # signals that to _threshold_hsv, which then matches [0, hsv_max hue] OR
-                # [hsv_min hue, 255] instead of a single contiguous range.
-                self.color_name_to_hsv_range["red"] = {
-                    "hsv_min": (245, 150, 95),
-                    "hsv_max": (15, 255, 255),
+                # A lower hue above the upper hue selects both sides of the hue seam.
+                self.color_ranges["red"] = {
+                    ColorRangeBound.LOWER: OpenCVHueSaturationValueAdapter.from_channels(
+                        hue=245, saturation=150, value=95
+                    ),
+                    ColorRangeBound.UPPER: OpenCVHueSaturationValueAdapter.from_channels(
+                        hue=15, saturation=255, value=255
+                    ),
                 }
 
                 self.outlier_removal: bool = True
@@ -160,13 +172,8 @@ class ImageClusterExtractor(BaseAnnotator):
 
         self.display_mode = self.ViewMode.masked_object
 
-    def adjust_hsv_threshold_to_query(self) -> None:
-        """
-        Adjust HSV thresholds based on color query.
-
-        Checks for a color query in the CAS and updates the HSV thresholding parameters
-        if a matching color is found in the color_name_to_hsv_range mapping.
-        """
+    def adjust_color_bounds_to_query(self) -> None:
+        """Select color bounds matching the first color in the current query."""
         if CASViews.QUERY not in self.get_cas().views:
             return
         self.query = self.get_cas().get(CASViews.QUERY)
@@ -178,47 +185,53 @@ class ImageClusterExtractor(BaseAnnotator):
             return
 
         color = self.query.obj.color[0]
-        if color not in self.descriptor.parameters.color_name_to_hsv_range:
+        if color not in self.descriptor.parameters.color_ranges:
             return
 
-        self.descriptor.parameters.hsv_min = (
-            self.descriptor.parameters.color_name_to_hsv_range[color]["hsv_min"]
+        self.descriptor.parameters.minimum_hue_saturation_value = (
+            self.descriptor.parameters.color_ranges[color][ColorRangeBound.LOWER]
         )
-        self.descriptor.parameters.hsv_max = (
-            self.descriptor.parameters.color_name_to_hsv_range[color]["hsv_max"]
+        self.descriptor.parameters.maximum_hue_saturation_value = (
+            self.descriptor.parameters.color_ranges[color][ColorRangeBound.UPPER]
         )
 
-    def _threshold_hsv(
+    def _threshold_color_image(
         self,
-        hsv_min: tuple[int, int, int],
-        hsv_max: tuple[int, int, int],
+        minimum_hue_saturation_value: HueSaturationValue,
+        maximum_hue_saturation_value: HueSaturationValue,
     ) -> npt.NDArray:
+        """Select pixels within normalized hue, saturation, and value bounds, including hue wraparound.
+
+        :param minimum_hue_saturation_value: Lower channel bounds.
+        :param maximum_hue_saturation_value: Upper channel bounds; a lower hue selects a wrapped range.
+        :return: Binary mask with inclusive channel bounds.
         """
-        Threshold ``self.hsv`` to the given bounds, wrapping the hue channel around the
-        0/255 seam when ``hsv_min``'s hue exceeds ``hsv_max``'s.
+        minimum_channels = OpenCVHueSaturationValueAdapter.to_channels(
+            minimum_hue_saturation_value
+        )
+        maximum_channels = OpenCVHueSaturationValueAdapter.to_channels(
+            maximum_hue_saturation_value
+        )
+        if minimum_hue_saturation_value.hue <= maximum_hue_saturation_value.hue:
+            return cv2.inRange(
+                self.hue_saturation_value_image, minimum_channels, maximum_channels
+            )
 
-        True red sits exactly at that seam, so a single contiguous hue range only ever
-        catches one side of it (confirmed live: a plain ``[215,255]`` range matched 124
-        of 101760 pixels on a red object; wrapping recovered 1748 by also matching the
-        pixels that wrapped to just above 0).
-
-        :param hsv_min: Lower HSV bound.
-        :param hsv_max: Upper HSV bound. A hue lower than ``hsv_min``'s signals
-            wraparound.
-        :return: Binary mask of pixels within the (possibly wrapped) bounds.
-        """
-        if hsv_min[0] <= hsv_max[0]:
-            return cv2.inRange(self.hsv, hsv_min, hsv_max)
-
+        _, minimum_saturation, minimum_value = minimum_channels
+        _, maximum_saturation, maximum_value = maximum_channels
         low = cv2.inRange(
-            self.hsv,
-            (0, hsv_min[1], hsv_min[2]),
-            (hsv_max[0], hsv_max[1], hsv_max[2]),
+            self.hue_saturation_value_image,
+            (0, minimum_saturation, minimum_value),
+            maximum_channels,
         )
         high = cv2.inRange(
-            self.hsv,
-            (hsv_min[0], hsv_min[1], hsv_min[2]),
-            (255, hsv_max[1], hsv_max[2]),
+            self.hue_saturation_value_image,
+            minimum_channels,
+            (
+                OpenCVHueSaturationValueAdapter.maximum_channel_value,
+                maximum_saturation,
+                maximum_value,
+            ),
         )
         return cv2.bitwise_or(low, high)
 
@@ -230,16 +243,18 @@ class ImageClusterExtractor(BaseAnnotator):
         """
         start_timer = default_timer()
         resized_color = self._prepare_images()
-        self.hsv = cv2.cvtColor(resized_color, cv2.COLOR_BGR2HSV_FULL)
-        self.adjust_hsv_threshold_to_query()
-        hsv_mask = self._threshold_hsv(
-            self.descriptor.parameters.hsv_min,
-            self.descriptor.parameters.hsv_max,
+        self.hue_saturation_value_image = cv2.cvtColor(
+            resized_color, cv2.COLOR_BGR2HSV_FULL
         )
-        contours = self._select_contours(hsv_mask)
+        self.adjust_color_bounds_to_query()
+        color_mask = self._threshold_color_image(
+            self.descriptor.parameters.minimum_hue_saturation_value,
+            self.descriptor.parameters.maximum_hue_saturation_value,
+        )
+        contours = self._select_contours(color_mask)
         clusters = self._extract_clusters(resized_color, contours)
         visualization_image = cv2.bitwise_and(
-            resized_color, resized_color, mask=hsv_mask
+            resized_color, resized_color, mask=color_mask
         )
         if (
             self.display_mode == self.ViewMode.depth_mask
@@ -277,13 +292,13 @@ class ImageClusterExtractor(BaseAnnotator):
 
         return resized_color
 
-    def _select_contours(self, hsv_mask: npt.NDArray) -> list[npt.NDArray]:
+    def _select_contours(self, color_mask: npt.NDArray) -> list[npt.NDArray]:
         """Select the largest outer contours that exceed the configured minimum area.
 
         :raises ImageContourMissing: If the mask contains no contours.
         """
         contours, hierarchy = cv2.findContours(
-            image=hsv_mask, mode=cv2.RETR_TREE, method=cv2.CHAIN_APPROX_SIMPLE
+            image=color_mask, mode=cv2.RETR_TREE, method=cv2.CHAIN_APPROX_SIMPLE
         )
 
         if len(contours) == 0:
