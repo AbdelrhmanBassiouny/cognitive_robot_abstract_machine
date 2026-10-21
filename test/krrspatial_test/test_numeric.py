@@ -20,7 +20,7 @@ from .dataset.frames import NamedFrame
 
 
 @pytest.mark.parametrize("interface", [Point2, Vector2])
-def test_the_planar_interfaces_cannot_be_instantiated(interface: type):
+def test_the_point_and_vector_interfaces_cannot_be_instantiated(interface: type):
     with pytest.raises(InterfaceInstantiationError):
         interface()
 
@@ -34,14 +34,14 @@ def test_the_planar_interfaces_cannot_be_instantiated(interface: type):
         (IntegerVector2(1, 2), Vector2),
     ],
 )
-def test_numeric_planar_types_implement_their_interface(
+def test_numeric_types_implement_their_interface(
     spatial_object: object, interface: type
 ):
     assert isinstance(spatial_object, interface)
 
 
 @pytest.mark.parametrize(
-    "planar_type, coordinate_type",
+    "spatial_type, coordinate_type",
     [
         (FloatPoint2, float),
         (IntegerPoint2, int),
@@ -50,9 +50,9 @@ def test_numeric_planar_types_implement_their_interface(
     ],
 )
 def test_binding_the_coordinate_type_narrows_both_coordinates(
-    planar_type: type, coordinate_type: type
+    spatial_type: type, coordinate_type: type
 ):
-    x_field, y_field, _ = fields(planar_type)
+    x_field, y_field, _ = fields(spatial_type)
     assert (x_field.type, y_field.type) == (coordinate_type, coordinate_type)
 
 

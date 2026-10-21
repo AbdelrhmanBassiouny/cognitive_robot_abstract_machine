@@ -31,7 +31,7 @@ class SpatialType(Generic[CoordinateT], SubClassSafeGeneric, Interface):
 # %% positions and directions in a plane
 
 
-class Planar(SpatialType[CoordinateT], Interface):
+class Coordinates2(SpatialType[CoordinateT], Interface):
     """
     A spatial object with coordinates along two axes.
     """
@@ -47,13 +47,13 @@ class Planar(SpatialType[CoordinateT], Interface):
     """
 
 
-class Point2(Planar[CoordinateT], Interface):
+class Point2(Coordinates2[CoordinateT], Interface):
     """
     A position in a plane.
     """
 
 
-class Vector2(Planar[CoordinateT], Interface):
+class Vector2(Coordinates2[CoordinateT], Interface):
     """
     A direction and length in a plane.
     """

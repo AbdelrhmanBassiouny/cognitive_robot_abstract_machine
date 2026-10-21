@@ -15,7 +15,7 @@ from krrspatial.exceptions import DifferentReferenceFrames
 from krrspatial.reference_frame import ReferenceFrame
 from krrspatial.spatial_types import (
     CoordinateT,
-    Planar,
+    Coordinates2,
     Point2,
     SpatialType,
     Vector2,
@@ -25,7 +25,7 @@ from krrspatial.spatial_types import (
 
 
 @dataclass
-class NumericPlanar(Planar[CoordinateT]):
+class NumericCoordinates2(Coordinates2[CoordinateT]):
     """
     A spatial object in a plane that stores its two coordinates as numbers.
     """
@@ -58,7 +58,7 @@ class NumericPlanar(Planar[CoordinateT]):
 
 
 @dataclass
-class NumericVector2(NumericPlanar[CoordinateT], Vector2[CoordinateT]):
+class NumericVector2(NumericCoordinates2[CoordinateT], Vector2[CoordinateT]):
     """
     A direction and length in a plane, as numbers.
     """
@@ -113,7 +113,7 @@ VectorT = TypeVar("VectorT", bound=NumericVector2)
 
 @dataclass
 class NumericPoint2(
-    NumericPlanar[CoordinateT],
+    NumericCoordinates2[CoordinateT],
     Point2[CoordinateT],
     Generic[CoordinateT, VectorT],
     SubClassSafeGeneric,
