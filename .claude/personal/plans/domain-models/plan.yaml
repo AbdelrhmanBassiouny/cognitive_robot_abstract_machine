@@ -46,9 +46,9 @@ items:
   depends_on:
   - shared-bounds
   session: https://claude.ai/code/session_01J17aVY3vyQM8goACbkHkcp
-  notes: 'Draft #526 on #512: ReferenceFrame, Point2/Vector2 interfaces generic over the coordinate type,
-    numeric Float/Integer points and vectors (norm float-only, IntegerPoint2.nearest). 2D only; 3D, transforms
-    and the casadi extra come with symbolic-spatial-types.'
+  notes: '#526 on #512 is ready for review on the fork: ReferenceFrame, Point2/Vector2 interfaces generic
+    over the coordinate type, numeric Float/Integer points and vectors (norm float-only, IntegerPoint2.nearest).
+    2D only; 3D, transforms and the casadi extra come with symbolic-spatial-types.'
   pull_request_number: 526
 - id: krrimage
   title: domain_models/krrimage (images, colours, pixels) with Color moved out of SemDT
