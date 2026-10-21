@@ -12,10 +12,8 @@ from krrood.entity_query_language.verbalization.fragments.base import (
 from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
     FunctionVerbalizationTemplates,
 )
-from semantic_digital_twin.grasping.grasp_candidates import (
-    GraspCandidate,
-    HasGraspCandidates,
-)
+from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
+from semantic_digital_twin.semantic_annotations.mixins import HasGraspCandidates
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 
 # %% how close a grasp is to where the robot stands

@@ -6,10 +6,7 @@ import pytest
 from rustworkx.rustworkx import NoEdgeBetweenNodes
 from typing_extensions import Generator, Iterable
 
-from coraplex.datastructures.enums import (
-    AxisIdentifier,
-    DetectionTechnique,
-)
+from coraplex.datastructures.enums import DetectionTechnique
 from coraplex.datastructures.trajectory import PoseTrajectory
 from coraplex.exceptions import NoFloorBelowRobot
 from coraplex.plans.plan_transformation import PlanRewriting
@@ -483,16 +480,13 @@ def test_follow_tcp_path_multi(multiple_robot_apartment_context):
         world.notify_state_change()
     # robot.full_body_controlled = True
     left_arm = left_or_only_arm(robot)
-    front_axis = tuple(int(v) for v in left_arm.end_effector.approach_axis.to_np()[:3])
-    grasp_axis = AxisIdentifier.from_tuple(front_axis)
+    approach_axis = left_arm.end_effector.approach_axis.to_np()
 
     pose_T = world.get_body_by_name("milk.stl").global_transform
     pose = pose_T.pose
-    if grasp_axis == AxisIdentifier.X:
-        target_pose = pose
-    elif grasp_axis == AxisIdentifier.Z:
+    if np.allclose(approach_axis, Vector3.Z().to_np()):
         offset_T = HomogeneousTransformationMatrix.from_xyz_axis_angle(
-            axis=AxisIdentifier.Y.value,
+            axis=Vector3.Y(),
             angle=np.pi / 2,
             reference_frame=world.root,
         )
@@ -787,7 +781,9 @@ def test_move_to_reach(multiple_robot_apartment_context, rclpy_node):
     # a Stretch keeps its heading while it reaches, so it stands behind the grasp,
     # where its arm already points along the approach
     stand_offset = (
-        Pose2D(-0.55, 0.0) if isinstance(robot, Stretch) else Pose2D(0.2, -0.55)
+        Pose2D.from_xy_yaw(-0.55, 0.0)
+        if isinstance(robot, Stretch)
+        else Pose2D.from_xy_yaw(0.2, -0.55)
     )
     move_to_reach = MoveToReach(
         target_pose_offset_robot=stand_offset,

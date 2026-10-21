@@ -600,7 +600,7 @@ def test_stretch_holds_the_orientation_of_its_base_only_once_it_drove_there(
 
     action = prepared(
         MoveToReach(
-            target_pose_offset_robot=Pose2D(0.2, -0.55),
+            target_pose_offset_robot=Pose2D.from_xy_yaw(0.2, -0.55),
             reference_T_grasp=Pose.from_xyz_rpy(
                 x=0.7, y=-1.3, z=0.9, reference_frame=world.root
             ),

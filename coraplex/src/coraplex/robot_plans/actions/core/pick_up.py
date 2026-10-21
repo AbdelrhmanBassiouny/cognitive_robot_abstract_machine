@@ -22,10 +22,8 @@ from semantic_digital_twin.collision_checking.collision_rules import (
 )
 from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from semantic_digital_twin.datastructures.definitions import GripperState
-from semantic_digital_twin.grasping.grasp_candidates import (
-    GraspCandidate,
-    HasGraspCandidates,
-)
+from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
+from semantic_digital_twin.semantic_annotations.mixins import HasGraspCandidates
 from semantic_digital_twin.robots.robot_parts import Arm
 from semantic_digital_twin.spatial_types import RotationMatrix
 from semantic_digital_twin.spatial_types.spatial_types import Pose
@@ -47,7 +45,7 @@ class HasGraspChoice:
     The grasp to take hold by.
 
     One of the object's own
-    :meth:`~semantic_digital_twin.grasping.grasp_candidates.HasGraspCandidates.grasp_candidates`.
+    :meth:`~semantic_digital_twin.semantic_annotations.mixins.HasGraspCandidates.grasp_candidates`.
     """
 
     arm: Arm

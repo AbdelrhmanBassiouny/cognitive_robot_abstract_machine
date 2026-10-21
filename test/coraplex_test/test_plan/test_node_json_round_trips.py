@@ -295,7 +295,7 @@ def _robot_body_cases() -> list[ActionRoundTripCase]:
             MoveToReach,
             lambda world: [
                 MoveToReach(
-                    target_pose_offset_robot=Pose2D(0.2, -0.55),
+                    target_pose_offset_robot=Pose2D.from_xy_yaw(0.2, -0.55),
                     reference_T_grasp=_pose(world),
                     hip_rotation=0.0,
                     end_effector=_arm(world).end_effector,
