@@ -39,7 +39,7 @@ items:
   notes: Ready for review on the fork. Base of krrspatial and
 - id: krrspatial-numeric
   title: domain_models/krrspatial with a ReferenceFrame interface, generic abstract spatial types and
-    their numpy implementations
+    their numeric implementations
   branch: claude/krrspatial
   track: spatial
   status: in_progress
