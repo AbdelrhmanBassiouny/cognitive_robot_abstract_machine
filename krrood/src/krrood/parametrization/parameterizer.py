@@ -23,6 +23,7 @@ from typing_extensions import (
 )
 from krrood.parametrization.exceptions import (
     AmbiguousVariableName,
+    AssignedValueHasNoRandomEventRepresentation,
     DomainElementsIndistinguishableInSamples,
     EmptyVariableDomain,
     InvalidEllipsis,
@@ -223,6 +224,14 @@ class UnderspecifiedParameters(ModelQueryParameters):
     A cache for events that are created from symbolic expressions.
     """
 
+    _domain_objects_cache: dict[SymbolicExpression, list[Any]] = field(
+        init=False, default_factory=dict
+    )
+    """
+    The values each assigned expression evaluated to, so an expression creating its
+    values anew on every evaluation offers the same objects wherever its domain is read.
+    """
+
     search_cause_variables: list[random_events.variable.Variable] = field(
         init=False, default_factory=list
     )
@@ -359,6 +368,8 @@ class UnderspecifiedParameters(ModelQueryParameters):
 
         :param attribute_match: The attribute match to extract variables from.
         :return: A dictionary of extracted variables.
+        :raises AssignedValueHasNoRandomEventRepresentation: If the attribute is
+            assigned an expression none of the handlers covers.
         """
         krrood_variable = attribute_match.assigned_variable
 
@@ -371,10 +382,10 @@ class UnderspecifiedParameters(ModelQueryParameters):
         if isinstance(krrood_variable, Literal):
             return self._handle_literal_attribute_match(attribute_match)
 
-        if isinstance(krrood_variable, Variable):
+        if isinstance(krrood_variable, (Variable, MappedVariable)):
             return self._handle_variable_attribute_match(attribute_match)
 
-        return {}
+        raise AssignedValueHasNoRandomEventRepresentation(attribute_match)
 
     def _handle_cause_attribute_match(
         self, attribute_match: AttributeMatch
@@ -612,10 +623,11 @@ class UnderspecifiedParameters(ModelQueryParameters):
         self, attribute_match: AttributeMatch
     ) -> dict[str, random_events.variable.Variable]:
         """
-        Handle attribute matches where the assigned value is a KRROOD variable.
+        Handle attribute matches where the assigned value is a KRROOD variable or an
+        expression derived from one.
 
-        :param attribute_match: The attribute match with a KRROOD variable assigned
-            value.
+        :param attribute_match: The attribute match with a KRROOD variable, or an
+            expression derived from one, assigned as its value.
         :return: A dictionary of extracted variables.
         """
         type_ = self._process_attribute_match_type(
@@ -626,7 +638,7 @@ class UnderspecifiedParameters(ModelQueryParameters):
                 attribute_match.assigned_value
             ][1]
 
-        domain_objects = attribute_match.assigned_value.tolist()
+        domain_objects = self._domain_objects_of(attribute_match.assigned_value)
 
         if not domain_objects:
             raise EmptyVariableDomain(attribute_match._variable_)
@@ -787,9 +799,20 @@ class UnderspecifiedParameters(ModelQueryParameters):
             )
         return columns
 
-    @staticmethod
+    def _domain_objects_of(self, assigned_value: SymbolicExpression) -> list[Any]:
+        """
+        :param assigned_value: An expression assigned to an attribute of the match.
+        :return: The values `assigned_value` evaluates to, the same objects on every
+            call.
+        """
+        if assigned_value not in self._domain_objects_cache:
+            self._domain_objects_cache[assigned_value] = assigned_value.tolist()
+        return self._domain_objects_cache[assigned_value]
+
     def _values_by_sample_value(
-        variable_: random_events.variable.Variable, attribute_match: AttributeMatch
+        self,
+        variable_: random_events.variable.Variable,
+        attribute_match: AttributeMatch,
     ) -> Optional[Dict[float, Hashable]]:
         """
         :param variable_: A variable of a model.
@@ -806,7 +829,7 @@ class UnderspecifiedParameters(ModelQueryParameters):
         ):
             domain_values_by_hash = {
                 hash(domain_value): domain_value
-                for domain_value in assigned_value.tolist()
+                for domain_value in self._domain_objects_of(assigned_value)
             }
             return UnderspecifiedParameters._by_sample_value(
                 variable_,

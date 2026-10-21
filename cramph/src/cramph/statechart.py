@@ -1707,7 +1707,7 @@ class Statechart(SubclassJSONSerializer):
 
         :param node: The composite node that just joined this statechart.
         :raises NodesMissingContextExtensionsError: If :attr:`context` lacks an
-            extension `node` requires, to expand or afterwards.
+            extension `node` requires to expand.
         """
         for prerequisite in node.prerequisite_nodes:
             if isinstance(prerequisite, CompositeNode) and (
@@ -1716,8 +1716,7 @@ class Statechart(SubclassJSONSerializer):
                 raise PrerequisiteNotExpandedError(node=node, prerequisite=prerequisite)
         self._check_context_holds(
             [node],
-            lambda expanding_node: expanding_node.required_context_extensions
-            + expanding_node.context_extensions_required_to_expand,
+            lambda expanding_node: expanding_node.context_extensions_required_to_expand,
         )
         node.expand()
 
