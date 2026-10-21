@@ -6,6 +6,7 @@ PACKAGES = [
     "cramera",
     "experiments",
     "giskardpy",
+    "krrimage",
     "krrood",
     "physics_simulators",
     "probabilistic_model",

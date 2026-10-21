@@ -39,6 +39,7 @@ dependencies = [
     "embreex",  # Hardware acceleration for trimesh raycasting
     "rtree",  # For spatial indexing in trimesh
     "random_events",
+    "krrimage",
     "plotly",
     "daqp",
     "pathlib",
