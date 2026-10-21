@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 # %% Imports
+
 import copy
 
 import numpy as np
@@ -29,6 +30,7 @@ from robokudo.utils.annotator_helper import (
     resize_mask,
     generate_source_name,
 )
+from semantic_digital_twin.spatial_types import Point2
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
@@ -46,8 +48,7 @@ def _camera_observation(
         image_resolution=CameraResolution(width=1024, height=1280),
         focal_length_x=1050.0,
         focal_length_y=1050.0,
-        principal_point_x=639.5,
-        principal_point_y=479.5,
+        principal_point=Point2(x=639.5, y=479.5),
     )
     camera_body = Body(name=PrefixedName(name="camera"))
     world_frame = Body(name=PrefixedName(name="world"))

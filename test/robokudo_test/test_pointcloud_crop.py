@@ -10,6 +10,7 @@ anything even when the camera-to-world transform was available.
 """
 
 # %% Imports
+
 import numpy as np
 import open3d
 import pytest
@@ -26,6 +27,7 @@ from robokudo.annotators.pointcloud_crop import PointcloudCropAnnotator
 from robokudo.cas import CAS, CASViews
 from robokudo.pipeline import Pipeline
 from robokudo.types.camera import CameraObservation
+from semantic_digital_twin.spatial_types import Point2
 from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -45,8 +47,7 @@ def camera_model() -> PinholeCameraModel:
         image_resolution=CameraResolution(width=200, height=200),
         focal_length_x=100.0,
         focal_length_y=100.0,
-        principal_point_x=100.0,
-        principal_point_y=100.0,
+        principal_point=Point2(x=100.0, y=100.0),
     )
 
 

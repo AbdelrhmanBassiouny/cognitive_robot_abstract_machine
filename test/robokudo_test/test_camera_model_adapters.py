@@ -1,4 +1,5 @@
 # %% Imports
+
 import pytest
 
 import numpy as np
@@ -14,6 +15,7 @@ from robokudo.io.camera_model_adapters import (
     Open3DCameraModelAdapter,
     RosCameraModelAdapter,
 )
+from semantic_digital_twin.spatial_types import Point2
 from semantic_digital_twin.datastructures.camera_model import (
     CameraDistortionModel,
     NoCameraDistortion,
@@ -59,8 +61,7 @@ def test_ros_camera_model_adapter_writes_camera_info():
         image_resolution=CameraResolution(width=640, height=480),
         focal_length_x=500.0,
         focal_length_y=510.0,
-        principal_point_x=321.0,
-        principal_point_y=239.0,
+        principal_point=Point2(x=321.0, y=239.0),
         distortion=PlumbBobCameraDistortion(radial_coefficient_1=0.1),
     )
 
@@ -84,8 +85,7 @@ def test_open3d_camera_model_adapter_creates_intrinsic():
         image_resolution=CameraResolution(width=640, height=480),
         focal_length_x=500.0,
         focal_length_y=510.0,
-        principal_point_x=321.0,
-        principal_point_y=239.0,
+        principal_point=Point2(x=321.0, y=239.0),
     )
 
     camera_intrinsic = Open3DCameraModelAdapter.to_intrinsic(model)

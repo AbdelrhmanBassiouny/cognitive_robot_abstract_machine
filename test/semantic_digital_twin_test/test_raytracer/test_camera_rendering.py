@@ -5,6 +5,7 @@ Aligned camera rendering from shared ray intersections.
 from __future__ import annotations
 
 # %% Imports
+
 import io
 from dataclasses import dataclass, replace
 from unittest.mock import Mock
@@ -12,6 +13,7 @@ import numpy as np
 import pytest
 from PIL import Image, UnidentifiedImageError
 from pyglet.canvas.xlib import NoSuchDisplayException
+from semantic_digital_twin.spatial_types import Point2
 from semantic_digital_twin.datastructures.camera_model import (
     CameraRange,
     PlumbBobCameraDistortion,
@@ -517,7 +519,10 @@ def test_textured_render_rejects_incompatible_projection(
         focal_length_y=(
             original.focal_length_x if off_center else original.focal_length_x * 2
         ),
-        principal_point_x=original.principal_point_x + (0.25 if off_center else 0.0),
+        principal_point=Point2(
+            x=float(original.principal_point.x) + (0.25 if off_center else 0.0),
+            y=original.principal_point.y,
+        ),
     )
     with pytest.raises(UnsupportedCameraProjection):
         fixture.ray_tracer.render(fixture.camera, rgb_mode=ColorRenderingMode.TEXTURED)

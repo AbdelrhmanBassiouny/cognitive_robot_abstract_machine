@@ -5,6 +5,7 @@ Conversions between semantic camera models and library boundary types.
 from __future__ import annotations
 
 # %% Imports
+
 from dataclasses import dataclass
 
 import open3d
@@ -14,6 +15,7 @@ from robokudo.io.exceptions import (
     CameraDistortionModelMissing,
     UnsupportedCameraDistortionModel,
 )
+from semantic_digital_twin.spatial_types import Point2
 from semantic_digital_twin.datastructures.camera_model import (
     CameraDistortion,
     CameraDistortionModel,
@@ -68,8 +70,7 @@ class RosCameraModelAdapter:
             ),
             focal_length_x=camera_info.k[0],
             focal_length_y=camera_info.k[4],
-            principal_point_x=camera_info.k[2],
-            principal_point_y=camera_info.k[5],
+            principal_point=Point2(x=camera_info.k[2], y=camera_info.k[5]),
             distortion=distortion,
         )
 
@@ -100,11 +101,11 @@ class RosCameraModelAdapter:
         camera_info.p = [
             camera_model.focal_length_x,
             0.0,
-            camera_model.principal_point_x,
+            float(camera_model.principal_point.x),
             0.0,
             0.0,
             camera_model.focal_length_y,
-            camera_model.principal_point_y,
+            float(camera_model.principal_point.y),
             0.0,
             0.0,
             0.0,
@@ -138,6 +139,6 @@ class Open3DCameraModelAdapter:
             camera_model.resolution.height,
             camera_model.focal_length_x,
             camera_model.focal_length_y,
-            camera_model.principal_point_x,
-            camera_model.principal_point_y,
+            float(camera_model.principal_point.x),
+            float(camera_model.principal_point.y),
         )

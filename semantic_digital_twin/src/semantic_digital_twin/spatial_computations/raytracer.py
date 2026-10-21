@@ -353,9 +353,9 @@ class RayTracer:
         ).reshape(-1, 2)
         optical_V_rays = np.column_stack(
             (
-                (pixels[:, 0] + 0.5 - camera_model.principal_point_x)
+                (pixels[:, 0] + 0.5 - float(camera_model.principal_point.x))
                 / camera_model.focal_length_x,
-                (pixels[:, 1] + 0.5 - camera_model.principal_point_y)
+                (pixels[:, 1] + 0.5 - float(camera_model.principal_point.y))
                 / camera_model.focal_length_y,
                 np.ones(len(pixels)),
             )
@@ -461,8 +461,10 @@ class RayTracer:
             )
         resolution = camera_model.resolution
         if rgb_mode == ColorRenderingMode.TEXTURED and not (
-            math.isclose(camera_model.principal_point_x, resolution.width / 2)
-            and math.isclose(camera_model.principal_point_y, resolution.height / 2)
+            math.isclose(float(camera_model.principal_point.x), resolution.width / 2)
+            and math.isclose(
+                float(camera_model.principal_point.y), resolution.height / 2
+            )
             and math.isclose(camera_model.focal_length_x, camera_model.focal_length_y)
         ):
             raise UnsupportedCameraProjection(

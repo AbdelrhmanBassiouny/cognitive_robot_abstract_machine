@@ -1,4 +1,5 @@
 # %% Imports
+
 import numpy as np
 import open3d
 import pytest
@@ -20,6 +21,7 @@ from robokudo.utils.o3d_helper import (
     create_line_for_visualization,
     create_sphere_from_translation,
 )
+from semantic_digital_twin.spatial_types import Point2
 from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
 
@@ -37,8 +39,7 @@ class TestUtilsO3DHelper(object):
             ),
             focal_length_x=intrinsic_matrix[0, 0],
             focal_length_y=intrinsic_matrix[1, 1],
-            principal_point_x=intrinsic_matrix[0, 2],
-            principal_point_y=intrinsic_matrix[1, 2],
+            principal_point=Point2(x=intrinsic_matrix[0, 2], y=intrinsic_matrix[1, 2]),
         )
         cas.set(CASViews.COLOR_TO_DEPTH_RATIO, ColorToDepthRatio())
         return cas
@@ -813,8 +814,7 @@ def test_masked_cloud_projects_depth_with_semantic_camera_model() -> None:
         image_resolution=CameraResolution(width=3, height=2),
         focal_length_x=2.0,
         focal_length_y=4.0,
-        principal_point_x=0.5,
-        principal_point_y=0.25,
+        principal_point=Point2(x=0.5, y=0.25),
     )
     depth_image = np.zeros((2, 3), dtype=np.uint16)
     depth_image[1, 2] = 1000
@@ -832,8 +832,10 @@ def test_masked_cloud_projects_depth_with_semantic_camera_model() -> None:
         np.asarray(cloud.points),
         [
             [
-                (2 - camera_model.principal_point_x) / camera_model.focal_length_x,
-                (1 - camera_model.principal_point_y) / camera_model.focal_length_y,
+                (2 - float(camera_model.principal_point.x))
+                / camera_model.focal_length_x,
+                (1 - float(camera_model.principal_point.y))
+                / camera_model.focal_length_y,
                 1.0,
             ]
         ],

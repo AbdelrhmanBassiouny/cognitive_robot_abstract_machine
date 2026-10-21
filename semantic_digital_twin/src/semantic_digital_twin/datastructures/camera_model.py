@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+# %% Imports
 import math
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
@@ -7,7 +8,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 import numpy as np
-
+from semantic_digital_twin.spatial_types import Point2
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.exceptions import (
@@ -94,7 +95,7 @@ class FieldOfViewCameraModel(CameraModel):
         return self.image_resolution
 
 
-@dataclass
+@dataclass(eq=False)
 class PinholeCameraModel(CameraModel):
     """
     Describe a calibrated pinhole projection for one image stream.
@@ -115,14 +116,9 @@ class PinholeCameraModel(CameraModel):
     Vertical focal length in pixels.
     """
 
-    principal_point_x: float = field(kw_only=True)
+    principal_point: Point2 = field(kw_only=True)
     """
-    Horizontal principal point in pixels from the image's left edge.
-    """
-
-    principal_point_y: float = field(kw_only=True)
-    """
-    Vertical principal point in pixels from the image's top edge.
+    Image position in pixels from the top-left corner, including fractional pixels.
     """
 
     distortion: CameraDistortion = field(default_factory=lambda: NoCameraDistortion())
@@ -141,14 +137,31 @@ class PinholeCameraModel(CameraModel):
             raise InvalidPinholeCameraModelError(
                 reason="focal lengths must be finite and positive"
             )
-        if not 0.0 <= self.principal_point_x <= self.image_resolution.width:
+        if not 0.0 <= float(self.principal_point.x) <= self.image_resolution.width:
             raise InvalidPinholeCameraModelError(
                 reason="the horizontal principal point must lie within the image"
             )
-        if not 0.0 <= self.principal_point_y <= self.image_resolution.height:
+        if not 0.0 <= float(self.principal_point.y) <= self.image_resolution.height:
             raise InvalidPinholeCameraModelError(
                 reason="the vertical principal point must lie within the image"
             )
+
+    def __eq__(self, other: object) -> bool:
+        """
+        Compare calibration values, including numeric principal-point coordinates.
+        """
+        if not isinstance(other, PinholeCameraModel):
+            return NotImplemented
+        return (
+            self.image_resolution == other.image_resolution
+            and self.focal_length_x == other.focal_length_x
+            and self.focal_length_y == other.focal_length_y
+            and float(self.principal_point.x) == float(other.principal_point.x)
+            and float(self.principal_point.y) == float(other.principal_point.y)
+            and self.principal_point.reference_frame
+            is other.principal_point.reference_frame
+            and self.distortion == other.distortion
+        )
 
     @classmethod
     def from_field_of_view(
@@ -176,8 +189,7 @@ class PinholeCameraModel(CameraModel):
             image_resolution=resolution,
             focal_length_x=focal_length_x,
             focal_length_y=focal_length_y,
-            principal_point_x=resolution.width / 2.0,
-            principal_point_y=resolution.height / 2.0,
+            principal_point=Point2(x=resolution.width / 2.0, y=resolution.height / 2.0),
             distortion=(distortion if distortion is not None else NoCameraDistortion()),
         )
 
@@ -191,14 +203,15 @@ class PinholeCameraModel(CameraModel):
         Calculate the angular extent represented by the calibration.
         """
         horizontal_angle = math.atan(
-            self.principal_point_x / self.focal_length_x
+            float(self.principal_point.x) / self.focal_length_x
         ) + math.atan(
-            (self.image_resolution.width - self.principal_point_x) / self.focal_length_x
+            (self.image_resolution.width - float(self.principal_point.x))
+            / self.focal_length_x
         )
         vertical_angle = math.atan(
-            self.principal_point_y / self.focal_length_y
+            float(self.principal_point.y) / self.focal_length_y
         ) + math.atan(
-            (self.image_resolution.height - self.principal_point_y)
+            (self.image_resolution.height - float(self.principal_point.y))
             / self.focal_length_y
         )
         return FieldOfView(
@@ -213,8 +226,8 @@ class PinholeCameraModel(CameraModel):
         """
         return np.array(
             [
-                [self.focal_length_x, 0.0, self.principal_point_x],
-                [0.0, self.focal_length_y, self.principal_point_y],
+                [self.focal_length_x, 0.0, float(self.principal_point.x)],
+                [0.0, self.focal_length_y, float(self.principal_point.y)],
                 [0.0, 0.0, 1.0],
             ]
         )
@@ -234,8 +247,10 @@ class PinholeCameraModel(CameraModel):
             ),
             focal_length_x=self.focal_length_x * scale_x,
             focal_length_y=self.focal_length_y * scale_y,
-            principal_point_x=self.principal_point_x * scale_x,
-            principal_point_y=self.principal_point_y * scale_y,
+            principal_point=Point2(
+                x=float(self.principal_point.x) * scale_x,
+                y=float(self.principal_point.y) * scale_y,
+            ),
             distortion=self.distortion,
         )
 

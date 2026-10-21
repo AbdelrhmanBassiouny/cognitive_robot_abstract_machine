@@ -1,7 +1,12 @@
 from __future__ import annotations
+
+# %% Imports
+from krrood.adapters.json_serializer import from_json, to_json
+
 import numpy as np
 import pytest
 
+from semantic_digital_twin.spatial_types import Point2
 from semantic_digital_twin.datastructures.camera_model import (
     CameraDistortion,
     CameraDistortionModel,
@@ -78,8 +83,7 @@ def test_pinhole_camera_model_rejects_nonpositive_focal_length() -> None:
             image_resolution=CameraResolution(width=640, height=480),
             focal_length_x=0.0,
             focal_length_y=400.0,
-            principal_point_x=320.0,
-            principal_point_y=240.0,
+            principal_point=Point2(x=320.0, y=240.0),
         )
 
 
@@ -88,16 +92,15 @@ def test_pinhole_camera_model_exposes_intrinsic_matrix() -> None:
         image_resolution=CameraResolution(width=640, height=480),
         focal_length_x=500.0,
         focal_length_y=510.0,
-        principal_point_x=321.0,
-        principal_point_y=239.0,
+        principal_point=Point2(x=321.0, y=239.0),
     )
 
     assert np.array_equal(
         model.intrinsic_matrix,
         np.array(
             [
-                [model.focal_length_x, 0.0, model.principal_point_x],
-                [0.0, model.focal_length_y, model.principal_point_y],
+                [model.focal_length_x, 0.0, float(model.principal_point.x)],
+                [0.0, model.focal_length_y, float(model.principal_point.y)],
                 [0.0, 0.0, 1.0],
             ]
         ),
@@ -110,8 +113,7 @@ def test_pinhole_camera_model_scales_projection_and_preserves_distortion() -> No
         image_resolution=CameraResolution(width=640, height=480),
         focal_length_x=500.0,
         focal_length_y=510.0,
-        principal_point_x=321.0,
-        principal_point_y=239.0,
+        principal_point=Point2(x=321.0, y=239.0),
         distortion=distortion,
     )
 
@@ -120,8 +122,10 @@ def test_pinhole_camera_model_scales_projection_and_preserves_distortion() -> No
     assert scaled_model.resolution == CameraResolution(width=320, height=120)
     assert scaled_model.focal_length_x == model.focal_length_x * 0.5
     assert scaled_model.focal_length_y == model.focal_length_y * 0.25
-    assert scaled_model.principal_point_x == model.principal_point_x * 0.5
-    assert scaled_model.principal_point_y == model.principal_point_y * 0.25
+    assert float(scaled_model.principal_point.x) == float(model.principal_point.x) * 0.5
+    assert (
+        float(scaled_model.principal_point.y) == float(model.principal_point.y) * 0.25
+    )
     assert scaled_model.distortion is distortion
 
 
@@ -214,8 +218,7 @@ def test_pinhole_rejects_nonfinite_focal_lengths(
             image_resolution=CameraResolution(width=8, height=6),
             focal_length_x=focal_length if horizontal else 10.0,
             focal_length_y=12.0 if horizontal else focal_length,
-            principal_point_x=2.0,
-            principal_point_y=1.0,
+            principal_point=Point2(x=2.0, y=1.0),
         )
 
 
@@ -242,3 +245,49 @@ def test_camera_range_allows_unbounded_maximum() -> None:
     The default range intentionally has no finite far bound.
     """
     assert CameraRange().maximum_distance == np.inf
+
+
+# %% Fractional image principal point
+
+
+def test_pinhole_retains_fractional_principal_point() -> None:
+    """
+    Keep a frame-free image point and expose numeric calibration entries.
+    """
+    principal_point = Point2(x=319.5, y=239.25)
+    model = PinholeCameraModel(
+        image_resolution=CameraResolution(width=640, height=480),
+        focal_length_x=500.0,
+        focal_length_y=510.0,
+        principal_point=principal_point,
+    )
+
+    assert model.principal_point is principal_point
+    assert model.principal_point.reference_frame is None
+    assert model.intrinsic_matrix.dtype == np.dtype(float)
+    np.testing.assert_array_equal(
+        model.intrinsic_matrix[:2, 2],
+        [float(principal_point.x), float(principal_point.y)],
+    )
+
+
+# %% Calibration serialization
+
+
+def test_pinhole_deserializes_recorded_principal_point() -> None:
+    """
+    Preserve a structured image point through JSON serialization.
+    """
+    model = PinholeCameraModel(
+        image_resolution=CameraResolution(width=640, height=480),
+        focal_length_x=500.0,
+        focal_length_y=510.0,
+        principal_point=Point2(x=319.5, y=239.25),
+    )
+    payload = to_json(model)
+    restored = from_json(payload)
+
+    assert restored == model
+    assert isinstance(restored.principal_point, Point2)
+    assert restored.principal_point.reference_frame is None
+    assert to_json(restored) == to_json(model)

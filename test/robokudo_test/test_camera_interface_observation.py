@@ -204,8 +204,8 @@ def test_camera_info_conversion_preserves_effective_calibration(
     assert camera_model.resolution == CameraResolution(width=640, height=480)
     assert camera_model.focal_length_x == camera_info.k[0]
     assert camera_model.focal_length_y == camera_info.k[4]
-    assert camera_model.principal_point_x == camera_info.k[2]
-    assert camera_model.principal_point_y == camera_info.k[5]
+    assert float(camera_model.principal_point.x) == camera_info.k[2]
+    assert float(camera_model.principal_point.y) == camera_info.k[5]
     assert isinstance(camera_model.distortion, RationalPolynomialCameraDistortion)
     assert camera_model.distortion.radial_coefficient_1 == camera_info.d[0]
     assert camera_model.distortion.tangential_coefficient_1 == camera_info.d[2]
@@ -755,7 +755,7 @@ def test_rgb_only_rotation_updates_effective_calibration(
         cas.camera_observation.effective_camera_model.resolution == expected_resolution
     )
     assert (
-        cas.camera_observation.effective_camera_model.principal_point_y
+        float(cas.camera_observation.effective_camera_model.principal_point.y)
         == expected_intrinsic_matrix[1, 2]
     )
     distortion = cas.camera_observation.effective_camera_model.distortion
@@ -798,7 +798,7 @@ def test_rgbd_high_resolution_crop_updates_effective_resolution(
         cas.camera_observation.effective_camera_model.resolution == expected_resolution
     )
     assert (
-        cas.camera_observation.effective_camera_model.principal_point_y
+        float(cas.camera_observation.effective_camera_model.principal_point.y)
         == camera_info.k[5]
     )
     assert not any(isinstance(view, CameraInfo) for view in cas.views.values())

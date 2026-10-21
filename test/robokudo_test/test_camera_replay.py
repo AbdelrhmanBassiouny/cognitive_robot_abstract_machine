@@ -4,6 +4,7 @@ Verify camera replay from a full recorded semantic world.
 
 from __future__ import annotations
 
+# %% Imports
 import json
 from dataclasses import dataclass, replace
 from typing_extensions import Any
@@ -22,6 +23,7 @@ from robokudo.io.storage import Storage, StorageDocumentField
 from robokudo.io.exceptions import RecordedViewMissing
 from robokudo.io.storage_reader_interface import StorageReaderInterface
 from robokudo.types.camera import CameraObservation
+from semantic_digital_twin.spatial_types import Point2
 from semantic_digital_twin.adapters.ros.messages import WorldModelSnapshot
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
     WorldEntityWithIDKwargsTracker,
@@ -93,8 +95,7 @@ def _recorded_scene(
         image_resolution=CameraResolution(width=640, height=480),
         focal_length_x=525.0,
         focal_length_y=526.0,
-        principal_point_x=319.5,
-        principal_point_y=239.5,
+        principal_point=Point2(x=319.5, y=239.5),
     )
     camera = Camera(
         name=PrefixedName(name="recorded_camera"),

@@ -20,13 +20,13 @@ class TestDataset:
     Dataset archive and cache name.
     """
 
-    revision: str = "52fedaf2f2e56f52a78eb9ea0a64a15d53a7294b"
+    revision: str = "859e8ef72d820de229bef3ef3e80f61e8be9643e"
     """
     Repository revision packaged in the archive.
     """
 
     checksum: str | None = (
-        "sha256:336c328d324f8c0023f924cb6fd0808aaabce8b11270597db427ebde333b3dd6"
+        "sha256:370ea67e870ae5b25a7de46eab046167ae825836d223b5d2527d5a3194d872d5"
     )
     """
     Expected archive checksum.

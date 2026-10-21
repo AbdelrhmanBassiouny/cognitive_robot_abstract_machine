@@ -1,4 +1,5 @@
 # %% Imports
+
 import sys
 from dataclasses import replace
 
@@ -43,6 +44,7 @@ from robokudo.utils.annotation_conversion import (
 )
 from robokudo_msgs.msg import ObjectDesignator, ShapeSize
 
+from semantic_digital_twin.spatial_types import Point2
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
@@ -72,8 +74,7 @@ class TestUtilsAnnotationConversion(object):
             image_resolution=CameraResolution(width=1024, height=1280),
             focal_length_x=1050.0,
             focal_length_y=639.5,
-            principal_point_x=512.0,
-            principal_point_y=479.5,
+            principal_point=Point2(x=512.0, y=479.5),
         )
         world_T_camera = HomogeneousTransformationMatrix.from_xyz_quaternion(
             pos_x=0.5,

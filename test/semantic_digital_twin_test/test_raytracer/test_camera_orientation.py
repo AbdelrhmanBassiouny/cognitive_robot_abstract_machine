@@ -5,11 +5,13 @@ Camera pose and pixel orientation across rendering conventions.
 from __future__ import annotations
 
 # %% Imports
+
 from unittest.mock import Mock
 
 import numpy as np
 import pytest
 
+from semantic_digital_twin.spatial_types import Point2
 from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
 from semantic_digital_twin.datastructures.camera_rendering import RayIntersections
@@ -107,8 +109,8 @@ def test_render_places_top_left_optical_ray_at_top_left_pixel(
     model = optical_camera.camera_model
     optical_V_top_left = np.array(
         [
-            (0.5 - model.principal_point_x) / model.focal_length_x,
-            (0.5 - model.principal_point_y) / model.focal_length_y,
+            (0.5 - float(model.principal_point.x)) / model.focal_length_x,
+            (0.5 - float(model.principal_point.y)) / model.focal_length_y,
             1.0,
         ]
     )
@@ -195,8 +197,7 @@ def test_render_preserves_off_center_projection(
         image_resolution=CameraResolution(width=8, height=6),
         focal_length_x=10.0,
         focal_length_y=12.0,
-        principal_point_x=2.0,
-        principal_point_y=1.0,
+        principal_point=Point2(x=2.0, y=1.0),
     )
     optical_camera.camera_model = model
     tracer = optical_camera.root._world.ray_tracer
