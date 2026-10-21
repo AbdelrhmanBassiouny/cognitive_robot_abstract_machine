@@ -81,9 +81,9 @@ class TSDFAnnotator(ThreadedAnnotator):
                 Voxel length for the TSDF volume of each object.
                 """
 
-                self.sdf_trunc: float = 0.04
+                self.signed_distance_truncation: float = 0.04
                 """
-                SDF truncation distance for the TSDF volume of each object.
+                Signed distance truncation for the TSDF volume of each object.
                 """
 
                 self.depth_scale: float = 1000.0
@@ -91,7 +91,7 @@ class TSDFAnnotator(ThreadedAnnotator):
                 Depth scale for the TSDF volume integration.
                 """
 
-                self.depth_trunc: float = 3.0
+                self.depth_truncation: float = 3.0
                 """
                 Depth truncation distance for the TSDF volume integration.
                 """
@@ -240,7 +240,7 @@ class TSDFAnnotator(ThreadedAnnotator):
                     color=open3d.geometry.Image(masked_color),
                     depth=open3d.geometry.Image(masked_depth),
                     depth_scale=self.descriptor.parameters.depth_scale,
-                    depth_trunc=self.descriptor.parameters.depth_trunc,
+                    depth_trunc=self.descriptor.parameters.depth_truncation,
                     convert_rgb_to_intensity=False,
                 )
             )
@@ -256,7 +256,7 @@ class TSDFAnnotator(ThreadedAnnotator):
             else:
                 volume = open3d.pipelines.integration.ScalableTSDFVolume(
                     voxel_length=self.descriptor.parameters.voxel_length,
-                    sdf_trunc=self.descriptor.parameters.sdf_trunc,
+                    sdf_trunc=self.descriptor.parameters.signed_distance_truncation,
                     color_type=open3d.pipelines.integration.TSDFVolumeColorType.RGB8,
                 )
                 self.tracked_objects.append(
