@@ -20,6 +20,12 @@ HTTP endpoints of the live bridge (default port 8765).
                         resolved, parts: [{slot, slotId, statement, faculty, backend,
                         answers, evidence, reasoning, highlight, milliseconds}]}]}
                         how the plans' open parts were resolved before execution
+    GET /query_steps[?revision=]  {revision, stepping, holdsNested, held, heldMoment, total,
+                       steps: [{number, asker, depth, phase, during, moment, question,
+                       code, askedFrom, faculty, backend, answers, highlight, frame,
+                       reasoning, milliseconds}]}  the queries the demo asked
+    POST /query_steps/next  let the demo carry on from the query it is held at
+    POST /query_steps/mode  {stepping, holdsNested} hold the demo at every query
     GET /chart   {signature, title,
                   nodes: [{id, parent, name, class_name, life_cycle, observation}],
                   edges: [{from, to, kind}]}
@@ -158,6 +164,11 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             return self._send_json(self.bridge.get_state())
         if self.path.startswith("/slot_answers"):
             return self._send_json(self.bridge.get_slot_answers())
+        if self.path.startswith("/query_steps"):
+            known = self._query_value("revision")
+            return self._send_json(
+                self.bridge.get_query_steps(None if known is None else int(known))
+            )
         if self.path.startswith("/plan"):
             return self._send_json(self.bridge.get_plan())
         if self.path.startswith("/chart"):
@@ -316,6 +327,10 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             return self.answer_asked_question()
         if self.path.startswith("/marker_topics"):
             return self.set_marker_topic()
+        if self.path == "/query_steps/next":
+            return self.advance_query_step()
+        if self.path == "/query_steps/mode":
+            return self.set_query_stepping()
         if self.path == "/recording/stop":
             return self._stop_recording()
         if self.path == "/recording/discard":
@@ -452,6 +467,29 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
                 str(payload.get("topic") or ""), bool(payload.get("subscribed", True))
             )
         )
+
+    def advance_query_step(self) -> None:
+        """
+        Let the running demo carry on from the query it is held at.
+        """
+        control = self.bridge.query_step_control
+        if control is None:
+            return self._send_json({"ok": False, "error": "nothing to step"}, 404)
+        control.advance()
+        self._send_json({"ok": True})
+
+    def set_query_stepping(self) -> None:
+        """
+        Choose whether the running demo is held at every query it asks.
+        """
+        control = self.bridge.query_step_control
+        payload = self._posted_payload()
+        if control is None or payload is None:
+            return self._send_json({"ok": False, "error": "nothing to step"}, 404)
+        control.set_stepping(
+            bool(payload.get("stepping")), bool(payload.get("holdsNested", True))
+        )
+        self._send_json({"ok": True})
 
     def do_OPTIONS(self) -> None:
         """

@@ -47,6 +47,7 @@ from krrood.entity_query_language.factories import (
     variable,
 )
 from krrood.entity_query_language.query.match import Match
+from krrood.entity_query_language.query_observation import QueryObservation
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
 from krrood.ormatic.utils import classproperty
 from krrood.parametrization.model_registries import ModelRegistry
@@ -373,8 +374,10 @@ class SlotBackend(QueryBackend, ABC):
         :param statement: The statement to answer.
         :return: What this backend answers to it, and how it reasoned.
         """
-        answers = self.distinct(self.evaluate(statement))
-        return BackendAnswer(answers, self.reasoning_for(statement, answers))
+        answers = self.distinct(statement.evaluate(backend=self))
+        # the reasoning is drawn for a person; the robot asks nothing to draw it
+        with QueryObservation().unobserved():
+            return BackendAnswer(answers, self.reasoning_for(statement, answers))
 
     @staticmethod
     def distinct(answers: Iterable[Any]) -> List[Any]:
@@ -731,11 +734,14 @@ class WorkingMemoryBackend(SelectiveBackend, SlotBackend):
         """
         if statement._type_ is None:
             return []
-        everything: List[WorldEntity] = [
-            *self.world.kinematic_structure_entities,
-            *self.world.semantic_annotations,
-        ]
-        return [thing for thing in everything if isinstance(thing, statement._type_)]
+        thing = variable(
+            statement._type_,
+            [
+                *self.world.kinematic_structure_entities,
+                *self.world.semantic_annotations,
+            ],
+        )
+        return an(entity(thing)).tolist()
 
     def reasoning_for(self, statement: Match, answers: List[Any]) -> Reasoning:
         considered = statement._domain_ or self.things_of_the_kind_of(statement)
@@ -765,12 +771,13 @@ class WorkingMemoryBackend(SelectiveBackend, SlotBackend):
         size = [
             round(float(value), 4) for value in (box.scale.x, box.scale.y, box.scale.z)
         ]
+        body = variable(Body, self.world.bodies_with_collision)
         support = next(
-            (
-                body
-                for body in self.world.bodies_with_collision
-                if SupportedBy(root, body, contact_tolerance=self.contact_tolerance)()
-            ),
+            an(
+                entity(body).where(
+                    SupportedBy(root, body, contact_tolerance=self.contact_tolerance)
+                )
+            ).evaluate(),
             None,
         )
         if support is None:
@@ -952,9 +959,9 @@ class HoleRulesBackend(SlotBackend):
     def evaluate(self, expression: Match) -> Iterable[Insertion]:
         piece = expression._kwargs_["piece"]
         kind = self.concluded_kind(piece)
-        for hole in self.twin.holes:
-            if hole.kind is kind:
-                yield Insertion(piece=piece, hole=hole)
+        hole = variable(SeenHole, self.twin.holes)
+        for found in an(entity(hole).where(hole.kind == kind)).evaluate():
+            yield Insertion(piece=piece, hole=found)
 
     def concluded_kind(self, piece: SeenPiece) -> Type[MontessoriShape] | None:
         """
@@ -1176,9 +1183,11 @@ class GraspSamplingBackend(SlotBackend):
         """
         return [
             grasp.side
-            for grasp in ProbabilisticBackend(
-                model_registry=model, number_of_samples=self.number_of_samples
-            ).evaluate(an(SideGrasp)(side=...))
+            for grasp in an(SideGrasp)(side=...).evaluate(
+                backend=ProbabilisticBackend(
+                    model_registry=model, number_of_samples=self.number_of_samples
+                )
+            )
         ]
 
     @staticmethod
@@ -1469,6 +1478,10 @@ class OpenSlotAnswerer:
         """
         if isinstance(answer, Insertion):
             return answer.hole.region.name.name
+        if isinstance(answer, SeenHole):
+            return answer.region.name.name
+        if isinstance(answer, HoleShape):
+            return f"{answer.kind.__name__} hole"
         if isinstance(answer, SideGrasp):
             return answer.side.name
         if isinstance(answer, enum.Enum):

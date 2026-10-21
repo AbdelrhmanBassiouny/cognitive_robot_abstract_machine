@@ -11,6 +11,9 @@ import pytest
 
 krrood = pytest.importorskip("krrood", reason="EQL requires krrood")
 
+from krrood.entity_query_language.backends import (  # noqa: E402
+    EntityQueryLanguageGenerativeBackend,
+)
 from krrood.entity_query_language.verbalization._example_domain import (  # noqa: E402
     Robot as ExampleRobot,
 )
@@ -71,6 +74,17 @@ class TestReadingAQueryBack:
         verbalization = QueryVerbalization.of_expression(expression)
 
         assert verbalization.text == VerbalizationPipeline.plain().verbalize(expression)
+
+    def test_the_backend_answering_a_query_opens_its_sentence(self):
+        namespace = make_runner().namespace()
+        expression = eval("an(entity(record).where(record.score > 1.0))", namespace)
+        backend = EntityQueryLanguageGenerativeBackend()
+
+        verbalization = QueryVerbalization.of_expression(expression, backend)
+
+        assert verbalization.text == VerbalizationPipeline.plain().verbalize(
+            expression, backend=backend
+        )
 
     def test_the_sentence_names_what_is_asked_about(self):
         verbalization = verbalize("an(entity(record).where(record.score > 1.0))")

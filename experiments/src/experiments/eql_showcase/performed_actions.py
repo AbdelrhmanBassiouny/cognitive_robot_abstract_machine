@@ -13,10 +13,12 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from typing_extensions import Any, List, Optional
+from typing_extensions import Any, List, Optional, Type
+
+from krrood.entity_query_language.factories import an, entity, variable
 
 from coraplex.plans.plan import Plan
-from coraplex.plans.plan_node import ActionNode, MotionNode
+from coraplex.plans.plan_node import ActionNode, MotionNode, PlanNode
 from giskardpy.motion_statechart.data_types import LifeCycleValues
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.robots.robot_parts import AbstractRobotPart
@@ -229,6 +231,17 @@ class PerformedActions:
     """
     The plans performed so far, in the order they were performed.
     """
+
+    def running(self, node_type: Type[PlanNode] = PlanNode) -> List[PlanNode]:
+        """
+        :param node_type: The kind of node asked for.
+        :return: The nodes of the kind running right now in the plans, deepest first.
+        """
+        node = variable(
+            node_type, [node for plan in self.plans for node in plan.all_nodes]
+        )
+        running = an(entity(node).where(node.status == LifeCycleValues.RUNNING))
+        return sorted(running.tolist(), key=lambda found: -found.depth)
 
     def __iter__(self) -> Iterator[PerformedAction]:
         """

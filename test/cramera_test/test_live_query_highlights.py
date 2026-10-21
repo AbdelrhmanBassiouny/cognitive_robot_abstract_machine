@@ -121,3 +121,18 @@ def test_a_resolved_part_lights_up_and_frames_the_published_keys() -> None:
     [part] = bridge.get_slot_answers()["resolutions"][0]["parts"]
     assert part["highlight"] == [key]
     assert part["frame"] == [key]
+
+
+def test_a_query_step_lights_up_and_frames_the_published_keys() -> None:
+    """
+    A query the demo asked names the bodies its answers are about; the viewer knows them
+    by their published keys.
+    """
+    bridge = attached_bridge()
+    [key] = bridge.object_keys()
+    name = str(bridge.object_body(key).name)
+    bridge.publish_query_steps({"steps": [{"highlight": [name], "frame": [name]}]})
+
+    [step] = bridge.get_query_steps()["steps"]
+    assert step["highlight"] == [key]
+    assert step["frame"] == [key]

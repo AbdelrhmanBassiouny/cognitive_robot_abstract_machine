@@ -20,7 +20,7 @@ out.
 from __future__ import annotations
 
 import time
-from contextlib import AbstractContextManager
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -38,7 +38,8 @@ from cramera.live.visualization import LiveVisualization
 from cramera.paths import data_directory
 from experiments.montessori.perception.overlay import RectifiedView
 from experiments.montessori.semantics import MontessoriShape
-from krrood.entity_query_language.factories import a, an
+from krrood.entity_query_language.factories import a, an, entity, exists, the, variable
+from krrood.entity_query_language.query.query import Query
 from krrood.entity_query_language.query.match import Match
 from segmind.detectors.agent_event_detector_nodes import GraspDetector
 from segmind.detectors.coarse_event_detector_nodes import (
@@ -73,6 +74,7 @@ from experiments.eql_showcase.open_slots import (
 )
 from experiments.eql_showcase.perceived_twin import PerceivedTwin, SeenHole, SeenPiece
 from experiments.eql_showcase.perception_demo import PerceptionShowcase
+from experiments.eql_showcase.query_steps import Phase, QueryStepper, StepSituation
 from experiments.eql_showcase.showcase import QUESTIONS_FILE, ShowcaseQuestions
 
 MONTESSORI_QUESTIONS_FILE = QUESTIONS_FILE.with_name("montessori_questions.yaml")
@@ -103,6 +105,44 @@ class SortingPart(StrEnum):
     SIDE = "side"
     ARM = "arm"
     HOLE = "hole"
+
+
+class QuestionName(StrEnum):
+    """
+    The names the demonstration's own objects go by in a question or command.
+    """
+
+    ANSWERER = "backends"
+    """
+    What answered the plans' open parts, e.g. ``backends.answered``.
+    """
+
+    SORTING = "montessori"
+    """
+    What resolves the sorting plans, e.g.
+    ``robot.do(montessori.insert(CubeShape), "insert the cube")``.
+    """
+
+    RESOLVE = "resolve"
+    """
+    Resolves a statement or plan, e.g. ``resolve(a(SeenPiece)(kind=CubeShape))``.
+    """
+
+    STEPS = "steps"
+    """
+    The queries Tracy asked, e.g. ``steps.steps``.
+    """
+
+
+class TracyActivity(StrEnum):
+    """
+    What Tracy is said to be doing when it asks a query outside any plan.
+    """
+
+    PLANNING = "planning what to sort"
+    """
+    It neither resolves a plan nor carries one out.
+    """
 
 
 @dataclass
@@ -203,6 +243,11 @@ class MontessoriSorting:
     Called once a plan or statement is resolved.
     """
 
+    observing: Callable[[], AbstractContextManager] = nullcontext
+    """
+    Opens the block whose queries are observed while a plan or statement is resolved.
+    """
+
     def __post_init__(self) -> None:
         self.answerer = OpenSlotAnswerer(
             backends=[
@@ -219,18 +264,28 @@ class MontessoriSorting:
         """
         The pieces the camera saw that a hole of their shape was seen for.
         """
-        hole_kinds = {hole.kind for hole in self.twin.holes}
-        return [
-            piece
-            for piece in self.twin.world.get_semantic_annotations_by_type(SeenPiece)
-            if piece.kind in hole_kinds
-        ]
+        return self.pieces_with_their_hole().tolist()
 
     def kinds_to_sort(self) -> List[Type[MontessoriShape]]:
         """
         The kinds of piece seen that a hole of their shape was seen for, each once.
         """
-        return list(dict.fromkeys(piece.kind for piece in self.pieces()))
+        piece = variable(SeenPiece, self.twin.world.semantic_annotations)
+        hole = variable(SeenHole, self.twin.holes)
+        return (
+            an(entity(piece.kind).where(exists(hole, hole.kind == piece.kind)))
+            .distinct()
+            .tolist()
+        )
+
+    def pieces_with_their_hole(self) -> Query:
+        """
+        :return: The query for the pieces the camera saw that a hole of their shape was
+            seen for.
+        """
+        piece = variable(SeenPiece, self.twin.world.semantic_annotations)
+        hole = variable(SeenHole, self.twin.holes)
+        return an(entity(piece).where(exists(hole, hole.kind == piece.kind)))
 
     def statement_to_sort(self, kind: Type[MontessoriShape]) -> Match:
         """
@@ -276,7 +331,8 @@ class MontessoriSorting:
         """
         if statement._type_ is SortPieceAction:
             return [self.resolve_sorting(statement)]
-        answers = self.answerer.resolve(statement)
+        with self.observing():
+            answers = self.answerer.resolve(statement)
         if self.on_resolved is not None:
             self.on_resolved(self.answerer.resolutions[-1])
         return answers
@@ -295,7 +351,8 @@ class MontessoriSorting:
             self.underspecified_lines(statement),
             self.resolved_lines(),
         )
-        plan = self._answer_parts(resolution, statement._kwargs_)
+        with self.observing():
+            plan = self._answer_parts(resolution, statement._kwargs_)
         resolution.plan = plan
         resolution.executable = plan is not None
         self._resolved(resolution)
@@ -385,15 +442,14 @@ class MontessoriSorting:
             the piece considered first.
         """
         position = piece.root.global_pose.position.to_np()[:3]
-        arm = an(Arm).from_(
-            sorted(
-                self.robot.all_arms,
-                key=lambda arm: float(
-                    sum((arm.root.global_pose.position.to_np()[:3] - position) ** 2)
-                ),
-            )
-        )
+        arm = an(Arm).from_(self.robot.all_arms)
         arm.where(GripperIsFree(arm.end_effector))
+        arm.ordered_by(
+            arm.root,
+            key=lambda root: float(
+                sum((root.global_pose.position.to_np()[:3] - position) ** 2)
+            ),
+        )
         return arm
 
     def title_of(self, piece_statement: Match) -> str:
@@ -572,11 +628,26 @@ class TracyMontessoriDemonstration(ShowcasedDemonstration):
     the viewer to resolve and command.
     """
 
+    stepper: QueryStepper = field(init=False)
+    """
+    Keeps every query Tracy asks, and holds it at each while the viewer steps through
+    them.
+    """
+
+    def __post_init__(self) -> None:
+        self.stepper = QueryStepper(
+            situation_of=self.situation, publish=self._publish_query_steps
+        )
+
+    def run(self) -> World:
+        with self.stepper.observing():
+            return super().run()
+
     def build_simulated_world(self) -> World:
         self.look = PerceptionShowcase(bridge=None)
         self.look.commit(self.capture_name)
         world = self.look.twin.world
-        [robot] = world.get_semantic_annotations_by_type(Tracy)
+        robot = self.robot_in(world)
         # Tracy starts with its arms parked, as it stands before a task
         for arm in robot.all_arms:
             for connection, position in arm.get_joint_state_by_type(
@@ -591,8 +662,16 @@ class TracyMontessoriDemonstration(ShowcasedDemonstration):
     def populate_scene(self, world: World) -> None:
         pass
 
+    @staticmethod
+    def robot_in(world: World) -> Tracy:
+        """
+        :param world: The world Tracy stands in.
+        :return: Tracy.
+        """
+        return the(entity(variable(Tracy, world.semantic_annotations))).first()
+
     def build_context(self, world: World) -> Context:
-        [robot] = world.get_semantic_annotations_by_type(Tracy)
+        robot = self.robot_in(world)
         # a command is built against a context of its own, but its open parts are
         # answered by the same backends, and kept with the sorting's answers
         if self.sorting is None:
@@ -602,12 +681,14 @@ class TracyMontessoriDemonstration(ShowcasedDemonstration):
                 robot=robot,
                 perception_view=self.look.view,
                 on_resolved=self._show_resolution,
+                observing=self.stepper.observing,
             )
             self.sorting.answerer.on_answer = self._publish_resolutions
             self._publish_resolutions(self.sorting.answerer)
-        self.extra_names[SORTING_NAME] = self.sorting
-        self.extra_names[ANSWERER_NAME] = self.sorting.answerer
-        self.extra_names[RESOLVE_NAME] = self.sorting.resolve
+        self.extra_names[QuestionName.SORTING] = self.sorting
+        self.extra_names[QuestionName.ANSWERER] = self.sorting.answerer
+        self.extra_names[QuestionName.RESOLVE] = self.sorting.resolve
+        self.extra_names[QuestionName.STEPS] = self.stepper
         self.extra_names.update(
             {
                 kind.__name__: kind
@@ -655,6 +736,38 @@ class TracyMontessoriDemonstration(ShowcasedDemonstration):
         payload["presentation"] = self.presentation.to_payload()
         self.visualization.provider.bridge.publish_slot_answers(payload)
 
+    def situation(self) -> StepSituation:
+        """
+        :return: What Tracy is doing at the moment: resolving a plan, carrying out an
+            action, or planning what to sort.
+        """
+        if self.sorting is not None:
+            resolution = variable(PlanResolution, self.sorting.answerer.resolutions)
+            resolving = an(entity(resolution).where(resolution.done == False)).tolist()
+            if resolving:
+                return StepSituation(Phase.RESOLUTION, resolving[-1].name)
+        performing = (
+            None
+            if self.showcase is None
+            else StepSituation.of_performance(self.showcase.performed_actions)
+        )
+        return performing or StepSituation(Phase.RESOLUTION, TracyActivity.PLANNING)
+
+    def _publish_query_steps(self, steps: Dict[str, Any]) -> None:
+        """
+        Show the viewer the queries Tracy asked and let it step through them, if this
+        run is shown in one.
+
+        :param steps: The steps, as JSON.
+        """
+        if not isinstance(self.visualization, PluginVisualization):
+            return
+        if not isinstance(self.visualization.provider, LiveVisualization):
+            return
+        bridge = self.visualization.provider.bridge
+        bridge.query_step_control = self.stepper
+        bridge.publish_query_steps(steps)
+
     def _show_resolution(self, resolution: PlanResolution) -> None:
         """
         Let the viewer show a complete resolution before the robot carries it out, if
@@ -678,25 +791,6 @@ class TracyMontessoriDemonstration(ShowcasedDemonstration):
         self.showcase.observe_events(segmentation.event_logger)
         self._offer_showcase()
         return segmentation
-
-
-ANSWERER_NAME = "backends"
-"""
-The name what answered the plans' open parts goes by in a question, e.g.
-``backends.answered``.
-"""
-
-SORTING_NAME = "montessori"
-"""
-The name the sorting plans are resolved through in a command, e.g.
-``robot.do(montessori.insert(CubeShape), "insert the cube")``.
-"""
-
-RESOLVE_NAME = "resolve"
-"""
-The name a statement or plan is resolved through in a question, e.g.
-``resolve(a(SeenPiece)(kind=CubeShape))``.
-"""
 
 
 def main(

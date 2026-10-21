@@ -56,6 +56,7 @@ from cramera.knowledge.queryable_knowledge import (
     UnknownQueryScope,
 )
 from cramera.knowledge.question_matching import QuestionMatcher, QuestionMatchResult
+from cramera.live.query_steps import QueryStepControl
 from cramera.live.query import NoQuerySourceRegistered
 from cramera.live.markers import MarkerEntry, MarkerStore
 from cramera.live.shape_catalog import (
@@ -443,6 +444,17 @@ class Bridge:
     """
     How the parts the running plan left open were answered, and by which backend, as
     the demo last published it (see :meth:`publish_slot_answers`).
+    """
+
+    query_steps: Dict[str, Any] = field(default_factory=dict)
+    """
+    The queries the running demo asked, as it last published them (see
+    :meth:`publish_query_steps`).
+    """
+
+    query_step_control: Optional[QueryStepControl] = None
+    """
+    What holds the running demo at each query it asks, if it can be stepped through.
     """
 
     chart_state: ChartSnapshot = field(default_factory=ChartSnapshot)
@@ -1562,6 +1574,43 @@ class Bridge:
         """
         with self._lock:
             return self.slot_answers
+
+    def publish_query_steps(self, steps: Dict[str, Any]) -> None:
+        """
+        Publish the queries the demo asked, the body names each step lights up and
+        frames turned into the identifiers the viewer knows them by.
+
+        :param steps: The steps and where the demo is held, as JSON.
+        """
+        resolved = {
+            **steps,
+            "revision": self.query_steps.get("revision", 0) + 1,
+            "steps": [
+                {
+                    **step,
+                    **{
+                        names: self._resolve_highlights(step.get(names, []))
+                        for names in PartBodies
+                    },
+                }
+                for step in steps.get("steps", [])
+            ],
+        }
+        with self._lock:
+            self.query_steps = resolved
+
+    def get_query_steps(self, known_revision: Optional[int] = None) -> Dict[str, Any]:
+        """
+        The newest published query steps (safe to call from HTTP threads).
+
+        :param known_revision: The revision the viewer already shows, if any.
+        :return: The steps, or only their revision when the viewer already shows it.
+        """
+        with self._lock:
+            revision = self.query_steps.get("revision", 0)
+            if known_revision == revision:
+                return {"revision": revision, "unchanged": True}
+            return self.query_steps
 
     def get_plan(self) -> Dict[str, Any]:
         """
