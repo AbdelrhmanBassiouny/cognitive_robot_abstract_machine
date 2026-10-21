@@ -61,7 +61,10 @@ from cramph.context import ContextExtension
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.goals.cartesian_goals import CartesianPoseStraight
 from giskardpy.motion_statechart.goals.gripper import MoveGripper
-from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
+from giskardpy.motion_statechart.tasks.cartesian_tasks import (
+    CartesianPose,
+    CartesianPositionStraight,
+)
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList
 from krrood.entity_query_language.backends import EntityQueryLanguageGenerativeBackend
 from krrood.entity_query_language.factories import a, variable
@@ -660,9 +663,8 @@ def test_the_perception_precedes_the_final_approach_of_a_straight_reach(
     stretch_apartment_context,
 ) -> None:
     """
-    A reach moving its tool center point in a straight line approaches the object with a
-    different goal, which still counts as its final approach, also where the Stretch
-    runs the reach's steps beside the hold of its base.
+    A reach moving its tool center point in a straight line still has its final approach
+    found, also where the Stretch runs the reach's steps beside the hold of its base.
     """
     world, view, extensions = stretch_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
@@ -675,14 +677,14 @@ def test_the_perception_precedes_the_final_approach_of_a_straight_reach(
     )
 
     final_approach = [
-        node for node in plan.descendants if isinstance(node, CartesianPoseStraight)
+        node for node in plan.descendants if isinstance(node, CartesianPositionStraight)
     ][-1]
     steps = next(node for node in final_approach.path if isinstance(node, Sequence))
     assert kinds_of_the_steps_of(steps) == [
-        CartesianPoseStraight,
+        CartesianPose,
         LookAtAction,
         DetectAction,
-        CartesianPoseStraight,
+        CartesianPose,
     ]
 
 

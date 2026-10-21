@@ -19,7 +19,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64MultiArray
 
-from giskardpy.middleware.ros2 import rospy
+from semantic_digital_twin.adapters.ros import rospy
 from giskardpy.middleware.ros2.controller_manager import (
     ControllerManager,
     ControllerParameter,

@@ -3,6 +3,7 @@ Tests for a running goal whose nodes choose their child on the client, see
 :mod:`giskardpy.middleware.ros2.child_choices`.
 """
 
+from cramph.data_types import StatechartPayloadKey
 import json
 from dataclasses import dataclass, field
 
@@ -342,7 +343,7 @@ def test_the_client_answers_a_waiting_node_once_per_child_it_holds() -> None:
         world_updates=client_world_updates(),
     )
     feedback = {
-        MotionStatechartPayloadKey.GOAL_ID: 3,
+        StatechartPayloadKey.GOAL_ID: 3,
         MotionStatechartPayloadKey.WAITING_FOR_CHILD: {
             str(goal.choosing_node.index): 0
         },

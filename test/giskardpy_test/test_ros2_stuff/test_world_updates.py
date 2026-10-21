@@ -6,7 +6,7 @@ from typing import Any, List
 import pytest
 
 from cramph.executor import NoPacing
-from giskardpy.middleware.ros2 import rospy
+from semantic_digital_twin.adapters.ros import rospy
 from giskardpy.middleware.ros2.command_publishing import CommandPublisher
 from giskardpy.middleware.ros2.client_presence import ClientWatchdog, HeartbeatPresence
 from giskardpy.middleware.ros2.control_loop import ControlLoop

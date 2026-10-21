@@ -18,7 +18,7 @@ from giskardpy.motion_statechart.binding_policy import (
     ForwardKinematicsBinding,
     GoalBindingPolicy,
 )
-from giskardpy.motion_statechart.data_types import DefaultWeights
+from giskardpy.motion_statechart.weights import DefaultWeights
 from giskardpy.motion_statechart.exceptions import UnexpectedWorldEntityCountError
 from giskardpy.motion_statechart.tasks.drive_tasks import (
     BaseHeading,

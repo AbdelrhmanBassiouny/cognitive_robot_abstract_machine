@@ -22,7 +22,7 @@ We initialize the ROS 2 node using Giskardpy's `rospy` middleware wrapper, which
 ```{code-cell} ipython3
 import numpy as np
 import time
-from giskardpy.middleware.ros2 import rospy
+from semantic_digital_twin.adapters.ros import rospy
 from semantic_digital_twin.world import World
 from semantic_digital_twin.datastructures.soft_trunk import SoftTrunk, SoftTrunkSection
 

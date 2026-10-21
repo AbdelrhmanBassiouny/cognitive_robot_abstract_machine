@@ -105,8 +105,8 @@ poetry install
 
 The workspace includes [CRAMERA](cramera/README.md) for live 3D visualization,
 recorded playback, EQL questions and plan/statechart inspection. Start `cramera`
-from the activated environment, then run an existing demo with
-`cramera-live path/to/demo.py`.
+from the activated environment, then add a `LiveVisualization` to the executor of the
+demo you want to follow.
 
 ## To run tests
 

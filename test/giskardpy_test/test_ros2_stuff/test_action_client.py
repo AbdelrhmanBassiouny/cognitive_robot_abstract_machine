@@ -9,7 +9,7 @@ import pytest
 from json_msgs.action import JsonAction
 from typing_extensions import Any
 
-from giskardpy.middleware.ros2 import rospy
+from semantic_digital_twin.adapters.ros import rospy
 from giskardpy.middleware.ros2.action_server import ActionServerHandler, GoalOutcome
 from giskardpy.middleware.ros2.ros2_interface import MyActionClient
 

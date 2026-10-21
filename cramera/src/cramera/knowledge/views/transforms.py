@@ -34,7 +34,7 @@ class TransformViewPayload(GraphPanelPayload):
 
     empty_message: str = (
         "The transform graph is read off the executing world. "
-        "Start the demo with cramera-live and press ◉ Live — "
+        "Show the demo with a LiveVisualization and press ◉ Live — "
         "every connection appears here, ringed by how recently it moved."
     )
     """

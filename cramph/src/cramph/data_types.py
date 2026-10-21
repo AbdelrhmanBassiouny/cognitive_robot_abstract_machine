@@ -60,6 +60,43 @@ class StatechartJSONKey(StrEnum):
     """
 
 
+class StatechartPayloadKey(StrEnum):
+    """
+    The keys of the payloads that report on a statechart a server runs for a goal, and
+    of the messages a client answers them with.
+    """
+
+    GOAL_ID = "goal_id"
+    """
+    The goal of the server the payload belongs to.
+    """
+
+    STATECHART = "statechart"
+    """
+    The structure of the statechart, sent once per goal.
+    """
+
+    LIFE_CYCLE_STATE = "life_cycle_state"
+    """
+    The life cycle state of every node.
+    """
+
+    OBSERVATION_STATE = "observation_state"
+    """
+    The observation state of every node.
+    """
+
+    LAST_OBSERVATION_STATE = "last_observation_state"
+    """
+    The observation every node took most recently.
+    """
+
+    TICK_COUNT = "tick_count"
+    """
+    The tick the states were taken at.
+    """
+
+
 # %% life cycle states
 
 

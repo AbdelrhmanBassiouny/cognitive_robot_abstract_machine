@@ -12,7 +12,12 @@ from krrood.ormatic.utils import classproperty
 from cramph.node import SucceedsOnObservingTrue, FailsOnObservingFalse
 from cramph.composites import ControlStructureNode, Parallel, Sequence, TryAll
 from cramph.context import ContextExtension
-from cramph.node import CompositeNode, NodeArtifacts, StatechartNode
+from cramph.node import (
+    CompositeNode,
+    NodeArtifacts,
+    StatechartNode,
+    expanded_child_field,
+)
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from giskardpy.motion_statechart.tasks.cartesian_tasks import HoldPose
 from krrood.class_diagrams.attribute_introspector import DataclassOnlyIntrospector
@@ -186,6 +191,11 @@ class GoalAction(Action, SucceedsOnObservingTrue, FailsOnObservingFalse, ABC):
     is ended by the action once it observes True.
     """
 
+    goal: StatechartNode | None = expanded_child_field(default=None)
+    """
+    The child reaching the goal of this action, None until the action was expanded.
+    """
+
     @abstractmethod
     def create_goal(self) -> StatechartNode:
         """
@@ -193,24 +203,14 @@ class GoalAction(Action, SucceedsOnObservingTrue, FailsOnObservingFalse, ABC):
             action is expanded.
         """
 
-    @property
-    def goal(self) -> StatechartNode | None:
-        """
-        :return: The child reaching the goal of this action, None until the action was
-            expanded.
-        """
-        if not self.children:
-            return None
-        return self.children[0]
-
     def _create_children(self) -> None:
         """
         Puts the goal below this action and ends it once it is at its goal, unless it
         decides its own success.
         """
-        goal = self.create_goal()
-        self._add_child_to_statechart(goal)
-        self._succeed_at_its_goal(goal)
+        self.goal = self.create_goal()
+        self._add_child_to_statechart(self.goal)
+        self._succeed_at_its_goal(self.goal)
 
     def build_artifacts(self) -> NodeArtifacts:
         """

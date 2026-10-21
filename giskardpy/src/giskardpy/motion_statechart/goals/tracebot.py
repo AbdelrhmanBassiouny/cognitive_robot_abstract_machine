@@ -10,7 +10,7 @@ from cramph.node import (
     NodeArtifacts,
     expanded_child_field,
 )
-from giskardpy.motion_statechart.data_types import DefaultWeights
+from giskardpy.motion_statechart.weights import DefaultWeights
 from giskardpy.motion_statechart.graph_node import ConvergingTask, MotionNodeArtifacts
 from giskardpy.motion_statechart.tasks.align_planes import AlignPlanes
 from giskardpy.motion_statechart.tasks.feature_functions import AngleGoal, ReachPoint

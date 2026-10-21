@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from cramph.data_types import StatechartPayloadKey
 import json
 import time
 from dataclasses import dataclass, field
@@ -19,37 +20,8 @@ if TYPE_CHECKING:
 
 class MotionStatechartPayloadKey(StrEnum):
     """
-    The keys of the motion statechart feedback and result sent to the action client.
-    """
-
-    LIFE_CYCLE_STATE = "life_cycle_state"
-    """
-    The life cycle state of every node.
-    """
-
-    OBSERVATION_STATE = "observation_state"
-    """
-    The observation state of every node.
-    """
-
-    LAST_OBSERVATION_STATE = "last_observation_state"
-    """
-    The observation every node took most recently.
-    """
-
-    TICK_COUNT = "tick_count"
-    """
-    The tick the states were taken at.
-    """
-
-    MOTION_STATECHART = "motion_statechart"
-    """
-    The structure of the motion statechart, sent once per goal.
-    """
-
-    GOAL_ID = "goal_id"
-    """
-    The goal the feedback belongs to.
+    The keys of the motion statechart feedback sent to the action client on top of the
+    :class:`~cramph.data_types.StatechartPayloadKey`.
     """
 
     WAITING_FOR_CHILD = "waiting_for_child"
@@ -114,10 +86,10 @@ class ActionFeedbackPublisher:
         if self.executor.statechart is None:
             return
         data = self.create_states()
-        data[MotionStatechartPayloadKey.MOTION_STATECHART] = (
+        data[StatechartPayloadKey.STATECHART] = (
             self.executor.statechart.create_structure_copy().to_json()
         )
-        data[MotionStatechartPayloadKey.GOAL_ID] = self.action_server.goal_id
+        data[StatechartPayloadKey.GOAL_ID] = self.action_server.goal_id
         self.last_history_length = len(self.executor.statechart.state_history)
         self.send(data)
 
@@ -163,7 +135,7 @@ class ActionFeedbackPublisher:
         if self.executor.statechart is None:
             return
         data = self.create_states()
-        data[MotionStatechartPayloadKey.GOAL_ID] = self.action_server.goal_id
+        data[StatechartPayloadKey.GOAL_ID] = self.action_server.goal_id
         self.send(data)
 
     def create_states(self) -> dict[str, Any]:
@@ -174,10 +146,10 @@ class ActionFeedbackPublisher:
         """
         motion_statechart = self.executor.statechart
         states = {
-            MotionStatechartPayloadKey.TICK_COUNT: self.executor.tick_count,
-            MotionStatechartPayloadKey.LIFE_CYCLE_STATE: motion_statechart.life_cycle_state.to_json(),
-            MotionStatechartPayloadKey.OBSERVATION_STATE: motion_statechart.observation_state.to_json(),
-            MotionStatechartPayloadKey.LAST_OBSERVATION_STATE: motion_statechart.last_observation_state.to_json(),
+            StatechartPayloadKey.TICK_COUNT: self.executor.tick_count,
+            StatechartPayloadKey.LIFE_CYCLE_STATE: motion_statechart.life_cycle_state.to_json(),
+            StatechartPayloadKey.OBSERVATION_STATE: motion_statechart.observation_state.to_json(),
+            StatechartPayloadKey.LAST_OBSERVATION_STATE: motion_statechart.last_observation_state.to_json(),
             MotionStatechartPayloadKey.WAITING_FOR_CHILD: {
                 str(node.index): len(node.children)
                 for node in self._nodes_waiting_for_a_child()

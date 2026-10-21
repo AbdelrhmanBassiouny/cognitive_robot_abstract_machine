@@ -43,7 +43,7 @@ except ModuleNotFoundError:
     robot_extensions = None
 
 try:
-    from giskardpy.middleware.ros2 import rospy
+    from semantic_digital_twin.adapters.ros import rospy
 except ModuleNotFoundError:
     # ROS dependencies.
     rospy = None

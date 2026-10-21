@@ -10,8 +10,6 @@ from cramph.node import StatechartNode
 from cramph.world_modification_nodes import MoveBranch
 from krrood.ormatic.utils import classproperty
 from cramph.composites import Parallel
-from giskardpy.motion_statechart.binding_policy import GoalBindingPolicy
-from giskardpy.motion_statechart.goals.cartesian_goals import CartesianPoseStraight
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
@@ -203,12 +201,6 @@ class MovesToolCenterPoint(Action, ABC):
     :attr:`~coraplex.plans.context_extensions.MotionToleranceConfig.tool_orientation_threshold`.
     """
 
-    moves_tool_center_point_in_a_straight_line: bool = field(default=False, init=False)
-    """
-    Whether the tool center point travels to each target along a straight line, instead
-    of along whatever path the controller finds.
-    """
-
     @classproperty
     def context_extensions_required_to_expand(
         cls,
@@ -274,18 +266,8 @@ class MovesToolCenterPoint(Action, ABC):
         tip: KinematicStructureEntity,
     ) -> MotionStatechartNode:
         """
-        :return: The task that brings `tip` to `target`, along a straight line where
-            :attr:`moves_tool_center_point_in_a_straight_line`.
+        :return: The task that brings `tip` to `target`.
         """
-        if self.moves_tool_center_point_in_a_straight_line:
-            return CartesianPoseStraight(
-                root_link=root,
-                tip_link=tip,
-                goal_pose=target,
-                translation_threshold=self.resolved_position_threshold(),
-                orientation_threshold=self.resolved_orientation_threshold(),
-                binding_policy=GoalBindingPolicy.Bind_on_start,
-            )
         return CartesianPose(
             root_link=root,
             tip_link=tip,

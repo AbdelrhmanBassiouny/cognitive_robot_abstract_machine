@@ -20,13 +20,12 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from typing_extensions import Type
 
-from coraplex.datastructures.enums import VisualizationBackend
 from coraplex.plans.executors import (
     KinematicallySimulatedPlanExecutor,
     PlanExecutor,
     SimulatedPlanExecutor,
 )
-from coraplex.visualization import WorldVisualization
+from cramph.visualization import RvizVisualization, WorldVisualization
 from cramph.context import ContextExtension, StatechartContext
 from cramph.statechart import Statechart
 from semantic_digital_twin.adapters.ros.world_fetcher import fetch_world_from_service
@@ -193,15 +192,10 @@ class RobotDemonstration(ABC):
     ``None`` keeps the budget of the executor.
     """
 
-    default_visualization_backend: VisualizationBackend = VisualizationBackend.RVIZ
+    visualization: WorldVisualization | None = None
     """
-    The renderer a simulated run is shown with, unless the environment selects one.
-    """
-
-    visualization: WorldVisualization | None = field(init=False, default=None)
-    """
-    Shows every simulated run of this demonstration, selected through the environment;
-    ``None`` for a real run or when the environment selects no renderer.
+    Shows every simulated run of this demonstration. Left ``None``, a simulated run is
+    shown in RViz through :attr:`ros_node`, if there is one; a real run is never shown.
     """
 
     ros_session: RobotDemonstrationRosSession | None = field(init=False, default=None)
@@ -271,11 +265,10 @@ class RobotDemonstration(ABC):
         """
         self.ros_session = RobotDemonstrationRosSession.start(self.ros_node_name)
         if issubclass(self.executor_type, SimulatedPlanExecutor):
-            self.visualization = WorldVisualization.from_environment(
-                self.default_visualization_backend,
-                ros_node=self.ros_node,
-                collision_visualization=True,
-            )
+            if self.visualization is None and self.ros_node is not None:
+                self.visualization = RvizVisualization(
+                    ros_node=self.ros_node, collision_visualization=True
+                )
             return self.build_simulated_world()
         world = self.ros_session.fetch_world()
         WorldSynchronizer(_world=world, node=self.ros_session.node)

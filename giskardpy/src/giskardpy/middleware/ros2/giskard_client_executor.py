@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from cramph.data_types import StatechartPayloadKey
 import json
 from dataclasses import dataclass, field
 from threading import Thread
@@ -17,7 +18,7 @@ from cramph.composites import ChildChooserAccess
 from cramph.context import ContextExtension, StatechartContext
 from cramph.executor import Executor, ExecutorExtension
 from cramph.statechart import Statechart
-from giskardpy.middleware.ros2 import rospy
+from semantic_digital_twin.adapters.ros import rospy
 from giskardpy.middleware.ros2.child_choices import (
     ChildChoiceClient,
     child_choices_topic,
@@ -27,7 +28,6 @@ from giskardpy.middleware.ros2.exceptions import (
     NoActiveGoalToCancelError,
     StatechartNotEndedByResultError,
 )
-from giskardpy.middleware.ros2.feedback_publisher import MotionStatechartPayloadKey
 from giskardpy.middleware.ros2.motion_goal import MotionGoal
 from giskardpy.middleware.ros2.ros2_interface import MyActionClient
 from giskardpy.middleware.ros2.state_updates import StatechartStateUpdate
@@ -267,7 +267,7 @@ class GiskardClientExecutor(Executor):
         """
         result_json = json.loads(result.result.result)
         if result.status == GoalStatus.STATUS_ABORTED:
-            if MotionStatechartPayloadKey.LIFE_CYCLE_STATE in result_json:
+            if StatechartPayloadKey.LIFE_CYCLE_STATE in result_json:
                 StatechartStateUpdate.from_json(
                     result_json, statechart=self.statechart
                 ).apply()

@@ -8,6 +8,7 @@ whatever observes the copy sees the goal progress.
 
 from __future__ import annotations
 
+from cramph.data_types import StatechartPayloadKey
 from dataclasses import dataclass
 
 from typing_extensions import Any, Self
@@ -20,7 +21,6 @@ from cramph.statechart import (
     StateHistoryItem,
 )
 from giskardpy.middleware.ros2.exceptions import StateUpdateAheadOfStatechartError
-from giskardpy.middleware.ros2.feedback_publisher import MotionStatechartPayloadKey
 
 # %% the states Giskard reports
 
@@ -65,17 +65,17 @@ class StatechartStateUpdate:
         """
         return cls(
             statechart=statechart,
-            tick_count=payload[MotionStatechartPayloadKey.TICK_COUNT],
+            tick_count=payload[StatechartPayloadKey.TICK_COUNT],
             life_cycle_state=LifeCycleState.from_json(
-                payload[MotionStatechartPayloadKey.LIFE_CYCLE_STATE],
+                payload[StatechartPayloadKey.LIFE_CYCLE_STATE],
                 statechart=statechart,
             ),
             observation_state=ObservationState.from_json(
-                payload[MotionStatechartPayloadKey.OBSERVATION_STATE],
+                payload[StatechartPayloadKey.OBSERVATION_STATE],
                 statechart=statechart,
             ),
             last_observation_state=LastObservationState.from_json(
-                payload[MotionStatechartPayloadKey.LAST_OBSERVATION_STATE],
+                payload[StatechartPayloadKey.LAST_OBSERVATION_STATE],
                 statechart=statechart,
             ),
         )

@@ -12,7 +12,7 @@ parts:
 
   - caption: Concepts
     chapters:
-    - file: plan.md
+    - file: statechart.md
     - file: designators.md
     - file: orm_concept.md
     - file: abstract_robot.md

@@ -25,7 +25,6 @@ from giskardpy.motion_statechart.goals.base_pose_goals import (
     DifferentialDriveBaseGoal,
     HolonomicBaseGoal,
 )
-from giskardpy.motion_statechart.goals.cartesian_goals import CartesianPoseStraight
 from giskardpy.motion_statechart.goals.grasped_mechanism import (
     ArticulateGraspedMechanism,
 )
@@ -34,6 +33,7 @@ from giskardpy.motion_statechart.monitors.overwrite_state_monitors import SetOdo
 from giskardpy.motion_statechart.tasks.align_planes import AlignPlanes
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
+    CartesianPositionStraight,
     HoldOrientation,
     HoldPose,
 )
@@ -438,11 +438,7 @@ def reaching_goals_of(action: ReachAction) -> list[StatechartNode]:
         what accompanies it; any other goal is the first node of its step.
     """
     return [
-        (
-            step
-            if isinstance(step, (CartesianPose, CartesianPoseStraight))
-            else step.nodes[0]
-        )
+        step if isinstance(step, CartesianPose) else step.nodes[0]
         for step in action.nodes
     ]
 
@@ -475,7 +471,7 @@ def test_stretch_reaches_in_a_straight_line(
     for goal, default_goal in zip(
         reaching_goals_of(action), reaching_goals_of(unchanged), strict=True
     ):
-        assert type(goal) is CartesianPoseStraight
+        assert type(goal.nodes[0]) is CartesianPositionStraight
         assert goal.root_link is default_goal.root_link
         assert goal.tip_link is default_goal.tip_link
         np.testing.assert_allclose(
@@ -505,7 +501,7 @@ def test_stretch_lifts_in_a_straight_line(
         )
     )
 
-    assert type(goal) is CartesianPoseStraight
+    assert type(goal.nodes[0]) is CartesianPositionStraight
     assert goal.root_link is unchanged.root_link
     assert goal.tip_link is unchanged.tip_link
     np.testing.assert_allclose(goal.goal_pose.to_np(), unchanged.goal_pose.to_np())

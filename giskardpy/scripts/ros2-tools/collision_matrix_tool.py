@@ -35,7 +35,7 @@ from PyQt5.QtWidgets import (
 )
 from typing_extensions import Callable
 
-from giskardpy.middleware.ros2 import rospy
+from semantic_digital_twin.adapters.ros import rospy
 from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
     VizMarkerPublisher,
     ShapeSource,

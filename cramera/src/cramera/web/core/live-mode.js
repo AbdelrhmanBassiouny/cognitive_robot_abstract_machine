@@ -57,7 +57,7 @@
         return 'Switch to the live view of the running demo — this leaves the recorded '
           + 'scene, and an arrangement made here does not carry over';
       }
-      return 'Attach to the running demo (cramera-live bridge) — renders the live world '
+      return 'Attach to the running demo (live bridge) — renders the live world '
         + 'instead of the recording';
     },
 

@@ -296,7 +296,7 @@ def test_a_plan_that_violates_collision_avoidance_fails_as_a_plan_failure(
     instead of stopping.
     """
     world, robot_view, extensions = pr2_apartment_context
-    violation = CollisionViolatedError(violated_collisions=[], thresholds=[])
+    violation = CollisionViolatedError(violated_collisions=[])
 
     def violate_collision_avoidance(executor: StatechartExecutor) -> None:
         raise violation

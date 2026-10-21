@@ -57,6 +57,7 @@ class Pacer(ABC):
 
         Nothing to wait for unless the loop drives a physics in lockstep.
         """
+        return None
 
 
 @dataclass
@@ -69,9 +70,10 @@ class NoPacing(Pacer):
         """
         Does nothing, since this pacer never waits.
         """
+        return None
 
     def sleep(self) -> None:
-        pass
+        return None
 
 
 @dataclass
@@ -218,11 +220,12 @@ class ExecutorExtension:
 
     def extend_context(self, context: StatechartContext) -> None:
         """
-        Called once when the executor is created, before a
-        :class:`StatechartExecutor` lets its pacer read the tick duration of `context`.
+        Called once when the executor is created, before a :class:`StatechartExecutor`
+        lets its pacer read the tick duration of `context`.
 
         :param context: The context handed to every node of the executed statecharts.
         """
+        return None
 
     def after_compile(self, executor: Executor) -> None:
         """
@@ -230,6 +233,7 @@ class ExecutorExtension:
 
         :param executor: The executor this extension belongs to.
         """
+        return None
 
     def after_run(self, executor: Executor) -> None:
         """
@@ -237,6 +241,7 @@ class ExecutorExtension:
 
         :param executor: The executor this extension belongs to.
         """
+        return None
 
 
 @dataclass
@@ -259,9 +264,9 @@ class TickingExecutorExtension(ExecutorExtension):
 
     def after_recompile(self, executor: StatechartExecutor) -> None:
         """
-        Called every time a statechart that already compiled compiled again, which
-        keeps its state, its history and the tick count. Does what
-        :meth:`after_compile` does unless overridden.
+        Called every time a statechart that already compiled compiled again, which keeps
+        its state, its history and the tick count. Does what :meth:`after_compile` does
+        unless overridden.
 
         :param executor: The executor this extension belongs to.
         """
@@ -273,6 +278,7 @@ class TickingExecutorExtension(ExecutorExtension):
 
         :param executor: The executor this extension belongs to.
         """
+        return None
 
     def after_tick(self, executor: StatechartExecutor) -> None:
         """
@@ -280,6 +286,7 @@ class TickingExecutorExtension(ExecutorExtension):
 
         :param executor: The executor this extension belongs to.
         """
+        return None
 
 
 GenericExecutorExtension = TypeVar("GenericExecutorExtension", bound=ExecutorExtension)
@@ -314,9 +321,9 @@ class Executor(ABC):
     def __post_init__(self) -> None:
         """
         Adds the :meth:`default_context_extensions` to :attr:`context` and the
-        :meth:`default_executor_extensions` to :attr:`extensions`, keeping any
-        extension of the same type that is already there, and lets every extension
-        extend :attr:`context`.
+        :meth:`default_executor_extensions` to :attr:`extensions`, keeping any extension
+        of the same type that is already there, and lets every extension extend
+        :attr:`context`.
         """
         for default_extension in self.default_context_extensions():
             self.context.ensure_extension(default_extension)
@@ -481,8 +488,10 @@ class StatechartExecutor(Executor, RecompileCallback):
 
     def after_recompile(self) -> None:
         """
-        Let every extension compile again, so what it builds from the nodes covers
-        every node of the statechart. The tick count is not restarted.
+        Let every extension compile again, so what it builds from the nodes covers every
+        node of the statechart.
+
+        The tick count is not restarted.
         """
         for extension in self.ticking_extensions:
             extension.after_recompile(self)

@@ -7,7 +7,7 @@ import pytest
 from cramph.executor import Executor, ExecutorExtension
 from cramph.monitors import CountTicks
 from cramph.statechart import Statechart
-from giskardpy.middleware.ros2 import rospy
+from semantic_digital_twin.adapters.ros import rospy
 from giskardpy.middleware.ros2.action_server import ActionServerHandler, GoalOutcome
 from giskardpy.middleware.ros2.exceptions import ExecutionAbortedException
 from giskardpy.middleware.ros2.giskard_client_executor import (

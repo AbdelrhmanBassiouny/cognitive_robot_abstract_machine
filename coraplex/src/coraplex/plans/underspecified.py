@@ -17,7 +17,7 @@ from coraplex.robot_plans.plan_transformations import WriteTheOdometryInsteadOfD
 from coraplex.robot_plans.robot_specific_plan_transformations import (
     KeepStretchInFrontOfTheContainerItCloses,
 )
-from coraplex.visualization import RvizVisualization
+from cramph.visualization import RvizVisualization
 from cramph.context import StatechartContext
 from cramph.composites import (
     ChildChooser,

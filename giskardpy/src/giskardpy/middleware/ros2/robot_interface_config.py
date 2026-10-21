@@ -8,7 +8,7 @@ from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 
 from cramph.executor import NoPacing, Pacer, RealTimePacer
-from giskardpy.middleware.ros2 import rospy
+from semantic_digital_twin.adapters.ros import rospy
 from giskardpy.middleware.ros2.command_publishing import (
     DriveVelocityCommandPublisher,
     Float64MultiArrayFormat,

@@ -35,6 +35,7 @@ class ContextExtension:
         """
         Releases what the extension acquired while the statechart was running.
         """
+        return None
 
 
 GenericContextExtension = TypeVar("GenericContextExtension", bound=ContextExtension)

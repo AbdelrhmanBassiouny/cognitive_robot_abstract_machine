@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 
 from cramph.statechart import Statechart
-from giskardpy.middleware.ros2 import rospy
+from semantic_digital_twin.adapters.ros import rospy
 from giskardpy.middleware.ros2.command_publishing import (
     JointGroupVelocityCommandPublisher,
 )

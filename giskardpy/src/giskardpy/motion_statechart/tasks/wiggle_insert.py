@@ -10,7 +10,7 @@ import krrood.symbolic_math.symbolic_math as symbolic_math
 from giskardpy.motion_statechart.context import MotionControlContext
 from krrood.ormatic.utils import classproperty
 from cramph.context import ContextExtension
-from giskardpy.motion_statechart.data_types import DefaultWeights
+from giskardpy.motion_statechart.weights import DefaultWeights
 from cramph.data_types import ObservationStateValues
 from giskardpy.motion_statechart.graph_node import (
     ConvergingTask,

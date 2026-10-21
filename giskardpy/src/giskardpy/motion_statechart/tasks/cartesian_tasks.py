@@ -15,7 +15,7 @@ from giskardpy.motion_statechart.binding_policy import (
     GoalBindingPolicy,
     ForwardKinematicsBinding,
 )
-from giskardpy.motion_statechart.data_types import DefaultWeights
+from giskardpy.motion_statechart.weights import DefaultWeights
 from giskardpy.motion_statechart.error_signals import (
     joint_position_and_velocity_variables,
     time_derivative_from_joint_motion,
@@ -741,10 +741,10 @@ class CartesianPose(Parallel):
         """
         if self.root_link is None:
             self.root_link = self.context.world.root
-        self.nodes[:0] = self._create_tasks()
+        self.nodes[:0] = self.create_tasks()
         super().expand()
 
-    def _create_tasks(self) -> list[MotionStatechartNode]:
+    def create_tasks(self) -> list[MotionStatechartNode]:
         """
         :return: The position and the orientation task.
         """

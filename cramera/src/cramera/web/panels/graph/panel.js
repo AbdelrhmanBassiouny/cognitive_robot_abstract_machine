@@ -7,7 +7,7 @@
  *   Kinematics  the robot's URDF tree (links as nodes, joints as edges)
  *   Transforms  the executing world's connection graph, node border = freshness
  *
- * The tabs in LIVE_ENDPOINT take their node status from the cramera-live bridge
+ * The tabs in LIVE_ENDPOINT take their node status from the live bridge
  * while it is attached: structure changes rebuild the graph, pure status
  * changes only re-colour the rings (no layout jumps). Without a bridge, the
  * Statechart tab follows the playhead through the statecharts the played

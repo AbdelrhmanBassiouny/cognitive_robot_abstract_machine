@@ -13,7 +13,7 @@ import pytest
 from rclpy.qos import QoSDurabilityPolicy, QoSProfile
 from std_msgs.msg import String
 
-from giskardpy.middleware.ros2 import rospy
+from semantic_digital_twin.adapters.ros import rospy
 from giskardpy.middleware.ros2.ros2_interface import get_robot_description
 from giskardpy.middleware.ros2.scripts.iai_robots.daisy import (
     daisy_standalone,

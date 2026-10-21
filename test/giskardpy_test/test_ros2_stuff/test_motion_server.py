@@ -1,3 +1,4 @@
+from cramph.data_types import StatechartPayloadKey
 import json
 from dataclasses import dataclass, field
 from typing import Any, List, Optional
@@ -5,7 +6,7 @@ from typing import Any, List, Optional
 import pytest
 
 from cramph.executor import NoPacing
-from giskardpy.middleware.ros2 import rospy
+from semantic_digital_twin.adapters.ros import rospy
 from giskardpy.middleware.ros2.action_server import GoalOutcome
 from giskardpy.middleware.ros2.client_presence import ClientWatchdog, HeartbeatPresence
 from giskardpy.middleware.ros2.command_publishing import CommandPublisher
@@ -19,7 +20,6 @@ from giskardpy.middleware.ros2.exceptions import (
 )
 from giskardpy.middleware.ros2.feedback_publisher import (
     ActionFeedbackPublisher,
-    MotionStatechartPayloadKey,
 )
 from giskardpy.middleware.ros2.cycle_counter import CycleCounter
 from semantic_digital_twin.input_synchronization import (
@@ -878,7 +878,7 @@ class TestGoalResult:
         motion_statechart = motion_server.executor.statechart
         assert (
             LastObservationState.from_json(
-                result[MotionStatechartPayloadKey.LAST_OBSERVATION_STATE],
+                result[StatechartPayloadKey.LAST_OBSERVATION_STATE],
                 statechart=motion_statechart,
             )
             == motion_statechart.last_observation_state
@@ -900,7 +900,7 @@ class TestStatesOfAFailedGoal:
         motion_server.motion_server.run_idle_cycle()
 
         result = json.loads(motion_server.action_server.sent_results[-1].result)
-        assert MotionStatechartPayloadKey.LIFE_CYCLE_STATE not in result
+        assert StatechartPayloadKey.LIFE_CYCLE_STATE not in result
 
 
 class TestCleanupAfterGoal:
@@ -1010,7 +1010,7 @@ class TestStateFeedback:
 
         last_feedback = feedback_data(motion_server.action_server.feedback_messages[-1])
         assert (
-            last_feedback[MotionStatechartPayloadKey.TICK_COUNT]
+            last_feedback[StatechartPayloadKey.TICK_COUNT]
             == motion_server.executor.tick_count
         )
 
@@ -1037,7 +1037,7 @@ class TestGoalStructureFeedback:
 
         assert watcher.published_feedback_per_cycle[0] == 1
         first_feedback = feedback_data(motion_server.action_server.feedback_messages[0])
-        assert "motion_statechart" in first_feedback
+        assert StatechartPayloadKey.STATECHART in first_feedback
 
     def test_the_structure_is_published_once_per_goal(
         self, motion_server: MotionServerFixture
@@ -1049,7 +1049,7 @@ class TestGoalStructureFeedback:
         structures = [
             message
             for message in motion_server.action_server.feedback_messages
-            if "motion_statechart" in feedback_data(message)
+            if StatechartPayloadKey.STATECHART in feedback_data(message)
         ]
         assert len(structures) == 1
 
@@ -1064,7 +1064,7 @@ class TestGoalStructureFeedback:
         goal_ids_with_structure = [
             feedback_data(message)["goal_id"]
             for message in motion_server.action_server.feedback_messages
-            if "motion_statechart" in feedback_data(message)
+            if StatechartPayloadKey.STATECHART in feedback_data(message)
         ]
         assert goal_ids_with_structure == [0, 1]
 

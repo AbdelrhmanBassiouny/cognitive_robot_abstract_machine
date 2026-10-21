@@ -214,6 +214,7 @@ class ControlStructureNode(CompositeNode, ABC):
 
         :param node: The node the caller handed over.
         """
+        return None
 
     def _wire_children(self) -> None:
         """
@@ -221,6 +222,7 @@ class ControlStructureNode(CompositeNode, ABC):
 
         Wires nothing unless overridden.
         """
+        return None
 
     def _has_child(self, node: StatechartNode) -> bool:
         """

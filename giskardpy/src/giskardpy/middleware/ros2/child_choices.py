@@ -15,6 +15,7 @@ published before.
 
 from __future__ import annotations
 
+from cramph.data_types import StatechartPayloadKey
 import time
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -70,12 +71,8 @@ def child_choices_topic(giskard_node_name: str) -> str:
 
 class ChildChoicePayloadKey(StrEnum):
     """
-    The keys of a child choice sent to Giskard.
-    """
-
-    GOAL_ID = "goal_id"
-    """
-    The goal the choice belongs to.
+    The keys of a child choice sent to Giskard on top of
+    :attr:`~cramph.data_types.StatechartPayloadKey.GOAL_ID`.
     """
 
     NODE_INDEX = "node_index"
@@ -136,7 +133,7 @@ class ChildChoiceMessage(SubclassJSONSerializer):
     def to_json(self, **kwargs: Any) -> dict[str, Any]:
         return {
             **super().to_json(**kwargs),
-            ChildChoicePayloadKey.GOAL_ID: self.goal_id,
+            StatechartPayloadKey.GOAL_ID: self.goal_id,
             ChildChoicePayloadKey.NODE_INDEX: self.node_index,
             ChildChoicePayloadKey.FIRST_NODE_INDEX: self.first_node_index,
             ChildChoicePayloadKey.NODES: self.nodes,
@@ -151,7 +148,7 @@ class ChildChoiceMessage(SubclassJSONSerializer):
     def _from_json(cls, data: dict[str, Any], **kwargs: Any) -> Self:
         required_position = data[ChildChoicePayloadKey.REQUIRED_POSITION]
         return cls(
-            goal_id=data[ChildChoicePayloadKey.GOAL_ID],
+            goal_id=data[StatechartPayloadKey.GOAL_ID],
             node_index=data[ChildChoicePayloadKey.NODE_INDEX],
             first_node_index=data[ChildChoicePayloadKey.FIRST_NODE_INDEX],
             nodes=data[ChildChoicePayloadKey.NODES],
@@ -342,7 +339,7 @@ class ChildChoiceClient:
         ):
             return []
         self._waiting_for_changes_since = None
-        goal_id = feedback[MotionStatechartPayloadKey.GOAL_ID]
+        goal_id = feedback[StatechartPayloadKey.GOAL_ID]
         messages = []
         for index, child_count in feedback[
             MotionStatechartPayloadKey.WAITING_FOR_CHILD

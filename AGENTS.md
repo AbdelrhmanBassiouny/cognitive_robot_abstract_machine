@@ -78,7 +78,8 @@
 - Those mimic classes import only `krrood`, `random_events` and `probabilistic_model`
 
 ### cramph Isolation
-- `cramph`, including its tests under `test/cramph_test`, imports only `krrood` and `semantic_digital_twin` among the workspace packages - in particular not `giskardpy`, `coraplex`, `segmind`, `physics_simulators`, `robokudo`, `experiments` or any ROS package. `test/cramph_test/test_package_dependencies.py` enforces this
+- `cramph`, including its tests under `test/cramph_test`, imports only `krrood` and `semantic_digital_twin` among the workspace packages - in particular not `giskardpy`, `coraplex`, `segmind`, `physics_simulators`, `robokudo` or `experiments`
+- ROS is a soft dependency of `cramph`: only a tool that needs it, such as the statechart inspector, imports ROS packages, and nothing else in `cramph` imports that tool
 - Generic statechart behaviour (life cycles, transition conditions, ticking, composite nodes, generic monitors, plotting) belongs in `cramph`; motion-specific behaviour (QP constraints, tasks, world and robot monitors) belongs in `giskardpy`, built on top of `cramph`
 
 ## Design Principles

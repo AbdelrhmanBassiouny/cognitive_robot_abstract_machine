@@ -20,15 +20,10 @@ locally. Their versions, checksums and licenses are documented in
 
 ## Follow a live demo
 
-In another terminal using the same environment:
-
-```bash
-cramera-live path/to/demo.py
-```
-
-The wrapper selects CRAMERA through CRAM's visualization backend. The live bridge
-serves the world's geometry and state on port 8765. Open the viewer and choose Live
-to follow the robot, objects, plan progress and motion statecharts. The viewer
+Add a `cramera.live.visualization.LiveVisualization` to the extensions of the executor
+running the demo, or pass it as the `visualization` of a `RobotDemonstration`. The live
+bridge serves the world's geometry and state on port 8765. Open the viewer and choose
+Live to follow the robot, objects, plan progress and motion statecharts. The viewer
 observes execution; it offers no robot or plan editing controls.
 
 Use one live session per `CRAMERA_DATA` directory. Separate simultaneous sessions
@@ -93,8 +88,6 @@ package. New recordings are written under `CRAMERA_DATA/scenes`.
 The frontend mounts independent panels through `web/core/registry.js` and an event
 bus. `web/config.js` chooses the layout. The Python `live` package observes existing
 world and plan callbacks; `knowledge` answers queries and builds inspection views.
-The visualization provider is registered through the `coraplex.visualizations`
-entry-point group.
 
 See [core scope](docs/core_scope.md) for the boundaries of this package.
 

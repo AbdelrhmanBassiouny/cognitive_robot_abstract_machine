@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from cramph.statechart import Statechart
-from giskardpy.middleware.ros2 import rospy
+from semantic_digital_twin.adapters.ros import rospy
 from giskardpy.middleware.ros2.giskard_client_executor import GiskardClientExecutor
 from giskardpy.motion_statechart.graph_node import EndMotion
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList, JointState

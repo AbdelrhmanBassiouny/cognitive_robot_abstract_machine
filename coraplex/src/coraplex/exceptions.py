@@ -5,10 +5,6 @@ from dataclasses import dataclass
 from typing_extensions import TYPE_CHECKING, Type
 
 from krrood.exceptions import DataclassException
-from coraplex.datastructures.enums import (
-    VisualizationBackend,
-    VisualizationOption,
-)
 from coraplex.plans.failures import PlanFailure
 
 if TYPE_CHECKING:
@@ -19,73 +15,6 @@ if TYPE_CHECKING:
     from semantic_digital_twin.world_description.world_entity import (
         SemanticAnnotation,
     )
-
-
-# %% visualization
-@dataclass
-class UnknownVisualizationOption(DataclassException):
-    """
-    A configuration value does not name a supported visualization option.
-    """
-
-    variable: VisualizationOption
-    """
-    The environment setting containing the unknown value.
-    """
-
-    value: str
-    """
-    The rejected value.
-    """
-
-    def error_message(self) -> str:
-        """
-        Identify the rejected environment setting and value.
-        """
-        return f"Unknown visualization option {self.variable}={self.value!r}."
-
-    def suggest_correction(self) -> str:
-        """
-        Describe how to select a supported renderer configuration.
-        """
-        return "Choose a supported visualization backend or Rerun mode."
-
-
-@dataclass
-class VisualizationBackendUnavailable(DataclassException):
-    """
-    A selected renderer has no available provider.
-    """
-
-    backend: VisualizationBackend
-    """
-    The renderer that could not be started.
-    """
-
-    def error_message(self) -> str:
-        """
-        Identify the renderer whose provider could not be loaded.
-        """
-        return f"Visualization backend {self.backend.value!r} is unavailable."
-
-    def suggest_correction(self) -> str:
-        """
-        Describe how to make the selected provider available.
-        """
-        return "Install the selected visualization provider or select another backend."
-
-
-@dataclass
-class RvizVisualizationWithoutRosNode(DataclassException):
-    """
-    RViz is selected as the renderer, but no ROS node is given to publish through.
-    """
-
-    def error_message(self) -> str:
-        return "RViz is selected as the renderer without a ROS node to publish through."
-
-    def suggest_correction(self) -> str:
-        return "Pass a ROS node when selecting the visualization, or select another backend."
 
 
 # %% plan execution

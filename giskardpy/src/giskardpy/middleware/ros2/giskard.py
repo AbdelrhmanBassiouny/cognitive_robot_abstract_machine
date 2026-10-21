@@ -15,7 +15,7 @@ from std_msgs.msg import String
 from sqlalchemy.orm import sessionmaker
 
 from giskardpy.data_types.exceptions import NoControlledJointsError
-from giskardpy.middleware.ros2 import rospy
+from semantic_digital_twin.adapters.ros import rospy
 from giskardpy.middleware.ros2.action_server import ActionServerHandler
 from giskardpy.middleware.ros2.child_choices import (
     ChildChoiceMessage,

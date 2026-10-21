@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from giskardpy.motion_statechart.data_types import DefaultWeights
+from giskardpy.motion_statechart.weights import DefaultWeights
 from giskardpy.motion_statechart.graph_node import (
     ConvergingTask,
     MotionNodeArtifacts,

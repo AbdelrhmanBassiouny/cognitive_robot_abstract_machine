@@ -7,7 +7,7 @@ import pytest
 
 from giskardpy.motion_statechart.binding_policy import GoalBindingPolicy
 from cramph.data_types import ObservationStateValues, LifeCycleValues
-from giskardpy.motion_statechart.data_types import DefaultWeights
+from giskardpy.motion_statechart.weights import DefaultWeights
 from giskardpy.motion_statechart.goals.base_pose_goals import DifferentialDriveBaseGoal
 from giskardpy.motion_statechart.goals.cartesian_goals import CartesianPoseStraight
 from cramph.composites import Sequence, Parallel

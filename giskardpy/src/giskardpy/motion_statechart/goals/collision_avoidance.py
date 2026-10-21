@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import field, dataclass
 
-from abc import ABC, abstractmethod
+from abc import ABC
 
 from itertools import combinations
 
@@ -12,7 +12,7 @@ from krrood.ormatic.utils import classproperty
 from cramph.node import EndedByOwner, SucceedsOnObservingTrue
 from cramph.context import ContextExtension
 from cramph.data_types import ObservationStateValues
-from giskardpy.motion_statechart.data_types import DefaultWeights
+from giskardpy.motion_statechart.weights import DefaultWeights
 from giskardpy.motion_statechart.exceptions import (
     UnexpectedWorldEntityCountError,
     CollisionViolatedError,
@@ -25,8 +25,10 @@ from cramph.node import CompositeNode, NodeArtifacts, CancelStatechart
 from giskardpy.motion_statechart.graph_node import Task
 from cramph.plotters.plot_specs import NodePlotSpec, plot_specification_field
 from krrood.symbolic_math.symbolic_math import Scalar
-from semantic_digital_twin.collision_checking.collision_detector import ClosestPoints
-from semantic_digital_twin.collision_checking.collision_groups import CollisionGroup
+from semantic_digital_twin.collision_checking.collision_groups import (
+    CollisionGroup,
+    CollisionGroupCombination,
+)
 from semantic_digital_twin.collision_checking.collision_matrix import (
     CollisionRule,
     CollisionMatrix,
@@ -36,6 +38,10 @@ from semantic_digital_twin.collision_checking.collision_rules import (
     AvoidSelfCollisions,
 )
 from semantic_digital_twin.collision_checking.collision_variable_managers import (
+    AvoidedContact,
+    AvoidedExternalContact,
+    AvoidedSelfContact,
+    BaseCollisionVariableManager,
     SelfCollisionVariableManager,
     ExternalCollisionVariableManager,
 )
@@ -66,6 +72,21 @@ class _CollisionAvoidanceTask(ABC, Task):
     The maximum velocity for the collision avoidance task.
     """
 
+    collision_variable_manager: BaseCollisionVariableManager | None = field(
+        default=None, init=False, repr=False
+    )
+    """
+    The collision variable manager of the context this node is built in, which holds the
+    data of :attr:`avoided_contacts`.
+    """
+
+    avoided_contacts: list[AvoidedContact] = field(
+        default_factory=list, init=False, repr=False
+    )
+    """
+    One avoided contact per constraint, in order.
+    """
+
     @classproperty
     def required_context_extensions(cls) -> tuple[type[ContextExtension], ...]:
         return super().required_context_extensions + (MotionControlContext,)
@@ -84,24 +105,21 @@ class _CollisionAvoidanceTask(ABC, Task):
             else_result=DefaultWeights.WEIGHT_COLLISION_AVOIDANCE,
         )
 
-    @staticmethod
-    def _none_violated(distances: list[tuple[Scalar, Scalar]]) -> Scalar:
+    def _none_violated(self) -> Scalar:
         """
-        :param distances: The contact distance and the violated distance of every
-            avoided collision.
-        :return: An expression that is True while no contact distance is below its
-            violated distance.
+        :return: An expression that is True while the distance of no avoided contact is
+            below its violated distance.
         """
-        if not distances:
+        if not self.avoided_contacts:
             return Scalar.const_true()
-        return sm.logic_all([contact >= violated for contact, violated in distances])
-
-    @abstractmethod
-    def violated_collisions(self) -> list[tuple[ClosestPoints, float]]:
-        """
-        :return: Every avoided collision whose contact distance is below its violated
-            distance, with that violated distance.
-        """
+        manager = self.collision_variable_manager
+        return sm.logic_all(
+            [
+                manager.get_contact_distance_symbol(contact)
+                >= manager.get_violated_distance_symbol(contact)
+                for contact in self.avoided_contacts
+            ]
+        )
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
@@ -139,15 +157,15 @@ class _CancelBecauseCollisionViolated(CancelStatechart):
         return sm.logic_or(*[node.observes_false for node in self.tasks])
 
     def create_exception(self) -> CollisionViolatedError:
-        violated = [
-            violation
-            for task in self.tasks
-            if task.observation_state == ObservationStateValues.FALSE
-            for violation in task.violated_collisions()
-        ]
         return CollisionViolatedError(
-            violated_collisions=[collision for collision, _ in violated],
-            thresholds=[threshold for _, threshold in violated],
+            violated_collisions=[
+                violation
+                for task in self.tasks
+                if task.observation_state == ObservationStateValues.FALSE
+                for violation in task.collision_variable_manager.violated_collisions(
+                    task.avoided_contacts
+                )
+            ]
         )
 
 
@@ -182,20 +200,13 @@ class _ExternalCollisionAvoidanceTask(_CollisionAvoidanceTask):
     observation turns false once a distance drops below its violated distance.
     """
 
-    _external_collision_manager: ExternalCollisionVariableManager | None = field(
+    collision_variable_manager: ExternalCollisionVariableManager | None = field(
         default=None, init=False, repr=False
     )
-    """
-    The external collision variable manager of the context this node is built in.
-    """
 
-    avoided_contacts: list[tuple[CollisionGroup, int]] = field(
+    avoided_contacts: list[AvoidedExternalContact] = field(
         default_factory=list, init=False, repr=False
     )
-    """
-    One entry per constraint, in order: the collision group and the rank by distance of
-    the environment object it avoids, 0 for the closest.
-    """
 
     def build(self) -> NodeArtifacts:
         """
@@ -203,17 +214,14 @@ class _ExternalCollisionAvoidanceTask(_CollisionAvoidanceTask):
         with the external collision variable manager of :attr:`context`, which this node
         reads from then on.
         """
-        self._external_collision_manager = self.context.require_extension(
+        self.collision_variable_manager = self.context.require_extension(
             MotionControlContext
         ).external_collision_manager
         self.avoided_contacts = []
         for group in self._groups_avoiding_external_collisions():
-            self._external_collision_manager.register_group_of_body(group.root)
+            self.collision_variable_manager.register_group_of_body(group.root)
             self.avoided_contacts.extend(
-                (group, index)
-                for index in range(
-                    group.get_max_avoided_bodies(self.context.world.collision_manager)
-                )
+                self.collision_variable_manager.avoided_contacts_of(group)
             )
         return super().build()
 
@@ -227,62 +235,34 @@ class _ExternalCollisionAvoidanceTask(_CollisionAvoidanceTask):
         for body in self.robot.bodies_with_collision:
             if not self.context.world.collision_manager.get_max_avoided_bodies(body):
                 continue
-            group = self._external_collision_manager.get_collision_group(body)
+            group = self.collision_variable_manager.get_collision_group(body)
             if group not in groups and group.root in robot_bodies:
                 groups.append(group)
         return groups
 
     def build_artifacts(self) -> MotionNodeArtifacts:
         artifacts = MotionNodeArtifacts()
-        manager = self._external_collision_manager
-        for group, index in self.avoided_contacts:
+        manager = self.collision_variable_manager
+        for contact in self.avoided_contacts:
             root_T_group = self.context.world.compose_forward_kinematics_expression(
-                self.context.world.root, group.root
+                self.context.world.root, contact.group.root
             )
             root_V_point_on_group = (
-                root_T_group @ manager.get_group_a_P_point_on_a_symbol(group, index)
+                root_T_group @ manager.get_group_a_P_point_on_a_symbol(contact)
             ).vector3
-            root_V_contact_normal = manager.get_root_V_contact_normal_symbol(
-                group, index
-            )
+            root_V_contact_normal = manager.get_root_V_contact_normal_symbol(contact)
             artifacts.constraints.add_inequality_constraint(
-                name=f"{group.root.name}/{index}",
+                name=f"{contact.group.root.name}/{contact.rank}",
                 reference_velocity=self.max_velocity,
-                lower_error=manager.get_buffer_distance_symbol(group, index)
-                - manager.get_contact_distance_symbol(group, index),
+                lower_error=manager.get_buffer_distance_symbol(contact)
+                - manager.get_contact_distance_symbol(contact),
                 upper_error=float("inf"),
                 quadratic_weight=self._weight_while_close(root_V_contact_normal),
                 # the position distance is not accurate, but the derivative is still correct
                 task_expression=root_V_contact_normal @ root_V_point_on_group,
             )
-        artifacts.observation = self._none_violated(
-            [
-                (
-                    manager.get_contact_distance_symbol(group, index),
-                    manager.get_violated_distance_symbol(group, index),
-                )
-                for group, index in self.avoided_contacts
-            ]
-        )
+        artifacts.observation = self._none_violated()
         return artifacts
-
-    def violated_collisions(self) -> list[tuple[ClosestPoints, float]]:
-        manager = self._external_collision_manager
-        violated = []
-        for group, index in self.avoided_contacts:
-            contact_distance = manager.get_contact_distance_symbol(
-                group, index
-            ).evaluate()[0]
-            violated_distance = manager.get_violated_distance_symbol(
-                group, index
-            ).evaluate()[0]
-            if contact_distance < violated_distance:
-                closest_first = sorted(
-                    manager.last_closest_contacts[group],
-                    key=lambda contact: contact.distance,
-                )
-                violated.append((closest_first[index], violated_distance))
-        return violated
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
@@ -394,7 +374,7 @@ class ExternalCollisionDistanceMonitor(EndedByOwner, MotionStatechartNode):
 
         # 3. Retrieve the symbolic variable for the contact distance
         distance_symbol = manager.get_contact_distance_symbol(
-            group=group, idx=self.collision_index
+            AvoidedExternalContact(group=group, rank=self.collision_index)
         )
 
         # 4. Return an observation artifact
@@ -506,32 +486,20 @@ class _SelfCollisionAvoidanceTask(_CollisionAvoidanceTask):
     Its observation turns false once a distance drops below its violated distance.
     """
 
-    _self_collision_manager: SelfCollisionVariableManager | None = field(
+    collision_variable_manager: SelfCollisionVariableManager | None = field(
         default=None, init=False, repr=False
     )
-    """
-    The self collision variable manager of the context this node is built in.
-    """
 
-    checked_combinations: list[tuple[CollisionGroup, CollisionGroup]] = field(
+    avoided_contacts: list[AvoidedSelfContact] = field(
+        default_factory=list, init=False, repr=False
+    )
+
+    checked_combinations: list[CollisionGroupCombination] = field(
         default_factory=list, init=False, repr=False
     )
     """
     Every combination of collision groups this task avoids contacts of, in order.
     """
-
-    @property
-    def avoided_contacts(self) -> list[tuple[CollisionGroup, CollisionGroup, int]]:
-        """
-        :return: One combination of collision groups and rank of its contact per
-            constraint, in order.
-        """
-        manager = self._self_collision_manager
-        return [
-            (group_a, group_b, index)
-            for group_a, group_b in self.checked_combinations
-            for index in range(manager.avoided_contacts_of(group_a, group_b))
-        ]
 
     def create_self_collision_matrix(self) -> CollisionMatrix:
         """
@@ -557,14 +525,14 @@ class _SelfCollisionAvoidanceTask(_CollisionAvoidanceTask):
         collision matrix checks with the self collision variable manager of
         :attr:`context`, which this node reads from then on.
         """
-        self._self_collision_manager = self.context.require_extension(
+        self.collision_variable_manager = self.context.require_extension(
             MotionControlContext
         ).self_collision_manager
         collision_matrix = self.create_self_collision_matrix()
         kinematic_structure_entities = self.robot.kinematic_structure_entities
         self.checked_combinations = []
         for group_a, group_b in combinations(
-            self._self_collision_manager.collision_groups, 2
+            self.collision_variable_manager.collision_groups, 2
         ):
             if (
                 group_a.root not in kinematic_structure_entities
@@ -577,71 +545,55 @@ class _SelfCollisionAvoidanceTask(_CollisionAvoidanceTask):
             ):
                 # skip because this self collision is never checked
                 continue
-            self._self_collision_manager.register_groups_of_body_combination(
+            self.collision_variable_manager.register_groups_of_body_combination(
                 group_a.root, group_b.root
             )
             self.checked_combinations.append(
-                self._self_collision_manager.body_pair_to_group_pair(
+                self.collision_variable_manager.body_pair_to_group_pair(
                     group_a.root, group_b.root
                 )
             )
+        self.avoided_contacts = [
+            contact
+            for combination in self.checked_combinations
+            for contact in self.collision_variable_manager.avoided_contacts_of(
+                combination
+            )
+        ]
         return super().build()
 
     def build_artifacts(self) -> MotionNodeArtifacts:
         artifacts = MotionNodeArtifacts()
-        manager = self._self_collision_manager
-        for group_a, group_b, index in self.avoided_contacts:
+        manager = self.collision_variable_manager
+        for contact in self.avoided_contacts:
+            group_a = contact.combination.group_a
+            group_b = contact.combination.group_b
             group_b_T_group_a = (
                 self.context.world.compose_forward_kinematics_expression(
                     group_b.root, group_a.root
                 )
             )
             group_b_P_point_on_a = (
-                group_b_T_group_a
-                @ manager.get_group_a_P_point_on_a_symbol(group_a, group_b, index)
+                group_b_T_group_a @ manager.get_group_a_P_point_on_a_symbol(contact)
             )
             group_b_V_point_on_b_to_point_on_a = (
-                group_b_P_point_on_a
-                - manager.get_group_b_P_point_on_b_symbol(group_a, group_b, index)
+                group_b_P_point_on_a - manager.get_group_b_P_point_on_b_symbol(contact)
             )
             group_b_V_contact_normal = manager.get_group_b_V_contact_normal_symbol(
-                group_a, group_b, index
+                contact
             )
             artifacts.constraints.add_inequality_constraint(
-                name=f"{group_a.root.name}/{group_b.root.name}/{index}",
+                name=f"{group_a.root.name}/{group_b.root.name}/{contact.rank}",
                 reference_velocity=self.max_velocity,
-                lower_error=manager.get_buffer_distance_symbol(group_a, group_b, index)
-                - manager.get_contact_distance_symbol(group_a, group_b, index),
+                lower_error=manager.get_buffer_distance_symbol(contact)
+                - manager.get_contact_distance_symbol(contact),
                 upper_error=float("inf"),
                 quadratic_weight=self._weight_while_close(group_b_V_contact_normal),
                 task_expression=group_b_V_contact_normal
                 @ group_b_V_point_on_b_to_point_on_a,
             )
-        artifacts.observation = self._none_violated(
-            [
-                (
-                    manager.get_contact_distance_symbol(group_a, group_b, index),
-                    manager.get_violated_distance_symbol(group_a, group_b, index),
-                )
-                for group_a, group_b, index in self.avoided_contacts
-            ]
-        )
+        artifacts.observation = self._none_violated()
         return artifacts
-
-    def violated_collisions(self) -> list[tuple[ClosestPoints, float]]:
-        manager = self._self_collision_manager
-        violated = []
-        for group_a, group_b, index in self.avoided_contacts:
-            contact_distance = manager.get_contact_distance_symbol(
-                group_a, group_b, index
-            ).evaluate()[0]
-            violated_distance = manager.get_violated_distance_symbol(
-                group_a, group_b, index
-            ).evaluate()[0]
-            if contact_distance < violated_distance:
-                contact = manager.last_closest_contacts[group_a, group_b][index]
-                violated.append((contact, violated_distance))
-        return violated
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
@@ -747,9 +699,11 @@ class SelfCollisionDistanceMonitor(EndedByOwner, MotionStatechartNode):
         ).self_collision_manager
 
         manager.register_groups_of_body_combination(self.body_a, self.body_b)
-        group_a, group_b = manager.body_pair_to_group_pair(self.body_a, self.body_b)
+        combination = manager.body_pair_to_group_pair(self.body_a, self.body_b)
 
         # The contacts of a combination are ranked, so the first is the closest.
-        distance_symbol = manager.get_contact_distance_symbol(group_a, group_b, 0)
+        distance_symbol = manager.get_contact_distance_symbol(
+            manager.avoided_contacts_of(combination)[0]
+        )
 
         return MotionNodeArtifacts(observation=distance_symbol < self.threshold)

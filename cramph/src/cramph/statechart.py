@@ -1827,6 +1827,8 @@ class Statechart(SubclassJSONSerializer):
                 self._expand(replacement)
             if holder is not None:
                 holder._wire_children()
+                if holder.parent_node is not None:
+                    holder.parent_node._succeed_at_its_goal(holder)
             if not holds_node:
                 self.remove_node(node)
                 self._replaced_nodes.remove(record)

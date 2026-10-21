@@ -4,7 +4,7 @@ import numpy as np
 
 from cramph.executor import SimulationPacer
 from cramph.data_types import ObservationStateValues
-from giskardpy.motion_statechart.data_types import DefaultWeights
+from giskardpy.motion_statechart.weights import DefaultWeights
 from cramph.composites import Sequence, Parallel
 from giskardpy.motion_statechart.graph_node import EndMotion
 from giskardpy.motion_statechart.monitors.overwrite_state_monitors import (

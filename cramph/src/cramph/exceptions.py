@@ -1019,3 +1019,21 @@ class PlanCancelled(ExecutionFailure):
             "The world is no longer in the state the rest of the plan assumed, so plan "
             "again from the state the robot is in now."
         )
+
+
+# %% visualization
+
+
+@dataclass
+class RvizUnavailableError(DataclassException):
+    """
+    Raised when the world is to be shown in RViz without ROS installed.
+    """
+
+    def error_message(self) -> str:
+        return "RViz cannot show the world, because ROS is not installed."
+
+    def suggest_correction(self) -> str:
+        return (
+            "Source a ROS installation, or show the world with another visualization."
+        )

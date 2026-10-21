@@ -41,7 +41,7 @@ class ChartViewPayload(GraphPanelPayload):
 
     empty_message: str = (
         "Motion statecharts are built and ticked at execution time. "
-        "Start the demo with cramera-live and press ◉ Live — "
+        "Show the demo with a LiveVisualization and press ◉ Live — "
         "the statechart of the running motion group appears here, "
         "coloured by its node life cycle."
     )

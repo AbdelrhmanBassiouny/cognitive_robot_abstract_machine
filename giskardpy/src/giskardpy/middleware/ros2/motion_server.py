@@ -12,7 +12,7 @@ from json_msgs.action import JsonAction
 
 from cramph.executor import StatechartExecutor
 from cramph.executor import RealTimePacer
-from giskardpy.middleware.ros2 import rospy
+from semantic_digital_twin.adapters.ros import rospy
 from giskardpy.middleware.ros2.action_server import ActionServerHandler
 from giskardpy.middleware.ros2.client_presence import ClientWatchdog
 from giskardpy.middleware.ros2.control_loop import ControlLoop

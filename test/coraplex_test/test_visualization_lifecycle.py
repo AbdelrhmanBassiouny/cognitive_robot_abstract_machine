@@ -9,8 +9,8 @@ from unittest.mock import Mock
 import pytest
 from rclpy.node import Node
 
-import coraplex.visualization as visualization_module
-from coraplex.visualization import RvizVisualization
+import cramph.visualization as visualization_module
+from cramph.visualization import RvizVisualization
 from cramph.exceptions import TickLimitReachedError
 
 from .test_optional_visualization import (

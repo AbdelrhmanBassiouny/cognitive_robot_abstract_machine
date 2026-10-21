@@ -94,7 +94,7 @@ You can now open RViz2 and add a Marker display subscribing to the topic "/semwo
 
 Now that we have set up the environment, we can write our first plan. A plan in CoraPlex is a structured sequence of actions
 which the robot will execute to achieve a specific goal. For more details on how plans work in CoraPlex, refer to the
-{ref}`plan_header`.
+{ref}`statechart_header`.
 
 The plan will consist of the following steps:
 

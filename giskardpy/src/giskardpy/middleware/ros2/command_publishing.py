@@ -22,7 +22,7 @@ from std_msgs.msg import Float64, Float64MultiArray
 from typing_extensions import Self, TypeVar
 
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
-from giskardpy.middleware.ros2 import rospy
+from semantic_digital_twin.adapters.ros import rospy
 from giskardpy.middleware.ros2.exceptions import UnknownMinimumVelocityJointError
 from giskardpy.middleware.ros2.ros2_interface import get_parameters
 from semantic_digital_twin.world import World

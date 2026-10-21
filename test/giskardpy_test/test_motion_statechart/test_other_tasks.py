@@ -1,9 +1,10 @@
+from dataclasses import fields
 from math import radians
 
 import numpy as np
 import pytest
 
-from giskardpy.motion_statechart.data_types import DefaultWeights
+from giskardpy.motion_statechart.weights import DefaultWeights
 from cramph.data_types import LifeCycleValues, ObservationStateValues
 from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
 from giskardpy.motion_statechart.goals.grasped_mechanism import (
@@ -27,6 +28,7 @@ from giskardpy.motion_statechart.tasks.feature_functions import (
     AngleGoal,
     AlignPerpendicular,
     DistanceGoal,
+    FeatureFunctionGoal,
     HeightGoal,
     ReachPoint,
 )
@@ -60,6 +62,7 @@ from semantic_digital_twin.world_description.degree_of_freedom import (
 from giskardpy.motion_control import MotionControl
 from cramph.context import StatechartContext
 from cramph.executor import StatechartExecutor
+from krrood.utils import recursive_subclasses
 from ..motion_control_context import create_context_with_motion_control
 
 
@@ -78,6 +81,19 @@ class TestFeatureFunctions:
     """
     Test suite for feature function tasks (HeightGoal, DistanceGoal, etc.).
     """
+
+    @pytest.mark.parametrize(
+        "task_type",
+        recursive_subclasses(FeatureFunctionGoal),
+        ids=lambda task_type: task_type.__name__,
+    )
+    def test_a_feature_function_gives_way_to_collision_avoidance_by_default(
+        self, task_type: type[FeatureFunctionGoal]
+    ) -> None:
+        weight = next(
+            declared for declared in fields(task_type) if declared.name == "weight"
+        )
+        assert weight.default == DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE
 
     def test_height_goal_within_bounds(self, pr2_world_state_reset: World):
         """

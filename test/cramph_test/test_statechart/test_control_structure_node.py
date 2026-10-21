@@ -154,6 +154,25 @@ def test_a_replaced_step_leaves_the_statechart_and_its_replacement_runs_in_its_p
     assert _start_order(statechart, [third, second, first]) == [first, second, third]
 
 
+def test_a_replaced_node_of_a_step_no_longer_decides_when_the_step_succeeds(
+    statechart_executor: StatechartExecutor,
+) -> None:
+    """
+    The sequence ends the parallel once it is at its goal, which the parallel only is
+    while none of its nodes failed, so it has to stop asking the node that left.
+    """
+    statechart = Statechart(context=statechart_executor.context)
+    replaced, kept, replacement = _succeeding("x"), _succeeding("1"), _succeeding("2")
+    parallel = Parallel(nodes=[replaced, kept])
+    statechart.add_node(sequence := Sequence(nodes=[parallel]))
+
+    statechart.replace(replaced, replacement)
+    _run(statechart_executor, statechart, sequence)
+
+    assert replaced not in statechart.nodes
+    assert parallel.life_cycle_state == LifeCycleValues.SUCCEEDED
+
+
 def test_a_sequence_that_did_not_join_yet_only_changes_its_list(
     statechart_executor: StatechartExecutor,
 ) -> None:

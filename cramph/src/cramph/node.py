@@ -5,7 +5,7 @@ import logging
 import threading
 import uuid
 from abc import ABC, ABCMeta, abstractmethod
-from dataclasses import field, dataclass
+from dataclasses import MISSING, field, dataclass
 
 from typing_extensions import (
     Any,
@@ -1442,6 +1442,7 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
         :meth:`build_artifacts`. Register what this node reads from :attr:`context`
         here, such as float variables, because :meth:`build` may run more than once.
         """
+        return None
 
     def build(self) -> NodeArtifacts:
         """
@@ -1481,24 +1482,28 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
         .. warning:: The result of this method takes precedence over the observation expression created in build().
         :return: An optional observation state overwrite
         """
+        return None
 
     def on_start(self) -> None:
         """
         Triggered when the node transitions from NOT_STARTED to RUNNING.
         .. warning:: This method is called inside a control loop, make sure it is fast.
         """
+        return None
 
     def on_pause(self) -> None:
         """
         Triggered when the node transitions from RUNNING to PAUSED.
         .. warning:: This method is called inside a control loop, make sure it is fast.
         """
+        return None
 
     def on_unpause(self) -> None:
         """
         Triggered when the node transitions from PAUSED to RUNNING.
         .. warning:: This method is called inside a control loop, make sure it is fast.
         """
+        return None
 
     def on_end(self) -> None:
         """
@@ -1506,18 +1511,21 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
         state. Read :attr:`life_cycle_state` for the outcome.
         .. warning:: This method is called inside a control loop, make sure it is fast.
         """
+        return None
 
     def on_reset(self) -> None:
         """
         Triggered when the node transitions from any state to NOT_STARTED.
         .. warning:: This method is called inside a control loop, make sure it is fast.
         """
+        return None
 
     def cleanup(self) -> None:
         """
         Triggered after an EndStatechart or CancelStatechart was triggered.
         Place code here to clean up after execution.
         """
+        return None
 
     def __hash__(self) -> int:
         return hash(self.name)
@@ -2108,15 +2116,20 @@ class DeserializedNodeTracker(DeserializedObjectTracker[str, StatechartNode]):
         return None
 
 
-def expanded_child_field() -> Any:
+def expanded_child_field(default: Any = MISSING) -> Any:
     """
     Declares a field of a composite node that holds a child the node creates in
     :meth:`~CompositeNode.expand`.
 
     A statechart is sent through JSON after its composite nodes expanded, and the
     receiver does not expand them again, so such a field is serialized explicitly.
+
+    :param default: The value of the field before the node expanded; without one, the
+        field does not exist until then.
     """
-    return field(init=False, metadata=JSONMetadata(serialize=True).as_dict())
+    return field(
+        init=False, default=default, metadata=JSONMetadata(serialize=True).as_dict()
+    )
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
@@ -2169,12 +2182,14 @@ class CompositeNode(StatechartNode):
 
         .. warning:: Nodes have not been built yet.
         """
+        return None
 
     def check_children(self) -> None:
         """
         Rejects children this node cannot have, once the statechart is compiled and the
         children's conditions are complete.
         """
+        return None
 
     def _add_child_to_statechart(self, node: StatechartNode) -> None:
         """
@@ -2340,7 +2355,7 @@ class StructureCopyCompositeNode(EndedByOwner, CompositeNode):
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class ThreadPayloadMonitor(EndedByOwner, ABC, StatechartNode):
+class ThreadPayloadMonitor(EndedByOwner, StatechartNode, ABC):
     """
     A monitor whose observation is computed by :meth:`_compute_observation` in a
     background thread, so that a slow computation never blocks a tick.
@@ -2432,7 +2447,7 @@ class ThreadPayloadMonitor(EndedByOwner, ABC, StatechartNode):
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class TerminalNode(EndedByOwner, ABC, StatechartNode):
+class TerminalNode(EndedByOwner, StatechartNode, ABC):
     """
     A node that ends the whole statechart once its observation state turns true.
 

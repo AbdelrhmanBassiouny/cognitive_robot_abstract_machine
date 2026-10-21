@@ -45,7 +45,7 @@ giskard_process = subprocess.Popen(
 
 time.sleep(8)  # Wait for the launch file to start
 
-drives_real_robot = True
+controls_real_robot = True
 
 print("Init ROS")
 rclpy.init()
@@ -57,7 +57,7 @@ executor.add_node(node)
 thread = threading.Thread(target=executor.spin, daemon=True, name="rclpy-executor")
 thread.start()
 
-if drives_real_robot:
+if controls_real_robot:
     # 300s matches giskardpy's own client (giskardpy/middleware/ros2/giskard_client_executor.py), which waits
     # this long for the same race: this demo's giskard/world-fetcher server is still parsing the URDF
     # and starting up when the client's default 10s budget would otherwise expire.
@@ -140,7 +140,7 @@ with world.modify_world():
 
 # The executor needs the ROS node to reach the real robot
 executor_type: type[PlanExecutor] = (
-    RealRobotPlanExecutor if drives_real_robot else KinematicallySimulatedPlanExecutor
+    RealRobotPlanExecutor if controls_real_robot else KinematicallySimulatedPlanExecutor
 )
 executor = executor_type(
     StatechartContext.with_extensions(world, [RobotAccess(tracy)]), ros_node=node

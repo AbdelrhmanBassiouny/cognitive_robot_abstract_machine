@@ -4,20 +4,13 @@ Optional world visualization, added to the executor that runs a statechart.
 
 from __future__ import annotations
 
-import os
 from abc import ABC, abstractmethod
 from contextlib import ExitStack
 from dataclasses import dataclass, field
-from importlib.metadata import entry_points
 
 from typing_extensions import TYPE_CHECKING, Self
 
-from coraplex.datastructures.enums import VisualizationBackend, VisualizationOption
-from coraplex.exceptions import (
-    RvizVisualizationWithoutRosNode,
-    UnknownVisualizationOption,
-    VisualizationBackendUnavailable,
-)
+from cramph.exceptions import RvizUnavailableError
 from cramph.executor import ExecutorExtension
 from semantic_digital_twin.adapters.rerun import RerunAdapter, RerunMode
 
@@ -53,68 +46,6 @@ class WorldVisualization(ExecutorExtension, ABC):
     """
     Releases what the running visualization acquired, in reverse acquisition order.
     """
-
-    @classmethod
-    def from_environment(
-        cls,
-        default_backend: VisualizationBackend = VisualizationBackend.NONE,
-        *,
-        ros_node: Node | None = None,
-        collision_visualization: bool = False,
-    ) -> WorldVisualization | None:
-        """
-        Select the visualization named by :attr:`VisualizationOption.BACKEND`.
-
-        :param default_backend: The renderer used unless the environment selects one.
-        :param ros_node: The ROS node RViz publishes through.
-        :param collision_visualization: Whether RViz also shows collision results.
-        :return: The selected visualization, or ``None`` for
-            :attr:`VisualizationBackend.NONE`.
-        :raises UnknownVisualizationOption: If the environment names no renderer.
-        :raises VisualizationBackendUnavailable: If no installed visualization provides
-            the selected renderer.
-        :raises RvizVisualizationWithoutRosNode: If RViz is selected without `ros_node`.
-        """
-        backend = (
-            os.environ.get(VisualizationOption.BACKEND, default_backend.value)
-            .strip()
-            .lower()
-        )
-        if backend not in {member.value for member in VisualizationBackend}:
-            raise UnknownVisualizationOption(VisualizationOption.BACKEND, backend)
-        match VisualizationBackend(backend):
-            case VisualizationBackend.NONE:
-                return None
-            case VisualizationBackend.RVIZ:
-                if ros_node is None:
-                    raise RvizVisualizationWithoutRosNode()
-                return RvizVisualization(
-                    ros_node=ros_node, collision_visualization=collision_visualization
-                )
-            case VisualizationBackend.RERUN:
-                return RerunVisualization.from_rerun_options()
-            case VisualizationBackend.CRAMERA:
-                return cls._create_installed_visualization(VisualizationBackend.CRAMERA)
-
-    @classmethod
-    def _create_installed_visualization(
-        cls, backend: VisualizationBackend
-    ) -> WorldVisualization:
-        """
-        :param backend: The renderer an installed visualization provides.
-        :return: A new instance of the visualization installed for `backend`.
-        :raises VisualizationBackendUnavailable: If no single visualization class is
-            installed for `backend`.
-        """
-        providers = entry_points(group=VisualizationOption.PROVIDER_GROUP, name=backend)
-        if len(providers) != 1:
-            raise VisualizationBackendUnavailable(backend)
-        provider_type = next(iter(providers)).load()
-        if not isinstance(provider_type, type) or not issubclass(
-            provider_type, WorldVisualization
-        ):
-            raise VisualizationBackendUnavailable(backend)
-        return provider_type()
 
     @property
     @abstractmethod
@@ -217,10 +148,10 @@ class RvizVisualization(WorldVisualization):
         """
         Start publishing markers through :attr:`ros_node`.
 
-        :raises VisualizationBackendUnavailable: If ROS is not installed.
+        :raises RvizUnavailableError: If ROS is not installed.
         """
         if VizMarkerPublisher is None:
-            raise VisualizationBackendUnavailable(VisualizationBackend.RVIZ)
+            raise RvizUnavailableError()
         tf_publisher = self._prefixed_tf_publisher(world, cleanup)
         self.publisher = VizMarkerPublisher(
             _world=world,
@@ -289,26 +220,6 @@ class RerunVisualization(WorldVisualization):
     """
     The Rerun adapter, while this visualization runs.
     """
-
-    @classmethod
-    def from_rerun_options(cls) -> RerunVisualization:
-        """
-        :return: A Rerun visualization configured by
-            :attr:`VisualizationOption.RERUN_MODE` and
-            :attr:`VisualizationOption.RERUN_TARGET`.
-        :raises UnknownVisualizationOption: If the environment names no Rerun mode.
-        """
-        mode = (
-            os.environ.get(VisualizationOption.RERUN_MODE, RerunMode.SPAWN.value)
-            .strip()
-            .lower()
-        )
-        if mode not in {member.value for member in RerunMode}:
-            raise UnknownVisualizationOption(VisualizationOption.RERUN_MODE, mode)
-        return cls(
-            mode=RerunMode(mode),
-            target=os.environ.get(VisualizationOption.RERUN_TARGET),
-        )
 
     @property
     def is_rendering(self) -> bool:

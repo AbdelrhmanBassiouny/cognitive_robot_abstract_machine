@@ -5,7 +5,7 @@ import signal
 import subprocess
 import sys
 import time
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from importlib.resources import files
 from unittest.mock import MagicMock, patch
 
@@ -56,18 +56,30 @@ def substituted_modules(substitutes: dict[str, Any]) -> Iterator[None]:
     Makes imports of the given module names resolve to their substitutes inside the
     block, and to what they resolved to before once it is left.
 
+    A submodule of a package that is imported already is also substituted as the
+    attribute of that package, which ``from package import submodule`` reads first.
+
     :param substitutes: The substitute of each module name.
     """
     replaced_modules = {
         name: sys.modules[name] for name in substitutes if name in sys.modules
     }
-    sys.modules.update(substitutes)
-    try:
-        yield
-    finally:
-        for name in substitutes:
-            del sys.modules[name]
-        sys.modules.update(replaced_modules)
+    with ExitStack() as package_attributes:
+        for name, substitute in substitutes.items():
+            package_name, _, attribute = name.rpartition(".")
+            if package_name in sys.modules and package_name not in substitutes:
+                package_attributes.enter_context(
+                    patch.object(
+                        sys.modules[package_name], attribute, substitute, create=True
+                    )
+                )
+        sys.modules.update(substitutes)
+        try:
+            yield
+        finally:
+            for name in substitutes:
+                del sys.modules[name]
+            sys.modules.update(replaced_modules)
 
 
 # Import the tool
@@ -86,7 +98,7 @@ tool_path = os.path.abspath(
 with substituted_modules(
     {
         "giskardpy.middleware.ros2": MagicMock(),
-        "giskardpy.middleware.ros2.rospy": MagicMock(),
+        "semantic_digital_twin.adapters.ros.rospy": MagicMock(),
         "PyQt5": MagicMock(),
         "PyQt5.QtCore": MagicMock(),
         "PyQt5.QtGui": MagicMock(),

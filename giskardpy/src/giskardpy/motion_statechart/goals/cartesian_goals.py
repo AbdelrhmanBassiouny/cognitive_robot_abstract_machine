@@ -5,7 +5,8 @@ from dataclasses import dataclass, field
 from cramph.composites import Parallel
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.binding_policy import GoalBindingPolicy
-from giskardpy.motion_statechart.data_types import DefaultWeights
+from giskardpy.motion_statechart.graph_node import MotionStatechartNode
+from giskardpy.motion_statechart.weights import DefaultWeights
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianOrientation,
     CartesianPositionStraight,
@@ -76,7 +77,15 @@ class CartesianPoseStraight(Parallel):
         this goal was handed, as :meth:`~cramph.composites.ControlStructureNode.expand`
         does.
         """
-        self.nodes[:0] = [
+        self.nodes[:0] = self.create_tasks()
+        super().expand()
+
+    def create_tasks(self) -> list[MotionStatechartNode]:
+        """
+        :return: New position and orientation tasks reaching :attr:`goal_pose`, the
+            position along a straight line.
+        """
+        return [
             CartesianPositionStraight(
                 name=self.name + "/position",
                 root_link=self.root_link,
@@ -96,4 +105,3 @@ class CartesianPoseStraight(Parallel):
                 binding_policy=self.binding_policy,
             ),
         ]
-        super().expand()

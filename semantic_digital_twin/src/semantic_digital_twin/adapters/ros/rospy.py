@@ -1,5 +1,6 @@
 """
-Giskard-owned ROS lifecycle with process-local shared node access.
+A process-local ROS node with its own executor and spin thread, shared by every library
+in the process.
 """
 
 from __future__ import annotations
@@ -37,13 +38,13 @@ ActionClient.__init__ = _patched_action_client_init
 
 def get_node() -> Node:
     """
-    Return the process-local ROS node owned by Giskard's lifecycle.
+    Return the process-local ROS node started by :func:`init_node`.
 
     The node is stored in the lifecycle-neutral semantic digital twin registry so that
     all libraries in this process resolve the same object. Consumers may use the node,
     but must not destroy it, change its executor ownership, or shut down its context.
 
-    :return: Giskard's registered ROS node.
+    :return: The registered ROS node.
     :raises ROSNodeNotRegisteredError: If :func:`init_node` has not registered a node.
     """
     return ROSNodeRegistry().get()
@@ -53,7 +54,7 @@ def spinner_thread_target(node: Node) -> None:
     """
     Thread that runs a multithreaded executor in the background.
 
-    :param node: The Giskard-owned node registered for shared access.
+    :param node: The node registered for shared access.
     """
     global executor
     executor = MultiThreadedExecutor()
@@ -80,9 +81,9 @@ def wait_for_future_to_complete(future: Future) -> None:
 
 def init_node(node_name: str) -> None:
     """
-    Initialize Giskard's ROS node, executor, and spin thread once.
+    Initialize the shared ROS node, executor, and spin thread once.
 
-    Giskard owns the complete lifecycle. The node is registered before consumers can
+    This module owns the complete lifecycle. The node is registered before consumers can
     access it and remains registered until :func:`shutdown` stops the executor. Calling
     this function again while the node is registered is a no-op.
 
@@ -107,7 +108,7 @@ def init_node(node_name: str) -> None:
 
 def shutdown() -> None:
     """
-    Cleanly shut down the Giskard-owned ROS runtime.
+    Cleanly shut down the ROS runtime started by :func:`init_node`.
 
     Node users must already have stopped. The registration is cleared before the node is
     destroyed, as required by the shared-node contract. This also avoids invalid handles

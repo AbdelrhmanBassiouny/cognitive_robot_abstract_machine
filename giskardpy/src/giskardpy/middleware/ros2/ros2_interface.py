@@ -17,7 +17,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy
 from std_msgs.msg import String
 
-from giskardpy.middleware.ros2 import rospy
+from semantic_digital_twin.adapters.ros import rospy
 from giskardpy.middleware.ros2.event_loop_manager import get_event_loop
 from giskardpy.middleware.ros2.exceptions import (
     ExecutionAbortedException,

@@ -15,7 +15,7 @@ from giskardpy.middleware.ros2.scripts.iai_robots.pr2.configs import (
     WorldWithPR2Config,
 )
 from giskardpy.middleware.ros2.giskard import Giskard
-from giskardpy.middleware.ros2.rospy import wait_for_future_to_complete
+from semantic_digital_twin.adapters.ros.rospy import wait_for_future_to_complete
 from giskardpy.middleware.ros2.utils.utils import load_xacro
 from giskardpy.middleware.ros2.utils.utils_for_tests import (
     GiskardTester,

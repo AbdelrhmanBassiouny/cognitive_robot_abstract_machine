@@ -13,7 +13,7 @@ import std_msgs.msg
 from rclpy.node import Node
 from rclpy.timer import Timer
 
-from giskardpy.middleware.ros2 import rospy
+from semantic_digital_twin.adapters.ros import rospy
 from giskardpy.middleware.ros2.client_presence import (
     ClientHeartbeatPublisher,
     ClientWatchdog,

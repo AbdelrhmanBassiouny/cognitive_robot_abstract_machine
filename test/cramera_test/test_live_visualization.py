@@ -322,9 +322,9 @@ class TestLiveVisualization:
 
     def test_start_registers_an_atexit_safety_net(self, world, monkeypatch, tmp_path):
         """
-        A demo run directly (not through ``cramera-live``) has no long-lived process
-        left for the browser to send ``/recording/stop`` to — the interpreter exits the
-        moment the script's main body returns.
+        A demo has no long-lived process left for the browser to send
+        ``/recording/stop`` to — the interpreter exits the moment the script's main body
+        returns.
 
         The registered callback must finalize whatever the bridge is currently recording
         at that point.

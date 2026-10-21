@@ -9,7 +9,7 @@ from typing import ClassVar, Dict, List, Type
 
 import numpy as np
 
-from giskardpy.middleware.ros2 import rospy
+from semantic_digital_twin.adapters.ros import rospy
 from experiments.control_loop_experiments.control_loop_profiler import (
     CallTreeProfile,
     ControlLoopProfiler,

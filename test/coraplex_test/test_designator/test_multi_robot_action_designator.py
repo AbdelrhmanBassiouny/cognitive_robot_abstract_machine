@@ -59,7 +59,7 @@ from coraplex.robot_plans.actions.composite.transporting import MoveAndPlaceActi
 from coraplex.robot_plans.actions.core.exceptions import WidthBeyondGripperOpening
 from cramph.node import StatechartNode
 from cramph.world_modification_nodes import MoveBranch
-from giskardpy.motion_statechart.data_types import DefaultWeights
+from giskardpy.motion_statechart.weights import DefaultWeights
 from giskardpy.motion_statechart.goals.collision_avoidance import (
     UpdateTemporaryCollisionRules,
 )

@@ -6,7 +6,9 @@ from dataclasses import dataclass
 from typing_extensions import TYPE_CHECKING, Type
 
 from krrood.exceptions import DataclassException
-from semantic_digital_twin.collision_checking.collision_detector import ClosestPoints
+from semantic_digital_twin.collision_checking.collision_variable_managers import (
+    ViolatedCollision,
+)
 
 if TYPE_CHECKING:
     from giskardpy.motion_statechart.monitors.progress_monitors import StillProgressing
@@ -22,21 +24,16 @@ class CollisionViolatedError(DataclassException):
     Raised when bodies came closer to each other than their collision threshold allows.
     """
 
-    violated_collisions: list[ClosestPoints]
+    violated_collisions: list[ViolatedCollision]
     """
-    The closest points of every body pair that violated its threshold.
-    """
-
-    thresholds: list[float]
-    """
-    The minimum allowed distance of each violated collision, in the same order as
-    :attr:`violated_collisions`.
+    Every collision that came closer than its violated distance.
     """
 
     def error_message(self) -> str:
         violations = "".join(
-            f"{str(collision.body_a.name), str(collision.body_b.name)}: {collision.distance} < {threshold}\n"
-            for collision, threshold in zip(self.violated_collisions, self.thresholds)
+            f"{str(violation.closest_points.body_a.name), str(violation.closest_points.body_b.name)}: "
+            f"{violation.closest_points.distance} < {violation.violated_distance}\n"
+            for violation in self.violated_collisions
         )
         return f"Violated collision constraints: \n{violations}"
 

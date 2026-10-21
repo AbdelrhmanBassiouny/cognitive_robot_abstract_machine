@@ -1,7 +1,14 @@
+"""
+A window following the statecharts a ROS action server reports in its feedback.
+
+.. note:: Needs ROS, ``json_msgs`` and PyQt5, which only this tool uses.
+"""
+
+from __future__ import annotations
+
 import json
 import signal
 import sys
-from typing import List, Dict, Optional, Any
 
 from PyQt5.QtCore import QMutex, QMutexLocker
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
@@ -20,19 +27,21 @@ from PyQt5.QtWidgets import (
     QGraphicsScene,
     QShortcut,
 )
-from giskardpy.middleware.ros2 import rospy
-from giskardpy.middleware.ros2.feedback_publisher import MotionStatechartPayloadKey
+from json_msgs.action import JsonAction
+from json_msgs.action._json_action import JsonAction_FeedbackMessage
+from typing_extensions import Any
+
+from cramph.data_types import StatechartPayloadKey
+from cramph.plotters.graphviz import StatechartGraphviz
 from cramph.statechart import (
     LastObservationState,
     LifeCycleState,
     ObservationState,
     Statechart,
 )
-from cramph.plotters.graphviz import StatechartGraphviz
-from json_msgs.action import JsonAction
-from json_msgs.action._json_action import JsonAction_FeedbackMessage
+from semantic_digital_twin.adapters.ros import rospy
 
-compact = False
+# %% the window
 
 
 class SvgGrahpicsView(QGraphicsView):
@@ -80,9 +89,9 @@ class SvgGrahpicsView(QGraphicsView):
 class DotGraphViewer(QWidget):
     # Add this signal to communicate between threads
     new_message_signal: pyqtSignal = pyqtSignal(object)
-    last_goal_id: Optional[int]
-    graphs_by_goal: Dict[int, List[Any]]
-    motion_statechart: Optional[Statechart]
+    last_goal_id: int | None
+    graphs_by_goal: dict[int, list[Any]]
+    motion_statechart: Statechart | None
 
     def __init__(self):
         super().__init__()
@@ -93,7 +102,7 @@ class DotGraphViewer(QWidget):
         self.new_message_signal.connect(self.handle_new_message)
 
         # Initialize the ROS node
-        rospy.init_node("motion_statechart_inspector")
+        rospy.init_node("statechart_inspector")
 
         self.setup_qt()
 
@@ -137,7 +146,7 @@ class DotGraphViewer(QWidget):
         layout.addLayout(nav_layout)
         self.setLayout(layout)
 
-        self.setWindowTitle("Motion Statechart Inspector")
+        self.setWindowTitle("Statechart Inspector")
         self.resize(800, 600)
 
     def setup_gui_components(self):
@@ -250,7 +259,7 @@ class DotGraphViewer(QWidget):
     def handle_new_message(self, msg: JsonAction_FeedbackMessage) -> None:
         # This runs in the main thread
         json_data = json.loads(msg.feedback.feedback)
-        msg_goal_id = json_data[MotionStatechartPayloadKey.GOAL_ID]
+        msg_goal_id = json_data[StatechartPayloadKey.GOAL_ID]
 
         self.parse_new_motion_statechart(json_data)
         self.parse_state(json_data)
@@ -292,25 +301,23 @@ class DotGraphViewer(QWidget):
         graph = StatechartGraphviz(self.motion_statechart).to_dot_graph()
         self.graphs_by_goal[goal_id].append(graph)
 
-    def parse_new_motion_statechart(self, json_data: Dict[str, Any]):
-        motion_statechart_data = json_data.get(
-            MotionStatechartPayloadKey.MOTION_STATECHART
-        )
+    def parse_new_motion_statechart(self, json_data: dict[str, Any]):
+        motion_statechart_data = json_data.get(StatechartPayloadKey.STATECHART)
         if motion_statechart_data is not None:
             self.motion_statechart = Statechart.from_json(motion_statechart_data)
             self.motion_statechart._add_transitions()
 
-    def parse_state(self, json_data: Dict[str, Any]):
-        life_cycle_data = json_data.get(MotionStatechartPayloadKey.LIFE_CYCLE_STATE)
+    def parse_state(self, json_data: dict[str, Any]):
+        life_cycle_data = json_data.get(StatechartPayloadKey.LIFE_CYCLE_STATE)
         life_cycle_state = LifeCycleState.from_json(
             life_cycle_data, statechart=self.motion_statechart
         )
-        observation_data = json_data.get(MotionStatechartPayloadKey.OBSERVATION_STATE)
+        observation_data = json_data.get(StatechartPayloadKey.OBSERVATION_STATE)
         observation_state = ObservationState.from_json(
             observation_data, statechart=self.motion_statechart
         )
         last_observation_data = json_data.get(
-            MotionStatechartPayloadKey.LAST_OBSERVATION_STATE
+            StatechartPayloadKey.LAST_OBSERVATION_STATE
         )
         last_observation_state = LastObservationState.from_json(
             last_observation_data, statechart=self.motion_statechart
@@ -399,7 +406,13 @@ class DotGraphViewer(QWidget):
             self.display_graph(self.current_goal_index, self.current_message_index)
 
 
-def main():
+# %% running the tool
+
+
+def main() -> None:
+    """
+    Opens the inspector window and runs it until it is closed.
+    """
     app = QApplication(sys.argv)
 
     signal.signal(signal.SIGINT, lambda *args: app.quit())

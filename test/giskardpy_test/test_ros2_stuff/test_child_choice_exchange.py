@@ -5,6 +5,7 @@ copy of it, see :mod:`giskardpy.middleware.ros2.child_choices`, without a ROS gr
 
 from __future__ import annotations
 
+from cramph.data_types import StatechartPayloadKey
 import json
 from dataclasses import dataclass, field
 
@@ -34,7 +35,6 @@ from giskardpy.middleware.ros2.exceptions import (
 )
 from giskardpy.middleware.ros2.feedback_publisher import (
     ActionFeedbackPublisher,
-    MotionStatechartPayloadKey,
 )
 from giskardpy.middleware.ros2.world_updates import (
     ClientWorldUpdates,
@@ -316,7 +316,7 @@ class ClientAndRunningStatechart:
         :return: The choices the client sent.
         """
         feedback = self.feedback_publisher.create_states()
-        feedback[MotionStatechartPayloadKey.GOAL_ID] = self.action_server.goal_id
+        feedback[StatechartPayloadKey.GOAL_ID] = self.action_server.goal_id
         sent_choices = [
             ChildChoiceMessage.from_json(json.loads(json.dumps(choice.to_json())))
             for choice in self.client.answer(json.loads(json.dumps(feedback)))

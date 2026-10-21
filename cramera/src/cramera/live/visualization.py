@@ -15,7 +15,7 @@ from functools import partial
 from typing_extensions import TYPE_CHECKING, Any, Callable, Optional
 
 from coraplex.robot_plans.actions.base import Action
-from coraplex.visualization import WorldVisualization
+from cramph.visualization import WorldVisualization
 from cramph.statechart import StateHistory, StateHistoryObserver, Statechart
 from semantic_digital_twin.callbacks.callback import (
     ModelChangeCallback,
@@ -154,10 +154,8 @@ def _finalize_recording_at_exit(
     Best-effort safety net: write the current recording to disk if the process is about
     to exit without the viewer ever sending ``/recording/stop``.
 
-    A demo run directly (rather than through ``cramera-live``, which stays up for
-    inspection after the demo finishes) has no long-lived process left for the browser
-    to ask, so the recording would otherwise be lost the moment the script's main body
-    returns.
+    A demo has no long-lived process left for the browser to ask once it finished, so
+    the recording would otherwise be lost the moment the script's main body returns.
 
     :param bridge: The bridge whose geometry belongs to the recording.
     :param recording: The session's capture, or the bridge's current capture.
@@ -306,7 +304,7 @@ class LiveVisualization(WorldVisualization):
 
     def stop(self) -> None:
         """
-        Differs from :meth:`~coraplex.visualization.WorldVisualization.stop` in also
+        Differs from :meth:`~cramph.visualization.WorldVisualization.stop` in also
         unsubscribing from the history of the published statechart, finalizing the
         recording and closing the server of :attr:`bridge`.
         """
@@ -316,7 +314,7 @@ class LiveVisualization(WorldVisualization):
 
     def after_compile(self, executor: Executor) -> None:
         """
-        Differs from :meth:`~coraplex.visualization.WorldVisualization.after_compile` in
+        Differs from :meth:`~cramph.visualization.WorldVisualization.after_compile` in
         switching to the world of `executor` if another one is shown, and in also
         publishing the statechart `executor` compiled.
         """
@@ -327,7 +325,7 @@ class LiveVisualization(WorldVisualization):
 
     def after_run(self, executor: Executor) -> None:
         """
-        Differs from :meth:`~coraplex.visualization.WorldVisualization.after_run` in
+        Differs from :meth:`~cramph.visualization.WorldVisualization.after_run` in
         publishing the statechart as the run left it and keeping the world, the server
         and the recording until :meth:`stop`.
         """

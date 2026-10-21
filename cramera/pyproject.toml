@@ -28,10 +28,6 @@ license = { text = "GPL-3.0-only" }
 
 [project.scripts]
 cramera = "cramera.server:main"
-cramera-live = "cramera.live.runner:main"
-
-[project.entry-points."coraplex.visualizations"]
-cramera = "cramera.live.visualization:LiveVisualization"
 
 [tool.setuptools.packages.find]
 where = ["src"]

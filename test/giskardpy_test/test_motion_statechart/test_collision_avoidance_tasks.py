@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from cramph.executor import SimulationPacer
-from giskardpy.motion_statechart.data_types import (
+from giskardpy.motion_statechart.weights import (
     DefaultWeights,
 )
 from giskardpy.motion_statechart.exceptions import CollisionViolatedError
@@ -847,9 +847,9 @@ def test_self_collision_avoidance_avoids_every_checked_combination_in_one_task(
     ).self_collision_manager
     assert task.checked_combinations == list(manager.registered_group_combinations)
     assert task.avoided_contacts == [
-        (group_a, group_b, index)
-        for group_a, group_b in manager.registered_group_combinations
-        for index in range(manager.avoided_contacts_of(group_a, group_b))
+        contact
+        for combination in manager.registered_group_combinations
+        for contact in manager.avoided_contacts_of(combination)
     ]
     assert len(task.constraint_collection.inequality_constraints) == len(
         task.avoided_contacts
@@ -901,16 +901,16 @@ def test_self_collision_avoidance_avoids_the_closest_contacts_of_a_combination(
         MotionControlContext
     ).self_collision_manager
     (hands,) = [
-        (group_a, group_b)
-        for group_a, group_b in task.checked_combinations
-        if group_a.root in left_hand | right_hand
-        and group_b.root in left_hand | right_hand
+        combination
+        for combination in task.checked_combinations
+        if combination.group_a.root in left_hand | right_hand
+        and combination.group_b.root in left_hand | right_hand
     ]
     contacts = manager.last_closest_contacts[hands]
     assert len(contacts) == 4
     avoided_distances = [
-        manager.get_contact_distance_symbol(*hands, index).evaluate()[0]
-        for index in range(manager.avoided_contacts_of(*hands))
+        manager.get_contact_distance_symbol(contact).evaluate()[0]
+        for contact in manager.avoided_contacts_of(hands)
     ]
     assert avoided_distances == pytest.approx(
         sorted(contact.distance for contact in contacts)[:2]
@@ -932,11 +932,9 @@ def test_external_collision_avoidance_avoids_every_closest_object_in_one_task(
         MotionControlContext
     ).external_collision_manager
     assert task.avoided_contacts == [
-        (group, index)
+        contact
         for group in manager.registered_groups
-        for index in range(
-            group.get_max_avoided_bodies(cylinder_bot_world.collision_manager)
-        )
+        for contact in manager.avoided_contacts_of(group)
     ]
     assert len(task.constraint_collection.inequality_constraints) == len(
         task.avoided_contacts
@@ -1013,8 +1011,8 @@ def test_only_closest_objects_with_collision_data_weigh_anything(
         MotionControlContext
     ).external_collision_manager
     with_data = [
-        index < len(manager.last_closest_contacts[group])
-        for group, index in task.avoided_contacts
+        contact.rank < len(manager.last_closest_contacts[contact.group])
+        for contact in task.avoided_contacts
     ]
     assert any(with_data) and not all(with_data)
     assert _weights(task) == [

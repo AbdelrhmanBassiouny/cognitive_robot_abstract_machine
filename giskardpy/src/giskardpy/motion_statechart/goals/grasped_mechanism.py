@@ -12,7 +12,7 @@ from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
 from cramph.node import EndedByOwner
-from giskardpy.motion_statechart.data_types import DefaultWeights
+from giskardpy.motion_statechart.weights import DefaultWeights
 from giskardpy.motion_statechart.goals.collision_avoidance import (
     UpdateTemporaryCollisionRules,
 )
@@ -61,8 +61,11 @@ class ArticulateGraspedMechanism(EndedByOwner, CompositeNode):
     """
     Weight of the goal keeping the end effector fixed relative to the grasped part.
 
-    Above collision avoidance, because at a lower weight the solver buys clearance by
-    letting the end effector drift off the grasped part, and the two move independently.
+    .. warning:: Unlike most goals, this one is weighted above collision avoidance on
+        purpose. Holding on to the grasped part has to matter more than both moving the
+        mechanism and keeping clear of collisions: at a lower weight the solver buys
+        clearance by letting the end effector drift off the grasped part, and moves the
+        mechanism without the end effector holding on to it.
     """
 
     grasping_end_effector: EndEffector | None = None
