@@ -5,7 +5,8 @@ Plan
 
 Done
 - Package, wiring (workspace, CI, version test), 19 tests pushed.
+- First review addressed (49a3ac3c8b); IntegerVector2 thread left open for the user's call.
 
 Next
-- Review; then restack #524 onto this branch and replace ImagePoint/Pixel.
+- User decides whether IntegerVector2 stays; then restack #524 onto this branch and replace ImagePoint/Pixel.
 - Later: 3D, transforms, krrspatial[symbolic] (SemDT casadi types).
