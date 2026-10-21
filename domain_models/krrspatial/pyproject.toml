@@ -5,9 +5,9 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "krrspatial"
 authors = [
-    { name = "Abdelrhman Bassiouny", email = "abassiou@uni-bremen.de" },
+    { name = "Simon Stelter", email = "stelter@uni-bremen.de" },
 ]
-description = "Points and vectors in reference frames, free of any robot or world model."
+description = "Points and vectors in reference frames."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 classifiers = [

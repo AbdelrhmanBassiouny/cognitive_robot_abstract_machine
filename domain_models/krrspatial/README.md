@@ -1,8 +1,6 @@
 # krrspatial
 
-Points and vectors in reference frames, free of any robot or world model. It depends only
-on `krrood`, so a package that needs positions and directions can use it without the
-semantic digital twin or casadi.
+Points and vectors in reference frames.
 
 - `krrspatial.reference_frame`: `ReferenceFrame`, the interface of whatever positions and
   directions are expressed in.

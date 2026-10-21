@@ -9,6 +9,8 @@ from dataclasses import dataclass
 
 from typing_extensions import Generic, Self, TypeVar, overload
 
+from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
+
 from krrspatial.exceptions import DifferentReferenceFrames
 from krrspatial.reference_frame import ReferenceFrame
 from krrspatial.spatial_types import (
@@ -111,7 +113,10 @@ VectorT = TypeVar("VectorT", bound=NumericVector2)
 
 @dataclass
 class NumericPoint2(
-    NumericPlanar[CoordinateT], Point2[CoordinateT], Generic[CoordinateT, VectorT]
+    NumericPlanar[CoordinateT],
+    Point2[CoordinateT],
+    Generic[CoordinateT, VectorT],
+    SubClassSafeGeneric,
 ):
     """
     A position in a plane, as numbers, whose differences are vectors of the bound vector
