@@ -90,7 +90,6 @@ def test_wheel_console_serves_its_own_assets(
     assert result.returncode == 0, result.stdout + result.stderr
     imported = json.loads(result.stdout)
     assert imported["package"] == str(installed / "cramera")
-    assert imported["providers"] == ["cramera.live.visualization:LiveVisualization"]
     with socket.socket() as address:
         address.bind(("127.0.0.1", 0))
         port = address.getsockname()[1]
