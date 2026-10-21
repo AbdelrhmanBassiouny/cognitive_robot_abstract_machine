@@ -25,6 +25,7 @@ from semantic_digital_twin.world_description.world_entity import Body
 from cramera import paths
 from cramera.live.bridge import Bridge
 from cramera.live.http import serve
+from cramera.live.query_steps import HeldStep, StepMoment
 from cramera.live.recording import Recording
 
 from .test_live_bridge import shaped_body, world_with
@@ -870,6 +871,15 @@ class TestQueryStepping:
         status, _ = post(server + "/query_steps/next", {})
 
         assert (status, control.advances) == (200, 1)
+
+    def test_next_names_the_step_the_viewer_saw_the_demo_held_at(self, server, bridge):
+        control = RecordedStepControl()
+        bridge.query_step_control = control
+        held_at = HeldStep(3, StepMoment.ANSWERED)
+
+        post(server + "/query_steps/next", {"number": 3, "moment": held_at.moment})
+
+        assert control.seen_held_at == [held_at]
 
     def test_the_viewer_chooses_how_the_demo_is_stepped_through(self, server, bridge):
         control = RecordedStepControl()

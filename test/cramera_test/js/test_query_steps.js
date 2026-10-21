@@ -84,3 +84,40 @@ test('the first answer of an answered query is marked as the one taken', functio
   const html = load().answersHtml(step(0, null, { answers: ['first', 'second'] }), 500);
   assert.ok(html.indexOf('qs-answer qs-in qs-first" style="animation-delay:0ms">first') >= 0);
 });
+
+// %% where a query is asked
+const PLAN = {
+  kind: 'plan being resolved', title: 'put the cylinder into its hole', statement: 'Generate a SortPieceAction',
+  variables: [
+    { name: 'piece', role: 'answered', values: ['cylinder 1'] },
+    { name: 'side', role: 'being answered', values: [] },
+  ],
+};
+const SOUGHT = { name: 'hole', role: 'sought', values: [], kind: 'SeenHole', looked_at: null };
+
+test('the stack runs from the enclosing statements through the asking queries to the query', function () {
+  const QuerySteps = load();
+  const asker = step(0, null, { variables: [SOUGHT] });
+  const asked = step(1, 0, { enclosing: [PLAN], variables: [SOUGHT] });
+  const html = QuerySteps.stackHtml([asker, asked], asked);
+  const order = [PLAN.title, 'query #' + (asker.number + 1), 'this query #' + (asked.number + 1)]
+    .map(function (text) { return html.indexOf(text); });
+  assert.ok(order.every(function (at) { return at >= 0; }));
+  assert.deepStrictEqual(order.slice().sort(function (a, b) { return a - b; }), order);
+});
+
+test('each part of an enclosing statement shows what it holds so far', function () {
+  const html = load().stackHtml([], step(0, null, { enclosing: [PLAN], variables: [] }));
+  assert.ok(html.indexOf('<b>piece</b><i>cylinder 1</i>') >= 0);
+  assert.ok(html.indexOf('qs-part qs-r-asking" title="being answered"><b>side</b>') >= 0);
+});
+
+test('a sought variable is open until the query is answered', function () {
+  const QuerySteps = load();
+  const asked = QuerySteps.variablesHtml(step(0, null, { moment: 'asked', variables: [SOUGHT] }));
+  const answered = QuerySteps.variablesHtml(step(0, null, {
+    variables: [Object.assign({}, SOUGHT, { values: ['cylinder hole 1'] })],
+  }));
+  assert.ok(asked.indexOf('qs-pending') >= 0);
+  assert.ok(answered.indexOf('<i>cylinder hole 1</i>') >= 0);
+});

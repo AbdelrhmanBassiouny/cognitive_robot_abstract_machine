@@ -6,23 +6,30 @@
  * conclude, which joint state parks an arm, which arm holds the piece. The demo
  * publishes every query it asked to the bridge (GET /query_steps); this panel lists
  * them under the scene and, while stepping, holds the robot at each one: an
- * inspector laid over the right-hand column shows the code that asks it, the
- * question in English, the backend answering it, its answers and how the backend
- * reasoned, and the bodies the answers are about glow in the 3D scene. Next lets the
- * robot carry on to the following query.
+ * inspector laid over the right-hand column shows where the query is asked -- the
+ * plan, actions and motions and the queries it is asked inside, down to the query
+ * itself with its variables -- the code that asks it, the question in English, the
+ * backend answering it, its answers and how the backend reasoned, and the bodies and
+ * regions the answers are about glow in the 3D scene. Next lets the robot carry on to
+ * the following query.
  *
  * The panel stays hidden until a running demo has published a query.
  *
  * Bus events:
  *   listens  live:changed {on, url}     poll the bridge while a demo is attached
- *   emits    entity:highlight {ids}     the bodies the shown step's answers are about
+ *   emits    entity:highlight {ids, regions}   the bodies and regions the shown step's
+ *                                       answers are about
  *   emits    scene:focus {ids, milliseconds}   frame the scene on those bodies
+ *   emits    queries:stage {open}       the inspector opened or closed; while open
+ *                                       the shown step owns the scene's highlight
  * ==========================================================================*/
 Panels.define('queries', function (root, bus) {
   const POLL_MILLISECONDS = 250;
   const LISTED_STEPS = 7;
   const ANSWER_SPAN = 900;
   const REASONING_SPAN = 2600;
+  // how long the inspector stays on a step the robot carried on from
+  const LINGER_MILLISECONDS = 2500;
   // the gap between this panel's column and the inspector laid beside it, in pixels
   const STAGE_GAP = 6;
   const PHASES = {
@@ -61,11 +68,11 @@ Panels.define('queries', function (root, bus) {
     '  <button class="qs-close" id="qs-close" title="close">×</button>' +
     '</div>' +
     '<div class="qs-trail" id="qs-trail"></div>' +
-    '<div class="qs-askers" id="qs-askers"></div>' +
     '<div class="qs-cols">' +
+    '  <section class="qs-col qs-stackcol"><h3>Where the query is asked</h3><div id="qs-stack"></div></section>' +
     '  <section class="qs-col qs-codecol"><h3>Asked in the code</h3><div id="qs-code"></div><div class="qs-from" id="qs-from"></div></section>' +
-    '  <section class="qs-col qs-asks"><h3>The question</h3><div class="qs-question" id="qs-question"></div><div class="qs-by" id="qs-by"></div></section>' +
-    '  <section class="qs-col"><h3>The answer</h3><div id="qs-answers"></div><div class="qs-lit" id="qs-lit"></div></section>' +
+    '  <section class="qs-col qs-asks"><h3>The question</h3><div class="qs-question" id="qs-question"></div><div class="qs-by" id="qs-by"></div>' +
+    '    <h3>The answer</h3><div id="qs-answers"></div><div class="qs-lit" id="qs-lit"></div></section>' +
     '</div>' +
     '<div class="qs-reasoning" id="qs-reasoning"></div>' +
     '<div class="qs-foot">' +
@@ -91,7 +98,13 @@ Panels.define('queries', function (root, bus) {
       body: JSON.stringify(body || {}),
     }).then(poll).catch(function () {});
   }
-  function advance() { picked = null; post('/query_steps/next'); }
+  // names the step the viewer sees the robot held at, so a second press before the
+  // next step shows cannot skip it
+  function advance() {
+    picked = null;
+    if (published.held === null) return;
+    post('/query_steps/next', { number: published.held, moment: published.heldMoment });
+  }
   function setMode() { post('/query_steps/mode', { stepping: steppingEl.checked, holdsNested: nestedEl.checked }); }
   steppingEl.onchange = setMode;
   nestedEl.onchange = setMode;
@@ -122,6 +135,8 @@ Panels.define('queries', function (root, bus) {
   function hideStage() {
     if (!stage.classList.contains('qs-open')) return;
     stage.classList.remove('qs-open');
+    bus.emit('queries:stage', { open: false });
+    document.body.classList.remove('qs-inspecting');
     showing = null;
     bus.emit('entity:highlight', { ids: [] });
   }
@@ -134,6 +149,8 @@ Panels.define('queries', function (root, bus) {
     const fresh = !showing || showing.split(':')[0] !== String(step.number);
     showing = key;
     placeStage();
+    if (!stage.classList.contains('qs-open')) bus.emit('queries:stage', { open: true });
+    document.body.classList.add('qs-inspecting');
     stage.classList.add('qs-open');
     const phase = PHASES[step.phase] || PHASES.resolution;
     const f = faculty(step.faculty);
@@ -142,10 +159,7 @@ Panels.define('queries', function (root, bus) {
     $('qs-during').textContent = step.during;
     $('qs-count').textContent = 'query ' + (step.number + 1) + ' of ' + published.total;
     $('qs-trail').innerHTML = trailHtml(step);
-    $('qs-askers').innerHTML = QuerySteps.askers(published.steps, step).map(function (asker) {
-      return '<span class="qs-asker">asked while answering <b>#' + (asker.number + 1) + '</b> ' +
-        esc(QuerySteps.questionText(asker)) + '</span>';
-    }).join('');
+    $('qs-stack').innerHTML = QuerySteps.stackHtml(published.steps, step);
     if (fresh) {
       $('qs-code').innerHTML = QuerySteps.codeHtml(step.code);
       $('qs-from').innerHTML = step.askedFrom
@@ -170,8 +184,10 @@ Panels.define('queries', function (root, bus) {
       ? (step.moment === 'asked' ? 'Tracy waits before answering · Next answers it' : 'Tracy waits with the answer · Next lets it go on')
       : 'looking back at an earlier query';
     $('qs-stagenext').textContent = held ? 'Next ▸' : 'Back to the robot';
+    $('qs-stagenext').disabled = false;
     $('qs-run').style.display = published.stepping ? '' : 'none';
-    bus.emit('entity:highlight', { ids: step.moment === 'answered' ? step.highlight : [] });
+    const answered = step.moment === 'answered';
+    bus.emit('entity:highlight', { ids: answered ? step.highlight : [], regions: answered ? step.regions || [] : [] });
     if (step.moment === 'answered' && step.frame.length) bus.emit('scene:focus', { ids: step.frame, milliseconds: 700 });
   }
 
@@ -183,6 +199,13 @@ Panels.define('queries', function (root, bus) {
         '" data-step="' + s.number + '" title="#' + (s.number + 1) + ' ' + esc(QuerySteps.questionText(s)) + '"></i>';
     }).join('');
   }
+  // an asking query in the stack opens that query
+  $('qs-stack').onclick = function (event) {
+    const frame = event.target && event.target.closest && event.target.closest('[data-step]');
+    if (!frame) return;
+    picked = Number(frame.dataset.step);
+    showStep();
+  };
   $('qs-trail').onclick = function (event) {
     const number = event.target && event.target.dataset && event.target.dataset.step;
     if (number === undefined) return;
@@ -227,8 +250,26 @@ Panels.define('queries', function (root, bus) {
     published = next;
     renderStatus();
     renderList();
-    if (picked !== null || published.held !== null) showStep();
-    else hideStage();
+    if (picked !== null || published.held !== null) {
+      clearTimeout(lingering);
+      lingering = null;
+      showStep();
+      return;
+    }
+    linger();
+  }
+  // the robot carries on from a step: the inspector stays on it a moment, so a query
+  // asked soon after takes its place without the inspector closing in between
+  let lingering = null;
+  function linger() {
+    if (!stage.classList.contains('qs-open')) return;
+    $('qs-hint').textContent = 'Tracy carries on…';
+    $('qs-stagenext').disabled = true;
+    if (lingering) return;
+    lingering = setTimeout(function () {
+      lingering = null;
+      if (picked === null && published.held === null) hideStage();
+    }, LINGER_MILLISECONDS);
   }
   root.classList.add('idle');
   function poll() {

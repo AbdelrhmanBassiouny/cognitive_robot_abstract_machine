@@ -20,7 +20,10 @@
  *
  * Bus events:
  *   listens  live:changed {on, url}     poll the bridge while a demo is attached
- *   emits    entity:highlight {ids}     the bodies the part being resolved is about
+ *   listens  queries:stage {open}       while the robot's queries are stepped through,
+ *                                       they own the scene: no part is played or lit
+ *   emits    entity:highlight {ids, regions}   the bodies and regions the part being
+ *                                       resolved is about
  *   emits    scene:focus {ids, milliseconds}   frame the scene on those bodies
  *   emits    eql:run {code, text}       have the robot carry out a resolved plan
  * ==========================================================================*/
@@ -204,8 +207,10 @@ Panels.define('backends', function (root, bus) {
         (part.answers.length ? esc(part.answers[0]) : 'nothing') + '</span>' +
         (part.answers.length > 1 ? '<span class="rs-alts">then ' + part.answers.slice(1).map(esc).join(', ') + '</span>' : '') + '</div>';
       cardEl.className = 'rs-card rs-show ' + f.css;
-      bus.emit('entity:highlight', { ids: part.highlight || [] });
-      if ((part.frame || []).length) bus.emit('scene:focus', { ids: part.frame, milliseconds: P * 0.25 });
+      if (!queriesOpen) {
+        bus.emit('entity:highlight', { ids: part.highlight || [], regions: part.regions || [] });
+        if ((part.frame || []).length) bus.emit('scene:focus', { ids: part.frame, milliseconds: P * 0.25 });
+      }
     }, P * 0.18);
     // the answer goes into the resolved plan
     later(function () {
@@ -232,7 +237,7 @@ Panels.define('backends', function (root, bus) {
     renderCompact(resolution, resolution.parts.length);
     later(function () {
       stage.classList.remove('rs-open');
-      bus.emit('entity:highlight', { ids: [] });
+      if (!queriesOpen) bus.emit('entity:highlight', { ids: [] });
       current = null;
       playQueued();
     }, presentation.afterMilliseconds);
@@ -252,8 +257,15 @@ Panels.define('backends', function (root, bus) {
   }
   function cssEscape(text) { return String(text).replace(/["\\]/g, '\\$&'); }
 
+  // the queries the robot is held at own the scene while they are stepped through
+  let queriesOpen = false;
+  bus.on('queries:stage', function (p) {
+    queriesOpen = !!(p && p.open);
+    if (!queriesOpen) playQueued();
+  });
+
   function playQueued() {
-    if (current !== null || !queue.length) return;
+    if (queriesOpen || current !== null || !queue.length) return;
     playResolution(queue.shift());
   }
 

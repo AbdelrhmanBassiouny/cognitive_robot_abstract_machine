@@ -728,6 +728,8 @@ body.graph-full-open{overflow:hidden}
 .f-rules{--c:var(--f-rules)}.f-probabilistic{--c:var(--f-probabilistic)}
 .slot>.panel-backends{flex:0 1 auto;max-height:318px;min-height:0}
 .slot>.panel-backends.idle{display:none}
+/* while the robot's queries are stepped through, their stack shows the plan: the scene gets the room */
+body.qs-inspecting .slot>.panel-backends{display:none}
 .rs-head{padding:10px 16px}
 .rs-head h2{font-size:14px;letter-spacing:.01em}
 .rs-status{font-size:11px;padding:2px 9px;border-radius:999px;border:1px solid var(--line2);color:var(--muted)}
@@ -928,10 +930,42 @@ body.graph-full-open{overflow:hidden}
 .qs-dot.qs-exec{border-radius:2px}
 .qs-dot:hover{transform:scale(1.5)}
 .qs-dot.qs-here{background:var(--c);box-shadow:0 0 0 2px #0b0e13,0 0 0 3.5px #ffd166,0 0 12px #ffd166}
-.qs-askers{display:flex;flex-direction:column;gap:2px}
-.qs-asker{font-size:11px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.qs-asker b{color:var(--muted)}
-.qs-cols{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr) minmax(0,.8fr);gap:10px}
+.qs-cols{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1.25fr) minmax(0,.95fr);gap:10px}
+.qs-stack{display:flex;flex-direction:column;gap:7px}
+.qs-frame{--d:0;--k:#8b93a3;position:relative;margin-left:calc(var(--d)*13px);padding:7px 9px 8px 10px;border-radius:9px;
+  border:1px solid color-mix(in srgb,var(--k) 38%,transparent);background:color-mix(in srgb,var(--k) 6%,transparent);
+  animation:rs-in .35s ease both;animation-delay:calc(var(--d)*60ms)}
+.qs-frame+.qs-frame::before{content:'';position:absolute;left:-9px;top:-8px;height:22px;width:8px;
+  border-left:1.5px solid var(--line2);border-bottom:1.5px solid var(--line2);border-bottom-left-radius:7px}
+.qs-frame[data-step]{cursor:pointer}
+.qs-frame[data-step]:hover{border-color:var(--k)}
+.qs-k-plan{--k:#b98cff}.qs-k-action{--k:#39d5c8}.qs-k-motion{--k:#5b8cff}.qs-k-query{--k:#ffb648}
+.qs-current{--k:#ffd166;border-color:#ffd166;box-shadow:0 0 22px -8px #ffd166}
+.qs-fhead{display:flex;flex-direction:column;gap:1px;font-size:12px;line-height:1.35;min-width:0}
+.qs-fhead b{font-weight:600;color:#e8edf4;overflow-wrap:anywhere}
+.qs-fkind{flex:none;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--k);font-weight:700}
+.qs-fstatement{margin-top:3px;font-size:11px;color:var(--muted);font-style:italic;line-height:1.4}
+.qs-parts{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.qs-part{--r:#8b93a3;display:inline-flex;align-items:baseline;gap:5px;padding:2px 7px;border-radius:6px;font-size:11px;
+  border:1px solid color-mix(in srgb,var(--r) 45%,transparent);background:color-mix(in srgb,var(--r) 9%,transparent)}
+.qs-part b{font:600 10.5px var(--mono);color:var(--r)}
+.qs-part i,.qs-held i{font-style:normal;color:#dfe5ee}
+.qs-part i+i::before{content:', ';color:var(--faint)}
+.qs-part em,.qs-held em{font-style:normal;color:var(--faint)}
+.qs-r-sought{--r:#ffd166}.qs-r-ranges{--r:#5b8cff}.qs-r-given{--r:#8b93a3}.qs-r-open{--r:#8b93a3;border-style:dashed}
+.qs-r-asking{--r:#ffd166;border-color:#ffd166;animation:qs-asking 1.4s ease-in-out infinite}.qs-r-answered{--r:#7ee08a}
+@keyframes qs-asking{0%,100%{box-shadow:0 0 0 0 rgba(255,209,102,0)}50%{box-shadow:0 0 12px -2px rgba(255,209,102,.8)}}
+.qs-pending{color:#ffd166!important;font-weight:700}
+.qs-vars{display:flex;flex-direction:column;gap:5px;margin-top:8px;font-size:11.5px}
+.qs-var{--r:#8b93a3;display:flex;flex-wrap:wrap;align-items:baseline;gap:3px 8px;padding:5px 8px;border-radius:7px;
+  border-left:2.5px solid var(--r);background:color-mix(in srgb,var(--r) 7%,transparent)}
+.qs-role{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--r);font-weight:700;white-space:nowrap}
+.qs-vname{font:600 11px var(--mono);color:#e8edf4;overflow-wrap:anywhere}
+.qs-vtype{color:var(--muted);font-weight:400}
+.qs-held{flex:1 1 100%;display:flex;flex-wrap:wrap;gap:4px;min-width:0}
+.qs-held i{padding:1px 7px;border-radius:5px;background:rgba(255,255,255,.06);border:1px solid var(--line2);overflow-wrap:anywhere}
+.qs-held i+i::before{content:none}
+.qs-r-sought .qs-held i{color:#ffd166;font-weight:600;border-color:rgba(255,209,102,.45)}
 .qs-col{border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.018);padding:10px 12px;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:8px}
 .qs-col h3{margin:0;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);font-weight:600}
 .qs-file{display:flex;gap:8px;align-items:baseline;font:11px var(--mono);flex-wrap:wrap}

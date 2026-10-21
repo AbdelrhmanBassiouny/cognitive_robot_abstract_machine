@@ -204,6 +204,29 @@ class PartBodies(StrEnum):
     """The bodies the scene is framed on while the part is shown."""
 
 
+@dataclass
+class RegionOutline:
+    """
+    A region of the world drawn as a glowing box while something it is about is shown;
+    regions have no geometry of their own in the scene.
+    """
+
+    id: str
+    """
+    The region's name, as the step naming it gives it.
+    """
+
+    pose: List[float]
+    """
+    The box's centre and orientation in the world, as ``[x, y, z, qx, qy, qz, qw]``.
+    """
+
+    size: List[float]
+    """
+    The box's extent along its own x, y and z axes, in metres.
+    """
+
+
 class PlanTreeField(StrEnum):
     """Fields describing the published plan hierarchy and node lifecycle."""
 
@@ -878,6 +901,38 @@ class Bridge:
                 }
             )
         return sorted({identifiers.get(name, name) for name in names})
+
+    def _region_outlines(self, names: list[str]) -> list[RegionOutline]:
+        """
+        :param names: Entity names, some of which may name regions of the world.
+        :return: A box around each region named, where it is in the world now.
+        """
+        if self.world is None:
+            return []
+        regions = {str(region.name): region for region in self.world.regions}
+        outlines = []
+        for name in names:
+            region = regions.get(name)
+            if region is None or not region.area.shapes:
+                continue
+            box = region.area.as_bounding_box_collection_in_frame(region).bounding_box()
+            center = box.center.to_np()[:3]
+            world_T_center = (
+                region.global_pose.to_np()
+                @ HomogeneousTransformationMatrix.from_xyz_rpy(
+                    x=float(center[0]), y=float(center[1]), z=float(center[2])
+                ).to_np()
+            )
+            outlines.append(
+                RegionOutline(
+                    id=name,
+                    pose=NumericPose.of_matrix(world_T_center).rounded(),
+                    size=[
+                        round(float(value), POSE_PRECISION) for value in box.dimensions
+                    ],
+                )
+            )
+        return outlines
 
     def mesh_path(self, key: str) -> Optional[str]:
         """
@@ -1563,6 +1618,12 @@ class Bridge:
         """
         for resolution in answers.get("resolutions", []):
             for part in resolution["parts"]:
+                part["regions"] = [
+                    asdict(outline)
+                    for outline in self._region_outlines(
+                        part.get(PartBodies.HIGHLIGHT, [])
+                    )
+                ]
                 for names in (PartBodies.HIGHLIGHT, PartBodies.FRAME):
                     part[names] = self._resolve_highlights(part.get(names, []))
         with self._lock:
@@ -1592,6 +1653,12 @@ class Bridge:
                         names: self._resolve_highlights(step.get(names, []))
                         for names in PartBodies
                     },
+                    "regions": [
+                        asdict(outline)
+                        for outline in self._region_outlines(
+                            step.get(PartBodies.HIGHLIGHT, [])
+                        )
+                    ],
                 }
                 for step in steps.get("steps", [])
             ],

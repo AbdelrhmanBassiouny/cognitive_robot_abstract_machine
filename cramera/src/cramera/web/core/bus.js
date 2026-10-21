@@ -13,7 +13,7 @@
  *   scene:step           {step}   ('__done__' at end)   robot-scene → eql, graph
  *   scene:frame          {index}                        robot-scene → graph
  *   live:changed         {on, url}                      robot-scene → graph
- *   entity:highlight     {ids, focus?}                  eql → robot-scene, graph
+ *   entity:highlight     {ids, focus?, regions?}        eql → robot-scene, graph
  *   entity:select        {id, detail, relations}        graph → eql
  *   knowledge:ready             {payload}                      eql → anyone
  *   voice:transcript     {text}                         eql → eql, anyone

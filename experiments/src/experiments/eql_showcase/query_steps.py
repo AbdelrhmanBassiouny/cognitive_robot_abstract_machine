@@ -11,27 +11,38 @@ from __future__ import annotations
 
 import ast
 import linecache
+import re
+import sys
 import threading
 import time
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import MISSING, asdict, dataclass, field, fields
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
 
 from typing_extensions import Any, Callable, Dict, Iterator, List
 
-from coraplex.plans.plan_node import ActionNode
+from coraplex.plans.designator import Designator
+from coraplex.plans.plan_node import ActionNode, DesignatorNode
+from coraplex.robot_plans.actions.base import ActionDescription
 from cramera.knowledge.query_verbalization import QueryVerbalization
-from cramera.live.query_steps import QueryStepControl
+from cramera.live.query_steps import HeldStep, QueryStepControl, StepMoment
 from cramera.paths import repository_root
 from krrood.entity_query_language._monitoring import monitored
+from krrood.entity_query_language import factories
 from krrood.entity_query_language._stack import StackFrame
 from krrood.entity_query_language.backends import (
     EntityQueryLanguageGenerativeBackend,
     ProbabilisticBackend,
 )
-from krrood.entity_query_language.core.variable import Variable
+from krrood.entity_query_language.core.variable import (
+    InstantiatedVariable,
+    Literal,
+    Variable,
+)
+from krrood.entity_query_language.operators.comparator import Comparator
+from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.query.query import Query
 from krrood.entity_query_language.query_observation import (
     AskedQuery,
@@ -39,24 +50,20 @@ from krrood.entity_query_language.query_observation import (
     QueryObservation,
     QueryObserver,
 )
-from semantic_digital_twin.datastructures.joint_state import JointState
-from semantic_digital_twin.robots.robot_parts import AbstractRobotPart, Arm
-from semantic_digital_twin.world_description.world_entity import (
-    KinematicStructureEntity,
-    SemanticAnnotation,
-)
+from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
+from semantic_digital_twin.spatial_types.spatial_types import Pose
 
 from experiments.eql_showcase.open_slots import (
+    AnswerBodies,
     ContactReading,
     ContactReasoning,
     Faculty,
-    Insertion,
     OpenSlotAnswerer,
+    PlanResolution,
     Reasoning,
-    SideGrasp,
     SlotBackend,
+    SlotIdentifier,
 )
-from experiments.eql_showcase.perceived_twin import SeenHole
 from experiments.eql_showcase.performed_actions import PerformedActions
 
 # %% where a step happens
@@ -99,22 +106,6 @@ class Phase(StrEnum):
     """
 
 
-class StepMoment(StrEnum):
-    """
-    The moments of a query a step is held at.
-    """
-
-    ASKED = "asked"
-    """
-    The query was asked; nothing answers it yet.
-    """
-
-    ANSWERED = "answered"
-    """
-    The query's answering ended.
-    """
-
-
 @dataclass
 class StepSituation:
     """
@@ -131,19 +122,33 @@ class StepSituation:
     The plan being resolved or the action being carried out, as said to a person.
     """
 
+    enclosing: List[EnclosingStatement] = field(default_factory=list)
+    """
+    The statements the robot is answering or carrying out, outermost first.
+    """
+
     @classmethod
     def of_performance(cls, performed: PerformedActions) -> StepSituation | None:
         """
         :param performed: The plans the robot performs.
         :return: The action being carried out, or the plan being expanded into motions
-            before any action runs, or None while no plan is performed.
+            before any action runs, with the actions being expanded or carried out, or
+            None while no plan is performed.
         """
         actions = performed.running(ActionNode)
         if actions:
-            return cls(Phase.EXECUTION, type(actions[0].designator).__name__)
+            return cls(
+                Phase.EXECUTION,
+                type(actions[0].designator).__name__,
+                EnclosingStatement.of_actions(performed),
+            )
         nodes = performed.running()
         if nodes:
-            return cls(Phase.EXPANSION, SituationLabel.EXPANDING)
+            return cls(
+                Phase.EXPANSION,
+                SituationLabel.EXPANDING,
+                EnclosingStatement.of_actions(performed),
+            )
         return None
 
 
@@ -278,46 +283,428 @@ class CandidateVerdict(StrEnum):
     """
 
 
+# %% the variables of a query
+
+
+class VariableRole(StrEnum):
+    """
+    What a variable of a query, or a part of a statement, is to it.
+    """
+
+    SOUGHT = "sought"
+    """
+    What the query answers with.
+    """
+
+    RANGES_OVER = "ranges over"
+    """
+    A variable the query tries values of while it looks for answers.
+    """
+
+    GIVEN = "given"
+    """
+    A value the code asking the query fixed.
+    """
+
+    OPEN = "open"
+    """
+    A part left open, for a backend to answer.
+    """
+
+    BEING_ANSWERED = "being answered"
+    """
+    An open part whose answering is under way.
+    """
+
+    ANSWERED = "answered"
+    """
+    An open part a backend has answered.
+    """
+
+
 @dataclass
-class AnswerBodies:
+class QueryVariable:
     """
-    The bodies of the scene an answer is about, which light up while it is shown.
-    """
-
-    answer: Any
-    """
-    The answer.
+    A variable of a query or a part of a statement, and what it holds.
     """
 
-    def bodies(self) -> List[KinematicStructureEntity]:
+    name: str
+    """
+    The name the code gives it, else the part of the statement it is.
+    """
+
+    role: VariableRole
+    """
+    What it is to the query.
+    """
+
+    values: List[str] = field(default_factory=list)
+    """
+    What it holds, as said to a person: the answers of a sought variable, the value
+    given, or the answer of an answered part.
+    """
+
+    kind: str | None = None
+    """
+    The type of what it holds, where the query states one.
+    """
+
+    looked_at: int | None = None
+    """
+    How many values of its domain the query looked at, for a variable it ranges over.
+    """
+
+    @classmethod
+    def of_asked(cls, asked: AskedQuery, most_shown: int = 8) -> List[QueryVariable]:
         """
-        :return: The bodies and regions the answer is about.
+        :param asked: An asked query.
+        :param most_shown: How many variables are kept at most.
+        :return: Its sought variable first, then those it ranges over and the values
+            it was given.
         """
-        answer = self.answer
-        if isinstance(answer, KinematicStructureEntity):
-            return [answer]
-        if isinstance(answer, JointState):
-            return [connection.child for connection in answer.connections]
-        if isinstance(answer, Insertion):
-            return [answer.piece.root, answer.hole.region]
-        if isinstance(answer, SideGrasp):
-            return [] if answer.piece is None else [answer.piece.root]
-        if isinstance(answer, SeenHole):
-            return [answer.region]
-        if isinstance(answer, Arm):
-            return answer.end_effector.bodies
-        if isinstance(answer, SemanticAnnotation):
-            return answer.bodies
+        query = asked.query
+        answers = [cls.said(answer) for answer in asked.answers]
+        if isinstance(query, Match):
+            variables = cls.of_statement(query, answers)
+        elif isinstance(query, Query):
+            variables = cls.of_query(query, answers)
+        else:
+            variables = []
+        merged: Dict[tuple[str, VariableRole], QueryVariable] = {}
+        for variable in variables:
+            kept = merged.setdefault((variable.name, variable.role), variable)
+            if kept is not variable:
+                kept.values.extend(
+                    value for value in variable.values if value not in kept.values
+                )
+        return list(merged.values())[:most_shown]
+
+    @classmethod
+    def of_statement(cls, statement: Match, answers: List[str]) -> List[QueryVariable]:
+        """
+        :param statement: A statement of a type and its attributes.
+        :param answers: Its answers so far, as said to a person.
+        :return: What it seeks, then each attribute it states, given or left open.
+        """
+        sought = cls(
+            cls.name_in_code(statement) or cls.noun_of(statement._type_.__name__),
+            VariableRole.SOUGHT,
+            answers,
+            statement._type_.__name__,
+        )
+        return [
+            sought,
+            *[
+                cls(
+                    name,
+                    VariableRole.OPEN if value is ... else VariableRole.GIVEN,
+                    (
+                        []
+                        if value is ...
+                        else [
+                            (
+                                verbalize_expression(value)
+                                if isinstance(value, Match)
+                                else cls.said(value)
+                            )
+                        ]
+                    ),
+                )
+                for name, value in statement._kwargs_.items()
+            ],
+        ]
+
+    @classmethod
+    def of_query(cls, query: Query, answers: List[str]) -> List[QueryVariable]:
+        """
+        :param query: A query over variables.
+        :param answers: Its answers so far, as said to a person.
+        :return: Its sought variable, the variables it ranges over and the values
+            its conditions compare them with.
+        """
+        selected = query.selected_variable
+        variables = [
+            cls(
+                cls.name_in_code(selected) or cls.noun_of(str(selected._name_)),
+                VariableRole.SOUGHT,
+                answers,
+                cls.type_name(selected._type_),
+            )
+        ]
+        for expression in query._all_expressions_:
+            if isinstance(expression, Literal):
+                continue
+            if isinstance(expression, Variable) and expression is not selected:
+                variables.append(
+                    cls(
+                        cls.name_in_code(expression)
+                        or cls.noun_of(str(expression._name_)),
+                        VariableRole.RANGES_OVER,
+                        kind=cls.type_name(expression._type_),
+                        looked_at=len(
+                            expression._re_enterable_domain_generator_.materialized_values
+                        ),
+                    )
+                )
+            variables.extend(cls.given_in(expression))
+        return variables
+
+    @classmethod
+    def given_in(cls, expression: Any) -> List[QueryVariable]:
+        """
+        :param expression: A part of a query.
+        :return: The values the code fixed in it: what a comparison compares with,
+            named by what it is compared to, and what a predicate is given, named by
+            its parameter.
+        """
+        if isinstance(expression, Comparator):
+            return [
+                cls(
+                    str(other._name_).split(".")[-1],
+                    VariableRole.GIVEN,
+                    [cls.said(given._value_)],
+                )
+                for given, other in (
+                    (expression.right, expression.left),
+                    (expression.left, expression.right),
+                )
+                if isinstance(given, Literal) and not isinstance(other, Literal)
+            ]
+        if isinstance(expression, InstantiatedVariable):
+            return [
+                cls(parameter, VariableRole.GIVEN, [cls.said(given._value_)])
+                for parameter, given in expression._kwargs_.items()
+                if isinstance(given, Literal)
+            ]
         return []
 
-    def framed(self) -> List[KinematicStructureEntity]:
+    @staticmethod
+    def name_in_code(expression: Any) -> str | None:
         """
-        :return: The bodies the scene is framed on while the answer is shown; none
-            for a part of the robot, which stays in view.
+        :param expression: A variable or statement of a query.
+        :return: The name the code that wrote it assigned it to, if it did.
         """
-        if isinstance(self.answer, (JointState, AbstractRobotPart)):
+        stack = monitored.get_stack(expression)
+        writing = (
+            None
+            if stack is None
+            else next(
+                (
+                    frame
+                    for frame in stack
+                    if not (frame.module_name or "").startswith(
+                        QueryLanguagePackage.NAME
+                    )
+                ),
+                None,
+            )
+        )
+        if writing is None:
+            return None
+        first, last = SourceExcerpt.statement_lines(writing.filename, writing.lineno)
+        statement = ast.parse(
+            "".join(
+                linecache.getline(writing.filename, number)
+                for number in range(first, last + 1)
+            ).strip()
+        ).body[0]
+        if not (
+            isinstance(statement, ast.Assign)
+            and isinstance(statement.targets[0], ast.Name)
+        ):
+            return None
+        # the name is the query's only where the statement builds the query itself
+        built_by = statement.value
+        while isinstance(built_by, (ast.Call, ast.Attribute)):
+            built_by = (
+                built_by.func if isinstance(built_by, ast.Call) else built_by.value
+            )
+        if isinstance(built_by, ast.Name) and built_by.id in vars(factories):
+            return statement.targets[0].id
+        return None
+
+    @staticmethod
+    def noun_of(type_name: str) -> str:
+        """
+        :param type_name: The name of a type, in capitalised words.
+        :return: The name in lower-case words joined by underscores, as code names a
+            variable of the type.
+        """
+        return re.sub(r"(?<!^)(?=[A-Z])", "_", type_name).lower()
+
+    @staticmethod
+    def type_name(kind: Any) -> str | None:
+        """
+        :param kind: The type a variable states, if any.
+        :return: Its name.
+        """
+        return kind.__name__ if isinstance(kind, type) else None
+
+    @classmethod
+    def said(cls, value: Any, longest: int = 48) -> str:
+        """
+        :param value: A value a query holds.
+        :param longest: How many characters are kept at most.
+        :return: The value as said to a person.
+        """
+        if isinstance(value, (list, tuple, set)):
+            return ", ".join(cls.said(item) for item in value)
+        if isinstance(value, Pose):
+            return "at " + ", ".join(
+                f"{coordinate:.2f}" for coordinate in value.position.to_np()[:3]
+            )
+        said = OpenSlotAnswerer.name_of(value)
+        if said.startswith(type(value).__name__ + "("):
+            # a value without a name of its own is said by its type
+            return type(value).__name__
+        return said if len(said) <= longest else said[: longest - 1] + "…"
+
+
+class EnclosingKind(StrEnum):
+    """
+    The statements a query can be asked as a part of.
+    """
+
+    PLAN = "plan being resolved"
+    """
+    A plan stated with parts left open, whose parts the backends answer.
+    """
+
+    ACTION = "action"
+    """
+    An action being expanded into motions or carried out.
+    """
+
+    MOTION = "motion"
+    """
+    A motion being turned into the motion state chart that carries it out.
+    """
+
+
+@dataclass
+class EnclosingStatement:
+    """
+    A statement the robot is answering or carrying out while it asks a query.
+    """
+
+    kind: EnclosingKind
+    """
+    What kind of statement it is.
+    """
+
+    title: str
+    """
+    What it is, as said to a person.
+    """
+
+    statement: str | None
+    """
+    What it states, in English, if it is written as a statement.
+    """
+
+    variables: List[QueryVariable]
+    """
+    Its parts, each given, answered, being answered or open.
+    """
+
+    @classmethod
+    def of_resolution(cls, resolution: PlanResolution) -> List[EnclosingStatement]:
+        """
+        :param resolution: A plan being resolved.
+        :return: The plan as stated, each part with what it holds so far, if it was
+            stated as a statement.
+        """
+        statement = resolution.statement
+        if statement is None:
             return []
-        return self.bodies()
+        return [
+            cls(
+                EnclosingKind.PLAN,
+                resolution.name,
+                verbalize_expression(statement),
+                [
+                    cls.part_of(resolution, name, value)
+                    for name, value in statement._kwargs_.items()
+                ],
+            )
+        ]
+
+    @staticmethod
+    def part_of(resolution: PlanResolution, name: str, stated: Any) -> QueryVariable:
+        """
+        :param resolution: A plan being resolved.
+        :param name: A part of the plan.
+        :param stated: The part as stated.
+        :return: What the part holds so far.
+        """
+        answered = [
+            part
+            for part in resolution.parts
+            if part.slot_id.split(SlotIdentifier.CONDITIONS_SEPARATOR)[0] == name
+        ]
+        asking = resolution.asking
+        if (
+            asking is not None
+            and asking.split(SlotIdentifier.CONDITIONS_SEPARATOR)[0] == name
+        ):
+            return QueryVariable(name, VariableRole.BEING_ANSWERED)
+        if answered:
+            return QueryVariable(name, VariableRole.ANSWERED, answered[-1].answers[:1])
+        if stated is ... or isinstance(stated, Match):
+            return QueryVariable(name, VariableRole.OPEN)
+        return QueryVariable(name, VariableRole.GIVEN, [QueryVariable.said(stated)])
+
+    @classmethod
+    def of_actions(cls, performed: PerformedActions) -> List[EnclosingStatement]:
+        """
+        :param performed: The plans the robot performs.
+        :return: The actions running, then the actions and motions the current thread
+            is expanding or turning into motions, outermost first, each with the parts
+            it was given.
+        """
+        designators = [
+            node.designator for node in reversed(performed.running(ActionNode))
+        ]
+        on_the_stack = []
+        frame = sys._getframe(1)
+        while frame is not None:
+            performing = frame.f_locals.get("self")
+            if isinstance(performing, DesignatorNode):
+                performing = performing.designator
+            if isinstance(performing, Designator) and not any(
+                designator is performing for designator in designators + on_the_stack
+            ):
+                on_the_stack.append(performing)
+            frame = frame.f_back
+        designators.extend(reversed(on_the_stack))
+        return [cls.of_designator(designator) for designator in designators]
+
+    @classmethod
+    def of_designator(cls, designator: Designator) -> EnclosingStatement:
+        """
+        :param designator: An action or motion.
+        :return: It, with each part it was given that it has no default for.
+        """
+        return cls(
+            (
+                EnclosingKind.ACTION
+                if isinstance(designator, ActionDescription)
+                else EnclosingKind.MOTION
+            ),
+            type(designator).__name__,
+            None,
+            [
+                QueryVariable(
+                    stated.name,
+                    VariableRole.GIVEN,
+                    [QueryVariable.said(vars(designator)[stated.name])],
+                )
+                for stated in fields(designator)
+                if stated.init
+                and stated.default is MISSING
+                and stated.default_factory is MISSING
+            ],
+        )
 
 
 # %% one query asked
@@ -390,6 +777,19 @@ class QueryStep:
                 ],
                 "",
             )
+
+    def answer_bodies(self, answer: Any) -> AnswerBodies:
+        """
+        :param answer: One of the query's answers.
+        :return: What the answer is about in the scene, as the backend answering the
+            query, or the nearest query that asked it, knows it.
+        """
+        asked = self.asked
+        while asked is not None:
+            if isinstance(asked.backend, SlotBackend):
+                return asked.backend.answer_bodies(answer)
+            asked = asked.asker
+        return AnswerBodies(answer)
 
     def candidates(self, most_shown: int = 16) -> List[Any]:
         """
@@ -496,16 +896,20 @@ class QueryStep:
             "highlight": [
                 str(body.name)
                 for answer in answers
-                for body in AnswerBodies(answer).bodies()
+                for body in self.answer_bodies(answer).bodies()
             ],
             "frame": [
                 str(body.name)
                 for answer in answers
-                for body in AnswerBodies(answer).framed()
+                for body in self.answer_bodies(answer).framed()
             ],
             "reasoning": (
                 None if self.reasoning is None else self.reasoning.to_payload()
             ),
+            "variables": [
+                asdict(variable) for variable in QueryVariable.of_asked(self.asked)
+            ],
+            "enclosing": [asdict(statement) for statement in self.situation.enclosing],
             "milliseconds": (
                 None if self.seconds is None else round(self.seconds * 1000, 1)
             ),
@@ -623,8 +1027,13 @@ class QueryStepper(QueryObserver, QueryStepControl):
                 self.held = None
             self._change.wait_for(lambda: self.held is not step)
 
-    def advance(self) -> None:
+    def advance(self, held_at: HeldStep | None = None) -> None:
         with self._change:
+            if held_at is not None and (
+                self.held is None
+                or HeldStep(self.held.number, self.held.moment) != held_at
+            ):
+                return
             self.held = None
             self._publish()
             self._change.notify_all()

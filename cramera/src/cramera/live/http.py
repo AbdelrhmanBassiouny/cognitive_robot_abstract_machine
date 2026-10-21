@@ -23,8 +23,11 @@ HTTP endpoints of the live bridge (default port 8765).
     GET /query_steps[?revision=]  {revision, stepping, holdsNested, held, heldMoment, total,
                        steps: [{number, asker, depth, phase, during, moment, question,
                        code, askedFrom, faculty, backend, answers, highlight, frame,
-                       reasoning, milliseconds}]}  the queries the demo asked
-    POST /query_steps/next  let the demo carry on from the query it is held at
+                       regions, reasoning, milliseconds, variables, enclosing}]}  the
+                       queries the demo asked, each with its variables and the
+                       statements it was asked inside
+    POST /query_steps/next  {number?, moment?} let the demo carry on from the query it
+                       is held at, only while it is still held at the one given
     POST /query_steps/mode  {stepping, holdsNested} hold the demo at every query
     GET /chart   {signature, title,
                   nodes: [{id, parent, name, class_name, life_cycle, observation}],
@@ -68,6 +71,7 @@ from cramera.knowledge.query_vocabulary import UnknownVocabularyName
 from cramera.knowledge.queryable_knowledge import QueryScope, UnknownQueryScope
 from cramera.live.bridge import Bridge
 from cramera.live.query import NoQuerySourceRegistered
+from cramera.live.query_steps import HeldStep, StepMoment
 from cramera.live.frame_range import InvalidFrameRange
 from cramera.live.live_bundle import build_live_scene
 from cramera.live.recording import Recording, RecordingState
@@ -475,7 +479,12 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
         control = self.bridge.query_step_control
         if control is None:
             return self._send_json({"ok": False, "error": "nothing to step"}, 404)
-        control.advance()
+        payload = self._posted_payload() or {}
+        control.advance(
+            HeldStep(int(payload["number"]), StepMoment(payload["moment"]))
+            if payload.get("number") is not None and payload.get("moment")
+            else None
+        )
         self._send_json({"ok": True})
 
     def set_query_stepping(self) -> None:

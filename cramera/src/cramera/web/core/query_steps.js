@@ -95,7 +95,78 @@
       ? '<span class="qs-more">+' + (step.answers.length - shownAnswers.length) + ' more</span>' : '') + '</div>';
   }
 
+  // the css of each role a variable plays in a query or a part plays in a statement
+  const ROLE_CSS = {
+    'sought': 'qs-r-sought', 'ranges over': 'qs-r-ranges', 'given': 'qs-r-given',
+    'open': 'qs-r-open', 'being answered': 'qs-r-asking', 'answered': 'qs-r-answered',
+  };
+  const KIND_CSS = { 'plan being resolved': 'qs-k-plan', 'action': 'qs-k-action', 'motion': 'qs-k-motion' };
+
+  // what a variable holds: its values, else that it is still open, else how far the
+  // query looked through its domain
+  function heldHtml(variable, answered, most) {
+    if (variable.values.length) {
+      const shownValues = variable.values.slice(0, most || 8);
+      return shownValues.map(function (value) { return '<i>' + esc(value) + '</i>'; }).join('') +
+        (variable.values.length > shownValues.length
+          ? '<em>+' + (variable.values.length - shownValues.length) + ' more</em>' : '');
+    }
+    if (variable.role === 'sought') return answered ? '<em>no answer</em>' : '<em class="qs-pending">?</em>';
+    if (variable.role === 'being answered') return '<em class="qs-pending">?</em>';
+    if (variable.looked_at !== null && variable.looked_at !== undefined) {
+      return '<em>' + variable.looked_at + ' looked at</em>';
+    }
+    return '<em>?</em>';
+  }
+
+  // a part of an enclosing statement as a chip: its name and what it holds
+  function partHtml(variable) {
+    return '<span class="qs-part ' + (ROLE_CSS[variable.role] || '') + '" title="' + esc(variable.role) + '">' +
+      '<b>' + esc(variable.name) + '</b>' + heldHtml(variable, true) + '</span>';
+  }
+
+  // the variables of a query as rows: what each is to the query, its name and type,
+  // and what it holds
+  function variablesHtml(step) {
+    const answered = step.moment === 'answered';
+    return '<div class="qs-vars">' + (step.variables || []).map(function (variable) {
+      return '<div class="qs-var ' + (ROLE_CSS[variable.role] || '') + '">' +
+        '<span class="qs-role">' + esc(variable.role) + '</span>' +
+        '<span class="qs-vname">' + esc(variable.name) +
+        (variable.kind ? '<span class="qs-vtype">: ' + esc(variable.kind) + '</span>' : '') + '</span>' +
+        '<span class="qs-held">' + heldHtml(variable, answered) + '</span></div>';
+    }).join('') + '</div>';
+  }
+
+  // the statements and queries a step is asked inside, outermost first, ending in the
+  // step itself with its variables
+  function stackHtml(steps, step) {
+    const enclosing = step.enclosing || [];
+    const chain = askers(steps, step);
+    let depth = 0;
+    const frames = enclosing.map(function (frame) {
+      return '<div class="qs-frame ' + (KIND_CSS[frame.kind] || '') + '" style="--d:' + depth++ + '">' +
+        '<div class="qs-fhead"><span class="qs-fkind">' + esc(frame.kind) + '</span><b>' + esc(frame.title) + '</b></div>' +
+        (frame.statement ? '<div class="qs-fstatement">' + esc(frame.statement) + '</div>' : '') +
+        (frame.variables.length ? '<div class="qs-parts">' + frame.variables.map(partHtml).join('') + '</div>' : '') +
+        '</div>';
+    }).concat(chain.map(function (asker) {
+      const sought = (asker.variables || [])[0];
+      return '<div class="qs-frame qs-k-query" style="--d:' + depth++ + '" data-step="' + asker.number + '">' +
+        '<div class="qs-fhead"><span class="qs-fkind">query #' + (asker.number + 1) + '</span><b>' +
+        esc(questionText(asker)) + '</b></div>' +
+        (sought ? '<div class="qs-parts">' + partHtml({ name: sought.name, role: 'being answered', values: [] }) + '</div>' : '') +
+        '</div>';
+    }));
+    frames.push('<div class="qs-frame qs-current" style="--d:' + depth + '">' +
+      '<div class="qs-fhead"><span class="qs-fkind">this query #' + (step.number + 1) + '</span><b>' +
+      esc(questionText(step)) + '</b></div>' + variablesHtml(step) + '</div>');
+    return '<div class="qs-stack">' + frames.join('') + '</div>';
+  }
+
   window.QuerySteps = {
+    stackHtml: stackHtml,
+    variablesHtml: variablesHtml,
     codeHtml: codeHtml,
     lineHtml: lineHtml,
     shown: shown,

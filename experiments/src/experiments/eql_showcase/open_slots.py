@@ -61,11 +61,17 @@ from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
 from probabilistic_model.utils import MissingDict
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.reasoning.predicates import SupportedBy
-from semantic_digital_twin.robots.robot_parts import Arm
+from semantic_digital_twin.datastructures.joint_state import JointState
+from semantic_digital_twin.robots.robot_parts import AbstractRobotPart, Arm
 from semantic_digital_twin.spatial_types import RotationMatrix
 from semantic_digital_twin.spatial_types.spatial_types import Point3, Pose
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.world_entity import Body, WorldEntity
+from semantic_digital_twin.world_description.world_entity import (
+    Body,
+    KinematicStructureEntity,
+    SemanticAnnotation,
+    WorldEntity,
+)
 
 # %% what answered
 
@@ -267,6 +273,23 @@ class CodeLine:
         return {"text": self.text, "slot": self.slot_id}
 
 
+class SlotIdentifier(StrEnum):
+    """
+    How the id of the part holding a statement's relations is made from the id of the
+    statement's part.
+    """
+
+    CONDITIONS_SEPARATOR = "-"
+    """
+    Separates the statement's part from the word naming its relations.
+    """
+
+    CONDITIONS = "where"
+    """
+    Names the part holding the relations.
+    """
+
+
 @dataclass(eq=False)
 class PlanResolution(NamedEntity):
     """
@@ -304,6 +327,16 @@ class PlanResolution(NamedEntity):
     Whether every part that can be answered has been.
     """
 
+    statement: Match | None = field(default=None, repr=False)
+    """
+    The plan or statement as stated, its open parts given as ``...`` or as statements.
+    """
+
+    asking: str | None = field(default=None, repr=False)
+    """
+    The id of the part being answered at the moment, if any.
+    """
+
     def to_payload(self, index: int) -> Dict[str, Any]:
         """
         :param index: The resolution's place among all resolutions so far.
@@ -318,6 +351,58 @@ class PlanResolution(NamedEntity):
             "resolved": [line.to_payload() for line in self.resolved],
             "parts": [part.to_payload() for part in self.parts],
         }
+
+
+# %% what an answer is about in the scene
+
+
+@dataclass
+class AnswerBodies:
+    """
+    The bodies of the scene an answer is about, which light up while it is shown.
+    """
+
+    answer: Any
+    """
+    The answer.
+    """
+
+    holes: List[SeenHole] = field(default_factory=list)
+    """
+    The holes of the board, which an answer concluding a kind of hole is about.
+    """
+
+    def bodies(self) -> List[KinematicStructureEntity]:
+        """
+        :return: The bodies and regions the answer is about.
+        """
+        answer = self.answer
+        if isinstance(answer, KinematicStructureEntity):
+            return [answer]
+        if isinstance(answer, JointState):
+            return [connection.child for connection in answer.connections]
+        if isinstance(answer, Insertion):
+            return [answer.piece.root, answer.hole.region]
+        if isinstance(answer, SideGrasp):
+            return [] if answer.piece is None else [answer.piece.root]
+        if isinstance(answer, SeenHole):
+            return [answer.region]
+        if isinstance(answer, HoleShape):
+            return [hole.region for hole in self.holes if hole.kind is answer.kind]
+        if isinstance(answer, Arm):
+            return answer.end_effector.bodies
+        if isinstance(answer, SemanticAnnotation):
+            return answer.bodies
+        return []
+
+    def framed(self) -> List[KinematicStructureEntity]:
+        """
+        :return: The bodies the scene is framed on while the answer is shown; none
+            for a part of the robot, which stays in view.
+        """
+        if isinstance(self.answer, (JointState, AbstractRobotPart)):
+            return []
+        return self.bodies()
 
 
 # %% the backends
@@ -360,6 +445,13 @@ class SlotBackend(QueryBackend, ABC):
         :param statement: The statement to answer.
         :return: Whether this backend can answer it.
         """
+
+    def answer_bodies(self, answer: Any) -> AnswerBodies:
+        """
+        :param answer: An answer given while this backend answers a statement.
+        :return: What the answer is about in the scene.
+        """
+        return AnswerBodies(answer)
 
     @abstractmethod
     def reasoning_for(self, statement: Match, answers: List[Any]) -> Reasoning:
@@ -950,6 +1042,12 @@ class HoleRulesBackend(SlotBackend):
     def faculty(cls) -> Faculty:
         return Faculty.RULES
 
+    def answer_bodies(self, answer: Any) -> AnswerBodies:
+        """
+        A concluded kind of hole is about the board's holes of that kind.
+        """
+        return AnswerBodies(answer, self.twin.holes)
+
     def can_answer(self, statement: Match) -> bool:
         """
         A statement about an insertion whose hole it leaves open.
@@ -1260,6 +1358,7 @@ class OpenSlotAnswerer:
         title: str,
         underspecified: List[CodeLine],
         resolved: List[CodeLine],
+        statement: Match | None = None,
         executable: bool = False,
     ) -> PlanResolution:
         """
@@ -1268,6 +1367,7 @@ class OpenSlotAnswerer:
         :param title: What the plan is, as said to a person.
         :param underspecified: The plan as stated, its open parts marked.
         :param resolved: The plan as carried out, each open part marked.
+        :param statement: The plan or statement as stated, if it is a statement.
         :param executable: Whether the robot can be told to carry the plan out.
         :return: The resolution, whose parts are answered through :meth:`answer`.
         """
@@ -1276,6 +1376,7 @@ class OpenSlotAnswerer:
             underspecified=underspecified,
             resolved=resolved,
             executable=executable,
+            statement=statement,
         )
         self.resolutions.append(resolution)
         return resolution
@@ -1294,9 +1395,11 @@ class OpenSlotAnswerer:
         :raises NoBackendAnswers: If no backend declares it can answer it.
         """
         backend = self.backend_for(statement)
+        resolution.asking = slot_id
         started = time.perf_counter()
         answer = backend.resolve(statement)
         seconds = time.perf_counter() - started
+        resolution.asking = None
         part = SlotAnswer(
             name=f"{slot} · {resolution.name}",
             step=resolution.name,
@@ -1350,7 +1453,9 @@ class OpenSlotAnswerer:
         statement.from_(there_are)
         return self.answer(
             resolution,
-            f"{slot_id}-where",
+            SlotIdentifier.CONDITIONS_SEPARATOR.join(
+                (slot_id, SlotIdentifier.CONDITIONS)
+            ),
             "which of them hold the relations",
             statement,
         )
@@ -1388,7 +1493,7 @@ class OpenSlotAnswerer:
             )
         ]
         resolution = self.begin(
-            verbalize_expression(statement), underspecified, resolved
+            verbalize_expression(statement), underspecified, resolved, statement
         )
         answers = self._answer_nested(resolution, statement, nested)
         self.finish(resolution)

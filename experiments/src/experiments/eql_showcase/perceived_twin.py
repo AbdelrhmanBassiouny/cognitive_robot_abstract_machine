@@ -25,7 +25,13 @@ from experiments.montessori.perception.detections import (
 )
 from experiments.montessori.perception.orthophoto import WorkspaceRegion
 from experiments.montessori.pieces import PieceSet
-from experiments.montessori.semantics import MontessoriShape
+from experiments.montessori.semantics import (
+    CylinderShape,
+    DiskShape,
+    MontessoriShape,
+    SphereShape,
+    TriangularPrismShape,
+)
 from experiments.montessori.world import _BOARD_MESH, _HOLE_FOOTPRINTS, _board_body
 from krrood.entity_query_language.utils import camel_case_to_words
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -40,7 +46,16 @@ from semantic_digital_twin.world_description.connections import (
     Connection6DoF,
     FixedConnection,
 )
-from semantic_digital_twin.world_description.geometry import Box, Color, Mesh, Scale
+from semantic_digital_twin.world_description.geometry import (
+    Box,
+    Color,
+    Cylinder,
+    Mesh,
+    Polygon2D,
+    Scale,
+    Shape,
+    Sphere,
+)
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import (
     Body,
@@ -355,6 +370,34 @@ class PerceivedTwin:
             ),
         )
 
+    @staticmethod
+    def shape_of_kind(piece: MontessoriShapeDetection, color: Color) -> Shape:
+        """
+        :param piece: A piece the look found.
+        :param color: The colour it is drawn in.
+        :return: The shape of the kind it was recognised as, sized as it was measured
+            and centred on its footprint; the box it is measured as for a kind with
+            none of its own.
+        """
+        footprint = piece.footprint
+        if piece.category in (CylinderShape, DiskShape):
+            return Cylinder(width=footprint.width, height=piece.height, color=color)
+        if piece.category is SphereShape:
+            return Sphere(radius=footprint.width / 2, color=color)
+        if piece.category is TriangularPrismShape:
+            prism = Mesh.from_trimesh(
+                mesh=Polygon2D.equilateral_triangle(side=footprint.length).extrude(
+                    piece.height
+                )
+            )
+            prism.color = color
+            # the triangle's base runs along the footprint's longer side
+            prism.origin = HomogeneousTransformationMatrix.from_xyz_rpy(yaw=np.pi / 2)
+            return prism
+        return Box(
+            scale=Scale(footprint.width, footprint.length, piece.height), color=color
+        )
+
     def _commit_piece(self, piece: MontessoriShapeDetection, index: int) -> None:
         """
         Add one piece, named and annotated as the kind of piece it was recognised as.
@@ -363,6 +406,7 @@ class PerceivedTwin:
         :param index: Its position among the pieces of the look, to tell pieces of the
             same kind apart.
         """
+        color = self.colors.get(piece.category, UNKNOWN_PIECE_COLOR)
         body = Body.from_shape_collection(
             self._name(f"{self.kind_of(piece.category)} {index + 1}"),
             ShapeCollection(
@@ -371,9 +415,12 @@ class PerceivedTwin:
                         scale=Scale(
                             piece.footprint.width, piece.footprint.length, piece.height
                         ),
-                        color=self.colors.get(piece.category, UNKNOWN_PIECE_COLOR),
+                        color=color,
                     )
                 ]
+            ),
+            visuals_shape_collection=ShapeCollection(
+                [self.shape_of_kind(piece, color)]
             ),
         )
         self.world.add_kinematic_structure_entity(body)

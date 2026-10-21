@@ -16,8 +16,22 @@ from experiments.eql_showcase.perception_demo import (
 )
 from experiments.montessori.perception.detections import MontessoriScene
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
-from experiments.montessori.semantics import MontessoriShape
+from experiments.montessori.semantics import (
+    CubeShape,
+    CylinderShape,
+    DiskShape,
+    MontessoriShape,
+    RectangularPrismShape,
+    SphereShape,
+    TriangularPrismShape,
+)
 from semantic_digital_twin.world_description.connections import Connection6DoF
+from semantic_digital_twin.world_description.geometry import (
+    Box,
+    Cylinder,
+    Mesh,
+    Sphere,
+)
 
 from .dataset import montessori_scene_fixtures
 from .dataset.montessori_capture_truths import CAPTURE_TRUTHS
@@ -118,6 +132,29 @@ def test_a_piece_seen_on_the_table_rests_on_it(
     assert sorted(row["__entity__"] for row in answer.rows) == sorted(
         str(piece.root.name) for piece in seen_pieces(twin)
     )
+
+
+def test_a_piece_seen_looks_like_its_kind_and_collides_as_its_measured_box(
+    twin: PerceivedTwin, scene: MontessoriScene
+):
+    twin.commit(scene)
+
+    looks = {
+        type(piece): (
+            type(piece.root.visual.shapes[0]),
+            type(piece.root.collision.shapes[0]),
+        )
+        for piece in seen_pieces(twin)
+    }
+    drawn_as = {
+        CubeShape: Box,
+        RectangularPrismShape: Box,
+        CylinderShape: Cylinder,
+        DiskShape: Cylinder,
+        SphereShape: Sphere,
+        TriangularPrismShape: Mesh,
+    }
+    assert looks == {kind: (drawn_as[kind], Box) for kind in looks}
 
 
 # %% the shipped captures

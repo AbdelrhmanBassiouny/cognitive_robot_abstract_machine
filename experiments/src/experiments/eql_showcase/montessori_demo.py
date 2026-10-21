@@ -74,7 +74,12 @@ from experiments.eql_showcase.open_slots import (
 )
 from experiments.eql_showcase.perceived_twin import PerceivedTwin, SeenHole, SeenPiece
 from experiments.eql_showcase.perception_demo import PerceptionShowcase
-from experiments.eql_showcase.query_steps import Phase, QueryStepper, StepSituation
+from experiments.eql_showcase.query_steps import (
+    EnclosingStatement,
+    Phase,
+    QueryStepper,
+    StepSituation,
+)
 from experiments.eql_showcase.showcase import QUESTIONS_FILE, ShowcaseQuestions
 
 MONTESSORI_QUESTIONS_FILE = QUESTIONS_FILE.with_name("montessori_questions.yaml")
@@ -355,6 +360,7 @@ class MontessoriSorting:
             self.title_of(statement._kwargs_["piece"]),
             self.underspecified_lines(statement),
             self.resolved_lines(),
+            statement,
         )
         with self.observing():
             plan = self._answer_parts(resolution, statement._kwargs_)
@@ -758,7 +764,11 @@ class TracyMontessoriDemonstration(ShowcasedDemonstration):
         resolution = variable(PlanResolution, self.sorting.answerer.resolutions)
         resolving = an(entity(resolution).where(resolution.done == False)).tolist()
         if resolving:
-            return StepSituation(Phase.RESOLUTION, resolving[-1].name)
+            return StepSituation(
+                Phase.RESOLUTION,
+                resolving[-1].name,
+                EnclosingStatement.of_resolution(resolving[-1]),
+            )
         performing = (
             None
             if self.showcase is None

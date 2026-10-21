@@ -12,7 +12,8 @@
  *   emits    scene:step {step}         playback entered a plan step ('__done__' at end)
  *   emits    scene:frame {index}      playback moved onto another recorded tick
  *   emits    live:changed {on, url}    live bridge attached / detached
- *   listens  entity:highlight {ids}    glow the matching 3D objects
+ *   listens  entity:highlight {ids, regions?}    glow the matching 3D objects, and draw
+ *                                       each region as a glowing box
  *   listens  scene:focus {ids, milliseconds?}   glide the camera onto those objects
  *
  * window.RobotView stays exported for the console and split-resize.
@@ -218,6 +219,10 @@ Panels.define('robot-scene', function (root, bus) {
   const worldRoot = new THREE.Group();
   const markerRoot = new THREE.Group();   // the CRAM debug-marker overlay (/markers)
   worldRoot.add(markerRoot);
+  // regions lit while something about them is shown; a region has no geometry of its
+  // own in the scene, so each is drawn as a glowing box
+  const regionRoot = new THREE.Group();
+  worldRoot.add(regionRoot);
   worldRoot.rotation.x = -Math.PI / 2;
   scene3.add(worldRoot);
 
@@ -916,7 +921,9 @@ Panels.define('robot-scene', function (root, bus) {
   function glideTo(names, milliseconds) {
     const box = new THREE.Box3();
     names.forEach(function (name) {
-      const body = scene3.getObjectByName(name) || objectMeshes[name];
+      // a region's outline first: the scene may hold a node of the same name with no
+      // geometry of its own
+      const body = regionRoot.getObjectByName(name) || scene3.getObjectByName(name) || objectMeshes[name];
       if (body) box.expandByObject(body);
     });
     if (box.isEmpty()) return false;
@@ -1132,6 +1139,29 @@ Panels.define('robot-scene', function (root, bus) {
         if (c.material.transparent) c.material.opacity = on ? 0.26 : 0.08;
       });
     }
+    needsRender = true;
+  }
+
+  // regions = [{id, pose: [x, y, z, qx, qy, qz, qw], size: [x, y, z]}]
+  function outlineRegions(regions) {
+    while (regionRoot.children.length) {
+      const old = regionRoot.children[0];
+      regionRoot.remove(old);
+      old.traverse(function (c) { if (c.geometry) c.geometry.dispose(); if (c.material) c.material.dispose(); });
+    }
+    regions.forEach(function (region) {
+      const holder = new THREE.Group();
+      holder.name = region.id;
+      holder.position.set(region.pose[0], region.pose[1], region.pose[2]);
+      holder.quaternion.set(region.pose[3], region.pose[4], region.pose[5], region.pose[6]);
+      const geometry = new THREE.BoxGeometry(region.size[0], region.size[1], region.size[2]);
+      holder.add(new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
+        color: 0x39d5c8, transparent: true, opacity: 0.42, depthWrite: false,
+      })));
+      holder.add(new THREE.LineSegments(new THREE.EdgesGeometry(geometry),
+        new THREE.LineBasicMaterial({ color: 0x9ffff6 })));
+      regionRoot.add(holder);
+    });
     needsRender = true;
   }
 
@@ -1720,7 +1750,10 @@ Panels.define('robot-scene', function (root, bus) {
   RobotView.onLiveChange(function (on) { bus.emit('live:changed', { on: on, url: liveUrl() }); });
 
   // %% bus: inbound
-  bus.on('entity:highlight', function (p) { highlightObjects((p && p.ids) || []); });
+  bus.on('entity:highlight', function (p) {
+    highlightObjects((p && p.ids) || []);
+    outlineRegions((p && p.regions) || []);
+  });
   bus.on('scene:focus', function (p) { if (p && p.ids) glideTo(p.ids, p.milliseconds); });
 
   // %% play button
