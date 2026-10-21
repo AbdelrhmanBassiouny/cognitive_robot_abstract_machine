@@ -1,10 +1,11 @@
 schema_version: 1
 id: eql-planning
 title: 'EQL planning: goals as EQL conditions, planners as EQL backends'
-description: 'Domain-agnostic planning over EQL in krrood: fluents and a State overlay, action schemas
-  with assignment effects, and a PlanningBackend that answers a goal query with plans, with compiled heuristic
-  search, regression-based explanation, trajectory constraints and a unified-planning backend. Its robot
-  use is eql-planning-robots (#522). Core by Nov 13; target IROS 2027.'
+description: 'Domain-agnostic planning over EQL in krrood: fluents and a State overlay, action
+  schemas with assignment effects, and a PlanningBackend that answers a goal query with plans,
+  with compiled heuristic search, regression-based explanation, trajectory constraints and
+  a unified-planning backend. Its robot use is eql-planning-robots (#522). Core by Nov 13;
+  target IROS 2027.'
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 513
 waves:
@@ -34,18 +35,8 @@ items:
   pull_request_number: 495
   track: eql-prerequisites
   status: in_progress
-  notes: Already merged into aamas27-unification-revision. Also listed in ontomatic-port as eql-correlated-quantifiers,
-    which records no PR; overlaps eql-existential-semantics.
-- id: nested-evaluation-context
-  branch: ccr-149bfc8c-nxzj39
-  pull_request_number: 520
-  session: https://claude.ai/code/session_01RZNdyMVHF5vjN8QRUu5i7s
-  title: An EQL evaluation started inside another one sees its own context
-  track: eql-prerequisites
-  status: done
-  notes: 'Bug found in #511: a rule tree evaluated during another evaluation returns nothing (shared ContextVar).
-    Fixed in draft #520 (bug label, off main): every public evaluate() starts its own EvaluationContext.
-    Once it lands, drop the contextvars workaround in #511''s HoleRulesBackend.concluded_kind.'
+  notes: Already merged into aamas27-unification-revision. Also listed in ontomatic-port as
+    eql-correlated-quantifiers, which records no PR; overlaps eql-existential-semantics.
 - id: state-aware-predicate-cache
   branch: eql-planning/state-aware-predicate-cache
   title: Predicate results cached per state, not per argument tuple alone
@@ -53,9 +44,9 @@ items:
   depends_on:
   - fluent-state-overlay
   status: deferred
-  notes: 'Changes the per-argument cache (ontomatic-port eql-predicate-call-memo, commit 08f9178dd on
-    aamas27-unification-revision): fold into whichever PR lands that cache. Keys on the State that
-    fluent-state-overlay introduces. Deferred at kickoff on 2026-10-20.'
+  notes: 'Changes the per-argument cache (ontomatic-port eql-predicate-call-memo, commit 08f9178dd
+    on aamas27-unification-revision): fold into whichever PR lands that cache. Keys on the
+    State that fluent-state-overlay introduces. Deferred at kickoff on 2026-10-20.'
   blockers:
   - 'eql-predicate-call-memo has no PR; it waits on #495 (needs-resolution).'
   - fluent-state-overlay has not started, so there is no State to key the cache on.
@@ -63,8 +54,7 @@ items:
   branch: eql-planning/fluent-state-overlay
   title: Fluents and a State overlay that EQL queries are evaluated against
   track: planning-core
-  depends_on:
-  - nested-evaluation-context
+  depends_on: []
   status: not_started
 - id: action-schema-progression
   branch: eql-planning/action-schema-progression
@@ -90,7 +80,8 @@ items:
   status: not_started
 - id: compiled-search-ff
   branch: eql-planning/compiled-search-ff
-  title: Grounding through EQL, compiled integer state, greedy best-first and A* with the FF heuristic
+  title: Grounding through EQL, compiled integer state, greedy best-first and A* with the
+    FF heuristic
   track: planning-core
   depends_on:
   - planning-backend-search
@@ -105,7 +96,8 @@ items:
   status: not_started
 - id: unified-planning-backend
   branch: eql-planning/unified-planning-backend
-  title: Compile EQL domains to unified-planning; cross-check against Fast Downward on IPC domains
+  title: Compile EQL domains to unified-planning; cross-check against Fast Downward on IPC
+    domains
   track: evaluation
   depends_on:
   - planning-backend-search

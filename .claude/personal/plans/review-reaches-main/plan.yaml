@@ -12,23 +12,16 @@ tracking_issue: 426
 waves:
 - id: front-line
   name: Land what is already reviewable
-  description: 'Thirty-six pull requests are based directly on main, several within ten commits of it.
-    Every one that lands shortens every chain above it, so this is the only work with compounding returns
-    and it comes first.
-
-    '
+  description: |
+    Thirty-six pull requests are based directly on main, several within ten commits of it. Every one that lands shortens every chain above it, so this is the only work with compounding returns and it comes first.
 - id: joins
   name: The joins nobody owns
-  description: 'Where two unlanded lineages have to meet, or where a branch has diverged from main rather
-    than from another branch. Each collision gets one pull request whose single job is to settle it.
-
-    '
+  description: |
+    Where two unlanded lineages have to meet, or where a branch has diverged from main rather than from another branch. Each collision gets one pull request whose single job is to settle it.
 - id: orphans
   name: Work stranded with the integration branch
-  description: 'The closed sub-pull-requests, the commits that reached no pull request, and the queue
-    hygiene that makes the remainder readable.
-
-    '
+  description: |
+    The closed sub-pull-requests, the commits that reached no pull request, and the queue hygiene that makes the remainder readable.
 tracks:
 - id: landing
   name: Driving the front line to main
@@ -129,16 +122,6 @@ items:
     which still exist, and the descriptions, which are good -- #344''s is a full problem/fix/tests writeup
     with the production stack trace. Per orphan: harvest the description, decide re-cut or drop, record
     the branch SHA.'
-- id: tracy-demo-recut
-  title: Re-cut the tracy demo from its final tree rather than replaying it
-  branch: null
-  pull_request_number: null
-  track: orphan-recovery
-  depends_on:
-  - perception-join
-  status: deferred
-  notes: Moved Oct 20 to icra-upstream's tracy-lab-and-demos, which cuts the Tracy demo from the ICRA
-    tip's final tree.
 - id: dead-weight-closed
   title: Close what the recovery supersedes, naming the replacement
   branch: null
@@ -146,12 +129,11 @@ items:
   track: orphan-recovery
   depends_on:
   - perception-join
-  - tracy-demo-recut
   status: not_started
   notes: 'Twenty-seven open pull requests bottom out on a #265-family branch and cannot be reviewed as
     they stand. Closing each with the replacement named and the branch SHA recorded is the cheapest item
     here and the one that makes the queue readable, which is the precondition for review being fast at
-    all.'
+    all. The Tracy demo''s replacement is icra-upstream''s tracy-lab-and-demos.'
 - id: base-rule
   title: Write down that a pull request is based on main or on an approved pull request
   branch: null

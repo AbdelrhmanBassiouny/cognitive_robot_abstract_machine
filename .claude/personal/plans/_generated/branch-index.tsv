@@ -1,11 +1,9 @@
-claude/compassionate-darwin-ek7d2u	basstler-package
 claude/symbolic-expression-stack-refactor-ridull	dag-facade-hardening
 claude/split-performatives-prs-xbluus-agreement	eql-performatives
 claude/split-performatives-prs-xbluus	eql-performatives
 claude/performatives-clean	eql-performatives
 claude/eql-performatives-unify	eql-performatives
 fix/eql-correlated-quantifiers	eql-planning
-ccr-149bfc8c-nxzj39	eql-planning
 eql-planning/state-aware-predicate-cache	eql-planning
 eql-planning/fluent-state-overlay	eql-planning
 eql-planning/action-schema-progression	eql-planning
@@ -27,8 +25,6 @@ claude/pensive-albattani-2j50zr	general-video-production
 claude/the-icra-video-shows-the-plan-being-answered	general-video-production
 claude/general-figure-scenes	general-video-production
 claude/video-manim-scenes	general-video-production
-claude/icra-experiments-simulation-pipeline-w4ep7n	icra-foundation
-tracy_icra	icra-foundation
 icra-upstream/probabilistic-relational-circuit	icra-upstream
 icra-upstream/giskardpy-executor-statecharts	icra-upstream
 icra-upstream/krrood-eql-changes	icra-upstream
@@ -43,6 +39,7 @@ icra-upstream/paper-and-reproduction	icra-upstream
 claude/episode-replayed-world-kickoff-6ye5bb	knowledge-directed-expectation
 claude/plan-item-kickoff-expectations-2zvpmn	knowledge-directed-expectation
 perception_robokudo_detector	knowledge-directed-expectation
+tracy_icra	knowledge-directed-expectation
 montessori_perception_on_main	knowledge-directed-grounding
 perception_surfaces_from_world	knowledge-directed-grounding
 perception_per_supporting_surface	knowledge-directed-grounding
@@ -113,7 +110,6 @@ D-core-support	rdr-core-engine
 D-core-expert	rdr-core-engine
 D-core-single-class	rdr-core-engine
 D-core-backend	rdr-core-engine
-D-core-engine	rdr-core-engine
 rdr-engine	rdr-core-engine
 rdr/feature-registry	rdr-engine-extensions
 rdr/feature-capture	rdr-engine-extensions
@@ -133,7 +129,6 @@ montessori/choice-policies	rdr-explanation
 montessori/why-demo	rdr-explanation
 D-ui-rendering	rdr-interface-and-decorator
 D-ui	rdr-interface-and-decorator
-D-ui-splice-fix	rdr-interface-and-decorator
 D-store	rdr-interface-and-decorator
 D-deco	rdr-interface-and-decorator
 claude/the-place-an-insertion-builds-on	review-reaches-main

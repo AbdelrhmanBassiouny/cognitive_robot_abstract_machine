@@ -1,18 +1,18 @@
 schema_version: 1
 id: rdr-core-engine
 title: The EQL-native RDR core engine, landed as a split-PR stack
-description: 'The rdr/ package itself, delivered bottom-up as a stack of topic-oriented pull
-  requests: backward inference and condition resolvers, the conclusion helpers, the underspecified
-  adapter, corner-case provenance, the rule-tree unparser, the observer and rule-tree view,
-  the Expert policy split, the single-class inference engine and the underspecified-query
-  backend, plus the runtime behaviour left open when no rule fires.'
+description: 'The rdr/ package itself, delivered bottom-up as a stack of topic-oriented pull requests:
+  backward inference and condition resolvers, the conclusion helpers, the underspecified adapter, corner-case
+  provenance, the rule-tree unparser, the observer and rule-tree view, the Expert policy split, the single-class
+  inference engine and the underspecified-query backend, plus the runtime behaviour left open when no
+  rule fires.'
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 94
 waves:
 - id: stack
   name: The split-PR stack
-  description: One linear chain from ripple-down-rules-refactor to the backend tip, merged
-    bottom-up with a cascade after each landing.
+  description: One linear chain from ripple-down-rules-refactor to the backend tip, merged bottom-up with
+    a cascade after each landing.
 - id: runtime
   name: Engine runtime behaviour
   description: Behaviour the stack deliberately left interim.
@@ -24,13 +24,13 @@ tracks:
 - id: superseded-slices
   name: Superseded slices
   wave: stack
-  description: The umbrella and the mega-slice the three-way split replaced; kept as branches,
-    not as bases anything can land through.
+  description: The umbrella and the mega-slice the three-way split replaced; kept as branches, not as
+    bases anything can land through.
 - id: engine-runtime
   name: No-rule-fired handling and provenance
   wave: runtime
-  description: Warn, ask an expert or use a default conclusion, and record which of the three
-    a conclusion came from.
+  description: Warn, ask an expert or use a default conclusion, and record which of the three a conclusion
+    came from.
 items:
 - id: D-core-underspecified
   title: 'RDR engine: underspecified-match adapter'
@@ -39,11 +39,11 @@ items:
   track: engine-stack
   depends_on: []
   status: in_progress
-  notes: '2026-08-12 steward cascade: restacked onto its cascaded base, which now carries
-    main be377fdf (#41 merged 2026-08-10). Full account in roadmap.md section 21. Merged D-core-aid
-    (1ad96142); one conflict, an add/add on rdr/exceptions.py between this branch''s underspecified-target
-    exceptions and main''s AmbiguousBranchSemanticsError. Unioned - no class name collides
-    - and given %% section headers.'
+  notes: '2026-08-12 steward cascade: restacked onto its cascaded base, which now carries main be377fdf
+    (#41 merged 2026-08-10). Full account in roadmap.md section 21. Merged D-core-aid (1ad96142); one
+    conflict, an add/add on rdr/exceptions.py between this branch''s underspecified-target exceptions
+    and main''s AmbiguousBranchSemanticsError. Unioned - no class name collides - and given %% section
+    headers.'
 - id: D-core-corner-case
   title: 'RDR engine: corner-case provenance store'
   branch: D-core-corner-case
@@ -51,17 +51,16 @@ items:
   track: engine-stack
   session: https://claude.ai/code/session_018RwLhEUQy5ojjgCvmYRbWp
   blockers:
-  - 'Labelled `integration-conflict` since 2026-09-30: the integration build reported this
-    branch merges cleanly but the suite fails on the combined tree, with no single other branch
-    reproducing it.'
+  - 'Labelled `integration-conflict` since 2026-09-30: the integration build reported this branch merges
+    cleanly but the suite fails on the combined tree, with no single other branch reproducing it.'
   depends_on:
   - D-core-underspecified
   status: in_progress
-  notes: '2026-08-12 steward cascade: restacked onto its cascaded base, which now carries
-    main be377fdf (#41 merged 2026-08-10). Full account in roadmap.md section 21. Merged D-core-underspecified
-    (07545624); the same rdr/exceptions.py add/add recurring, this time also carrying CaseNotSerializableError.
-    Unioned again. 2026-10-02 review round (`55e70b6ac`): the developer''s seven threads were
-    all naming and docstring fixes, and all are applied, replied to and resolved.'
+  notes: '2026-08-12 steward cascade: restacked onto its cascaded base, which now carries main be377fdf
+    (#41 merged 2026-08-10). Full account in roadmap.md section 21. Merged D-core-underspecified (07545624);
+    the same rdr/exceptions.py add/add recurring, this time also carrying CaseNotSerializableError. Unioned
+    again. 2026-10-02 review round (`55e70b6ac`): the developer''s seven threads were all naming and docstring
+    fixes, and all are applied, replied to and resolved.'
 - id: D-core-serialization
   title: 'RDR engine: rule-tree unparser (rdr_to_python)'
   branch: D-core-serialization
@@ -70,12 +69,12 @@ items:
   depends_on:
   - D-core-corner-case
   status: in_progress
-  notes: 'The rule-tree unparser, plus the `type_hints.py` to `object_to_source.py` rename
-    its own review asked for. Restacked and cascaded. One finding worth keeping: the rename''s
-    claim to update every importer was narrower than stated, and CI caught `template_file_creator.py`
-    importing the deleted module — a file neither side''s diff touched, so git''s merge never
-    flagged it. That is the failure mode this stack has now hit three times. 2026-08-30: the
-    generated module''s header changed here (`bb01256df`), because this slice owns `templates/rdr_module.py.jinja`.'
+  notes: 'The rule-tree unparser, plus the `type_hints.py` to `object_to_source.py` rename its own review
+    asked for. Restacked and cascaded. One finding worth keeping: the rename''s claim to update every
+    importer was narrower than stated, and CI caught `template_file_creator.py` importing the deleted
+    module — a file neither side''s diff touched, so git''s merge never flagged it. That is the failure
+    mode this stack has now hit three times. 2026-08-30: the generated module''s header changed here (`bb01256df`),
+    because this slice owns `templates/rdr_module.py.jinja`.'
 - id: D-core-support
   title: 'RDR engine: observer, rule-tree view, and remaining support modules'
   branch: D-core-support
@@ -84,12 +83,11 @@ items:
   depends_on:
   - D-core-serialization
   status: in_progress
-  notes: 'Restacked 2026-08-12 out of the six days it spent unmergeable, which was what stopped
-    the whole stack landing. Two resolutions outlive that round: `base_expressions.py` keeps
-    main''s `set_active_root_if_not_set` API at this branch''s own placement, hoisted out
-    of the `owns_an_evaluation_context` branch so it also runs under a pre-installed context;
-    and the conclusion gate reads `if not is_active_root` now that eql-truth-unification deleted
-    `is_condition_false`.'
+  notes: 'Restacked 2026-08-12 out of the six days it spent unmergeable, which was what stopped the whole
+    stack landing. Two resolutions outlive that round: `base_expressions.py` keeps main''s `set_active_root_if_not_set`
+    API at this branch''s own placement, hoisted out of the `owns_an_evaluation_context` branch so it
+    also runs under a pre-installed context; and the conclusion gate reads `if not is_active_root` now
+    that eql-truth-unification deleted `is_condition_false`.'
 - id: d-core-expert
   title: 'RDR engine: Expert policy split'
   branch: D-core-expert
@@ -99,11 +97,11 @@ items:
   - D-core-support
   status: in_progress
   session: https://claude.ai/code/session_01Gid5Qw9cbedssFEqojo1SK
-  notes: 'The Expert policy split, and the parameter-object work handed to it from the single-class
-    plan. What it establishes for everything above: `ExpertInterface` carries only the expert
-    Q&A surface, while the RDR holds a `ModelSaver` (in `serialization.py`, beside `save_rdr_with_case`)
-    and a `ProgressReporter` as its own collaborators with Null-Object defaults — which deletes
-    the engine''s `expert.interface.on_save` reach-through.'
+  notes: 'The Expert policy split, and the parameter-object work handed to it from the single-class plan.
+    What it establishes for everything above: `ExpertInterface` carries only the expert Q&A surface, while
+    the RDR holds a `ModelSaver` (in `serialization.py`, beside `save_rdr_with_case`) and a `ProgressReporter`
+    as its own collaborators with Null-Object defaults — which deletes the engine''s `expert.interface.on_save`
+    reach-through.'
 - id: d-core-single-class
   title: 'RDR engine: EQLSingleClassRDR core inference engine'
   branch: D-core-single-class
@@ -113,11 +111,11 @@ items:
   - d-core-expert
   status: in_progress
   session: https://claude.ai/code/session_012Fy3CmMRRy1m5DtzVUhP2X
-  notes: 'The `EQLSingleClassRDR` inference engine, ported from the superseded mega-slice.
-    What it settled: a fit saves once on its way out through a `finally`, not once per inserted
-    rule, so a crash keeps the rules it authored — and an empty tree is deliberately not saved,
-    because saving unconditionally let `EmptyRuleTreeError` replace the exception the caller
-    needed to see. `TemporaryModelSaver` is the default.'
+  notes: 'The `EQLSingleClassRDR` inference engine, ported from the superseded mega-slice. What it settled:
+    a fit saves once on its way out through a `finally`, not once per inserted rule, so a crash keeps
+    the rules it authored — and an empty tree is deliberately not saved, because saving unconditionally
+    let `EmptyRuleTreeError` replace the exception the caller needed to see. `TemporaryModelSaver` is
+    the default.'
 - id: d-core-backend
   title: 'RDR engine: underspecified-query RDR backend'
   branch: D-core-backend
@@ -128,28 +126,16 @@ items:
   status: in_progress
   session: https://claude.ai/code/session_015bucsUoPW3ktQ1NnTZbbVx
   blockers:
-  - The GroundTruth thread on backend.py:36 is answered and deliberately left open. No dataclass
-    in entity_query_language/rdr/ expresses a per-case ground-truth supplier; the only one
-    that does is ripple_down_rules CaseQuery._target, in the package this split retires.
+  - The GroundTruth thread on backend.py:36 is answered and deliberately left open. No dataclass in entity_query_language/rdr/
+    expresses a per-case ground-truth supplier; the only one that does is ripple_down_rules CaseQuery._target,
+    in the package this split retires.
   - CI check test_each_lib (semantic_digital_twin) fails on test_multi_sim.py::test_world_sim_state_sync,
-    a physics-settling assertion this pull request's krrood/rdr files cannot reach. It is
-    not this branch's work and cannot be fixed inside it.
+    a physics-settling assertion this pull request's krrood/rdr files cannot reach. It is not this branch's
+    work and cannot be fixed inside it.
   notes: The underspecified-query RDR backend, and the stack tip. `RDRBackend` inherits `QueryBackend`,
-    whose whole ABC is `evaluate(expression)`; neither concrete base fits, since `SelectiveBackend`
-    raises on exactly the ellipsis matches this backend exists for and `GenerativeBackend`
-    constructs new instances where this completes an attribute on existing ones, but neither
-    of those reaches `QueryBackend` itself.
-- id: D-core-engine
-  title: 'RDR engine: EQLSingleClassRDR core inference engine'
-  branch: D-core-engine
-  pull_request_number: 68
-  track: superseded-slices
-  depends_on:
-  - D-core-support
-  status: deferred
-  notes: 'Superseded by the topic split (d-core-expert -> d-core-single-class -> d-core-backend)
-    after the PR #68 review asked to split the mega-slice. PR #68 closed once the split PRs
-    open.'
+    whose whole ABC is `evaluate(expression)`; neither concrete base fits, since `SelectiveBackend` raises
+    on exactly the ellipsis matches this backend exists for and `GenerativeBackend` constructs new instances
+    where this completes an attribute on existing ones, but neither of those reaches `QueryBackend` itself.
 - id: rdr-engine-umbrella
   title: RDR/EQL engine umbrella (superseded by the split stack)
   branch: rdr-engine
@@ -157,9 +143,8 @@ items:
   track: superseded-slices
   depends_on: []
   status: deferred
-  notes: 'Closed unmerged once the remainder was split into #58..#68 above. Opened on top
-    of eql-core-prep (#28), now in the eql-core-and-code-generation plan; that dependency
-    has merged.'
+  notes: 'Closed unmerged once the remainder was split into #58..#68 above. Opened on top of eql-core-prep
+    (#28), now in the eql-core-and-code-generation plan; that dependency has merged.'
 - id: no-rule-fired-resolution
   title: 'No-rule-fired handling: warn / ask-expert / default-conclusion modes + provenance'
   branch: null
@@ -170,8 +155,7 @@ items:
   status: blocked
   blockers:
   - Blocked until the Wave-0 engine stack lands on main.
-  notes: 'Beyond interim classify->UNSET. Conclusion provenance coordinates with Wave-3 JTMS
-    (rdr-justifications). 2026-08-09: the sentinel itself is being unified with ... (Ellipsis)
-    -- see rdr-backward-inference and roadmap Sec.17 -- so this item now inherits "no conclusion"
-    being spelled the same way as "generate one". Two consequences it owns. (1) Expert delegation:
-    once ...'
+  notes: 'Beyond interim classify->UNSET. Conclusion provenance coordinates with Wave-3 JTMS (rdr-justifications).
+    2026-08-09: the sentinel itself is being unified with ... (Ellipsis) -- see rdr-backward-inference
+    and roadmap Sec.17 -- so this item now inherits "no conclusion" being spelled the same way as "generate
+    one". Two consequences it owns. (1) Expert delegation: once ...'
