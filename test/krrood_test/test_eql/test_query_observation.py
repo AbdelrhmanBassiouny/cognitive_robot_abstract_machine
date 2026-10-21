@@ -1,8 +1,12 @@
 import threading
 
 from krrood.entity_query_language.backends import EntityQueryLanguageBackend
-from krrood.entity_query_language.factories import an, entity, variable
-from krrood.entity_query_language.query_observation import QueryObservation
+from krrood.entity_query_language._monitoring import monitored
+from krrood.entity_query_language.factories import a, an, entity, variable
+from krrood.entity_query_language.query_observation import (
+    QueryLanguagePackage,
+    QueryObservation,
+)
 
 from ..dataset.observed_queries import (
     ObservedMoment,
@@ -118,3 +122,18 @@ def test_an_observer_observing_twice_is_told_once():
         ObservedMoment.ASKED,
         ObservedMoment.ANSWERED,
     ]
+
+
+# %% where an asked query was written
+
+
+def test_a_match_keeps_the_code_that_wrote_it():
+    match = a(Shelf)(width=1.0)
+
+    [written, *_] = [
+        frame
+        for frame in monitored.get_stack(match)
+        if not frame.module_name.startswith(QueryLanguagePackage.NAME)
+    ]
+
+    assert written.function_name == test_a_match_keeps_the_code_that_wrote_it.__name__

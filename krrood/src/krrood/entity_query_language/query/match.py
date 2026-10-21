@@ -61,6 +61,7 @@ from krrood.entity_query_language.core.mapped_variable import (
     IndexByValue,
 )
 from krrood.entity_query_language.core.variable import Literal, DomainType, Variable
+from krrood.entity_query_language._monitoring import monitored
 from krrood.entity_query_language.evaluable import Evaluable
 from krrood.entity_query_language.exceptions import (
     CalledMatchAfterResolution,
@@ -230,6 +231,7 @@ class AbstractMatchExpression(MatchAssignedValue, Generic[T], ABC):
                 yield expression
 
 
+@monitored
 @dataclass(eq=False)
 class Match(
     Evaluable,
