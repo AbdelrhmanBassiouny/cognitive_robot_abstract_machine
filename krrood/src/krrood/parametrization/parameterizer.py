@@ -23,6 +23,7 @@ from typing_extensions import (
 )
 from krrood.parametrization.exceptions import (
     AmbiguousVariableName,
+    AttributeNotParameterized,
     DomainElementsIndistinguishableInSamples,
     EmptyVariableDomain,
     InvalidEllipsis,
@@ -81,6 +82,19 @@ class ModelQueryParameters(ABC):
         :return: A dictionary that maps variable names to the random events variables
             this query references.
         """
+
+    def variable_of(self, attribute: MappedVariable) -> random_events.variable.Variable:
+        """
+        :param attribute: An attribute of the query, such as
+            ``query.pose.position.x``.
+        :return: The random events variable that stands for the attribute.
+        :raises AttributeNotParameterized: If the query has no variable for the
+            attribute.
+        """
+        name = attribute._variable_rooted_._name_
+        if name not in self.variables:
+            raise AttributeNotParameterized(attribute)
+        return self.variables[name]
 
     @property
     @abstractmethod

@@ -15,10 +15,7 @@ from coraplex.alternative_motion_mappings.stretch_motion_mapping import (
 )
 from coraplex.alternative_motion_mappings.tiago_motion_mapping import TiagoMoveSim
 from coraplex.datastructures.dataclasses import Context
-from coraplex.datastructures.enums import (
-    AxisIdentifier,
-    DetectionTechnique,
-)
+from coraplex.datastructures.enums import DetectionTechnique
 from coraplex.datastructures.trajectory import PoseTrajectory
 from coraplex.exceptions import NoFloorBelowRobot
 from coraplex.execution_environment import kinematically_simulated_robot
@@ -443,16 +440,13 @@ def test_follow_tcp_path_multi(multiple_robot_apartment_context):
         world.notify_state_change()
     # robot.full_body_controlled = True
     left_arm = left_or_only_arm(context.robot)
-    front_axis = tuple(int(v) for v in left_arm.end_effector.approach_axis.to_np()[:3])
-    grasp_axis = AxisIdentifier.from_tuple(front_axis)
+    approach_axis = left_arm.end_effector.approach_axis.to_np()
 
     pose_T = world.get_body_by_name("milk.stl").global_transform
     pose = pose_T.pose
-    if grasp_axis == AxisIdentifier.X:
-        target_pose = pose
-    elif grasp_axis == AxisIdentifier.Z:
+    if np.allclose(approach_axis, Vector3.Z().to_np()):
         offset_T = HomogeneousTransformationMatrix.from_xyz_axis_angle(
-            axis=AxisIdentifier.Y.value,
+            axis=Vector3.Y(),
             angle=np.pi / 2,
             reference_frame=world.root,
         )
@@ -766,7 +760,7 @@ def test_transport(multiple_robot_apartment_context, rclpy_node):
 def test_move_to_reach(multiple_robot_apartment_context, rclpy_node):
     world, robot, context = multiple_robot_apartment_context
     move_to_reach = MoveToReach(
-        target_pose_offset_robot=Pose2D(0.2, -0.55),
+        target_pose_offset_robot=Pose2D.from_xy_yaw(0.2, -0.55),
         reference_T_grasp=Pose.from_xyz_rpy(
             x=0.7, y=-1.3, z=0.9, reference_frame=world.root
         ),

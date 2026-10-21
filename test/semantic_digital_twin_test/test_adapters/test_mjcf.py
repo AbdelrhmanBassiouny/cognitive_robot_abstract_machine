@@ -1,4 +1,5 @@
 import os.path
+import shutil
 
 import numpy
 import pytest
@@ -372,3 +373,23 @@ def test_primitive_box_geom_resolves_its_material_texture(tmp_path):
     assert box_shape.texture.file_path == str(texture_file_path)
     assert box_shape.texture.repeat == pytest.approx([3.0, 3.0])
     assert box_shape.texture.uniform is True
+
+
+# %% descriptions in ROS packages
+
+
+def test_a_scene_named_by_a_package_uri_is_read_from_that_package(
+    tmp_path, monkeypatch
+):
+    scene_file_name = "frame_wrapped_scene.xml"
+    package_directory = tmp_path / "scene_package"
+    package_directory.mkdir()
+    shutil.copy(os.path.join(DATASET_DIR, scene_file_name), package_directory)
+    monkeypatch.setenv("ROS_PACKAGE_PATH", str(package_directory))
+
+    from_package = MJCFParser(f"package://scene_package/{scene_file_name}").parse()
+
+    from_file = MJCFParser(os.path.join(DATASET_DIR, scene_file_name)).parse()
+    assert [body.name for body in from_package.kinematic_structure_entities] == [
+        body.name for body in from_file.kinematic_structure_entities
+    ]
