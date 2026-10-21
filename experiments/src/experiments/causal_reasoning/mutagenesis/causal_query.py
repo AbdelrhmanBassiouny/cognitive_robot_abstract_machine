@@ -26,7 +26,7 @@ from probabilistic_model.learning.learning_method import StratifiedLearning
 from probabilistic_model.probabilistic_circuit.relational.causal import (
     RelationalCausalCircuit,
 )
-from probabilistic_model.probabilistic_circuit.relational.rspn import (
+from probabilistic_model.probabilistic_circuit.relational.relational_probabilistic_circuit import (
     RelationalProbabilisticCircuit,
 )
 
@@ -199,7 +199,6 @@ class BranchingAtomCountCausalQuery:
             MutagenesisMoleculeAggregations
         ).branching_atom_count()
         model = RelationalProbabilisticCircuit(
-            MutagenesisMolecule,
             monte_carlo_sample_count=monte_carlo_sample_count,
             learning_method=StratifiedLearning(
                 variables=[branching_atom_count_variable_expression._name_],
