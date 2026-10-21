@@ -46,10 +46,10 @@ items:
   depends_on:
   - shared-bounds
   session: https://claude.ai/code/session_01J17aVY3vyQM8goACbkHkcp
-  notes: Base claude/ecstatic-hopper-7j7iaz. Abstract Point2/Point3/Vector generic over the coordinate
-    type (int, float, later symbolic Scalar); all coordinate types get coordinates, frame, ordering and
-    same-type offsets; only float and symbolic ones get norms, scaling, rotations and transforms. Depends
-    on krrood and numpy; casadi is the optional extra krrspatial[symbolic], filled in by symbolic-spatial-types.
+  notes: 'Draft #526 on #512: ReferenceFrame, Point2/Vector2 interfaces generic over the coordinate type,
+    numeric Float/Integer points and vectors (norm float-only, IntegerPoint2.nearest). 2D only; 3D, transforms
+    and the casadi extra come with symbolic-spatial-types.'
+  pull_request_number: 526
 - id: krrimage
   title: domain_models/krrimage (images, colours, pixels) with Color moved out of SemDT
   branch: claude/crollywood-refactor-shared-classes-e8jtm9
@@ -62,7 +62,8 @@ items:
   blockers:
   - ImagePoint, ImageBox, Pixel and PixelBox duplicate spatial types; they are replaced by krrspatial's
     float and int points and boxes once krrspatial-numeric exists.
-  notes: Restack onto claude/krrspatial and depend on krrspatial instead of its own coordinates.
+  notes: Restack onto claude/krrspatial (#526) and use its points; merge both domain_models/README.md
+    entries.
 - id: symbolic-spatial-types
   title: SemDT's casadi spatial types become krrspatial's symbolic implementations
   branch: claude/krrspatial-symbolic
