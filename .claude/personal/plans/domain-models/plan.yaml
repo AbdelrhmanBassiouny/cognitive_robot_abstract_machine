@@ -1,11 +1,9 @@
 schema_version: 1
 id: domain-models
 title: Standalone domain models (krrspatial, krrimage, krrollywood)
-description: >-
-  Shared types move out of SemDT and crollywood into standalone packages under domain_models/,
-  each depending only on krrood and external libraries. krrspatial holds points, vectors, boxes
-  and transforms; krrimage holds images, colours and pixels on top of it; krrollywood becomes
-  its own repository on krrimage.
+description: Shared types move out of SemDT and crollywood into standalone packages under domain_models/,
+  each depending only on krrood and external libraries. krrspatial holds points, vectors, boxes and transforms;
+  krrimage holds images, colours and pixels on top of it; krrollywood becomes its own repository on krrimage.
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 525
 waves:
@@ -14,8 +12,8 @@ waves:
   description: krrspatial's numeric types and krrimage on top of them, with no casadi.
 - id: adoption
   name: 'Wave 2: Packages moved onto them'
-  description: SemDT's casadi types become krrspatial's symbolic types; krrollywood and image
-    extensions build on krrimage.
+  description: SemDT's casadi types become krrspatial's symbolic types; krrollywood and image extensions
+    build on krrimage.
 tracks:
 - id: spatial
   name: krrspatial
@@ -38,22 +36,20 @@ items:
   status: in_progress
   depends_on: []
   session: https://claude.ai/code/session_01HQ4cooKAuKSVwcZpKfsCUc
-  notes: Ready for review on the fork. Base of krrspatial and #524.
+  notes: Ready for review on the fork. Base of krrspatial and
 - id: krrspatial-numeric
-  title: domain_models/krrspatial with a ReferenceFrame interface, generic abstract spatial types
-    and their numpy implementations
+  title: domain_models/krrspatial with a ReferenceFrame interface, generic abstract spatial types and
+    their numpy implementations
   branch: claude/krrspatial
   track: spatial
   status: in_progress
   depends_on:
   - shared-bounds
   session: https://claude.ai/code/session_01J17aVY3vyQM8goACbkHkcp
-  notes: >-
-    Base claude/ecstatic-hopper-7j7iaz. Abstract Point2/Point3/Vector generic over the coordinate
-    type (int, float, later symbolic Scalar); all coordinate types get coordinates, frame,
-    ordering and same-type offsets; only float and symbolic ones get norms, scaling, rotations
-    and transforms. Depends on krrood and numpy; casadi is the optional extra
-    krrspatial[symbolic], filled in by symbolic-spatial-types.
+  notes: Base claude/ecstatic-hopper-7j7iaz. Abstract Point2/Point3/Vector generic over the coordinate
+    type (int, float, later symbolic Scalar); all coordinate types get coordinates, frame, ordering and
+    same-type offsets; only float and symbolic ones get norms, scaling, rotations and transforms. Depends
+    on krrood and numpy; casadi is the optional extra krrspatial[symbolic], filled in by symbolic-spatial-types.
 - id: krrimage
   title: domain_models/krrimage (images, colours, pixels) with Color moved out of SemDT
   branch: claude/crollywood-refactor-shared-classes-e8jtm9
@@ -64,8 +60,8 @@ items:
   - krrspatial-numeric
   session: https://claude.ai/code/session_01J17aVY3vyQM8goACbkHkcp
   blockers:
-  - ImagePoint, ImageBox, Pixel and PixelBox duplicate spatial types; they are replaced by
-    krrspatial's float and int points and boxes once krrspatial-numeric exists.
+  - ImagePoint, ImageBox, Pixel and PixelBox duplicate spatial types; they are replaced by krrspatial's
+    float and int points and boxes once krrspatial-numeric exists.
   notes: Restack onto claude/krrspatial and depend on krrspatial instead of its own coordinates.
 - id: symbolic-spatial-types
   title: SemDT's casadi spatial types become krrspatial's symbolic implementations
@@ -74,10 +70,9 @@ items:
   status: not_started
   depends_on:
   - krrspatial-numeric
-  notes: >-
-    Behind the krrspatial[symbolic] extra. KinematicStructureEntity implements ReferenceFrame;
-    existing semantic_digital_twin.spatial_types imports keep working. Coordinate with #510
-    (krrood light core), which moves krrood's casadi import behind krrood[all].
+  notes: 'Behind the krrspatial[symbolic] extra. KinematicStructureEntity implements ReferenceFrame; existing
+    semantic_digital_twin.spatial_types imports keep working. Coordinate with #510 (krrood light core),
+    which moves krrood''s casadi import behind krrood[all].'
 - id: krrollywood-on-krrimage
   title: krrollywood (cram2/crollywood) depends on krrimage instead of its own frame types
   repository: cram2/crollywood
@@ -86,10 +81,12 @@ items:
   depends_on:
   - krrimage
   notes: '#472 is not merged; crollywood becomes its own repository, renamed krrollywood.'
+  branch: claude/krrollywood-on-krrimage
 - id: image-extensions
-  title: Depth and segmentation images, camera intrinsics, SemDT's CameraResolution and
-    VideoResolution collapsed into Resolution
+  title: Depth and segmentation images, camera intrinsics, SemDT's CameraResolution and VideoResolution
+    collapsed into Resolution
   track: image-consumers
   status: not_started
   depends_on:
   - krrimage
+  branch: claude/krrimage-depth-segmentation
