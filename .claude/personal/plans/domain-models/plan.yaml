@@ -33,10 +33,10 @@ items:
   branch: claude/ecstatic-hopper-7j7iaz
   pull_request_number: 512
   track: spatial
-  status: in_progress
+  status: done
   depends_on: []
   session: https://claude.ai/code/session_01HQ4cooKAuKSVwcZpKfsCUc
-  notes: Ready for review on the fork. Base of krrspatial and
+  notes: Merged upstream (cram2 main).
 - id: krrspatial-numeric
   title: domain_models/krrspatial with a ReferenceFrame interface, generic abstract spatial types and
     their numeric implementations
@@ -46,7 +46,7 @@ items:
   depends_on:
   - shared-bounds
   session: https://claude.ai/code/session_01J17aVY3vyQM8goACbkHkcp
-  notes: '#526 on #512 is ready for review on the fork: ReferenceFrame, Point2/Vector2 interfaces generic
+  notes: '#526, upstream link recorded (promotion-link-sent), fork base still #512 until the maintenance pass reparents it: ReferenceFrame, Point2/Vector2 interfaces generic
     over the coordinate type, numeric Float/Integer points and vectors (norm float-only, IntegerPoint2.nearest).
     2D only; 3D, transforms and the casadi extra come with symbolic-spatial-types.'
   pull_request_number: 526
