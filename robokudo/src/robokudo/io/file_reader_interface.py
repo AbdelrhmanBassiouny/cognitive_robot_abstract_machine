@@ -19,24 +19,25 @@ from __future__ import annotations
 
 # %% Imports
 import json
-import pathlib
 import re
 import warnings
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import ament_index_python.packages
 import cv2
-from typing_extensions import Any, TypeVar
+from typing_extensions import Any
 
 from krrood.adapters.json_serializer import from_json
 from robokudo.cas import CAS, CASViews
 from robokudo.io.camera_interface import CameraInterface
-from robokudo.io.exceptions import InvalidFileSequence, InvalidFileSource
+from robokudo.io.exceptions import InvalidFileSource
 from semantic_digital_twin.datastructures.camera_model import CameraModality
 
-T = TypeVar("T")
+# %% File playback
 
 
+@dataclass(init=False, eq=False)
 class FileReaderInterface(CameraInterface):
     """
     A camera interface for reading stored data from the local filesystem.
@@ -55,79 +56,15 @@ class FileReaderInterface(CameraInterface):
         use StorageReaderInterface instead.
     """
 
-    class DictIteratorReader:
-        """
-        Helper class for iterating over dictionary data in sequence.
+    frame_timestamps: list[str] = field(init=False, default_factory=list)
+    """
+    Timestamps in playback order.
+    """
 
-        This class provides cursor-based iteration over dictionary data, maintaining the
-        sequence order and supporting reset operations.
-        """
-
-        def __init__(
-            self,
-            data: dict[str, dict[str, Any]] | None = None,
-            data_sequence: list[str] | None = None,
-        ) -> None:
-            """
-            Initialize the dictionary iterator.
-
-            :param data: Dictionary containing the data, defaults to empty dict
-            :param data_sequence: List defining iteration order
-            """
-            self.index: int | None = None
-            """
-            Current position in the sequence.
-            """
-            self.data: dict[str, dict[str, Any]] = data if data else dict()
-            """
-            Dictionary containing the data.
-            """
-            self.data_sequence: list[str] = data_sequence if data_sequence else list()
-            """
-            List defining iteration order.
-            """
-            if len(self.data_sequence) != len(self.data):
-                raise InvalidFileSequence(
-                    sequence_length=len(self.data_sequence), data_length=len(self.data)
-                )
-
-            self.reset_cursor()
-
-        def reset_cursor(self) -> None:
-            """
-            Reset the iterator to the beginning of the sequence.
-
-            Sets index to 0 if there is data, None otherwise.
-            """
-            if len(self.data_sequence) > 0:
-                self.index = 0
-            else:
-                self.index = None
-
-        def cursor_has_data(self) -> bool:
-            """
-            Check if there is more data to read.
-
-            :return: True if more data is available, False otherwise
-            """
-            if self.index is None:
-                return False
-
-            return self.index < len(self.data_sequence)
-
-        def get_next_data(self) -> dict | None:
-            """
-            Get the next data item in the sequence.
-
-            :return: Next data item if available, None otherwise
-            """
-            if not self.cursor_has_data():
-                return None
-
-            data = self.data[self.data_sequence[self.index]]
-            self.index += 1
-
-            return data
+    next_frame_index: int = field(init=False, default=0)
+    """
+    Position of the next frame to read.
+    """
 
     def __init__(self, camera_config: Any) -> None:
         """
@@ -171,7 +108,7 @@ class FileReaderInterface(CameraInterface):
             """
             Target directory path as string.
             """
-            self.target_dir_path: pathlib.PurePath = target_dir_path
+            self.target_dir_path: Path = target_dir_path
             """
             Target directory as Path object.
             """
@@ -250,35 +187,34 @@ class FileReaderInterface(CameraInterface):
                         matched_data_type
                     ] = camera_observation_data
 
-        # Initialize the main datastructure that we use to access the data
-        # iteratively and to be able to peek into it for checking if data is available
-        self.data_reader = FileReaderInterface.DictIteratorReader(
-            data=self.loaded_data, data_sequence=list(iter(self.loaded_data))
-        )
-        """
-        Iterator for accessing loaded data.
-        """
+        self.frame_timestamps = list(self.loaded_data)
+        self.next_frame_index = 0
         self.initialized = True
 
     def has_new_data(self) -> bool:
-        """
-        Check if new data is available to read.
-
-        Handles looping behavior based on camera configuration and maintains cursor
-        position in the data sequence.
-
-        :return: True if new data is available, False otherwise
-        """
         if not self.initialized:
             return False
+        if self.camera_config.loop and self.next_frame_index == len(
+            self.frame_timestamps
+        ):
+            self.next_frame_index = 0
+        return self.next_frame_index < len(self.frame_timestamps)
 
-        # Check if we have to reinitialize the cursor after we hit the end of the recorded data
-        if self.camera_config.loop and not self.data_reader.cursor_has_data():
-            self.data_reader.reset_cursor()
+    def get_next_data(self) -> dict[str, Any] | None:
+        """
+        Return the next recorded frame, or ``None`` after the final frame.
+        """
+        if self.next_frame_index >= len(self.frame_timestamps):
+            return None
+        timestamp = self.frame_timestamps[self.next_frame_index]
+        self.next_frame_index += 1
+        return self.loaded_data[timestamp]
 
-        return self.data_reader.cursor_has_data()
+
+# %% RGB-D playback
 
 
+@dataclass(init=False, eq=False)
 class RGBDFileReaderInterface(FileReaderInterface):
     """
     Specialized file reader interface for RGB-D camera data.
@@ -302,7 +238,7 @@ class RGBDFileReaderInterface(FileReaderInterface):
 
         :param cas: Common Analysis Structure to update
         """
-        data = self.data_reader.get_next_data()
+        data = self.get_next_data()
         if data is None:
             return
 
