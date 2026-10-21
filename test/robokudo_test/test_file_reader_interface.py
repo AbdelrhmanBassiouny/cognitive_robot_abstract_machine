@@ -13,6 +13,7 @@ from robokudo.descriptors.camera_configs.config_filereader_playback import (
     FileReaderCameraConfig,
 )
 from robokudo.io.file_reader_interface import FileReaderInterface
+from robokudo.io.exceptions import InvalidFileSource
 
 # %% Playback
 
@@ -67,3 +68,27 @@ def test_empty_directory_has_no_frames(tmp_path: Path, loop: bool) -> None:
     )
     assert reader.has_new_data() is False
     assert reader.get_next_data() is None
+
+
+# %% Filename validation
+
+
+def test_rejects_unknown_view_suffix(tmp_path: Path) -> None:
+    """
+    A recording with an unknown view suffix is an invalid file source.
+    """
+    configuration = FileReaderCameraConfig(target_dir=str(tmp_path))
+    (tmp_path / f"{configuration.filename_prefix}0_unknown_view.png").touch()
+
+    with pytest.raises(InvalidFileSource):
+        FileReaderInterface(configuration)
+
+
+def test_recording_keys_are_views(file_reader: FileReaderInterface) -> None:
+    """
+    Loaded paths and data use validated view enum members as keys.
+    """
+    for recording in (file_reader.loaded_paths, file_reader.loaded_data):
+        for frame in recording.values():
+            assert list(frame) == [CASViews.COLOR_IMAGE]
+            assert all(isinstance(view, CASViews) for view in frame)

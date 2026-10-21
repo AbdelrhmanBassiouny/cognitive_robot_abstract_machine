@@ -34,6 +34,13 @@ from robokudo.io.camera_interface import CameraInterface
 from robokudo.io.exceptions import InvalidFileSource
 from semantic_digital_twin.datastructures.camera_model import CameraModality
 
+# %% Recording timestamps
+
+type RecordedTimestamp = str
+"""
+Timestamp text extracted from a recorded frame's filename.
+"""
+
 # %% File playback
 
 
@@ -56,7 +63,7 @@ class FileReaderInterface(CameraInterface):
         use StorageReaderInterface instead.
     """
 
-    frame_timestamps: list[str] = field(init=False, default_factory=list)
+    frame_timestamps: list[RecordedTimestamp] = field(init=False, default_factory=list)
     """
     Timestamps in playback order.
     """
@@ -130,11 +137,11 @@ class FileReaderInterface(CameraInterface):
 
             Make sure that this matches the filename_prefix in the FileReader.
             """
-        self.loaded_paths: dict[str, dict[str, Path]] = dict()
+        self.loaded_paths: dict[RecordedTimestamp, dict[CASViews, Path]] = dict()
         """
         Dictionary mapping timestamps to file paths.
         """
-        self.loaded_data: dict[str, dict[str, Any]] = dict()
+        self.loaded_data: dict[RecordedTimestamp, dict[CASViews, Any]] = dict()
         """
         Dictionary mapping timestamps to loaded data.
         """
@@ -155,37 +162,42 @@ class FileReaderInterface(CameraInterface):
             if not regexp_result:
                 continue
             matched_timestamp = regexp_result.groups()[0]
-            matched_data_type = regexp_result.groups()[1]
+            matched_suffix = regexp_result.groups()[1]
+            if matched_suffix not in CASViews:
+                raise InvalidFileSource(
+                    reason=f"Unknown data suffix {matched_suffix!r} in {file_path.name}"
+                )
+            matched_data_type = CASViews(matched_suffix)
             if matched_timestamp not in self.loaded_paths:
                 self.loaded_paths[matched_timestamp] = dict()
                 self.loaded_data[matched_timestamp] = dict()
 
             self.loaded_paths[matched_timestamp][matched_data_type] = file_path
 
-            # Load the actual content according to its recorded data suffix.
-            if matched_data_type == CASViews.COLOR_IMAGE:
-                data = cv2.imread(str(file_path))
-                if data is None:
-                    raise InvalidFileSource(
-                        reason=f"OpenCV couldn't read {str(file_path)}"
-                    )
-                self.loaded_data[matched_timestamp][matched_data_type] = data
-            elif matched_data_type == CASViews.DEPTH_IMAGE:
-                data = cv2.imread(str(file_path), cv2.IMREAD_ANYDEPTH)
-                if data is None:
-                    raise InvalidFileSource(
-                        reason=f"OpenCV couldn't read {str(file_path)}"
-                    )
-                self.loaded_data[matched_timestamp][matched_data_type] = data
-            elif matched_data_type == CASViews.CAMERA_OBSERVATION:
-                with open(str(file_path)) as fp:
-                    camera_observation_data = json.load(fp)
-                    camera_observation_data["effective_camera_model"] = from_json(
-                        camera_observation_data["effective_camera_model"]
-                    )
-                    self.loaded_data[matched_timestamp][
-                        matched_data_type
-                    ] = camera_observation_data
+            match matched_data_type:
+                case CASViews.COLOR_IMAGE:
+                    data = cv2.imread(str(file_path))
+                    if data is None:
+                        raise InvalidFileSource(
+                            reason=f"OpenCV couldn't read {str(file_path)}"
+                        )
+                    self.loaded_data[matched_timestamp][matched_data_type] = data
+                case CASViews.DEPTH_IMAGE:
+                    data = cv2.imread(str(file_path), cv2.IMREAD_ANYDEPTH)
+                    if data is None:
+                        raise InvalidFileSource(
+                            reason=f"OpenCV couldn't read {str(file_path)}"
+                        )
+                    self.loaded_data[matched_timestamp][matched_data_type] = data
+                case CASViews.CAMERA_OBSERVATION:
+                    with open(str(file_path)) as fp:
+                        camera_observation_data = json.load(fp)
+                        camera_observation_data["effective_camera_model"] = from_json(
+                            camera_observation_data["effective_camera_model"]
+                        )
+                        self.loaded_data[matched_timestamp][
+                            matched_data_type
+                        ] = camera_observation_data
 
         self.frame_timestamps = list(self.loaded_data)
         self.next_frame_index = 0
@@ -200,7 +212,7 @@ class FileReaderInterface(CameraInterface):
             self.next_frame_index = 0
         return self.next_frame_index < len(self.frame_timestamps)
 
-    def get_next_data(self) -> dict[str, Any] | None:
+    def get_next_data(self) -> dict[CASViews, Any] | None:
         """
         Return the next recorded frame, or ``None`` after the final frame.
         """
