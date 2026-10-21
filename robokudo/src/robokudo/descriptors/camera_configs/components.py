@@ -46,7 +46,7 @@ class ColorComponent:
     ROS color topic name. Must be set by camera configs using this component.
     """
 
-    filterBlurredImages: bool = True
+    filter_blurred_images: bool = True
     """
     Flag to enable/disable filtering of blurred images
     """
