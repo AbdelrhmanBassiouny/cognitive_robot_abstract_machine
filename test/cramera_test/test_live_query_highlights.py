@@ -7,7 +7,12 @@ from pathlib import Path
 import pytest
 
 from krrood.entity_query_language.factories import an, entity, variable
-from semantic_digital_twin.world_description.world_entity import Body
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from semantic_digital_twin.world_description.connections import FixedConnection
+from semantic_digital_twin.world_description.geometry import Box, Scale
+from semantic_digital_twin.world_description.shape_collection import ShapeCollection
+from semantic_digital_twin.world_description.world_entity import Body, Region
 
 from cramera.knowledge.enums import SceneEntityPrefix
 from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase
@@ -99,3 +104,71 @@ def test_unknown_highlights_survive_without_duplicate_identifiers(
     names = ["unpublished/body", "another/body", "unpublished/body"]
 
     assert bridge._resolve_highlights(names) == sorted(set(names))
+
+
+# %% resolutions the demo publishes
+def test_a_resolved_part_lights_up_and_frames_the_published_keys() -> None:
+    """
+    A resolution names the bodies each part is about; the viewer knows them by their
+    published keys.
+    """
+    bridge = attached_bridge()
+    [key] = bridge.object_keys()
+    name = str(bridge.object_body(key).name)
+
+    bridge.publish_slot_answers(
+        {
+            "backends": [],
+            "resolutions": [{"parts": [{"highlight": [name], "frame": [name]}]}],
+        }
+    )
+
+    [part] = bridge.get_slot_answers()["resolutions"][0]["parts"]
+    assert part["highlight"] == [key]
+    assert part["frame"] == [key]
+
+
+def test_a_query_step_lights_up_and_frames_the_published_keys() -> None:
+    """
+    A query the demo asked names the bodies its answers are about; the viewer knows them
+    by their published keys.
+    """
+    bridge = attached_bridge()
+    [key] = bridge.object_keys()
+    name = str(bridge.object_body(key).name)
+    bridge.publish_query_steps({"steps": [{"highlight": [name], "frame": [name]}]})
+
+    [step] = bridge.get_query_steps()["steps"]
+    assert step["highlight"] == [key]
+    assert step["frame"] == [key]
+
+
+# %% regions, which have no geometry of their own in the scene
+def test_a_query_step_about_a_region_outlines_it_where_it_is() -> None:
+    """
+    A region an answer is about is drawn as a box around its area, where the region is
+    in the world.
+    """
+    bridge = attached_bridge()
+    area = Box(scale=Scale(0.2, 0.3, 0.4))
+    region = Region(
+        name=PrefixedName("hole", prefix="board"), area=ShapeCollection([area])
+    )
+    with bridge.world.modify_world():
+        bridge.world.add_connection(
+            FixedConnection(
+                parent=bridge.world.root,
+                child=region,
+                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    0.5, 0.25, 0.1
+                ),
+            )
+        )
+
+    bridge.publish_query_steps({"steps": [{"highlight": [str(region.name)]}]})
+
+    [step] = bridge.get_query_steps()["steps"]
+    [outline] = step["regions"]
+    assert outline["id"] == str(region.name)
+    assert outline["pose"] == pytest.approx([0.5, 0.25, 0.1, 0.0, 0.0, 0.0, 1.0])
+    assert outline["size"] == pytest.approx([area.scale.x, area.scale.y, area.scale.z])

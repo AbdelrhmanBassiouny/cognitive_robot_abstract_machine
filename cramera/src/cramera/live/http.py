@@ -15,6 +15,20 @@ HTTP endpoints of the live bridge (default port 8765).
                       it, or {scene: null} when nothing is tracked yet; the viewer
                       loads the named scene exactly like any other
     GET /plan    {signature, nodes: [{id, parent, kind, label, status, derived}]}
+    GET /slot_answers  {backends: [{faculty, name}], presentation: {...},
+                        resolutions: [{id, title, executable, underspecified,
+                        resolved, parts: [{slot, slotId, statement, faculty, backend,
+                        answers, evidence, reasoning, highlight, milliseconds}]}]}
+                        how the plans' open parts were resolved before execution
+    GET /query_steps[?revision=]  {revision, stepping, holdsNested, held, heldMoment, total,
+                       steps: [{number, asker, depth, phase, during, moment, question,
+                       code, askedFrom, faculty, backend, answers, highlight, frame,
+                       regions, reasoning, milliseconds, variables, enclosing}]}  the
+                       queries the demo asked, each with its variables and the
+                       statements it was asked inside
+    POST /query_steps/next  {number?, moment?} let the demo carry on from the query it
+                       is held at, only while it is still held at the one given
+    POST /query_steps/mode  {stepping, holdsNested} hold the demo at every query
     GET /chart   {signature, title,
                   nodes: [{id, parent, name, class_name, life_cycle, observation}],
                   edges: [{from, to, kind}]}
@@ -57,6 +71,7 @@ from cramera.knowledge.query_vocabulary import UnknownVocabularyName
 from cramera.knowledge.queryable_knowledge import QueryScope, UnknownQueryScope
 from cramera.live.bridge import Bridge
 from cramera.live.query import NoQuerySourceRegistered
+from cramera.live.query_steps import HeldStep, StepMoment
 from cramera.live.frame_range import InvalidFrameRange
 from cramera.live.live_bundle import build_live_scene
 from cramera.live.recording import Recording, RecordingState
@@ -151,6 +166,13 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
         """
         if self.path.startswith("/state"):
             return self._send_json(self.bridge.get_state())
+        if self.path.startswith("/slot_answers"):
+            return self._send_json(self.bridge.get_slot_answers())
+        if self.path.startswith("/query_steps"):
+            known = self._query_value("revision")
+            return self._send_json(
+                self.bridge.get_query_steps(None if known is None else int(known))
+            )
         if self.path.startswith("/plan"):
             return self._send_json(self.bridge.get_plan())
         if self.path.startswith("/chart"):
@@ -309,6 +331,10 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             return self.answer_asked_question()
         if self.path.startswith("/marker_topics"):
             return self.set_marker_topic()
+        if self.path == "/query_steps/next":
+            return self.advance_query_step()
+        if self.path == "/query_steps/mode":
+            return self.set_query_stepping()
         if self.path == "/recording/stop":
             return self._stop_recording()
         if self.path == "/recording/discard":
@@ -354,6 +380,7 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
         except (NoQuerySourceRegistered, UnknownQueryScope) as error:
             return self._send_json({"ok": False, "error": str(error)})
         except Exception as error:
+            logger.exception("query failed: %s", code)
             # a SyntaxError from the query is named by its own type, like any other
             return self._send_json(
                 {"ok": False, "error": "%s: %s" % (type(error).__name__, error)}
@@ -445,6 +472,34 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
                 str(payload.get("topic") or ""), bool(payload.get("subscribed", True))
             )
         )
+
+    def advance_query_step(self) -> None:
+        """
+        Let the running demo carry on from the query it is held at.
+        """
+        control = self.bridge.query_step_control
+        if control is None:
+            return self._send_json({"ok": False, "error": "nothing to step"}, 404)
+        payload = self._posted_payload() or {}
+        control.advance(
+            HeldStep(int(payload["number"]), StepMoment(payload["moment"]))
+            if payload.get("number") is not None and payload.get("moment")
+            else None
+        )
+        self._send_json({"ok": True})
+
+    def set_query_stepping(self) -> None:
+        """
+        Choose whether the running demo is held at every query it asks.
+        """
+        control = self.bridge.query_step_control
+        payload = self._posted_payload()
+        if control is None or payload is None:
+            return self._send_json({"ok": False, "error": "nothing to step"}, 404)
+        control.set_stepping(
+            bool(payload.get("stepping")), bool(payload.get("holdsNested", True))
+        )
+        self._send_json({"ok": True})
 
     def do_OPTIONS(self) -> None:
         """

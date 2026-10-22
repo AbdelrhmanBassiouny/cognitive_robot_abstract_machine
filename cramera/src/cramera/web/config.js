@@ -21,7 +21,7 @@ window.CRAMERA_CONFIG = {
   layout: _sceneOnly
     ? { left: ['robot-scene'] }
     : {
-        left: ['robot-scene'],
+        left: ['robot-scene', 'backends', 'queries'],
         right: ['eql', 'graph'],
       },
 };

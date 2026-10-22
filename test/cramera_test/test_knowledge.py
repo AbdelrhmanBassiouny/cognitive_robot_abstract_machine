@@ -721,6 +721,77 @@ class TestGraphPayloadStructure:
         assert payload.status == "recorded · pr2 · make breakfast"
 
 
+# %% the ontology neighbourhood of a concept named in a plan
+def synthetic_class(name: str, *bases: str) -> PythonClass:
+    """
+    A scanned class of a synthetic package, deriving from the named bases.
+
+    :param name: The class's name.
+    :param bases: Names of its direct base classes.
+    """
+    return PythonClass(
+        name=name,
+        package="synthetic_pkg",
+        subpackage="synthetic_pkg",
+        module="synthetic_pkg." + name.lower(),
+        bases=bases,
+        methods=0,
+        docstring_summary="",
+    )
+
+
+class TestConceptNeighbourhood:
+    def test_a_concept_is_found_by_its_class_name(self, fixture_scene):
+        payload = GraphPanelViews.of_active_scene().for_concept("TypedPlan")
+
+        assert payload.breadcrumb == "TypedPlan"
+        assert {n.id for n in payload.nodes} == {
+            "coraplex.src.coraplex.plans.typed_plan.TypedPlan",
+            "coraplex.src.coraplex.plans.plan.Plan",
+        }
+
+    def test_a_concept_shows_every_ancestor_up_to_the_root(self, fixture_scene):
+        knowledge_base = EpisodeKnowledgeBase.of_active_scene()
+        root, parent, child, grandchild = (
+            synthetic_class("SyntheticRoot"),
+            synthetic_class("SyntheticParent", "SyntheticRoot"),
+            synthetic_class("SyntheticChild", "SyntheticParent"),
+            synthetic_class("SyntheticGrandchild", "SyntheticChild"),
+        )
+        knowledge_base.classes = knowledge_base.classes + [
+            root,
+            parent,
+            child,
+            grandchild,
+        ]
+
+        payload = GraphPanelViews.of_active_scene().for_concept(child.name)
+
+        assert payload.edges == [
+            GraphEdge(
+                child.qualified_name,
+                parent.qualified_name,
+                EdgeKind.TYPE,
+                "inherits",
+            ),
+            GraphEdge(
+                parent.qualified_name,
+                root.qualified_name,
+                EdgeKind.TYPE,
+                "inherits",
+            ),
+            GraphEdge(
+                grandchild.qualified_name,
+                child.qualified_name,
+                EdgeKind.TYPE,
+                "inherits",
+            ),
+        ]
+
+    def test_an_unknown_concept_has_no_neighbourhood(self, fixture_scene):
+        assert GraphPanelViews.of_active_scene().for_concept("NoSuchConcept") is None
+
+
 # %% characterization: GraphPanelViews.of_active_scene().for_node() dispatch
 class TestExpandNode:
     def test_robot_dispatches_to_urdf_view(self, fixture_scene):

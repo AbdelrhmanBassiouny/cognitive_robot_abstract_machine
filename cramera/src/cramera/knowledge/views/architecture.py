@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
-from typing_extensions import Any, ClassVar, Dict, List, TYPE_CHECKING
+from typing_extensions import Any, ClassVar, Dict, List, Optional, TYPE_CHECKING
 
 from cramera.knowledge.architecture_entities import Package, PythonClass, SubPackage
 from cramera.knowledge.enums import EdgeKind, NodeGroup
@@ -230,6 +230,103 @@ class SubgraphViewPayload(GraphPanelPayload):
             from.
         :param python_class: The class to render.
         """
+        return cls._inheritance_view(knowledge_base, python_class, every_ancestor=False)
+
+    @classmethod
+    def for_concept(
+        cls, knowledge_base: EpisodeKnowledgeBase, python_class: PythonClass
+    ) -> SubgraphViewPayload:
+        """
+        Ontology neighbourhood of one concept: every ancestor up to the root above, its
+        repo subclasses below.
+
+        :param knowledge_base: The knowledge base the concept's ancestors/subclasses are
+            read from.
+        :param python_class: The class the concept is.
+        """
+        return cls._inheritance_view(knowledge_base, python_class, every_ancestor=True)
+
+    @classmethod
+    def _resolved_base(
+        cls,
+        knowledge_base: EpisodeKnowledgeBase,
+        python_class: PythonClass,
+        base: str,
+    ) -> Optional[PythonClass]:
+        """
+        The scanned class a base name refers to, preferring one in the same package, or
+        None for a base outside the repo.
+
+        :param knowledge_base: The knowledge base the base is looked up in.
+        :param python_class: The class naming the base.
+        :param base: The base's name.
+        """
+        candidates = [entry for entry in knowledge_base.classes if entry.name == base]
+        return next(
+            (entry for entry in candidates if entry.package == python_class.package),
+            candidates[0] if candidates else None,
+        )
+
+    @classmethod
+    def _add_bases(
+        cls,
+        view: SubgraphAccumulator,
+        knowledge_base: EpisodeKnowledgeBase,
+        python_class: PythonClass,
+        every_ancestor: bool,
+    ) -> None:
+        """
+        Add the class's direct bases, resolved inside the repo or shown as external,
+        and, for every ancestor, their bases in turn.
+
+        :param view: The view the bases are added to.
+        :param knowledge_base: The knowledge base the bases are looked up in.
+        :param python_class: The class whose bases are added.
+        :param every_ancestor: Whether to climb on to the bases' own bases.
+        """
+        class_id = python_class.qualified_name
+        for base in python_class.bases:
+            resolved_base = cls._resolved_base(knowledge_base, python_class, base)
+            if resolved_base:
+                base_id = resolved_base.qualified_name
+                newly_seen = base_id not in view.details
+                if newly_seen:
+                    view.add(
+                        base_id,
+                        resolved_base.name,
+                        NodeGroup.PYTHON_CLASS,
+                        cls._class_lines(resolved_base),
+                    )
+                view.add_edge(class_id, base_id, EdgeKind.TYPE, "inherits")
+                if every_ancestor and newly_seen:
+                    cls._add_bases(view, knowledge_base, resolved_base, every_ancestor)
+                continue
+            base_id = "external:" + base
+            if base_id not in view.details:
+                view.add(
+                    base_id,
+                    base,
+                    NodeGroup.EXTERNAL_CLASS,
+                    ["external base class (outside the repo)"],
+                )
+            view.add_edge(class_id, base_id, EdgeKind.TYPE, "inherits")
+
+    @classmethod
+    def _inheritance_view(
+        cls,
+        knowledge_base: EpisodeKnowledgeBase,
+        python_class: PythonClass,
+        every_ancestor: bool,
+    ) -> SubgraphViewPayload:
+        """
+        One class with its bases above and its repo subclasses below.
+
+        :param knowledge_base: The knowledge base the class's bases/subclasses are read
+            from.
+        :param python_class: The class to render.
+        :param every_ancestor: Whether to show every ancestor rather than the direct
+            bases only.
+        """
         view = SubgraphAccumulator()
         class_id = python_class.qualified_name
         view.add(
@@ -238,39 +335,7 @@ class SubgraphViewPayload(GraphPanelPayload):
             NodeGroup.PYTHON_CLASS,
             cls._class_lines(python_class, drill_hint=False),
         )
-        # direct base classes: resolve inside the repo (same package preferred),
-        # otherwise show them as external
-        for base in python_class.bases:
-            candidates = [
-                entry for entry in knowledge_base.classes if entry.name == base
-            ]
-            resolved_base = next(
-                (
-                    entry
-                    for entry in candidates
-                    if entry.package == python_class.package
-                ),
-                candidates[0] if candidates else None,
-            )
-            if resolved_base:
-                base_id = resolved_base.qualified_name
-                if base_id not in view.details:
-                    view.add(
-                        base_id,
-                        resolved_base.name,
-                        NodeGroup.PYTHON_CLASS,
-                        cls._class_lines(resolved_base),
-                    )
-            else:
-                base_id = "external:" + base
-                if base_id not in view.details:
-                    view.add(
-                        base_id,
-                        base,
-                        NodeGroup.EXTERNAL_CLASS,
-                        ["external base class (outside the repo)"],
-                    )
-            view.add_edge(class_id, base_id, EdgeKind.TYPE, "inherits")
+        cls._add_bases(view, knowledge_base, python_class, every_ancestor)
         # every subclass in the repo (matched by base name)
         subclasses = [
             entry

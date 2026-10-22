@@ -8,16 +8,19 @@ import json
 
 import pytest
 
+from coraplex.plans.failures import PlanFailure
 from coraplex.plans.plan import Plan
 from coraplex.plans.plan_node import ActionNode, MotionNode, PlanNode
+from coraplex.plans.underspecified import CandidateOutcome, UnderspecifiedNode
 from coraplex.robot_plans.actions.core.robot_body import (
+    MoveTorsoAction,
     ParkArmsAction,
     SetGripperAction,
 )
 from giskardpy.motion_statechart.data_types import LifeCycleValues
-from krrood.entity_query_language.factories import inference
+from krrood.entity_query_language.factories import a, inference, variable_from
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
-from semantic_digital_twin.datastructures.definitions import GripperState
+from semantic_digital_twin.datastructures.definitions import GripperState, TorsoState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.pr2 import PR2
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Handle
@@ -174,3 +177,37 @@ def test_native_annotation_resolves_its_published_body_name() -> None:
     bridge.begin_plan(plan)
 
     assert bridge.plan_state.nodes[0].target == body.name.name
+
+
+# %% resolving what a plan left open
+
+
+def test_every_candidate_tried_for_an_open_step_is_published_under_it() -> None:
+    """
+    Each candidate an underspecified step tried is published under the step, numbered in
+    the order it was tried, with what its trial decided as its lifecycle.
+    """
+    open_torso = a(MoveTorsoAction)(
+        torso_state=variable_from([TorsoState.HIGH, TorsoState.LOW])
+    )
+    node = UnderspecifiedNode(underspecified_action=open_torso)
+    rejected, accepted = MoveTorsoAction(TorsoState.HIGH), MoveTorsoAction(
+        TorsoState.LOW
+    )
+    node.record_trial(rejected, CandidateOutcome.REJECTED_IN_TRIAL, PlanFailure())
+    node.record_trial(accepted, CandidateOutcome.ACCEPTED)
+    plan = Plan()
+    plan.add_node(node)
+    bridge = Bridge()
+
+    bridge.begin_plan(plan)
+
+    [step, *candidates] = bridge.plan_state.nodes
+    assert step.label == MoveTorsoAction.__name__
+    assert [
+        (entry.parent, entry.label, entry.candidate, entry.status)
+        for entry in candidates
+    ] == [
+        (step.id, MoveTorsoAction.__name__, 1, LifeCycleValues.FAILED),
+        (step.id, MoveTorsoAction.__name__, 2, LifeCycleValues.SUCCEEDED),
+    ]

@@ -11,6 +11,9 @@ import pytest
 
 krrood = pytest.importorskip("krrood", reason="EQL requires krrood")
 
+from krrood.entity_query_language.backends import (  # noqa: E402
+    EntityQueryLanguageGenerativeBackend,
+)
 from krrood.entity_query_language.verbalization._example_domain import (  # noqa: E402
     Robot as ExampleRobot,
 )
@@ -27,6 +30,7 @@ from krrood.entity_query_language.verbalization.verbalizer import (  # noqa: E40
     EQLVerbalizer,
 )
 
+from cramera.knowledge.presets import CommandPreset  # noqa: E402
 from cramera.knowledge.query_domain import QueryDomain  # noqa: E402
 from cramera.knowledge.query_runner import EqlQueryRunner  # noqa: E402
 from cramera.knowledge.query_verbalization import (  # noqa: E402
@@ -70,6 +74,17 @@ class TestReadingAQueryBack:
         verbalization = QueryVerbalization.of_expression(expression)
 
         assert verbalization.text == VerbalizationPipeline.plain().verbalize(expression)
+
+    def test_the_backend_answering_a_query_opens_its_sentence(self):
+        namespace = make_runner().namespace()
+        expression = eval("an(entity(record).where(record.score > 1.0))", namespace)
+        backend = EntityQueryLanguageGenerativeBackend()
+
+        verbalization = QueryVerbalization.of_expression(expression, backend)
+
+        assert verbalization.text == VerbalizationPipeline.plain().verbalize(
+            expression, backend=backend
+        )
 
     def test_the_sentence_names_what_is_asked_about(self):
         verbalization = verbalize("an(entity(record).where(record.score > 1.0))")
@@ -338,6 +353,17 @@ class TestWordingFromCode:
         runner.verbalize("an(entity(record))")
 
         assert runner.run_source("an(entity(record))").ok
+
+    def test_a_preset_that_makes_the_robot_act_is_not_built_to_word_it(self):
+        orders: list[str] = []
+        runner = make_runner()
+        runner.extra_names["orders"] = orders
+        preset = CommandPreset(text="Act", code="orders.append('act')")
+
+        worded = preset.worded(runner)
+
+        assert orders == []
+        assert worded == preset
 
 
 # %% verbalizing what cannot be verbalized

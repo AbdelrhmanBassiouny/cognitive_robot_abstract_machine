@@ -36,7 +36,13 @@ from giskardpy.motion_statechart.motion_statechart import (
     MotionStatechart,
     StateHistoryObserver,
 )
-from giskardpy.executor import Executor, NoPacing, Pacer, SteppedSimulationPacer
+from giskardpy.executor import (
+    Executor,
+    NoPacing,
+    Pacer,
+    SimulationPacer,
+    SteppedSimulationPacer,
+)
 from giskardpy.qp.qp_controller_config import QPControllerConfig
 from giskardpy.ros_executor import Ros2Executor
 from krrood.entity_query_language.factories import evaluate_condition
@@ -242,6 +248,13 @@ class GiskardExecutable(Executable):
 
     collision_avoidance: ClassVar[bool] = False
 
+    real_time_factor: ClassVar[Optional[float]] = None
+    """
+    How much faster than the clock a kinematically simulated motion runs, or None to run
+    it as fast as the hardware allows; managed by
+    :py:class:`~coraplex.execution_environment.ExecutionEnvironment`.
+    """
+
     simulation: ClassVar[Optional[MujocoSim]] = None
     """
     The physically simulated world a plan is performed in, when the execution type is
@@ -421,7 +434,7 @@ class GiskardExecutable(Executable):
             qp_controller_config = (
                 QPControllerConfig.create_with_fast_simulation_defaults()
             )
-            pacer = NoPacing()
+            pacer = self.kinematic_pacer()
         else:
             qp_controller_config = (
                 QPControllerConfig.create_with_physical_simulation_defaults()
@@ -439,6 +452,16 @@ class GiskardExecutable(Executable):
             qp_controller_config,
             pacer,
         )
+
+    @staticmethod
+    def kinematic_pacer() -> Pacer:
+        """
+        :return: What a kinematically simulated motion waits with between two ticks: the
+            clock scaled by :attr:`real_time_factor`, or nothing where it is None.
+        """
+        if GiskardExecutable.real_time_factor is None:
+            return NoPacing()
+        return SimulationPacer(real_time_factor=GiskardExecutable.real_time_factor)
 
     def _tick_until_done(
         self,
@@ -475,6 +498,7 @@ class GiskardExecutable(Executable):
                 executor.compile(self.motion_state_chart)
                 ticks = 0
                 while not executor.motion_statechart.is_end_motion():
+                    self.context.execution_gate.wait_while_paused()
                     if ticks >= maximum_ticks:
                         raise MotionExceededSimulationTimeLimit(time_limit)
                     executor.tick()

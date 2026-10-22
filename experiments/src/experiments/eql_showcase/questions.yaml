@@ -1,0 +1,199 @@
+# The ready-made questions the EQL showcase offers in the viewer's EQL panel.
+#
+# Each question is asked of one body of knowledge (its scope):
+#   current_state    - the world as it is now, named through the workspace's own classes,
+#                      what the robot did in the run in progress (`action`), every
+#                      candidate it considered for what a plan left open (`step`), and
+#                      the commands given from the viewer (`command`, through `robot`)
+#   detected_events  - what segmind saw happen while the robot worked (`event`)
+#   episodic_memory  - every run already finished (`run`, `action`), answered in SQL:
+#                      ORMatic translates the very same language into a query the
+#                      database runs, and the panel shows that SQL under the answer
+#
+# A question marked `commands_the_robot` is offered only while the robot takes commands;
+# one also marked `acts` tells the robot to do something, so it is only ever run when
+# picked, never to read it back in English.
+#
+# The text is the button's label; the panel reads the query itself back in English
+# underneath it, through EQL's own verbalization.
+
+- scope: current_state
+  text: What is the milk standing on?
+  code: |
+    an(
+        entity(surface := variable(Body, world.bodies_with_collision))
+        .where(SupportedBy(variable(Milk, world.semantic_annotations).root, surface))
+    )
+
+- scope: current_state
+  text: What is on the table?
+  code: |
+    an(
+        entity(body_on_table := variable(Body, world.bodies_with_collision))
+        .where(SupportedBy(body_on_table, variable(Table, world.semantic_annotations).root))
+    )
+
+- scope: current_state
+  text: What is the spoon touching?
+  code: |
+    an(
+        entity(touched_body := variable(Body, world.bodies_with_collision))
+        .where(
+            touched_body != (spoon_body := variable(Spoon, world.semantic_annotations).root),
+            InContactWith(spoon_body, touched_body),
+        )
+    )
+
+- scope: current_state
+  text: Which handles open a drawer?
+  code: |
+    an(entity(variable(Drawer, world.semantic_annotations).handle.root))
+
+- scope: current_state
+  text: How many drawers does each cabinet have?
+  code: |
+    set_of(
+        (cabinet := variable(Cabinet, world.semantic_annotations)).root,
+        eql.count(flat_variable(cabinet.drawers)),
+    ).grouped_by(cabinet.root)
+
+- scope: current_state
+  text: Put the milk back where it was
+  commands_the_robot: true
+  acts: true
+  code: |
+    robot.put_back(Milk)
+
+- scope: current_state
+  text: Put the bowl back where it was
+  commands_the_robot: true
+  acts: true
+  code: |
+    robot.put_back(Bowl)
+
+- scope: current_state
+  text: Pause
+  commands_the_robot: true
+  acts: true
+  code: |
+    robot.pause()
+
+- scope: current_state
+  text: Resume
+  commands_the_robot: true
+  acts: true
+  code: |
+    robot.resume()
+
+- scope: current_state
+  text: What have I asked you to do?
+  commands_the_robot: true
+  code: |
+    an(entity(command))
+
+- scope: current_state
+  text: How did you resolve what was left open?
+  code: |
+    an(entity(step))
+
+- scope: current_state
+  text: How did you decide how to pick up the milk?
+  code: |
+    an(entity(step).where(step.acted_on == 'Milk', step.open_part == 'MoveAndPickUpAction'))
+
+- scope: current_state
+  text: Which candidates did you reject, and why?
+  code: |
+    an(entity(step).where(step.outcome == 'rejected in trial'))
+
+- scope: detected_events
+  text: When was each object picked up?
+  code: |
+    an(entity(event).where(event.event_type == 'PickUpEvent'))
+
+- scope: detected_events
+  text: What was placed on the table?
+  code: |
+    an(entity(event).where(event.event_type == 'PlacingEvent', event.with_object == 'table_area_main'))
+
+- scope: detected_events
+  text: What happened to the milk?
+  code: |
+    an(entity(event).where(event.tracked_object == 'Milk')).ordered_by(event.timestamp)
+
+- scope: current_state
+  text: What did you do?
+  code: |
+    an(entity(action).where(action.part_of == None))
+
+- scope: current_state
+  text: Which objects did you pick up?
+  code: |
+    an(entity(action).where(action.action_type == 'PickUpAction'))
+
+- scope: current_state
+  text: What took you the longest?
+  code: |
+    an(entity(action)).ordered_by(action.seconds, descending=True).limit(1)
+
+- scope: current_state
+  text: How much time went into each kind of action?
+  code: |
+    set_of(
+        action_type := action.action_type, eql.count(action), eql.sum(action.seconds)
+    ).grouped_by(action_type)
+
+- scope: current_state
+  text: What did you do with the milk?
+  code: |
+    an(entity(action).where(action.acted_on == 'Milk'))
+
+- scope: episodic_memory
+  text: Which runs do you remember?
+  code: |
+    an(entity(run))
+
+- scope: episodic_memory
+  text: In which runs did you handle the milk?
+  code: |
+    an(
+        entity(run).where(
+            exists(action_in_run := flat_variable(run.actions), action_in_run.acted_on == 'Milk')
+        )
+    )
+
+- scope: episodic_memory
+  text: In which runs did you handle both the milk and the bowl?
+  code: |
+    an(
+        entity(run).where(
+            exists(milk_action := flat_variable(run.actions), milk_action.acted_on == 'Milk'),
+            exists(bowl_action := flat_variable(run.actions), bowl_action.acted_on == 'Bowl'),
+        )
+    )
+
+- scope: episodic_memory
+  text: In which runs did no pick up take longer than 20 seconds?
+  code: |
+    an(
+        entity(run).where(
+            not_(
+                exists(
+                    action_in_run := flat_variable(run.actions),
+                    and_(action_in_run.action_type == 'PickUpAction', action_in_run.seconds > 20),
+                )
+            )
+        )
+    )
+
+- scope: episodic_memory
+  text: What were your slowest pick ups ever?
+  code: |
+    an(entity(action).where(action.action_type == 'PickUpAction')).ordered_by(action.seconds, descending=True).limit(5)
+
+- scope: episodic_memory
+  text: How often have you done each kind of action, over all runs?
+  code: |
+    set_of(
+        action_type := action.action_type, eql.count(action), eql.sum(action.seconds)
+    ).grouped_by(action_type)

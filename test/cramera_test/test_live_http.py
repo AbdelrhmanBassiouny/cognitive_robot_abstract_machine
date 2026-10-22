@@ -25,11 +25,13 @@ from semantic_digital_twin.world_description.world_entity import Body
 from cramera import paths
 from cramera.live.bridge import Bridge
 from cramera.live.http import serve
+from cramera.live.query_steps import HeldStep, StepMoment
 from cramera.live.recording import Recording
 
 from .test_live_bridge import shaped_body, world_with
 from .test_server import get, get_json, posted_answer
 from .dataset.mesh_geometry import resolved_textured_mesh
+from .dataset.recorded_step_control import RecordedStepControl
 
 
 def post(url, payload=None, timeout=10):
@@ -115,6 +117,29 @@ class TestReadOnlyEndpoints:
 
     def test_plan_reflects_a_fresh_bridge(self, server):
         assert get_json(server + "/plan")["nodes"] == []
+
+    def test_slot_answers_serves_what_the_demo_published(self, server, bridge):
+        published = {
+            "backends": [{"faculty": "rules", "name": "HoleRules"}],
+            "answers": [{"slot": "which hole", "faculty": "rules"}],
+        }
+        bridge.publish_slot_answers(published)
+
+        assert get_json(server + "/slot_answers") == published
+
+    def test_query_steps_serves_what_the_demo_published(self, server, bridge):
+        bridge.publish_query_steps({"held": None, "steps": []})
+
+        assert get_json(server + "/query_steps")["held"] is None
+
+    def test_query_steps_already_shown_are_not_sent_again(self, server, bridge):
+        bridge.publish_query_steps({"held": None, "steps": []})
+        revision = get_json(server + "/query_steps")["revision"]
+
+        assert get_json(server + "/query_steps?revision=%d" % revision) == {
+            "revision": revision,
+            "unchanged": True,
+        }
 
     def test_chart_reflects_a_fresh_bridge(self, server):
         chart = get_json(server + "/chart")
@@ -833,3 +858,38 @@ class TestVocabularyEndpoints:
 
         assert payload["ok"] is False
         assert payload["entries"] == []
+
+
+# %% stepping through the queries a demo asks
+
+
+class TestQueryStepping:
+    def test_next_lets_the_demo_carry_on(self, server, bridge):
+        control = RecordedStepControl()
+        bridge.query_step_control = control
+
+        status, _ = post(server + "/query_steps/next", {})
+
+        assert (status, control.advances) == (200, 1)
+
+    def test_next_names_the_step_the_viewer_saw_the_demo_held_at(self, server, bridge):
+        control = RecordedStepControl()
+        bridge.query_step_control = control
+        held_at = HeldStep(3, StepMoment.ANSWERED)
+
+        post(server + "/query_steps/next", {"number": 3, "moment": held_at.moment})
+
+        assert control.seen_held_at == [held_at]
+
+    def test_the_viewer_chooses_how_the_demo_is_stepped_through(self, server, bridge):
+        control = RecordedStepControl()
+        bridge.query_step_control = control
+
+        post(server + "/query_steps/mode", {"stepping": True, "holdsNested": False})
+
+        assert control.modes == [(True, False)]
+
+    def test_stepping_a_demo_that_cannot_be_stepped_is_404(self, server):
+        status, _ = post(server + "/query_steps/next", {})
+
+        assert status == 404

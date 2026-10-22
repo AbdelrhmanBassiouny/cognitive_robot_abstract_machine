@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 import rclpy
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
-from typing_extensions import List, Type
+from typing_extensions import List, Optional, Type
 
 from coraplex.alternative_motion_mapping import AlternativeMotion
 from coraplex.datastructures.dataclasses import Context
@@ -161,6 +161,12 @@ class RobotDemonstration(ABC):
     Whether collision avoidance is added to every motion state chart of this run.
     """
 
+    real_time_factor: Optional[float] = None
+    """
+    How much faster than the clock a kinematically simulated motion of this run plays,
+    or None to play it as fast as the hardware allows.
+    """
+
     event_segmentation: bool = True
     """
     Whether the events of this run are segmented while the plan is performed, as
@@ -299,6 +305,7 @@ class RobotDemonstration(ABC):
                 with ExecutionEnvironment(
                     execution_type=self.execution_type,
                     collision_avoidance=self.collision_avoidance,
+                    real_time_factor=self.real_time_factor,
                 ), event_segmentation:
                     plan.perform()
         finally:

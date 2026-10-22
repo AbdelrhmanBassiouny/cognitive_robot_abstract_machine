@@ -8,14 +8,26 @@ This module provides quantified conditionals such as universal (ForAll) and exis
 from __future__ import annotations
 
 import uuid
-from abc import ABC
+import weakref
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import cached_property
-from typing import List, Iterable
 
-from krrood.entity_query_language.core.base_expressions import OperationResult
+from typing_extensions import Iterable, Iterator, List, Optional, Set, Tuple
+
+from krrood.entity_query_language.core.base_expressions import (
+    OperationResult,
+    Selectable,
+    SymbolicExpression,
+)
+from krrood.entity_query_language.core.variable import Literal
+from krrood.entity_query_language.evaluation_context import get_evaluation_context
 from krrood.entity_query_language.operators.core_logical_operators import (
     LogicalBinaryOperator,
+)
+from krrood.entity_query_language.query.query import Query
+from krrood.entity_query_language.utils import (
+    cartesian_product_while_passing_the_bindings_around,
 )
 
 
@@ -26,6 +38,12 @@ class QuantifiedConditional(LogicalBinaryOperator, ABC):
 
     It is a binary logical operator that has a quantified variable and a condition on
     the values of that variable.
+
+    A variable of the quantifier that also occurs elsewhere in the enclosing query,
+    whether selected or used by another condition, is outer-visible: the quantifier is
+    evaluated once per binding of the outer-visible variables. A variable that occurs
+    only inside the quantifier, including inside the quantified variable's own domain
+    expression, is local to it and is quantified together with the quantified variable.
     """
 
     @property
@@ -35,6 +53,123 @@ class QuantifiedConditional(LogicalBinaryOperator, ABC):
     @property
     def condition(self):
         return self.right
+
+    def _evaluate__(
+        self,
+        sources: OperationResult,
+    ) -> Iterable[OperationResult]:
+        """
+        Evaluate the quantifier once per binding of its outer-visible variables.
+
+        :param sources: The current bindings.
+        :return: The results of the quantifier for every outer binding.
+        """
+        outer_visible_variables = self._outer_visible_variables_()
+        if not outer_visible_variables:
+            yield from self._evaluate_for_outer_binding_(sources)
+            return
+        for outer_result in cartesian_product_while_passing_the_bindings_around(
+            outer_visible_variables, sources
+        ):
+            yield from self._evaluate_for_outer_binding_(outer_result)
+
+    @abstractmethod
+    def _evaluate_for_outer_binding_(
+        self, sources: OperationResult
+    ) -> Iterable[OperationResult]:
+        """
+        Evaluate the quantifier under one binding of its outer-visible variables.
+
+        :param sources: The bindings, with every outer-visible variable bound.
+        :return: The results of the quantifier under these bindings.
+        """
+
+    def _outer_visible_variables_(self) -> Tuple[Selectable, ...]:
+        """
+        :return: The outer-visible variables of this quantifier in the query being
+            evaluated. The quantified variable is one of them when it also occurs
+            elsewhere.
+        """
+        evaluation_context = get_evaluation_context()
+        if evaluation_context is None:
+            return self._compute_outer_visible_variables_()
+        cache = evaluation_context.outer_visible_variables_cache
+        if self._id_ not in cache:
+            cache[self._id_] = tuple(
+                weakref.ref(variable)
+                for variable in self._compute_outer_visible_variables_()
+            )
+        return tuple(reference() for reference in cache[self._id_])
+
+    def _compute_outer_visible_variables_(self) -> Tuple[Selectable, ...]:
+        """
+        :return: The variables of this quantifier that also occur in its enclosing
+            query outside this quantifier.
+        """
+        scope = self._enclosing_query_()
+        if scope is None:
+            return ()
+        ids_outside_this_quantifier = {
+            expression._id_
+            for expression in _expressions_in_scope_(scope._children_, {self._id_})
+        }
+        return tuple(
+            expression
+            for expression in _expressions_in_scope_((self.variable, self.condition))
+            if isinstance(expression, Selectable)
+            and not isinstance(expression, Literal)
+            and expression._id_ in ids_outside_this_quantifier
+        )
+
+    def _enclosing_query_(self) -> Optional[Query]:
+        """
+        :return: The innermost compiled query containing this quantifier: the one being
+            evaluated when there are several, as after a query is rebuilt around the
+            same condition, else the most recently built one. None when this quantifier
+            is not inside a query.
+        """
+        enclosing_queries = []
+        # Tracked by object identity: every build of a query reuses its identifier.
+        visited_objects = set()
+        frontier = list(reversed(self._parents_))
+        while frontier:
+            expression = frontier.pop(0)
+            if id(expression) in visited_objects:
+                continue
+            visited_objects.add(id(expression))
+            if isinstance(expression, Query):
+                enclosing_queries.append(expression)
+            else:
+                frontier.extend(reversed(expression._parents_))
+        evaluation_context = get_evaluation_context()
+        evaluated_query = (
+            evaluation_context.outermost_query.node if evaluation_context else None
+        )
+        for query in enclosing_queries:
+            if query is evaluated_query:
+                return query
+        return enclosing_queries[0] if enclosing_queries else None
+
+
+def _expressions_in_scope_(
+    roots: Iterable[SymbolicExpression], excluded_ids: Optional[Set[uuid.UUID]] = None
+) -> Iterator[SymbolicExpression]:
+    """
+    :param roots: The expressions to start from.
+    :param excluded_ids: Identifiers of the expressions to neither yield nor enter.
+    :return: The roots and their descendants, each once. A nested query is yielded but
+        not entered, since its variables belong to its own scope.
+    """
+    visited_ids = set(excluded_ids or ())
+    stack = list(reversed(list(roots)))
+    while stack:
+        expression = stack.pop()
+        if expression._id_ in visited_ids:
+            continue
+        visited_ids.add(expression._id_)
+        yield expression
+        if not isinstance(expression, Query):
+            stack.extend(reversed(expression._children_))
 
 
 @dataclass(eq=False, repr=False)
@@ -56,7 +191,7 @@ class ForAll(QuantifiedConditional):
             )
         ]
 
-    def _evaluate__(
+    def _evaluate_for_outer_binding_(
         self,
         sources: OperationResult,
     ) -> Iterable[OperationResult]:
@@ -77,6 +212,14 @@ class ForAll(QuantifiedConditional):
                 solution_set = []
                 break
 
+        if solution_set is None:
+            # The variable has no values: the condition holds for all of them vacuously.
+            yield self._build_operation_result_with_truth_(True, sources.bindings)
+            return
+        if not solution_set:
+            # Negation as failure: the condition fails for some value of the variable.
+            yield self._build_operation_result_with_truth_(False, sources.bindings)
+            return
         # Yield the remaining bindings (non-universal) merged with the incoming sources
         yield from [
             self._build_operation_result_with_truth_(True, sources.bindings | solution)
@@ -119,7 +262,7 @@ class Exists(QuantifiedConditional):
     value of the variable.
     """
 
-    def _evaluate__(
+    def _evaluate_for_outer_binding_(
         self,
         sources: OperationResult,
     ) -> Iterable[OperationResult]:
@@ -134,15 +277,9 @@ class Exists(QuantifiedConditional):
             variable_result = variable_result.update(sources.bindings)
             if not self._condition_holds_for_(variable_result):
                 continue
+            # The witness is local to the quantifier; it does not appear in the results.
             yield self._build_operation_result_with_truth_(
-                True,
-                sources.bindings
-                | {
-                    id_: variable_result.bindings[id_]
-                    for id_ in self._ids_of_variables_to_add_to_sources_
-                    if id_ in variable_result.bindings
-                },
-                variable_result,
+                True, sources.bindings, variable_result
             )
             return
 
@@ -160,16 +297,3 @@ class Exists(QuantifiedConditional):
                 self.condition, variable_result
             )
         )
-
-    @cached_property
-    def _ids_of_variables_to_add_to_sources_(self):
-        """
-        :return: The ids of the variables that are selected in the root query except the variable of this quantifier.
-        """
-        if self._root_query_ is None:
-            return []
-        return [
-            v._id_
-            for v in self._root_query_._selected_variables_
-            if v._id_ != self.variable._id_
-        ]

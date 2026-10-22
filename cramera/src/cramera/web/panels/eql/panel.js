@@ -21,6 +21,7 @@
  *   listens  scene:step {step}           describe the running episode
  *   listens  entity:select {id, detail, relations}   node clicked in a graph
  *   listens  live:changed {on, url}      answer from the demo instead of the recording
+ *   listens  eql:run {code, text?}         run a query another panel asks for
  * ==========================================================================*/
 Panels.define('eql', function (root, bus) {
   const QUERY_HINT = 'Choose a preset below or type an EQL query.';
@@ -192,7 +193,21 @@ Panels.define('eql', function (root, bus) {
   });
 
   // %% presets
+  // a running demo offers more as it goes - commands once the robot takes them - so
+  // after each of its answers the presets are asked for again, and redrawn if they changed
+  let shownPresetTexts = '';
+  function refreshLivePresets(requestedSource) {
+    fetch(requestedSource.presetsUrl).then(ResponseUtil.parseJson).then(function (payload) {
+      if (requestedSource !== source || !payload.ok) return;
+      const presets = payload.presets || [];
+      if (presetTexts(presets) !== shownPresetTexts) buildPresets(presets, payload.scopes);
+    }).catch(function () {});
+  }
+  function presetTexts(presets) {
+    return JSON.stringify(presets.map(function (p) { return p.text; }));
+  }
   function buildPresets(presets, scopes) {
+    shownPresetTexts = presetTexts(presets);
     presetsEl.innerHTML = '';
     PresetGroups.of(presets, scopes).forEach(function (group) {
       const row = document.createElement('div');
@@ -293,6 +308,14 @@ Panels.define('eql', function (root, bus) {
   // offer and run it as if its button had been clicked — or say it can't be answered
   bus.on('voice:transcript', function (p) { askSpokenQuestion(p.text); });
 
+  // another panel asks for a query to be run here, as if it had been typed
+  bus.on('eql:run', function (p) {
+    if (!p || !p.code) return;
+    input.value = p.code;
+    showQuestion({ text: p.text || p.code, code: p.code });
+    runQuery(p.code);
+  });
+
   async function askSpokenQuestion(text) {
     text = (text || '').trim(); if (!text) return;
     const request = ++voiceRequest;
@@ -341,6 +364,7 @@ Panels.define('eql', function (root, bus) {
       const response = await ResponseUtil.parseJson(r);
       if (requestedSource !== source) return;
       render(code, response);
+      if (requestedSource.live) refreshLivePresets(requestedSource);
     } catch (err) {
       if (requestedSource !== source) return;
       render(code, { ok: false, error: errorText(err) });
@@ -355,7 +379,7 @@ Panels.define('eql', function (root, bus) {
     if (res.verbalization) {
       showQuestion({ text: code, code: code, verbalization: res.verbalization });
     }
-    let html = '<div class="goal">&gt;&gt;&gt; ' + esc(code) + '</div>';
+    let html = '<div class="goal">&gt;&gt;&gt; ' + esc(code) + '</div>' + translationBlock(res.translation);
     if (!res.ok) {
       showAnswer(html + '<div class="qerr">' + esc(res.error || 'query failed') + '</div>');
       bus.emit('entity:highlight', { ids: [] });
@@ -371,6 +395,14 @@ Panels.define('eql', function (root, bus) {
     showAnswer(html);
     wireReplayButtons();
     bus.emit('entity:highlight', { ids: res.highlight || [] });
+  }
+
+  // the statement another query language answered the query by, such as the SQL a
+  // database ran for it, shown under the query it was translated from
+  function translationBlock(translation) {
+    if (!translation) return '';
+    return '<div class="query-translation"><div class="query-translation-language">answered in ' +
+      esc(translation.language) + '</div><pre>' + esc(translation.statement) + '</pre></div>';
   }
 
   // %% replaying an answered moment

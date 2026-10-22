@@ -1,0 +1,2 @@
+piece = a(SeenPiece)()
+piece

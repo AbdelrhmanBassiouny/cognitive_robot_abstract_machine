@@ -12,7 +12,9 @@
  *   emits    scene:step {step}         playback entered a plan step ('__done__' at end)
  *   emits    scene:frame {index}      playback moved onto another recorded tick
  *   emits    live:changed {on, url}    live bridge attached / detached
- *   listens  entity:highlight {ids}    glow the matching 3D objects
+ *   listens  entity:highlight {ids, regions?}    glow the matching 3D objects, and draw
+ *                                       each region as a glowing box
+ *   listens  scene:focus {ids, milliseconds?}   glide the camera onto those objects
  *
  * window.RobotView stays exported for the console and split-resize.
  * ==========================================================================*/
@@ -106,10 +108,14 @@ Panels.define('robot-scene', function (root, bus) {
   const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 200);
   camera.position.set(3, 2.4, 4);
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  // a browser without a graphics card renders every frame in software; ?render=light
+  // trades anti-aliasing, soft shadows and ambient occlusion for a fluid scene there
+  const LIGHT_RENDERING = new URLSearchParams(window.location.search).get('render') === 'light';
+  const LIGHT_SHADOW_MAP_SIZE = 1024;
+  const renderer = new THREE.WebGLRenderer({ antialias: !LIGHT_RENDERING, alpha: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = LIGHT_RENDERING ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
   renderer.outputEncoding = THREE.sRGBEncoding;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.95;
@@ -139,7 +145,7 @@ Panels.define('robot-scene', function (root, bus) {
   const key = new THREE.DirectionalLight(0xfff2df, 1.05);
   key.position.set(4, 7, 3);
   key.castShadow = true;
-  key.shadow.mapSize.set(4096, 4096);
+  key.shadow.mapSize.set(LIGHT_RENDERING ? LIGHT_SHADOW_MAP_SIZE : 4096, LIGHT_RENDERING ? LIGHT_SHADOW_MAP_SIZE : 4096);
   key.shadow.camera.near = 0.5; key.shadow.camera.far = 30;
   key.shadow.camera.left = -6; key.shadow.camera.right = 6;
   key.shadow.camera.top = 6; key.shadow.camera.bottom = -6;
@@ -213,6 +219,10 @@ Panels.define('robot-scene', function (root, bus) {
   const worldRoot = new THREE.Group();
   const markerRoot = new THREE.Group();   // the CRAM debug-marker overlay (/markers)
   worldRoot.add(markerRoot);
+  // regions lit while something about them is shown; a region has no geometry of its
+  // own in the scene, so each is drawn as a glowing box
+  const regionRoot = new THREE.Group();
+  worldRoot.add(regionRoot);
   worldRoot.rotation.x = -Math.PI / 2;
   scene3.add(worldRoot);
 
@@ -602,6 +612,9 @@ Panels.define('robot-scene', function (root, bus) {
         if (m.robot) robotModel = entry;
         worldRoot.add(obj);
         refreshFrameAxes();          // every link of the model is a frame
+        // a demo at rest publishes no new state, so the next poll re-applies the newest
+        // one to place this model at its live base and joints
+        lastSeq = -1;
         needsRender = true;
       });
     });
@@ -884,6 +897,59 @@ Panels.define('robot-scene', function (root, bus) {
     controls.update();
     needsRender = true;
   }
+  // look at the body of a name from a distance, keeping the direction the camera looks
+  // from; following the robot stops, so the view stays on the body
+  function frameBody(name, distance) {
+    const body = scene3.getObjectByName(name) || objectMeshes[name];
+    if (!body) return false;
+    const center = new THREE.Box3().setFromObject(body).getCenter(new THREE.Vector3());
+    const from = camera.position.clone().sub(controls.target).normalize();
+    follow = false;
+    controls.target.copy(center);
+    camera.position.copy(center).addScaledVector(from, distance);
+    controls.update();
+    needsRender = true;
+    return true;
+  }
+  // glide the camera, keeping its direction, until the given bodies fill the view
+  const GLIDE_MILLISECONDS = 1100;
+  // how far the camera stays from what it glides to, at least, in metres
+  const GLIDE_NEAREST = 0.32;
+  // how many times the bodies' extent the camera stays away from them
+  const GLIDE_SPAN = 2.6;
+  let glide = null;
+  function glideTo(names, milliseconds) {
+    const box = new THREE.Box3();
+    names.forEach(function (name) {
+      // a region's outline first: the scene may hold a node of the same name with no
+      // geometry of its own
+      const body = regionRoot.getObjectByName(name) || scene3.getObjectByName(name) || objectMeshes[name];
+      if (body) box.expandByObject(body);
+    });
+    if (box.isEmpty()) return false;
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3()).length();
+    const distance = Math.max(GLIDE_NEAREST, size * GLIDE_SPAN);
+    const from = camera.position.clone().sub(controls.target).normalize();
+    follow = false;
+    glide = {
+      start: performance.now(), milliseconds: milliseconds || GLIDE_MILLISECONDS,
+      target0: controls.target.clone(), target1: center,
+      camera0: camera.position.clone(), camera1: center.clone().addScaledVector(from, distance),
+    };
+    requestAnimationFrame(stepGlide);
+    return true;
+  }
+  function stepGlide(now) {
+    if (!glide) return;
+    const t = Math.min(1, (now - glide.start) / glide.milliseconds);
+    const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    controls.target.lerpVectors(glide.target0, glide.target1, eased);
+    camera.position.lerpVectors(glide.camera0, glide.camera1, eased);
+    controls.update();
+    needsRender = true;
+    if (t < 1) requestAnimationFrame(stepGlide); else glide = null;
+  }
   function robotCenter(out) {
     if (!robotModel) return false;
     robotModel.obj.getWorldPosition(_base);
@@ -1073,6 +1139,29 @@ Panels.define('robot-scene', function (root, bus) {
         if (c.material.transparent) c.material.opacity = on ? 0.26 : 0.08;
       });
     }
+    needsRender = true;
+  }
+
+  // regions = [{id, pose: [x, y, z, qx, qy, qz, qw], size: [x, y, z]}]
+  function outlineRegions(regions) {
+    while (regionRoot.children.length) {
+      const old = regionRoot.children[0];
+      regionRoot.remove(old);
+      old.traverse(function (c) { if (c.geometry) c.geometry.dispose(); if (c.material) c.material.dispose(); });
+    }
+    regions.forEach(function (region) {
+      const holder = new THREE.Group();
+      holder.name = region.id;
+      holder.position.set(region.pose[0], region.pose[1], region.pose[2]);
+      holder.quaternion.set(region.pose[3], region.pose[4], region.pose[5], region.pose[6]);
+      const geometry = new THREE.BoxGeometry(region.size[0], region.size[1], region.size[2]);
+      holder.add(new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
+        color: 0x39d5c8, transparent: true, opacity: 0.42, depthWrite: false,
+      })));
+      holder.add(new THREE.LineSegments(new THREE.EdgesGeometry(geometry),
+        new THREE.LineBasicMaterial({ color: 0x9ffff6 })));
+      regionRoot.add(holder);
+    });
     needsRender = true;
   }
 
@@ -1313,20 +1402,49 @@ Panels.define('robot-scene', function (root, bus) {
     needsRender = true;
   }
 
+  // %% easing into each live state
+  // the bridge is polled about fifteen times a second; each new state is eased into
+  // over about one poll rather than jumped to, so a streamed motion reads as continuous
+  const LIVE_BLEND_MILLISECONDS = 75;
+  let liveBlend = null;          // {start, joints: [{joint, from, to}], poses: [{obj, from, to}]}
+  function poseOf(obj) {
+    return [obj.position.x, obj.position.y, obj.position.z,
+            obj.quaternion.x, obj.quaternion.y, obj.quaternion.z, obj.quaternion.w];
+  }
+  function jointValueOf(joint) {
+    return joint.jointValue && joint.jointValue.length ? Number(joint.jointValue[0]) || 0 : 0;
+  }
+  function stepLiveBlend(now) {
+    const t = Math.min(1, (now - liveBlend.start) / LIVE_BLEND_MILLISECONDS);
+    liveBlend.joints.forEach(function (b) { b.joint.setJointValue(b.from + (b.to - b.from) * t); });
+    liveBlend.poses.forEach(function (b) { setPose(b.obj, b.from, b.to, t); });
+    needsRender = true;
+    if (t >= 1) liveBlend = null;
+  }
+  function runLiveBlend() {
+    if (!liveBlend) return;
+    stepLiveBlend(performance.now());
+    requestAnimationFrame(runLiveBlend);
+  }
+  function easeToward(obj, pose, blend) {
+    blend.poses.push({ obj: obj, from: poseOf(obj), to: pose });
+  }
+
   function applyLive(st) {
     if (!st || !st.frames) return;
+    const blend = { start: performance.now(), joints: [], poses: [] };
     for (const k in st.frames) {
       const j = JointRouting.jointFor(models, k);
       if (!j) continue;
-      j.setJointValue(st.frames[k]);
+      blend.joints.push({ joint: j, from: jointValueOf(j), to: st.frames[k] });
     }
-    if (robotModel && st.base) setPose(robotModel.obj, st.base, st.base, 0);
+    if (robotModel && st.base) easeToward(robotModel.obj, st.base, blend);
     // every bundled model root the bridge streams: a second robot drives, a moved
     // environment model follows (the primary robot's entry re-applies st.base)
     const modelBases = st.modelBases || {};
     for (const prefix in modelBases) {
       models.forEach(function (m) {
-        if (m.prefix === prefix) setPose(m.obj, modelBases[prefix], modelBases[prefix], 0);
+        if (m.prefix === prefix) easeToward(m.obj, modelBases[prefix], blend);
       });
     }
     if (typeof st.markersVersion === 'number' && st.markersVersion !== lastMarkersVersion) {
@@ -1341,10 +1459,13 @@ Panels.define('robot-scene', function (root, bus) {
         // the running world HAS this object, so it belongs on screen, even if an
         // earlier catalog answer hid it.
         if (!g.visible) { g.visible = true; needsRender = true; }
-        setPose(g, liveStateKeys[key], liveStateKeys[key], 0);
+        easeToward(g, liveStateKeys[key], blend);
       } else unknown = true;                   // an object the demo spawned mid-run
     }
     if (unknown) syncLiveObjects();            // fetch the catalog & spawn the newcomers
+    const easing = liveBlend !== null;
+    liveBlend = blend;
+    if (!easing) requestAnimationFrame(runLiveBlend);
     if (follow && robotCenter(_target)) controls.target.lerp(_target, 0.08);
     needsRender = true;
   }
@@ -1483,6 +1604,7 @@ Panels.define('robot-scene', function (root, bus) {
   // %% SSAO
   let composer = null, ssaoPass = null;
   (function setupSSAO() {
+    if (LIGHT_RENDERING) return;
     if (!(THREE.EffectComposer && THREE.RenderPass && window.BackgroundIgnoringSSAOPass && THREE.ShaderPass && THREE.CopyShader)) return;
     try {
       const w = container.clientWidth || 800, h = container.clientHeight || 600;
@@ -1576,6 +1698,7 @@ Panels.define('robot-scene', function (root, bus) {
     setAutoRotate: function (on) { controls.autoRotate = on; controls.autoRotateSpeed = 0.5; needsRender = true; },
     setFloorVisible: function (on) { ground.visible = on; needsRender = true; },
     setFollow: function (on) { follow = on; },
+    frame: frameBody,
     setPropsVisible: function (on) {
       for (const n in objectMeshes) objectMeshes[n].visible = on;
       marker.visible = on && !!PLACE0;
@@ -1627,7 +1750,11 @@ Panels.define('robot-scene', function (root, bus) {
   RobotView.onLiveChange(function (on) { bus.emit('live:changed', { on: on, url: liveUrl() }); });
 
   // %% bus: inbound
-  bus.on('entity:highlight', function (p) { highlightObjects((p && p.ids) || []); });
+  bus.on('entity:highlight', function (p) {
+    highlightObjects((p && p.ids) || []);
+    outlineRegions((p && p.regions) || []);
+  });
+  bus.on('scene:focus', function (p) { if (p && p.ids) glideTo(p.ids, p.milliseconds); });
 
   // %% play button
   const playBtn = $('play-btn');

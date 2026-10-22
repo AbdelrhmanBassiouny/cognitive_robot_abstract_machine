@@ -117,16 +117,17 @@ Panels.define('graph', function (root, bus) {
   let stepsMode = true;   // Plan tab opens in the readable Steps view; the toggle switches to the graph
   const stepsEl = root.querySelector('#graph-steps');
   const stepsToggle = root.querySelector('#graph-steps-toggle');
-  const STEP_KINDS = { ActionNode: 'action', AttachNode: 'attach', DetachNode: 'attach' };
+  const STEP_KINDS = { ActionNode: 'action', AttachNode: 'attach', DetachNode: 'attach', UnderspecifiedNode: 'open', CandidateTrial: 'candidate' };
   // conditions are internal checks that never execute — hidden from this view entirely
   const DETAIL_KINDS = { MotionNode: 'motion', MonitorNode: 'monitor' };
-  const STRUCT_KINDS = { SequentialNode: 1, ParallelNode: 1, UnderspecifiedNode: 1 };
+  const STRUCT_KINDS = { SequentialNode: 1, ParallelNode: 1 };
   function stepWords(x) { return String(x || '').replace(/([a-z0-9])([A-Z])/g, '$1 $2').trim().toLowerCase().replace(/^./, function (c) { return c.toUpperCase(); }); }
   function stepLabel(n) {
     if (n.kind === 'ConditionNode') return 'condition check';
     if (n.kind === 'AttachNode') return 'grasp' + (n.target ? ' ' + String(n.target).replace(/\.(stl|obj|dae)$/i, '') : '');
     if (n.kind === 'DetachNode') return 'release' + (n.target ? ' ' + String(n.target).replace(/\.(stl|obj|dae)$/i, '') : '');
     if (n.kind === 'MotionNode') return stepWords((n.label || 'motion').replace(/Motion$/, '')) || 'motion';
+    if (n.kind === 'CandidateTrial') return 'candidate ' + n.candidate + ' for ' + stepWords((n.label || '').replace(/Action$/, '')).toLowerCase();
     var l = stepWords((n.label || n.kind).replace(/(Action|Node)$/, ''));
     if (n.target) l += ' ' + String(n.target).replace(/\.(stl|obj|dae)$/i, '');
     return l || 'step';
@@ -158,6 +159,12 @@ Panels.define('graph', function (root, bus) {
       else if (STRUCT_KINDS[k]) Array.prototype.push.apply(out, stepItems(c));
     });
     return out;
+  }
+  const candidatesShown = {};  // candidate ids already drawn, so only a new one animates in
+  function escapeText(text) {
+    return String(text).replace(/[&<>"]/g, function (character) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[character];
+    });
   }
   const stepsCollapsed = {};   // node id -> true when the user collapsed that step (kept across live refreshes)
   let stepCollapsibleIds = [];  // ids of steps that have children, filled during render (for expand/collapse all)
@@ -193,15 +200,22 @@ Panels.define('graph', function (root, bus) {
       if (hk) stepCollapsibleIds.push(n.id);
       const collapsed = !!stepsCollapsed[n.id];
       const lvl = Math.min(depth, 3);
-      html.push('<div class="st-row lvl' + lvl + (hk ? ' hk' : '') + '" data-id="' + n.id + '">' +
+      // a candidate slides in the first time it is tried, not again on every refresh
+      const arriving = n.kind === 'CandidateTrial' && !candidatesShown[n.id];
+      if (n.kind === 'CandidateTrial') candidatesShown[n.id] = true;
+      html.push('<div class="st-row lvl' + lvl + (hk ? ' hk' : '') +
+        (n.kind === 'CandidateTrial' ? ' candidate ' + String(n.status || '').toLowerCase() : '') +
+        (arriving ? ' arriving' : '') + '" data-id="' + n.id + '">' +
         '<span class="st-tw">' + (hk ? (collapsed ? '▸' : '▾') : '') + '</span>' +
         '<span class="st-num">' + number + '</span>' +
-        '<span class="st-name">' + stepLabel(n) + '</span>' +
+        '<span class="st-name concept" data-id="' + n.id + '" title="show in the ontology">' + stepLabel(n) + '</span>' +
+        (n.kind === 'UnderspecifiedNode' ? '<span class="st-open">left open</span>' : '') +
+        (n.kind === 'CandidateTrial' && n.status === 'FAILED' && n.description ? '<span class="st-why">' + escapeText(n.description) + '</span>' : '') +
         '<span class="st-meta">' + (details.length ? '<span class="st-dc">' + details.length + ' detail' + (details.length > 1 ? 's' : '') + '</span>' : '') + stepPill(n.status) + '</span>' +
         '</div>');
       if (hk) {
         html.push('<div class="st-kids"' + (collapsed ? ' style="display:none"' : '') + '>');
-        details.forEach(function (d) { html.push('<div class="st-leaf" data-id="' + d.n.id + '"><span class="st-name detail">' + stepLabel(d.n) + '</span><span class="st-meta">' + stepPill(d.n.status) + '</span></div>'); });
+        details.forEach(function (d) { html.push('<div class="st-leaf" data-id="' + d.n.id + '"><span class="st-name detail concept" data-id="' + d.n.id + '" title="show in the ontology">' + stepLabel(d.n) + '</span><span class="st-meta">' + stepPill(d.n.status) + '</span></div>'); });
         var i = 1; sub.forEach(function (c) { walk(c, number + '.' + (i++), depth + 1); });
         html.push('</div>');
       }
@@ -211,6 +225,14 @@ Panels.define('graph', function (root, bus) {
     treeEl.querySelectorAll('.st-row, .st-leaf').forEach(function (row) {
       const detail = payload.details && payload.details[row.dataset.id];
       row.title = detail ? detail.lines.join('\n') : '';
+    });
+    // a step's name opens the concept it is an instance of; the rest of its row folds it
+    treeEl.querySelectorAll('.st-name.concept').forEach(function (name) {
+      name.addEventListener('click', function (event) {
+        event.stopPropagation();
+        const node = (payload.nodes || []).find(function (n) { return n.id === name.dataset.id; });
+        if (node) showConcept(node.label || node.kind);
+      });
     });
     // collapse/expand (persist the state so the 700ms live refresh keeps it)
     treeEl.querySelectorAll('.st-row.hk').forEach(function (r) {
@@ -287,6 +309,7 @@ Panels.define('graph', function (root, bus) {
   }
   async function drill(id) {
     if (!view.details[id]) return;
+    if (tab === 'plan') return showConcept(conceptOf(id));
     const requestedView = view;
     const requestedNavigation = navigationRevision;
     const requestedBridge = liveState;
@@ -300,6 +323,27 @@ Panels.define('graph', function (root, bus) {
       stacks[tab].push(view);
       setView(p);
       select(id);
+    } catch (err) { /* server unreachable — stay where we are */ }
+  }
+  // %% a concept the plan uses, shown in its ontology neighbourhood
+  // the class a plan node stands for: an action's or motion's own class, else the node's
+  function conceptOf(id) {
+    const node = (view.nodes || []).find(function (n) { return n.id === id; });
+    return node ? (node.label || node.kind) : id;
+  }
+  // open the Knowledge tab on the concept's ancestors and subclasses, the concept lit up
+  async function showConcept(name) {
+    const request = ++drillRequest;
+    try {
+      const r = await fetch(SceneContext.withScene('/api/knowledge/concept?name=' + encodeURIComponent(name)));
+      const p = await ResponseUtil.parseJson(r);
+      if (destroyed || request !== drillRequest || !p.ok) return;
+      await showTab('knowledge');
+      if (destroyed || request !== drillRequest || tab !== 'knowledge') return;
+      stacks[tab].push(view);
+      setView(p);
+      const focus = p.nodes.find(function (n) { return n.label === name; });
+      if (focus) select(focus.id);
     } catch (err) { /* server unreachable — stay where we are */ }
   }
   function goBack() {
@@ -441,6 +485,7 @@ Panels.define('graph', function (root, bus) {
       if (n.target) lines.push('target: ' + n.target);
       nodes.push({ id: n.id, label: n.label, group: n.group,
                    kind: n.kind, parent: n.parent, target: n.target,
+                   candidate: n.candidate, description: n.description,
                    title: [label].concat(lines).join('\n'), status: n.status });
       details[n.id] = { label: label, group: n.group, lines: lines };
       if (n.parent) edges.push({ from: n.parent, to: n.id, kind: 'property', label: 'has step' });

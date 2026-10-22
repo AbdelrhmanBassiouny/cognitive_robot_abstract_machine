@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
+from krrood.entity_query_language.backends import QueryBackend
 from krrood.entity_query_language.verbalization.exceptions import (
     UnverbalizableExpressionError,
 )
@@ -310,7 +311,9 @@ class QueryVerbalization:
     """
 
     @classmethod
-    def of_expression(cls, expression: Any) -> Optional[QueryVerbalization]:
+    def of_expression(
+        cls, expression: Any, backend: Optional[QueryBackend] = None
+    ) -> Optional[QueryVerbalization]:
         """
         Read one entity query language expression back as English.
 
@@ -318,11 +321,16 @@ class QueryVerbalization:
         query and then answer it.
 
         :param expression: The expression to word.
+        :param backend: What answers the expression, whose way of answering opens the
+            sentence; the kind of expression opens it when omitted.
         :return: Both renderings, or None for anything krrood cannot word — a sentence
             is a nicety, and failing to build one must not cost the caller its answer.
         """
         try:
-            fragment = EQLVerbalizer().build(expression)
+            fragment = EQLVerbalizer().build(
+                expression,
+                performative=None if backend is None else backend.opening_directive,
+            )
         except UnverbalizableExpressionError:
             return None
         return cls(

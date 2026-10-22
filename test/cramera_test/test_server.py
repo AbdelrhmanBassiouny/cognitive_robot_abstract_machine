@@ -411,6 +411,18 @@ class TestApi:
             assert payload["ok"], name
             assert payload.get("live") == expect_live
 
+    def test_a_concept_is_served_as_its_ontology_neighbourhood(self, server):
+        pytest.importorskip("krrood")
+        payload = get_json(server + "/api/knowledge/concept?name=TypedPlan")
+
+        assert payload["breadcrumb"] == "TypedPlan"
+
+    def test_an_unknown_concept_is_reported(self, server):
+        pytest.importorskip("krrood")
+        payload = get_json(server + "/api/knowledge/concept?name=NoSuchConcept")
+
+        assert not payload["ok"]
+
     def test_eql_query_roundtrip(self, server):
         pytest.importorskip("krrood")
         request = urllib.request.Request(
