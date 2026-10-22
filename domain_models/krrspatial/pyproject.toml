@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "krrspatial"
+authors = [
+    { name = "Simon Stelter", email = "stelter@uni-bremen.de" },
+]
+description = "Points in the spaces they are given in: reference frames and images."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+keywords = ["robotics", "geometry", "spatial"]
+license = "LGPL-3.0-only"
+dynamic = ["version"]
+dependencies = [
+    "krrood",
+    "typing_extensions",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0,<8.0.0",
+]
+
+[project.urls]
+"Source" = 'https://github.com/cram2/cognitive_robot_abstract_machine'
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["krrspatial*"]
+
+[tool.setuptools.dynamic]
+version = { attr = "krrspatial._version.__version__" }

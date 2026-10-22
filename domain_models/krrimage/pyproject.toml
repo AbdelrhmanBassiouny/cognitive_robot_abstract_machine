@@ -19,6 +19,7 @@ license = "LGPL-3.0-only"
 dynamic = ["version"]
 dependencies = [
     "krrood",
+    "krrspatial",
     "numpy",
     "opencv-python>=4.11.0.86",
     "typing_extensions",
