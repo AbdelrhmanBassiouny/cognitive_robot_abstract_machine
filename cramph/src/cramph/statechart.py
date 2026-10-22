@@ -2395,6 +2395,13 @@ class Statechart(SubclassJSONSerializer):
                 for node in written_nodes
                 for condition in node.conditions
             ],
+            StatechartJSONKey.CHILDREN: {
+                node.parent_node.index: [
+                    child.index for child in node.parent_node.nodes
+                ]
+                for node in written_nodes
+                if node.parent_node is not None
+            },
         }
 
     @classmethod
@@ -2404,8 +2411,8 @@ class Statechart(SubclassJSONSerializer):
         """
         Reconstructs a statechart from its JSON representation, as produced by
         :meth:`to_json`: first all nodes, then the transition conditions of every node
-        the document holds, then goal/child parent links. A goal that serializes its own nodes already holds
-        them, so it is not handed them a second time. The goals are not expanded again,
+        the document holds, then the children of every goal in the order it was written
+        with. The goals are not expanded again,
         because they expanded before they were serialized.
 
         :param data: The JSON dict.
@@ -2442,25 +2449,21 @@ class Statechart(SubclassJSONSerializer):
 
     def _register_nodes_from_json(self, data: dict[str, Any], **kwargs: Any) -> None:
         """
-        Registers the written nodes, then their transition conditions, then links every
-        one of them to the goal it is a child of. A goal that serializes its own nodes
-        already holds them, so it is not handed them a second time.
+        Registers the written nodes, then their transition conditions, then hands every
+        goal holding one of them its children in the order it was written with.
         """
         DeserializedNodeTracker.from_kwargs(kwargs)
-        added_nodes = []
         for json_data in data[StatechartJSONKey.NODES]:
             node = from_json(json_data, **kwargs)
             self._register_node(node)
-            added_nodes.append(node)
         for json_data in data[StatechartJSONKey.CONDITIONS]:
             transition = TransitionCondition.from_json(json_data, **kwargs)
             transition.owner._set_transition(transition)
-        for node in added_nodes:
-            if node.parent_node_index is None:
-                continue
-            parent_node = self.get_node_by_index(node.parent_node_index)
-            if node not in parent_node.nodes:
-                parent_node.nodes.append(node)
+        for parent_index, child_indices in data[StatechartJSONKey.CHILDREN].items():
+            # JSON writes the integer keys as strings
+            self.get_node_by_index(int(parent_index)).nodes = [
+                self.get_node_by_index(child_index) for child_index in child_indices
+            ]
 
     def sanity_check(self) -> None:
         """
