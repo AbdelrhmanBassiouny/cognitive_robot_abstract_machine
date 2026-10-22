@@ -614,12 +614,46 @@ class UnknownGriplinkActionError(MotionStatechartError):
     """
 
     def error_message(self) -> str:
-        return (
-            f'Cannot build a goal for the griplink action "{self.message_type.__name__}".'
-        )
+        return f'Cannot build a goal for the griplink action "{self.message_type.__name__}".'
 
     def suggest_correction(self) -> str:
         return "Build the task with Grip, Release, Flexgrip or Flexrelease."
+
+
+@dataclass
+class GriplinkParameterOutOfRangeError(MotionStatechartError):
+    """
+    Raised when a griplink parameter lies outside the interval the gripper accepts.
+    """
+
+    parameter_name: str
+    """
+    The name of the offending parameter.
+    """
+
+    value: float
+    """
+    The value the parameter was given.
+    """
+
+    lower_bound: float
+    """
+    The smallest value the gripper accepts.
+    """
+
+    upper_bound: float
+    """
+    The largest value the gripper accepts.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"Griplink parameter {self.parameter_name} is {self.value}, outside the "
+            f"valid interval [{self.lower_bound}..{self.upper_bound}]."
+        )
+
+    def suggest_correction(self) -> str:
+        return f"Choose a {self.parameter_name} within the valid interval."
 
 
 @dataclass

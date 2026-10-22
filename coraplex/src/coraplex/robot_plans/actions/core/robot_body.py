@@ -71,12 +71,12 @@ class MoveTorsoAction(ActionDescription):
 @dataclass
 class SetGripperAction(ActionDescription):
     """
-    Sets a gripper to the configuration it describes.
+    Moves a gripper to the given configuration.
     """
 
     configuration: GripperConfiguration
     """
-    The gripper configuration to reach.
+    The gripper configuration, given from outside, that the gripper should reach.
     """
 
     @property

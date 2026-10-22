@@ -9,7 +9,10 @@ from semantic_digital_twin.robots.griplink_gripper import GriplinkGripPreset
 
 from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.motion_statechart.data_types import ObservationStateValues
-from giskardpy.motion_statechart.exceptions import UnknownGriplinkActionError
+from giskardpy.motion_statechart.exceptions import (
+    GriplinkParameterOutOfRangeError,
+    UnknownGriplinkActionError,
+)
 from giskardpy.motion_statechart.ros2_nodes.ros_tasks import ActionServerTask
 
 logger = logging.getLogger(__name__)
@@ -257,6 +260,8 @@ class GriplinkFlexActionServerTask(GriplinkActionServerTask):
 
         :raises UnknownGriplinkActionError: If the task was built for neither
             ``Flexgrip`` nor ``Flexrelease``.
+        :raises GriplinkParameterOutOfRangeError: If a parameter lies outside its
+            documented interval.
         """
         super().__post_init__()
         if self.message_type is Flexgrip:
@@ -273,6 +278,29 @@ class GriplinkFlexActionServerTask(GriplinkActionServerTask):
             self.grip_velocity = default_velocity
         if self.grip_acceleration is None:
             self.grip_acceleration = default_acceleration
+        self._check_within(self.grip_position, "grip_position", -0.005, 0.12)
+        self._check_within(self.grip_force, "grip_force", 30.0, 300.0)
+        self._check_within(self.grip_velocity, "grip_velocity", 0.005, 0.35)
+        self._check_within(self.grip_acceleration, "grip_acceleration", 0.1, 4.0)
+
+    @staticmethod
+    def _check_within(
+        value: float, parameter_name: str, lower_bound: float, upper_bound: float
+    ) -> None:
+        """
+        :param value: The parameter value to check.
+        :param parameter_name: The name of the parameter, for the error.
+        :param lower_bound: The smallest accepted value.
+        :param upper_bound: The largest accepted value.
+        :raises GriplinkParameterOutOfRangeError: If the value is outside the interval.
+        """
+        if not lower_bound <= value <= upper_bound:
+            raise GriplinkParameterOutOfRangeError(
+                parameter_name=parameter_name,
+                value=value,
+                lower_bound=lower_bound,
+                upper_bound=upper_bound,
+            )
 
     def build_msg(self, context: MotionStatechartContext):
         """
