@@ -67,6 +67,7 @@ items:
   depends_on:
   - krrimage
   - projection-interface
+  - planar-point-interface
   branch: claude/krrimage-depth-segmentation
   notes: 'Camera model = Projection[ImagePoint, Ray3] (project, deproject with depth), behind
     krrimage''s optional krrspatial extra. First user: montessori perception (CameraIntrinsics.deproject,
@@ -118,3 +119,18 @@ items:
     matches the plane). A projector is a pinhole camera run backwards, calibrated instead of the
     camera; wall planes come from the twin. Demo ideas: the robot shown a video of its own pickup;
     the robot''s live capture projected onto the apartment walls while it works.'
+- id: planar-point-interface
+  title: Point2 and ImagePoint share a casadi-free PlanarPoint interface parameterized by their
+    space and coordinate type
+  branch: claude/planar-point-interface
+  track: spatial
+  status: not_started
+  depends_on:
+  - krrspatial-numeric
+  - krrimage
+  notes: 'PlanarPoint(Generic[SpaceT, CoordinateT]) with x, y and space; Space(IdentifiedObject)
+    with ReferenceFrame (metric) and ImageSpace (one camera''s image) under it. Point2 binds
+    [ReferenceFrame, casadi scalar], ImagePoint binds [ImageSpace, float] and gains its image
+    space. Each concrete class binds both parameters once (never Point2[float] beside Point2[casadi]).
+    Home open: krrood or a new casadi-free package. PR must lead with "different spaces, not
+    one space computed two ways".'
