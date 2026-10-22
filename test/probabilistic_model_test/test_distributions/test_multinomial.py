@@ -1,3 +1,4 @@
+import copy
 import itertools
 import unittest
 from enum import IntEnum
@@ -66,7 +67,7 @@ class MultinomialConstructionTestCase(unittest.TestCase):
         distribution_1 = MultinomialDistribution(
             (self.x, self.y), np.array([[0.1, 0.2, 0.3], [0.7, 0.4, 0.1]])
         )
-        distribution_2 = distribution_1.__copy__()
+        distribution_2 = copy.deepcopy(distribution_1)
         self.assertEqual(distribution_1, distribution_2)
         distribution_2.probabilities = np.zeros_like(distribution_2.probabilities)
         self.assertNotEqual(distribution_2, distribution_1)
@@ -154,7 +155,7 @@ class MultinomialInferenceTestCase(unittest.TestCase):
         # Copy and normalize locally rather than relying on crafted_distribution
         # already being normalized by another test -- likelihood() reads probabilities
         # as stored, with no normalization of its own.
-        distribution = self.crafted_distribution.__copy__()
+        distribution = copy.deepcopy(self.crafted_distribution)
         distribution.normalize()
         data = np.array([[XEnum.A, YEnum.A], [XEnum.B, YEnum.B]])
         likelihood = distribution.likelihood(data)
@@ -183,7 +184,7 @@ class MultinomialInferenceTestCase(unittest.TestCase):
     def test_crafted_probability(self):
         # Copy first: normalize() mutates in place, and crafted_distribution is a
         # class-level fixture shared with every other test in this class.
-        distribution = self.crafted_distribution.__copy__()
+        distribution = copy.deepcopy(self.crafted_distribution)
         distribution.normalize()
         event = SimpleEvent.from_data()
         self.assertAlmostEqual(distribution.probability(event.as_composite_set()), 1)

@@ -1,3 +1,4 @@
+import copy
 import json
 import sys
 import unittest
@@ -70,7 +71,7 @@ class IntegerDistributionTestCase(unittest.TestCase):
         self.assertTrue(all(likelihoods > 0))
 
     def test_copy(self):
-        copied = self.model.__copy__()
+        copied = copy.deepcopy(self.model)
         self.assertEqual(copied, self.model)
         copied.probabilities = MissingDict(float)
         # self.assertNotEqual(copied, self.model)

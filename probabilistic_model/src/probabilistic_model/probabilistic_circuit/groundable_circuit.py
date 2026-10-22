@@ -124,10 +124,6 @@ class GroundableCircuit(ProbabilisticCircuitRepresentation[NodeType], ABC):
         """
         raise NotImplementedError
 
-    @abstractmethod
-    def __deepcopy__(self, memo=None) -> Self:
-        raise NotImplementedError
-
     # %% operations on nodes
 
     @abstractmethod

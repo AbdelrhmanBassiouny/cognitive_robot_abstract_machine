@@ -8,7 +8,7 @@ import numpy as np
 import numpy.typing as npt
 from numpy import nextafter
 from scipy.stats import norm, truncnorm
-from typing_extensions import Self, Tuple, TYPE_CHECKING
+from typing_extensions import Any, Self, Tuple, TYPE_CHECKING
 
 from probabilistic_model.distributions.distributions import (
     ContinuousDistribution,
@@ -146,27 +146,6 @@ class GaussianDistribution(ContinuousDistribution):
     def __repr__(self):
         return f"N({self.variable.name})"
 
-    def __copy__(self):
-        return self.__class__(
-            variable=self.variable, location=self.location, scale=self.scale
-        )
-
-    def __deepcopy__(self, memo=None):
-        if memo is None:
-            memo = {}
-        id_self = id(self)
-        if id_self in memo:
-            return memo[id_self]
-
-        variable = self.variable.__class__(
-            name=self.variable.name, domain=self.variable.domain
-        )
-        result = self.__class__(
-            variable=variable, location=self.location, scale=self.scale
-        )
-        memo[id_self] = result
-        return result
-
     @property
     def abbreviated_symbol(self) -> str:
         return "N"
@@ -278,32 +257,6 @@ class TruncatedGaussianDistribution(
         return (
             f"N({self.variable.name} | {self.location}, {self.scale}, {self.interval})"
         )
-
-    def __copy__(self):
-        return self.__class__(
-            variable=self.variable,
-            interval=self.interval,
-            location=self.location,
-            scale=self.scale,
-        )
-
-    def __deepcopy__(self, memo=None):
-        if memo is None:
-            memo = {}
-        id_self = id(self)
-        if id_self in memo:
-            return memo[id_self]
-
-        variable = self.variable.__class__(self.variable.name)
-        interval = self.interval.__deepcopy__()
-        result = self.__class__(
-            variable=variable,
-            interval=interval,
-            location=self.location,
-            scale=self.scale,
-        )
-        memo[id_self] = result
-        return result
 
     def apply_translation(self, translation: VariableMap[Variable, float]):
         super().apply_translation(translation)

@@ -1,3 +1,4 @@
+import copy
 import enum
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
@@ -652,13 +653,10 @@ class ProbabilisticBackend(GenerativeBackend):
         # `.truncated()` fills in missing variables *in place* on the event it is
         # given, so reusing the same event object across several `.truncated()` calls
         # (each on a differently-shaped circuit) would leak one call's variables into
-        # the next -- pass a fresh copy each time. `Event` defines its own
-        # no-argument `__deepcopy__`, incompatible with the `copy` module's
-        # memo-passing convention, so it is called directly rather than through
-        # `copy.deepcopy`.
+        # the next -- pass a fresh copy each time.
         if effect_truncation_event:
             effect_truncated, _ = interventional.truncated(
-                effect_truncation_event.__deepcopy__()
+                copy.deepcopy(effect_truncation_event)
             )
         else:
             effect_truncated = interventional
@@ -677,7 +675,7 @@ class ProbabilisticBackend(GenerativeBackend):
 
         if effect_truncation_event:
             narrowed, effect_given_region_probability = region_only.truncated(
-                effect_truncation_event.__deepcopy__()
+                copy.deepcopy(effect_truncation_event)
             )
         else:
             narrowed, effect_given_region_probability = region_only, 1.0

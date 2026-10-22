@@ -102,22 +102,6 @@ class UniformDistribution(ContinuousDistributionWithFiniteSupport):
     def __repr__(self):
         return f"U({self.variable.name})"
 
-    def __copy__(self):
-        return self.__class__(variable=self.variable, interval=self.interval)
-
-    def __deepcopy__(self, memo=None):
-        if memo is None:
-            memo = {}
-        id_self = id(self)
-        if id_self in memo:
-            return memo[id_self]
-
-        variable = Continuous(self.variable.name)
-        interval = self.interval.__deepcopy__()
-        result = self.__class__(variable=variable, interval=interval)
-        memo[id_self] = result
-        return result
-
     def x_axis_points_for_plotly(self) -> List[Union[None, float]]:
         interval_size = self.upper - self.lower
         x = [

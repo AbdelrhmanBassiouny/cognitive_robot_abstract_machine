@@ -22,6 +22,7 @@ from typing_extensions import (
     Tuple,
 )
 
+from krrood.patterns.dataclass_deep_copy import DataclassDeepcopyMixin
 from probabilistic_model.distributions.truncated_multivariate_gaussian import (
     TruncatedMultivariateGaussianDistribution,
 )
@@ -142,7 +143,7 @@ class Covariance:
 
 
 @dataclass
-class MultivariateGaussianDistribution(ProbabilisticModel):
+class MultivariateGaussianDistribution(ProbabilisticModel, DataclassDeepcopyMixin):
     """
     A multivariate Gaussian distribution over continuous random variables.
 
@@ -503,27 +504,3 @@ class MultivariateGaussianDistribution(ProbabilisticModel):
         return self.scipy_distribution.rvs(size=amount).reshape(
             amount, len(self.variables)
         )
-
-    def __copy__(self) -> Self:
-        return type(self)(
-            variables=self.variables,
-            mean=self.mean.copy(),
-            covariance=Covariance(lower_triangle=self.covariance.lower_triangle.copy()),
-        )
-
-    def __deepcopy__(self, memo=None) -> Self:
-        if memo is None:
-            memo = {}
-        id_self = id(self)
-        if id_self in memo:
-            return memo[id_self]
-        result = type(self)(
-            variables=tuple(
-                variable.__class__(name=variable.name, domain=variable.domain)
-                for variable in self.variables
-            ),
-            mean=self.mean.copy(),
-            covariance=Covariance(lower_triangle=self.covariance.lower_triangle.copy()),
-        )
-        memo[id_self] = result
-        return result

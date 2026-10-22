@@ -400,12 +400,13 @@ class RayTracer:
             )
 
         ray_directions = target_points - origin_points
-        (
-            hit_points,
-            ray_indices,
-            triangle_indices,
-        ) = self.scene.to_mesh().ray.intersects_location(
-            origin_points, ray_directions, multiple_hits=multiple_hits
+        scene_geometry = trimesh.Trimesh(
+            **trimesh.triangles.to_kwargs(self.scene.triangles), process=False
+        )
+        hit_points, ray_indices, triangle_indices = (
+            scene_geometry.ray.intersects_location(
+                origin_points, ray_directions, multiple_hits=multiple_hits
+            )
         )
         hit_distances = np.linalg.norm(hit_points - origin_points[ray_indices], axis=1)
 

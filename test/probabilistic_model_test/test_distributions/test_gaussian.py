@@ -1,3 +1,4 @@
+import copy
 import unittest
 
 import numpy as np
@@ -258,12 +259,12 @@ class TruncatedGaussianDistributionTestCase(unittest.TestCase):
         self.assertTrue(probability > -np.inf)
 
     def test_copy(self):
-        copy = self.distribution.__copy__()
-        self.assertEqual(self.distribution, copy)
-        copy.interval = copy.interval.intersection_with(
+        copied = copy.deepcopy(self.distribution)
+        self.assertEqual(self.distribution, copied)
+        copied.interval = copied.interval.intersection_with(
             SimpleInterval.from_data(-1, 1, Bound.CLOSED, Bound.CLOSED)
         )
-        self.assertNotEqual(self.distribution, copy)
+        self.assertNotEqual(self.distribution, copied)
 
     def test_sample(self):
         samples = self.distribution.sample(100)

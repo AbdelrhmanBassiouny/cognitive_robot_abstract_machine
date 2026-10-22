@@ -4,6 +4,7 @@ Grounding relational probabilistic circuits for queries, independent of the circ
 
 from __future__ import annotations
 
+import copy
 import enum
 import itertools
 from dataclasses import dataclass, field, replace
@@ -567,7 +568,7 @@ class RelationalGrounding:
         relational_circuit = self.relational_circuit
         if relational_circuit.class_probabilistic_circuit is None:
             raise CircuitNotFittedError()
-        circuit = relational_circuit.class_probabilistic_circuit.__deepcopy__()
+        circuit = copy.deepcopy(relational_circuit.class_probabilistic_circuit)
         if not relational_circuit.exchangeable_distribution_templates:
             return circuit
         instance = query.construct_instance()

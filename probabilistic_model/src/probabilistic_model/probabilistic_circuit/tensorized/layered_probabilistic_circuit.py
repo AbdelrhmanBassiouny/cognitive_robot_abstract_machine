@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass
 
 import numpy as np
 from random_events.product_algebra import Event, SimpleEvent, VariableMap
 from random_events.variable import Symbolic, Variable
 from sortedcontainers import SortedSet
-from typing_extensions import Dict, Iterable, List, Optional, Self, Tuple, Type
+from typing_extensions import Any, Dict, Iterable, List, Optional, Self, Tuple, Type
 
+from krrood.patterns.dataclass_deep_copy import DataclassDeepcopyMixin
 from probabilistic_model.distributions.distributions import (
     IntegerDistribution,
     SymbolicDistribution,
@@ -121,7 +123,7 @@ class LayerNode:
 
 
 @dataclass(eq=False)
-class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode]):
+class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode], DataclassDeepcopyMixin):
     """
     A probabilistic circuit whose units are grouped into layers of numpy arrays.
 
@@ -328,7 +330,7 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode]):
     def log_truncated(
         self, event: Event, singleton_allowed: bool = False
     ) -> Tuple[Optional[Self], float]:
-        result = self.__deepcopy__()
+        result = copy.deepcopy(self)
         return result.log_truncated_in_place(event, singleton_allowed)
 
     def log_truncated_in_place(
@@ -513,7 +515,7 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode]):
         return self, log_probability
 
     def log_conditional(self, point: PartialPointType) -> Tuple[Optional[Self], float]:
-        result = self.__deepcopy__()
+        result = copy.deepcopy(self)
         return result.log_conditional_in_place(point)
 
     def log_conditional_in_place(
@@ -604,7 +606,7 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode]):
         self.variables = variables
 
     def marginal(self, variables: Iterable[Variable]) -> Optional[Self]:
-        result = self.__deepcopy__()
+        result = copy.deepcopy(self)
         if result.marginal_in_place(variables) is None:
             return None
         return result
@@ -621,7 +623,7 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode]):
         return self.simplify()
 
     def restrict_to_variables(self, variables: Iterable[Variable]) -> Optional[Self]:
-        result = self.__deepcopy__()
+        result = copy.deepcopy(self)
         return result.restrict_to_variables_in_place(variables)
 
     def restrict_to_variables_in_place(
@@ -812,7 +814,7 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode]):
     def mixture_of(cls, components: List[Self], log_weights: Iterable[float]) -> Self:
         log_weights = list(log_weights)
         ProbabilisticCircuitRepresentation.validate_mixture(components, log_weights)
-        copies = [component.__deepcopy__() for component in components]
+        copies = [copy.deepcopy(component) for component in components]
         root = SumLayer.mixture_of([copy.root for copy in copies], log_weights)
         root.normalize_own()
         return cls(SortedSet(components[0].variables), root)
@@ -825,10 +827,13 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode]):
             variables |= factor.variables
         copies = []
         for factor in factors:
-            copy = factor.__deepcopy__()
-            copy.restore_variables(variables)
-            copies.append(copy)
-        return cls(variables, ProductLayer.product_of([copy.root for copy in copies]))
+            factor_copy = copy.deepcopy(factor)
+            factor_copy.restore_variables(variables)
+            copies.append(factor_copy)
+        return cls(
+            variables,
+            ProductLayer.product_of([factor_copy.root for factor_copy in copies]),
+        )
 
     # %% operations on nodes
 
@@ -926,9 +931,3 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode]):
                 attached, np.array(layer_nodes), np.array(children)
             )
         self.reset_scopes()
-
-    def __deepcopy__(self, memo=None) -> Self:
-        return self.__class__(SortedSet(self.variables), self.root.__deepcopy__({}))
-
-    def __copy__(self) -> Self:
-        return self.__deepcopy__()

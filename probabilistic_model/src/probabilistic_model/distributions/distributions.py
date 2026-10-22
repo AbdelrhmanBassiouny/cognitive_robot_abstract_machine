@@ -8,6 +8,7 @@ from typing import Optional, Set as PythonSet
 import numpy as np
 import numpy.typing as npt
 import plotly.graph_objects as go
+from krrood.patterns.dataclass_deep_copy import DataclassDeepcopyMixin
 from probabilistic_model.exceptions import UndefinedOperationError
 from random_events.interval import Interval, SimpleInterval, Bound, singleton, closed
 from random_events.product_algebra import Event, SimpleEvent, VariableMap
@@ -31,7 +32,7 @@ from random_events.variable import Variable, Continuous, Symbolic, Integer
 
 
 @dataclass
-class UnivariateDistribution(ProbabilisticModel):
+class UnivariateDistribution(ProbabilisticModel, DataclassDeepcopyMixin):
     """
     Abstract Base class for Univariate distributions.
     """
@@ -404,25 +405,6 @@ class DiscreteDistribution(UnivariateDistribution):
         result.normalize()
         return result, np.log(probability)
 
-    def __copy__(self) -> Self:
-        return self.__class__(variable=self.variable, probabilities=self.probabilities)
-
-    def __deepcopy__(self, memo=None) -> Self:
-        if memo is None:
-            memo = {}
-        id_self = id(self)
-        if id_self in memo:
-            return memo[id_self]
-        import copy
-
-        variable = self.variable.__class__(
-            name=self.variable.name, domain=self.variable.domain
-        )
-        probabilities = copy.deepcopy(self.probabilities, memo)
-        result = self.__class__(variable=variable, probabilities=probabilities)
-        memo[id_self] = result
-        return result
-
     def __repr__(self):
         return f"P({self.variable.name})"
 
@@ -714,25 +696,6 @@ class DiracDeltaDistribution(ContinuousDistribution):
 
     def __repr__(self):
         return f"δ({self.variable.name})"
-
-    def __copy__(self):
-        return self.__class__(
-            variable=self.variable, location=self.location, density_cap=self.density_cap
-        )
-
-    def __deepcopy__(self, memo=None):
-        if memo is None:
-            memo = {}
-        id_self = id(self)
-        if id_self in memo:
-            return memo[id_self]
-
-        variable = Continuous(self.variable.name)
-        result = self.__class__(
-            variable=variable, location=self.location, density_cap=self.density_cap
-        )
-        memo[id_self] = result
-        return result
 
     def plot(self, **kwargs) -> List:
         lower_border = self.location - 1

@@ -23,6 +23,7 @@ from typing_extensions import (
     TYPE_CHECKING,
 )
 
+from krrood.patterns.dataclass_deep_copy import DataclassDeepcopyMixin
 from probabilistic_model.exceptions import (
     EventIsNotABoxError,
     InvalidMomentOrderError,
@@ -103,7 +104,9 @@ class MomentIntegration:
 
 
 @dataclasses.dataclass
-class TruncatedMultivariateGaussianDistribution(ProbabilisticModel):
+class TruncatedMultivariateGaussianDistribution(
+    ProbabilisticModel, DataclassDeepcopyMixin
+):
     """
     A Gaussian confined to a box, which is what is left of one once part of the space is
     ruled out.
@@ -357,7 +360,7 @@ class TruncatedMultivariateGaussianDistribution(ProbabilisticModel):
             return None
         if number_of_kept_variables < len(self.variables):
             raise NoClosedFormError(type(self), type(self).marginal)
-        return self.__copy__()
+        return copy.deepcopy(self)
 
     def moment(self, order: OrderType, center: CenterType) -> MomentType:
         """
@@ -500,20 +503,3 @@ class TruncatedMultivariateGaussianDistribution(ProbabilisticModel):
                     size=amount,
                 )
         return samples
-
-    def __copy__(self) -> Self:
-        return dataclasses.replace(self, untruncated=copy.copy(self.untruncated))
-
-    def __deepcopy__(self, memo=None) -> Self:
-        if memo is None:
-            memo = {}
-        id_self = id(self)
-        if id_self in memo:
-            return memo[id_self]
-        result = dataclasses.replace(
-            self,
-            untruncated=copy.deepcopy(self.untruncated, memo),
-            box=self.box.__deepcopy__(),
-        )
-        memo[id_self] = result
-        return result

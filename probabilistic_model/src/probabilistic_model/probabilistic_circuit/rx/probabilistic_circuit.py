@@ -268,7 +268,12 @@ class Unit(SubclassJSONSerializer, ABC):
         else:
             return id(self)
 
-    def copy_without_graph(self):
+    def copy_without_graph(self, memo: dict[int, Any] | None = None) -> Self:
+        """
+        :param memo: The objects already copied during the deep copy this copy is part
+            of, by their id.
+        :return: A deep copy of this unit that belongs to no circuit.
+        """
         result = self.empty_copy()
         result.result_of_current_query = self.result_of_current_query
         return result
@@ -364,7 +369,7 @@ class LeafUnit(Unit):
         )
 
     def support(self):
-        self.result_of_current_query = self.distribution.support  # .__deepcopy__()
+        self.result_of_current_query = self.distribution.support
 
     def simplify(self):
         if self.distribution is None:
@@ -441,8 +446,8 @@ class LeafUnit(Unit):
         else:
             self.result_of_current_query = 0.0
 
-    def copy_without_graph(self):
-        return self.__class__(distribution=self.distribution.__deepcopy__())
+    def copy_without_graph(self, memo: dict[int, Any] | None = None) -> Self:
+        return self.__class__(distribution=copy.deepcopy(self.distribution, memo))
 
     def replace_by_mixture(
         self, truncations: Iterable[Tuple[Optional[ProbabilisticModel], float]]
@@ -636,7 +641,7 @@ class SumUnit(InnerUnit):
     def support(self):
         support = self.subcircuits[0].result_of_current_query
         for subcircuit in self.subcircuits[1:]:
-            support |= subcircuit.result_of_current_query.__deepcopy__()
+            support |= copy.deepcopy(subcircuit.result_of_current_query)
         self.result_of_current_query = support
 
     @property
@@ -982,9 +987,6 @@ class ProductUnit(InnerUnit):
             )
             log_max += subcircuit.result_of_current_query[1]
         self.result_of_current_query = arg_log_max, log_max
-
-    def __copy__(self):
-        return self.empty_copy()
 
     def simplify(self):
 
@@ -1447,7 +1449,7 @@ class ProbabilisticCircuit(GroundableCircuit[Unit], SubclassJSONSerializer):
 
         # truncate a deep copy of the circuit to each simple set
         conditional_circuits = list(
-            self.__deepcopy__().log_truncated_of_simple_event_in_place(
+            copy.deepcopy(self).log_truncated_of_simple_event_in_place(
                 simple_event, singleton_allowed
             )
             for simple_event in event.simple_sets
@@ -1612,7 +1614,7 @@ class ProbabilisticCircuit(GroundableCircuit[Unit], SubclassJSONSerializer):
     def log_conditional(
         self, point: Dict[Variable, Any]
     ) -> Tuple[Optional[Self], float]:
-        result = self.__deepcopy__()
+        result = copy.deepcopy(self)
         return result.log_conditional_in_place(point)
 
     # %% operations on nodes
@@ -1694,11 +1696,11 @@ class ProbabilisticCircuit(GroundableCircuit[Unit], SubclassJSONSerializer):
         """
         root = ProductUnit(probabilistic_circuit=self)
         for copies in products.conditioned_copies:
-            copy = copies.circuit.__deepcopy__()
-            copy.condition_on_point_in_place(products.points[index])
-            copy.restrict_to_variables_in_place(copies.variables)
-            copy.update_variables(copies.renaming)
-            root.add_subcircuit(self.mount(copy.root)[copy.root.index])
+            conditioned = copy.deepcopy(copies.circuit)
+            conditioned.condition_on_point_in_place(products.points[index])
+            conditioned.restrict_to_variables_in_place(copies.variables)
+            conditioned.update_variables(copies.renaming)
+            root.add_subcircuit(self.mount(conditioned.root)[conditioned.root.index])
         for variable, values in products.point_masses.items():
             root.add_subcircuit(leaf(make_dirac(variable, values[index]), self))
         if products.components:
@@ -1780,8 +1782,8 @@ class ProbabilisticCircuit(GroundableCircuit[Unit], SubclassJSONSerializer):
         :param other: A circuit to copy into this one.
         :return: The root of the copy, a unit of this circuit.
         """
-        copy = other.__deepcopy__()
-        return self.mount(copy.root)[copy.root.index]
+        copied = copy.deepcopy(other)
+        return self.mount(copied.root)[copied.root.index]
 
     def marginal(self, variables: Iterable[Variable]) -> Optional[Self]:
         result = self.restrict_to_variables(variables)
@@ -1798,7 +1800,7 @@ class ProbabilisticCircuit(GroundableCircuit[Unit], SubclassJSONSerializer):
         :param variables: The variables to keep.
         :return: The restricted copy, or ``None`` if none of ``variables`` are modeled.
         """
-        result = self.__deepcopy__()
+        result = copy.deepcopy(self)
         return result.restrict_to_variables_in_place(variables)
 
     def sample(self, amount: int) -> npt.NDArray:
@@ -1882,27 +1884,12 @@ class ProbabilisticCircuit(GroundableCircuit[Unit], SubclassJSONSerializer):
         """
         return self.__class__()
 
-    def __deepcopy__(self, memo=None) -> Self:
-        """
-        Deep copy of the circuit.
-
-        :param memo: A dictionary that is used to keep track of objects that have
-            already been copied.
-        :return: A deep copy of the circuit.
-        """
-        if memo is None:
-            memo = {}
-        id_self = id(self)
-        if id_self in memo:
-            return memo[id_self]
-
-        # Create a new empty circuit
+    def __deepcopy__(self, memo: dict[int, Any] | None = None) -> Self:
         result = self.empty_copy()
-        memo[id_self] = result
 
         # remap nodes to new copies
         remapped_indices = {
-            node.index: node.copy_without_graph() for node in self.nodes()
+            node.index: node.copy_without_graph(memo) for node in self.nodes()
         }
 
         # add copied nodes
@@ -2288,8 +2275,8 @@ class ShallowProbabilisticCircuit(ProbabilisticCircuit):
 
     def event_of_higher_density(self, other: Self, tolerance: float = 10e-8) -> Event:
         """
-        Construct the event where this shallow circuit has a higher density than
-        another one.
+        Construct the event where this shallow circuit has a higher density than another
+        one.
 
         .. note::
 

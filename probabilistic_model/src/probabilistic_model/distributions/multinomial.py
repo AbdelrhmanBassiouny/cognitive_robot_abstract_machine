@@ -5,6 +5,7 @@ import numpy as np
 import numpy.typing as npt
 from typing_extensions import Self, Any, Iterable, List, Optional, Tuple, Dict
 
+from krrood.patterns.dataclass_deep_copy import DataclassDeepcopyMixin
 from probabilistic_model.exceptions import ShapeMismatchError
 from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
     SymbolicDistribution,
@@ -20,7 +21,7 @@ from random_events.variable import Symbolic, Variable
 
 
 @dataclass
-class MultinomialDistribution(ProbabilisticModel):
+class MultinomialDistribution(ProbabilisticModel, DataclassDeepcopyMixin):
     """
     A multinomial distribution over symbolic random variables.
     """
@@ -109,30 +110,6 @@ class MultinomialDistribution(ProbabilisticModel):
         event = SimpleEvent.from_data(point)
         event.fill_missing_variables(self.variables)
         return self.log_truncated(event.as_composite_set())
-
-    def __copy__(self) -> Self:
-        """
-        :return: a shallow copy of the distribution.
-        """
-        return MultinomialDistribution(self.variables, self.probabilities)
-
-    def __deepcopy__(self, memo=None) -> Self:
-        """
-        :param memo: A dictionary that is used to keep track of objects that have already been copied.
-        :return: a deep copy of the distribution.
-        """
-        if memo is None:
-            memo = {}
-        id_self = id(self)
-        if id_self in memo:
-            return memo[id_self]
-        import copy
-
-        variables = copy.deepcopy(self.variables, memo)
-        probabilities = copy.deepcopy(self.probabilities, memo)
-        result = MultinomialDistribution(variables, probabilities)
-        memo[id_self] = result
-        return result
 
     def __eq__(self, other: Self) -> bool:
         """

@@ -691,7 +691,7 @@ class TestSampling:
 
 class TestCopying:
     def test_a_copy_moves_without_moving_the_original(self, independent, horizontal):
-        copied = copy.copy(independent)
+        copied = copy.deepcopy(independent)
         copied.apply_translation({horizontal: 10.0})
         assert mean_of(independent, horizontal) == 1.0
         assert mean_of(copied, horizontal) == 11.0
