@@ -3,9 +3,10 @@ GARMI transports a bowl and a spoon across the apartment.
 
 The bowl starts on the kitchen counter and the spoon inside a drawer, and both are carried
 to the table. Running with :attr:`~coraplex.datastructures.enums.ExecutionType.REAL` drives
-the actual robot and takes the world from the running world server. The default runs the
-whole plan in simulation against a world built from the apartment's MuJoCo scene and
-GARMI's URDF, so nothing on the network is needed.
+the actual robot and takes the world from the running world server, merging the apartment
+into it unless the server holds it already. The default runs the whole plan in simulation
+against a world built from the apartment's MuJoCo scene and GARMI's URDF, so nothing on
+the network is needed.
 
 Needs the ``iai_garmi_apartment`` and ``garmi_description`` packages built in the
 workspace, since the scene and the robot description are read from their share
@@ -92,7 +93,7 @@ class SceneBody(StrEnum):
 
     BOWL = "bowl"
     """
-    The transported bowl, which also marks whether the scene was already populated.
+    The transported bowl.
     """
 
     SPOON = "spoon"
@@ -103,6 +104,11 @@ class SceneBody(StrEnum):
     SPOON_DRAWER = "drawer_1"
     """
     The drawer the spoon starts in.
+    """
+
+    APARTMENT = "apartment"
+    """
+    The apartment's origin, which marks whether the scene was already populated.
     """
 
 
@@ -230,28 +236,32 @@ class GarmiApartmentDemonstration(RobotDemonstration):
 
     ros_node_name: str = "garmi_demo_node"
 
-    def build_simulated_world(self) -> World:
+    def scene_specification(self) -> WorldSpecification:
         """
-        Put GARMI into the apartment's MuJoCo scene.
-
         The scene keeps its collision geometry in a file that is not loaded, so every
         geom has to stand in for it.
+
+        :return: The apartment's MuJoCo scene.
         """
         return WorldSpecification.from_mjcf(
-            SceneFile.APARTMENT.path,
-            use_visual_as_collision_backup=True,
-            robots=[
-                RobotSpecification(
-                    semantic_annotation_type=self.used_robot,
-                    odom_T_robot_start=ScenePose.GARMI_START.value.transform,
-                    drive_translation_velocity_limits=GarmiDrive.DEMONSTRATION.value.translation,
-                    drive_rotation_velocity_limits=GarmiDrive.DEMONSTRATION.value.rotation,
-                )
-            ],
-        ).to_domain_object()
+            SceneFile.APARTMENT.path, use_visual_as_collision_backup=True
+        )
+
+    def robot_specification(self) -> RobotSpecification:
+        """
+        :return: GARMI at its start, driving at the demonstration's speed.
+        """
+        return RobotSpecification(
+            semantic_annotation_type=self.used_robot,
+            odom_T_robot_start=ScenePose.GARMI_START.value.transform,
+            drive_translation_velocity_limits=GarmiDrive.DEMONSTRATION.value.translation,
+            drive_rotation_velocity_limits=GarmiDrive.DEMONSTRATION.value.rotation,
+        )
 
     def is_scene_populated(self, world: World) -> bool:
-        return world.is_kinematic_structure_entity_in_world_by_name(SceneBody.BOWL)
+        return world.is_kinematic_structure_entity_in_world_by_name(
+            SceneBody.APARTMENT
+        )
 
     def populate_scene(self, world: World) -> None:
         """
