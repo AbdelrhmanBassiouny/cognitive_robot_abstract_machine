@@ -6,6 +6,7 @@ claude/krrimage-depth-segmentation	domain-models
 ccr-d4b2f7f0-b27rlq	domain-models
 claude/krrspatial-projection-interface	domain-models
 claude/krrspatial-frame-checked-arithmetic	domain-models
+claude/krrimage-video-on-a-plane	domain-models
 claude/split-performatives-prs-xbluus-agreement	eql-performatives
 claude/split-performatives-prs-xbluus	eql-performatives
 claude/performatives-clean	eql-performatives

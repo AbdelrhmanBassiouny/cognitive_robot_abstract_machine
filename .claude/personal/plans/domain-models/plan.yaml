@@ -71,7 +71,9 @@ items:
   notes: 'Camera model = Projection[ImagePoint, Ray3] (project, deproject with depth), behind
     krrimage''s optional krrspatial extra. First user: montessori perception (CameraIntrinsics.deproject,
     RgbdFrame.project, MeasuredSurfaceFinder''s inline deprojection, orthophoto homography),
-    numpy-batched over whole images, so the model needs an array path.'
+    numpy-batched over whole images, so the model needs an array path. Also adds an image''s
+    placement on a plane (ImagePoint to Point2, like the orthophoto''s region_T_pixel) and the
+    plane-to-image homography composed from OrthogonalProjection and the camera.'
 - id: orthogonal-projection-in-krrspatial
   title: '#518''s OrthogonalProjection (project, embed, preimage) ported onto krrspatial'
   branch: ccr-d4b2f7f0-b27rlq
@@ -103,3 +105,16 @@ items:
   depends_on:
   - krrspatial-numeric
   notes: Subtracting points in different frames is silently accepted today; raise ReferenceFrameMismatchError.
+- id: video-on-a-plane
+  title: Show a video on a plane of the world (a wall, a table top) in a camera image or through
+    a projector
+  branch: claude/krrimage-video-on-a-plane
+  track: image-consumers
+  status: not_started
+  depends_on:
+  - image-extensions
+  notes: 'Per frame: placement, embed and camera project collapse into one video-to-camera homography
+    and one cv2.warpPerspective. Optional occlusion from the depth image (draw only where depth
+    matches the plane). A projector is a pinhole camera run backwards, calibrated instead of the
+    camera; wall planes come from the twin. Demo ideas: the robot shown a video of its own pickup;
+    the robot''s live capture projected onto the apartment walls while it works.'
