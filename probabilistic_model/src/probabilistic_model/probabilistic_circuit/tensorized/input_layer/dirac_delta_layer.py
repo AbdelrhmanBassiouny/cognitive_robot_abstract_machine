@@ -139,19 +139,22 @@ class DiracDeltaLayer(AbstractContinuousLayer):
     def contains(self, assignment: Interval) -> NodeMask:
         """
         :param assignment: The assignment of the variable of this layer.
-        :return: Whether the assignment contains the location of every node.
+        :return: Whether the assignment reaches the mass of every node, up to
+            :attr:`tolerance`.
         """
+        lower_of_window = self.location - self.tolerance
+        upper_of_window = self.location + self.tolerance
         inside = np.zeros(self.number_of_nodes, dtype=bool)
-        for interval in assignment.simple_sets:
+        for simple_interval in assignment.simple_sets:
             left = (
-                interval.lower <= self.location
-                if interval.left == Bound.CLOSED
-                else interval.lower < self.location
+                simple_interval.lower <= upper_of_window
+                if simple_interval.left == Bound.CLOSED
+                else simple_interval.lower < upper_of_window
             )
             right = (
-                self.location <= interval.upper
-                if interval.right == Bound.CLOSED
-                else self.location < interval.upper
+                lower_of_window <= simple_interval.upper
+                if simple_interval.right == Bound.CLOSED
+                else lower_of_window < simple_interval.upper
             )
             inside |= left & right
         return inside
@@ -177,8 +180,6 @@ class DiracDeltaLayer(AbstractContinuousLayer):
         variables: SortedSet,
         cache: Optional[QueryCache] = None,
     ) -> NodeValues:
-        # all of the mass sits on one point, so whether a bound is open or closed
-        # decides whether it is counted
         return self.contains(event[variables[self.variable]]).astype(float)
 
     def log_conditional_of_value(self, value: float) -> LayerWithLogProbabilities:
