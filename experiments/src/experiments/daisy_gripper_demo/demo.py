@@ -107,22 +107,20 @@ class DAiSyGripperDemonstration(RobotDemonstration):
     the fingers settle into the state they just reached.
     """
 
-    def build_simulated_world(self) -> World:
+    def scene_specification(self) -> WorldSpecification:
         """
-        Build a world holding nothing but the DAiSy, since gripper motions touch no
-        scene objects.
+        :return: A world holding nothing, since gripper motions touch no scene objects.
         """
-        return WorldSpecification(
-            world_parser=None,
-            robots=[
-                RobotSpecification(
-                    semantic_annotation_type=self.used_robot,
-                    odom_T_robot_start=HomogeneousTransformationMatrix.from_xyz_rpy(
-                        1, 1
-                    ),
-                )
-            ],
-        ).to_domain_object()
+        return WorldSpecification(world_parser=None)
+
+    def robot_specification(self) -> RobotSpecification:
+        """
+        :return: The DAiSy at its start position.
+        """
+        return RobotSpecification(
+            semantic_annotation_type=self.used_robot,
+            odom_T_robot_start=HomogeneousTransformationMatrix.from_xyz_rpy(1, 1),
+        )
 
     def is_scene_populated(self, world: World) -> bool:
         return True
