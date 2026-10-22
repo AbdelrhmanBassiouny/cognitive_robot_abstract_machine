@@ -34,6 +34,7 @@ from cramph.nodes_for_testing import (
     NodeObservingAPredicate,
     NodeReferringToAWorldEntity,
     NodeWithOwnStructureCopy,
+    SequenceCreatingItsSteps,
     SpecializedNodeWithOwnStructureCopy,
 )
 from krrood.adapters.json_serializer import to_json
@@ -370,6 +371,38 @@ def test_children_of_compiled_goal_are_its_children_once_after_json_round_trip(
     assert sequence_copy.nodes == [
         msc_copy.get_node_by_index(node.index) for node in sequence.nodes
     ]
+
+
+def assert_children_keep_their_order_after_json_round_trip(
+    msc: Statechart, sequence: Sequence
+) -> None:
+    """
+    Asserts that the deserialized `sequence` holds the copies of its children in the
+    order `sequence` holds them.
+    """
+    msc_copy = Statechart.from_json(
+        json.loads(json.dumps(msc.to_json())), context=StatechartContext(world=World())
+    )
+    sequence_copy = msc_copy.get_node_by_index(sequence.index)
+    assert sequence_copy.nodes == [
+        msc_copy.get_node_by_index(node.index) for node in sequence.nodes
+    ]
+
+
+def test_a_replaced_step_keeps_its_position_after_json_round_trip() -> None:
+    msc = Statechart(context=StatechartContext(world=World()))
+    msc.add_node(sequence := SequenceCreatingItsSteps())
+    msc.replace(sequence.nodes[1], ConstTrueNode())
+
+    assert_children_keep_their_order_after_json_round_trip(msc, sequence)
+
+
+def test_an_inserted_step_keeps_its_position_after_json_round_trip() -> None:
+    msc = Statechart(context=StatechartContext(world=World()))
+    msc.add_node(sequence := SequenceCreatingItsSteps())
+    sequence.insert_before(sequence.nodes[1], ConstTrueNode())
+
+    assert_children_keep_their_order_after_json_round_trip(msc, sequence)
 
 
 def test_node_referenced_by_another_node_is_one_instance_after_json_round_trip() -> (
