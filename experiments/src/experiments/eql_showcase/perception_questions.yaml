@@ -9,22 +9,26 @@
 - scope: current_state
   text: What does the camera see?
   code: |
-    piece = variable(MontessoriShape, world.semantic_annotations)
-    an(entity(piece.root))
+    an(entity(variable(MontessoriShape, world.semantic_annotations).root))
 
 - scope: current_state
   text: Which pieces did it find on the table?
   code: |
-    piece = variable(MontessoriShape, world.semantic_annotations)
-    table = variable(Table, world.semantic_annotations)
-    an(entity(piece.root).where(SupportedBy(piece.root, table.root)))
+    an(
+        entity((piece := variable(MontessoriShape, world.semantic_annotations)).root)
+        .where(SupportedBy(piece.root, variable(Table, world.semantic_annotations).root))
+    )
 
 - scope: current_state
   text: Which pieces did it find on the board?
   code: |
-    piece = variable(MontessoriShape, world.semantic_annotations)
-    board = variable(Body, world.bodies)
-    an(entity(piece.root).where(board.name.name == 'board', SupportedBy(piece.root, board)))
+    an(
+        entity((piece := variable(MontessoriShape, world.semantic_annotations)).root)
+        .where(
+            (board := variable(Body, world.bodies)).name.name == 'board',
+            SupportedBy(piece.root, board),
+        )
+    )
 
 - scope: current_state
   text: Which holes did it find in the board?
@@ -34,9 +38,10 @@
 - scope: current_state
   text: Is any piece standing in a hole?
   code: |
-    piece = variable(MontessoriShape, world.semantic_annotations)
-    hole = variable(Region, world.regions)
-    an(entity(piece.root).where(InsideRegion(piece.root, hole)))
+    an(
+        entity((piece := variable(MontessoriShape, world.semantic_annotations)).root)
+        .where(InsideRegion(piece.root, variable(Region, world.regions)))
+    )
 
 - scope: current_state
   text: Which cubes did it see?

@@ -20,35 +20,42 @@
 - scope: current_state
   text: What is the milk standing on?
   code: |
-    milk = variable(Milk, world.semantic_annotations)
-    surface = variable(Body, world.bodies_with_collision)
-    an(entity(surface).where(SupportedBy(milk.root, surface)))
+    an(
+        entity(surface := variable(Body, world.bodies_with_collision))
+        .where(SupportedBy(variable(Milk, world.semantic_annotations).root, surface))
+    )
 
 - scope: current_state
   text: What is on the table?
   code: |
-    table = variable(Table, world.semantic_annotations)
-    thing = variable(Body, world.bodies_with_collision)
-    an(entity(thing).where(SupportedBy(thing, table.root)))
+    an(
+        entity(body_on_table := variable(Body, world.bodies_with_collision))
+        .where(SupportedBy(body_on_table, variable(Table, world.semantic_annotations).root))
+    )
 
 - scope: current_state
   text: What is the spoon touching?
   code: |
-    spoon = variable(Spoon, world.semantic_annotations)
-    thing = variable(Body, world.bodies_with_collision)
-    an(entity(thing).where(thing != spoon.root, InContactWith(spoon.root, thing)))
+    an(
+        entity(touched_body := variable(Body, world.bodies_with_collision))
+        .where(
+            touched_body != (spoon_body := variable(Spoon, world.semantic_annotations).root),
+            InContactWith(spoon_body, touched_body),
+        )
+    )
 
 - scope: current_state
   text: Which handles open a drawer?
   code: |
-    drawer = variable(Drawer, world.semantic_annotations)
-    an(entity(drawer.handle.root))
+    an(entity(variable(Drawer, world.semantic_annotations).handle.root))
 
 - scope: current_state
   text: How many drawers does each cabinet have?
   code: |
-    cabinet = variable(Cabinet, world.semantic_annotations)
-    set_of(cabinet.root, eql.count(flat_variable(cabinet.drawers))).grouped_by(cabinet.root)
+    set_of(
+        (cabinet := variable(Cabinet, world.semantic_annotations)).root,
+        eql.count(flat_variable(cabinet.drawers)),
+    ).grouped_by(cabinet.root)
 
 - scope: current_state
   text: Put the milk back where it was
@@ -132,7 +139,9 @@
 - scope: current_state
   text: How much time went into each kind of action?
   code: |
-    set_of(kind := action.action_type, eql.count(action), eql.sum(action.seconds)).grouped_by(kind)
+    set_of(
+        action_type := action.action_type, eql.count(action), eql.sum(action.seconds)
+    ).grouped_by(action_type)
 
 - scope: current_state
   text: What did you do with the milk?
@@ -147,20 +156,35 @@
 - scope: episodic_memory
   text: In which runs did you handle the milk?
   code: |
-    an(entity(run).where(exists(step := flat_variable(run.actions), step.acted_on == 'Milk')))
+    an(
+        entity(run).where(
+            exists(action_in_run := flat_variable(run.actions), action_in_run.acted_on == 'Milk')
+        )
+    )
 
 - scope: episodic_memory
   text: In which runs did you handle both the milk and the bowl?
   code: |
-    milk_step = flat_variable(run.actions)
-    bowl_step = flat_variable(run.actions)
-    an(entity(run).where(exists(milk_step, milk_step.acted_on == 'Milk'), exists(bowl_step, bowl_step.acted_on == 'Bowl')))
+    an(
+        entity(run).where(
+            exists(milk_action := flat_variable(run.actions), milk_action.acted_on == 'Milk'),
+            exists(bowl_action := flat_variable(run.actions), bowl_action.acted_on == 'Bowl'),
+        )
+    )
 
 - scope: episodic_memory
   text: In which runs did no pick up take longer than 20 seconds?
   code: |
-    pick_up = flat_variable(run.actions)
-    an(entity(run).where(not_(exists(pick_up, and_(pick_up.action_type == 'PickUpAction', pick_up.seconds > 20)))))
+    an(
+        entity(run).where(
+            not_(
+                exists(
+                    action_in_run := flat_variable(run.actions),
+                    and_(action_in_run.action_type == 'PickUpAction', action_in_run.seconds > 20),
+                )
+            )
+        )
+    )
 
 - scope: episodic_memory
   text: What were your slowest pick ups ever?
@@ -170,4 +194,6 @@
 - scope: episodic_memory
   text: How often have you done each kind of action, over all runs?
   code: |
-    set_of(kind := action.action_type, eql.count(action), eql.sum(action.seconds)).grouped_by(kind)
+    set_of(
+        action_type := action.action_type, eql.count(action), eql.sum(action.seconds)
+    ).grouped_by(action_type)

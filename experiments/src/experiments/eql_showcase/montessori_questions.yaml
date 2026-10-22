@@ -18,8 +18,7 @@
 - scope: current_state
   text: What does the camera see?
   code: |
-    piece = variable(MontessoriShape, world.semantic_annotations)
-    an(entity(piece.root))
+    an(entity(variable(MontessoriShape, world.semantic_annotations).root))
 
 - scope: current_state
   text: Which holes did it see?
@@ -29,16 +28,18 @@
 - scope: current_state
   text: Which pieces are in a hole now?
   code: |
-    piece = variable(MontessoriShape, world.semantic_annotations)
-    hole = variable(Region, world.regions)
-    an(entity(piece.root).where(InsideRegion(piece.root, hole)))
+    an(
+        entity((piece := variable(MontessoriShape, world.semantic_annotations)).root)
+        .where(InsideRegion(piece.root, variable(Region, world.regions)))
+    )
 
 - scope: current_state
   text: Which pieces are still on the table?
   code: |
-    piece = variable(MontessoriShape, world.semantic_annotations)
-    table = variable(Table, world.semantic_annotations)
-    an(entity(piece.root).where(SupportedBy(piece.root, table.root)))
+    an(
+        entity((piece := variable(MontessoriShape, world.semantic_annotations)).root)
+        .where(SupportedBy(piece.root, variable(Table, world.semantic_annotations).root))
+    )
 
 - scope: current_state
   text: "Resolve: which cylinder is there?"
@@ -50,9 +51,10 @@
   text: "Resolve: does the triangular prism still rest on the table?"
   acts: true
   code: |
-    piece = a(SeenPiece)(kind=TriangularPrismShape)
-    piece.where(SupportedBy(piece.root, montessori.twin.table))
-    resolve(piece)
+    resolve(
+        (triangular_prism := a(SeenPiece)(kind=TriangularPrismShape))
+        .where(SupportedBy(triangular_prism.root, montessori.twin.table))
+    )
 
 - scope: current_state
   text: "Resolve: which side to take the triangular prism from?"
@@ -64,9 +66,7 @@
   text: "Resolve: which arm is free?"
   acts: true
   code: |
-    arm = an(Arm)
-    arm.where(GripperIsFree(arm.end_effector))
-    resolve(arm)
+    resolve((arm := an(Arm)).where(GripperIsFree(arm.end_effector)))
 
 - scope: current_state
   text: "Resolve: which hole does the triangular prism go into?"
@@ -78,17 +78,29 @@
   text: "Resolve the plan: put the triangular prism into its hole"
   acts: true
   code: |
-    piece = a(SeenPiece)(kind=TriangularPrismShape)
-    piece.where(SupportedBy(piece.root, montessori.twin.table))
-    resolve(a(SortPieceAction)(piece=piece, side=..., arm=..., hole=...))
+    resolve(
+        a(SortPieceAction)(
+            piece=(triangular_prism := a(SeenPiece)(kind=TriangularPrismShape))
+            .where(SupportedBy(triangular_prism.root, montessori.twin.table)),
+            side=...,
+            arm=...,
+            hole=...,
+        )
+    )
 
 - scope: current_state
   text: "Resolve the plan: put the cylinder into its hole again"
   acts: true
   code: |
-    piece = a(SeenPiece)(kind=CylinderShape)
-    piece.where(SupportedBy(piece.root, montessori.twin.table))
-    resolve(a(SortPieceAction)(piece=piece, side=..., arm=..., hole=...))
+    resolve(
+        a(SortPieceAction)(
+            piece=(cylinder := a(SeenPiece)(kind=CylinderShape))
+            .where(SupportedBy(cylinder.root, montessori.twin.table)),
+            side=...,
+            arm=...,
+            hole=...,
+        )
+    )
 
 - scope: current_state
   text: Put the triangular prism into its hole
@@ -120,8 +132,7 @@
 - scope: current_state
   text: Which backend answered each open part?
   code: |
-    answer = variable(SlotAnswer, backends.answered)
-    an(entity(answer))
+    an(entity(variable(SlotAnswer, backends.answered)))
 
 - scope: current_state
   text: What did perception answer?
@@ -155,8 +166,7 @@
 - scope: current_state
   text: Which plans did the backends resolve?
   code: |
-    resolution = variable(PlanResolution, backends.resolutions)
-    an(entity(resolution))
+    an(entity(variable(PlanResolution, backends.resolutions)))
 
 - scope: detected_events
   text: When was each piece picked up?
@@ -176,7 +186,17 @@
 - scope: episodic_memory
   text: In which runs did you pick up a cylinder?
   code: |
-    an(entity(run).where(exists(step := flat_variable(run.actions), step.acted_on == 'seen/cylinder 1')))
+    an(
+        entity(run).where(
+            exists(
+                action_in_run := flat_variable(run.actions),
+                and_(
+                    action_in_run.action_type == 'PickUpAction',
+                    action_in_run.acted_on == 'seen/cylinder 1',
+                ),
+            )
+        )
+    )
 
 - scope: episodic_memory
   text: What were your slowest pick ups ever?
