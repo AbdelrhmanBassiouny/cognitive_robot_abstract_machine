@@ -9,10 +9,10 @@ from dataclasses import dataclass, field
 import numpy as np
 from typing_extensions import TYPE_CHECKING
 
+from krrspatial.exceptions import ReferenceFrameMismatchError
 from semantic_digital_twin.exceptions import (
     MissingReferenceFrameError,
     ObjectHasNoWidthWithoutCollision,
-    ReferenceFrameMismatchError,
 )
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 

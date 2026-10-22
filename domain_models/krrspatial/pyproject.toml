@@ -7,7 +7,7 @@ name = "krrspatial"
 authors = [
     { name = "Simon Stelter", email = "stelter@uni-bremen.de" },
 ]
-description = "Points and vectors in reference frames."
+description = "Points, vectors, rotations and transformations in reference frames."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 classifiers = [
@@ -19,6 +19,8 @@ license = "LGPL-3.0-only"
 dynamic = ["version"]
 dependencies = [
     "krrood",
+    "casadi~=3.7.0",
+    "numpy",
     "typing_extensions",
 ]
 

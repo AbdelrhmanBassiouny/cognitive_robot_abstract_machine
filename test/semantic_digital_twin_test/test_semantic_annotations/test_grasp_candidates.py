@@ -11,11 +11,11 @@ from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
     WorldEntityWithIDKwargsTracker,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from krrspatial.exceptions import ReferenceFrameMismatchError
 from semantic_digital_twin.exceptions import (
     MissingReferenceFrameError,
     NoGraspGeometry,
     ObjectHasNoWidthWithoutCollision,
-    ReferenceFrameMismatchError,
 )
 from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate

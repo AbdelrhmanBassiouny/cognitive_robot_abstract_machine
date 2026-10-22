@@ -44,10 +44,10 @@ from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
 )
 from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.exceptions import (
-    AlreadyBelongsToAWorldError,
-    ReferenceFrameMismatchError,
-)
+from krrood.adapters.object_reference import IdentifiedObject
+from krrspatial.exceptions import ReferenceFrameMismatchError
+from krrspatial.reference_frame import ReferenceFrame
+from semantic_digital_twin.exceptions import AlreadyBelongsToAWorldError
 from semantic_digital_twin.mixin import HasSimulatorProperties, UniqueSimulatorProperty
 from semantic_digital_twin.world_description.connection_properties import (
     ServoGains,
@@ -148,7 +148,7 @@ class WorldEntity(Symbol):
 
 
 @dataclass(eq=False)
-class WorldEntityWithID(WorldEntity, SubclassJSONSerializer):
+class WorldEntityWithID(WorldEntity, SubclassJSONSerializer, IdentifiedObject):
     """
     A WorldEntity that has a unique identifier.
 
@@ -376,7 +376,7 @@ class WorldEntityWithSimulatorProperties(WorldEntityWithID, HasSimulatorProperti
 
 
 @dataclass(eq=False)
-class KinematicStructureEntity(ABC, WorldEntityWithSimulatorProperties):
+class KinematicStructureEntity(WorldEntityWithSimulatorProperties, ReferenceFrame, ABC):
     """
     An entity that is part of the kinematic structure of the world.
     """

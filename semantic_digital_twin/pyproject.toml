@@ -62,6 +62,7 @@ dependencies = [
     "psutil~=5.9.0",
     "giskardpy",
     "krrood",
+    "krrspatial",
     "physics_simulators",
 ]
 license = "LGPL-3.0-only"
@@ -87,6 +88,7 @@ version = {attr = "semantic_digital_twin._version.__version__"}
 workspace = [
     "giskardpy",
     "krrood",
+    "krrspatial",
     "physics_simulators",
     "probabilistic_model",
     "random_events",
