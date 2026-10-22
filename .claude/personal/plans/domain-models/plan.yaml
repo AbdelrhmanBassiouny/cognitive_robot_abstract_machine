@@ -66,6 +66,40 @@ items:
   status: not_started
   depends_on:
   - krrimage
+  - projection-interface
   branch: claude/krrimage-depth-segmentation
-  notes: Pixel-to-spatial-point conversion (camera intrinsics) is the only krrimage part that
-    needs krrspatial; put it behind an optional extra.
+  notes: 'Camera model = Projection[ImagePoint, Ray3] (project, deproject with depth), behind
+    krrimage''s optional krrspatial extra. First user: montessori perception (CameraIntrinsics.deproject,
+    RgbdFrame.project, MeasuredSurfaceFinder''s inline deprojection, orthophoto homography),
+    numpy-batched over whole images, so the model needs an array path.'
+- id: orthogonal-projection-in-krrspatial
+  title: '#518''s OrthogonalProjection (project, embed, preimage) ported onto krrspatial'
+  branch: ccr-d4b2f7f0-b27rlq
+  pull_request_number: 518
+  track: spatial
+  status: in_progress
+  depends_on:
+  - krrspatial-numeric
+  session: https://claude.ai/code/session_01TZs6sf5V7EyZYccGYkUDyJ
+  notes: '#518 edits SemDT spatial_types.py and ReferenceFrameMismatchError, both moved by #526;
+    port after #526 lands. project() calls plane_frame._world.transform, which krrspatial frames
+    lack: add a frame-transformer interface that SemDT''s World implements.'
+- id: projection-interface
+  title: A Projection interface (project, preimage, embed) shared by orthogonal projection and
+    camera models, with Ray3
+  branch: claude/krrspatial-projection-interface
+  track: spatial
+  status: not_started
+  depends_on:
+  - orthogonal-projection-in-krrspatial
+  notes: Generic in its image and preimage types (Projection[Point2, Line3] for OrthogonalProjection).
+    embed(p, t) is the point at t on preimage(p); the inverse laws become one test suite run
+    against every implementation.
+- id: frame-checked-arithmetic
+  title: Point and vector arithmetic in krrspatial checks that both sides share a frame
+  branch: claude/krrspatial-frame-checked-arithmetic
+  track: spatial
+  status: not_started
+  depends_on:
+  - krrspatial-numeric
+  notes: Subtracting points in different frames is silently accepted today; raise ReferenceFrameMismatchError.

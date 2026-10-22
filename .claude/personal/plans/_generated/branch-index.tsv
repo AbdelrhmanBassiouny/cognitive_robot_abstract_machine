@@ -3,6 +3,9 @@ claude/krrspatial	domain-models
 claude/crollywood-refactor-shared-classes-e8jtm9	domain-models
 claude/krrollywood-on-krrimage	domain-models
 claude/krrimage-depth-segmentation	domain-models
+ccr-d4b2f7f0-b27rlq	domain-models
+claude/krrspatial-projection-interface	domain-models
+claude/krrspatial-frame-checked-arithmetic	domain-models
 claude/split-performatives-prs-xbluus-agreement	eql-performatives
 claude/split-performatives-prs-xbluus	eql-performatives
 claude/performatives-clean	eql-performatives
