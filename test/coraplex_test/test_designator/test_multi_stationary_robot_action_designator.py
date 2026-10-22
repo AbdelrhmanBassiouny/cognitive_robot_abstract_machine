@@ -1,3 +1,4 @@
+import mujoco
 import numpy as np
 import pytest
 from rustworkx import NoEdgeBetweenNodes
@@ -132,15 +133,18 @@ def graspable_annotation(world: World, body: Body) -> HasGraspCandidates:
     ).first()
 
 
-def top_down_grasp(world: World, body: Body) -> GraspCandidate:
+def top_down_grasp(
+    world: World, body: Body, height_above_origin: float = 0.0
+) -> GraspCandidate:
     """
     :param world: The world holding the annotation naming ``body``.
     :param body: The body to grasp.
-    :return: A grasp reaching down onto ``body``'s own origin.
+    :param height_above_origin: How far above ``body``'s origin the grasp holds it.
+    :return: A grasp reaching down onto ``body``, centred over its origin.
     """
     return GraspCandidate(
         graspable_annotation(world, body),
-        Pose.from_xyz_rpy(pitch=np.pi / 2, reference_frame=body),
+        Pose.from_xyz_rpy(z=height_above_origin, pitch=np.pi / 2, reference_frame=body),
     )
 
 
@@ -389,7 +393,13 @@ def physically_simulated_block_context(stationary_block_context):
             )
         )
         world.add_semantic_annotations([HasGraspCandidates(root=narrow_box)])
-    simulation = MujocoSim(world=world, headless=True)
+    # Under the default pyramidal friction cone, a held box creeps down in the grip.
+    simulation = MujocoSim(
+        world=world,
+        headless=True,
+        cone=mujoco.mjtCone.mjCONE_ELLIPTIC,
+        impratio=10.0,
+    )
     simulation.start_stepped_simulation()
     yield world, view, extensions, simulation, narrow_box
     simulation.stop_simulation()
@@ -411,6 +421,22 @@ def perform_in_physics(
     executor.execute()
 
 
+def grasp_near_the_top(
+    world: World, box: Body, depth_below_top: float = 0.01
+) -> GraspCandidate:
+    """
+    :param world: The world holding the annotation naming ``box``.
+    :param box: The box to grasp.
+    :param depth_below_top: How far below the top of ``box`` the grasp holds it.
+    :return: A top-down grasp holding ``box`` just below its top, clear of the inner
+        knuckles above Tracy's pads.
+    """
+    # Grasped deeper, the box reaches up into the inner knuckles, which push the gripper
+    # up and sideways while it closes.
+    top = box.collision.max_point.to_np()[2]
+    return top_down_grasp(world, box, height_above_origin=top - depth_below_top)
+
+
 @pytest.mark.skipif(
     not runs_in_continuous_integration(), reason="MuJoCo tests only run in CI"
 )
@@ -425,7 +451,7 @@ def test_a_pick_in_physics_leaves_the_box_to_the_grip(
     arm = left_or_only_arm(view)
     stood_on = box.parent_connection.parent
     resting_height = box.global_pose.position.to_np().flatten()[2]
-    pick = PickUpAction(grasp=top_down_grasp(world, box), arm=arm)
+    pick = PickUpAction(grasp=grasp_near_the_top(world, box), arm=arm)
     plan = Sequence(nodes=[ParkArmsAction(arms=view.all_arms), pick])
 
     perform_in_physics(plan, extensions, simulation)
@@ -459,7 +485,7 @@ def test_a_place_in_physics_leaves_the_box_to_the_release(
     plan = Sequence(
         nodes=[
             ParkArmsAction(arms=view.all_arms),
-            PickUpAction(grasp=top_down_grasp(world, box), arm=arm),
+            PickUpAction(grasp=grasp_near_the_top(world, box), arm=arm),
             PlaceAction(
                 object_designator=graspable_annotation(world, box),
                 target_location=Pose(target, reference_frame=world.root),
