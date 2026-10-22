@@ -213,18 +213,16 @@ def test_equally_named_entities_are_each_built_under_their_own_name(
     pendulums = twin_pendulum_world.pendulums
 
     assert sorted(body.name for body in built_twin_pendulums.spec.bodies) == sorted(
-        element_names.bodies.assign(body) for body in twin_pendulum_world.world.bodies
+        element_names.of(body) for body in twin_pendulum_world.world.bodies
     )
     assert sorted(joint.name for joint in built_twin_pendulums.spec.joints) == sorted(
-        element_names.joints.assign(connection)
+        element_names.of(connection)
         for pendulum in pendulums
         for connection in (pendulum.hinge, pendulum.mirrored_hinge)
     )
     assert sorted(
         actuator.name for actuator in built_twin_pendulums.spec.actuators
-    ) == sorted(
-        element_names.actuators.assign(pendulum.servo) for pendulum in pendulums
-    )
+    ) == sorted(element_names.of(pendulum.servo) for pendulum in pendulums)
 
 
 def test_one_of_equally_named_entities_keeps_the_short_name_a_unique_one_would_get(
@@ -240,15 +238,9 @@ def test_one_of_equally_named_entities_keeps_the_short_name_a_unique_one_would_g
     [hinge_name] = {pendulum.hinge.name.name for pendulum in pendulums}
     [servo_name] = {pendulum.servo.name.name for pendulum in pendulums}
 
-    assert arm_name in {
-        element_names.bodies.assign(pendulum.arm) for pendulum in pendulums
-    }
-    assert hinge_name in {
-        element_names.joints.assign(pendulum.hinge) for pendulum in pendulums
-    }
-    assert servo_name in {
-        element_names.actuators.assign(pendulum.servo) for pendulum in pendulums
-    }
+    assert arm_name in {element_names.of(pendulum.arm) for pendulum in pendulums}
+    assert hinge_name in {element_names.of(pendulum.hinge) for pendulum in pendulums}
+    assert servo_name in {element_names.of(pendulum.servo) for pendulum in pendulums}
 
 
 def test_a_shape_is_built_into_the_body_of_its_own_entity(
@@ -258,7 +250,7 @@ def test_a_shape_is_built_into_the_body_of_its_own_entity(
     spec = built_twin_pendulums.spec
 
     for pendulum in twin_pendulum_world.pendulums:
-        assert len(spec.body(element_names.bodies.assign(pendulum.arm)).geoms) == len(
+        assert len(spec.body(element_names.of(pendulum.arm)).geoms) == len(
             pendulum.arm.collision.shapes
         )
 
@@ -270,8 +262,8 @@ def test_a_joint_is_built_into_the_body_of_its_own_child(
     spec = built_twin_pendulums.spec
 
     for pendulum in twin_pendulum_world.pendulums:
-        [joint] = spec.body(element_names.bodies.assign(pendulum.arm)).joints
-        assert joint.name == element_names.joints.assign(pendulum.hinge)
+        [joint] = spec.body(element_names.of(pendulum.arm)).joints
+        assert joint.name == element_names.of(pendulum.hinge)
 
 
 def test_a_servo_drives_the_joint_of_its_own_degree_of_freedom(
@@ -281,8 +273,8 @@ def test_a_servo_drives_the_joint_of_its_own_degree_of_freedom(
     spec = built_twin_pendulums.spec
 
     for pendulum in twin_pendulum_world.pendulums:
-        actuator = spec.actuator(element_names.actuators.assign(pendulum.servo))
-        assert actuator.target == element_names.joints.assign(pendulum.hinge)
+        actuator = spec.actuator(element_names.of(pendulum.servo))
+        assert actuator.target == element_names.of(pendulum.hinge)
         assert actuator.trntype == mujoco.mjtTrn.mjTRN_JOINT
 
 
@@ -296,8 +288,8 @@ def test_a_mimic_joint_follows_the_joint_of_its_own_degree_of_freedom(
         for equality in built_twin_pendulums.spec.equalities
     ) == sorted(
         (
-            element_names.joints.assign(pendulum.mirrored_hinge),
-            element_names.joints.assign(pendulum.hinge),
+            element_names.of(pendulum.mirrored_hinge),
+            element_names.of(pendulum.hinge),
         )
         for pendulum in twin_pendulum_world.pendulums
     )
@@ -315,9 +307,7 @@ def test_a_camera_is_built_into_the_body_it_is_attached_to(
         world=twin_pendulum_world.world, file_path=str(tmp_path / "scene.xml")
     )
 
-    [built_camera] = builder.spec.body(
-        builder.element_names.bodies.assign(second.arm)
-    ).cameras
+    [built_camera] = builder.spec.body(builder.element_names.of(second.arm)).cameras
     assert built_camera.name == camera.name
 
 
@@ -426,7 +416,7 @@ def test_each_equally_named_servo_is_commanded_with_its_own_set_point(
         simulation.step_simulation(timedelta(seconds=2))
         reached = [
             simulation.simulator.get_joint_value(
-                simulation.synchronizer.element_names.joints.assign(pendulum.hinge)
+                simulation.synchronizer.element_names.of(pendulum.hinge)
             ).result
             for pendulum in pendulums
         ]
