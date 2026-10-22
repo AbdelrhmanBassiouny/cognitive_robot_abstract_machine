@@ -502,12 +502,14 @@ class QueryVariable:
         if writing is None:
             return None
         first, last = SourceExcerpt.statement_lines(writing.filename, writing.lineno)
-        statement = ast.parse(
-            "".join(
-                linecache.getline(writing.filename, number)
-                for number in range(first, last + 1)
-            ).strip()
-        ).body[0]
+        source = "".join(
+            linecache.getline(writing.filename, number)
+            for number in range(first, last + 1)
+        ).strip()
+        if not source:
+            # code compiled from a string, such as a query typed in the viewer
+            return None
+        statement = ast.parse(source).body[0]
         if not (
             isinstance(statement, ast.Assign)
             and isinstance(statement.targets[0], ast.Name)

@@ -6,6 +6,7 @@ out as a step, and for holding it at each step until the viewer moves on.
 from __future__ import annotations
 
 import threading
+from pathlib import Path
 
 import pytest
 
@@ -15,6 +16,7 @@ from coraplex.plans.factories import sequential
 from coraplex.plans.plan_node import PlanNode
 from coraplex.robot_plans.actions.core.placing import PlaceAction
 from krrood.entity_query_language.backends import ProbabilisticBackend
+from cramera.knowledge.query_runner import EqlQueryRunner
 from cramera.live.query_steps import HeldStep
 from experiments.eql_showcase.insertion import InsertAction
 from experiments.eql_showcase.montessori_demo import (
@@ -22,6 +24,7 @@ from experiments.eql_showcase.montessori_demo import (
     TracyMontessoriDemonstration,
 )
 from experiments.eql_showcase.open_slots import HoleRulesBackend, HoleShape
+from experiments.eql_showcase.perceived_twin import SeenPiece
 from experiments.eql_showcase.performed_actions import PerformedActions
 from experiments.eql_showcase.query_steps import (
     EnclosingKind,
@@ -339,3 +342,16 @@ def test_a_concluded_kind_of_hole_lights_the_holes_of_that_kind(
         for hole in unsorted.twin.holes
         if hole.kind is concluded.kind
     ]
+
+
+def test_a_statement_typed_in_the_viewer_is_named_by_its_type():
+    code = (
+        Path(__file__).with_name("dataset") / "statement_typed_in_the_viewer.py"
+    ).read_text()
+    statement = EqlQueryRunner(
+        domains=[], extra_names={SeenPiece.__name__: SeenPiece}
+    ).build(code)
+
+    [sought] = QueryVariable.of_statement(statement, [])
+
+    assert sought.name == QueryVariable.noun_of(SeenPiece.__name__)

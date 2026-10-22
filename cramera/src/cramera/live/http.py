@@ -380,6 +380,7 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
         except (NoQuerySourceRegistered, UnknownQueryScope) as error:
             return self._send_json({"ok": False, "error": str(error)})
         except Exception as error:
+            logger.exception("query failed: %s", code)
             # a SyntaxError from the query is named by its own type, like any other
             return self._send_json(
                 {"ok": False, "error": "%s: %s" % (type(error).__name__, error)}
