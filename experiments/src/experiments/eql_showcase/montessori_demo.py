@@ -336,11 +336,12 @@ class MontessoriSorting:
         backends and show how in the viewer.
 
         :param statement: The statement or sorting plan.
-        :return: What answers it, most preferred first; the resolved plan for a sorting
-            plan.
+        :return: What answers it, most preferred first; for a sorting plan, the resolved
+            plan, or nothing if a part of it has no answer.
         """
         if statement._type_ is SortPieceAction:
-            return [self.resolve_sorting(statement)]
+            plan = self.resolve_sorting(statement)
+            return [] if plan is None else [plan]
         with self.observing():
             answers = self.answerer.resolve(statement)
         if self.on_resolved is not None:

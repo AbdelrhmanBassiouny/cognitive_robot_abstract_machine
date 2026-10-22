@@ -183,6 +183,24 @@ def test_a_sorting_whose_piece_no_longer_rests_on_the_table_is_left_unresolved(
     assert resolution.parts[-1].answers == []
 
 
+def test_a_sorting_plan_stated_in_a_query_that_cannot_be_resolved_has_no_answer(
+    unsorted: MontessoriSorting,
+):
+    [piece, *_] = unsorted.pieces()
+    [hole, *_] = holes_for(unsorted, piece)
+    piece.root.parent_connection.origin = (
+        SortPieceAction(
+            piece=piece, side=..., arm=unsorted.robot.all_arms[0], hole=hole
+        )
+        .release_pose()
+        .homogeneous_matrix
+    )
+
+    answers = unsorted.resolve(unsorted.statement_to_sort(piece.kind))
+
+    assert answers == []
+
+
 def test_any_statement_is_resolved_its_nested_statements_first(
     unsorted: MontessoriSorting,
 ):
