@@ -1,8 +1,8 @@
 # domain-models — standing rules
 
-- A domain model under `domain_models/` depends only on `krrood` and external libraries, never on another workspace package.
-- Never duplicate a class to drop a dependency. Shared behaviour lives once in an abstract base; implementations bind its generic coordinate parameter.
-- casadi is an optional extra (`krrspatial[symbolic]`); numeric types import none of it.
-- Spatial types are generic over their coordinate type. Integer coordinates get no operations whose results leave the integers (norms, scaling, rotations, transforms).
+- A domain model depends on `krrood`, on other domain models and on libraries outside this repository.
+- Never duplicate a class to drop a dependency, and never keep two implementations of one concept (no numeric copy of the symbolic spatial types).
+- krrspatial is the one home of points, vectors, rotations and transforms (casadi). A package that needs none of them does not depend on it.
+- Pixels and image coordinates are krrimage's own types, not spatial types; turning one into a spatial point is an explicit step behind an optional extra.
+- Moved classes stay importable from their old module, so old imports and JSON type names keep resolving.
 - Package names (krrspatial, krrimage, krrollywood) are open to change in review.
-- Coordinates2/Coordinates3 hold only x, y (, z); a pose is its own SpatialType composed of a point and an orientation, never a subclass of a point.
