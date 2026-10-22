@@ -1,13 +1,12 @@
-PR #526 (ready, user-approved; reworked on user's request): domain_models/krrspatial holds SemDT's casadi spatial types. Plan: domain-models.
+PR #526 (ready, user-approved; reworked on user's request, base main): krrspatial holds SemDT's casadi spatial types. Plan: domain-models.
 
 Plan
-- Drop numeric Point2[C] types. Move spatial_types.py to krrspatial.spatial_types; SemDT module re-exports (old JSON type names keep resolving).
-- ReferenceFrame interface (id, name); KinematicStructureEntity implements it. ReferenceFrameResolver interface found in from_json kwargs; SemDT's tracker implements it.
-- Spatial exceptions move to krrspatial.exceptions; SemDT re-exports. test_KinematicStructureEntityNotInKwargs expects MissingReferenceFrameResolver (user-approved).
-- krrspatial deps: krrood, casadi, numpy. Tests in test/krrspatial_test with mimic frames; SemDT tests stay.
+- One set of spatial types in krrspatial; SemDT module re-exports; ReferenceFrame/ReferenceFrameResolver interfaces; krrood ObjectReference shared.
 
 Done
-- Fork main fast-forwarded to cram2 main; merged into branch.
+- Pushed dfb6b4964; #526 description rewritten, #526 and #524 retargeted to main; plan.yaml updated (symbolic-spatial-types folded in, krrimage unblocked).
+- Local: krrspatial, krrood utils/patterns, version pass; SemDT 1332 pass, rest is missing ROS/robot packages.
 
 Next
-- Implement, test, push; retarget #526 and #524 to main; rewrite #526 description; update plan.yaml (fold symbolic-spatial-types, unblock krrimage).
+- Read CI, especially SemDT's ORM build (can't generate locally: MetaData needs ROS) and giskardpy.
+- User re-clicks the updated Promote link; #524 then merges domain_models/README.md with this PR's.
