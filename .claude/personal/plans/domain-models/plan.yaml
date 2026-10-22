@@ -32,12 +32,12 @@ items:
   branch: claude/krrspatial
   track: spatial
   status: in_progress
-  depends_on: []
+  depends_on:
+  - planar-point-interface
   session: https://claude.ai/code/session_01GoHMif2Xa7Mnqzz9mKFpTT
-  notes: '#526 reworked after team review rejected parallel numeric/symbolic types: numeric
-    Point2[C] dropped; spatial_types.py moved to krrspatial, SemDT module re-exports; KinematicStructureEntity
-    implements ReferenceFrame, SemDT''s tracker implements ReferenceFrameResolver; krrood.adapters.object_reference
-    shared. Base main. Pushed dfb6b4964; CI and ORM build pending.'
+  notes: '#526 (user-marked ready) restacked on #527 by merge: spatial_types.py behind krrspatial[casadi]
+    (casadi, numpy), SemDT and root depend on the extra, Point2 implements PlanarPoint[ReferenceFrame,
+    Scalar]. Base claude/krrspatial-interfaces. Pushed 144a41d122; CI and ORM build pending.'
   pull_request_number: 526
 - id: krrimage
   title: domain_models/krrimage (images, colours, pixels) with Color moved out of SemDT
@@ -45,11 +45,13 @@ items:
   pull_request_number: 524
   track: image
   status: in_progress
-  depends_on: []
+  depends_on:
+  - planar-point-interface
   session: https://claude.ai/code/session_01J17aVY3vyQM8goACbkHkcp
-  notes: 'Keeps its own Pixel/PixelBox/ImagePoint/ImageBox; no krrspatial (casadi) dependency.
-    #524 retargeted to main, merges clean; whichever of #524/#526 lands second merges the
-    domain_models/README.md entries.'
+  notes: '#524 restacked on #527 (base claude/krrspatial-interfaces), pushed 884ebfcb4d: depends
+    on base krrspatial, ImagePoint implements PlanarPoint[ImageSpace, float] with an optional
+    space until a camera implements ImageSpace; no longer frozen. Pixel stays a grid cell. Whichever
+    of #524/#526 lands second merges the domain_models/README.md entries.'
 - id: krrollywood-on-krrimage
   title: krrollywood (cram2/crollywood) depends on krrimage instead of its own frame types
   repository: cram2/crollywood
@@ -70,7 +72,7 @@ items:
   - planar-point-interface
   branch: claude/krrimage-depth-segmentation
   notes: 'Camera model = Projection[ImagePoint, Ray3] (project, deproject with depth), behind
-    krrimage''s optional krrspatial extra. First user: montessori perception (CameraIntrinsics.deproject,
+    krrimage''s optional krrspatial[casadi] extra; the camera implements ImageSpace. First user: montessori perception (CameraIntrinsics.deproject,
     RgbdFrame.project, MeasuredSurfaceFinder''s inline deprojection, orthophoto homography),
     numpy-batched over whole images, so the model needs an array path. Also adds an image''s
     placement on a plane (ImagePoint to Point2, like the orthophoto''s region_T_pixel) and the
@@ -120,17 +122,14 @@ items:
     camera; wall planes come from the twin. Demo ideas: the robot shown a video of its own pickup;
     the robot''s live capture projected onto the apartment walls while it works.'
 - id: planar-point-interface
-  title: Point2 and ImagePoint share a casadi-free PlanarPoint interface parameterized by their
-    space and coordinate type
-  branch: claude/planar-point-interface
+  title: krrspatial's casadi-free base (Space, ReferenceFrame, ImageSpace, PlanarPoint[SpaceT,
+    CoordinateT])
+  branch: claude/krrspatial-interfaces
+  pull_request_number: 527
   track: spatial
-  status: not_started
-  depends_on:
-  - krrspatial-numeric
-  - krrimage
-  notes: 'PlanarPoint(Generic[SpaceT, CoordinateT]) with x, y and space; Space(IdentifiedObject)
-    with ReferenceFrame (metric) and ImageSpace (one camera''s image) under it. Point2 binds
-    [ReferenceFrame, casadi scalar], ImagePoint binds [ImageSpace, float] and gains its image
-    space. Each concrete class binds both parameters once (never Point2[float] beside Point2[casadi]).
-    Home open: krrood or a new casadi-free package. PR must lead with "different spaces, not
-    one space computed two ways".'
+  status: in_progress
+  depends_on: []
+  session: https://claude.ai/code/session_01GoHMif2Xa7Mnqzz9mKFpTT
+  notes: 'Draft #527 off main, the base #526 and #524 stack on. Holds Space/ImageSpace/ReferenceFrame,
+    PlanarPoint, ReferenceFrameResolver/Reference and krrood ObjectReference; deps krrood only.
+    Projection and FrameTransformer come with their own items. Pushed 08010edf00; CI pending.'
