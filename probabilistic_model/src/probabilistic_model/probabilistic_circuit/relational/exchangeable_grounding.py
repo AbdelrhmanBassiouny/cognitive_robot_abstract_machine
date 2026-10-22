@@ -568,6 +568,8 @@ class RelationalGrounding:
         if relational_circuit.class_probabilistic_circuit is None:
             raise CircuitNotFittedError()
         circuit = relational_circuit.class_probabilistic_circuit.__deepcopy__()
+        if not relational_circuit.exchangeable_distribution_templates:
+            return circuit
         instance = query.construct_instance()
         for (
             exchangeable_part_name,

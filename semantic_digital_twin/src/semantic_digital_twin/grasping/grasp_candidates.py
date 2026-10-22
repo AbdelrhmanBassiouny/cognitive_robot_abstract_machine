@@ -7,16 +7,17 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import numpy as np
-from typing_extensions import List
+from typing_extensions import TYPE_CHECKING
 
 from semantic_digital_twin.exceptions import (
     MissingReferenceFrameError,
     ObjectHasNoWidthWithoutCollision,
     ReferenceFrameMismatchError,
 )
-from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
-from semantic_digital_twin.spatial_types import Point3, Vector3
-from semantic_digital_twin.spatial_types.spatial_types import Pose, RotationMatrix
+from semantic_digital_twin.spatial_types.spatial_types import Pose
+
+if TYPE_CHECKING:
+    from semantic_digital_twin.semantic_annotations.mixins import HasGraspCandidates
 
 # %% grasp candidates
 
@@ -111,59 +112,3 @@ class GraspCandidate:
         :return:``reference_T_grasp``, the grasp in the same frame that pose is in.
         """
         return reference_T_object.homogeneous_matrix @ self.grasp_pose
-
-
-@dataclass(eq=False)
-class HasGraspCandidates(HasRootBody):
-    """
-    A mixin class for semantic annotations that can say where they may be grasped.
-
-    Only an annotation rooted in a body can be grasped at all, since a region carries no
-    collision geometry for fingers to close on.
-    """
-
-    grasp_candidate_count: int = field(default=12, kw_only=True)
-    """
-    How many grasp candidates :meth:`grasp_candidates` generates.
-    """
-
-    def grasp_candidates(self) -> List[GraspCandidate]:
-        """
-        The grasps this annotation offers, in no particular order.
-
-        The default grasps the object at its own origin, from evenly spaced directions
-        around its z-axis. Annotations whose geometry admits a better grip override
-        this.
-        """
-        return [
-            GraspCandidate(
-                self,
-                Pose(
-                    orientation=RotationMatrix.from_rpy(yaw=yaw).quaternion,
-                    reference_frame=self.root,
-                ),
-            )
-            for yaw in np.linspace(
-                0, 2 * np.pi, self.grasp_candidate_count, endpoint=False
-            )
-        ]
-
-
-# %% grasp geometry helpers
-
-
-@dataclass
-class RimWallSection:
-    """
-    Where a bowl's wall runs at one point of its rim, in the bowl's own frame.
-    """
-
-    center: Point3
-    """
-    The middle of the wall, halfway between its inner and its outer surface.
-    """
-
-    outward: Vector3
-    """
-    The direction from the bowl's axis to the wall.
-    """
