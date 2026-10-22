@@ -7,16 +7,18 @@ from uuid import UUID
 from typing_extensions import Any, Dict
 
 from krrood.adapters.json_serializer import from_json
-from krrood.adapters.object_reference import IdentifiedObject, ObjectReference
+from krrood.adapters.object_reference import ObjectReference
 from krrood.patterns.interface import Interface
 from krrspatial.exceptions import MissingReferenceFrameResolver
+from krrspatial.space import Space
 
 # %% frames that positions and directions are expressed in
 
 
-class ReferenceFrame(IdentifiedObject, Interface):
+class ReferenceFrame(Space, Interface):
     """
-    A frame that positions and directions are expressed in, such as a body of a robot.
+    A frame that positions and directions are expressed in, in metres, such as a body of
+    a robot.
     """
 
 

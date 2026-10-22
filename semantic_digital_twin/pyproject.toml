@@ -62,7 +62,7 @@ dependencies = [
     "psutil~=5.9.0",
     "giskardpy",
     "krrood",
-    "krrspatial",
+    "krrspatial[casadi]",
     "physics_simulators",
 ]
 license = "LGPL-3.0-only"

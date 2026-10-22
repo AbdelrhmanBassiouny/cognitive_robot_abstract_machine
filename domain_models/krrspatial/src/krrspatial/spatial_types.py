@@ -32,6 +32,7 @@ from krrspatial.exceptions import (
     ReferenceFrameMismatchError,
     SpatialTypesError,
 )
+from krrspatial.planar_point import PlanarPoint
 from krrspatial.reference_frame import ReferenceFrame, ReferenceFrameReference
 
 
@@ -1343,7 +1344,7 @@ class Point3(Point):
 
 
 @dataclass(eq=False, init=False, repr=False)
-class Point2(Point):
+class Point2(Point, PlanarPoint[ReferenceFrame, sm.Scalar]):
     """
     Represents a 2D point with reference frame handling.
 
@@ -1367,6 +1368,10 @@ class Point2(Point):
         self.casadi_sx = sm.to_sx([x, y])
         self.reference_frame = reference_frame
         super().__post_init__()
+
+    @property
+    def space(self) -> ReferenceFrame | None:
+        return self.reference_frame
 
     def _verify_type(self):
         if self.shape != (2, 1):
