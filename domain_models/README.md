@@ -5,3 +5,4 @@ models and on libraries outside this repository.
 
 - `krrspatial`: points in the spaces they are given in, metric reference frames and
   images.
+- `krrimage`: images and the positions, boxes and colours on them.

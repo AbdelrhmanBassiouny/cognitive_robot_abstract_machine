@@ -174,6 +174,12 @@ class OrmInterface:
     Names of the packages whose ORM model this interface builds on.
     """
 
+    further_source_folders: Tuple[Path, ...] = ()
+    """
+    Folders outside the package, relative to the root, holding modules whose classes
+    this interface maps too.
+    """
+
     @property
     def generator(self) -> Path:
         """
@@ -216,14 +222,22 @@ class OrmInterface:
     def inputs(self) -> List[Path]:
         """
         The files this package contributes to a build: its generator, the modules of its
-        source folder, and those of the mapping engine.
+        source folder and of its further source folders, and those of the mapping
+        engine.
 
         The interface itself is written by a build rather than read by one, so it is not
         among them.
         """
         modules = [
             module
-            for source_folder in (self.sources, *self.mapping_engine_sources)
+            for source_folder in (
+                self.sources,
+                *(
+                    self.repository_root / folder
+                    for folder in self.further_source_folders
+                ),
+                *self.mapping_engine_sources,
+            )
             for module in source_folder.rglob(SOURCE_FILE_PATTERN)
             if module != self.path
         ]
@@ -447,7 +461,13 @@ class WorkspaceOrmInterfaces:
 # ORMatic collects those from all imported subclasses.
 WORKSPACE_ORM_INTERFACES = WorkspaceOrmInterfaces(
     (
-        OrmInterface("semantic_digital_twin", REPOSITORY_ROOT),
+        OrmInterface(
+            "semantic_digital_twin",
+            REPOSITORY_ROOT,
+            further_source_folders=(
+                Path("domain_models") / "krrimage" / "src" / "krrimage",
+            ),
+        ),
         OrmInterface("giskardpy", REPOSITORY_ROOT, ("semantic_digital_twin",)),
         OrmInterface("segmind", REPOSITORY_ROOT, ("semantic_digital_twin",)),
         OrmInterface("coraplex", REPOSITORY_ROOT, ("giskardpy",)),

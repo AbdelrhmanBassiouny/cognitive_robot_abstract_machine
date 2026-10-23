@@ -403,6 +403,23 @@ def test_a_changed_module_leaves_the_interface_of_another_package_alone(
     assert workspace.interfaces[-1].is_outdated is False
 
 
+def test_a_changed_module_of_a_further_source_folder_outdates_the_interface(
+    checkout: Path,
+):
+    further_source_folder = Path("domain_model") / "src" / "domain_model"
+    (checkout / further_source_folder).mkdir(parents=True)
+    module = checkout / further_source_folder / SOURCE_MODULE_NAME
+    shutil.copy(Path(mapped_module.__file__), module)
+    interface = OrmInterface(
+        PACKAGE_NAMES[0], checkout, further_source_folders=(further_source_folder,)
+    )
+    WorkspaceOrmInterfaces((interface,)).regenerate()
+
+    change_after_the_build(module, interface)
+
+    assert interface.is_outdated is True
+
+
 def test_a_changed_mapping_engine_module_outdates_every_interface(
     workspace: WorkspaceOrmInterfaces,
 ):

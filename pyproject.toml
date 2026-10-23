@@ -26,6 +26,7 @@ dependencies = [
   "segmind",
   "cramera",
   "krrspatial",
+  "krrimage",
   "ipykernel>=7.2.0",
   "lark-parser>=0.12.0",
   "tqdm"
@@ -95,7 +96,8 @@ members = [
   "experiments",
   "segmind",
   "cramera",
-  "domain_models/krrspatial"
+  "domain_models/krrspatial",
+  "domain_models/krrimage"
 ]
 
 [tool.uv.sources]
@@ -111,6 +113,7 @@ segmind               = { workspace = true }
 experiments           = { workspace = true }
 cramera                = { workspace = true }
 krrspatial            = { workspace = true }
+krrimage              = { workspace = true }
 
 [tool.poetry]
 package-mode = false
@@ -128,6 +131,7 @@ experiments = { path = "experiments", develop = true }
 segmind = { path = "segmind", develop = true }
 cramera = { path = "cramera", develop = true }
 krrspatial = { path = "domain_models/krrspatial", develop = true }
+krrimage = { path = "domain_models/krrimage", develop = true }
 
 [tool.setuptools]
 packages = ["cognitive_robot_abstract_machine"]
