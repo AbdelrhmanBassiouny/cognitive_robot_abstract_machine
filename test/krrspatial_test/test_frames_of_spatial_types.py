@@ -10,7 +10,7 @@ from krrspatial.exceptions import (
     MissingReferenceFrameResolver,
     ReferenceFrameMismatchError,
 )
-from krrspatial.planar_point import SpaceT
+from krrspatial.coordinate_system import CoordinateSystemT
 from krrspatial.reference_frame import ReferenceFrame
 from krrspatial.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -100,8 +100,31 @@ def test_a_point_without_a_frame_is_read_without_a_resolver():
 def test_a_point2_is_given_in_its_reference_frame(table_frame):
     point = Point2(1, 2, reference_frame=table_frame)
 
-    assert point.space is table_frame
+    assert point.coordinate_system is table_frame
 
 
 def test_a_point2_is_a_planar_point_of_a_reference_frame():
-    assert Point2.get_type_of_generic_parameter(SpaceT) is ReferenceFrame
+    assert Point2.get_type_of_generic_parameter(CoordinateSystemT) is ReferenceFrame
+
+
+# %% a transformation as a change between two frames
+
+
+def test_a_transformation_changes_coordinates_between_frames():
+    assert (
+        HomogeneousTransformationMatrix.get_type_of_generic_parameter(CoordinateSystemT)
+        is ReferenceFrame
+    )
+
+
+def test_a_transformation_changes_from_its_child_frame_to_its_reference_frame(
+    table_frame, camera_frame
+):
+    table_T_camera = HomogeneousTransformationMatrix(
+        reference_frame=table_frame, child_frame=camera_frame
+    )
+
+    assert (
+        table_T_camera.source_coordinate_system,
+        table_T_camera.target_coordinate_system,
+    ) == (camera_frame, table_frame)

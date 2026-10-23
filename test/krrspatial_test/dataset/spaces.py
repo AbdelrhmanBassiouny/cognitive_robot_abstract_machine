@@ -3,26 +3,48 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from uuid import UUID, uuid4
 
-from krrspatial.planar_point import CoordinateT, PlanarPoint, SpaceT
-from krrspatial.space import ImageSpace
+from krrspatial.coordinate_system import (
+    CoordinateChange,
+    CoordinateSystemT,
+    ImageCoordinateSystem,
+)
+from krrspatial.planar_point import CoordinateT, PlanarPoint
+from krrspatial.space import ImagePlane
 
-# %% images told apart by name
+# %% image planes and their coordinate systems, told apart by name
 
 
 @dataclass(eq=False)
-class NamedImage(ImageSpace):
+class NamedImagePlane(ImagePlane):
     """
-    An image space that only has a name.
+    An image plane that only has a name.
     """
 
     name: str
     """
-    What the image is called.
+    What the plane is called.
+    """
+
+
+@dataclass(eq=False)
+class NamedImageCoordinateSystem(ImageCoordinateSystem):
+    """
+    An image coordinate system that only has a name and the plane it charts.
+    """
+
+    name: str
+    """
+    What the coordinate system is called.
+    """
+
+    space: ImagePlane | None = None
+    """
+    The plane the coordinate system charts.
     """
 
     id: UUID = field(default_factory=uuid4)
     """
-    The identifier serialized points refer to the image with.
+    The identifier serialized points refer to the coordinate system with.
     """
 
 
@@ -30,9 +52,9 @@ class NamedImage(ImageSpace):
 
 
 @dataclass
-class StoredPlanarPoint(PlanarPoint[SpaceT, CoordinateT]):
+class StoredPlanarPoint(PlanarPoint[CoordinateSystemT, CoordinateT]):
     """
-    A point that stores its coordinates and space as given.
+    A point that stores its coordinates and coordinate system as given.
     """
 
     x: CoordinateT
@@ -45,14 +67,42 @@ class StoredPlanarPoint(PlanarPoint[SpaceT, CoordinateT]):
     The second coordinate.
     """
 
-    space: SpaceT | None
+    coordinate_system: CoordinateSystemT | None
     """
-    The space the coordinates are given in.
+    The coordinate system the coordinates are given in.
     """
 
 
 @dataclass
-class StoredImagePoint(StoredPlanarPoint[ImageSpace, float]):
+class StoredImagePoint(StoredPlanarPoint[ImageCoordinateSystem, float]):
     """
     A position on an image that stores its coordinates as given.
+    """
+
+
+# %% coordinate changes that store their coordinate systems
+
+
+@dataclass
+class StoredCoordinateChange(CoordinateChange[CoordinateSystemT]):
+    """
+    A coordinate change that only stores the coordinate systems it changes between.
+    """
+
+    source_coordinate_system: CoordinateSystemT | None
+    """
+    The coordinate system the coordinates are given in.
+    """
+
+    target_coordinate_system: CoordinateSystemT | None
+    """
+    The coordinate system the coordinates are changed into.
+    """
+
+
+@dataclass
+class StoredImageCoordinateChange(StoredCoordinateChange[ImageCoordinateSystem]):
+    """
+    A change between two coordinate systems of one image plane, such as from a crop to
+    the whole image.
     """

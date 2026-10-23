@@ -27,6 +27,7 @@ from krrood.symbolic_math.exceptions import (
     UnsupportedOperationError,
 )
 from krrood.symbolic_math.symbolic_math import Matrix, to_sx
+from krrspatial.coordinate_system import CoordinateChange
 from krrspatial.exceptions import (
     InsufficientVectorsError,
     ReferenceFrameMismatchError,
@@ -253,7 +254,10 @@ class SpatialType(ABC):
 
 @dataclass(eq=False, init=False, repr=False)
 class HomogeneousTransformationMatrix(
-    sm.SymbolicMathType, SpatialType, SubclassJSONSerializer
+    sm.SymbolicMathType,
+    SpatialType,
+    SubclassJSONSerializer,
+    CoordinateChange[ReferenceFrame],
 ):
     """
     Represents a 4x4 transformation matrix used in kinematics and transformations.
@@ -288,6 +292,14 @@ class HomogeneousTransformationMatrix(
         else:
             self.casadi_sx = sm.to_sx(data)
         super().__post_init__()
+
+    @property
+    def source_coordinate_system(self) -> ReferenceFrame | None:
+        return self.child_frame
+
+    @property
+    def target_coordinate_system(self) -> ReferenceFrame | None:
+        return self.reference_frame
 
     def _verify_type(self):
         if self.shape != (4, 4):
@@ -1370,7 +1382,7 @@ class Point2(Point, PlanarPoint[ReferenceFrame, sm.Scalar]):
         super().__post_init__()
 
     @property
-    def space(self) -> ReferenceFrame | None:
+    def coordinate_system(self) -> ReferenceFrame | None:
         return self.reference_frame
 
     def _verify_type(self):
