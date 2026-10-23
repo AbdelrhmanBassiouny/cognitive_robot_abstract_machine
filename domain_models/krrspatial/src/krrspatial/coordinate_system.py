@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing_extensions import Generic, TypeVar
+from abc import abstractmethod
+
+from typing_extensions import Generic, Self, TypeVar
 
 from krrood.adapters.object_reference import IdentifiedObject
 from krrood.patterns.interface import Interface
@@ -67,4 +69,35 @@ class CoordinateChange(Generic[CoordinateSystemT], SubClassSafeGeneric, Interfac
     """
     The coordinate system the coordinates are changed into; ``None`` where it is not
     known.
+    """
+
+    @abstractmethod
+    def inverse(self) -> Self:
+        """
+        :return: The change from the target coordinate system back to the source one.
+        """
+
+    @abstractmethod
+    def __matmul__(self, other: Self) -> Self:
+        """
+        :param other: The change applied first, whose target coordinate system is the
+            source one of this change.
+        :return: The change that applies the other change and then this one.
+        """
+
+
+class AffineCoordinateChange(CoordinateChange[CoordinateSystemT], Interface):
+    """
+    A coordinate change that scales, shears, rotates or reflects the axes and shifts
+    the origin.
+
+    It keeps straight lines, parallel lines and ratios of lengths along one line.
+    """
+
+
+class RigidCoordinateChange(AffineCoordinateChange[CoordinateSystemT], Interface):
+    """
+    An affine coordinate change that only rotates the axes and shifts the origin.
+
+    It also keeps distances and angles.
     """

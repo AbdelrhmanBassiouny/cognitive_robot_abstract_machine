@@ -3,12 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from uuid import UUID, uuid4
 
+from typing_extensions import Self
+
 from krrspatial.coordinate_system import (
-    CoordinateChange,
+    AffineCoordinateChange,
     CoordinateSystemT,
     ImageCoordinateSystem,
+    RigidCoordinateChange,
 )
 from krrspatial.planar_point import CoordinateT, PlanarPoint
+from krrspatial.reference_frame import ReferenceFrame
 from krrspatial.space import ImagePlane
 
 # %% image planes and their coordinate systems, told apart by name
@@ -84,9 +88,10 @@ class StoredImagePoint(StoredPlanarPoint[ImageCoordinateSystem, float]):
 
 
 @dataclass
-class StoredCoordinateChange(CoordinateChange[CoordinateSystemT]):
+class StoredCoordinateChange(AffineCoordinateChange[CoordinateSystemT]):
     """
-    A coordinate change that only stores the coordinate systems it changes between.
+    An affine coordinate change that only stores the coordinate systems it changes
+    between.
     """
 
     source_coordinate_system: CoordinateSystemT | None
@@ -99,10 +104,25 @@ class StoredCoordinateChange(CoordinateChange[CoordinateSystemT]):
     The coordinate system the coordinates are changed into.
     """
 
+    def inverse(self) -> Self:
+        return type(self)(self.target_coordinate_system, self.source_coordinate_system)
+
+    def __matmul__(self, other: Self) -> Self:
+        return type(self)(other.source_coordinate_system, self.target_coordinate_system)
+
 
 @dataclass
 class StoredImageCoordinateChange(StoredCoordinateChange[ImageCoordinateSystem]):
     """
     A change between two coordinate systems of one image plane, such as from a crop to
     the whole image.
+    """
+
+
+@dataclass
+class StoredFrameChange(
+    StoredCoordinateChange[ReferenceFrame], RigidCoordinateChange[ReferenceFrame]
+):
+    """
+    A rigid change between two reference frames, such as from a gripper to the table.
     """
