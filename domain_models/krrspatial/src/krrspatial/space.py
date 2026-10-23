@@ -1,22 +1,31 @@
 from __future__ import annotations
 
-from krrood.adapters.object_reference import IdentifiedObject
 from krrood.patterns.interface import Interface
 
-# %% what coordinates are given in
+# %% sets of points and their geometry
 
 
-class Space(IdentifiedObject, Interface):
+class Space(Interface):
     """
-    A coordinate system that the coordinates of a point are given in.
+    A set of points with a geometry, charted by any number of coordinate systems.
 
-    Coordinates given in one space mean nothing in another, so values of two spaces are
-    combined only after mapping one into the other.
+    Coordinates in two coordinate systems of one space convert into each other; points
+    of two spaces relate only through a map between the spaces, such as a camera.
     """
 
 
-class ImageSpace(Space, Interface):
+class EuclideanSpace(Space, Interface):
     """
-    The coordinate system of an image: in pixels, from its top left corner, with ``x``
-    along the columns and ``y`` down the rows.
+    Physical space, in metres; its coordinate systems are reference frames, related by
+    rigid transforms, which keep distances and angles.
+    """
+
+
+class ImagePlane(Space, Interface):
+    """
+    The plane an image shows its scene on; crops and resizes of the image show the same
+    plane.
+
+    Its coordinate systems are related by scaling and shifting each axis, which keeps
+    ratios of distances along an axis but not distances.
     """

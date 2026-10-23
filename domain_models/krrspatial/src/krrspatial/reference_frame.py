@@ -9,13 +9,14 @@ from typing_extensions import Any, Dict
 from krrood.adapters.json_serializer import from_json
 from krrood.adapters.object_reference import ObjectReference
 from krrood.patterns.interface import Interface
+from krrspatial.coordinate_system import CoordinateSystem
 from krrspatial.exceptions import MissingReferenceFrameResolver
-from krrspatial.space import Space
+from krrspatial.space import EuclideanSpace
 
 # %% frames that positions and directions are expressed in
 
 
-class ReferenceFrame(Space, Interface):
+class ReferenceFrame(CoordinateSystem[EuclideanSpace], Interface):
     """
     A frame that positions and directions are expressed in, in metres, such as a body of
     a robot.
