@@ -18,6 +18,10 @@ given in.
 - `krrspatial.planar_point`: `PlanarPoint`, a coordinate representation of a point by
   two coordinates. Each implementation binds the kind of coordinate system and what
   its coordinates are stored as.
+- `krrspatial.spatial_types`, with the extra `krrspatial[casadi]`: `Point2`, `Point3`,
+  `Vector3`, `RotationMatrix`, `Quaternion`, `AxisAngle`,
+  `HomogeneousTransformationMatrix`, `Pose` and `Pose2D`, as symbolic expressions that
+  can also hold plain numbers.
 
 | Space | Coordinate system | Coordinate change | Kept by the change |
 |---|---|---|---|
@@ -28,15 +32,8 @@ Points of two spaces, such as a body and an image of it, relate only through a m
 between the spaces, such as a camera, never through a coordinate change.
 
 ```python
-from dataclasses import dataclass
+from krrspatial.spatial_types import HomogeneousTransformationMatrix, Point3
 
-from krrspatial.coordinate_system import ImageCoordinateSystem
-from krrspatial.planar_point import PlanarPoint
-
-
-@dataclass
-class PositionOnImage(PlanarPoint[ImageCoordinateSystem, float]):
-    x: float
-    y: float
-    coordinate_system: ImageCoordinateSystem
+table_T_cup = HomogeneousTransformationMatrix.from_xyz_rpy(x=1.0, yaw=0.5)
+cup_in_table = table_T_cup @ Point3(0.1, 0.0, 0.2)
 ```

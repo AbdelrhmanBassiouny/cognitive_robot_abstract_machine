@@ -4,16 +4,23 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from uuid import UUID
 
-from typing_extensions import Any, Dict
+from typing_extensions import Any, Dict, TypeVar
 
 from krrood.adapters.json_serializer import from_json
 from krrood.adapters.object_reference import ObjectReference
 from krrood.patterns.interface import Interface
-from krrspatial.coordinate_system import CoordinateSystem
+from krrspatial.coordinate_system import CoordinateRepresentation, CoordinateSystem
 from krrspatial.exceptions import MissingReferenceFrameResolver
 from krrspatial.space import EuclideanSpace
 
 # %% frames that positions and directions are expressed in
+
+CoordinateRepresentationT = TypeVar(
+    "CoordinateRepresentationT", bound=CoordinateRepresentation
+)
+"""
+The kind of value a reference frame expresses.
+"""
 
 
 class ReferenceFrame(CoordinateSystem[EuclideanSpace], Interface):
@@ -21,6 +28,14 @@ class ReferenceFrame(CoordinateSystem[EuclideanSpace], Interface):
     A frame that positions and directions are expressed in, in metres, such as a body of
     a robot.
     """
+
+    @abstractmethod
+    def express(self, value: CoordinateRepresentationT) -> CoordinateRepresentationT:
+        """
+        :param value: A value given in this frame or in another frame of the same
+            space.
+        :return: The same value, given in this frame.
+        """
 
 
 class ReferenceFrameResolver(Interface):

@@ -6,7 +6,12 @@ from uuid import UUID, uuid4
 from typing_extensions import Any
 
 from krrood.adapters.deserialized_object_tracker import DeserializedObjectTracker
-from krrspatial.reference_frame import ReferenceFrame, ReferenceFrameResolver
+from krrspatial.exceptions import ReferenceFrameMismatchError
+from krrspatial.reference_frame import (
+    CoordinateRepresentationT,
+    ReferenceFrame,
+    ReferenceFrameResolver,
+)
 from krrspatial.space import EuclideanSpace
 
 # %% frames told apart by name
@@ -15,7 +20,8 @@ from krrspatial.space import EuclideanSpace
 @dataclass(eq=False)
 class NamedFrame(ReferenceFrame):
     """
-    A reference frame that only has a name.
+    A reference frame that only has a name, so it knows no change to any other frame and
+    expresses only values already given in it.
     """
 
     name: str
@@ -32,6 +38,13 @@ class NamedFrame(ReferenceFrame):
     """
     The identifier serialized spatial types refer to the frame with.
     """
+
+    def express(self, value: CoordinateRepresentationT) -> CoordinateRepresentationT:
+        if value.coordinate_system is not self:
+            raise ReferenceFrameMismatchError(
+                expected_frame=self, actual_frame=value.coordinate_system
+            )
+        return value
 
 
 # %% finding frames while deserializing
