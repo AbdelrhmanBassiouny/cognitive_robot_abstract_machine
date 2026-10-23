@@ -151,6 +151,23 @@ class CompositeNodeWithChainedChildren(EndedByOwner, CompositeNode):
 
 
 @dataclass(repr=False, eq=False, kw_only=True)
+class SequenceCreatingItsSteps(Sequence):
+    """
+    A sequence that creates its three steps when it expands, so they are not among the
+    fields it is constructed with.
+    """
+
+    nodes: list[StatechartNode] = field(default_factory=list, init=False)
+    """
+    The steps, created when the sequence expands.
+    """
+
+    def expand(self) -> None:
+        self.nodes = [ConstTrueNode(), ConstTrueNode(), ConstTrueNode()]
+        super().expand()
+
+
+@dataclass(repr=False, eq=False, kw_only=True)
 class CompositeNodeWithNestedCompositeChild(EndedByOwner, CompositeNode):
     """
     A composite node with a single composite child, observing what that child observes.

@@ -59,6 +59,12 @@ class StatechartJSONKey(StrEnum):
     of goals that join the statechart only when it is compiled.
     """
 
+    CHILDREN = "children"
+    """
+    The indices of the children of every node that is the parent of a node the document
+    holds, in the order the parent holds them, by the index of the parent.
+    """
+
 
 class StatechartPayloadKey(StrEnum):
     """
