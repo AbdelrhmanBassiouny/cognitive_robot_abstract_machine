@@ -18,7 +18,11 @@ if TYPE_CHECKING:
     from coraplex.plans.plan_node import PlanNode
     from coraplex.robot_plans.actions.base import ActionDescription
     from semantic_digital_twin.datastructures.definitions import GripperState
-    from semantic_digital_twin.robots.robot_parts import AbstractRobot, Arm
+    from semantic_digital_twin.robots.robot_parts import (
+        AbstractRobot,
+        Arm,
+        EndEffector,
+    )
     from semantic_digital_twin.semantic_annotations.mixins import HasGraspCandidates
     from semantic_digital_twin.world_description.world_entity import (
         SemanticAnnotation,
