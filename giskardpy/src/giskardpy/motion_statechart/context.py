@@ -2,18 +2,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import List, Optional
+from typing_extensions import TYPE_CHECKING
 
 from cramph.context import ContextExtension
 from giskardpy.qp.qp_controller_config import QPControllerConfig
-from krrood.symbolic_math.float_variable_data import FloatVariableData
-from semantic_digital_twin.collision_checking.collision_manager import CollisionManager
 from semantic_digital_twin.collision_checking.collision_variable_managers import (
     BaseCollisionVariableManager,
     SelfCollisionVariableManager,
     ExternalCollisionVariableManager,
 )
-from semantic_digital_twin.world import World
+
+if TYPE_CHECKING:
+    from cramph.context import StatechartContext
 
 
 @dataclass
@@ -29,78 +29,67 @@ class MotionControlContext(ContextExtension):
     commands.
     """
 
-    world: World = field(repr=False)
-    """
-    The world the commands are applied to.
-    """
-
-    float_variable_data: FloatVariableData = field(repr=False)
-    """
-    The auxiliary variables of the statechart context, which the collision variable
-    managers register their variables in.
-    """
-
-    _self_collision_manager: Optional[SelfCollisionVariableManager] = field(
+    self_collision_manager: SelfCollisionVariableManager | None = field(
         init=False, default=None, repr=False, compare=False
     )
     """
-    Backs :attr:`self_collision_manager`, None until a node requests it.
+    The self collision variable manager shared by all self collision avoidance nodes,
+    None until one of them requests it.
     """
 
-    _external_collision_manager: Optional[ExternalCollisionVariableManager] = field(
+    external_collision_manager: ExternalCollisionVariableManager | None = field(
         init=False, default=None, repr=False, compare=False
     )
     """
-    Backs :attr:`external_collision_manager`, None until a node requests it.
+    The external collision variable manager shared by all external collision avoidance
+    nodes, None until one of them requests it.
     """
 
-    @property
-    def collision_manager(self) -> CollisionManager:
+    def get_or_create_self_collision_manager(
+        self, context: StatechartContext
+    ) -> SelfCollisionVariableManager:
         """
-        :return: The collision manager of :attr:`world`.
+        :param context: The context this extension belongs to.
+        :return: :attr:`self_collision_manager`, created in `context` on first request.
         """
-        return self.world.collision_manager
+        if self.self_collision_manager is None:
+            self.self_collision_manager = SelfCollisionVariableManager(
+                context.float_variable_data
+            )
+            context.world.collision_manager.add_collision_consumer(
+                self.self_collision_manager
+            )
+        return self.self_collision_manager
 
-    @property
-    def self_collision_manager(self) -> SelfCollisionVariableManager:
+    def get_or_create_external_collision_manager(
+        self, context: StatechartContext
+    ) -> ExternalCollisionVariableManager:
         """
-        SelfCollisionVariableManager shared by all self collision avoidance nodes,
-        created on first access.
+        :param context: The context this extension belongs to.
+        :return: :attr:`external_collision_manager`, created in `context` on first
+            request.
         """
-        if self._self_collision_manager is None:
-            self._self_collision_manager = SelfCollisionVariableManager(
-                self.float_variable_data
+        if self.external_collision_manager is None:
+            self.external_collision_manager = ExternalCollisionVariableManager(
+                context.float_variable_data
             )
-            self.collision_manager.add_collision_consumer(self._self_collision_manager)
-        return self._self_collision_manager
-
-    @property
-    def external_collision_manager(self) -> ExternalCollisionVariableManager:
-        """
-        ExternalCollisionVariableManager shared by all external collision avoidance
-        nodes, created on first access.
-        """
-        if self._external_collision_manager is None:
-            self._external_collision_manager = ExternalCollisionVariableManager(
-                self.float_variable_data
+            context.world.collision_manager.add_collision_consumer(
+                self.external_collision_manager
             )
-            self.collision_manager.add_collision_consumer(
-                self._external_collision_manager
-            )
-        return self._external_collision_manager
+        return self.external_collision_manager
 
     @property
     def _registered_collision_variable_managers(
         self,
-    ) -> List[BaseCollisionVariableManager]:
+    ) -> list[BaseCollisionVariableManager]:
         """
         :return: The collision variable managers that nodes have requested so far.
         """
         return [
             manager
             for manager in (
-                self._self_collision_manager,
-                self._external_collision_manager,
+                self.self_collision_manager,
+                self.external_collision_manager,
             )
             if manager is not None
         ]
@@ -113,11 +102,12 @@ class MotionControlContext(ContextExtension):
         """
         return len(self._registered_collision_variable_managers) > 0
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """
-        Removes the lazy-initialized collision managers from the collision manager.
+        Removes the collision variable managers from the collision manager they were
+        added to.
         """
         for manager in self._registered_collision_variable_managers:
-            self.collision_manager.remove_collision_consumer(manager)
-        self._self_collision_manager = None
-        self._external_collision_manager = None
+            manager.collision_manager.remove_collision_consumer(manager)
+        self.self_collision_manager = None
+        self.external_collision_manager = None

@@ -11,7 +11,7 @@ from dataclasses import dataclass
 import numpy as np
 import pytest
 
-from coraplex.plans.context_extensions import MotionToleranceConfig
+from coraplex.robot_plans.mixins import MovesToolCenterPoint
 from coraplex.robot_plans.actions.core.container import OpenAction
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
@@ -260,7 +260,7 @@ def assert_bowl_and_cup_stand_on_the_kitchen_island(
     Assert that both objects were released at their goals on the kitchen island.
     """
     # A pick-up and a place each end within the position threshold of their goal.
-    position_tolerance = 2 * MotionToleranceConfig().default_tcp_position_threshold
+    position_tolerance = 2 * MovesToolCenterPoint.position_threshold
     for placed, world_T_goal in [
         (kitchen.bowl, kitchen.world_T_bowl_goal),
         (kitchen.cup, kitchen.world_T_cup_goal),

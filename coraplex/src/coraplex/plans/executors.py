@@ -13,10 +13,7 @@ from coraplex.exceptions import (
     MotionDidNotFinish,
     PlanNotCompiled,
 )
-from coraplex.plans.context_extensions import (
-    MotionToleranceConfig,
-    StatementGrounding,
-)
+from coraplex.plans.context_extensions import StatementGrounding
 from coraplex.plans.failures import (
     CandidateLimitReached,
     EmptyUnderspecified,
@@ -34,8 +31,7 @@ from coraplex.robot_plans.plan_transformations import (
     WriteTheOdometryInsteadOfCommandingAPose,
 )
 from coraplex.robot_plans.robot_specific_plan_transformations import (
-    DriveStretchWithItsDifferentialDrive,
-    DriveTiagoWithItsDifferentialDrive,
+    DriveWithTheDifferentialDrive,
     KeepStretchFromTurningWhileMovingItsTool,
     KeepStretchInFrontOfTheContainerItCloses,
     KeepTheTorsoUprightWhileUsingATool,
@@ -85,8 +81,7 @@ class PlanExecutor(Executor, ABC):
 
     The extensions of :attr:`context` describe the robot and how the plan is grounded,
     such as the :class:`~coraplex.plans.context_extensions.RobotAccess` of the robot
-    performing it. A :class:`~coraplex.plans.context_extensions.StatementGrounding`, a
-    :class:`~coraplex.plans.context_extensions.MotionToleranceConfig` and a
+    performing it. A :class:`~coraplex.plans.context_extensions.StatementGrounding` and a
     :class:`~coraplex.plans.plan_transformation.PlanRewriting` with default values are
     added unless one is there; the executor replaces the latter with one offering every
     node to :attr:`robot_adaptations` and :attr:`plan_adaptations` first. A context
@@ -131,8 +126,7 @@ class PlanExecutor(Executor, ABC):
 
     robot_adaptations: list[PlanTransformation] = field(
         default_factory=lambda: [
-            DriveStretchWithItsDifferentialDrive(),
-            DriveTiagoWithItsDifferentialDrive(),
+            DriveWithTheDifferentialDrive(),
             MoveStretchToolCenterPointInAStraightLine(),
             KeepStretchFromTurningWhileMovingItsTool(),
             KeepTheTorsoUprightWhileUsingATool(),
@@ -172,7 +166,6 @@ class PlanExecutor(Executor, ABC):
     def default_context_extensions(self) -> list[ContextExtension]:
         return [
             StatementGrounding(),
-            MotionToleranceConfig(),
             PlanRewriting(transformations=self.adaptations),
         ]
 

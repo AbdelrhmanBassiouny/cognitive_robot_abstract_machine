@@ -5,7 +5,6 @@ their own.
 
 from __future__ import annotations
 
-from abc import ABC
 from dataclasses import dataclass
 
 from coraplex.exceptions import ClosingGoalNotFound, ToolPathNotFound
@@ -38,8 +37,8 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import (
 )
 from semantic_digital_twin.robots.justin import Justin
 from semantic_digital_twin.robots.stretch import Stretch
-from semantic_digital_twin.robots.tiago import Tiago
 from semantic_digital_twin.spatial_types.spatial_types import Pose, Vector3
+from semantic_digital_twin.world_description.connections import DifferentialDrive
 
 # %% keeping the torso upright while using a tool
 
@@ -84,36 +83,20 @@ class KeepTheTorsoUprightWhileUsingATool(ParallelInsertion[ToolMotionAction]):
 
 
 @dataclass
-class DriveWithTheDifferentialDrive(ConfigurationTransformation[DrivesBase], ABC):
+class DriveWithTheDifferentialDrive(ConfigurationTransformation[DrivesBase]):
     """
-    Moves the base of a robot with a goal for its differential drive, which turns
-    towards a pose, drives there and turns again, instead of a goal that asks the base
-    to move sideways.
+    Moves the base of a robot driven by a differential drive with a goal for that drive,
+    which turns towards a pose, drives there and turns again, instead of a goal that
+    asks the base to move sideways.
+
+    Applies simulated or not.
     """
+
+    def is_applicable(self, plan_node: DrivesBase) -> bool:
+        return isinstance(plan_node.robot.drive, DifferentialDrive)
 
     def apply(self, plan_node: DrivesBase) -> None:
         plan_node.base_goal_type = DifferentialDriveBaseGoal
-
-
-@dataclass
-class DriveStretchWithItsDifferentialDrive(DriveWithTheDifferentialDrive):
-    """
-    Moves the base of a Stretch with a goal for its differential drive, simulated or
-    not.
-    """
-
-    def is_applicable(self, plan_node: DrivesBase) -> bool:
-        return isinstance(plan_node.robot, Stretch)
-
-
-@dataclass
-class DriveTiagoWithItsDifferentialDrive(DriveWithTheDifferentialDrive):
-    """
-    Moves the base of a Tiago with a goal for its differential drive, simulated or not.
-    """
-
-    def is_applicable(self, plan_node: DrivesBase) -> bool:
-        return isinstance(plan_node.robot, Tiago)
 
 
 # %% keeping the base from turning while moving the tool
@@ -267,7 +250,6 @@ class KeepStretchInFrontOfTheContainerItCloses(PlanTransformation[CloseAction]):
                         tip_link=tool_frame,
                         environment_link=handle,
                         goal_joint_state=closing_goal.goal_joint_state,
-                        grasping_end_effector=closing_goal.grasping_end_effector,
                     ),
                 ]
             ),

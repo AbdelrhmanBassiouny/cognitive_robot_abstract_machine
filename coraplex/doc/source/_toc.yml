@@ -31,7 +31,6 @@ parts:
 
   - caption: Examples
     chapters:
-      - file: notebooks/language
       - file: designator_example.md
         sections:
         - file: notebooks/plan

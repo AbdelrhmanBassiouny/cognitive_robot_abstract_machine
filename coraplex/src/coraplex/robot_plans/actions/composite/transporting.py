@@ -84,15 +84,17 @@ class TransportAction(SequentialAction):
                 seed=seed,
             ),
             place=a(MoveAndPlaceAction)(
-                navigate=a(NavigateAction)(
-                    target_location=variable(
-                        Pose,
-                        domain=ReachabilityLocation(
-                            target_pose=target_location,
-                            arm=arm,
-                            context=context,
-                            seed=seed,
-                        ),
+                carry=a(CarryAction)(
+                    navigate=a(NavigateAction)(
+                        target_location=variable(
+                            Pose,
+                            domain=ReachabilityLocation(
+                                target_pose=target_location,
+                                arm=arm,
+                                context=context,
+                                seed=seed,
+                            ),
+                        )
                     )
                 ),
                 face_and_look_at=a(FaceAndLookAtAction)(
@@ -146,9 +148,9 @@ class MoveAndPlaceAction(SequentialAction):
     the object there.
     """
 
-    navigate: NavigateAction
+    carry: CarryAction
     """
-    The step to where the robot stands while placing.
+    The step carrying the object to where the robot stands while placing.
     """
 
     face_and_look_at: FaceAndLookAtAction
@@ -175,7 +177,9 @@ class MoveAndPlaceAction(SequentialAction):
         :return: The step placing the object from `standing_position`.
         """
         return cls(
-            navigate=NavigateAction(target_location=standing_position),
+            carry=CarryAction(
+                navigate=NavigateAction(target_location=standing_position)
+            ),
             face_and_look_at=FaceAndLookAtAction(
                 face_at=FaceAtAction(target=target_location),
                 look_at=LookAtAction(target=target_location),
@@ -187,7 +191,7 @@ class MoveAndPlaceAction(SequentialAction):
 
     def create_steps(self) -> list[StatechartNode]:
         return [
-            CarryAction(navigate=self.navigate),
+            self.carry,
             self.face_and_look_at,
             self.place,
         ]

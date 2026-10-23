@@ -9,7 +9,7 @@ from cramph.context import StatechartContext
 from cramph.executor import StatechartExecutor
 from cramph.statechart import Statechart
 from giskardpy.motion_control import MotionControl
-from giskardpy.motion_statechart.goals.tracebot import InsertCylinder
+from giskardpy.motion_statechart.goals.cylinder_insertion import InsertCylinder
 from giskardpy.motion_statechart.graph_node import EndMotion
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList
 from semantic_digital_twin.datastructures.definitions import GripperState
@@ -27,7 +27,6 @@ from semantic_digital_twin.world_description.connections import (
 from semantic_digital_twin.world_description.geometry import Cylinder
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
-
 
 # %% inserting a cylinder
 

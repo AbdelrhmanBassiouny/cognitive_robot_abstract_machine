@@ -148,13 +148,13 @@ class GeometricConstraintBuilder:
         :param frame_R_goal: goal rotation as rotation matrix
         :param reference_velocity: value used for normalization rad/s
         """
-        q_error = self._quaternion_error(frame_R_current, frame_R_goal)
+        quaternion_error = self._quaternion_error(frame_R_current, frame_R_goal)
 
         # w is redundant
         for i in range(3):
             self.collection.add_equality_constraint(
-                task_expression=q_error[i],
-                equality_bound=-q_error[i],
+                task_expression=quaternion_error[i],
+                equality_bound=-quaternion_error[i],
                 quadratic_weight=quadratic_weight,
                 reference_velocity=reference_velocity,
                 name=self._indexed_constraint_name(name, i),
@@ -182,10 +182,10 @@ class GeometricConstraintBuilder:
         frame_R_goal_yaw = RotationMatrix.from_rpy(
             yaw=frame_R_goal.rpy[2], reference_frame=frame_R_goal.reference_frame
         )
-        q_error = self._quaternion_error(frame_R_current, frame_R_goal_yaw)
+        quaternion_error = self._quaternion_error(frame_R_current, frame_R_goal_yaw)
         self.collection.add_equality_constraint(
-            task_expression=q_error.z,
-            equality_bound=-q_error.z,
+            task_expression=quaternion_error.z,
+            equality_bound=-quaternion_error.z,
             quadratic_weight=quadratic_weight,
             reference_velocity=reference_velocity,
             name=name,
@@ -204,10 +204,15 @@ class GeometricConstraintBuilder:
         # -0.0001 preserves the old behavior from before this goal was refactored
         hack = RotationMatrix.from_axis_angle(AxisAngle(Vector3.Z(), -0.0001))
         frame_R_current = frame_R_current.dot(hack)
-        q_actual = frame_R_current.quaternion
-        q_goal = frame_R_goal.quaternion
-        q_goal = sm.if_less(q_goal.dot(q_actual), 0, -q_goal, q_goal)
-        return q_actual.diff(q_goal)
+        current_quaternion = frame_R_current.quaternion
+        goal_quaternion = frame_R_goal.quaternion
+        goal_quaternion = sm.if_less(
+            goal_quaternion.dot(current_quaternion),
+            0,
+            -goal_quaternion,
+            goal_quaternion,
+        )
+        return current_quaternion.diff(goal_quaternion)
 
     def add_translational_velocity_limit(
         self,

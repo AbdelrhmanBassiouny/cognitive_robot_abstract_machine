@@ -70,11 +70,7 @@ class MotionControl(TickingExecutorExtension):
 
     def extend_context(self, context: StatechartContext) -> None:
         context.add_extension(
-            MotionControlContext(
-                qp_controller_config=self.qp_controller_config,
-                world=context.world,
-                float_variable_data=context.float_variable_data,
-            )
+            MotionControlContext(qp_controller_config=self.qp_controller_config)
         )
         context.set_tick_duration(
             self.qp_controller_config.control_time_step.total_seconds()

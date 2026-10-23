@@ -16,7 +16,7 @@ from coraplex.robot_plans.actions.base import (
 from coraplex.robot_plans.mixins import ReattachesBranches
 from cramph.composites import Parallel, PausedUntilTrue
 from giskardpy.motion_statechart.goals.base_pose_goals import (
-    BasePoseGoal,
+    MobileBasePoseGoal,
     DifferentialDriveBaseGoal,
     HolonomicBaseGoal,
 )
@@ -58,7 +58,9 @@ class DrivesBase(Action, ABC):
     as arrived.
     """
 
-    base_goal_type: type[BasePoseGoal] = field(default=HolonomicBaseGoal, init=False)
+    base_goal_type: type[MobileBasePoseGoal] = field(
+        default=HolonomicBaseGoal, init=False
+    )
     """
     The kind of node putting the base at the poses this action drives it to, as set by
     the plan transformations configuring the action.

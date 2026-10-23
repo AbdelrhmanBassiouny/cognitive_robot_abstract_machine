@@ -214,31 +214,26 @@ run(LookAtAction(target=target_location))
 
 ## Detect
 
-Detect is used to detect objects in the field of vision (FOV) of the robot. We will use the milk used in the pick
-up/place example, if you didn't execute that example you can spawn the milk with the following cell. The detect
-designator will return a resolved instance of an ObjectDesignatorDescription.
-
+Detect is used to detect objects in the field of vision (FOV) of the robot. We will use the milk placed in the pick
+up/place example. The robot drives in front of it, looks at it and detects it, which writes the pose the milk is seen at
+into the world.
 
 ```python
-# from coraplex.robot_plans import DetectActionDescription, LookAtActionDescription, ParkArmsActionDescription, NavigateActionDescription
-# from coraplex.designators.object_designator import BelieveObject
-# from coraplex.process_module import simulated_robot
-# from coraplex.datastructures.pose import PoseStamped
-# from coraplex.datastructures.enums import DetectionTechnique
-# 
-# milk_desig = BelieveObject(names=["milk"])
-# 
-# with simulated_robot:
-#     ParkArmsActionDescription(pr2.all_arms).resolve().perform()
-# 
-#     NavigateActionDescription([PoseStamped.from_list([1.7, 2, 0], [0, 0, 0, 1])]).resolve().perform()
-# 
-#     LookAtActionDescription(target=milk_desig.resolve().pose).resolve().perform()
-# 
-#     obj_desig = DetectActionDescription(DetectionTechnique.ALL,
-#                                         object_designator=milk_desig).resolve().perform()
-# 
-#     print(obj_desig)
+from coraplex.datastructures.enums import DetectionTechnique
+from coraplex.robot_plans.actions.core.misc import DetectAction
+from coraplex.robot_plans.actions.core.navigation import LookAtAction, NavigateAction
+from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
+from cramph.composites import Sequence
+from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
+
+milk = world.get_semantic_annotations_by_type(Milk)[0]
+
+run(Sequence(nodes=[
+    ParkArmsAction(arms=pr2.all_arms),
+    NavigateAction(target_location=Pose.from_xyz_rpy(1.7, 2, 0, reference_frame=world.root)),
+    LookAtAction(target=Pose(reference_frame=milk.root)),
+    DetectAction(technique=DetectionTechnique.TYPES, object_sem_annotation=Milk),
+]))
 ```
 
 ## Transporting

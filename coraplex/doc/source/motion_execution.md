@@ -10,12 +10,11 @@ and with every executor.
 A motion is a giskard goal or task. When an action expands, it creates the motions it needs from
 {mod}`giskardpy.motion_statechart` and puts them below itself in the statechart, for example a
 {class}`~giskardpy.motion_statechart.tasks.joint_tasks.JointPositionList` to move a joint, or a
-{class}`~giskardpy.motion_statechart.goals.gripper.MoveGripper` to open a gripper.
+{class}`~giskardpy.motion_statechart.goals.gripper.MoveGripper` to open a gripper to a width.
 
 Before an action creates a goal, it looks up the values that come from coraplex rather than from its own parameters:
 an arm's tool frame comes from its
-{class}`~semantic_digital_twin.robots.robot_parts.EndEffector`, goal-achievement thresholds fall back to
-the {class}`~coraplex.plans.context_extensions.MotionToleranceConfig` of the context, and the link a Cartesian
+{class}`~semantic_digital_twin.robots.robot_parts.EndEffector`, and the link a Cartesian
 goal is expressed relative to comes from
 {attr}`~coraplex.plans.context_extensions.RobotAccess.controlled_root`. The mixins in
 {mod}`coraplex.robot_plans.mixins` do this for the goals several actions share.
@@ -138,8 +137,8 @@ Some robots need a different implementation of a motion. Such a robot gets a
 action is expanded, and that applies only to its robot type. Every executor applies these through its
 {attr}`~coraplex.plans.executors.PlanExecutor.robot_adaptations`, whichever executor it is:
 
-- {class}`~coraplex.robot_plans.robot_specific_plan_transformations.DriveStretchWithItsDifferentialDrive` and
-  {class}`~coraplex.robot_plans.robot_specific_plan_transformations.DriveTiagoWithItsDifferentialDrive` drive the base with a
+- {class}`~coraplex.robot_plans.robot_specific_plan_transformations.DriveWithTheDifferentialDrive` drives the base of
+  every robot on a differential drive with a
   {class}`~giskardpy.motion_statechart.goals.base_pose_goals.DifferentialDriveBaseGoal`, which arrives within the
   {attr}`~coraplex.robot_plans.actions.core.navigation.DrivesBase.base_pose_threshold` of the action.
 - {class}`~coraplex.robot_plans.robot_specific_plan_transformations.MoveStretchToolCenterPointInAStraightLine` moves

@@ -80,7 +80,7 @@ def robot_setup(request):
             )
         elif request.param[1] == DAiSy:
             box1_transformationmatrix = HomogeneousTransformationMatrix.from_xyz_rpy(
-                0.6, 1.0, 1.2
+                0.6, 1.0, 0.9
             )
             box2_transformationmatrix = HomogeneousTransformationMatrix.from_xyz_rpy(
                 0.6, 0.1, 1.2

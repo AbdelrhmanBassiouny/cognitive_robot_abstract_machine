@@ -1420,25 +1420,6 @@ def test_repeated_collision_pr2_apartment_does_not_increase_execution_time(
     )
 
 
-# %% rules for a single end effector
-
-
-def test_end_effector_rules_free_only_that_end_effector(pr2_world_copy) -> None:
-    """
-    The rules built for an end effector allow collisions for that end effector and
-    nothing else.
-    """
-    robot = pr2_world_copy.get_semantic_annotations_by_type(PR2)[0]
-    end_effector = robot.left_arm.end_effector
-
-    node = UpdateTemporaryCollisionRules.for_end_effector(end_effector)
-
-    assert [type(rule) for rule in node.temporary_rules] == [
-        AllowCollisionForEndEffector
-    ]
-    assert node.temporary_rules[0].end_effector is end_effector
-
-
 # %% rules in force while a rules node is built
 
 
@@ -1478,8 +1459,16 @@ def test_rules_nodes_running_at_once_keep_the_rules_of_each_other_in_force(
     pr2_world_copy: World,
 ) -> None:
     robot = pr2_world_copy.get_semantic_annotations_by_type(PR2)[0]
-    left = UpdateTemporaryCollisionRules.for_end_effector(robot.left_arm.end_effector)
-    right = UpdateTemporaryCollisionRules.for_end_effector(robot.right_arm.end_effector)
+    left = UpdateTemporaryCollisionRules(
+        temporary_rules=[
+            AllowCollisionForEndEffector(end_effector=robot.left_arm.end_effector)
+        ]
+    )
+    right = UpdateTemporaryCollisionRules(
+        temporary_rules=[
+            AllowCollisionForEndEffector(end_effector=robot.right_arm.end_effector)
+        ]
+    )
     executor = _executor_of(pr2_world_copy)
     statechart = Statechart(context=executor.context)
     statechart.add_nodes([left, right])

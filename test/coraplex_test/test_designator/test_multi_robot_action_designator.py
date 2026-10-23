@@ -48,7 +48,6 @@ from coraplex.robot_plans.actions.core.robot_body import (
     MoveFingersToWidthAction,
     MoveManipulatorAction,
 )
-from coraplex.plans.context_extensions import MotionToleranceConfig
 from coraplex.robot_plans.actions.base import Action
 from coraplex.robot_plans.actions.composite.carrying import CarryAction
 from coraplex.robot_plans.actions.composite.facing import FaceAndLookAtAction
@@ -60,7 +59,7 @@ from giskardpy.motion_statechart.weights import DefaultWeights
 from giskardpy.motion_statechart.goals.collision_avoidance import (
     UpdateTemporaryCollisionRules,
 )
-from giskardpy.motion_statechart.goals.gripper import MoveGripper
+from giskardpy.motion_statechart.goals.gripper import MoveFingers, MoveGripper
 from giskardpy.motion_statechart.monitors.overwrite_state_monitors import SetOdometry
 from giskardpy.motion_statechart.goals.base_pose_goals import HolonomicBaseGoal
 from giskardpy.motion_statechart.goals.cartesian_goals import CartesianPoseStraight
@@ -70,7 +69,6 @@ from giskardpy.motion_statechart.goals.grasped_mechanism import (
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
     CartesianPositionVelocityLimit,
-    DistanceAlongAxis,
     HoldPose,
 )
 from giskardpy.motion_statechart.tasks.joint_tasks import (
@@ -1246,8 +1244,9 @@ def test_set_gripper_drives_the_gripper_it_names(multiple_robot_apartment_contex
 
     expand(action, extensions)
 
-    [goal] = nodes_of_type(action, MoveGripper)
-    assert goal.end_effector is end_effector
+    [goal] = nodes_of_type(action, MoveFingers)
+    assert goal.finger_connections
+    assert set(goal.finger_connections) <= set(end_effector.finger_connections)
 
 
 def test_park_arms_caps_joint_velocity_only_when_asked(
@@ -1544,10 +1543,9 @@ def test_fingers_sent_to_a_width_are_given_the_distance_between_their_facing_poi
     statechart_of(physically_simulated_executor(extensions), action)
 
     goal = action.goal
-    assert isinstance(goal, DistanceAlongAxis)
-    assert goal.reference_point.reference_frame is gripper.finger.tip
-    assert goal.tip_point.reference_frame is gripper.thumb.tip
-    assert goal.distance == action.width
+    assert isinstance(goal, MoveGripper)
+    assert goal.gripper is gripper
+    assert goal.width == action.width
 
 
 def test_a_squeeze_sends_the_fingers_past_the_width(
@@ -1563,7 +1561,7 @@ def test_a_squeeze_sends_the_fingers_past_the_width(
     statechart_of(physically_simulated_executor(extensions), touching)
     statechart_of(physically_simulated_executor(extensions), pressing)
 
-    assert pressing.goal.distance == pytest.approx(touching.goal.distance - 2 * squeeze)
+    assert pressing.goal.width == pytest.approx(touching.goal.width - 2 * squeeze)
 
 
 def test_fingers_sent_to_a_width_stand_that_far_apart(
@@ -1607,7 +1605,7 @@ def test_fingers_may_be_sent_as_wide_as_their_gripper_opens(
 
     statechart_of(physically_simulated_executor(extensions), action)
 
-    assert isinstance(action.goal, DistanceAlongAxis)
+    assert isinstance(action.goal, MoveGripper)
 
 
 # %% what holds a picked object
@@ -1828,7 +1826,7 @@ def test_a_cup_picked_up_earlier_in_the_plan_ends_upright(
     # The cup is held with the orientation error the gripper reached its grasp with.
     assert (
         tilt_from_upright(cup.root)
-        <= carry.upright_threshold + MotionToleranceConfig().tool_orientation_threshold
+        <= carry.upright_threshold + PickUpAction.orientation_threshold
     )
 
 
@@ -1896,7 +1894,7 @@ def test_a_placing_carries_its_object_to_where_it_stands(
     cup = cup_held_tilted(robot)
     target = Pose.from_xyz_rpy(x=0.8, z=0.8, reference_frame=robot.root)
     move_and_place = MoveAndPlaceAction(
-        navigate=drive_ahead(robot),
+        carry=CarryAction(navigate=drive_ahead(robot)),
         face_and_look_at=FaceAndLookAtAction(
             face_at=FaceAtAction(target=target), look_at=LookAtAction(target=target)
         ),
@@ -1905,9 +1903,7 @@ def test_a_placing_carries_its_object_to_where_it_stands(
 
     expand(move_and_place, extensions)
 
-    carry = move_and_place.nodes[0]
-    assert isinstance(carry, CarryAction)
-    assert carry.navigate is move_and_place.navigate
+    assert move_and_place.nodes[0] is move_and_place.carry
 
 
 # %% both arms handling objects at once
@@ -2021,7 +2017,7 @@ def test_a_gripper_closes_at_its_grasp_although_the_other_arm_is_moving(
             world.transform(pick_up.grasp.grasp_pose, world.root)
             .position.to_np()
             .flatten()[:3],
-            atol=MotionToleranceConfig().default_tcp_position_threshold,
+            atol=pick_up.position_threshold,
         )
 
 
@@ -2041,7 +2037,7 @@ def test_a_gripper_opens_at_its_place_target_although_the_other_arm_is_moving(
         np.testing.assert_allclose(
             place.object_designator.root.global_pose.position.to_np()[:3],
             place.target_location.position.to_np()[:3],
-            atol=2 * MotionToleranceConfig().default_tcp_position_threshold,
+            atol=2 * place.position_threshold,
         )
 
 

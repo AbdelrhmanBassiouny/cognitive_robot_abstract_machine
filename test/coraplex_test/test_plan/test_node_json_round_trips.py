@@ -211,7 +211,7 @@ def _move_and_pick_up(world: World) -> MoveAndPickUpAction:
 
 def _move_and_place(world: World) -> MoveAndPlaceAction:
     return MoveAndPlaceAction(
-        navigate=_navigate(world),
+        carry=CarryAction(navigate=_navigate(world)),
         face_and_look_at=_face_and_look_at(world),
         place=_place(world),
     )

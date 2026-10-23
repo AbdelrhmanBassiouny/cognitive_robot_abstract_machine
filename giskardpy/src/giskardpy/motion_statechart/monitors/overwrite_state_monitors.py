@@ -13,7 +13,7 @@ from semantic_digital_twin.world_description.connections import (
 from semantic_digital_twin.world_description.world_entity import Connection
 from cramph.node import SucceedsOnObservingTrue
 from giskardpy.motion_statechart.exceptions import UnexpectedWorldEntityCountError
-from giskardpy.motion_statechart.goals.base_pose_goals import BasePoseGoal
+from giskardpy.motion_statechart.goals.base_pose_goals import MobileBasePoseGoal
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from cramph.node import NodeArtifacts
 from giskardpy.motion_statechart.tasks.joint_tasks import JointState
@@ -45,7 +45,7 @@ class SetSeedConfiguration(SucceedsOnObservingTrue, MotionStatechartNode):
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class SetOdometry(SucceedsOnObservingTrue, MotionStatechartNode, BasePoseGoal):
+class SetOdometry(SucceedsOnObservingTrue, MotionStatechartNode, MobileBasePoseGoal):
     """
     Sets the odometry of the robot to the given pose.
     """
@@ -63,14 +63,18 @@ class SetOdometry(SucceedsOnObservingTrue, MotionStatechartNode, BasePoseGoal):
     """
 
     _odom_joints: Tuple[Type[Connection], ...] = field(default=(OmniDrive,), init=False)
+    """
+    The kinds of drive searched for when :attr:`odom_connection` is None.
+    """
 
     @classmethod
     def moving_base_of(
         cls, robot: AbstractRobot, goal_pose: Pose, threshold: float
     ) -> Self:
         """
-        Differs from :meth:`BasePoseGoal.moving_base_of` in ignoring `threshold`,
-        because the base is put exactly at `goal_pose`.
+        Differs from :meth:`MobileBasePoseGoal.moving_base_of` in setting the odometry
+        of the drive attaching `robot` to its parent, which puts the base exactly at
+        `goal_pose` at once, so `threshold` is ignored.
         """
         return cls(
             base_pose=goal_pose.homogeneous_matrix,

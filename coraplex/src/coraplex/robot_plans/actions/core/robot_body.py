@@ -6,9 +6,6 @@ from datetime import timedelta
 from typing_extensions import Optional, Any, List
 
 from semantic_digital_twin.collision_checking.collision_matrix import CollisionRule
-from semantic_digital_twin.collision_checking.collision_rules import (
-    AllowCollisionForEndEffector,
-)
 from semantic_digital_twin.robots.robot_part_mixins import HasTwoFingers
 from semantic_digital_twin.robots.robot_parts import Arm, EndEffector
 from semantic_digital_twin.spatial_types.spatial_types import Pose
@@ -29,7 +26,6 @@ from cramph.node import StatechartNode
 from giskardpy.motion_statechart.binding_policy import GoalBindingPolicy
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
-    DistanceAlongAxis,
 )
 from giskardpy.motion_statechart.tasks.joint_tasks import (
     JointPositionList,
@@ -77,7 +73,7 @@ class SetGripperAction(GoalAction):
     """
 
     def create_goal(self) -> StatechartNode:
-        return MoveGripper(end_effector=self.gripper, state=self.motion)
+        return self.create_finger_goal(self.gripper, self.motion)
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
@@ -126,15 +122,11 @@ class MoveFingersToWidthAction(GoalAction):
         """
         if self.width > self.gripper.separation_when_open:
             raise WidthBeyondGripperOpening(gripper=self.gripper, width=self.width)
-        fingertips = self.gripper.fingertips
-        return DistanceAlongAxis(
-            root_link=fingertips.tool_frame,
-            reference_point=fingertips.finger_P_facing_point,
-            tip_point=fingertips.thumb_P_facing_point,
-            axis=fingertips.tool_V_finger_to_thumb,
-            distance=max(0.0, self.width - 2 * self.squeeze),
-            name="MoveFingersToWidth",
+        return MoveGripper(
+            gripper=self.gripper,
+            width=max(0.0, self.width - 2 * self.squeeze),
             threshold=self.threshold,
+            name="MoveFingersToWidth",
         )
 
 
@@ -193,6 +185,16 @@ class FollowToolCenterPointPathAction(MovesToolCenterPoint, ParallelAction):
     The arm to use.
     """
 
+    position_threshold: float = CartesianPose.translation_threshold
+    """
+    Distance threshold in meters within which the tool center point passes a waypoint.
+    """
+
+    orientation_threshold: float = CartesianPose.orientation_threshold
+    """
+    Rotation threshold in rad within which the tool center point passes a waypoint.
+    """
+
     def create_steps(self) -> list[StatechartNode]:
         waypoints = Sequence(
             nodes=[self._waypoint_goal(pose) for pose in self.target_locations.poses]
@@ -202,19 +204,14 @@ class FollowToolCenterPointPathAction(MovesToolCenterPoint, ParallelAction):
     def _waypoint_goal(self, target: Pose) -> CartesianPose:
         """
         :param target: The waypoint the tool center point passes through.
-        :return: The task reaching that waypoint, leaving each threshold to giskard's
-            own default unless this action was given one.
+        :return: The task reaching that waypoint.
         """
-        thresholds = {}
-        if self.position_threshold is not None:
-            thresholds["translation_threshold"] = self.position_threshold
-        if self.orientation_threshold is not None:
-            thresholds["orientation_threshold"] = self.orientation_threshold
         return CartesianPose(
             root_link=self.controlled_root,
             tip_link=self.arm.end_effector.tool_frame,
             goal_pose=target,
-            **thresholds,
+            translation_threshold=self.position_threshold,
+            orientation_threshold=self.orientation_threshold,
         )
 
     def validate(
@@ -253,15 +250,15 @@ class MoveManipulatorAction(MovesToolCenterPoint, GoalAction):
         """
         if not self.allow_gripper_collision:
             return []
-        return [AllowCollisionForEndEffector(end_effector=self.end_effector)]
+        return self.create_touch_allowance_for(self.end_effector)
 
     def create_goal(self) -> StatechartNode:
         goal = CartesianPose(
             root_link=self.controlled_root,
             tip_link=self.end_effector.tool_frame,
             goal_pose=self.target_pose,
-            translation_threshold=self.resolved_position_threshold(),
-            orientation_threshold=self.resolved_orientation_threshold(),
+            translation_threshold=self.position_threshold,
+            orientation_threshold=self.orientation_threshold,
             binding_policy=GoalBindingPolicy.Bind_on_start,
         )
         for node in self.keep_base_still():

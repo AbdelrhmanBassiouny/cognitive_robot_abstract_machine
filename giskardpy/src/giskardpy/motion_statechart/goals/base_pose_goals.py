@@ -40,7 +40,7 @@ from semantic_digital_twin.world_description.world_entity import (
 # %% putting the base of a robot at a pose
 
 
-class BasePoseGoal(ABC):
+class MobileBasePoseGoal(ABC):
     """
     A node putting the base of a robot at a pose, built for any robot the same way, so
     which kind of node does it can be chosen without knowing what each one needs.
@@ -65,7 +65,11 @@ class BasePoseGoal(ABC):
 
 @dataclass(eq=False, repr=False, kw_only=True)
 class DrivenBaseGoal(
-    SucceedsOnObservingTrue, FailsOnObservingFalse, CompositeNode, BasePoseGoal, ABC
+    SucceedsOnObservingTrue,
+    FailsOnObservingFalse,
+    CompositeNode,
+    MobileBasePoseGoal,
+    ABC,
 ):
     """
     Drives a base along the floor and turns it about the vertical until it stands below
@@ -87,7 +91,7 @@ class DrivenBaseGoal(
     Pose to reach.
     """
 
-    weight: float = DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE
+    weight: float = DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE
     """
     Task priority relative to other tasks.
     """
@@ -145,8 +149,8 @@ class DrivenBaseGoal(
         cls, robot: AbstractRobot, goal_pose: Pose, threshold: float
     ) -> Self:
         """
-        Differs from :meth:`BasePoseGoal.moving_base_of` in requiring `robot` to have a
-        mobile base.
+        Differs from :meth:`MobileBasePoseGoal.moving_base_of` in requiring `robot` to
+        have a mobile base.
 
         :raises RobotWithoutMobileBaseError: If `robot` has no mobile base.
         """

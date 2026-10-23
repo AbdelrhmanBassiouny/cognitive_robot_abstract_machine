@@ -10,9 +10,6 @@ from scipy.spatial.transform import Rotation
 from typing_extensions import List, Optional, Tuple, Union
 
 from semantic_digital_twin.collision_checking.collision_matrix import CollisionRule
-from semantic_digital_twin.collision_checking.collision_rules import (
-    AllowCollisionForEndEffector,
-)
 from semantic_digital_twin.datastructures.alignment import AlignmentPair
 from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
 from semantic_digital_twin.robots.robot_parts import Arm
@@ -20,7 +17,6 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import Tool
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
     Point3,
-    Vector3,
 )
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world_description.world_entity import (
@@ -166,7 +162,7 @@ class ToolMotionAction(
         :return: An allowance for the manipulator holding the tool to touch what the
             tool works on, for the whole stroke.
         """
-        return [AllowCollisionForEndEffector(end_effector=self.arm.end_effector)]
+        return self.create_touch_allowance_for(self.arm.end_effector)
 
     def create_steps(self) -> list[StatechartNode]:
         """
@@ -199,7 +195,7 @@ class ToolMotionAction(
             goal_points=self._waypoints,
             maximum_skip_ahead=self.maximum_skip_ahead,
             weight=float(DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE),
-            threshold=self.resolved_position_threshold(),
+            threshold=self.position_threshold,
         )
         return [trajectory, *alignments]
 
@@ -591,7 +587,7 @@ class PouringAction(FullBodyControlledAction, MovesToolCenterPoint, SequentialAc
         :return: An allowance for the manipulator holding the source container to touch
             the rim it pours over.
         """
-        return [AllowCollisionForEndEffector(end_effector=self.arm.end_effector)]
+        return self.create_touch_allowance_for(self.arm.end_effector)
 
     def create_steps(self) -> list[StatechartNode]:
         """

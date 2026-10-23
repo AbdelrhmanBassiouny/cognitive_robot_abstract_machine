@@ -1,18 +1,18 @@
 from __future__ import annotations
 
-from abc import ABC
-
-import numpy as np
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Self, List
+
+import numpy as np
 
 from krrood.ormatic.utils import classproperty
 from semantic_digital_twin.datastructures.definitions import (
     GripperState,
     StaticJointState,
 )
+from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_part_mixins import (
@@ -20,10 +20,8 @@ from semantic_digital_twin.robots.robot_part_mixins import (
     HasTorso,
     HasMobileBase,
     HasTwoFingers,
-    HasEndEffector,
     HasSensors,
 )
-from semantic_digital_twin.world_description.connections import OmniDrive
 from semantic_digital_twin.robots.robot_parts import (
     AbstractRobot,
     Arm,
@@ -33,8 +31,11 @@ from semantic_digital_twin.robots.robot_parts import (
     MobileBase,
     EndEffector,
 )
-from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.spatial_types import Vector3
+from semantic_digital_twin.world_description.connections import (
+    ActiveConnection1DOF,
+    OmniDrive,
+)
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
@@ -115,17 +116,24 @@ class MMPDresdenGripper(
         self._setup_hardware_interfaces_for_active_connections()
 
     def setup_joint_states(self) -> List[JointState]:
-        gripper_joints = self.active_connections
+        """
+        The gripper stands open with its left knuckle, which every other joint of the
+        gripper mimics, at its lower limit and closed with it at its upper limit.
+        """
+        knuckle: ActiveConnection1DOF = self._world.get_connection_by_name(
+            MMPDresdenJoint.GRIPPER_LEFT_KNUCKLE
+        )
+        limits = knuckle.raw_dof.limits
 
         gripper_open = JointState.from_mapping(
             name=PrefixedName(f"{self.name.name}_open", prefix=self.name.name),
-            mapping=dict(zip(gripper_joints, [0.0])),
+            mapping={knuckle: limits.lower.position},
             state_type=GripperState.OPEN,
         )
 
         gripper_close = JointState.from_mapping(
             name=PrefixedName(f"{self.name.name}_close", prefix=self.name.name),
-            mapping=dict(zip(gripper_joints, [0.8])),
+            mapping={knuckle: limits.upper.position},
             state_type=GripperState.CLOSE,
         )
 

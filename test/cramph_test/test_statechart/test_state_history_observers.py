@@ -320,3 +320,31 @@ def test_a_node_that_just_ended_is_among_those_ended_in_the_newest_snapshot(
     assert executor.statechart.state_history.nodes_ended_in_latest_item() == [
         succeeding
     ]
+
+
+# %% snapshots of a state
+
+
+def test_a_state_snapshot_reads_its_values_against_the_same_statechart(
+    history_chart,
+) -> None:
+    """
+    A snapshot is keyed by the nodes of the statechart it was taken of, not a copy.
+    """
+    snapshot = history_chart.life_cycle_state.snapshot()
+
+    assert snapshot.statechart is history_chart
+
+
+def test_a_state_snapshot_keeps_its_values_when_the_state_changes(
+    history_chart,
+) -> None:
+    """
+    Changing the live state after taking a snapshot leaves the snapshot as it was.
+    """
+    node = history_chart.nodes[0]
+    history_chart.life_cycle_state[node] = LifeCycleValues.PAUSED
+    snapshot = history_chart.life_cycle_state.snapshot()
+    history_chart.life_cycle_state[node] = LifeCycleValues.RUNNING
+
+    assert snapshot[node] == LifeCycleValues.PAUSED

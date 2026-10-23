@@ -31,11 +31,17 @@ from giskardpy.motion_statechart.goals.collision_avoidance import (
     _ExternalCollisionAvoidanceTask,
     _SelfCollisionAvoidanceTask,
 )
-from giskardpy.motion_statechart.goals.gripper import MoveGripper
+from giskardpy.motion_statechart.goals.gripper import (
+    MoveFingersToJointState,
+    MoveGripper,
+)
 from giskardpy.motion_statechart.goals.grasped_mechanism import (
     ArticulateGraspedMechanism,
 )
-from giskardpy.motion_statechart.goals.tracebot import InsertCylinder, StayOnLineTask
+from giskardpy.motion_statechart.goals.cylinder_insertion import (
+    InsertCylinder,
+    StayOnLineTask,
+)
 from giskardpy.motion_statechart.graph_node import (
     EndMotion,
     StructureCopyMotionStatechartNode,
@@ -773,8 +779,19 @@ def _joint_and_base_cases() -> list[NodeRoundTripCase]:
             MoveGripper,
             lambda world: [
                 MoveGripper(
-                    end_effector=world.get_semantic_annotations_by_type(EndEffector)[0],
-                    state=GripperState.CLOSE,
+                    gripper=world.get_semantic_annotations_by_type(EndEffector)[0],
+                    width=0.04,
+                )
+            ],
+            WorldFixture.PR2_WORLD,
+        ),
+        NodeRoundTripCase(
+            MoveFingersToJointState,
+            lambda world: [
+                MoveFingersToJointState(
+                    goal_state=world.get_semantic_annotations_by_type(EndEffector)[
+                        0
+                    ].get_joint_state_by_type(GripperState.CLOSE),
                 )
             ],
             WorldFixture.PR2_WORLD,

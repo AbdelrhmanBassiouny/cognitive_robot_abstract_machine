@@ -19,6 +19,7 @@ from coraplex.robot_plans.actions.core.navigation import (
     LookAtAction,
     NavigateAction,
 )
+from coraplex.robot_plans.actions.composite.carrying import CarryAction
 from coraplex.robot_plans.actions.composite.facing import FaceAndLookAtAction
 from coraplex.robot_plans.actions.composite.transporting import (
     MoveAndOpenAction,
@@ -114,15 +115,17 @@ def _place_at(
     """
     robot = robot_of(extensions)
     return a(MoveAndPlaceAction)(
-        navigate=a(NavigateAction)(
-            target_location=variable(
-                Pose,
-                domain=ReachabilityLocation(
-                    target,
-                    robot.right_arm,
-                    context=context_of(extensions),
-                    seed=SAMPLING_SEED,
-                ),
+        carry=a(CarryAction)(
+            navigate=a(NavigateAction)(
+                target_location=variable(
+                    Pose,
+                    domain=ReachabilityLocation(
+                        target,
+                        robot.right_arm,
+                        context=context_of(extensions),
+                        seed=SAMPLING_SEED,
+                    ),
+                )
             )
         ),
         face_and_look_at=a(FaceAndLookAtAction)(
@@ -133,11 +136,12 @@ def _place_at(
     )
 
 
-def _standing_positions(step: Match) -> ReachabilityLocation:
+def _standing_positions(navigate: Match) -> ReachabilityLocation:
     """
-    :return: The location the standing pose of `step` is sampled from.
+    :param navigate: The statement of a drive to where the robot stands.
+    :return: The location the standing pose of `navigate` is sampled from.
     """
-    return step._kwargs_["navigate"]._kwargs_["target_location"]._domain_.domain
+    return navigate._kwargs_["target_location"]._domain_.domain
 
 
 def _transport_of_the_milk(
@@ -193,8 +197,10 @@ def test_a_transport_of_a_graspable_stands_around_the_object_then_the_target(
         milk, target, robot.right_arm, context_of(extensions), seed=SAMPLING_SEED
     )
 
-    pick_up_location = _standing_positions(transport.pick_up)
-    place_location = _standing_positions(transport.place)
+    pick_up_location = _standing_positions(transport.pick_up._kwargs_["navigate"])
+    place_location = _standing_positions(
+        transport.place._kwargs_["carry"]._kwargs_["navigate"]
+    )
     assert pick_up_location.target_pose.reference_frame is milk.root
     assert place_location.target_pose is target
 
@@ -787,7 +793,7 @@ def test_a_move_and_place_from_a_standing_position_places_the_given_object(
         standing_position, target, milk
     )
 
-    assert move_and_place.navigate.target_location is standing_position
+    assert move_and_place.carry.navigate.target_location is standing_position
     assert move_and_place.face_and_look_at.face_at.target is target
     assert move_and_place.face_and_look_at.look_at.target is target
     assert move_and_place.place.object_designator is milk

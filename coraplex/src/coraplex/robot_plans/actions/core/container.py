@@ -16,14 +16,10 @@ from cramph.node import StatechartNode
 from coraplex.robot_plans.actions.core.pick_up import GraspingAction, HasGraspChoice
 from coraplex.robot_plans.mixins import HasApproachesGraspPoses, MovesToolCenterPoint
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
-from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from giskardpy.motion_statechart.goals.grasped_mechanism import (
     ArticulateGraspedMechanism,
 )
 from semantic_digital_twin.collision_checking.collision_matrix import CollisionRule
-from semantic_digital_twin.collision_checking.collision_rules import (
-    AllowCollisionForEndEffector,
-)
 from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.robots.robot_parts import Arm, EndEffector
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
@@ -100,7 +96,7 @@ class MovesContainerByItsHandle(
         :return: An allowance for the gripper on the handle to touch its surroundings,
             from taking hold of the handle until it has backed off it.
         """
-        return [AllowCollisionForEndEffector(end_effector=self.arm.end_effector)]
+        return self.create_touch_allowance_for(self.arm.end_effector)
 
     def create_steps(self) -> list[StatechartNode]:
         end_effector = self.arm.end_effector
@@ -111,10 +107,7 @@ class MovesContainerByItsHandle(
                 approach_clearance=self.approach_clearance,
             ),
             self._create_mechanism_goal(),
-            MoveGripper(
-                end_effector=end_effector,
-                state=GripperState.OPEN,
-            ),
+            self.create_finger_goal(end_effector, GripperState.OPEN),
             self.tool_center_point_goal(
                 self.back_off_pose(self.grasp.grasp_pose, end_effector),
                 self.arm,

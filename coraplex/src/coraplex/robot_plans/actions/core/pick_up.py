@@ -17,10 +17,6 @@ from coraplex.robot_plans.mixins import (
     ReachTuningParameters,
 )
 from semantic_digital_twin.collision_checking.collision_matrix import CollisionRule
-from semantic_digital_twin.collision_checking.collision_rules import (
-    AllowCollisionForEndEffector,
-)
-from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.semantic_annotations.mixins import HasGraspCandidates
@@ -93,7 +89,7 @@ class ReachAction(
         :return: An allowance for the gripper to touch the surroundings of the grasp it
             comes down onto.
         """
-        return [AllowCollisionForEndEffector(end_effector=self.arm.end_effector)]
+        return self.create_touch_allowance_for(self.arm.end_effector)
 
     def create_steps(self) -> list[StatechartNode]:
         poses = self.grasp_pose_sequence(
@@ -109,7 +105,7 @@ class ReachAction(
         ]
         if self.open_gripper_at_pre_pose:
             children.append(
-                MoveGripper(end_effector=self.arm.end_effector, state=GripperState.OPEN)
+                self.create_finger_goal(self.arm.end_effector, GripperState.OPEN)
             )
         children.append(
             self.tool_center_point_goal(
@@ -138,7 +134,7 @@ class PickUpAction(
     tolerate_grasp_stall: bool = False
     """
     Whether the CLOSE motion's completion also tolerates a stalled grasp (see
-    :attr:`~giskardpy.motion_statechart.goals.gripper.MoveGripper.tolerate_stall`).
+    :attr:`~giskardpy.motion_statechart.goals.gripper.MoveFingers.tolerate_stall`).
 
     Opt-in rather than always on: building the stall monitor needs a velocity variable
     for every one of the gripper's connections, which is not guaranteed for every robot
@@ -197,7 +193,7 @@ class PickUpAction(
             which it is around from reaching for it until it has lifted it clear, the
             moment the object is put under it included.
         """
-        return [AllowCollisionForEndEffector(end_effector=self.arm.end_effector)]
+        return self.create_touch_allowance_for(self.arm.end_effector)
 
     def create_steps(self) -> list[StatechartNode]:
         lift_to_pose = self.grasp_pose_sequence(
@@ -232,7 +228,7 @@ class GraspingAction(
     tolerate_grasp_stall: bool = False
     """
     Whether the CLOSE motion's completion also tolerates a stalled grasp (see
-    :attr:`~giskardpy.motion_statechart.goals.gripper.MoveGripper.tolerate_stall`).
+    :attr:`~giskardpy.motion_statechart.goals.gripper.MoveFingers.tolerate_stall`).
     """
 
     def create_temporary_collision_rules(self) -> list[CollisionRule]:
@@ -240,7 +236,7 @@ class GraspingAction(
         :return: An allowance for the gripper to touch the surroundings of the grasp it
             reaches and closes on.
         """
-        return [AllowCollisionForEndEffector(end_effector=self.arm.end_effector)]
+        return self.create_touch_allowance_for(self.arm.end_effector)
 
     def create_steps(self) -> list[StatechartNode]:
         return [
@@ -257,9 +253,9 @@ class GraspingAction(
                 grasp_detection_threshold=self.grasp_detection_threshold,
             ),
             self.closing_step(
-                MoveGripper(
-                    end_effector=self.arm.end_effector,
-                    state=GripperState.CLOSE,
+                self.create_finger_goal(
+                    self.arm.end_effector,
+                    GripperState.CLOSE,
                     finger_velocity=self.grasp_closing_velocity,
                     stall_minimum_time=self.grasp_stall_minimum_time,
                     tolerate_stall=self.tolerate_grasp_stall,

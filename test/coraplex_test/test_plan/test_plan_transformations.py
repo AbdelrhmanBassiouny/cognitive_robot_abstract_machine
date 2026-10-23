@@ -60,7 +60,7 @@ from cramph.composites import (
 from cramph.context import ContextExtension
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.goals.cartesian_goals import CartesianPoseStraight
-from giskardpy.motion_statechart.goals.gripper import MoveGripper
+from giskardpy.motion_statechart.goals.gripper import MoveFingers, MoveGripper
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
     CartesianPositionStraight,
@@ -165,11 +165,11 @@ def kinds_of_the_steps_of(node: StatechartNode) -> list[type]:
     return [kind_of(step) for step in steps_of(node)]
 
 
-def gripper_goal(end_effector: EndEffector, state: GripperState) -> MoveGripper:
+def gripper_goal(end_effector: EndEffector, state: GripperState) -> MoveFingers:
     """
     :return: A new goal moving the gripper of `end_effector` to `state`.
     """
-    return MoveGripper(end_effector=end_effector, state=state)
+    return Action.create_finger_goal(end_effector, state)
 
 
 def joint_goal_of(torso_move: MoveTorsoAction) -> JointPositionList:
@@ -540,7 +540,7 @@ def test_a_transformation_inserts_its_nodes_before_the_anchor(pr2_apartment_cont
         MoveGripper,
         JointPositionList,
     ]
-    assert [step.end_effector for step in steps[:2]] == [
+    assert [step.gripper for step in steps[:2]] == [
         view.left_arm.end_effector,
         view.right_arm.end_effector,
     ]
@@ -564,7 +564,7 @@ def test_a_transformation_inserts_its_nodes_after_the_anchor(pr2_apartment_conte
         MoveGripper,
         MoveGripper,
     ]
-    assert [step.end_effector for step in steps[1:]] == [
+    assert [step.gripper for step in steps[1:]] == [
         view.left_arm.end_effector,
         view.right_arm.end_effector,
     ]
@@ -1543,7 +1543,7 @@ def test_the_transformations_that_collide_are_still_applied(pr2_apartment_contex
         plan_transformations,
     )
 
-    assert [step.end_effector for step in steps_of(plan)[:2]] == [
+    assert [step.gripper for step in steps_of(plan)[:2]] == [
         view.left_arm.end_effector,
         view.right_arm.end_effector,
     ]
@@ -1591,7 +1591,8 @@ def shutting_goals_of(plan: StatechartNode) -> list[MoveGripper]:
     return [
         node
         for node in plan.descendants
-        if isinstance(node, MoveGripper) and node.state is GripperState.CLOSE
+        if isinstance(node, MoveGripper)
+        and node.width == node.gripper.separation_in(GripperState.CLOSE)
     ]
 
 

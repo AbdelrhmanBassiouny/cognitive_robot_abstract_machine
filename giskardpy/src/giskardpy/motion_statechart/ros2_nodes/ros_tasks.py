@@ -65,9 +65,9 @@ class ActionServerTask(
     ROS action client, is created in `set_up`.
     """
 
-    _msg: ActionGoal = field(init=False, default=None)
+    _action_goal: ActionGoal | None = field(init=False, default=None)
     """
-    ROS message to send to the action server.
+    Goal to send to the action server.
     """
 
     _result: ActionResult = field(init=False, default=None)
@@ -80,7 +80,7 @@ class ActionServerTask(
         return super().required_context_extensions + (RosContextExtension,)
 
     @abstractmethod
-    def build_msg(self) -> None:
+    def build_action_goal(self) -> None:
         """
         Build the goal message this node sends to the action server.
         """
@@ -95,7 +95,7 @@ class ActionServerTask(
         self._action_client = ros_context_extension.get_or_create_action_client(
             self.message_type, self.action_topic
         )
-        self.build_msg()
+        self.build_action_goal()
         logger.info(f"Waiting for action server {self.action_topic}")
         self._action_client.wait_for_server()
 
@@ -103,7 +103,7 @@ class ActionServerTask(
         """
         Creates a goal and sends it to the action server asynchronously.
         """
-        future = self._action_client.send_goal_async(self._msg)
+        future = self._action_client.send_goal_async(self._action_goal)
         future.add_done_callback(self.goal_response_callback)
 
     def goal_response_callback(self, future):
@@ -151,12 +151,12 @@ class NavigateActionServerTask(
     Base link of the robot, used for estimating the distance to the goal.
     """
 
-    def build_msg(self) -> None:
-        root_p_goal = self.context.world.transform(
+    def build_action_goal(self) -> None:
+        root_T_goal = self.context.world.transform(
             target_frame=self.context.world.root, spatial_object=self.target_pose
         )
-        position = root_p_goal.position.to_np()
-        orientation = root_p_goal.quaternion.to_np()
+        position = root_T_goal.position.to_np()
+        orientation = root_T_goal.quaternion.to_np()
         pose_stamped = ROSPoseStamped(
             header=Header(frame_id="map"),
             pose=ROSPose(
@@ -169,7 +169,7 @@ class NavigateActionServerTask(
                 ),
             ),
         )
-        self._msg = NavigateToPose.Goal(pose=pose_stamped)
+        self._action_goal = NavigateToPose.Goal(pose=pose_stamped)
 
     def build_artifacts(self) -> NodeArtifacts:
         """

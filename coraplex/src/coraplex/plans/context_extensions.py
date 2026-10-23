@@ -68,25 +68,6 @@ class StatementGrounding(ContextExtension):
 
     sampling_seed: int | None = None
     """
-    Seed for the locations the plan's actions sample, so a run can be repeated;
-    ``None`` samples afresh each run.
-    """
-
-
-@dataclass
-class MotionToleranceConfig(ContextExtension):
-    """
-    Default goal-achievement tolerances for motions that leave their own thresholds
-    unset.
-    """
-
-    default_tcp_position_threshold: float = 0.005
-    """
-    Default position tolerance in meters for tool-center-point poses, tighter than
-    Giskard's own task default so an approach doesn't stop short of a small object.
-    """
-
-    tool_orientation_threshold: float = 0.02
-    """
-    Default orientation tolerance in rad for tool-center-point poses.
+    Seed for the locations the plan's actions sample, so a run can be repeated; ``None``
+    samples afresh each run.
     """

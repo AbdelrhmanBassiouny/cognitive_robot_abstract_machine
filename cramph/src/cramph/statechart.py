@@ -183,13 +183,10 @@ class State(MutableMapping[StatechartNode, float], SubclassJSONSerializer, ABC):
     def __contains__(self, node: StatechartNode) -> bool:
         return node in self.statechart.nodes
 
-    def __deepcopy__(self, memo: dict[int, Any]) -> Self:
+    def snapshot(self) -> Self:
         """
-        Create a deep copy of the state.
-
-        :param memo: The memo dict used by :func:`copy.deepcopy` to track already-copied
-            objects.
-        :return: The deep copy.
+        :return: A state over the same nodes of the same :attr:`statechart`, holding a
+            copy of the current values that later changes to this state leave alone.
         """
         return self.__class__(
             statechart=self.statechart,
@@ -681,6 +678,9 @@ class CompiledTick:
         parent reaches in the same pass, so a node never starts under a parent that stops
         running in that pass.
 
+        Nodes are visited parents first but stored by node index, so an entry is
+        ``None`` only until its node is visited; none is left once every node is.
+
         :return: The life cycle state of every node, and the one its parent alone
             forces it into, see
             :meth:`~cramph.node.StatechartNode.create_life_cycle_forced_by_parent`, both
@@ -914,11 +914,11 @@ class StateHistoryItem:
 
     def __post_init__(self) -> None:
         """
-        Deep-copies the given states, so later mutation of the live states does not
-        affect this snapshot.
+        Snapshots the given states, so later mutation of the live states does not
+        affect this item.
         """
-        self.life_cycle_state = deepcopy(self.life_cycle_state)
-        self.observation_state = deepcopy(self.observation_state)
+        self.life_cycle_state = self.life_cycle_state.snapshot()
+        self.observation_state = self.observation_state.snapshot()
 
     def records(self, node: StatechartNode) -> bool:
         """

@@ -25,8 +25,8 @@ coraplex has no motions of its own. What the robot actually does is a Giskard go
 When the plan joins a statechart, every action expands, and the goals it creates become its children in the plan's
 statechart, which Giskard runs as a whole. Before creating them, the action fills in what the plan already knows: the
 robot from the {class}`~coraplex.plans.context_extensions.RobotAccess` of the context, the link a Cartesian goal is
-expressed in as {attr}`~coraplex.plans.context_extensions.RobotAccess.controlled_root`, the tool frame of the arm it
-uses, and the tolerances of the {class}`~coraplex.plans.context_extensions.MotionToleranceConfig`. The executor may
+expressed in as {attr}`~coraplex.plans.context_extensions.RobotAccess.controlled_root` and the tool frame of the arm it
+uses. The executor may
 still change a goal afterwards with a plan transformation, for example to drive a robot's base with its differential
 drive.
 

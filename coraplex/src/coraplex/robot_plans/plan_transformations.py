@@ -48,13 +48,8 @@ from cramph.composites import Sequence, StatementNode
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.goals.base_pose_goals import HolonomicBaseGoal
 from giskardpy.motion_statechart.monitors.overwrite_state_monitors import SetOdometry
-from giskardpy.motion_statechart.goals.gripper import MoveGripper
-from giskardpy.motion_statechart.goals.cartesian_goals import CartesianPoseStraight
-from giskardpy.motion_statechart.tasks.cartesian_tasks import (
-    CartesianPose,
-    CartesianPosition,
-    CartesianPositionStraight,
-)
+from giskardpy.motion_statechart.goals.gripper import MoveFingers
+from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianTask
 from krrood.entity_query_language.core.mapped_variable import FlatVariable
 from krrood.entity_query_language.core.variable import InstantiatedVariable, Variable
 from krrood.entity_query_language.factories import a, variable
@@ -63,7 +58,6 @@ from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from semantic_digital_twin.reasoning.predicates import InsideOf
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.semantic_annotations.mixins import HasGraspCandidates
-from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.robots.robot_part_mixins import HasTwoFingers
 from semantic_digital_twin.robots.robot_parts import Arm
 from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
@@ -118,19 +112,11 @@ class DetectBeforeGrasp(SequentialInsertion[ReachAction]):
     @staticmethod
     def _moves_the_tool_center_point(step: StatechartNode, arm: Arm) -> bool:
         """
-        :return: Whether a Cartesian goal in `step` moves the tool center point of
+        :return: Whether a Cartesian task in `step` moves the tool center point of
             `arm`.
         """
         return any(
-            isinstance(
-                node,
-                (
-                    CartesianPose,
-                    CartesianPosition,
-                    CartesianPoseStraight,
-                    CartesianPositionStraight,
-                ),
-            )
+            isinstance(node, CartesianTask)
             and node.tip_link is arm.end_effector.tool_frame
             for node in [step, *step.descendants]
         )
@@ -491,15 +477,12 @@ class CloseFingersToObjectWidth(PlanTransformation[GraspingAction]):
     def closing_step(plan_node: GraspingAction) -> StatechartNode:
         """
         :param plan_node: The grasp.
-        :raises GraspHasNoClosingGoal: If no goal shutting the gripper lies below the
+        :raises GraspHasNoClosingGoal: If no goal moving the fingers lies below the
             grasp, which it has none of before it is expanded.
-        :return: The step of the grasp that shuts its gripper.
+        :return: The last step of the grasp that moves its fingers, which shuts them.
         """
         for step in reversed(plan_node.nodes):
-            if any(
-                isinstance(node, MoveGripper) and node.state is GripperState.CLOSE
-                for node in [step, *step.descendants]
-            ):
+            if any(isinstance(node, MoveFingers) for node in [step, *step.descendants]):
                 return step
         raise GraspHasNoClosingGoal(plan_node)
 

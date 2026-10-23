@@ -13,7 +13,7 @@ from cramph.executor import StatechartExecutor
 from cramph.statechart import Statechart
 from giskardpy.motion_control import MotionControl
 from giskardpy.motion_statechart.goals.base_pose_goals import (
-    BasePoseGoal,
+    MobileBasePoseGoal,
     DifferentialDriveBaseGoal,
     HolonomicBaseGoal,
 )
@@ -69,7 +69,7 @@ def test_a_differential_drive_goal_drives_the_drive_of_the_robot(
 
 @pytest.mark.parametrize("goal_type", [HolonomicBaseGoal, DifferentialDriveBaseGoal])
 def test_a_drive_goal_cannot_move_a_robot_without_a_mobile_base(
-    self_collision_bot_world: World, goal_type: type[BasePoseGoal]
+    self_collision_bot_world: World, goal_type: type[MobileBasePoseGoal]
 ) -> None:
     robot = self_collision_bot_world.get_semantic_annotations_by_type(MinimalRobot)[0]
 
@@ -95,7 +95,7 @@ def test_setting_the_odometry_writes_the_connection_above_the_robot(
 # %% moving the base along the floor
 
 
-def _compiled(world: World, goal: BasePoseGoal) -> StatechartExecutor:
+def _compiled(world: World, goal: MobileBasePoseGoal) -> StatechartExecutor:
     """
     :return: An executor with motion control, compiled with `goal` ending the motion.
     """
@@ -109,7 +109,7 @@ def _compiled(world: World, goal: BasePoseGoal) -> StatechartExecutor:
     return executor
 
 
-def _equality_constraint_counts(goal: BasePoseGoal) -> list[int]:
+def _equality_constraint_counts(goal: MobileBasePoseGoal) -> list[int]:
     """
     :return: How many equality constraints each task below `goal` writes, position
         tasks first.

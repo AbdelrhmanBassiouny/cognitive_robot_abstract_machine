@@ -13,6 +13,7 @@ from semantic_digital_twin.exceptions import (
     MoreThanOneBodyHeld,
     NothingHeld,
 )
+from semantic_digital_twin.robots.hsrb import HSRB
 from semantic_digital_twin.robots.pr2 import PR2
 from semantic_digital_twin.robots.robot_part_mixins import HasTwoFingers
 from semantic_digital_twin.robots.robot_parts import Camera, EndEffector
@@ -500,6 +501,74 @@ def test_a_gripper_opens_as_wide_as_its_fingertips_stand_in_its_open_state(
 
     assert pr2_gripper.separation_when_open == pytest.approx(expected)
     np.testing.assert_array_equal(world.state.positions, positions_before)
+
+
+def test_a_gripper_stands_as_wide_in_a_state_as_its_fingertips_do_there(
+    pr2_gripper,
+) -> None:
+    world = pr2_gripper._world
+    positions_before = world.state.positions.copy()
+    with world.reset_state_context():
+        pr2_gripper.get_joint_state_by_type(GripperState.CLOSE).apply_to(world)
+        expected = pr2_gripper.fingertips.separation
+
+    assert pr2_gripper.separation_in(GripperState.CLOSE) == pytest.approx(expected)
+    np.testing.assert_array_equal(world.state.positions, positions_before)
+
+
+def test_the_finger_connections_are_those_the_grippers_states_drive(
+    pr2_gripper,
+) -> None:
+    driven = [
+        connection
+        for state_type in (GripperState.OPEN, GripperState.CLOSE)
+        for connection in pr2_gripper.get_joint_state_by_type(state_type).connections
+    ]
+
+    assert set(pr2_gripper.finger_connections) == set(driven)
+    assert len(pr2_gripper.finger_connections) == len(set(driven))
+
+
+def test_a_gripper_whose_states_drive_every_finger_joint_is_moved_by_them_alone(
+    pr2_gripper,
+) -> None:
+    assert pr2_gripper.fingertips_move_only_by_its_states
+
+
+def test_a_gripper_with_passive_finger_joints_is_not_moved_by_its_states_alone() -> (
+    None
+):
+    """
+    An HSR's fingers hang on spring joints its states leave alone.
+    """
+    world = URDFParser.from_file(HSRB.get_ros_file_path()).parse()
+    gripper = HSRB.from_world(world).all_arms[0].end_effector
+
+    assert not gripper.fingertips_move_only_by_its_states
+
+
+def test_every_two_finger_gripper_stands_narrower_closed_than_open(
+    supported_abstract_robots,
+) -> None:
+    """
+    A gripper's closed state brings its fingertips closer together than its open state,
+    for every robot there is.
+    """
+    for abstract_robot in supported_abstract_robots:
+        world = URDFParser.from_file(abstract_robot.get_ros_file_path()).parse()
+        abstract_robot.from_world(world)
+
+        for gripper in world.get_semantic_annotations_by_type(EndEffector):
+            if not isinstance(gripper, HasTwoFingers):
+                continue
+            separations = {}
+            with world.reset_state_context():
+                for state_type in (GripperState.OPEN, GripperState.CLOSE):
+                    gripper.get_joint_state_by_type(state_type).apply_to(world)
+                    separations[state_type] = gripper.fingertips.separation
+            assert (
+                separations[GripperState.CLOSE] < separations[GripperState.OPEN]
+            ), gripper.name
 
 
 def test_a_robotiq_2f_85_opens_as_wide_as_its_name_says(tracy_world) -> None:

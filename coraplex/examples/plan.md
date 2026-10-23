@@ -14,7 +14,7 @@ jupyter:
 # Introduction to Plans
 A plan in CoraPlex is what the robot does: the nodes a statechart holds at its top level, usually cramph composites
 such as `Sequence`, `Parallel` or `TryInOrder` holding actions. Plans are built from the constructs introduced in the
-[Language](language.md) section. An executor then compiles the statechart and executes it, in a simulated environment
+[Plan Language](https://cram2.github.io/cognitive_robot_abstract_machine/cramph/examples/plan_language.html) of cramph. An executor then compiles the statechart and executes it, in a simulated environment
 or on a real robot.
 
 We will now go through a simple example of how to create and execute a plan.
