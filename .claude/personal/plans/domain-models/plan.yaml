@@ -38,8 +38,9 @@ items:
   notes: '#526 (user-marked ready) on #527: spatial_types.py behind krrspatial[casadi]; every
     SpatialType is a CoordinateRepresentation[ReferenceFrame] (coordinate_system = reference_frame);
     Point2 a PlanarPoint; HomogeneousTransformationMatrix a RigidCoordinateChange[ReferenceFrame],
-    must be rigid. Frameless values stay. Pushed b77b55cc8d; CI and ORM build pending. Open
-    questions to Simon: https://claude.ai/artifact/UW7BdpNyW1r2sc63ktzA9T'
+    must be rigid. Frameless values stay. #518''s OrthogonalProjection ported in; ReferenceFrame.express
+    brings a value into a frame (KinematicStructureEntity via its world). Merged main, pushed
+    009739e57e; CI and ORM build pending. Open questions to Simon: https://claude.ai/artifact/UW7BdpNyW1r2sc63ktzA9T'
   pull_request_number: 526
 - id: krrimage
   title: domain_models/krrimage (images, colours, pixels) with Color moved out of SemDT
