@@ -76,32 +76,21 @@ items:
     orthophoto homography), numpy-batched, so it needs an array path. Also an image''s placement on a
     plane (ImagePoint to Point2) and the plane-to-image homography from OrthogonalProjection and the camera.'
 - id: orthogonal-projection-in-krrspatial
-  title: '#518''s OrthogonalProjection (project, embed, preimage) ported onto krrspatial'
+  title: '#518''s OrthogonalProjection (project, unproject, projection_line) and #519''s planar Pose2D,
+    ported onto krrspatial'
   branch: ccr-d4b2f7f0-b27rlq
   pull_request_number: 518
   track: spatial
   status: in_progress
   depends_on:
   - krrspatial-numeric
-  session: https://claude.ai/code/session_01TZs6sf5V7EyZYccGYkUDyJ
-  notes: '#518 edits SemDT spatial_types.py and ReferenceFrameMismatchError, both moved by #526; port
-    after #526 lands. project() calls plane_frame._world.transform, which krrspatial frames lack: add
-    a frame-transformer interface that SemDT''s World implements.'
-- id: pose2d-planar-interface
-  title: '#519''s Pose2D without fake z/roll/pitch, and from_pose transforming into its frame, ported onto
-    krrspatial'
-  branch: claude/pose2d-planar-interface
-  pull_request_number: 519
-  track: spatial
-  status: in_progress
-  depends_on:
-  - krrspatial-numeric
-  session: https://claude.ai/code/session_01TZs6sf5V7EyZYccGYkUDyJ
-  notes: '#519 (user-marked ready, merge conflict with main) is stacked on upstream cram2#746 and edits
-    SemDT spatial_types.py, moved by #526; port after #526 lands, like #518. from_pose calls
-    frame._world.transform, which world-as-euclidean-space replaces.'
+  session: https://claude.ai/code/session_01U544NRSi5q2UusrdQQEQba
+  notes: '#518 is upstream as cram2#764 (LucaKro requested changes). d68548d28 answers all three asks:
+    #519 folded in (closed), embed/preimage renamed unproject/projection_line, test fixture tilted about
+    x. Replies on #764 not posted yet. Edits SemDT spatial_types.py, moved by #526; port after #526
+    lands. project() and Pose2D.from_pose call frame._world.transform, which krrspatial frames lack.'
 - id: projection-interface
-  title: A Projection interface (project, preimage, embed) shared by orthogonal projection and camera
+  title: A Projection interface (project, projection_line, unproject) shared by orthogonal projection and camera
     models, with Ray3
   branch: claude/krrspatial-projection-interface
   track: spatial
@@ -109,8 +98,8 @@ items:
   depends_on:
   - orthogonal-projection-in-krrspatial
   notes: Generic in its image and preimage types (Projection[Point2, Line3] for OrthogonalProjection).
-    A projection maps between two spaces; a change within one space is a CoordinateChange. embed(p, t)
-    is the point at t on preimage(p); the inverse laws become one test suite run against every implementation.
+    A projection maps between two spaces; a change within one space is a CoordinateChange. unproject(p, t)
+    is the point at t on projection_line(p); the inverse laws become one test suite run against every implementation.
 - id: frame-checked-arithmetic
   title: Point and vector arithmetic in krrspatial checks that both sides share a frame
   branch: claude/krrspatial-frame-checked-arithmetic
@@ -126,7 +115,7 @@ items:
   status: not_started
   depends_on:
   - image-extensions
-  notes: 'Per frame: placement, embed and camera project collapse into one video-to-camera homography
+  notes: 'Per frame: placement, unproject and camera project collapse into one video-to-camera homography
     and one cv2.warpPerspective. Optional occlusion from the depth image (draw only where depth matches
     the plane). A projector is a pinhole camera run backwards, calibrated instead of the camera; wall
     planes come from the twin. Demo ideas: the robot shown a video of its own pickup; the robot''s live
