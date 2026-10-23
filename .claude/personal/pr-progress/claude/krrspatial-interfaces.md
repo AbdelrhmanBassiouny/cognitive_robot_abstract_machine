@@ -1,10 +1,10 @@
-PR #527 (draft, base main): krrspatial's casadi-free base, the PR #526 and #524 stack on. Plan: domain-models, item planar-point-interface.
+PR #527 (user-marked ready, base main): krrspatial's casadi-free base. Plan: domain-models, item planar-point-interface.
 
 Plan
-- Space/ImageSpace/ReferenceFrame, PlanarPoint[SpaceT, CoordinateT], frame serialization, krrood ObjectReference; deps krrood only.
+- Space (EuclideanSpace, ImagePlane), CoordinateSystem[SpaceT] (ReferenceFrame, ImageCoordinateSystem), CoordinateChange[CoordinateSystemT], PlanarPoint[CoordinateSystemT, CoordinateT].
 
 Done
-- Pushed 08010edf00; 15 tests pass locally; #526 and #524 merged it and retargeted onto it.
+- Pushed c1c29715f5 (#528 merged in); 22 krrspatial tests pass; #526 and #524 merged it.
 
 Next
-- Read CI. Promote before #526/#524; Projection/FrameTransformer stay with their own items.
+- Read CI. Promote after #528, before #526/#524.
