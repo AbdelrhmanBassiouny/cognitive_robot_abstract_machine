@@ -7,14 +7,16 @@ given in.
   space in metres; and `ImagePlane`, the plane an image shows.
 - `krrspatial.coordinate_system`: `CoordinateSystem`, what coordinates on one space are
   given in; `ImageCoordinateSystem`, pixels from an image's top left corner;
+  `CoordinateRepresentation`, a point, direction or orientation given by its
+  coordinates in a coordinate system;
   `CoordinateChange`, between two coordinate systems of the same space, which can be
   inverted and composed; `AffineCoordinateChange`, one that keeps straight lines; and
   `RigidCoordinateChange`, an affine one that also keeps distances and angles.
 - `krrspatial.reference_frame`: `ReferenceFrame`, the coordinate system of physical
   space that positions and directions are expressed in, and how serialized values refer
   to one.
-- `krrspatial.planar_point`: `PlanarPoint`, a point given by two coordinates in a
-  coordinate system. Each implementation binds the kind of coordinate system and what
+- `krrspatial.planar_point`: `PlanarPoint`, a coordinate representation of a point by
+  two coordinates. Each implementation binds the kind of coordinate system and what
   its coordinates are stored as.
 - `krrspatial.spatial_types`, with the extra `krrspatial[casadi]`: `Point2`, `Point3`,
   `Vector3`, `RotationMatrix`, `Quaternion`, `AxisAngle`,

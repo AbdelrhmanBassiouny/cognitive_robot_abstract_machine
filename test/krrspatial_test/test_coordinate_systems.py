@@ -8,6 +8,7 @@ from krrood.patterns.exceptions import InterfaceInstantiationError
 from krrspatial.coordinate_system import (
     AffineCoordinateChange,
     CoordinateChange,
+    CoordinateRepresentation,
     CoordinateSystem,
     CoordinateSystemT,
     ImageCoordinateSystem,
@@ -69,6 +70,14 @@ def test_an_image_coordinate_system_is_not_a_reference_frame():
 
 def test_a_reference_frame_is_not_an_image_coordinate_system(table_frame: NamedFrame):
     assert not isinstance(table_frame, ImageCoordinateSystem)
+
+
+# %% values given in a coordinate system
+
+
+def test_a_coordinate_representation_cannot_be_instantiated():
+    with pytest.raises(InterfaceInstantiationError):
+        CoordinateRepresentation()
 
 
 # %% changing coordinates within one space

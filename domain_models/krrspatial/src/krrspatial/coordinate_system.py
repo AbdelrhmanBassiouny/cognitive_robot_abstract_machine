@@ -41,12 +41,34 @@ class ImageCoordinateSystem(CoordinateSystem[ImagePlane], Interface):
     """
 
 
-# %% changing coordinates within one space
+# %% values given in a coordinate system
 
 CoordinateSystemT = TypeVar("CoordinateSystemT", bound=CoordinateSystem)
 """
 The kind of coordinate system coordinates are given in.
 """
+
+
+class CoordinateRepresentation(
+    Generic[CoordinateSystemT], SubClassSafeGeneric, Interface
+):
+    """
+    A geometric value, such as a point, a direction or an orientation, given by its
+    coordinates in a coordinate system.
+
+    .. seealso::
+        T. De Laet, S. Bellens and H. Bruyninckx, "Geometric Relations Between Rigid
+        Bodies (Part 1): Semantics for Standardization", IEEE Robotics & Automation
+        Magazine, 2013, which separates a geometric value from its coordinates.
+    """
+
+    coordinate_system: CoordinateSystemT | None
+    """
+    The coordinate system the coordinates are given in; ``None`` where it is not known.
+    """
+
+
+# %% changing coordinates within one space
 
 
 class CoordinateChange(Generic[CoordinateSystemT], SubClassSafeGeneric, Interface):
@@ -88,8 +110,8 @@ class CoordinateChange(Generic[CoordinateSystemT], SubClassSafeGeneric, Interfac
 
 class AffineCoordinateChange(CoordinateChange[CoordinateSystemT], Interface):
     """
-    A coordinate change that scales, shears, rotates or reflects the axes and shifts
-    the origin.
+    A coordinate change that scales, shears, rotates or reflects the axes and shifts the
+    origin.
 
     It keeps straight lines, parallel lines and ratios of lengths along one line.
     """
