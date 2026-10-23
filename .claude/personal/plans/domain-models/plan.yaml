@@ -35,8 +35,8 @@ items:
   session: https://claude.ai/code/session_01GoHMif2Xa7Mnqzz9mKFpTT
   notes: '#526 (user-marked ready) on #527: spatial_types.py behind krrspatial[casadi]; Point2 implements
     PlanarPoint[ReferenceFrame, Scalar] (coordinate_system = reference_frame); HomogeneousTransformationMatrix
-    implements CoordinateChange[ReferenceFrame] (child_frame to reference_frame). Merged #527, pushed
-    015b915efe; CI and ORM build pending.'
+    implements RigidCoordinateChange[ReferenceFrame] (child_frame to reference_frame), docstring warns
+    it must be rigid. Merged #527, pushed 753a4ce359; CI and ORM build pending.'
   pull_request_number: 526
 - id: krrimage
   title: domain_models/krrimage (images, colours, pixels) with Color moved out of SemDT
@@ -49,7 +49,7 @@ items:
   session: https://claude.ai/code/session_01J17aVY3vyQM8goACbkHkcp
   notes: '#524 on #527 (base claude/krrspatial-interfaces): ImagePoint implements PlanarPoint[ImageCoordinateSystem,
     float] with an optional coordinate_system; not frozen. Pixel stays a grid cell. Whichever of #524/#526
-    lands second merges the domain_models/README.md entries. Merged #527''s new base, pushed 90119bef22;
+    lands second merges the domain_models/README.md entries. Merged #527''s new base, pushed 2a830dd575;
     CI pending.'
 - id: krrollywood-on-krrimage
   title: krrollywood (cram2/crollywood) depends on krrimage instead of its own frame types
@@ -121,7 +121,7 @@ items:
     capture projected onto the apartment walls while it works.'
 - id: planar-point-interface
   title: 'krrspatial''s casadi-free base: Space (EuclideanSpace, ImagePlane), CoordinateSystem[SpaceT]
-    (ReferenceFrame, ImageCoordinateSystem), CoordinateChange, PlanarPoint'
+    (ReferenceFrame, ImageCoordinateSystem), CoordinateChange (affine, rigid), PlanarPoint'
   branch: claude/krrspatial-interfaces
   pull_request_number: 527
   track: spatial
@@ -131,8 +131,9 @@ items:
   session: https://claude.ai/code/session_01GoHMif2Xa7Mnqzz9mKFpTT
   notes: 'Draft #527 off main. A reference frame is a coordinate system on physical space, not a space:
     Space is the point set, CoordinateSystem what coordinates are given in, CoordinateChange[CoordinateSystemT]
-    the change within one space (rigid for frames, scale and shift for images). PlanarPoint[CoordinateSystemT,
-    CoordinateT].coordinate_system. #528 merged in; pushed c1c29715f5 (user-marked ready); CI pending.'
+    the change within one space (declares inverse, @); AffineCoordinateChange and RigidCoordinateChange
+    name what a change keeps. PlanarPoint[CoordinateSystemT, CoordinateT].coordinate_system. #528 merged
+    in; pushed 1dfecdfc1c (user-marked ready); CI pending.'
 - id: subclass-safe-generic-identity
   title: SubClassSafeGeneric generates no equality, so eq=False subclasses keep identity and stay hashable
   branch: claude/subclass-safe-generic-identity
@@ -151,7 +152,7 @@ items:
   status: not_started
   depends_on:
   - krrimage
-  notes: 'Implements CoordinateChange[ImageCoordinateSystem]: a crop or resize is a new ImageCoordinateSystem
+  notes: 'Implements AffineCoordinateChange[ImageCoordinateSystem]: a crop or resize is a new ImageCoordinateSystem
     on the same ImagePlane, so an ImagePoint found in a crop maps back to the whole image. ColorImage.cropped/resized
     do the pixel work with cv2 and return the change; it also yields the 2x3 matrix cv2.warpAffine takes.
     Pasting one image into another (ColorImage.pasted/fitted) maps between two planes, not within one:
