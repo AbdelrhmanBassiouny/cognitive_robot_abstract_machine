@@ -74,12 +74,13 @@ items:
   - projection-interface
   - planar-point-interface
   branch: claude/krrimage-depth-segmentation
-  notes: 'Camera model = Projection[ImagePoint, Ray3] (project, deproject with depth) behind
-    krrimage''s optional krrspatial[casadi] extra; it maps its frame''s EuclideanSpace onto
-    an ImagePlane. First user: montessori perception (CameraIntrinsics.deproject, RgbdFrame.project,
-    MeasuredSurfaceFinder''s deprojection, orthophoto homography), numpy-batched, so it needs
-    an array path. Also an image''s placement on a plane (ImagePoint to Point2) and the plane-to-image
-    homography from OrthogonalProjection and the camera.'
+  notes: 'Camera model = Projection[ImagePoint, Ray3] behind krrimage''s optional
+    krrspatial[casadi] extra, mapping its frame''s space onto an ImagePlane. A captured image''s
+    plane implements ImagePlane with its camera and capture instant (world, time; state from a
+    WorldStateTrajectory or a snapshot); world-less images use a plain ImagePlane. Unprojecting
+    needs express at that recorded state. First user: montessori perception (deproject,
+    RgbdFrame.project, orthophoto homography), numpy-batched. Also placing an image on a plane
+    (ImagePoint to Point2).'
 - id: projection-interface
   title: A Projection interface (project, projection_line, unproject) shared by orthogonal
     projection and camera models, with Ray3
@@ -88,11 +89,11 @@ items:
   status: not_started
   depends_on:
   - krrspatial-numeric
-  notes: 'Ports #518''s OrthogonalProjection and Line3 onto krrspatial; project() and Pose2D.from_pose
-    call frame._world.transform, which krrspatial frames lack. Generic in its image and preimage
-    types (Projection[Point2, Line3] for OrthogonalProjection). A projection maps between
-    two spaces; a change within one space is a CoordinateChange. unproject(p, t) is the point
-    at t on projection_line(p); the inverse laws become one test suite run against every implementation.'
+  notes: 'OrthogonalProjection and Line3 are in krrspatial (#526). Add the Projection interface
+    they implement: project, projection_line, unproject(p, t) = the point at t on
+    projection_line(p), generic in image and preimage types (Projection[Point2, Line3]), and Ray3
+    for cameras. A projection maps between two spaces; a change within one space is a
+    CoordinateChange. The inverse laws become one test suite run against every implementation.'
 - id: frame-checked-arithmetic
   title: Arithmetic in krrspatial checks frames, and a transformation only applies to values
     in its child frame
