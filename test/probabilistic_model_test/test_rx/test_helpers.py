@@ -43,8 +43,8 @@ class FullyFactorizedTestCase(unittest.TestCase):
             .complement()
         )
         model = self.model
-        model, _ = model.truncated(event)
-        mode, _ = model.mode()
+        model = model.truncated(event).distribution
+        mode = model.mode().event
         # TODO this does not work due to numeric impression. Wait for david for updates
         # truncated, _ = model.truncated(mode)
         # self.assertIsNotNone(truncated)

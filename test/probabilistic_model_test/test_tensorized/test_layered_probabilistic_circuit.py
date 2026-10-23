@@ -576,10 +576,10 @@ class QueryTestCase(unittest.TestCase):
     def test_mode_of_a_deterministic_circuit(self):
         rx_circuit = deterministic_mixture()
         layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
-        rx_mode, rx_likelihood = rx_circuit.log_mode()
-        mode, likelihood = layered.log_mode()
-        self.assertEqual(mode, rx_mode)
-        self.assertAlmostEqual(likelihood, rx_likelihood)
+        rx_mode = rx_circuit.log_mode()
+        mode = layered.log_mode()
+        self.assertEqual(mode.event, rx_mode.event)
+        self.assertAlmostEqual(mode.log_likelihood, rx_mode.log_likelihood)
 
     def test_mode_of_a_non_deterministic_circuit_is_intractable(self):
         layered = RustworkxCircuitToLayeredCircuitConverter.convert(
@@ -652,21 +652,21 @@ class TruncationTestCase(unittest.TestCase):
     def assert_same_truncation(self, rx_circuit: RxCircuit, event: Event, grid):
         layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
 
-        rx_truncated, rx_probability = rx_circuit.truncated(event.__deepcopy__())
-        truncated, probability = layered.truncated(event.__deepcopy__())
+        rx_truncation = rx_circuit.truncated(event.__deepcopy__())
+        truncation = layered.truncated(event.__deepcopy__())
 
-        self.assertAlmostEqual(probability, rx_probability)
-        if rx_truncated is None:
-            self.assertIsNone(truncated)
+        self.assertAlmostEqual(truncation.probability, rx_truncation.probability)
+        if rx_truncation.distribution is None:
+            self.assertIsNone(truncation.distribution)
             return
 
-        truncated.validate()
+        truncation.distribution.validate()
         np.testing.assert_allclose(
-            truncated.log_likelihood(grid),
-            rx_truncated.log_likelihood(grid),
+            truncation.distribution.log_likelihood(grid),
+            rx_truncation.distribution.log_likelihood(grid),
             atol=1e-10,
         )
-        return truncated
+        return truncation.distribution
 
     def test_truncation_to_a_simple_event(self):
         grid = np.stack(
@@ -713,14 +713,14 @@ class TruncationTestCase(unittest.TestCase):
             }
         ).as_composite_set()
 
-        rx_truncated, rx_probability = rx_circuit.truncated(event.__deepcopy__())
-        truncated, probability = layered.truncated(event.__deepcopy__())
-        self.assertAlmostEqual(probability, rx_probability)
+        rx_truncation = rx_circuit.truncated(event.__deepcopy__())
+        truncation = layered.truncated(event.__deepcopy__())
+        self.assertAlmostEqual(truncation.probability, rx_truncation.probability)
 
-        samples = truncated.sample(200)
+        samples = truncation.distribution.sample(200)
         np.testing.assert_allclose(
-            truncated.log_likelihood(samples),
-            rx_truncated.log_likelihood(samples),
+            truncation.distribution.log_likelihood(samples),
+            rx_truncation.distribution.log_likelihood(samples),
         )
 
     def boxes(self, number_of_boxes: int, lower: float, upper: float) -> Event:
@@ -787,15 +787,17 @@ class TruncationTestCase(unittest.TestCase):
                     ALL_CIRCUITS[name]()
                 )
 
-                batched, batched_probability = layered.truncated(event.__deepcopy__())
-                separate, separate_probability = self.truncate_one_simple_set_at_a_time(
+                batched_truncation = layered.truncated(event.__deepcopy__())
+                separate_truncation = self.truncate_one_simple_set_at_a_time(
                     layered, event.__deepcopy__()
                 )
 
-                self.assertAlmostEqual(batched_probability, separate_probability)
+                self.assertAlmostEqual(
+                    batched_truncation.probability, separate_truncation.probability
+                )
                 np.testing.assert_allclose(
-                    batched.log_likelihood(grid),
-                    separate.log_likelihood(grid),
+                    batched_truncation.distribution.log_likelihood(grid),
+                    separate_truncation.distribution.log_likelihood(grid),
                     atol=1e-10,
                 )
 
@@ -810,11 +812,11 @@ class TruncationTestCase(unittest.TestCase):
         )
         event = self.boxes(10, 0.0, 2.0)
 
-        truncated, _ = layered.truncated(event.__deepcopy__())
+        truncated = layered.truncated(event.__deepcopy__()).distribution
 
-        separate, _ = self.truncate_one_simple_set_at_a_time(
+        separate = self.truncate_one_simple_set_at_a_time(
             layered, event.__deepcopy__()
-        )
+        ).distribution
 
         # one mixing layer on top of the circuit's own layers, against one whole set of
         # layers per simple set
@@ -870,7 +872,7 @@ class TruncationTestCase(unittest.TestCase):
         event = SimpleEvent.from_data(
             {x: closed(0.5, 2.5), y: closed(0.5, 1.75)}
         ).as_composite_set()
-        truncated, _ = layered.truncated(event.__deepcopy__())
+        truncated = layered.truncated(event.__deepcopy__()).distribution
         self.assertAlmostEqual(truncated.probability(event.__deepcopy__()), 1.0)
 
     def test_truncation_to_an_impossible_event(self):
@@ -878,19 +880,19 @@ class TruncationTestCase(unittest.TestCase):
             deterministic_mixture()
         )
         event = SimpleEvent.from_data({x: closed(10.0, 11.0)}).as_composite_set()
-        truncated, probability = layered.truncated(event)
-        self.assertIsNone(truncated)
-        self.assertEqual(probability, 0.0)
+        truncation = layered.truncated(event)
+        self.assertIsNone(truncation.distribution)
+        self.assertEqual(truncation.probability, 0.0)
 
     def test_truncation_removes_the_impossible_nodes(self):
         layered = RustworkxCircuitToLayeredCircuitConverter.convert(
             deterministic_mixture()
         )
         event = SimpleEvent.from_data({x: closed(0.0, 1.0)}).as_composite_set()
-        truncated, probability = layered.truncated(event)
-        self.assertAlmostEqual(probability, 0.3)
+        truncation = layered.truncated(event)
+        self.assertAlmostEqual(truncation.probability, 0.3)
         # the branch over [2, 3] x [2, 4] is gone
-        for layer in truncated.layers:
+        for layer in truncation.distribution.layers:
             if isinstance(layer, UniformLayer):
                 self.assertEqual(layer.number_of_nodes, 1)
 
@@ -920,15 +922,17 @@ class ConditionalTestCase(unittest.TestCase):
                 layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
 
                 point = {x: 0.75}
-                rx_conditional, _ = rx_circuit.conditional(point)
-                conditional, probability = layered.conditional(point)
+                rx_conditional = rx_circuit.conditional(point).distribution
+                conditioning = layered.conditional(point)
 
-                self.assertAlmostEqual(probability, expected_probability)
-                self.assertEqual(list(conditional.variables), list(layered.variables))
+                self.assertAlmostEqual(conditioning.likelihood, expected_probability)
+                self.assertEqual(
+                    list(conditioning.distribution.variables), list(layered.variables)
+                )
 
                 grid = np.stack([np.full(40, 0.75), np.linspace(-1, 4, 40)], axis=-1)
                 np.testing.assert_allclose(
-                    conditional.log_likelihood(grid),
+                    conditioning.distribution.log_likelihood(grid),
                     rx_conditional.log_likelihood(grid),
                     atol=1e-10,
                 )
@@ -940,7 +944,7 @@ class ConditionalTestCase(unittest.TestCase):
                 layered = RustworkxCircuitToLayeredCircuitConverter.convert(
                     ALL_CIRCUITS[name]()
                 )
-                conditional, _ = layered.conditional({x: 0.75})
+                conditional = layered.conditional({x: 0.75}).distribution
                 density = conditional.likelihood(
                     np.stack([np.full_like(grid, 0.75), grid], axis=-1)
                 )
@@ -957,11 +961,11 @@ class ConditionalTestCase(unittest.TestCase):
         layered = RustworkxCircuitToLayeredCircuitConverter.convert(
             shared_children_circuit()
         )
-        conditional, probability = layered.conditional({x: 0.75})
+        conditioning = layered.conditional({x: 0.75})
 
-        self.assertAlmostEqual(probability, 0.55)
+        self.assertAlmostEqual(conditioning.likelihood, 0.55)
         np.testing.assert_allclose(
-            conditional.likelihood(np.array([[0.75, 0.5], [0.75, 1.5]])),
+            conditioning.distribution.likelihood(np.array([[0.75, 0.5], [0.75, 1.5]])),
             np.array([0.255 / 0.55, 0.295 / 0.55]),
         )
 
@@ -969,23 +973,25 @@ class ConditionalTestCase(unittest.TestCase):
         layered = RustworkxCircuitToLayeredCircuitConverter.convert(
             deterministic_mixture()
         )
-        conditional, probability = layered.conditional({x: 1.5})
-        self.assertIsNone(conditional)
-        self.assertEqual(probability, 0.0)
+        conditioning = layered.conditional({x: 1.5})
+        self.assertIsNone(conditioning.distribution)
+        self.assertEqual(conditioning.likelihood, 0.0)
 
     def test_conditioning_on_a_symbolic_variable(self):
         rx_circuit = mixed_circuit()
         layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
 
         point = {s: SymbolEnum.B}
-        rx_conditional, rx_probability = rx_circuit.log_conditional(point)
-        conditional, probability = layered.log_conditional(point)
+        rx_conditioning = rx_circuit.log_conditional(point)
+        conditioning = layered.log_conditional(point)
 
-        self.assertAlmostEqual(probability, rx_probability)
-        samples = conditional.sample(200)
+        self.assertAlmostEqual(
+            conditioning.log_likelihood, rx_conditioning.log_likelihood
+        )
+        samples = conditioning.distribution.sample(200)
         np.testing.assert_allclose(
-            conditional.log_likelihood(samples),
-            rx_conditional.log_likelihood(samples),
+            conditioning.distribution.log_likelihood(samples),
+            rx_conditioning.distribution.log_likelihood(samples),
         )
 
     def test_conditioning_on_an_integer_variable(self):
@@ -993,15 +999,20 @@ class ConditionalTestCase(unittest.TestCase):
         layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
 
         point = {n: 2}
-        rx_conditional, rx_probability = rx_circuit.log_conditional(point)
-        conditional, probability = layered.log_conditional(point)
+        rx_conditioning = rx_circuit.log_conditional(point)
+        conditioning = layered.log_conditional(point)
 
         # only the second component has n = 2
-        self.assertAlmostEqual(probability, np.log(0.6 * 0.3))
-        self.assertAlmostEqual(probability, rx_probability)
+        self.assertAlmostEqual(conditioning.log_likelihood, np.log(0.6 * 0.3))
+        self.assertAlmostEqual(
+            conditioning.log_likelihood, rx_conditioning.log_likelihood
+        )
         # the point mass is an integer layer, so it answers interval events of n
         self.assertTrue(
-            any(isinstance(layer, IntegerLayer) for layer in conditional.layers)
+            any(
+                isinstance(layer, IntegerLayer)
+                for layer in conditioning.distribution.layers
+            )
         )
         event = SimpleEvent.from_data(
             {
@@ -1011,19 +1022,20 @@ class ConditionalTestCase(unittest.TestCase):
             }
         )
         self.assertAlmostEqual(
-            conditional.probability_of_simple_event(event),
-            rx_conditional.probability_of_simple_event(event),
+            conditioning.distribution.probability_of_simple_event(event),
+            rx_conditioning.distribution.probability_of_simple_event(event),
         )
 
     def test_conditioning_on_every_variable(self):
         layered = RustworkxCircuitToLayeredCircuitConverter.convert(
             deterministic_mixture()
         )
-        conditional, probability = layered.conditional({x: 0.5, y: 0.5})
-        self.assertIsNotNone(conditional)
-        self.assertAlmostEqual(probability, 0.3)
+        conditioning = layered.conditional({x: 0.5, y: 0.5})
+        self.assertIsNotNone(conditioning.distribution)
+        self.assertAlmostEqual(conditioning.likelihood, 0.3)
         np.testing.assert_allclose(
-            conditional.log_likelihood(np.array([[0.5, 0.5]])), np.array([0.0])
+            conditioning.distribution.log_likelihood(np.array([[0.5, 0.5]])),
+            np.array([0.0]),
         )
 
 
@@ -1121,7 +1133,7 @@ class SerializationTestCase(unittest.TestCase):
         event = SimpleEvent.from_data(
             {x: closed(-2.0, 1.0), y: closed(-1.0, 3.0)}
         ).as_composite_set()
-        truncated, _ = layered.truncated(event)
+        truncated = layered.truncated(event).distribution
 
         restored = from_json(to_json(truncated))
         samples = truncated.sample(200)
@@ -1135,7 +1147,7 @@ class SerializationTestCase(unittest.TestCase):
         layered = RustworkxCircuitToLayeredCircuitConverter.convert(
             overlapping_mixture()
         )
-        conditioned, _ = layered.conditional({x: 0.5})
+        conditioned = layered.conditional({x: 0.5}).distribution
         self.assertIsInstance(conditioned.root, ProductLayer)
         self.assertTrue(
             any(isinstance(layer, DiracDeltaLayer) for layer in conditioned.layers)
@@ -1424,13 +1436,15 @@ class SymbolicEncodingTestCase(unittest.TestCase):
 
     def test_conditioning_agrees_with_rustworkx(self):
         point = {sparse: SparseSymbolEnum.HIGH}
-        rx_conditional, rx_probability = self.rx_circuit.log_conditional(point)
-        conditional, probability = self.layered.log_conditional(point)
-        self.assertAlmostEqual(probability, rx_probability)
-        samples = conditional.sample(200)
+        rx_conditioning = self.rx_circuit.log_conditional(point)
+        conditioning = self.layered.log_conditional(point)
+        self.assertAlmostEqual(
+            conditioning.log_likelihood, rx_conditioning.log_likelihood
+        )
+        samples = conditioning.distribution.sample(200)
         np.testing.assert_allclose(
-            conditional.log_likelihood(samples),
-            rx_conditional.log_likelihood(samples),
+            conditioning.distribution.log_likelihood(samples),
+            rx_conditioning.distribution.log_likelihood(samples),
         )
 
 
@@ -1477,16 +1491,14 @@ class ProbabilityTableChoiceTestCase(unittest.TestCase):
                     sparse.probability_of_simple_event(event),
                     dense.probability_of_simple_event(event),
                 )
-                dense_truncated, dense_probability = dense.truncated(
-                    event.as_composite_set()
+                dense_truncation = dense.truncated(event.as_composite_set())
+                sparse_truncation = sparse.truncated(event.as_composite_set())
+                self.assertAlmostEqual(
+                    sparse_truncation.probability, dense_truncation.probability
                 )
-                sparse_truncated, sparse_probability = sparse.truncated(
-                    event.as_composite_set()
-                )
-                self.assertAlmostEqual(sparse_probability, dense_probability)
                 np.testing.assert_allclose(
-                    sparse_truncated.log_likelihood(samples),
-                    dense_truncated.log_likelihood(samples),
+                    sparse_truncation.distribution.log_likelihood(samples),
+                    dense_truncation.distribution.log_likelihood(samples),
                 )
 
     def test_samples_of_a_sparse_circuit_are_likely_under_the_dense_one(self):

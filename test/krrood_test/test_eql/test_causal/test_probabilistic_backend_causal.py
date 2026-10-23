@@ -274,15 +274,15 @@ def test_pipeline_reproduces_directly_computed_backdoor_adjustment_and_best_regi
     # the reference computation: exactly what the plan's design describes as the
     # interventional branch, called directly against the causal circuit
     interventional = causal_circuit.backdoor_adjustment(cause_variable, effect_variable)
-    effect_truncated, _ = interventional.truncated(
+    effect_truncated = interventional.truncated(
         parameters.truncation_assignments_from_where_conditions
-    )
+    ).distribution
     expected_best_region = causal_circuit._best_disjoint_region(
         cause_variable, effect_truncated
     )
-    expected_narrowed, _ = effect_truncated.truncated(
+    expected_narrowed = effect_truncated.truncated(
         expected_best_region.fill_missing_variables_pure(effect_truncated.variables)
-    )
+    ).distribution
 
     backend = ProbabilisticBackend(
         model_registry=CausalCircuitRegistry({Pick: causal_circuit}),
