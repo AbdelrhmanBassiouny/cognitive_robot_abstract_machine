@@ -128,12 +128,12 @@ items:
   status: not_started
   depends_on:
   - krrspatial-numeric
-  notes: 'Space gets a dimension classproperty and a 2D plane space; a frame''s x-y plane is
-    a coordinate system of that plane, derived from the frame (not stored). Point2 and Pose2D
-    keep reference_frame (World.transform, OrthogonalProjection and JSON rely on it); only
-    coordinate_system returns the plane''s coordinate system, so SpatialType becomes generic
-    in its coordinate-system kind. SE(2) is RigidCoordinateChange of the plane kind, defined
-    only between frames sharing one x-y plane; Point2.transform stays a projection otherwise.'
+  notes: 'Space gets a dimension; a frame''s x-y plane is a 2D plane space''s coordinate system,
+    derived from the frame. A plane refers to the space it lies in; planes are equal when
+    they share it and their points (ImagePlane has none). Point2 and Pose2D keep reference_frame;
+    only coordinate_system becomes the plane''s, so SpatialType is generic in its coordinate-system
+    kind. SE(2) is RigidCoordinateChange of the plane kind, only between frames sharing one
+    x-y plane; Point2.transform stays a projection otherwise.'
 - id: krrspatial-imports
   title: The workspace imports spatial types from krrspatial instead of SemDT's re-export
     module
@@ -189,15 +189,16 @@ items:
     another (ColorImage.pasted/fitted) maps between two planes, not within one: same algebra,
     a separate map class.'
 - id: world-as-euclidean-space
-  title: SemDT's World has a EuclideanSpace that its bodies chart; ReferenceFrame.express
-    checks the space before changing coordinates
+  title: SemDT's World is the EuclideanSpace its bodies chart; ReferenceFrame.express checks
+    the space before changing coordinates
   branch: claude/world-as-euclidean-space
   track: spatial
   status: not_started
   depends_on:
   - krrspatial-numeric
-  notes: 'Composition, not inheritance: World holds a EuclideanSpace (it is more than one: bodies,
-    state, semantics), so the Interface.__new__ blocker no longer applies. KinematicStructureEntity.space
-    returns its world''s space. ReferenceFrame.express becomes a template method: it raises
-    when the value has no frame or its frame charts another space, then calls an abstract
-    hook; KinematicStructureEntity implements the hook through World.transform.'
+  notes: 'World implements EuclideanSpace (one world, one space; copies and merges follow).
+    test/living_worlds.py wraps an existing __new__ instead of refusing it (approved). CoordinateSystem.space
+    becomes an abstract property returning SpaceT | None; KinematicStructureEntity returns
+    _world, never raising. express is a template method: raises for no frame, a frame not
+    in a space, or frames of different spaces, then calls an abstract hook. If a world ever
+    holds unrelated parts, switch to has-a.'
