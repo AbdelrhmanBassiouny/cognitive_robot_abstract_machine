@@ -6,8 +6,10 @@ given in.
 - `krrspatial.space`: `Space`, a set of points with a geometry; `EuclideanSpace`, physical
   space in metres; and `ImagePlane`, the plane an image shows.
 - `krrspatial.coordinate_system`: `CoordinateSystem`, what coordinates on one space are
-  given in; `ImageCoordinateSystem`, pixels from an image's top left corner; and
-  `CoordinateChange`, between two coordinate systems of the same space.
+  given in; `ImageCoordinateSystem`, pixels from an image's top left corner;
+  `CoordinateChange`, between two coordinate systems of the same space, which can be
+  inverted and composed; `AffineCoordinateChange`, one that keeps straight lines; and
+  `RigidCoordinateChange`, an affine one that also keeps distances and angles.
 - `krrspatial.reference_frame`: `ReferenceFrame`, the coordinate system of physical
   space that positions and directions are expressed in, and how serialized values refer
   to one.
@@ -17,8 +19,8 @@ given in.
 
 | Space | Coordinate system | Coordinate change | Kept by the change |
 |---|---|---|---|
-| `EuclideanSpace` | `ReferenceFrame`, metres | rigid transform | distances, angles |
-| `ImagePlane` | `ImageCoordinateSystem`, pixels | scaling and shifting each axis (crop, resize) | ratios along an axis |
+| `EuclideanSpace` | `ReferenceFrame`, metres | `RigidCoordinateChange` | distances, angles |
+| `ImagePlane` | `ImageCoordinateSystem`, pixels | `AffineCoordinateChange`: scaling and shifting each axis (crop, resize) | straight lines, ratios along a line |
 
 Points of two spaces, such as a body and an image of it, relate only through a map
 between the spaces, such as a camera, never through a coordinate change.
