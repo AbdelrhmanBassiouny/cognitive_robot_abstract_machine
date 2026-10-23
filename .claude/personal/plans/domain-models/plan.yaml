@@ -80,7 +80,7 @@ items:
   branch: ccr-d4b2f7f0-b27rlq
   pull_request_number: 518
   track: spatial
-  status: in_progress
+  status: done
   session: https://claude.ai/code/session_01U544NRSi5q2UusrdQQEQba
   notes: 'Upstream as cram2#764 (LucaKro requested changes); d68548d28 answers all three asks, replies
     not posted yet. Stays a SemDT fix: the krrspatial port belongs to projection-interface, never to
@@ -154,7 +154,7 @@ items:
   title: SubClassSafeGeneric generates no equality, so eq=False subclasses keep identity and stay hashable
   branch: claude/subclass-safe-generic-identity
   track: spatial
-  status: in_progress
+  status: done
   depends_on: []
   session: https://claude.ai/code/session_01GoHMif2Xa7Mnqzz9mKFpTT
   notes: 'Bug fix off main: @dataclass on SubClassSafeGeneric made every eq=False subclass equal to any
