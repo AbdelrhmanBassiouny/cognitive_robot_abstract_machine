@@ -1,10 +1,10 @@
 PR #526 (user-marked ready; base claude/krrspatial-interfaces = #527): SemDT's casadi spatial types in krrspatial[casadi]. Plan: domain-models.
 
 Plan
-- Point2 is PlanarPoint[ReferenceFrame, Scalar]; HomogeneousTransformationMatrix is RigidCoordinateChange[ReferenceFrame], docstring warns it must be rigid.
+- Every SpatialType is CoordinateRepresentation[ReferenceFrame]; HTM is RigidCoordinateChange[ReferenceFrame]. Frameless values stay (user chose option c).
 
 Done
-- Merged #527, pushed 753a4ce359; description rewritten. krrspatial 42 pass; SemDT subset 465 pass, same with and without the change.
+- Pushed b77b55cc8d: coordinate_system on all spatial types, renamed and added transformation tests. krrspatial 55 pass; SemDT subset 908 pass, same as before.
 
 Next
-- Read CI (SemDT ORM build, giskardpy). Promote after #528 and #527. Optional: check numeric matrices are rigid (separate PR). World as EuclideanSpace waits on the user.
+- Frame check in HTM.dot held for the frame-checked-arithmetic item: SemDT test_reference_frames asserts the opposite; waits on the user and Simon (doc UW7BdpNyW1r2sc63ktzA9T). Threads at 576 and 874 move to the spatial-action item. Read CI.
