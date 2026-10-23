@@ -8,6 +8,9 @@ claude/krrspatial-projection-interface	domain-models
 claude/krrspatial-frame-checked-arithmetic	domain-models
 claude/krrimage-video-on-a-plane	domain-models
 claude/krrspatial-interfaces	domain-models
+claude/subclass-safe-generic-identity	domain-models
+claude/krrimage-coordinate-change	domain-models
+claude/world-as-euclidean-space	domain-models
 claude/split-performatives-prs-xbluus-agreement	eql-performatives
 claude/split-performatives-prs-xbluus	eql-performatives
 claude/performatives-clean	eql-performatives

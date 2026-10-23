@@ -1,17 +1,16 @@
 schema_version: 1
 id: domain-models
 title: Standalone domain models (krrspatial, krrimage, krrollywood)
-description: Shared types move out of SemDT and crollywood into standalone packages under
-  domain_models/. krrspatial holds SemDT's casadi spatial types behind a ReferenceFrame interface;
-  krrimage holds images, colours and pixels on krrood alone; krrollywood becomes its own repository
-  on krrimage.
+description: Shared types move out of SemDT and crollywood into standalone packages under domain_models/.
+  krrspatial holds SemDT's casadi spatial types behind a ReferenceFrame interface; krrimage holds images,
+  colours and pixels on krrood alone; krrollywood becomes its own repository on krrimage.
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 525
 waves:
 - id: foundations
   name: 'Wave 1: Spatial and image models'
-  description: krrspatial (SemDT's spatial types moved) and krrimage (no casadi), independent
-    of each other.
+  description: krrspatial (SemDT's spatial types moved) and krrimage (no casadi), independent of each
+    other.
 - id: adoption
   name: 'Wave 2: Packages moved onto them'
   description: krrollywood and image extensions build on krrimage.
@@ -27,17 +26,17 @@ tracks:
   wave: adoption
 items:
 - id: krrspatial-numeric
-  title: domain_models/krrspatial holds SemDT's casadi spatial types behind a ReferenceFrame
-    interface
+  title: domain_models/krrspatial holds SemDT's casadi spatial types behind a ReferenceFrame interface
   branch: claude/krrspatial
   track: spatial
   status: in_progress
   depends_on:
   - planar-point-interface
   session: https://claude.ai/code/session_01GoHMif2Xa7Mnqzz9mKFpTT
-  notes: '#526 (user-marked ready) restacked on #527 by merge: spatial_types.py behind krrspatial[casadi]
-    (casadi, numpy), SemDT and root depend on the extra, Point2 implements PlanarPoint[ReferenceFrame,
-    Scalar]. Base claude/krrspatial-interfaces. Pushed 144a41d122; CI and ORM build pending.'
+  notes: '#526 (user-marked ready) on #527: spatial_types.py behind krrspatial[casadi]; Point2 implements
+    PlanarPoint[ReferenceFrame, Scalar] (coordinate_system = reference_frame); HomogeneousTransformationMatrix
+    implements CoordinateChange[ReferenceFrame] (child_frame to reference_frame). Merged #527, pushed
+    015b915efe; CI and ORM build pending.'
   pull_request_number: 526
 - id: krrimage
   title: domain_models/krrimage (images, colours, pixels) with Color moved out of SemDT
@@ -48,10 +47,10 @@ items:
   depends_on:
   - planar-point-interface
   session: https://claude.ai/code/session_01J17aVY3vyQM8goACbkHkcp
-  notes: '#524 restacked on #527 (base claude/krrspatial-interfaces), pushed 884ebfcb4d: depends
-    on base krrspatial, ImagePoint implements PlanarPoint[ImageSpace, float] with an optional
-    space until a camera implements ImageSpace; no longer frozen. Pixel stays a grid cell. Whichever
-    of #524/#526 lands second merges the domain_models/README.md entries.'
+  notes: '#524 on #527 (base claude/krrspatial-interfaces): ImagePoint implements PlanarPoint[ImageCoordinateSystem,
+    float] with an optional coordinate_system; not frozen. Pixel stays a grid cell. Whichever of #524/#526
+    lands second merges the domain_models/README.md entries. Merged #527''s new base, pushed 90119bef22;
+    CI pending.'
 - id: krrollywood-on-krrimage
   title: krrollywood (cram2/crollywood) depends on krrimage instead of its own frame types
   repository: cram2/crollywood
@@ -71,12 +70,11 @@ items:
   - projection-interface
   - planar-point-interface
   branch: claude/krrimage-depth-segmentation
-  notes: 'Camera model = Projection[ImagePoint, Ray3] (project, deproject with depth), behind
-    krrimage''s optional krrspatial[casadi] extra; the camera implements ImageSpace. First user: montessori perception (CameraIntrinsics.deproject,
-    RgbdFrame.project, MeasuredSurfaceFinder''s inline deprojection, orthophoto homography),
-    numpy-batched over whole images, so the model needs an array path. Also adds an image''s
-    placement on a plane (ImagePoint to Point2, like the orthophoto''s region_T_pixel) and the
-    plane-to-image homography composed from OrthogonalProjection and the camera.'
+  notes: 'Camera model = Projection[ImagePoint, Ray3] (project, deproject with depth) behind krrimage''s
+    optional krrspatial[casadi] extra; it maps its frame''s EuclideanSpace onto an ImagePlane. First user:
+    montessori perception (CameraIntrinsics.deproject, RgbdFrame.project, MeasuredSurfaceFinder''s deprojection,
+    orthophoto homography), numpy-batched, so it needs an array path. Also an image''s placement on a
+    plane (ImagePoint to Point2) and the plane-to-image homography from OrthogonalProjection and the camera.'
 - id: orthogonal-projection-in-krrspatial
   title: '#518''s OrthogonalProjection (project, embed, preimage) ported onto krrspatial'
   branch: ccr-d4b2f7f0-b27rlq
@@ -86,20 +84,20 @@ items:
   depends_on:
   - krrspatial-numeric
   session: https://claude.ai/code/session_01TZs6sf5V7EyZYccGYkUDyJ
-  notes: '#518 edits SemDT spatial_types.py and ReferenceFrameMismatchError, both moved by #526;
-    port after #526 lands. project() calls plane_frame._world.transform, which krrspatial frames
-    lack: add a frame-transformer interface that SemDT''s World implements.'
+  notes: '#518 edits SemDT spatial_types.py and ReferenceFrameMismatchError, both moved by #526; port
+    after #526 lands. project() calls plane_frame._world.transform, which krrspatial frames lack: add
+    a frame-transformer interface that SemDT''s World implements.'
 - id: projection-interface
-  title: A Projection interface (project, preimage, embed) shared by orthogonal projection and
-    camera models, with Ray3
+  title: A Projection interface (project, preimage, embed) shared by orthogonal projection and camera
+    models, with Ray3
   branch: claude/krrspatial-projection-interface
   track: spatial
   status: not_started
   depends_on:
   - orthogonal-projection-in-krrspatial
   notes: Generic in its image and preimage types (Projection[Point2, Line3] for OrthogonalProjection).
-    embed(p, t) is the point at t on preimage(p); the inverse laws become one test suite run
-    against every implementation.
+    A projection maps between two spaces; a change within one space is a CoordinateChange. embed(p, t)
+    is the point at t on preimage(p); the inverse laws become one test suite run against every implementation.
 - id: frame-checked-arithmetic
   title: Point and vector arithmetic in krrspatial checks that both sides share a frame
   branch: claude/krrspatial-frame-checked-arithmetic
@@ -109,27 +107,62 @@ items:
   - krrspatial-numeric
   notes: Subtracting points in different frames is silently accepted today; raise ReferenceFrameMismatchError.
 - id: video-on-a-plane
-  title: Show a video on a plane of the world (a wall, a table top) in a camera image or through
-    a projector
+  title: Show a video on a plane of the world (a wall, a table top) in a camera image or through a projector
   branch: claude/krrimage-video-on-a-plane
   track: image-consumers
   status: not_started
   depends_on:
   - image-extensions
   notes: 'Per frame: placement, embed and camera project collapse into one video-to-camera homography
-    and one cv2.warpPerspective. Optional occlusion from the depth image (draw only where depth
-    matches the plane). A projector is a pinhole camera run backwards, calibrated instead of the
-    camera; wall planes come from the twin. Demo ideas: the robot shown a video of its own pickup;
-    the robot''s live capture projected onto the apartment walls while it works.'
+    and one cv2.warpPerspective. Optional occlusion from the depth image (draw only where depth matches
+    the plane). A projector is a pinhole camera run backwards, calibrated instead of the camera; wall
+    planes come from the twin. Demo ideas: the robot shown a video of its own pickup; the robot''s live
+    capture projected onto the apartment walls while it works.'
 - id: planar-point-interface
-  title: krrspatial's casadi-free base (Space, ReferenceFrame, ImageSpace, PlanarPoint[SpaceT,
-    CoordinateT])
+  title: 'krrspatial''s casadi-free base: Space (EuclideanSpace, ImagePlane), CoordinateSystem[SpaceT]
+    (ReferenceFrame, ImageCoordinateSystem), CoordinateChange, PlanarPoint'
   branch: claude/krrspatial-interfaces
   pull_request_number: 527
   track: spatial
   status: in_progress
+  depends_on:
+  - subclass-safe-generic-identity
+  session: https://claude.ai/code/session_01GoHMif2Xa7Mnqzz9mKFpTT
+  notes: 'Draft #527 off main. A reference frame is a coordinate system on physical space, not a space:
+    Space is the point set, CoordinateSystem what coordinates are given in, CoordinateChange[CoordinateSystemT]
+    the change within one space (rigid for frames, scale and shift for images). PlanarPoint[CoordinateSystemT,
+    CoordinateT].coordinate_system. #528 merged in; pushed c1c29715f5 (user-marked ready); CI pending.'
+- id: subclass-safe-generic-identity
+  title: SubClassSafeGeneric generates no equality, so eq=False subclasses keep identity and stay hashable
+  branch: claude/subclass-safe-generic-identity
+  track: spatial
+  status: in_progress
   depends_on: []
   session: https://claude.ai/code/session_01GoHMif2Xa7Mnqzz9mKFpTT
-  notes: 'Draft #527 off main, the base #526 and #524 stack on. Holds Space/ImageSpace/ReferenceFrame,
-    PlanarPoint, ReferenceFrameResolver/Reference and krrood ObjectReference; deps krrood only.
-    Projection and FrameTransformer come with their own items. Pushed 08010edf00; CI pending.'
+  notes: 'Bug fix off main: @dataclass on SubClassSafeGeneric made every eq=False subclass equal to any
+    other instance of its class and unhashable (two NamedFrames compared equal). Fix: @dataclass(eq=False).
+    Draft #528 off main (bug label), merged into #527. Pushed 0d03858949; CI pending.'
+  pull_request_number: 528
+- id: image-coordinate-change
+  title: krrimage's ImageCoordinateChange (scale and shift per axis) for crops and resizes, with cv2 resampling
+  branch: claude/krrimage-coordinate-change
+  track: image
+  status: not_started
+  depends_on:
+  - krrimage
+  notes: 'Implements CoordinateChange[ImageCoordinateSystem]: a crop or resize is a new ImageCoordinateSystem
+    on the same ImagePlane, so an ImagePoint found in a crop maps back to the whole image. ColorImage.cropped/resized
+    do the pixel work with cv2 and return the change; it also yields the 2x3 matrix cv2.warpAffine takes.
+    Pasting one image into another (ColorImage.pasted/fitted) maps between two planes, not within one:
+    same algebra, a separate map class.'
+- id: world-as-euclidean-space
+  title: SemDT's World implements EuclideanSpace; a body's space is its world; World.transform checks
+    it
+  branch: claude/world-as-euclidean-space
+  track: spatial
+  status: blocked
+  depends_on:
+  - krrspatial-numeric
+  notes: 'Blocked on a decision: World inheriting the Interface EuclideanSpace inherits Interface.__new__,
+    and test/living_worlds.py refuses to watch a world type whose __new__ is not object.__new__. Then
+    KinematicStructureEntity.space = _world, and transform raises a clear error for frames of two worlds.'
