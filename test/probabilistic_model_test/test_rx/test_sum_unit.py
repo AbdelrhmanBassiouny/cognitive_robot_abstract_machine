@@ -86,16 +86,16 @@ class SumUnitTestCase(unittest.TestCase):
 
     def test_conditional(self):
         event = SimpleEvent.from_data({self.x: closed(0, 0.5)}).as_composite_set()
-        result, probability = self.model.truncated(event)
-        self.assertAlmostEqual(probability, 0.3)
-        self.assertEqual(len(list(result.nodes())), 1)
-        self.assertIsInstance(result.root, LeafUnit)
+        truncation = self.model.truncated(event)
+        self.assertAlmostEqual(truncation.probability, 0.3)
+        self.assertEqual(len(list(truncation.distribution.nodes())), 1)
+        self.assertIsInstance(truncation.distribution.root, LeafUnit)
 
     def test_conditional_impossible(self):
         event = SimpleEvent.from_data({self.x: closed(5, 6)}).as_composite_set()
-        result, probability = self.model.truncated(event)
-        self.assertEqual(probability, 0.0)
-        self.assertIsNone(result)
+        truncation = self.model.truncated(event)
+        self.assertEqual(truncation.probability, 0.0)
+        self.assertIsNone(truncation.distribution)
 
     def test_sample(self):
         samples = self.model.sample(100)
@@ -112,10 +112,10 @@ class SumUnitTestCase(unittest.TestCase):
         self.assertEqual(len(marginal.nodes()), len(self.model.nodes()))
 
     def test_mode(self):
-        mode, likelihood = self.model.mode()
-        self.assertEqual(likelihood, 0.6)
+        mode = self.model.mode()
+        self.assertEqual(mode.likelihood, 0.6)
         self.assertEqual(
-            mode, SimpleEvent.from_data({self.x: closed(0, 1)}).as_composite_set()
+            mode.event, SimpleEvent.from_data({self.x: closed(0, 1)}).as_composite_set()
         )
 
     def test_serialization(self):
@@ -126,8 +126,8 @@ class SumUnitTestCase(unittest.TestCase):
 
     def test_conditional_inference(self):
         event = SimpleEvent.from_data({self.x: closed(0, 0.5)}).as_composite_set()
-        result, probability = self.model.truncated(event)
-        self.assertEqual(result.probability(event), 1)
+        truncation = self.model.truncated(event)
+        self.assertEqual(truncation.distribution.probability(event), 1)
 
     def test_deep_mount(self):
         pc = ProbabilisticCircuit()

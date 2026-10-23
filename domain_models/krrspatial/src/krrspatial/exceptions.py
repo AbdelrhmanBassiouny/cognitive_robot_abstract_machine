@@ -60,14 +60,14 @@ class ReferenceFrameMismatchError(SpatialTypesError):
     Raised when a value is expressed in a different frame than an operation requires.
     """
 
-    expected_frame: ReferenceFrame
+    expected_frame: ReferenceFrame | None
     """
-    The frame the operation requires.
+    The frame the operation requires, or ``None`` if it requires no frame.
     """
 
-    actual_frame: ReferenceFrame
+    actual_frame: ReferenceFrame | None
     """
-    The frame that was found instead.
+    The frame that was found instead, or ``None`` if the value has no frame.
     """
 
     context: Optional[str] = None
@@ -78,9 +78,20 @@ class ReferenceFrameMismatchError(SpatialTypesError):
     def error_message(self) -> str:
         checked_value = self.context or "the given value"
         return (
-            f"Expected {checked_value} to be expressed in frame '{self.expected_frame.name}', "
-            f"but it is expressed in frame '{self.actual_frame.name}'."
+            f"Expected {checked_value} to be expressed in "
+            f"{self._describe(self.expected_frame)}, "
+            f"but it is expressed in {self._describe(self.actual_frame)}."
         )
+
+    @staticmethod
+    def _describe(frame: ReferenceFrame | None) -> str:
+        """
+        :param frame: The frame to describe.
+        :return: The frame as it reads in the error message.
+        """
+        if frame is None:
+            return "no frame"
+        return f"frame '{frame.name}'"
 
     def suggest_correction(self) -> str:
         return (

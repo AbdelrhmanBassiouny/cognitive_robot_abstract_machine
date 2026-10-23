@@ -1,3 +1,4 @@
+import copy
 import unittest
 
 import numpy as np
@@ -29,8 +30,8 @@ class GaussianDistributionTestCase(unittest.TestCase):
         self.assertEqual(self.distribution.probability(self.distribution.support), 1)
 
     def test_mode(self):
-        mode, likelihood = self.distribution.univariate_log_mode()
-        self.assertEqual(mode, singleton(2))
+        mode = self.distribution.univariate_log_mode()
+        self.assertEqual(mode.assignment, singleton(2))
 
     def test_sample(self):
         samples = self.distribution.sample(100)
@@ -42,14 +43,14 @@ class GaussianDistributionTestCase(unittest.TestCase):
         event = SimpleEvent.from_data(
             {self.distribution.variable: closed(1, 2)}
         ).as_composite_set()
-        conditional, probability = self.distribution.truncated(event)
-        self.assertIsInstance(conditional, TruncatedGaussianDistribution)
+        truncation = self.distribution.truncated(event)
+        self.assertIsInstance(truncation.distribution, TruncatedGaussianDistribution)
         cdf = self.distribution.cumulative_distribution_function(
             np.array([1, 2]).reshape(-1, 1)
         )
-        self.assertAlmostEqual(probability, cdf[1] - cdf[0])
-        self.assertEqual(conditional.lower, 1)
-        self.assertEqual(conditional.upper, 2)
+        self.assertAlmostEqual(truncation.probability, cdf[1] - cdf[0])
+        self.assertEqual(truncation.distribution.lower, 1)
+        self.assertEqual(truncation.distribution.upper, 2)
 
     def test_raw_moment(self):
         self.assertEqual(self.distribution.raw_moment(0), 1)
@@ -145,10 +146,10 @@ class TruncatedGaussianDistributionTestCase(unittest.TestCase):
         self.assertEqual(cdf[2], 0)
 
     def test_mode(self):
-        mode, likelihood = self.distribution.univariate_log_mode()
-        self.assertEqual(mode, singleton(2))
+        mode = self.distribution.univariate_log_mode()
+        self.assertEqual(mode.assignment, singleton(2))
         self.assertEqual(
-            likelihood,
+            mode.log_likelihood,
             self.distribution.log_likelihood_without_bounds_check(np.array([[2]])),
         )
 
@@ -224,46 +225,46 @@ class TruncatedGaussianDistributionTestCase(unittest.TestCase):
 
     def test_conditional_simple_intersection(self):
         event = SimpleEvent.from_data({self.x: closed(1, 2)}).as_composite_set()
-        conditional, probability = self.distribution.truncated(event)
-        self.assertIsInstance(conditional, TruncatedGaussianDistribution)
+        truncation = self.distribution.truncated(event)
+        self.assertIsInstance(truncation.distribution, TruncatedGaussianDistribution)
         cdf = self.distribution.cumulative_distribution_function(
             np.array([1, 2]).reshape(-1, 1)
         )
-        self.assertEqual(probability, cdf[1] - cdf[0])
-        self.assertEqual(conditional.lower, 1)
-        self.assertEqual(conditional.upper, 2)
+        self.assertEqual(truncation.probability, cdf[1] - cdf[0])
+        self.assertEqual(truncation.distribution.lower, 1)
+        self.assertEqual(truncation.distribution.upper, 2)
 
     def test_conditional_on_an_interval_reaching_beyond_the_support(self):
         event = SimpleEvent.from_data({self.x: closed(-5, 1)}).as_composite_set()
-        conditional, probability = self.distribution.truncated(event)
-        self.assertEqual(conditional.interval, closed(-2, 1).simple_sets[0])
+        truncation = self.distribution.truncated(event)
+        self.assertEqual(truncation.distribution.interval, closed(-2, 1).simple_sets[0])
         points = np.linspace(-2, 1, 7).reshape(-1, 1)
         np.testing.assert_allclose(
-            conditional.likelihood(points),
-            self.distribution.likelihood(points) / probability,
+            truncation.distribution.likelihood(points),
+            self.distribution.likelihood(points) / truncation.probability,
         )
 
     def test_conditional_on_mode(self):
-        mode, _ = self.distribution.mode()
-        conditional, probability = self.distribution.truncated(mode)
-        self.assertIsNone(conditional)
+        mode = self.distribution.mode().event
+        truncation = self.distribution.truncated(mode)
+        self.assertIsNone(truncation.distribution)
 
         point_value = (
             mode.simple_sets[0][self.distribution.variable].simple_sets[0].lower
         )
-        conditional, probability = self.distribution.log_conditional(
+        conditioning = self.distribution.log_conditional(
             {self.distribution.variable: point_value}
         )
-        self.assertIsInstance(conditional, DiracDeltaDistribution)
-        self.assertTrue(probability > -np.inf)
+        self.assertIsInstance(conditioning.distribution, DiracDeltaDistribution)
+        self.assertTrue(conditioning.log_likelihood > -np.inf)
 
     def test_copy(self):
-        copy = self.distribution.__copy__()
-        self.assertEqual(self.distribution, copy)
-        copy.interval = copy.interval.intersection_with(
+        copied = copy.deepcopy(self.distribution)
+        self.assertEqual(self.distribution, copied)
+        copied.interval = copied.interval.intersection_with(
             SimpleInterval.from_data(-1, 1, Bound.CLOSED, Bound.CLOSED)
         )
-        self.assertNotEqual(self.distribution, copy)
+        self.assertNotEqual(self.distribution, copied)
 
     def test_sample(self):
         samples = self.distribution.sample(100)
@@ -290,17 +291,17 @@ class TruncatedGaussianDistributionJapaneseManTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.example_2, _ = cls.distribution.truncated(
+        cls.example_2 = cls.distribution.truncated(
             SimpleEvent.from_data(
                 {cls.distribution.variable: closed(0.5, np.inf)}
             ).as_composite_set()
-        )
+        ).distribution
 
-        cls.example_3, _ = cls.distribution.truncated(
+        cls.example_3 = cls.distribution.truncated(
             SimpleEvent.from_data(
                 {cls.distribution.variable: closed(-1, 1)}
             ).as_composite_set()
-        )
+        ).distribution
 
     def test_raw_expectation_example_2(self):
         center = VariableMap({self.distribution.variable: 0})
@@ -456,15 +457,15 @@ class TruncatedGaussianSamplingTestCase(unittest.TestCase):
         event = SimpleEvent.from_data({x: singleton(0)}).as_composite_set()
 
         # singleton_allowed=False
-        conditional, probability = dist.truncated(event)
-        self.assertIsNone(conditional)
+        truncation = dist.truncated(event)
+        self.assertIsNone(truncation.distribution)
 
         # singleton_allowed=True
-        conditional, probability = dist.truncated(event, singleton_allowed=True)
-        self.assertIsInstance(conditional, DiracDeltaDistribution)
-        self.assertEqual(conditional.location, 0.0)
+        truncation = dist.truncated(event, singleton_allowed=True)
+        self.assertIsInstance(truncation.distribution, DiracDeltaDistribution)
+        self.assertEqual(truncation.distribution.location, 0.0)
         self.assertAlmostEqual(
-            probability, np.exp(dist.log_likelihood(np.array([[0]]))[0])
+            truncation.probability, np.exp(dist.log_likelihood(np.array([[0]]))[0])
         )
 
 

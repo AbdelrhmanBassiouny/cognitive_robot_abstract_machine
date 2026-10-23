@@ -16,6 +16,10 @@ def test_a_reference_frame_cannot_be_instantiated():
         ReferenceFrame()
 
 
+def test_a_reference_frame_declares_expressing_values_in_it():
+    assert ReferenceFrame.__abstractmethods__ == {ReferenceFrame.express.__name__}
+
+
 # %% referring to a frame in a serialized value
 
 

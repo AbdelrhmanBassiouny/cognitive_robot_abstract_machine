@@ -10,6 +10,7 @@ if app is None:
 
 from probabilistic_model.gui.controller import ModelController
 from probabilistic_model.gui.posterior_widget import PosteriorWidget
+from probabilistic_model.query_results import Truncation
 from random_events.variable import Continuous, Symbolic
 from random_events.set import Set
 from random_events.interval import closed
@@ -30,7 +31,7 @@ class TestPosteriorGUI(unittest.TestCase):
         self.model.marginal.return_value = self.model
         self.model.plot.return_value = []
         self.model.plotly_layout.return_value = {}
-        self.model.truncated.return_value = (self.model, 1.0)
+        self.model.truncated.return_value = Truncation(self.model, 1.0)
 
         self.controller.set_model(self.model)
 

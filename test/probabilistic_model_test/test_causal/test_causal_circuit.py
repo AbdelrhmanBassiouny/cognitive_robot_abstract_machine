@@ -347,8 +347,8 @@ def _build_unnormalized_circuit() -> tuple:
 def _build_shared_cause_subcircuit_circuit() -> tuple:
     """
     A DAG, not a tree: the SumUnit over the cause x is mounted as a shared child of two
-    different ProductUnits, matching the mounting pattern relational grounding uses when one
-    exchangeable instance is attached under several class-level product nodes.
+    different ProductUnits, matching the mounting pattern relational grounding uses when
+    one exchangeable instance is attached under several class-level product nodes.
 
         SumUnit(root)
           ProductUnit_a(SumUnit_x [shared], leaf y∈[0,1])
@@ -751,9 +751,9 @@ class VerifySupportDeterminismSharedSubcircuitTestCase(unittest.TestCase):
     """
     A shared child (a node with more than one parent) must be visited once by
     _check_support_disjointness's traversal and its disjointness result attributed
-    correctly to every parent -- the pattern the relational circuit's exact-partition and Monte-Carlo
-    grounding both rely on when one grounded instance is mounted under several class-
-    level product nodes.
+    correctly to every parent -- the pattern the relational circuit's exact-partition
+    and Monte-Carlo grounding both rely on when one grounded instance is mounted under
+    several class- level product nodes.
     """
 
     def test_shared_cause_subcircuit_passes(self):
@@ -1080,11 +1080,11 @@ class DiscreteConfounderAdjustmentTestCase(unittest.TestCase):
         )
 
     def test_conditioning_is_confounded(self):
-        conditioned, _ = self.circuit.truncated(
+        conditioned = self.circuit.truncated(
             SimpleEvent.from_data({self.treatment: Set.from_iterable([Treatment.HIGH])})
             .as_composite_set()
             .fill_missing_variables_pure(self.circuit.variables)
-        )
+        ).distribution
         self.assertAlmostEqual(
             _symbolic_probability(conditioned, self.outcome, Outcome.GOOD),
             0.8,
@@ -1095,11 +1095,11 @@ class DiscreteConfounderAdjustmentTestCase(unittest.TestCase):
         # An empty adjustment set cannot separate the confound from the effect --
         # it should reproduce the same spurious 0.8, not the causal 0.6.
         naive = self.cc.backdoor_adjustment(self.treatment, self.outcome)
-        narrowed, _ = naive.truncated(
+        narrowed = naive.truncated(
             SimpleEvent.from_data({self.treatment: Set.from_iterable([Treatment.HIGH])})
             .as_composite_set()
             .fill_missing_variables_pure(naive.variables)
-        )
+        ).distribution
         self.assertAlmostEqual(
             _symbolic_probability(narrowed, self.outcome, Outcome.GOOD),
             0.8,
@@ -1112,16 +1112,18 @@ class DiscreteConfounderAdjustmentTestCase(unittest.TestCase):
         )
         for treatment_value in (Treatment.HIGH, Treatment.LOW):
             with self.subTest(treatment=treatment_value):
-                narrowed, region_probability = adjusted.truncated(
+                truncation = adjusted.truncated(
                     SimpleEvent.from_data(
                         {self.treatment: Set.from_iterable([treatment_value])}
                     )
                     .as_composite_set()
                     .fill_missing_variables_pure(adjusted.variables)
                 )
-                self.assertGreater(region_probability, 0.0)
+                self.assertGreater(truncation.probability, 0.0)
                 self.assertAlmostEqual(
-                    _symbolic_probability(narrowed, self.outcome, Outcome.GOOD),
+                    _symbolic_probability(
+                        truncation.distribution, self.outcome, Outcome.GOOD
+                    ),
                     0.6,
                     delta=0.01,
                 )
@@ -1139,11 +1141,11 @@ class DiscreteConfounderAdjustmentTestCase(unittest.TestCase):
         adjusted = self.cc.backdoor_adjustment(
             self.treatment, self.outcome, [self.season]
         )
-        _, high_mass = adjusted.truncated(
+        high_mass = adjusted.truncated(
             SimpleEvent.from_data({self.treatment: Set.from_iterable([Treatment.HIGH])})
             .as_composite_set()
             .fill_missing_variables_pure(adjusted.variables)
-        )
+        ).probability
         # P(treatment=HIGH) = P(WARM)*0.8 + P(COLD)*0.3 = 0.6*0.8 + 0.4*0.3 = 0.6
         self.assertAlmostEqual(high_mass, 0.6, delta=0.01)
 
@@ -1253,16 +1255,18 @@ class CauseSpecificAdjustmentTestCase(unittest.TestCase):
             (Treatment.LOW, 0.0),
         ):
             with self.subTest(treatment=treatment_value):
-                narrowed, region_probability = adjusted.truncated(
+                truncation = adjusted.truncated(
                     SimpleEvent.from_data(
                         {self.treatment: Set.from_iterable([treatment_value])}
                     )
                     .as_composite_set()
                     .fill_missing_variables_pure(adjusted.variables)
                 )
-                self.assertGreater(region_probability, 0.0)
+                self.assertGreater(truncation.probability, 0.0)
                 self.assertAlmostEqual(
-                    _symbolic_probability(narrowed, self.outcome, Outcome.GOOD),
+                    _symbolic_probability(
+                        truncation.distribution, self.outcome, Outcome.GOOD
+                    ),
                     expected,
                     delta=0.01,
                 )
@@ -1437,9 +1441,9 @@ class BestDisjointRegionTestCase(unittest.TestCase):
 
     def _truncated_to_y(self, lower: float, upper: float):
         event = SimpleEvent.from_data({self.y: closed(lower, upper)}).as_composite_set()
-        truncated, _ = self.interventional.truncated(
+        truncated = self.interventional.truncated(
             event.fill_missing_variables_pure(self.interventional.variables)
-        )
+        ).distribution
         return truncated
 
     def test_best_region_is_near_certain_once_truncated_to_one_branchs_effect(self):

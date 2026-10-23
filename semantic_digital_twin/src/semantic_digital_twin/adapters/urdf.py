@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+import numpy as np
 from typing_extensions import Dict, Optional, Union, List
 from urdf_parser_py import urdf as urdfpy
 from xacro import process_file
@@ -12,7 +13,11 @@ from semantic_digital_twin.adapters.package_resolver import (
 )
 from semantic_digital_twin.adapters.world_model_parser import WorldModelParser
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.exceptions import NegativeConnectionVelocity
+from semantic_digital_twin.exceptions import (
+    NegativeConnectionVelocity,
+    MissingURDFJointAxisError,
+    ZeroLengthURDFJointAxisError,
+)
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
     Point3,
@@ -30,6 +35,7 @@ from semantic_digital_twin.world_description.connections import (
     RevoluteConnection,
     PrismaticConnection,
     FixedConnection,
+    Connection6DoF,
 )
 from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedom,
@@ -54,10 +60,31 @@ connection_type_map = {  # 'unknown': JointType.UNKNOWN,
     "revolute": RevoluteConnection,
     "continuous": RevoluteConnection,
     "prismatic": PrismaticConnection,
-    # 'floating': JointType.FLOATING,
+    "floating": Connection6DoF,
     # 'planar': JointType.PLANAR,
     "fixed": FixedConnection,
 }
+
+
+def urdf_joint_axis(urdf_joint: urdfpy.Joint) -> List[float]:
+    """
+    The axis a URDF joint moves along, as the unit vector the connections expect.
+
+    URDF normalizes the axis it is given. A joint that declares no axis is rejected
+    rather than given a default, so a description is read as written.
+
+    :param urdf_joint: The URDF joint to read the axis of.
+    :return: The joint's axis as a unit vector.
+    """
+    if urdf_joint.axis is None:
+        raise MissingURDFJointAxisError(
+            joint_name=urdf_joint.name, joint_type=urdf_joint.type
+        )
+    axis = np.asarray(urdf_joint.axis, dtype=float)
+    norm = np.linalg.norm(axis)
+    if norm == 0:
+        raise ZeroLengthURDFJointAxisError(joint_name=urdf_joint.name)
+    return (axis / norm).tolist()
 
 
 def urdf_joint_to_limits(
@@ -193,6 +220,13 @@ class URDFParser(WorldModelParser):
         )
 
     def parse(self) -> World:
+        for joint in self.parsed.joints:
+            if connection_type_map.get(joint.type) in (
+                RevoluteConnection,
+                PrismaticConnection,
+            ):
+                urdf_joint_axis(joint)
+
         prefix = self.parsed.name
         links = [
             self.parse_link(link, PrefixedName(link.name, prefix))
@@ -263,6 +297,14 @@ class URDFParser(WorldModelParser):
                 child=child,
                 parent_T_connection_expression=parent_T_connection,
             )
+        if connection_type is Connection6DoF:
+            return Connection6DoF.create_with_dofs(
+                world=world,
+                parent=parent,
+                child=child,
+                name=connection_name,
+                parent_T_connection_expression=parent_T_connection,
+            )
 
         dof_name = connection_name
         multiplier, offset = 1.0, 0.0
@@ -279,7 +321,6 @@ class URDFParser(WorldModelParser):
         else:
             dof = world.get_degree_of_freedom_by_name(dof_name)
 
-        assert joint.axis is not None, f"Joint axis is None for joint {joint.name}"
         result = connection_type(
             name=connection_name,
             parent=parent,
@@ -287,7 +328,7 @@ class URDFParser(WorldModelParser):
             parent_T_connection_expression=parent_T_connection,
             multiplier=multiplier,
             offset=offset,
-            axis=Vector3(*map(int, joint.axis), reference_frame=parent),
+            axis=Vector3(*urdf_joint_axis(joint), reference_frame=parent),
             raw_dof=dof,
             dynamics=self.parse_dynamics(joint),
         )

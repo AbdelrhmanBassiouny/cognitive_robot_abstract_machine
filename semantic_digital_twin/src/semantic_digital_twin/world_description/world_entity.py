@@ -54,6 +54,7 @@ from semantic_digital_twin.world_description.connection_properties import (
     VelocityServoGains,
 )
 from semantic_digital_twin.spatial_types.spatial_types import (
+    GenericSpatialType,
     HomogeneousTransformationMatrix,
     Point3,
     Pose,
@@ -395,6 +396,9 @@ class KinematicStructureEntity(WorldEntityWithSimulatorProperties, ReferenceFram
     def remove_from_world(self):
         super().remove_from_world()
         self.index = None
+
+    def express(self, value: GenericSpatialType) -> GenericSpatialType:
+        return self._world.transform(value, self)
 
     @property
     @abstractmethod

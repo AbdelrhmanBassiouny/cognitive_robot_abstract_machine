@@ -11,6 +11,8 @@ from krrspatial.spatial_types import (
     GenericRotatableSpatialType,
     GenericSpatialType,
     HomogeneousTransformationMatrix,
+    Line3,
+    OrthogonalProjection,
     Point,
     Point2,
     Point3,

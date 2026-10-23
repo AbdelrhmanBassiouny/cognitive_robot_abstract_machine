@@ -168,7 +168,7 @@ def test_a_point2_is_a_planar_point_of_a_reference_frame():
 # %% a transformation as a change between two frames
 
 
-def test_a_transformation_is_a_change_between_reference_frames():
+def test_a_transformation_binds_reference_frames_as_its_coordinate_systems():
     assert (
         HomogeneousTransformationMatrix.get_type_of_generic_parameter(CoordinateSystemT)
         is ReferenceFrame
