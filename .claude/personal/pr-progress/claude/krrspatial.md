@@ -4,7 +4,7 @@ Plan
 - Every SpatialType is CoordinateRepresentation[ReferenceFrame]; HTM is RigidCoordinateChange[ReferenceFrame]; ReferenceFrame.express brings values into a frame. Frameless values stay.
 
 Done
-- Merged main (#518 ported into krrspatial), pushed 009739e57e. krrspatial 56 pass; SemDT 1114 pass, failures env-only.
+- Pushed d313e8f49b: touched SemDT files import from krrspatial; Point/Point2.transform docstrings state the projection cases. krrspatial 56 pass, SemDT spatial 453 pass.
 
 Next
-- Frame check waits on Simon (frame-checked-arithmetic); threads 576/874 go to spatial-action. Discussing groups and dimensions (SE(n), SO(n)) with the user. Read CI.
+- Open threads wait on later items: express space check (world-as-euclidean-space), imports (krrspatial-imports), 576/874 (spatial-action), 681 and 88 (Simon). Read CI.
