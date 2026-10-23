@@ -5,14 +5,17 @@ Tests for positions and boxes on an image.
 from __future__ import annotations
 
 from krrimage.coordinates import ImageBox, ImagePoint, Pixel, PixelBox, Resolution
-from krrspatial.planar_point import CoordinateT, SpaceT
-from krrspatial.space import ImageSpace
+from krrspatial.coordinate_system import CoordinateSystemT, ImageCoordinateSystem
+from krrspatial.planar_point import CoordinateT
 
 # %% positions anywhere on an image
 
 
-def test_an_image_point_is_given_in_an_image_space() -> None:
-    assert ImagePoint.get_type_of_generic_parameter(SpaceT) is ImageSpace
+def test_an_image_point_is_given_in_an_image_coordinate_system() -> None:
+    assert (
+        ImagePoint.get_type_of_generic_parameter(CoordinateSystemT)
+        is ImageCoordinateSystem
+    )
 
 
 def test_an_image_points_coordinates_are_floats() -> None:

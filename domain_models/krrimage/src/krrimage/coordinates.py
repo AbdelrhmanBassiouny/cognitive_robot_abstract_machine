@@ -10,8 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from krrood.bounds import Bounds
+from krrspatial.coordinate_system import ImageCoordinateSystem
 from krrspatial.planar_point import PlanarPoint
-from krrspatial.space import ImageSpace
 
 # %% the size of an image
 
@@ -37,7 +37,7 @@ class Resolution:
 
 
 @dataclass
-class ImagePoint(PlanarPoint[ImageSpace, float]):
+class ImagePoint(PlanarPoint[ImageCoordinateSystem, float]):
     """
     A position on an image, anywhere between its pixels.
     """
@@ -52,9 +52,10 @@ class ImagePoint(PlanarPoint[ImageSpace, float]):
     Pixels from the image's top edge.
     """
 
-    space: ImageSpace | None = None
+    coordinate_system: ImageCoordinateSystem | None = None
     """
-    The image the position is on; ``None`` where it is not known.
+    The image coordinate system the position is given in; ``None`` where it is not
+    known.
     """
 
 
