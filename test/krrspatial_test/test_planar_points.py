@@ -5,7 +5,11 @@ from dataclasses import fields
 import pytest
 
 from krrood.patterns.exceptions import InterfaceInstantiationError
-from krrspatial.coordinate_system import CoordinateSystemT, ImageCoordinateSystem
+from krrspatial.coordinate_system import (
+    CoordinateRepresentation,
+    CoordinateSystemT,
+    ImageCoordinateSystem,
+)
 from krrspatial.planar_point import CoordinateT, PlanarPoint
 
 from .dataset.spaces import StoredImagePoint
@@ -16,6 +20,10 @@ from .dataset.spaces import StoredImagePoint
 def test_a_planar_point_cannot_be_instantiated():
     with pytest.raises(InterfaceInstantiationError):
         PlanarPoint()
+
+
+def test_a_planar_point_is_a_coordinate_representation():
+    assert issubclass(PlanarPoint, CoordinateRepresentation)
 
 
 def test_a_point_reports_the_kind_of_coordinate_system_it_is_given_in():
