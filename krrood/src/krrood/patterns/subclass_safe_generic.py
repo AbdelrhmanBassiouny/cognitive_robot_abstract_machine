@@ -60,7 +60,7 @@ ResolvableType: TypeAlias = (
 )
 
 
-@dataclass
+@dataclass(eq=False)
 class SubClassSafeGeneric(ABC):
     """
     Generic-agnostic engine that updates field types when a subclass binds the generic type
