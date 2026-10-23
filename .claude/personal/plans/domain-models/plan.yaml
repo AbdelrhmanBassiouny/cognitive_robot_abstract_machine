@@ -39,8 +39,8 @@ items:
     SpatialType is a CoordinateRepresentation[ReferenceFrame] (coordinate_system = reference_frame);
     Point2 a PlanarPoint; HomogeneousTransformationMatrix a RigidCoordinateChange[ReferenceFrame],
     must be rigid. Frameless values stay. #518''s OrthogonalProjection ported in; ReferenceFrame.express
-    brings a value into a frame (KinematicStructureEntity via its world). Merged main, pushed
-    009739e57e; CI and ORM build pending. Open questions to Simon: https://claude.ai/artifact/UW7BdpNyW1r2sc63ktzA9T'
+    brings a value into a frame (KinematicStructureEntity via its world). Pushed d313e8f49b;
+    CI and ORM build pending. Open questions to Simon: https://claude.ai/artifact/UW7BdpNyW1r2sc63ktzA9T'
   pull_request_number: 526
 - id: krrimage
   title: domain_models/krrimage (images, colours, pixels) with Color moved out of SemDT
@@ -114,11 +114,37 @@ items:
   status: not_started
   depends_on:
   - krrspatial-numeric
+  - planar-coordinate-system
   notes: 'A change acts on values of its own coordinate-system kind and keeps their type:
     a point by R p + t, a vector by R v, an orientation by composition. Each value implements
     the action (double dispatch) instead of HomogeneousTransformationMatrix.dot and RotationMatrix.dot
-    listing operands. Point2 and Pose2D are left out (only planar changes act on them). Waits
+    listing operands; planar changes act on Point2 and Pose2D. Waits
     on Simon''s answers to Q4 (Point3 in RotationMatrix.dot) and Q5 (AxisAngle).'
+- id: planar-coordinate-system
+  title: Point2 and Pose2D are given in the x-y plane of their reference frame, with dimension
+    on the space and planar rigid changes
+  branch: claude/krrspatial-planar-coordinate-system
+  track: spatial
+  status: not_started
+  depends_on:
+  - krrspatial-numeric
+  notes: 'Space gets a dimension classproperty and a 2D plane space; a frame''s x-y plane is
+    a coordinate system of that plane, derived from the frame (not stored). Point2 and Pose2D
+    keep reference_frame (World.transform, OrthogonalProjection and JSON rely on it); only
+    coordinate_system returns the plane''s coordinate system, so SpatialType becomes generic
+    in its coordinate-system kind. SE(2) is RigidCoordinateChange of the plane kind, defined
+    only between frames sharing one x-y plane; Point2.transform stays a projection otherwise.'
+- id: krrspatial-imports
+  title: The workspace imports spatial types from krrspatial instead of SemDT's re-export
+    module
+  branch: claude/krrspatial-imports
+  track: spatial
+  status: not_started
+  depends_on:
+  - krrspatial-numeric
+  notes: 'About 334 files (SemDT, giskardpy, coraplex, robokudo, cramera, segmind, experiments,
+    tests) import semantic_digital_twin.spatial_types.spatial_types. Mechanical; the re-export
+    module stays so JSON type names and outside code keep resolving.'
 - id: video-on-a-plane
   title: Show a video on a plane of the world (a wall, a table top) in a camera image or through
     a projector
@@ -163,14 +189,15 @@ items:
     another (ColorImage.pasted/fitted) maps between two planes, not within one: same algebra,
     a separate map class.'
 - id: world-as-euclidean-space
-  title: SemDT's World implements EuclideanSpace; a body's space is its world; World.transform
-    checks it
+  title: SemDT's World has a EuclideanSpace that its bodies chart; ReferenceFrame.express
+    checks the space before changing coordinates
   branch: claude/world-as-euclidean-space
   track: spatial
-  status: blocked
+  status: not_started
   depends_on:
   - krrspatial-numeric
-  notes: 'Blocked on a decision: World inheriting the Interface EuclideanSpace inherits Interface.__new__,
-    and test/living_worlds.py refuses to watch a world type whose __new__ is not object.__new__.
-    Then KinematicStructureEntity.space = _world, and transform raises a clear error for frames
-    of two worlds.'
+  notes: 'Composition, not inheritance: World holds a EuclideanSpace (it is more than one: bodies,
+    state, semantics), so the Interface.__new__ blocker no longer applies. KinematicStructureEntity.space
+    returns its world''s space. ReferenceFrame.express becomes a template method: it raises
+    when the value has no frame or its frame charts another space, then calls an abstract
+    hook; KinematicStructureEntity implements the hook through World.transform.'

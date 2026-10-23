@@ -6,6 +6,8 @@ claude/krrimage-depth-segmentation	domain-models
 claude/krrspatial-projection-interface	domain-models
 claude/krrspatial-frame-checked-arithmetic	domain-models
 claude/krrspatial-action	domain-models
+claude/krrspatial-planar-coordinate-system	domain-models
+claude/krrspatial-imports	domain-models
 claude/krrimage-video-on-a-plane	domain-models
 claude/krrspatial-interfaces	domain-models
 claude/krrimage-coordinate-change	domain-models

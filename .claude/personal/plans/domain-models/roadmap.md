@@ -6,5 +6,6 @@
 - A space is a point set (EuclideanSpace, ImagePlane); values are CoordinateRepresentations of a CoordinateSystem on it, never of the space. A change within one space implements the CoordinateChange kind naming what it keeps, bound to its coordinate-system kind (rigid for ReferenceFrame, affine for image crops and resizes); a map between spaces is a Projection.
 - Every 2D point implements PlanarPoint[CoordinateSystemT, CoordinateT], binding both parameters exactly once; ImagePoint is krrimage's PlanarPoint[ImageCoordinateSystem, float], Pixel stays a grid cell. Mapping an image point to a metric point is a projection behind an optional extra.
 - Every map between 2D and 3D (orthogonal projection, camera model) implements krrspatial's Projection: project, projection_line, unproject. An image reaches a ReferenceFrame only through a Projection, never by being one.
+- Dimension belongs to a space, not to its values or changes. A world has a space and fills it; it never is one. A 2D value is given in a plane's coordinate system, which a 3D frame induces.
 - Moved classes stay importable from their old module, so old imports and JSON type names keep resolving.
 - Package names (krrspatial, krrimage, krrollywood) are open to change in review.
