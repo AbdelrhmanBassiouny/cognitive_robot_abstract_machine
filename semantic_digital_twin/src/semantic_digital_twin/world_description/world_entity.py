@@ -53,7 +53,7 @@ from semantic_digital_twin.world_description.connection_properties import (
     ServoGains,
     VelocityServoGains,
 )
-from semantic_digital_twin.spatial_types.spatial_types import (
+from krrspatial.spatial_types import (
     GenericSpatialType,
     HomogeneousTransformationMatrix,
     Point3,

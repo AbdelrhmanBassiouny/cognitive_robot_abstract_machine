@@ -1098,10 +1098,10 @@ class Point(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer, ABC):
     :class:`Point3` has a ``z``: a 2D point has no height of its own, so :class:`Point2`
     does not carry the attribute at all.
 
-    .. warning::
-        Reading :attr:`x` and :attr:`y` of a :class:`Point3` through this interface
-        ignores its height but is not a projection. Code that needs the 2D point a
-        :class:`Point3` corresponds to uses :meth:`OrthogonalProjection.project`.
+    .. note::
+        :attr:`x` and :attr:`y` of a :class:`Point3` are its orthogonal projection onto
+        the x-y plane of its own reference frame. Its projection onto any other plane is
+        :meth:`OrthogonalProjection.project`.
     """
 
     @property
@@ -1469,10 +1469,10 @@ class Point2(Point, PlanarPoint[ReferenceFrame, sm.Scalar]):
         This point re-expressed in ``target_frame_T_reference_frame``'s reference frame.
 
         .. warning::
-            Between frames whose x-y planes are not parallel this is not a change of
-            coordinates but a projection: the point is placed at height 0 through an
-            :class:`OrthogonalProjection`, moved, and projected onto the target plane.
-            The height the rotation produced is lost.
+            Only between frames whose x-y planes are the same plane is this a change of
+            coordinates. Otherwise it is an :class:`OrthogonalProjection` onto the
+            target frame's x-y plane: it keeps distances when the two planes are
+            parallel, and shortens them when they are not.
 
         :param target_frame_T_reference_frame: The transformation from this point's
             reference frame to the frame it should be expressed in.

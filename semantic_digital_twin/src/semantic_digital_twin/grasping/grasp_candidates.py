@@ -14,7 +14,7 @@ from semantic_digital_twin.exceptions import (
     MissingReferenceFrameError,
     ObjectHasNoWidthWithoutCollision,
 )
-from semantic_digital_twin.spatial_types.spatial_types import Pose
+from krrspatial.spatial_types import Pose
 
 if TYPE_CHECKING:
     from semantic_digital_twin.semantic_annotations.mixins import HasGraspCandidates
