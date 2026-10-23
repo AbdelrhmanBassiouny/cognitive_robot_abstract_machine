@@ -87,6 +87,19 @@ items:
   notes: '#518 edits SemDT spatial_types.py and ReferenceFrameMismatchError, both moved by #526; port
     after #526 lands. project() calls plane_frame._world.transform, which krrspatial frames lack: add
     a frame-transformer interface that SemDT''s World implements.'
+- id: pose2d-planar-interface
+  title: '#519''s Pose2D without fake z/roll/pitch, and from_pose transforming into its frame, ported onto
+    krrspatial'
+  branch: claude/pose2d-planar-interface
+  pull_request_number: 519
+  track: spatial
+  status: in_progress
+  depends_on:
+  - krrspatial-numeric
+  session: https://claude.ai/code/session_01TZs6sf5V7EyZYccGYkUDyJ
+  notes: '#519 (user-marked ready, merge conflict with main) is stacked on upstream cram2#746 and edits
+    SemDT spatial_types.py, moved by #526; port after #526 lands, like #518. from_pose calls
+    frame._world.transform, which world-as-euclidean-space replaces.'
 - id: projection-interface
   title: A Projection interface (project, preimage, embed) shared by orthogonal projection and camera
     models, with Ray3

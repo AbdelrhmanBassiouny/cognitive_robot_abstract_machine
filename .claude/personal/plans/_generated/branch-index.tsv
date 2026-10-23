@@ -4,6 +4,7 @@ claude/crollywood-refactor-shared-classes-e8jtm9	domain-models
 claude/krrollywood-on-krrimage	domain-models
 claude/krrimage-depth-segmentation	domain-models
 ccr-d4b2f7f0-b27rlq	domain-models
+claude/pose2d-planar-interface	domain-models
 claude/krrspatial-projection-interface	domain-models
 claude/krrspatial-frame-checked-arithmetic	domain-models
 claude/krrimage-video-on-a-plane	domain-models
