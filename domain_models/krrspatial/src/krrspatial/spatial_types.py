@@ -27,7 +27,10 @@ from krrood.symbolic_math.exceptions import (
     UnsupportedOperationError,
 )
 from krrood.symbolic_math.symbolic_math import Matrix, to_sx
-from krrspatial.coordinate_system import RigidCoordinateChange
+from krrspatial.coordinate_system import (
+    CoordinateRepresentation,
+    RigidCoordinateChange,
+)
 from krrspatial.exceptions import (
     InsufficientVectorsError,
     ReferenceFrameMismatchError,
@@ -73,7 +76,7 @@ class SpatialFrameKey(StrEnum):
 
 
 @dataclass(eq=False, repr=False)
-class SpatialType(ABC):
+class SpatialType(CoordinateRepresentation[ReferenceFrame], ABC):
     """
     A value expressed in a :class:`~krrspatial.reference_frame.ReferenceFrame`.
     """
@@ -89,6 +92,10 @@ class SpatialType(ABC):
 
     Can be None if no reference frame is required or applicable.
     """
+
+    @property
+    def coordinate_system(self) -> ReferenceFrame | None:
+        return self.reference_frame
 
     def transform(
         self, target_frame_T_reference_frame: HomogeneousTransformationMatrix
@@ -1385,10 +1392,6 @@ class Point2(Point, PlanarPoint[ReferenceFrame, sm.Scalar]):
         self.casadi_sx = sm.to_sx([x, y])
         self.reference_frame = reference_frame
         super().__post_init__()
-
-    @property
-    def coordinate_system(self) -> ReferenceFrame | None:
-        return self.reference_frame
 
     def _verify_type(self):
         if self.shape != (2, 1):
