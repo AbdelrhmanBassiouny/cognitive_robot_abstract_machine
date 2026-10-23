@@ -27,7 +27,7 @@ from krrood.symbolic_math.exceptions import (
     UnsupportedOperationError,
 )
 from krrood.symbolic_math.symbolic_math import Matrix, to_sx
-from krrspatial.coordinate_system import CoordinateChange
+from krrspatial.coordinate_system import RigidCoordinateChange
 from krrspatial.exceptions import (
     InsufficientVectorsError,
     ReferenceFrameMismatchError,
@@ -257,7 +257,7 @@ class HomogeneousTransformationMatrix(
     sm.SymbolicMathType,
     SpatialType,
     SubclassJSONSerializer,
-    CoordinateChange[ReferenceFrame],
+    RigidCoordinateChange[ReferenceFrame],
 ):
     """
     Represents a 4x4 transformation matrix used in kinematics and transformations.
@@ -266,6 +266,11 @@ class HomogeneousTransformationMatrix(
     system (reference frame) and a child coordinate system through rotation and
     translation. It provides utilities to derive transformations, compute dot products,
     and create transformations from various inputs such as Euler angles or quaternions.
+
+    .. warning::
+        The matrix must be rigid: its upper left 3x3 block a rotation and its last row
+        ``[0, 0, 0, 1]``. :meth:`inverse` and the rotation it is composed of are wrong
+        for a matrix that scales or shears.
     """
 
     child_frame: Optional[ReferenceFrame] = field(kw_only=True, default=None)

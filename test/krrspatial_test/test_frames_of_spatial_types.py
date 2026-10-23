@@ -10,7 +10,7 @@ from krrspatial.exceptions import (
     MissingReferenceFrameResolver,
     ReferenceFrameMismatchError,
 )
-from krrspatial.coordinate_system import CoordinateSystemT
+from krrspatial.coordinate_system import CoordinateSystemT, RigidCoordinateChange
 from krrspatial.reference_frame import ReferenceFrame
 from krrspatial.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -117,6 +117,10 @@ def test_a_transformation_changes_coordinates_between_frames():
     )
 
 
+def test_a_transformation_is_a_rigid_coordinate_change():
+    assert issubclass(HomogeneousTransformationMatrix, RigidCoordinateChange)
+
+
 def test_a_transformation_changes_from_its_child_frame_to_its_reference_frame(
     table_frame, camera_frame
 ):
@@ -128,3 +132,34 @@ def test_a_transformation_changes_from_its_child_frame_to_its_reference_frame(
         table_T_camera.source_coordinate_system,
         table_T_camera.target_coordinate_system,
     ) == (camera_frame, table_frame)
+
+
+def test_an_inverted_transformation_changes_back_to_its_child_frame(
+    table_frame, camera_frame
+):
+    camera_T_table = HomogeneousTransformationMatrix(
+        reference_frame=table_frame, child_frame=camera_frame
+    ).inverse()
+
+    assert (
+        camera_T_table.source_coordinate_system,
+        camera_T_table.target_coordinate_system,
+    ) == (table_frame, camera_frame)
+
+
+def test_composed_transformations_change_from_the_first_source_to_the_last_target(
+    table_frame, camera_frame, gripper_frame
+):
+    table_T_camera = HomogeneousTransformationMatrix(
+        reference_frame=table_frame, child_frame=camera_frame
+    )
+    camera_T_gripper = HomogeneousTransformationMatrix(
+        reference_frame=camera_frame, child_frame=gripper_frame
+    )
+
+    table_T_gripper = table_T_camera @ camera_T_gripper
+
+    assert (
+        table_T_gripper.source_coordinate_system,
+        table_T_gripper.target_coordinate_system,
+    ) == (gripper_frame, table_frame)
