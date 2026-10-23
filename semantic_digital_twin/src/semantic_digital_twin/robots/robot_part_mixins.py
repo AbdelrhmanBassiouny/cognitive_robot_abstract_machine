@@ -47,11 +47,13 @@ from semantic_digital_twin.robots.exceptions import (
     UndeclaredTopicError,
 )
 from semantic_digital_twin.robots.input_source import InputSource
-from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
 
 if TYPE_CHECKING:
     from rclpy.node import Node
     from semantic_digital_twin.world import World
+    from semantic_digital_twin.world_description.connections import (
+        ActiveConnection1DOF,
+    )
     from semantic_digital_twin.world_description.geometry import BoundingBox
     from semantic_digital_twin.world_description.world_entity import Body
 
@@ -423,23 +425,6 @@ class HasTwoFingers(
         with self._world.reset_state_context():
             self.get_joint_state_by_type(state_type).apply_to(self._world)
             return self.fingertips.separation
-
-    @property
-    def fingertips_move_only_by_its_states(self) -> bool:
-        """
-        Whether every joint between this gripper and its fingertips moves with
-        :attr:`finger_connections`, so its states alone decide where the fingertips
-        stand; passive joints such as springs do not.
-        """
-        driven_degrees_of_freedom = {
-            connection.raw_dof for connection in self.finger_connections
-        }
-        return all(
-            connection.raw_dof in driven_degrees_of_freedom
-            for tip in self.fingertips.both
-            for connection in self._world.compute_chain_of_connections(self.root, tip)
-            if isinstance(connection, ActiveConnection1DOF)
-        )
 
     @property
     def finger_connections(self) -> list[ActiveConnection1DOF]:

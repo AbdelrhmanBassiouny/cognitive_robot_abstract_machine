@@ -84,7 +84,10 @@ from semantic_digital_twin.datastructures.definitions import (
     StaticJointState,
 )
 from semantic_digital_twin.reasoning.robot_predicates import get_visible_bodies
-from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
+from semantic_digital_twin.robots.robot_part_mixins import (
+    HasMobileBase,
+    HasTwoFingers,
+)
 from semantic_digital_twin.collision_checking.collision_rules import (
     AllowCollisionForEndEffector,
 )
@@ -371,27 +374,23 @@ def test_navigate_multi(multiple_robot_apartment_context, rclpy_node):
 
 
 def test_move_gripper_multi(multiple_robot_apartment_context):
+    """
+    A two-finger gripper ends up as wide as its fingertips stand in the state it was set
+    to, any other hand in that state's joint positions.
+    """
     world, view, extensions = multiple_robot_apartment_context
+    end_effector = left_or_only_arm(view).end_effector
 
-    plan = SetGripperAction(
-        gripper=left_or_only_arm(view).end_effector, motion=GripperState.OPEN
-    )
+    for state in (GripperState.OPEN, GripperState.CLOSE):
+        run_plan(SetGripperAction(gripper=end_effector, motion=state), extensions)
 
-    executor = run_plan(plan, extensions)
-    arm = view.all_arms[0]
-    open_state = arm.end_effector.get_joint_state_by_type(GripperState.OPEN)
-    close_state = arm.end_effector.get_joint_state_by_type(GripperState.CLOSE)
-
-    for connection, target in open_state.items():
-        assert connection.position == pytest.approx(target, abs=0.02)
-
-    plan = SetGripperAction(
-        gripper=left_or_only_arm(view).end_effector, motion=GripperState.CLOSE
-    )
-
-    run_plan(plan, extensions)
-    for connection, target in close_state.items():
-        assert connection.position == pytest.approx(target, abs=0.02)
+        if isinstance(end_effector, HasTwoFingers):
+            assert end_effector.fingertips.separation == pytest.approx(
+                end_effector.separation_in(state), abs=MoveGripper.threshold
+            )
+            continue
+        for connection, target in end_effector.get_joint_state_by_type(state).items():
+            assert connection.position == pytest.approx(target, abs=0.02)
 
 
 def test_park_arms_multi(multiple_robot_apartment_context):

@@ -48,6 +48,7 @@ from semantic_digital_twin.robots.robot_parts import (
 )
 from semantic_digital_twin.spatial_types import Vector3
 from semantic_digital_twin.world_description.connections import (
+    ActiveConnection1DOF,
     OmniDrive,
 )
 from semantic_digital_twin.world_description.world_entity import (
@@ -75,7 +76,8 @@ class HSRBJoint(StrEnum):
     them stays a plain mapping of names to positions.
 
     ..note:: Connections that no controller commands, such as the drive and passive base
-        wheels and the hand's spring and distal joints, are left out.
+        wheels and the hand's distal joints, are left out. The hand's spring joints are
+        commanded only in simulation.
     """
 
     TORSO_LIFT = "torso_lift_joint"
@@ -91,6 +93,8 @@ class HSRBJoint(StrEnum):
     HAND_MOTOR = "hand_motor_joint"
     HAND_LEFT_PROXIMAL = "hand_l_proximal_joint"
     HAND_RIGHT_PROXIMAL = "hand_r_proximal_joint"
+    HAND_LEFT_SPRING_PROXIMAL = "hand_l_spring_proximal_joint"
+    HAND_RIGHT_SPRING_PROXIMAL = "hand_r_spring_proximal_joint"
 
 
 @dataclass(eq=False)
@@ -146,22 +150,32 @@ class HSRBGripper(EndEffector, HasTwoFingers[HSRBLeftFinger, HSRBRightFinger]):
         return
 
     def setup_joint_states(self) -> List[JointState]:
+        """
+        The gripper stands open with its motor and both finger springs at their upper
+        limits, and closed with its motor at zero and the springs relaxed.
+        """
         world = self._world
-        gripper_joints = [
-            world.get_connection_by_name(HSRBJoint.HAND_LEFT_PROXIMAL),
-            world.get_connection_by_name(HSRBJoint.HAND_RIGHT_PROXIMAL),
-            world.get_connection_by_name(HSRBJoint.HAND_MOTOR),
+        motor: ActiveConnection1DOF = world.get_connection_by_name(HSRBJoint.HAND_MOTOR)
+        springs: list[ActiveConnection1DOF] = [
+            world.get_connection_by_name(HSRBJoint.HAND_LEFT_SPRING_PROXIMAL),
+            world.get_connection_by_name(HSRBJoint.HAND_RIGHT_SPRING_PROXIMAL),
         ]
 
         gripper_open = JointState.from_mapping(
             name=PrefixedName("gripper_open", prefix=self.name.name),
-            mapping=dict(zip(gripper_joints, [0.3, 0.3, 0.3])),
+            mapping={
+                connection: connection.raw_dof.limits.upper.position
+                for connection in [motor, *springs]
+            },
             state_type=GripperState.OPEN,
         )
 
         gripper_close = JointState.from_mapping(
             name=PrefixedName("gripper_close", prefix=self.name.name),
-            mapping=dict(zip(gripper_joints, [0.0, 0.0, 0.0])),
+            mapping={
+                motor: 0.0,
+                **{spring: spring.raw_dof.limits.lower.position for spring in springs},
+            },
             state_type=GripperState.CLOSE,
         )
 

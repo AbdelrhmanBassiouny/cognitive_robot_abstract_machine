@@ -10,6 +10,9 @@ from scipy.spatial.transform import Rotation
 from typing_extensions import List, Optional, Tuple, Union
 
 from semantic_digital_twin.collision_checking.collision_matrix import CollisionRule
+from semantic_digital_twin.collision_checking.collision_rules import (
+    AllowCollisionForEndEffector,
+)
 from semantic_digital_twin.datastructures.alignment import AlignmentPair
 from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
 from semantic_digital_twin.robots.robot_parts import Arm
@@ -162,7 +165,7 @@ class ToolMotionAction(
         :return: An allowance for the manipulator holding the tool to touch what the
             tool works on, for the whole stroke.
         """
-        return self.create_touch_allowance_for(self.arm.end_effector)
+        return [AllowCollisionForEndEffector(end_effector=self.arm.end_effector)]
 
     def create_steps(self) -> list[StatechartNode]:
         """
@@ -587,7 +590,7 @@ class PouringAction(FullBodyControlledAction, MovesToolCenterPoint, SequentialAc
         :return: An allowance for the manipulator holding the source container to touch
             the rim it pours over.
         """
-        return self.create_touch_allowance_for(self.arm.end_effector)
+        return [AllowCollisionForEndEffector(end_effector=self.arm.end_effector)]
 
     def create_steps(self) -> list[StatechartNode]:
         """

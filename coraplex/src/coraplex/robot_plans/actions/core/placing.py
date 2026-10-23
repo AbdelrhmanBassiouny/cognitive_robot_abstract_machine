@@ -24,6 +24,9 @@ from coraplex.robot_plans.mixins import (
     PlaceTuningParameters,
 )
 from semantic_digital_twin.collision_checking.collision_matrix import CollisionRule
+from semantic_digital_twin.collision_checking.collision_rules import (
+    AllowCollisionForEndEffector,
+)
 from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.reasoning.robot_predicates import is_body_gripped
@@ -70,7 +73,7 @@ class PlaceAction(
             included.
         """
         arm, _ = self._holding_arm_and_grasp()
-        return self.create_touch_allowance_for(arm.end_effector)
+        return [AllowCollisionForEndEffector(end_effector=arm.end_effector)]
 
     def create_steps(self) -> list[StatechartNode]:
         arm, grasp = self._holding_arm_and_grasp()

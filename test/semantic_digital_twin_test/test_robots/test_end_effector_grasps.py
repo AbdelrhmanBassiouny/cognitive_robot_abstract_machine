@@ -13,7 +13,7 @@ from semantic_digital_twin.exceptions import (
     MoreThanOneBodyHeld,
     NothingHeld,
 )
-from semantic_digital_twin.robots.hsrb import HSRB
+from semantic_digital_twin.robots.hsrb import HSRB, HSRBJoint
 from semantic_digital_twin.robots.pr2 import PR2
 from semantic_digital_twin.robots.robot_part_mixins import HasTwoFingers
 from semantic_digital_twin.robots.robot_parts import Camera, EndEffector
@@ -21,7 +21,10 @@ from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.spatial_types.spatial_types import Point3, Vector3
-from semantic_digital_twin.world_description.connections import FixedConnection
+from semantic_digital_twin.world_description.connections import (
+    ActiveConnection1DOF,
+    FixedConnection,
+)
 from semantic_digital_twin.world_description.geometry import Box, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import (
@@ -529,22 +532,50 @@ def test_the_finger_connections_are_those_the_grippers_states_drive(
     assert len(pr2_gripper.finger_connections) == len(set(driven))
 
 
-def test_a_gripper_whose_states_drive_every_finger_joint_is_moved_by_them_alone(
-    pr2_gripper,
+def test_every_two_finger_gripper_drives_every_joint_up_to_its_fingertips(
+    supported_abstract_robots,
 ) -> None:
-    assert pr2_gripper.fingertips_move_only_by_its_states
-
-
-def test_a_gripper_with_passive_finger_joints_is_not_moved_by_its_states_alone() -> (
-    None
-):
     """
-    An HSR's fingers hang on spring joints its states leave alone.
+    A gripper's states decide alone where its fingertips stand, for every robot there
+    is, so a goal on the fingertips moves only joints the gripper's states drive.
     """
-    world = URDFParser.from_file(HSRB.get_ros_file_path()).parse()
-    gripper = HSRB.from_world(world).all_arms[0].end_effector
+    for abstract_robot in supported_abstract_robots:
+        world = URDFParser.from_file(abstract_robot.get_ros_file_path()).parse()
+        abstract_robot.from_world(world)
 
-    assert not gripper.fingertips_move_only_by_its_states
+        for gripper in world.get_semantic_annotations_by_type(EndEffector):
+            if not isinstance(gripper, HasTwoFingers):
+                continue
+            driven = {connection.raw_dof for connection in gripper.finger_connections}
+            undriven = [
+                connection.name
+                for tip in gripper.fingertips.both
+                for connection in world.compute_chain_of_connections(gripper.root, tip)
+                if isinstance(connection, ActiveConnection1DOF)
+                and connection.raw_dof not in driven
+            ]
+            assert undriven == [], gripper.name
+
+
+def test_an_hsr_opens_with_its_motor_and_springs_at_their_upper_limits(
+    hsr_world_copy,
+) -> None:
+    [hsr] = hsr_world_copy.get_semantic_annotations_by_type(HSRB)
+    gripper = hsr.all_arms[0].end_effector
+    open_state = gripper.get_joint_state_by_type(GripperState.OPEN)
+    connections = [
+        hsr_world_copy.get_connection_by_name(joint)
+        for joint in (
+            HSRBJoint.HAND_MOTOR,
+            HSRBJoint.HAND_LEFT_SPRING_PROXIMAL,
+            HSRBJoint.HAND_RIGHT_SPRING_PROXIMAL,
+        )
+    ]
+
+    assert dict(open_state.items()) == {
+        connection: connection.raw_dof.limits.upper.position
+        for connection in connections
+    }
 
 
 def test_every_two_finger_gripper_stands_narrower_closed_than_open(

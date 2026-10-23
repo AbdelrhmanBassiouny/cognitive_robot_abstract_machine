@@ -29,9 +29,6 @@ from krrood.class_diagrams.attribute_introspector import DataclassOnlyIntrospect
 from krrood.patterns.field_metadata import JSONMetadata
 from krrood.symbolic_math.symbolic_math import Scalar, trinary_if_cases
 from semantic_digital_twin.collision_checking.collision_matrix import CollisionRule
-from semantic_digital_twin.collision_checking.collision_rules import (
-    AllowCollisionForEndEffector,
-)
 from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase, HasTwoFingers
 from semantic_digital_twin.robots.robot_parts import AbstractRobot, EndEffector
@@ -157,15 +154,6 @@ class Action(CompositeNode, ABC):
         return []
 
     @staticmethod
-    def create_touch_allowance_for(end_effector: EndEffector) -> list[CollisionRule]:
-        """
-        :param end_effector: The end effector that may touch its surroundings.
-        :return: New collision rules letting `end_effector`, together with whatever it
-            holds, touch its surroundings, for :meth:`create_temporary_collision_rules`.
-        """
-        return [AllowCollisionForEndEffector(end_effector=end_effector)]
-
-    @staticmethod
     def create_finger_goal(
         end_effector: EndEffector,
         state: GripperState,
@@ -180,14 +168,10 @@ class Action(CompositeNode, ABC):
         :param stall_minimum_time: See :attr:`~giskardpy.motion_statechart.goals.gripper.MoveFingers.stall_minimum_time`.
         :param tolerate_stall: See :attr:`~giskardpy.motion_statechart.goals.gripper.MoveFingers.tolerate_stall`.
         :return: A new goal bringing the fingers of `end_effector` into `state`: to the
-            width its fingertips stand apart in that state for a two-finger gripper whose
-            states alone move its fingertips, to the joint state of that state for any
-            other hand.
+            width its fingertips stand apart in that state for a two-finger gripper, to
+            the joint state of that state for any other hand.
         """
-        if (
-            isinstance(end_effector, HasTwoFingers)
-            and end_effector.fingertips_move_only_by_its_states
-        ):
+        if isinstance(end_effector, HasTwoFingers):
             return MoveGripper(
                 gripper=end_effector,
                 width=end_effector.separation_in(state),

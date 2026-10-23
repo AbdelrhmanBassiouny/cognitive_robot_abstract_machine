@@ -20,6 +20,9 @@ from giskardpy.motion_statechart.goals.grasped_mechanism import (
     ArticulateGraspedMechanism,
 )
 from semantic_digital_twin.collision_checking.collision_matrix import CollisionRule
+from semantic_digital_twin.collision_checking.collision_rules import (
+    AllowCollisionForEndEffector,
+)
 from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.robots.robot_parts import Arm, EndEffector
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
@@ -96,7 +99,7 @@ class MovesContainerByItsHandle(
         :return: An allowance for the gripper on the handle to touch its surroundings,
             from taking hold of the handle until it has backed off it.
         """
-        return self.create_touch_allowance_for(self.arm.end_effector)
+        return [AllowCollisionForEndEffector(end_effector=self.arm.end_effector)]
 
     def create_steps(self) -> list[StatechartNode]:
         end_effector = self.arm.end_effector

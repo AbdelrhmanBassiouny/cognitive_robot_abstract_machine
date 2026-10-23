@@ -17,6 +17,9 @@ from coraplex.robot_plans.mixins import (
     ReachTuningParameters,
 )
 from semantic_digital_twin.collision_checking.collision_matrix import CollisionRule
+from semantic_digital_twin.collision_checking.collision_rules import (
+    AllowCollisionForEndEffector,
+)
 from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.semantic_annotations.mixins import HasGraspCandidates
@@ -89,7 +92,7 @@ class ReachAction(
         :return: An allowance for the gripper to touch the surroundings of the grasp it
             comes down onto.
         """
-        return self.create_touch_allowance_for(self.arm.end_effector)
+        return [AllowCollisionForEndEffector(end_effector=self.arm.end_effector)]
 
     def create_steps(self) -> list[StatechartNode]:
         poses = self.grasp_pose_sequence(
@@ -193,7 +196,7 @@ class PickUpAction(
             which it is around from reaching for it until it has lifted it clear, the
             moment the object is put under it included.
         """
-        return self.create_touch_allowance_for(self.arm.end_effector)
+        return [AllowCollisionForEndEffector(end_effector=self.arm.end_effector)]
 
     def create_steps(self) -> list[StatechartNode]:
         lift_to_pose = self.grasp_pose_sequence(
@@ -236,7 +239,7 @@ class GraspingAction(
         :return: An allowance for the gripper to touch the surroundings of the grasp it
             reaches and closes on.
         """
-        return self.create_touch_allowance_for(self.arm.end_effector)
+        return [AllowCollisionForEndEffector(end_effector=self.arm.end_effector)]
 
     def create_steps(self) -> list[StatechartNode]:
         return [

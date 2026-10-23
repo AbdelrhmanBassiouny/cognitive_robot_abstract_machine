@@ -6,6 +6,9 @@ from datetime import timedelta
 from typing_extensions import Optional, Any, List
 
 from semantic_digital_twin.collision_checking.collision_matrix import CollisionRule
+from semantic_digital_twin.collision_checking.collision_rules import (
+    AllowCollisionForEndEffector,
+)
 from semantic_digital_twin.robots.robot_part_mixins import HasTwoFingers
 from semantic_digital_twin.robots.robot_parts import Arm, EndEffector
 from semantic_digital_twin.spatial_types.spatial_types import Pose
@@ -250,7 +253,7 @@ class MoveManipulatorAction(MovesToolCenterPoint, GoalAction):
         """
         if not self.allow_gripper_collision:
             return []
-        return self.create_touch_allowance_for(self.end_effector)
+        return [AllowCollisionForEndEffector(end_effector=self.end_effector)]
 
     def create_goal(self) -> StatechartNode:
         goal = CartesianPose(
