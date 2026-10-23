@@ -8,6 +8,7 @@ import numpy.typing as npt
 from random_events.product_algebra import Event, SimpleEvent
 from sortedcontainers import SortedSet
 from typing_extensions import (
+    Any,
     Dict,
     Iterable,
     List,
@@ -583,18 +584,6 @@ class SumLayer(InnerLayer):
             for index, event in enumerate(events)
             for other in events[index + 1 :]
         )
-
-    def __deepcopy__(self, memo=None) -> SumLayer:
-        if memo is None:
-            memo = {}
-        if id(self) in memo:
-            return memo[id(self)]
-        child_layers = [
-            child_layer.__deepcopy__(memo) for child_layer in self.child_layers
-        ]
-        result = self.__class__(child_layers, self.log_weights.copy())
-        memo[id(self)] = result
-        return result
 
     # %% structural
 

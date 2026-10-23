@@ -125,7 +125,7 @@ class MultivariateGaussianArrayTestCase(unittest.TestCase):
             np.array([1]), np.array([0, 2]), np.array([0.3])
         )
         for index, distribution in enumerate(self.distributions):
-            expected, _ = distribution.log_conditional({self.y: 0.3})
+            expected = distribution.log_conditional({self.y: 0.3}).distribution
             gaussian = expected.marginal([self.x, self.z])
             np.testing.assert_allclose(conditional.mean[index], gaussian.mean)
             np.testing.assert_allclose(

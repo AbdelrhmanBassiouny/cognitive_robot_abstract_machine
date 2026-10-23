@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass
 
 import numpy as np
@@ -154,7 +155,7 @@ class LayeredProducts:
             if key not in stacked_of_copies:
                 stacked_of_copies[key] = self.stacked_copies(copies)
             stacked = stacked_of_copies[key]
-            layer = stacked.layer.__deepcopy__({})
+            layer = copy.deepcopy(stacked.layer)
             layer.remap_variables(self.variable_remapping(copies, variables))
             roots = stacked.nodes_of_copy(
                 products, np.zeros(len(products), dtype=np.int64)
@@ -215,7 +216,7 @@ class LayeredProducts:
         """
         result = []
         for index, component in enumerate(self.products.components):
-            component = component.__deepcopy__()
+            component = copy.deepcopy(component)
             component.restore_variables(variables)
             result.append(
                 ProductFactor(

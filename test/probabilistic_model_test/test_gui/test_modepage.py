@@ -11,6 +11,7 @@ if app is None:
 from probabilistic_model.gui.controller import ModelController
 from probabilistic_model.gui.mode_widget import ModeWidget
 from probabilistic_model.gui.variable_constraint_widget import VariableConstraintWidget
+from probabilistic_model.query_results import Mode, Truncation
 from random_events.variable import Continuous, Symbolic
 from random_events.set import Set, SetElement
 from random_events.interval import closed
@@ -47,7 +48,7 @@ class TestModeGUI(unittest.TestCase):
 
         self.model.marginal.side_effect = side_effect
 
-        # Mock mode result: (Event, Likelihood)
+        # Mock mode result
         self.mode_event = Event.from_simple_sets(
             SimpleEvent.from_data(
                 {self.v1: closed(0.5, 0.5), self.v2: Set.from_iterable(["a"])}
@@ -57,10 +58,12 @@ class TestModeGUI(unittest.TestCase):
 
         # Mock truncated for mode
         self.mock_truncated_model = MagicMock()
-        self.mock_truncated_model.mode.return_value = (self.mode_event, self.likelihood)
+        self.mock_truncated_model.mode.return_value = Mode(
+            self.mode_event, self.likelihood
+        )
 
-        self.model.truncated.return_value = (self.mock_truncated_model, 1.0)
-        self.model.mode.return_value = (self.mode_event, self.likelihood)
+        self.model.truncated.return_value = Truncation(self.mock_truncated_model, 1.0)
+        self.model.mode.return_value = Mode(self.mode_event, self.likelihood)
 
         self.controller.set_model(self.model)
 

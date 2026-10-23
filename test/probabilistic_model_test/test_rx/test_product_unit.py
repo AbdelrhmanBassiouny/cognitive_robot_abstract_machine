@@ -54,10 +54,10 @@ class ProductUnitTestCase(unittest.TestCase):
         self.assertEqual(result, 0.25)
 
     def test_mode(self):
-        mode, likelihood = self.model.mode()
-        self.assertEqual(likelihood, 1)
+        mode = self.model.mode()
+        self.assertEqual(mode.likelihood, 1)
         self.assertEqual(
-            mode,
+            mode.event,
             SimpleEvent.from_data(
                 {self.x: closed(0, 1), self.y: closed(3, 4)}
             ).as_composite_set(),
@@ -75,16 +75,16 @@ class ProductUnitTestCase(unittest.TestCase):
 
     def test_conditional(self):
         event = SimpleEvent.from_data({self.x: closed(0, 0.5)}).as_composite_set()
-        result, probability = self.model.truncated(event)
-        self.assertEqual(probability, 0.5)
-        self.assertEqual(len(list(result.nodes())), 3)
-        self.assertIsInstance(result.root, ProductUnit)
+        truncation = self.model.truncated(event)
+        self.assertEqual(truncation.probability, 0.5)
+        self.assertEqual(len(list(truncation.distribution.nodes())), 3)
+        self.assertIsInstance(truncation.distribution.root, ProductUnit)
 
     def test_conditional_with_0_evidence(self):
         event = SimpleEvent.from_data({self.x: closed(1.5, 2)}).as_composite_set()
-        result, probability = self.model.truncated(event)
-        self.assertEqual(probability, 0)
-        self.assertEqual(result, None)
+        truncation = self.model.truncated(event)
+        self.assertEqual(truncation.probability, 0)
+        self.assertEqual(truncation.distribution, None)
 
     def test_marginal_with_intersecting_variables(self):
         marginal = self.model.marginal([self.x])

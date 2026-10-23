@@ -96,9 +96,9 @@ class SmallCircuitTestCast(unittest.TestCase):
         event = SimpleEvent.from_data(
             {self.x: closed(0, 0.25) | closed(0.5, 0.75)}
         ).as_composite_set()
-        conditional, prob = self.model.truncated(event)
-        self.assertAlmostEqual(prob, 0.375)
-        conditional.plot_structure()
+        truncation = self.model.truncated(event)
+        self.assertAlmostEqual(truncation.probability, 0.375)
+        truncation.distribution.plot_structure()
         # plt.show()
 
     def test_plot(self):
@@ -177,8 +177,8 @@ class ConditioningWithOrphansTestCase(unittest.TestCase):
             }
         ).as_composite_set()
 
-        result, probability = self.model.truncated(event)
-        self.assertIsNone(result)
+        truncation = self.model.truncated(event)
+        self.assertIsNone(truncation.distribution)
 
 
 class DiracMixtureConditioningTestCase(unittest.TestCase):
@@ -209,22 +209,22 @@ class DiracMixtureConditioningTestCase(unittest.TestCase):
 
     def test_conditioning(self):
         event = SimpleEvent.from_data({self.x: closed(0.0, 1.0)}).as_composite_set()
-        conditional, probability = self.model.truncated(event)
-        self.assertAlmostEqual(probability, 1.0)
+        truncation = self.model.truncated(event)
+        self.assertAlmostEqual(truncation.probability, 1.0)
 
     def test_conditioning_without_dirac(self):
         event = SimpleEvent.from_data(
             {self.x: closed(0.0, 0.25) | closed(0.75, 1.0)}
         ).as_composite_set()
 
-        conditional, probability = self.model.truncated(event)
-        self.assertAlmostEqual(probability, 0.25)
-        self.assertEqual(len(list(conditional.nodes())), 3)
+        truncation = self.model.truncated(event)
+        self.assertAlmostEqual(truncation.probability, 0.25)
+        self.assertEqual(len(list(truncation.distribution.nodes())), 3)
         self.assertTrue(
             all(
                 [
                     isinstance(node.distribution, UniformDistribution)
-                    for node in conditional.leaves
+                    for node in truncation.distribution.leaves
                 ]
             )
         )
@@ -232,18 +232,20 @@ class DiracMixtureConditioningTestCase(unittest.TestCase):
     def test_conditioning_singleton(self):
         event = SimpleEvent.from_data({self.x: singleton(0.5)}).as_composite_set()
 
-        conditional, probability = self.model.truncated(event)
-        self.assertEqual(len(list(conditional.nodes())), 1)
-        self.assertIsInstance(conditional.root.distribution, DiracDeltaDistribution)
+        truncation = self.model.truncated(event)
+        self.assertEqual(len(list(truncation.distribution.nodes())), 1)
+        self.assertIsInstance(
+            truncation.distribution.root.distribution, DiracDeltaDistribution
+        )
 
-        conditional, probability = self.model.conditional({self.x: 0.5})
-        self.assertAlmostEqual(probability, 1.5)
-        self.assertEqual(len(list(conditional.nodes())), 1)
+        conditioning = self.model.conditional({self.x: 0.5})
+        self.assertAlmostEqual(conditioning.likelihood, 1.5)
+        self.assertEqual(len(list(conditioning.distribution.nodes())), 1)
         self.assertTrue(
             all(
                 [
                     isinstance(node.distribution, DiracDeltaDistribution)
-                    for node in conditional.leaves
+                    for node in conditioning.distribution.leaves
                 ]
             )
         )
@@ -302,7 +304,7 @@ class ConditioningTestCase(unittest.TestCase):
 
         marginal = self.model.marginal([self.y])
 
-        model, _ = self.model.conditional(p)
+        model = self.model.conditional(p).distribution
         # model, _ = self.model.truncated(SimpleEvent.from_data({self.x: closed(0.3, 0.5)}).as_composite_set())
 
         conditioned_marginal = model.marginal([self.y])
@@ -340,7 +342,7 @@ class ConditioningTestCase(unittest.TestCase):
         # only the second component has density at x = 1.5, so conditioning removes
         # the root sum unit; its weight must still be part of the probability
         point = {self.x: 1.5}
-        _, log_probability = self.model.log_conditional(point)
+        log_probability = self.model.log_conditional(point).log_likelihood
         self.assertAlmostEqual(log_probability, np.log(0.5 * 0.5))
         self.assertAlmostEqual(
             log_probability,
@@ -442,13 +444,13 @@ class MixedLeafTruncationTestCase(unittest.TestCase):
         circuit = self.build_mixed_circuit()
         event = self.composite_event()
         expected_probability = circuit.probability(event)
-        _, log_probability = circuit.log_truncated(event)
+        log_probability = circuit.log_truncated(event).log_probability
         self.assertAlmostEqual(np.exp(log_probability), expected_probability, places=9)
 
     def test_truncated_circuit_places_all_mass_inside_event(self):
         circuit = self.build_mixed_circuit()
         event = self.composite_event()
-        truncated, _ = circuit.log_truncated(event)
+        truncated = circuit.log_truncated(event).distribution
         self.assertAlmostEqual(truncated.probability(event), 1.0, places=9)
 
 

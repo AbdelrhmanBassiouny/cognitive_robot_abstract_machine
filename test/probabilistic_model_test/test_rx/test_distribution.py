@@ -40,27 +40,27 @@ class ContinuousDistributionTestCase(unittest.TestCase):
         event = SimpleEvent.from_data(
             {self.variable: closed(0.5, 2)}
         ).as_composite_set()
-        conditional, probability = self.leaf.probabilistic_circuit.truncated(event)
-        self.assertEqual(len(list(conditional.nodes())), 1)
-        self.assertEqual(probability, 0.5)
+        truncation = self.leaf.probabilistic_circuit.truncated(event)
+        self.assertEqual(len(list(truncation.distribution.nodes())), 1)
+        self.assertEqual(truncation.probability, 0.5)
         self.assertEqual(
-            conditional.root.distribution.univariate_support, closed(0.5, 1)
+            truncation.distribution.root.distribution.univariate_support, closed(0.5, 1)
         )
 
     def test_conditional_from_singleton_event(self):
         event = SimpleEvent.from_data(
             {self.variable: singleton(0.3)}
         ).as_composite_set()
-        conditional, probability = self.leaf.probabilistic_circuit.truncated(event)
-        self.assertIsNone(conditional)
+        truncation = self.leaf.probabilistic_circuit.truncated(event)
+        self.assertIsNone(truncation.distribution)
 
-        conditional, probability = self.leaf.probabilistic_circuit.conditional(
-            {self.variable: 0.3}
+        conditioning = self.leaf.probabilistic_circuit.conditional({self.variable: 0.3})
+
+        self.assertEqual(len(list(conditioning.distribution.nodes())), 1)
+        self.assertEqual(conditioning.likelihood, 1.0)
+        self.assertAlmostEqual(
+            conditioning.distribution.root.distribution.location, 0.3
         )
-
-        self.assertEqual(len(list(conditional.nodes())), 1)
-        self.assertEqual(probability, 1.0)
-        self.assertAlmostEqual(conditional.root.distribution.location, 0.3)
 
     def test_probabilistic_circuit_singleton(self):
         x = Continuous("x")
@@ -72,17 +72,17 @@ class ContinuousDistributionTestCase(unittest.TestCase):
         event = SimpleEvent.from_data({x: singleton(0.5)}).as_composite_set()
 
         # singleton_allowed=False
-        conditional, probability = pc.probabilistic_circuit.truncated(event)
-        self.assertIsNone(conditional)
+        truncation = pc.probabilistic_circuit.truncated(event)
+        self.assertIsNone(truncation.distribution)
 
         # singleton_allowed=True
-        conditional, probability = pc.probabilistic_circuit.truncated(
-            event, singleton_allowed=True
+        truncation = pc.probabilistic_circuit.truncated(event, singleton_allowed=True)
+        self.assertIsNotNone(truncation.distribution)
+        self.assertIsInstance(
+            truncation.distribution.root.distribution, DiracDeltaDistribution
         )
-        self.assertIsNotNone(conditional)
-        self.assertIsInstance(conditional.root.distribution, DiracDeltaDistribution)
-        self.assertEqual(conditional.root.distribution.location, 0.5)
-        self.assertAlmostEqual(probability, 1.0)  # f(0.5) = 1.0
+        self.assertEqual(truncation.distribution.root.distribution.location, 0.5)
+        self.assertAlmostEqual(truncation.probability, 1.0)  # f(0.5) = 1.0
 
     def test_probabilistic_circuit_complex_event_with_singleton(self):
         x = Continuous("x")
@@ -104,40 +104,38 @@ class ContinuousDistributionTestCase(unittest.TestCase):
         ).as_composite_set()
 
         # singleton_allowed=True
-        conditional, probability = pc.truncated(event, singleton_allowed=True)
+        truncation = pc.truncated(event, singleton_allowed=True)
 
         # Probabilities:
         # P([0.5, 0.6]) = 0.5 * 0.1 = 0.05
         # f(2.5) = 0.5 * 1.0 = 0.5
         # Total "probability" in truncated sense: 0.05 + 0.5 = 0.55
-        self.assertAlmostEqual(probability, 0.55)
+        self.assertAlmostEqual(truncation.probability, 0.55)
 
         # The result should be a SumUnit with two children:
         # 1. Truncated U(0,1) on [0.5, 0.6] -> U(0.5, 0.6) with weight 0.05/0.55
         # 2. DiracDelta(2.5) with weight 0.5/0.55
 
-        self.assertIsInstance(conditional.root, SumUnit)
-        self.assertEqual(len(conditional.root.subcircuits), 2)
+        self.assertIsInstance(truncation.distribution.root, SumUnit)
+        self.assertEqual(len(truncation.distribution.root.subcircuits), 2)
 
-        weights = np.exp(conditional.root.log_weights)
+        weights = np.exp(truncation.distribution.root.log_weights)
         self.assertTrue(any(np.isclose(weights, 0.05 / 0.55)))
         self.assertTrue(any(np.isclose(weights, 0.5 / 0.55)))
 
     def test_conditional_from_complex_event(self):
         interval = closed(0.0, 0.2) | closed(0.5, 1.0) | singleton(0.3)
         event = SimpleEvent.from_data({self.variable: interval})
-        conditional, probability = self.leaf.probabilistic_circuit.truncated(
-            event.as_composite_set()
-        )
+        truncation = self.leaf.probabilistic_circuit.truncated(event.as_composite_set())
 
-        self.assertEqual(len(list(conditional.nodes())), 3)
-        self.assertEqual(len(list(conditional.edges())), 2)
-        self.assertIsInstance(conditional.root, SumUnit)
+        self.assertEqual(len(list(truncation.distribution.nodes())), 3)
+        self.assertEqual(len(list(truncation.distribution.edges())), 2)
+        self.assertIsInstance(truncation.distribution.root, SumUnit)
 
     def test_conditional_with_none(self):
         event = SimpleEvent.from_data({self.variable: singleton(2)}).as_composite_set()
-        conditional, probability = self.leaf.probabilistic_circuit.truncated(event)
-        self.assertEqual(conditional, None)
+        truncation = self.leaf.probabilistic_circuit.truncated(event)
+        self.assertEqual(truncation.distribution, None)
 
 
 class DiscreteDistributionTestCase(unittest.TestCase):

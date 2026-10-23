@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import math
 from dataclasses import dataclass
 
@@ -8,7 +9,7 @@ from random_events.interval import SimpleInterval, reals
 from random_events.variable import Variable
 from scipy.stats import norm, truncnorm
 from sortedcontainers import SortedSet
-from typing_extensions import List, Self, Type
+from typing_extensions import Any, List, Self, Type
 
 from probabilistic_model.distributions.gaussian import (
     GaussianDistribution,
@@ -209,7 +210,7 @@ class GaussianLayer(HasLocationAndScale, ContinuousLayerWithDensity):
         )
 
         if self.type_of_layer_truncated_to_interval(interval) is GaussianLayer:
-            return LayerWithLogProbabilities(self.__deepcopy__(), log_probabilities)
+            return LayerWithLogProbabilities(copy.deepcopy(self), log_probabilities)
 
         interval_of_nodes = np.tile([lower, upper], (self.number_of_nodes, 1))
         bounds_of_nodes = np.tile(
@@ -226,15 +227,6 @@ class GaussianLayer(HasLocationAndScale, ContinuousLayerWithDensity):
             ),
             log_probabilities,
         )
-
-    def __deepcopy__(self, memo=None) -> GaussianLayer:
-        if memo is None:
-            memo = {}
-        if id(self) in memo:
-            return memo[id(self)]
-        result = self.__class__(self.variable, self.location.copy(), self.scale.copy())
-        memo[id(self)] = result
-        return result
 
 
 @dataclass(eq=False, repr=False)
@@ -373,18 +365,3 @@ class TruncatedGaussianLayer(HasLocationAndScale, ContinuousLayerWithFiniteSuppo
         super().apply_scaling_own(scaling)
         self.location = self.location * scaling[self.variable]
         self.scale = self.scale * scaling[self.variable]
-
-    def __deepcopy__(self, memo=None) -> TruncatedGaussianLayer:
-        if memo is None:
-            memo = {}
-        if id(self) in memo:
-            return memo[id(self)]
-        result = self.__class__(
-            self.variable,
-            self.interval.copy(),
-            self.bounds.copy(),
-            self.location.copy(),
-            self.scale.copy(),
-        )
-        memo[id(self)] = result
-        return result

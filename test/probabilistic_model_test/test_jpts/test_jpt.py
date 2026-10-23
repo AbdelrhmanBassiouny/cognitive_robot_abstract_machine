@@ -296,8 +296,8 @@ class ContinuousOnlyTestCase(unittest.TestCase):
 
     def test_dependent_variables_are_split_apart(self):
         """
-        Small x always comes with large y and vice versa, so a single leaf, which
-        models x and y as independent, is not a fit of this data.
+        Small x always comes with large y and vice versa, so a single leaf, which models
+        x and y as independent, is not a fit of this data.
         """
         data = pd.DataFrame(
             {
@@ -313,8 +313,8 @@ class ContinuousOnlyTestCase(unittest.TestCase):
 
 class MaxStandardDeviationTestCase(unittest.TestCase):
     """
-    A maximum standard deviation is a precision to reach: once every numeric target
-    in a node is at least that precise, the node is not split any further.
+    A maximum standard deviation is a precision to reach: once every numeric target in a
+    node is at least that precise, the node is not split any further.
     """
 
     def test_splitting_stops_once_every_leaf_is_precise_enough(self):
@@ -382,9 +382,11 @@ class BreastCancerTestCase(unittest.TestCase):
             {variable: variable.domain for variable in self.model.variables}
         ).as_composite_set()
         query = evidence
-        conditional_model, evidence_probability = self.pc.truncated(evidence)
-        self.assertAlmostEqual(1.0, evidence_probability, delta=1e-5)
-        self.assertAlmostEqual(1.0, conditional_model.probability(query), delta=1e-5)
+        truncation = self.pc.truncated(evidence)
+        self.assertAlmostEqual(1.0, truncation.probability, delta=1e-5)
+        self.assertAlmostEqual(
+            1.0, truncation.distribution.probability(query), delta=1e-5
+        )
 
     def test_univariate_continuous_marginal(self):
         marginal = self.pc.marginal(self.model.variables[:1])
@@ -408,11 +410,11 @@ class BreastCancerTestCase(unittest.TestCase):
         marginal = model.marginal(self.model.variables[:2])
         x, y = self.model.variables[:2]
         event = SimpleEvent.from_data({x: closed(0, 10)}).as_composite_set()
-        conditional, probability = model.truncated(event)
+        truncation = model.truncated(event)
 
     def test_mode(self):
-        mode, likelihood = self.pc.log_mode(check_determinism=False)
-        self.assertGreater(len(mode.simple_sets), 0)
+        mode = self.pc.log_mode(check_determinism=False)
+        self.assertGreater(len(mode.event.simple_sets), 0)
 
 
 class MNISTTestCase(unittest.TestCase):
