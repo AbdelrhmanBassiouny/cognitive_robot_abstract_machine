@@ -1,8 +1,11 @@
-Plan:
-- PR #518 (draft): OrthogonalProjection/Line3 + Point2 helpers built on it
+## Plan
+- Answer cram2#764's review (LucaKro, changes requested) on #518's branch.
+- Port onto krrspatial after #526 lands.
 
-Done:
-- Promotion link built (head fcc0e5eee, 4 commits, merges clean on cram2 main): https://github.com/cram2/cognitive_robot_abstract_machine/compare/main...AbdelrhmanBassiouny:cognitive_robot_abstract_machine:ccr-d4b2f7f0-b27rlq?expand=1
+## Done
+- d68548d28: #519 folded in (closed), embed/preimage renamed unproject/projection_line, test fixture
+  tilted about x. Main merged.
 
-Next:
-- Owner verdict on open threads: helpers (r4315316650, r4315343922), raise-on-law (r4315504268), contains without to_point3 (r4315760268)
+## Next
+- User posts the drafted replies on cram2#764 and re-requests LucaKro's review.
+- Port onto krrspatial once #526 lands.
