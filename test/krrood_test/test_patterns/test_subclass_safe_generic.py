@@ -837,3 +837,16 @@ def test_a_field_redeclaring_an_interface_attribute_is_narrowed():
 
     [lower_field] = fields(IntegerStoredRegion)
     assert lower_field.type is int
+
+
+# %% identity of classes that keep identity comparison
+
+
+def test_a_subclass_compared_by_identity_is_not_equal_to_another_instance():
+    assert CombinedClass() != CombinedClass()
+
+
+def test_a_subclass_compared_by_identity_is_hashable():
+    instance = CombinedClass()
+
+    assert instance in {instance}

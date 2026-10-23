@@ -7,6 +7,7 @@ from typing_extensions import Any
 
 from krrood.adapters.deserialized_object_tracker import DeserializedObjectTracker
 from krrspatial.reference_frame import ReferenceFrame, ReferenceFrameResolver
+from krrspatial.space import EuclideanSpace
 
 # %% frames told apart by name
 
@@ -20,6 +21,11 @@ class NamedFrame(ReferenceFrame):
     name: str
     """
     What the frame is called.
+    """
+
+    space: EuclideanSpace | None = None
+    """
+    The space the frame charts.
     """
 
     id: UUID = field(default_factory=uuid4)
