@@ -33,10 +33,10 @@ items:
   depends_on:
   - planar-point-interface
   session: https://claude.ai/code/session_01GoHMif2Xa7Mnqzz9mKFpTT
-  notes: '#526 (user-marked ready) on #527: spatial_types.py behind krrspatial[casadi]; Point2 implements
-    PlanarPoint[ReferenceFrame, Scalar] (coordinate_system = reference_frame); HomogeneousTransformationMatrix
-    implements RigidCoordinateChange[ReferenceFrame] (child_frame to reference_frame), docstring warns
-    it must be rigid. Merged #527, pushed 753a4ce359; CI and ORM build pending.'
+  notes: '#526 (user-marked ready) on #527: spatial_types.py behind krrspatial[casadi]; every SpatialType
+    is a CoordinateRepresentation[ReferenceFrame] (coordinate_system = reference_frame); Point2 a PlanarPoint;
+    HomogeneousTransformationMatrix a RigidCoordinateChange[ReferenceFrame], must be rigid. Frameless values
+    stay. Pushed b77b55cc8d; CI and ORM build pending. Open questions to Simon: https://claude.ai/artifact/UW7BdpNyW1r2sc63ktzA9T'
   pull_request_number: 526
 - id: krrimage
   title: domain_models/krrimage (images, colours, pixels) with Color moved out of SemDT
@@ -100,13 +100,29 @@ items:
     within one space is a CoordinateChange. unproject(p, t) is the point at t on projection_line(p);
     the inverse laws become one test suite run against every implementation.'
 - id: frame-checked-arithmetic
-  title: Point and vector arithmetic in krrspatial checks that both sides share a frame
+  title: Arithmetic in krrspatial checks frames, and a transformation only applies to values in its child
+    frame
   branch: claude/krrspatial-frame-checked-arithmetic
   track: spatial
   status: not_started
   depends_on:
   - krrspatial-numeric
-  notes: Subtracting points in different frames is silently accepted today; raise ReferenceFrameMismatchError.
+  notes: 'Subtracting points in different frames is silently accepted today; raise ReferenceFrameMismatchError.
+    HomogeneousTransformationMatrix.dot should raise when child_frame and the operand''s reference_frame
+    are both set and differ; written but held out of #526 because SemDT''s TestTransformationMatrix.test_reference_frames
+    asserts the opposite. Waits on the user and Simon (Q1 of the questions doc) before changing that test.'
+- id: spatial-action
+  title: Each spatial value says how a coordinate change acts on it, replacing the operand lists in dot
+  branch: claude/krrspatial-action
+  track: spatial
+  status: not_started
+  depends_on:
+  - krrspatial-numeric
+  notes: 'A change acts on values of its own coordinate-system kind and keeps their type: a point by R p
+    + t, a vector by R v, an orientation by composition. Each value implements the action (double dispatch)
+    instead of HomogeneousTransformationMatrix.dot and RotationMatrix.dot listing operands. Point2 and
+    Pose2D are left out (only planar changes act on them). Waits on Simon''s answers to Q4 (Point3 in
+    RotationMatrix.dot) and Q5 (AxisAngle).'
 - id: video-on-a-plane
   title: Show a video on a plane of the world (a wall, a table top) in a camera image or through a projector
   branch: claude/krrimage-video-on-a-plane
@@ -129,11 +145,11 @@ items:
   depends_on:
   - subclass-safe-generic-identity
   session: https://claude.ai/code/session_01GoHMif2Xa7Mnqzz9mKFpTT
-  notes: 'Draft #527 off main. A reference frame is a coordinate system on physical space, not a space:
+  notes: '#527 on #528. A reference frame is a coordinate system on physical space, not a space:
     Space is the point set, CoordinateSystem what coordinates are given in, CoordinateChange[CoordinateSystemT]
     the change within one space (declares inverse, @); AffineCoordinateChange and RigidCoordinateChange
-    name what a change keeps. PlanarPoint[CoordinateSystemT, CoordinateT].coordinate_system. #528 merged
-    in; pushed 1dfecdfc1c (user-marked ready); CI pending.'
+    name what a change keeps. CoordinateRepresentation[CoordinateSystemT].coordinate_system: a value given
+    in a coordinate system; PlanarPoint is one. Pushed 03adbed9fa (user-marked ready); CI pending.'
 - id: subclass-safe-generic-identity
   title: SubClassSafeGeneric generates no equality, so eq=False subclasses keep identity and stay hashable
   branch: claude/subclass-safe-generic-identity
@@ -143,7 +159,7 @@ items:
   session: https://claude.ai/code/session_01GoHMif2Xa7Mnqzz9mKFpTT
   notes: 'Bug fix off main: @dataclass on SubClassSafeGeneric made every eq=False subclass equal to any
     other instance of its class and unhashable (two NamedFrames compared equal). Fix: @dataclass(eq=False).
-    Draft #528 off main (bug label), merged into #527. Pushed 0d03858949; CI pending.'
+    #528 off main (bug label, user-marked ready), merged into #527. Pushed 0d03858949; CI pending.'
   pull_request_number: 528
 - id: image-coordinate-change
   title: krrimage's ImageCoordinateChange (scale and shift per axis) for crops and resizes, with cv2 resampling
