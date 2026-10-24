@@ -59,9 +59,9 @@ items:
   - planar-point-interface
   session: https://claude.ai/code/session_01J17aVY3vyQM8goACbkHkcp
   notes: '#524 on #527: ImagePoint implements PlanarPoint[ImageCoordinateSystem, float]; Pixel
-    stays a grid cell. Pushed 2a830dd575; CI pending. Conflicts with cram2#761, which rewrites
-    SemDT''s Color (mutable setters, HueSaturationValue): whichever lands second moves Color and
-    HueSaturationValue into krrimage; ask before dropping the setters. Whichever of #524/#526
+    stays a grid cell. Pushed 2a830dd575; CI pending. cram2#761 rewrites SemDT''s Color
+    (mutable setters, HueSaturationValue): #524 lands after it and moves Color as #761 left
+    it, HueSaturationValue included; ask before dropping the setters. Whichever of #524/#526
     lands second merges the domain_models/README.md entries.'
 - id: krrollywood-on-krrimage
   title: krrollywood (cram2/crollywood) depends on krrimage instead of its own frame types
