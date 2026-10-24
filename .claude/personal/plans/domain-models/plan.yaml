@@ -15,6 +15,10 @@ waves:
 - id: adoption
   name: 'Wave 2: Packages moved onto them'
   description: krrollywood and image extensions build on krrimage.
+- id: perception
+  name: 'Wave 3: Perception moved onto them'
+  description: SemDT's ray tracer and RoboKudo use krrimage images and captures, after cram2#761
+    and #795 land.
 tracks:
 - id: spatial
   name: krrspatial
@@ -25,6 +29,9 @@ tracks:
 - id: image-consumers
   name: Built on krrimage
   wave: adoption
+- id: perception
+  name: SemDT and RoboKudo perception
+  wave: perception
 items:
 - id: krrspatial-numeric
   title: domain_models/krrspatial holds SemDT's casadi spatial types behind a ReferenceFrame
@@ -51,10 +58,11 @@ items:
   depends_on:
   - planar-point-interface
   session: https://claude.ai/code/session_01J17aVY3vyQM8goACbkHkcp
-  notes: '#524 on #527 (base claude/krrspatial-interfaces): ImagePoint implements PlanarPoint[ImageCoordinateSystem,
-    float] with an optional coordinate_system; not frozen. Pixel stays a grid cell. Whichever
-    of #524/#526 lands second merges the domain_models/README.md entries. Merged #527''s new
-    base, pushed 2a830dd575; CI pending.'
+  notes: '#524 on #527: ImagePoint implements PlanarPoint[ImageCoordinateSystem, float]; Pixel
+    stays a grid cell. Pushed 2a830dd575; CI pending. Conflicts with cram2#761, which rewrites
+    SemDT''s Color (mutable setters, HueSaturationValue): whichever lands second moves Color and
+    HueSaturationValue into krrimage; ask before dropping the setters. Whichever of #524/#526
+    lands second merges the domain_models/README.md entries.'
 - id: krrollywood-on-krrimage
   title: krrollywood (cram2/crollywood) depends on krrimage instead of its own frame types
   repository: cram2/crollywood
@@ -74,7 +82,7 @@ items:
   - projection-interface
   - planar-point-interface
   branch: claude/krrimage-depth-segmentation
-  notes: 'Camera model = Projection[ImagePoint, Ray3] behind krrimage''s optional krrspatial[casadi] extra; its target ImagePlane is the sensor''s, one per sensor, shared by all its images. An Image base holds pixels in an ImageCoordinateSystem on that plane: ColorImage, DepthImage, SegmentationImage; a crop is a new image in a new coordinate system on the same plane. Capture is a krrood Role[Image] with camera and instant (world, time); real, MuJoCo and recorded images all yield captures, a video is a list of them. Measure role cost per frame; fallback a plain dataclass. First user: montessori.'
+  notes: 'Waits for cram2#761 to land, then moves its SemDT CameraModel family (pinhole, field of view, distortion, range, modality) into krrimage''s camera extra as a Projection[ImagePoint, Ray3] onto the sensor''s ImagePlane; principal_point an ImagePoint, CameraResolution and VideoResolution become Resolution, scaled() an ImageCoordinateChange. Adds the Image base (ColorImage, DepthImage, SegmentationImage) and Capture, a Role[Image] (camera, instant). Old imports stay.'
 - id: projection-interface
   title: A Projection interface (project, projection_line, unproject) shared by orthogonal
     projection and camera models, with Ray3
@@ -197,3 +205,31 @@ items:
     _world, never raising. express is a template method: raises for no frame, a frame not
     in a space, or frames of different spaces, then calls an abstract hook. If a world ever
     holds unrelated parts, switch to has-a.'
+- id: perception-typed-images
+  title: SemDT's ray tracer renders, and RoboKudo's CAS holds, krrimage images instead of bare
+    arrays
+  branch: claude/perception-typed-images
+  track: perception
+  status: not_started
+  depends_on:
+  - image-extensions
+  - image-coordinate-change
+  notes: 'After cram2#761 and #795 land. RayTracer.render returns ColorImage, DepthImage and
+    SegmentationImage, not RenderedRGBDFrame (BGR and millimetres move into the types), and
+    create_camera_rays becomes projection_line. CAS colour and depth views hold those images;
+    Point2D, Rect and ImageROI become ImagePoint, ImageBox, PixelBox and a SegmentationImage mask;
+    ColorToDepthRatio and crops become ImageCoordinateChanges on one ImagePlane. Old views stay
+    readable.'
+- id: robokudo-captures
+  title: RoboKudo's CameraObservation becomes krrimage's Capture, and camera placement takes it
+  branch: claude/robokudo-captures
+  track: perception
+  status: not_started
+  depends_on:
+  - perception-typed-images
+  - world-as-euclidean-space
+  notes: 'CameraObservation (camera, effective model, world_T_camera, timestamp) is a Capture of
+    the frame''s images: the effective model comes from each image''s coordinate system, not
+    stored; instant holds the world and time, or a sampled camera pose when no state trajectory
+    exists (live ROS, replay). The ray tracer and MuJoCo recorder yield captures; #795''s
+    CameraPlacement and RecordedCameraWorld take them instead of frame-name strings.'

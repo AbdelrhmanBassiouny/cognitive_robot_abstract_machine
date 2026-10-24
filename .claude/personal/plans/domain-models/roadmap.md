@@ -8,5 +8,6 @@
 - Every map between 2D and 3D (orthogonal projection, camera model) implements krrspatial's Projection: project, projection_line, unproject. An image reaches a ReferenceFrame only through a Projection, never by being one.
 - Dimension belongs to a space, not to its values or changes. A world is the space its bodies chart, one space per world; a frame not in a world has no space. A 2D value is given in a plane's coordinate system, which a 3D frame induces.
 - One image plane per sensor, shared by every image it takes; an image is pixels in an ImageCoordinateSystem on it. Where and when an image was taken is a Capture role on the image, never fields of the image.
+- Perception adopts these types only after cram2#761 and #795 land, never by asking an open upstream PR to depend on an unmerged domain model. #761's CameraModel and CameraObservation are moved and retyped (Projection, Capture), never rewritten beside them.
 - Moved classes stay importable from their old module, so old imports and JSON type names keep resolving.
 - Package names (krrspatial, krrimage, krrollywood) are open to change in review.

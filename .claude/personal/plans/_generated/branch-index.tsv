@@ -12,6 +12,8 @@ claude/krrimage-video-on-a-plane	domain-models
 claude/krrspatial-interfaces	domain-models
 claude/krrimage-coordinate-change	domain-models
 claude/world-as-euclidean-space	domain-models
+claude/perception-typed-images	domain-models
+claude/robokudo-captures	domain-models
 claude/split-performatives-prs-xbluus-agreement	eql-performatives
 claude/split-performatives-prs-xbluus	eql-performatives
 claude/performatives-clean	eql-performatives
