@@ -4,8 +4,8 @@ Plan
 - krrood.development_tools: `krrood format`; `krrood agents-md` generates whole AGENTS.md (Jinja) from Section classes holding AgentRule attributes; RuleSet roots PythonRules/KrroodRules/ProjectRules (project = ProjectRules subclasses imported via repo agent_rules.py).
 
 Done
-- Pushed 1632e51cf (sections hold rules, RuleSet enum + markers removed, Misc->Miscellaneous); 30 tool tests pass; 6 of 8 new threads resolved.
+- Pushed a4c4f0c58: titles derived from class names (sentence case, acronyms kept), SectionWithoutTitle removed; 30 tool tests pass.
 
 Next
-- Open: r4368111586 (keep AgentRule vs bare str for detail-less rules); r4368156346 (entry module: keep agent_rules.py convention vs pyproject setting).
-- Krrood rules now a separate top-level part (offered to re-interleave if user objects). CI on 1632e51cf not yet seen.
+- Await user on r4368270223 (subsections) + r4368285294 (Enum): proposed `class Section(AgentRule, Enum)` with members as str/(statement, details) and nesting via `parent` classproperty (Generic on Enum impossible: subscripting = member lookup). Implement on "go".
+- CI on a4c4f0c58 not yet seen.
