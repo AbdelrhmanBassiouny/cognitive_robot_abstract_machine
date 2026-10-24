@@ -1,60 +1,91 @@
 """
-The rules for a repository built on krrood.
+The rules for a repository built on krrood, one catalogue per section.
 """
 
 from __future__ import annotations
 
-from krrood.development_tools.agent_rule import KrroodRule, RuleCatalogue, RuleSection
+from pathlib import Path
+
+from typing_extensions import Generic
+
+import krrood
+from krrood.adapters import json_serializer
+from krrood.adapters.json_serializer import (
+    DataclassJSONSerializer,
+    SubclassJSONSerializer,
+)
+from krrood.development_tools.agent_rule import AgentRule, CodeReference, KrroodRules
+from krrood.development_tools.rules.sections import (
+    Errors,
+    ConstantsAndClassLevelValues,
+    StructuredData,
+    TypeHints,
+)
+from krrood.exceptions import DataclassException
+from krrood.ormatic.utils import classproperty
+from krrood.patterns.path_enumeration import PathEnumeration
+from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 
 
-class KrroodRules(RuleCatalogue):
+class KrroodErrors(Errors, KrroodRules):
     """
-    The rules for a repository built on krrood, one member per rule, each naming the
-    krrood API it uses.
+    The krrood rules on errors.
     """
 
-    SUBCLASS_DATACLASS_EXCEPTION = KrroodRule(
-        RuleSection.ERRORS,
-        (
-            "Custom exceptions subclass `krrood.exceptions.DataclassException`, "
-            "implementing its `error_message` and `suggest_correction`"
-        ),
+    SUBCLASS_DATACLASS_EXCEPTION = AgentRule(
+        f"Custom exceptions subclass {CodeReference(DataclassException).path}, "
+        f"implementing its {CodeReference(DataclassException.error_message).name} "
+        f"and {CodeReference(DataclassException.suggest_correction).name}"
     )
 
-    USE_KRROOD_CLASSPROPERTY = KrroodRule(
-        RuleSection.CONSTANTS_AND_CLASS_LEVEL_VALUES,
-        "Use the `classproperty` `krrood` provides",
+
+class KrroodConstantsAndClassLevelValues(ConstantsAndClassLevelValues, KrroodRules):
+    """
+    The krrood rules on constants and class-level values.
+    """
+
+    USE_KRROOD_CLASSPROPERTY = AgentRule(
+        f"Use the {CodeReference(classproperty).name} {CodeReference(krrood).name} "
+        "provides"
     )
 
-    PATH_ENUMS_SUBCLASS_PATH_ENUMERATION = KrroodRule(
-        RuleSection.STRUCTURED_DATA,
-        (
-            "A path enum subclasses "
-            "`krrood.patterns.path_enumeration.PathEnumeration`, so every path derived "
-            "from a member is a plain `Path`; its members' `name` is the path's last "
-            "component, so read the member name as `_name_`"
-        ),
+
+class KrroodStructuredData(StructuredData, KrroodRules):
+    """
+    The krrood rules on structured data.
+    """
+
+    PATH_ENUMS_SUBCLASS_PATH_ENUMERATION = AgentRule(
+        f"A path enum subclasses {CodeReference(PathEnumeration).path}, so every "
+        f"path derived from a member is a plain {CodeReference(Path).name}; its "
+        "members' `name` is the path's last "
+        "component, so read the member name as `_name_`"
     )
 
-    SERIALIZE_JSON_WITH_KRROOD = KrroodRule(
-        RuleSection.STRUCTURED_DATA,
-        (
-            "JSON that our own classes round-trip goes through "
-            "`krrood.adapters.json_serializer`: use `DataclassJSONSerializer` wherever "
-            "it can (de)serialize the class; where a class needs more, subclass "
-            "`SubclassJSONSerializer` and build on "
-            "`DataclassJSONSerializer.to_json`/`from_json`. Never hand-write "
-            "field-by-field `to_json`/`from_json`"
-        ),
+    SERIALIZE_JSON_WITH_KRROOD = AgentRule(
+        "JSON that our own classes round-trip goes through "
+        f"{CodeReference(json_serializer).path}: use "
+        f"{CodeReference(DataclassJSONSerializer).name} wherever it can "
+        "(de)serialize the class; where a class needs more, subclass "
+        f"{CodeReference(SubclassJSONSerializer).name} and build on "
+        f"{CodeReference(DataclassJSONSerializer).name}'s "
+        f"{CodeReference(DataclassJSONSerializer.to_json).name}/"
+        f"{CodeReference(DataclassJSONSerializer.from_json).name}. Never hand-write "
+        f"field-by-field {CodeReference(SubclassJSONSerializer.to_json).name}/"
+        f"{CodeReference(SubclassJSONSerializer.from_json).name}"
     )
 
-    SUBCLASS_SAFE_GENERICS = KrroodRule(
-        RuleSection.TYPE_HINTS,
-        (
-            "Generic classes inherit `Generic[...]` and then "
-            "`krrood.patterns.subclass_safe_generic.SubClassSafeGeneric`, which "
-            "narrows field types when a subclass binds a parameter. Read a bound type "
-            "with `get_type_of_generic_parameter`, never via `__orig_bases__`. Such "
-            "classes cannot be frozen dataclasses"
-        ),
+
+class KrroodTypeHints(TypeHints, KrroodRules):
+    """
+    The krrood rules on type hints.
+    """
+
+    SUBCLASS_SAFE_GENERICS = AgentRule(
+        f"Generic classes inherit {CodeReference(Generic).name} and then "
+        f"{CodeReference(SubClassSafeGeneric).path}, which narrows field types "
+        "when a subclass binds a parameter. Read a bound type with "
+        f"{CodeReference(SubClassSafeGeneric.get_type_of_generic_parameter).name}, "
+        "never via `__orig_bases__`. Such "
+        "classes cannot be frozen dataclasses"
     )

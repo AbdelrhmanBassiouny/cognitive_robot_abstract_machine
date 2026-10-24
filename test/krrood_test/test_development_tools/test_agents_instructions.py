@@ -8,51 +8,65 @@ from typing_extensions import Callable
 from krrood.development_tools.agent_instructions import (
     AgentsInstructions,
     ProjectRulesModule,
-    RepositoryInstructionsFile,
     RuleSet,
     RulesBlockMarker,
+    SectionContent,
 )
-from krrood.development_tools.agent_rule import (
-    KrroodRule,
-    PythonRule,
-    RuleSection,
-)
+from krrood.development_tools.agent_rule import CodeReference, Section
 from krrood.development_tools.command_line import (
     CommandLine,
     ExitStatus,
     Option,
     Subcommand,
 )
-from krrood.development_tools.exceptions import MalformedRulesBlock
-from krrood.development_tools.rules.krrood_rules import KrroodRules
-from krrood.development_tools.rules.python_rules import PythonRules
+from krrood.development_tools.exceptions import (
+    CatalogueWithoutSection,
+    MalformedRulesBlock,
+    SectionWithoutTitle,
+)
+from krrood.development_tools.repository_files import RepositoryInstructionsFile
+from krrood.development_tools.rules.sections import (
+    CodeQualityRules,
+    DesignPrinciples,
+    Errors,
+    RunningTests,
+    StructuredData,
+)
+from krrood.exceptions import DataclassException
+from krrood.patterns import path_enumeration
 
-from .dataset.project_rules_module import OwnRules, OwnSection
-from .dataset.rule_catalogues import ErrorAndStructuredDataRules, ErrorRules
+from .dataset.rule_catalogues import (
+    DatasetErrors,
+    DatasetStructuredData,
+    OtherDatasetErrors,
+    SectionlessRules,
+    UntitledSection,
+)
 from .dataset_files import DatasetFile
 
 # %% block of shared rules
 
 
 def test_a_new_file_holds_only_the_rules_block(repository_root: Path) -> None:
-    instructions = AgentsInstructions(repository_root)
+    instructions = AgentsInstructions.of_repository(repository_root)
 
     assert instructions.render() == f"{instructions.rules_block}\n"
 
 
 def test_the_rules_block_is_enclosed_by_its_markers() -> None:
-    instructions = AgentsInstructions(Path.cwd())
+    instructions = AgentsInstructions.of_repository(Path.cwd())
 
     assert instructions.rules_block == (
-        f"{RulesBlockMarker.BEGIN}\n\n{instructions.rules_text}\n\n"
-        f"{RulesBlockMarker.END}"
+        f"{RulesBlockMarker.BEGIN}\n\n{instructions.rules_text}{RulesBlockMarker.END}"
     )
 
 
 def test_text_around_the_block_is_kept(
     instructions_with_empty_rules_block: Path,
 ) -> None:
-    instructions = AgentsInstructions(instructions_with_empty_rules_block.parent)
+    instructions = AgentsInstructions.of_repository(
+        instructions_with_empty_rules_block.parent
+    )
 
     assert instructions.render() == (
         f"{DatasetFile.INTRODUCTION.read_text()}\n"
@@ -67,7 +81,7 @@ def test_a_file_without_the_block_gets_it_above_its_text(
     (repository_root / RepositoryInstructionsFile.AGENTS).write_text(
         DatasetFile.HAND_WRITTEN_RULES.read_text()
     )
-    instructions = AgentsInstructions(repository_root)
+    instructions = AgentsInstructions.of_repository(repository_root)
 
     assert instructions.render() == (
         f"{instructions.rules_block}\n\n{DatasetFile.HAND_WRITTEN_RULES.read_text()}"
@@ -80,7 +94,7 @@ def test_a_file_with_only_one_marker_is_rejected(repository_root: Path) -> None:
     )
 
     with pytest.raises(MalformedRulesBlock):
-        AgentsInstructions(repository_root).render()
+        AgentsInstructions.of_repository(repository_root).render()
 
 
 def test_a_file_with_two_blocks_is_rejected(
@@ -90,7 +104,9 @@ def test_a_file_with_two_blocks_is_rejected(
     instructions_with_empty_rules_block.write_text(content + content)
 
     with pytest.raises(MalformedRulesBlock):
-        AgentsInstructions(instructions_with_empty_rules_block.parent).render()
+        AgentsInstructions.of_repository(
+            instructions_with_empty_rules_block.parent
+        ).render()
 
 
 def test_a_block_closed_before_it_opens_is_rejected(repository_root: Path) -> None:
@@ -99,94 +115,101 @@ def test_a_block_closed_before_it_opens_is_rejected(repository_root: Path) -> No
     )
 
     with pytest.raises(MalformedRulesBlock):
-        AgentsInstructions(repository_root).render()
+        AgentsInstructions.of_repository(repository_root).render()
 
 
-# %% rules and catalogues
+# %% sections and catalogues
 
 
-def test_a_rule_lists_its_details_below_it() -> None:
-    rule = ErrorRules.RAISE_ERRORS.value
+def test_a_catalogue_belongs_to_the_section_it_subclasses() -> None:
+    assert DatasetErrors.section is Errors
 
-    assert rule.markdown == "\n".join(
-        [f"- {rule.statement}", *(f"  - {detail}" for detail in rule.details)]
+
+def test_a_catalogue_without_a_section_is_rejected() -> None:
+    with pytest.raises(CatalogueWithoutSection):
+        SectionlessRules.section
+
+
+def test_a_section_without_a_title_is_rejected() -> None:
+    with pytest.raises(SectionWithoutTitle):
+        UntitledSection.heading
+
+
+def test_a_section_lists_its_catalogues_in_the_chosen_order() -> None:
+    instructions = AgentsInstructions(
+        Path.cwd(), [OtherDatasetErrors, DatasetStructuredData, DatasetErrors]
     )
 
-
-def test_a_catalogue_lists_its_rules_of_a_section_in_declaration_order() -> None:
-    assert ErrorAndStructuredDataRules.rules_in(RuleSection.ERRORS) == [
-        ErrorAndStructuredDataRules.NAME_ERRORS.value,
-        ErrorAndStructuredDataRules.DOCUMENT_ERRORS.value,
+    assert instructions.contents_of([Errors]) == [
+        SectionContent(Errors, [OtherDatasetErrors, DatasetErrors], [])
     ]
 
 
-@pytest.mark.parametrize(
-    "catalogue, rule_class",
-    [(PythonRules, PythonRule), (KrroodRules, KrroodRule)],
-)
-def test_a_shipped_catalogue_holds_only_rules_of_its_rule_set(
-    catalogue: type, rule_class: type
-) -> None:
-    assert {type(member.value) for member in catalogue} == {rule_class}
+def test_sections_without_rules_are_left_out() -> None:
+    instructions = AgentsInstructions(Path.cwd(), [DatasetStructuredData])
+
+    assert instructions.contents_of(Section.subsections) == [
+        SectionContent(
+            CodeQualityRules,
+            [],
+            [
+                SectionContent(
+                    DesignPrinciples,
+                    [],
+                    [SectionContent(StructuredData, [DatasetStructuredData], [])],
+                )
+            ],
+        )
+    ]
 
 
-def test_every_rule_set_names_a_catalogue() -> None:
-    assert [rule_set.catalogue for rule_set in RuleSet] == [PythonRules, KrroodRules]
+def test_every_shipped_catalogue_has_a_titled_section() -> None:
+    sections = [
+        catalogue.section for rule_set in RuleSet for catalogue in rule_set.catalogues
+    ]
+
+    assert all(section.heading for section in sections)
 
 
-def test_python_rules_name_no_krrood_api() -> None:
-    python_rules = "\n".join(rule.value.markdown for rule in PythonRules)
+def test_python_rules_name_no_krrood_api(repository_root: Path) -> None:
+    rules_text = AgentsInstructions.of_repository(
+        repository_root, (RuleSet.PYTHON,)
+    ).rules_text
+    rules = "\n".join(
+        line for line in rules_text.splitlines() if not line.startswith("<!--")
+    )
 
-    assert "krrood" not in python_rules.lower()
+    assert "krrood" not in rules.lower()
 
 
-def test_rules_text_name_no_cram_package() -> None:
-    rules_text = AgentsInstructions(Path.cwd()).rules_text
+def test_shipped_rules_name_no_cram_package(repository_root: Path) -> None:
+    rules_text = AgentsInstructions.of_repository(repository_root).rules_text
 
     assert "cram" not in rules_text.lower()
 
 
-# %% sections of the block
+# %% code named by rules
 
 
-def test_a_section_lists_the_rules_of_each_chosen_catalogue_under_their_source() -> (
-    None
-):
-    instructions = AgentsInstructions(
-        Path.cwd(), (ErrorRules, ErrorAndStructuredDataRules)
-    )
-    catalogue_module = Path(*ErrorRules.__module__.split(".")).with_suffix(".py")
-
-    assert instructions.rules_of(RuleSection.ERRORS) == "\n".join(
-        [
-            f"<!-- from {ErrorRules.__qualname__} in {catalogue_module} -->",
-            ErrorRules.RAISE_ERRORS.value.markdown,
-            f"<!-- from {ErrorAndStructuredDataRules.__qualname__} in "
-            f"{catalogue_module} -->",
-            ErrorAndStructuredDataRules.NAME_ERRORS.value.markdown,
-            ErrorAndStructuredDataRules.DOCUMENT_ERRORS.value.markdown,
-        ]
+def test_a_class_is_named_by_its_import_path() -> None:
+    assert CodeReference(DataclassException).path == (
+        f"`{DataclassException.__module__}.{DataclassException.__qualname__}`"
     )
 
 
-def test_a_catalogue_left_out_contributes_no_rules() -> None:
-    instructions = AgentsInstructions(Path.cwd(), (ErrorRules,))
-
-    assert instructions.rules_of(RuleSection.STRUCTURED_DATA) == ""
+def test_a_module_is_named_by_its_import_path() -> None:
+    assert CodeReference(path_enumeration).path == f"`{path_enumeration.__name__}`"
 
 
-def test_headings_of_sections_without_rules_are_left_out() -> None:
-    instructions = AgentsInstructions(Path.cwd(), (ErrorAndStructuredDataRules,))
+def test_an_object_is_named_by_the_module_it_is_imported_from() -> None:
+    assert CodeReference(pytest.raises, pytest).path == (
+        f"`{pytest.__name__}.{pytest.raises.__qualname__}`"
+    )
 
-    assert instructions.rules_text == "\n\n".join(
-        [
-            RuleSection.CODE_QUALITY_RULES.value.markdown,
-            RuleSection.DESIGN_PRINCIPLES.value.markdown,
-            f"{RuleSection.ERRORS.value.markdown}\n"
-            + instructions.rules_of(RuleSection.ERRORS),
-            f"{RuleSection.STRUCTURED_DATA.value.markdown}\n"
-            + instructions.rules_of(RuleSection.STRUCTURED_DATA),
-        ]
+
+def test_a_method_is_named_by_its_own_name() -> None:
+    assert CodeReference(DataclassException.error_message).name == (
+        f"`{DataclassException.error_message.__name__}`"
     )
 
 
@@ -199,7 +222,7 @@ def project_rules_module(
     copy_into_temporary_directory: Callable[[DatasetFile, str], Path],
 ) -> ProjectRulesModule:
     """
-    :return: The repository's own rules module, at its default path.
+    :return: The repository's own rules module.
     """
     copy_into_temporary_directory(
         DatasetFile.PROJECT_RULES_MODULE, RepositoryInstructionsFile.PROJECT_RULES
@@ -210,57 +233,67 @@ def project_rules_module(
 def test_the_project_rules_module_declares_its_catalogues(
     project_rules_module: ProjectRulesModule,
 ) -> None:
-    assert [
-        [member._name_ for member in catalogue]
-        for catalogue in project_rules_module.catalogues
-    ] == [[member._name_ for member in OwnRules]]
+    module = project_rules_module.module
+
+    assert project_rules_module.catalogues == [
+        module.OwnRunningTests,
+        module.DeploymentRules,
+    ]
+
+
+def test_the_project_rules_module_is_loaded_once(
+    project_rules_module: ProjectRulesModule,
+) -> None:
+    assert (
+        ProjectRulesModule(project_rules_module.repository_root).catalogues
+        == project_rules_module.catalogues
+    )
 
 
 def test_a_repository_without_a_project_rules_module_has_no_own_rules(
     repository_root: Path,
 ) -> None:
-    assert ProjectRulesModule(repository_root).catalogues == ()
+    assert ProjectRulesModule(repository_root).catalogues == []
 
 
-def test_project_rules_name_their_module_by_its_path_in_the_repository(
-    repository_root: Path,
+def test_project_rules_are_listed_under_their_sections(
+    project_rules_module: ProjectRulesModule,
 ) -> None:
-    relative_path = Path("rules") / "own_rules.py"
-    (repository_root / relative_path.parent).mkdir()
-    (repository_root / relative_path).write_text(
-        DatasetFile.PROJECT_RULES_MODULE.read_text()
-    )
-    module = ProjectRulesModule(repository_root, relative_path)
-    instructions = AgentsInstructions(repository_root, module.catalogues)
-
-    assert instructions.rules_of(RuleSection.RUNNING_TESTS).splitlines()[0] == (
-        f"<!-- from {OwnRules.__qualname__} in {relative_path} -->"
+    instructions = AgentsInstructions(
+        project_rules_module.repository_root, project_rules_module.catalogues
     )
 
-
-def test_own_sections_follow_the_shared_sections() -> None:
-    instructions = AgentsInstructions(Path.cwd(), (ErrorRules, OwnRules))
-
-    assert instructions.sections == [*RuleSection, *OwnSection]
+    assert instructions.rules_text == DatasetFile.PROJECT_RULES_TEXT.read_text()
 
 
-def test_a_project_rule_in_a_shared_section_follows_the_shared_rules() -> None:
-    instructions = AgentsInstructions(Path.cwd(), (ErrorRules, OwnRules))
-
-    assert instructions.rules_text == "\n\n".join(
-        [
-            RuleSection.CODE_QUALITY_RULES.value.markdown,
-            RuleSection.TESTING.value.markdown,
-            f"{RuleSection.RUNNING_TESTS.value.markdown}\n"
-            + instructions.rules_of(RuleSection.RUNNING_TESTS),
-            RuleSection.DESIGN_PRINCIPLES.value.markdown,
-            f"{RuleSection.ERRORS.value.markdown}\n"
-            + instructions.rules_of(RuleSection.ERRORS),
-            OwnSection.OWN_RULES.value.markdown,
-            f"{OwnSection.DEPLOYMENT.value.markdown}\n"
-            + instructions.rules_of(OwnSection.DEPLOYMENT),
-        ]
+def test_own_sections_follow_the_shared_sections(
+    project_rules_module: ProjectRulesModule,
+) -> None:
+    instructions = AgentsInstructions.of_repository(
+        project_rules_module.repository_root
     )
+
+    assert [
+        content.section for content in instructions.contents_of(Section.subsections)
+    ] == [CodeQualityRules, project_rules_module.module.OwnRules]
+
+
+def test_a_project_rule_in_a_shared_section_follows_the_shared_rules(
+    project_rules_module: ProjectRulesModule,
+) -> None:
+    instructions = AgentsInstructions.of_repository(
+        project_rules_module.repository_root
+    )
+
+    assert instructions.contents_of([RunningTests])[0].catalogues == [
+        *(
+            catalogue
+            for rule_set in RuleSet
+            for catalogue in rule_set.catalogues
+            if catalogue.section is RunningTests
+        ),
+        project_rules_module.module.OwnRunningTests,
+    ]
 
 
 # %% command line
@@ -271,14 +304,14 @@ def test_agents_md_command_writes_a_new_file(repository_root: Path) -> None:
 
     assert exit_status == ExitStatus.FAILURE
     assert (repository_root / RepositoryInstructionsFile.AGENTS).read_text() == (
-        f"{AgentsInstructions(repository_root).rules_block}\n"
+        f"{AgentsInstructions.of_repository(repository_root).rules_block}\n"
     )
 
 
 def test_agents_md_command_fills_the_block_and_keeps_the_text_around_it(
     instructions_with_empty_rules_block: Path,
 ) -> None:
-    expected_content = AgentsInstructions(
+    expected_content = AgentsInstructions.of_repository(
         instructions_with_empty_rules_block.parent
     ).render()
 
@@ -293,7 +326,7 @@ def test_agents_md_command_adds_the_block_to_a_file_without_one(
 ) -> None:
     path = repository_root / RepositoryInstructionsFile.AGENTS
     path.write_text(DatasetFile.HAND_WRITTEN_RULES.read_text())
-    expected_content = AgentsInstructions(repository_root).render()
+    expected_content = AgentsInstructions.of_repository(repository_root).render()
 
     CommandLine.main([Subcommand.AGENTS_MD])
 
@@ -303,10 +336,12 @@ def test_agents_md_command_adds_the_block_to_a_file_without_one(
 def test_agents_md_command_writes_only_the_chosen_rule_sets(
     repository_root: Path,
 ) -> None:
-    CommandLine.main([Subcommand.AGENTS_MD, Option.RULE_SETS, RuleSet.PYTHON])
+    CommandLine.main(
+        [Subcommand.AGENTS_MD, Option.RULE_SETS, RuleSet.PYTHON.command_line_name]
+    )
 
     assert (repository_root / RepositoryInstructionsFile.AGENTS).read_text() == (
-        AgentsInstructions(repository_root, (RuleSet.PYTHON.catalogue,)).render()
+        AgentsInstructions.of_repository(repository_root, (RuleSet.PYTHON,)).render()
     )
 
 
@@ -314,11 +349,16 @@ def test_agents_md_command_keeps_rule_set_order_whatever_the_order_given(
     repository_root: Path,
 ) -> None:
     CommandLine.main(
-        [Subcommand.AGENTS_MD, Option.RULE_SETS, RuleSet.KRROOD, RuleSet.PYTHON]
+        [
+            Subcommand.AGENTS_MD,
+            Option.RULE_SETS,
+            RuleSet.KRROOD.command_line_name,
+            RuleSet.PYTHON.command_line_name,
+        ]
     )
 
     assert (repository_root / RepositoryInstructionsFile.AGENTS).read_text() == (
-        AgentsInstructions(repository_root).render()
+        AgentsInstructions.of_repository(repository_root).render()
     )
 
 
@@ -359,32 +399,7 @@ def test_agents_md_command_adds_the_project_rules(
     assert (
         project_rules_module.repository_root / RepositoryInstructionsFile.AGENTS
     ).read_text() == (
-        AgentsInstructions(
-            project_rules_module.repository_root,
-            (PythonRules, KrroodRules, *project_rules_module.catalogues),
-        ).render()
-    )
-
-
-def test_agents_md_command_reads_the_project_rules_module_it_is_given(
-    repository_root: Path,
-    copy_into_temporary_directory: Callable[[DatasetFile, str], Path],
-) -> None:
-    module_path = copy_into_temporary_directory(
-        DatasetFile.PROJECT_RULES_MODULE, "own_rules.py"
-    )
-
-    CommandLine.main([Subcommand.AGENTS_MD, Option.PROJECT_RULES, module_path.name])
-
-    assert (repository_root / RepositoryInstructionsFile.AGENTS).read_text() == (
-        AgentsInstructions(
-            repository_root,
-            (
-                PythonRules,
-                KrroodRules,
-                *ProjectRulesModule(repository_root, Path(module_path.name)).catalogues,
-            ),
-        ).render()
+        AgentsInstructions.of_repository(project_rules_module.repository_root).render()
     )
 
 

@@ -55,3 +55,8 @@ class DatasetFile(PathEnumeration):
     A module declaring a repository's own rules, one in a shared section and one in a
     section of its own.
     """
+
+    PROJECT_RULES_TEXT = Path(__file__).parent / "dataset" / "project_rules_text.md"
+    """
+    The rules text of :attr:`PROJECT_RULES_MODULE`'s rules alone.
+    """

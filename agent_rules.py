@@ -5,38 +5,75 @@ alongside the shared rules.
 
 from __future__ import annotations
 
-from krrood.development_tools.agent_rule import (
-    ProjectRule,
-    RuleCatalogue,
-    RuleSection,
-    SectionHeading,
-    SectionHeadings,
-)
+from krrood.development_tools.agent_rule import AgentRule, ProjectRules, Section
+from krrood.development_tools.rules.sections import RunningTests
+from krrood.ormatic.utils import classproperty
 
 # %% sections
 
 
-class CramSection(SectionHeadings):
+class CramProjectRules(Section):
     """
-    The sections of this repository's own rules, listed after the shared sections.
+    The rules for this repository only, listed after the shared sections.
     """
 
-    PROJECT_RULES = SectionHeading("Project Rules", 1)
-    GENERATED_ORM_INTERFACES = SectionHeading("Generated ORM Interfaces", 2)
-    KRROOD_ISOLATION = SectionHeading("krrood Isolation", 2)
-    DOMAIN_SPECIFIC_CONVENTIONS = SectionHeading("Domain-Specific Conventions", 2)
+    @classproperty
+    def title(cls) -> str:
+        return "Project Rules"
+
+
+class GeneratedOrmInterfaces(CramProjectRules):
+    """
+    The rules on the ORM interfaces ORMatic generates.
+    """
+
+    @classproperty
+    def title(cls) -> str:
+        return "Generated ORM Interfaces"
+
+
+class KrroodIsolation(CramProjectRules):
+    """
+    The rules keeping krrood independent of the other workspace packages.
+    """
+
+    @classproperty
+    def title(cls) -> str:
+        return "krrood Isolation"
+
+
+class DomainSpecificConventions(CramProjectRules):
+    """
+    The rules pointing to the conventions of one domain.
+    """
+
+    @classproperty
+    def title(cls) -> str:
+        return "Domain-Specific Conventions"
 
 
 # %% rules
 
 
-class CramRules(RuleCatalogue):
+class CramRunningTests(RunningTests, ProjectRules):
     """
-    The rules for this repository only, one member per rule.
+    The rules on running this repository's tests.
     """
 
-    NEVER_EDIT_ORM_INTERFACES = ProjectRule(
-        CramSection.GENERATED_ORM_INTERFACES,
+    NEVER_BUILD_ORM_INTERFACES_IN_TEST_RUNS = AgentRule(
+        (
+            "Pass `--orm-build never`, and regenerate the ORM interfaces explicitly "
+            "with `scripts/regenerate_all_orm.py` when a change needs it"
+        ),
+    )
+
+
+class OrmInterfaceRules(GeneratedOrmInterfaces, ProjectRules):
+    """
+    The rules on the generated ORM interfaces.
+    """
+
+    NEVER_EDIT_ORM_INTERFACES = AgentRule(
         (
             "`ormatic_interface.py` files are generated, never written, and "
             "git-ignored (see `.gitignore`). Never edit them, and never read them to "
@@ -45,48 +82,41 @@ class CramRules(RuleCatalogue):
         ),
     )
 
-    BUILD_ORM_INTERFACES_LOCALLY = ProjectRule(
-        CramSection.GENERATED_ORM_INTERFACES,
+    BUILD_ORM_INTERFACES_LOCALLY = AgentRule(
         (
             "The test suite builds them for its runs; a local checkout builds them "
             "with `scripts/regenerate_all_orm.py`"
         ),
     )
 
-    NEVER_TRACK_ORM_INTERFACES = ProjectRule(
-        CramSection.GENERATED_ORM_INTERFACES,
+    NEVER_TRACK_ORM_INTERFACES = AgentRule(
         (
             "Never track one again: git refuses to overwrite a tracked path a checkout "
             "has generated its own copy of, which makes every branch switch fail"
         ),
     )
 
-    ASK_ABOUT_PERSISTENT_ORM_PROBLEMS = ProjectRule(
-        CramSection.GENERATED_ORM_INTERFACES,
+    ASK_ABOUT_PERSISTENT_ORM_PROBLEMS = AgentRule(
         (
             "When regenerating the ORM interfaces does not fix an ORM problem, ask the "
             "developer"
         ),
     )
 
-    ASK_ABOUT_ORM_IMPORT_CYCLES = ProjectRule(
-        CramSection.GENERATED_ORM_INTERFACES,
+    ASK_ABOUT_ORM_IMPORT_CYCLES = AgentRule(
         (
             "If an ORM import creates an import cycle, ask the user if a local import "
             "is fine"
         ),
     )
 
-    NEVER_BUILD_ORM_INTERFACES_IN_TEST_RUNS = ProjectRule(
-        RuleSection.RUNNING_TESTS,
-        (
-            "Pass `--orm-build never`, and regenerate the ORM interfaces explicitly "
-            "with `scripts/regenerate_all_orm.py` when a change needs it"
-        ),
-    )
 
-    KRROOD_IMPORTS_NO_WORKSPACE_PACKAGE = ProjectRule(
-        CramSection.KRROOD_ISOLATION,
+class KrroodIsolationRules(KrroodIsolation, ProjectRules):
+    """
+    The rules keeping krrood independent of the other workspace packages.
+    """
+
+    KRROOD_IMPORTS_NO_WORKSPACE_PACKAGE = AgentRule(
         (
             "`krrood`, including its tests under `test/krrood_test`, never imports "
             "another workspace package - in particular not `coraplex`, "
@@ -96,8 +126,7 @@ class CramRules(RuleCatalogue):
         ),
     )
 
-    MIMIC_OTHER_PACKAGES_IN_KRROOD_TESTS = ProjectRule(
-        CramSection.KRROOD_ISOLATION,
+    MIMIC_OTHER_PACKAGES_IN_KRROOD_TESTS = AgentRule(
         (
             "When a `krrood` test needs behaviour another package triggers, mimic the "
             "relevant classes and patterns in `test/krrood_test/dataset` and test "
@@ -106,16 +135,20 @@ class CramRules(RuleCatalogue):
         ),
     )
 
-    MIMICS_IMPORT_ONLY_KRROOD_DEPENDENCIES = ProjectRule(
-        CramSection.KRROOD_ISOLATION,
+    MIMICS_IMPORT_ONLY_KRROOD_DEPENDENCIES = AgentRule(
         (
             "Those mimic classes import only `krrood`, `random_events` and "
             "`probabilistic_model`"
         ),
     )
 
-    FOLLOW_THE_SPATIAL_STYLE_GUIDE = ProjectRule(
-        CramSection.DOMAIN_SPECIFIC_CONVENTIONS,
+
+class DomainConventionRules(DomainSpecificConventions, ProjectRules):
+    """
+    The rules pointing to the conventions of one domain.
+    """
+
+    FOLLOW_THE_SPATIAL_STYLE_GUIDE = AgentRule(
         (
             "For spatial types and connections, follow "
             "`semantic_digital_twin/doc/style_guide.md`"

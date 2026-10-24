@@ -16,11 +16,10 @@ from typing_extensions import Sequence
 
 from krrood.development_tools.agent_instructions import (
     AgentsInstructions,
-    ProjectRulesModule,
-    RepositoryInstructionsFile,
     RuleSet,
 )
 from krrood.development_tools.formatting import DocstringFormatter
+from krrood.development_tools.repository_files import RepositoryInstructionsFile
 
 logger = logging.getLogger(__name__)
 
@@ -57,11 +56,6 @@ class Option(StrEnum):
     RULE_SETS = "--rule-sets"
     """
     Choose the rule sets a generated ``AGENTS.md`` contains.
-    """
-
-    PROJECT_RULES = "--project-rules"
-    """
-    Name the module declaring the repository's own rules.
     """
 
 
@@ -137,17 +131,11 @@ class CommandLine:
         agents_parser.add_argument(
             Option.RULE_SETS,
             nargs="+",
-            type=RuleSet,
-            choices=list(RuleSet),
-            default=list(RuleSet),
-            help="The rule sets the block contains; all of them when omitted.",
-        )
-        agents_parser.add_argument(
-            Option.PROJECT_RULES,
-            type=Path,
-            default=Path(RepositoryInstructionsFile.PROJECT_RULES),
-            help="The module declaring the repository's own rules, relative to the "
-            "repository root; no own rules if it does not exist.",
+            choices=[rule_set.command_line_name for rule_set in RuleSet],
+            default=[rule_set.command_line_name for rule_set in RuleSet],
+            help="The rule sets the block contains; all of them when omitted. The "
+            f"repository's own rules in {RepositoryInstructionsFile.PROJECT_RULES} "
+            "always follow them.",
         )
         agents_parser.set_defaults(run=self.generate_agents_instructions)
 
@@ -172,14 +160,13 @@ class CommandLine:
         :param arguments: The parsed command line.
         :return: :attr:`ExitStatus.FAILURE` if the file was rewritten or is stale.
         """
-        shared_catalogues = tuple(
-            rule_set.catalogue
-            for rule_set in RuleSet
-            if rule_set in arguments.rule_sets
-        )
-        project_rules = ProjectRulesModule(Path.cwd(), arguments.project_rules)
-        instructions = AgentsInstructions(
-            Path.cwd(), shared_catalogues + project_rules.catalogues
+        instructions = AgentsInstructions.of_repository(
+            Path.cwd(),
+            tuple(
+                rule_set
+                for rule_set in RuleSet
+                if rule_set.command_line_name in arguments.rule_sets
+            ),
         )
         if arguments.check:
             if instructions.is_current():

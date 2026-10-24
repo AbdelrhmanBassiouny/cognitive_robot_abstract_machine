@@ -1,87 +1,105 @@
 """
-The rules agents follow, the sections ``AGENTS.md`` groups them under and the catalogues
-that hold them.
+The rules agents follow, the sections ``AGENTS.md`` groups them under and the rule sets
+they belong to.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
+from types import ModuleType
+
+from typing_extensions import Any, Callable
+
+from krrood.development_tools.exceptions import (
+    CatalogueWithoutSection,
+    SectionWithoutTitle,
+)
+from krrood.development_tools.repository_files import RepositoryInstructionsFile
+from krrood.ormatic.utils import classproperty
+
+# %% code named by rules
+
+
+@dataclass(frozen=True)
+class CodeReference:
+    """
+    A module, class or function a rule names, rendered as inline Markdown code, so the
+    rule follows a rename of it.
+    """
+
+    target: ModuleType | type | Callable[..., Any]
+    """
+    The object the rule names.
+    """
+
+    public_module: ModuleType | None = None
+    """
+    The module the object is imported from, where that is not the module defining it.
+    """
+
+    @property
+    def path(self) -> str:
+        """
+        The import path of the object, as inline code.
+        """
+        if isinstance(self.target, ModuleType):
+            return f"`{self.target.__name__}`"
+        module = self.public_module or self.target
+        module_name = (
+            module.__name__ if isinstance(module, ModuleType) else module.__module__
+        )
+        return f"`{module_name}.{self.target.__qualname__}`"
+
+    @property
+    def name(self) -> str:
+        """
+        The object's own name, as inline code.
+        """
+        return f"`{self.target.__name__}`"
+
 
 # %% sections
 
 
-@dataclass(frozen=True)
-class SectionHeading:
+class Section:
     """
-    The Markdown heading of one section of the rules.
-    """
-
-    title: str
-    """
-    The text of the heading.
+    A section of the rules in ``AGENTS.md``. A subclass of a section is a subsection
+    nested under it, unless it is a :class:`RuleCatalogue`, which holds rules of the
+    section instead.
     """
 
-    level: int
-    """
-    The heading level, 1 for a top-level heading.
-    """
-
-    @property
-    def markdown(self) -> str:
+    @classproperty
+    def title(cls) -> str:
         """
-        The heading as a line of Markdown.
+        The text of the section's heading.
         """
-        return f"{'#' * self.level} {self.title}"
+        raise SectionWithoutTitle(cls)
 
-
-class SectionHeadings(Enum):
-    """
-    The sections of a set of rules, in the order ``AGENTS.md`` lists them, each member's
-    value being its :class:`SectionHeading`.
-    """
-
-    @property
-    def subsections(self) -> list[SectionHeadings]:
+    @classproperty
+    def subsections(cls) -> list[type[Section]]:
         """
-        The sections of the same set nested under this one, at any depth.
+        The sections nested directly under this one, in definition order.
         """
-        sections = list(type(self))
-        nested = []
-        for section in sections[sections.index(self) + 1 :]:
-            if section.value.level <= self.value.level:
-                break
-            nested.append(section)
-        return nested
+        return [
+            subclass
+            for subclass in cls.__subclasses__()
+            if not issubclass(subclass, RuleCatalogue)
+        ]
 
-
-class RuleSection(SectionHeadings):
-    """
-    The sections of the shared rules, listed before any repository's own sections.
-    """
-
-    CODE_QUALITY_RULES = SectionHeading("Code Quality Rules", 1)
-    APPLYING_THESE_RULES = SectionHeading("Applying These Rules", 2)
-    ASK_THE_DEVELOPER = SectionHeading("Ask the Developer", 2)
-    TESTING = SectionHeading("Testing", 2)
-    WRITING_TESTS = SectionHeading("Writing Tests", 3)
-    ASSERTIONS = SectionHeading("Assertions", 3)
-    EXTERNAL_SERVICES_AND_CI = SectionHeading("External Services and CI", 3)
-    RUNNING_TESTS = SectionHeading("Running Tests", 3)
-    CODE_STYLE = SectionHeading("Code Style", 2)
-    NAMING = SectionHeading("Naming", 3)
-    IMPORTS = SectionHeading("Imports", 2)
-    DESIGN_PRINCIPLES = SectionHeading("Design Principles", 2)
-    METHODS = SectionHeading("Methods", 3)
-    ERRORS = SectionHeading("Errors", 3)
-    CONSTANTS_AND_CLASS_LEVEL_VALUES = SectionHeading(
-        "Constants and Class-Level Values", 3
-    )
-    STRUCTURED_DATA = SectionHeading("Structured Data", 3)
-    TYPE_HINTS = SectionHeading("Type Hints", 2)
-    DOCUMENTATION = SectionHeading("Documentation", 2)
-    VERSION_CONTROL = SectionHeading("Version Control", 2)
-    MISC = SectionHeading("Misc", 2)
+    @classproperty
+    def heading(cls) -> str:
+        """
+        The section's heading as a line of Markdown, one level deeper than the section
+        it is nested under.
+        """
+        level = sum(
+            1
+            for base in cls.__mro__
+            if issubclass(base, Section) and base is not Section
+        )
+        return f"{'#' * level} {cls.title}"
 
 
 # %% rules
@@ -91,12 +109,6 @@ class RuleSection(SectionHeadings):
 class AgentRule:
     """
     One rule agents follow, rendered as a Markdown list item.
-    """
-
-    section: SectionHeadings
-    """
-    The section ``AGENTS.md`` lists the rule under, a shared :class:`RuleSection` or one
-    of the repository's own.
     """
 
     statement: str
@@ -109,47 +121,61 @@ class AgentRule:
     The points that spell the rule out, rendered as a nested list below it.
     """
 
-    @property
-    def markdown(self) -> str:
-        """
-        The rule as a Markdown list item, followed by its details.
-        """
-        return "\n".join(
-            [f"- {self.statement}", *(f"  - {detail}" for detail in self.details)]
-        )
-
-
-@dataclass(frozen=True)
-class PythonRule(AgentRule):
-    """
-    A rule for any Python repository.
-    """
-
-
-@dataclass(frozen=True)
-class KrroodRule(AgentRule):
-    """
-    A rule for a repository built on krrood, naming the krrood API it uses.
-    """
-
-
-@dataclass(frozen=True)
-class ProjectRule(AgentRule):
-    """
-    A rule for one repository only, declared in that repository's rules file.
-    """
-
 
 class RuleCatalogue(Enum):
     """
-    A set of rules, one member per rule, each member's value being its
-    :class:`AgentRule`.
+    The rules of one rule set in one section, one member per rule, each member's value
+    being its :class:`AgentRule`. A catalogue subclasses its rule set and the
+    :class:`Section` its rules belong to.
     """
 
-    @classmethod
-    def rules_in(cls, section: SectionHeadings) -> list[AgentRule]:
+    @classproperty
+    def section(cls) -> type[Section]:
         """
-        :param section: The section to collect.
-        :return: The catalogue's rules for ``section``, in declaration order.
+        The section the catalogue's rules belong to.
         """
-        return [member.value for member in cls if member.value.section is section]
+        sections = [
+            base
+            for base in cls.__mro__
+            if issubclass(base, Section) and not issubclass(base, RuleCatalogue)
+        ]
+        if not sections:
+            raise CatalogueWithoutSection(cls)
+        return sections[0]
+
+    @classproperty
+    def source_path(cls) -> Path:
+        """
+        The path of the module declaring the catalogue, relative to the directory of
+        its top-level package.
+        """
+        return Path(*cls.__module__.split(".")).with_suffix(".py")
+
+
+# %% rule sets
+
+
+class PythonRules(RuleCatalogue):
+    """
+    The rule set for any Python repository.
+    """
+
+
+class KrroodRules(RuleCatalogue):
+    """
+    The rule set for a repository built on krrood, naming the krrood API it uses.
+    """
+
+
+class ProjectRules(RuleCatalogue):
+    """
+    The rule set of one repository only, declared in that repository's
+    :attr:`~krrood.development_tools.repository_files.RepositoryInstructionsFile.PROJECT_RULES`.
+    """
+
+    @classproperty
+    def source_path(cls) -> Path:
+        """
+        The repository's rules module, relative to the repository root.
+        """
+        return Path(RepositoryInstructionsFile.PROJECT_RULES)

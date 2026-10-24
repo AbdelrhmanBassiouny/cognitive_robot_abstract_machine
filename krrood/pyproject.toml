@@ -111,6 +111,7 @@ krrood = [
   "rustworkx_utils/visualization/templates/*.jinja",
   "code_generation/templates/*.jinja",
   "entity_query_language/testing/templates/*.jinja",
+  "development_tools/templates/*.jinja",
 ]
 
 [tool.pytest.ini_options]

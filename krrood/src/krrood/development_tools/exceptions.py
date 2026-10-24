@@ -63,3 +63,42 @@ class MalformedRulesBlock(DataclassException):
             "remove both to have `krrood agents-md` put the block at the top; then run "
             "it again."
         )
+
+
+@dataclass
+class SectionWithoutTitle(DataclassException):
+    """
+    Raised when the heading of a section of the rules is needed, but the section
+    declares no title.
+    """
+
+    section: type
+    """
+    The section without a title.
+    """
+
+    def error_message(self) -> str:
+        return f"The section {self.section.__qualname__} declares no title."
+
+    def suggest_correction(self) -> str:
+        return "Give the section a `title` classproperty returning its heading text."
+
+
+@dataclass
+class CatalogueWithoutSection(DataclassException):
+    """
+    Raised when a catalogue of rules does not subclass the section its rules belong to.
+    """
+
+    catalogue: type
+    """
+    The catalogue without a section.
+    """
+
+    def error_message(self) -> str:
+        return f"The rule catalogue {self.catalogue.__qualname__} has no section."
+
+    def suggest_correction(self) -> str:
+        return (
+            "Add the section its rules belong to as the catalogue's first base class."
+        )

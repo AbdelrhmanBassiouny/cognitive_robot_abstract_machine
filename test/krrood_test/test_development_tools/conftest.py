@@ -10,10 +10,8 @@ from pathlib import Path
 import pytest
 from typing_extensions import Callable
 
-from krrood.development_tools.agent_instructions import (
-    RepositoryInstructionsFile,
-    RulesBlockMarker,
-)
+from krrood.development_tools.agent_instructions import RulesBlockMarker
+from krrood.development_tools.repository_files import RepositoryInstructionsFile
 
 from .dataset_files import DatasetFile
 

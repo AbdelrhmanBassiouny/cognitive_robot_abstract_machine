@@ -8,9 +8,9 @@ can use the same conventions:
   docformatter can disagree with ruff about the blank lines after an attribute docstring
   that precedes a decorated definition; for such a file ruff's output is kept, so the two
   tools never oscillate.
-- `krrood agents-md [--rule-sets SET ...] [--project-rules PATH] [--check]` keeps the
-  block of rules in the repository's `AGENTS.md` equal to the rules of the chosen rule
-  sets and the repository's own rules (see [Project rules](#project-rules)). It rewrites
+- `krrood agents-md [--rule-sets SET ...] [--check]` keeps the block of rules in the
+  repository's `AGENTS.md` equal to the rules of the chosen rule sets and the
+  repository's own rules (see [Project rules](#project-rules)). It rewrites
   only what lies between the block's two marker lines and keeps the repository's own
   text around it. An `AGENTS.md` without the marker lines gets the block above its
   text, and without an `AGENTS.md` it writes one holding just the block. With
@@ -21,17 +21,21 @@ for formatting hooks.
 
 ## Rule sets
 
-The rules are code: each rule is an `AgentRule` naming its section, its statement and
-any details that spell it out. The rules are grouped into rule sets, and `--rule-sets`
-chooses which ones the block contains (all of them by default):
+The rules are code. A section of `AGENTS.md` is a subclass of `Section`, and a
+subsection subclasses the section it is nested under, so `Errors` subclasses
+`DesignPrinciples`. A catalogue is an enum holding one rule set's rules of one section:
+it subclasses that section and its rule set, and each member is an `AgentRule` with a
+statement and any details that spell it out. For example, `PythonErrors(Errors,
+PythonRules)` holds the Python rules on errors, and `PythonErrors.NEVER_TRY_EXCEPT` is
+one of them. A rule that names code builds that name from the imported object with
+`CodeReference`, so the rule follows a rename.
 
-- `python`: rules for any Python repository, the `PythonRule` members of `PythonRules`.
+`--rule-sets` chooses the rule sets the block contains (all of them by default):
+
+- `python`: rules for any Python repository, the catalogues of `PythonRules`.
 - `krrood`: conventions for a repository built on krrood, naming the krrood API each one
   uses (`DataclassException`, `classproperty`, `PathEnumeration`, the JSON serializer,
-  `SubClassSafeGeneric`), the `KrroodRule` members of `KrroodRules`.
-
-Each catalogue is an enum with one named member per rule, so the rules can be queried
-from code, for example `PythonRules.rules_in(RuleSection.NAMING)`.
+  `SubClassSafeGeneric`), the catalogues of `KrroodRules`.
 
 A repository that does not use krrood generates its block with `--rule-sets python`, in
 its pre-commit hook and in its CI check alike.
@@ -81,36 +85,38 @@ rather than krrood.
 ## Project rules
 
 A repository's own rules are code too. Declare them in `agent_rules.py` at the
-repository root (`--project-rules PATH` names another module, relative to the root);
-`krrood agents-md` reads every `RuleCatalogue` defined there and merges its rules into
-the block:
+repository root as catalogues of `ProjectRules`; `krrood agents-md` loads that module
+and merges the rules of every `ProjectRules` subclass it defines into the block:
 
 ```python
-from krrood.development_tools.agent_rule import (
-    ProjectRule,
-    RuleCatalogue,
-    RuleSection,
-    SectionHeading,
-    SectionHeadings,
-)
+from krrood.development_tools.agent_rule import AgentRule, ProjectRules, Section
+from krrood.development_tools.rules.sections import RunningTests
+from krrood.ormatic.utils import classproperty
 
 
-class OwnSection(SectionHeadings):
-    PROJECT_RULES = SectionHeading("Project Rules", 1)
-    DEPLOYMENT = SectionHeading("Deployment", 2)
+class OwnProjectRules(Section):
+    @classproperty
+    def title(cls) -> str:
+        return "Project Rules"
 
 
-class OwnRules(RuleCatalogue):
-    PIN_TEST_DEPENDENCIES = ProjectRule(
-        RuleSection.RUNNING_TESTS, "Run tests against the pinned dependencies"
-    )
-    DEPLOY_FROM_TAGS = ProjectRule(OwnSection.DEPLOYMENT, "Deploy only tagged commits")
+class Deployment(OwnProjectRules):
+    @classproperty
+    def title(cls) -> str:
+        return "Deployment"
+
+
+class OwnRunningTests(RunningTests, ProjectRules):
+    PIN_TEST_DEPENDENCIES = AgentRule("Run tests against the pinned dependencies")
+
+
+class DeploymentRules(Deployment, ProjectRules):
+    DEPLOY_FROM_TAGS = AgentRule("Deploy only tagged commits")
 ```
 
-A project rule in a shared section, such as `RuleSection.RUNNING_TESTS`, is listed after
-the shared rules of that section. Sections of the repository's own follow the shared
-sections, in the order their `SectionHeadings` enum declares them. The module is
-imported when the command runs, so it imports only krrood and the standard library.
+A project rule in a shared section, such as `RunningTests`, is listed after the shared
+rules of that section. Sections of the repository's own follow the shared sections, in
+the order they are defined.
 
 ## Changing a rule
 
@@ -118,13 +124,12 @@ Never edit a rule inside the block: the comment above each group of rules names 
 catalogue and module it comes from. Find the member by the rule's text and change it
 there.
 
-- A repository's own rule is a `ProjectRule` in its `agent_rules.py`.
+- A repository's own rule is in a `ProjectRules` catalogue in its `agent_rules.py`.
 - A shared rule lives under `krrood/development_tools/rules/` (in `krrood/src` of
-  cognitive_robot_abstract_machine). A rule that names krrood's API is a `KrroodRule`
-  in `KrroodRules`; every other rule is a `PythonRule` in `PythonRules`. A new shared
-  section is a new member of `RuleSection` in
-  `krrood/src/krrood/development_tools/agent_rule.py`, which sets the order the sections
-  appear in.
+  cognitive_robot_abstract_machine). A rule that names krrood's API is in a
+  `KrroodRules` catalogue in `krrood_rules.py`; every other rule is in a `PythonRules`
+  catalogue in `python_rules.py`. The shared sections are defined in `sections.py`, in
+  the order they appear.
 
 After changing a rule, run `krrood agents-md` (the pre-commit hook does this) and commit
 the regenerated `AGENTS.md` with the change; CI fails when the block is stale or was
@@ -135,4 +140,4 @@ outside the block.
 
 To adopt the block in an existing `AGENTS.md`, run `krrood agents-md`: it puts the block
 above the file's text. Then move the rules of your own into `agent_rules.py` as
-`ProjectRule` members and delete them from the text.
+`ProjectRules` catalogues and delete them from the text.

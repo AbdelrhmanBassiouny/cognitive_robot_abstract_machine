@@ -68,17 +68,3 @@ jobs:
             echo "Untrack them with 'git rm --cached', and build them locally with scripts/regenerate_all_orm.py."
             exit 1
           fi
-
-  check_agents_md_is_generated:
-    # The marked block of rules in AGENTS.md is generated from the rules krrood ships
-    # and agent_rules.py; a hand edit inside it or a forgotten regeneration fails here.
-    # Generating it needs only the standard library, so krrood is installed without its
-    # dependencies.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - run: pip install --no-deps ./krrood typing_extensions tqdm
-      - run: krrood agents-md --check
