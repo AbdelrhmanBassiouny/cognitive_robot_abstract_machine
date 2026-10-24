@@ -54,6 +54,6 @@ def instructions_with_empty_rules_block(repository_root: Path) -> Path:
     path.write_text(
         f"{DatasetFile.INTRODUCTION.read_text()}\n"
         f"{RulesBlockMarker.BEGIN}\n{RulesBlockMarker.END}\n\n"
-        f"{DatasetFile.PROJECT_RULES.read_text()}"
+        f"{DatasetFile.HAND_WRITTEN_RULES.read_text()}"
     )
     return path

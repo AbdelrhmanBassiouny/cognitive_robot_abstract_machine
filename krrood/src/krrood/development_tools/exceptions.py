@@ -32,8 +32,8 @@ class FormatterNotInstalled(DataclassException):
 @dataclass
 class MalformedRulesBlock(DataclassException):
     """
-    Raised when an ``AGENTS.md`` holds a marker line of the block of shared rules, but
-    not exactly one block opened and closed by its two marker lines in that order.
+    Raised when an ``AGENTS.md`` holds a marker line of the block of generated rules,
+    but not exactly one block opened and closed by its two marker lines in that order.
     """
 
     instructions_path: Path
@@ -59,7 +59,7 @@ class MalformedRulesBlock(DataclassException):
 
     def suggest_correction(self) -> str:
         return (
-            "Leave one of each line, in that order, where the shared rules belong, or "
+            "Leave one of each line, in that order, where the rules belong, or "
             "remove both to have `krrood agents-md` put the block at the top; then run "
             "it again."
         )

@@ -44,8 +44,14 @@ class DatasetFile(PathEnumeration):
     rules.
     """
 
-    PROJECT_RULES = Path(__file__).parent / "dataset" / "project_rules.md"
+    HAND_WRITTEN_RULES = Path(__file__).parent / "dataset" / "hand_written_rules.md"
     """
     Hand-written rules an ``AGENTS.md`` under test holds after its block of shared
     rules.
+    """
+
+    PROJECT_RULES_MODULE = Path(__file__).parent / "dataset" / "project_rules_module.py"
+    """
+    A module declaring a repository's own rules, one in a shared section and one in a
+    section of its own.
     """

@@ -1,15 +1,21 @@
 """
-Keeps the block of shared rules in a repository's ``AGENTS.md`` equal to the rules krrood
-ships.
+Keeps the block of generated rules in a repository's ``AGENTS.md`` equal to the rules krrood
+ships and the rules the repository declares.
 """
 
 from __future__ import annotations
 
+import importlib.util
 from dataclasses import dataclass, field
 from enum import StrEnum
+from functools import cached_property
 from pathlib import Path
 
-from krrood.development_tools.agent_rule import RuleCatalogue, RuleSection
+from krrood.development_tools.agent_rule import (
+    RuleCatalogue,
+    RuleSection,
+    SectionHeadings,
+)
 from krrood.development_tools.exceptions import MalformedRulesBlock
 from krrood.development_tools.rules.krrood_rules import KrroodRules
 from krrood.development_tools.rules.python_rules import PythonRules
@@ -24,14 +30,19 @@ class RepositoryInstructionsFile(StrEnum):
 
     AGENTS = "AGENTS.md"
     """
-    The instructions agents read: the block of shared rules and the repository's own
-    rules around it.
+    The instructions agents read, holding the block of generated rules.
+    """
+
+    PROJECT_RULES = "agent_rules.py"
+    """
+    The module declaring the repository's own rules as catalogues of
+    :class:`~krrood.development_tools.agent_rule.ProjectRule`.
     """
 
 
 class RulesBlockMarker(StrEnum):
     """
-    The lines that enclose the block of shared rules in ``AGENTS.md``.
+    The lines that enclose the block of generated rules in ``AGENTS.md``.
     """
 
     BEGIN = (
@@ -78,14 +89,55 @@ class RuleSet(StrEnum):
                 return KrroodRules
 
 
+# %% project rules
+
+
+@dataclass
+class ProjectRulesModule:
+    """
+    The module of one repository that declares the repository's own rules.
+    """
+
+    repository_root: Path
+    """
+    The directory the module's path is relative to.
+    """
+
+    relative_path: Path = Path(RepositoryInstructionsFile.PROJECT_RULES)
+    """
+    The path of the module, relative to :attr:`repository_root`.
+    """
+
+    @cached_property
+    def catalogues(self) -> tuple[type[RuleCatalogue], ...]:
+        """
+        The rule catalogues the module declares, in declaration order; none if the
+        repository has no such module.
+        """
+        path = self.repository_root / self.relative_path
+        if not path.is_file():
+            return ()
+        module_name = ".".join(self.relative_path.with_suffix("").parts)
+        specification = importlib.util.spec_from_file_location(module_name, path)
+        module = importlib.util.module_from_spec(specification)
+        specification.loader.exec_module(module)
+        return tuple(
+            value
+            for value in vars(module).values()
+            if isinstance(value, type)
+            and issubclass(value, RuleCatalogue)
+            and value.__module__ == module_name
+        )
+
+
 # %% generation
 
 
 @dataclass
 class AgentsInstructions:
     """
-    The ``AGENTS.md`` of one repository, whose block of shared rules holds the rules of
-    the chosen catalogues and whose text around that block is written by hand.
+    The ``AGENTS.md`` of one repository, whose block of generated rules holds the rules
+    of the chosen catalogues and whose text around that block is written by hand.
     """
 
     repository_root: Path
@@ -101,13 +153,31 @@ class AgentsInstructions:
     """
 
     @property
+    def sections(self) -> list[SectionHeadings]:
+        """
+        Every section the block may list, the shared ones first, then the sections of
+        each further set the catalogues' rules use, in order of first use.
+        """
+        section_sets = dict.fromkeys(
+            [
+                RuleSection,
+                *(
+                    type(member.value.section)
+                    for catalogue in self.catalogues
+                    for member in catalogue
+                ),
+            ]
+        )
+        return [section for section_set in section_sets for section in section_set]
+
+    @property
     def path(self) -> Path:
         """
         The path of the repository's ``AGENTS.md``.
         """
         return self.repository_root / RepositoryInstructionsFile.AGENTS
 
-    def rules_of(self, section: RuleSection) -> str:
+    def rules_of(self, section: SectionHeadings) -> str:
         """
         :param section: The section to collect.
         :return: The rules every chosen catalogue has for ``section``, in catalogue
@@ -130,12 +200,14 @@ class AgentsInstructions:
         return "\n".join(rules_per_catalogue)
 
     @property
-    def shared_rules(self) -> str:
+    def rules_text(self) -> str:
         """
         The rules of the chosen catalogues, under the headings of the sections that have
         any.
         """
-        rules_by_section = {section: self.rules_of(section) for section in RuleSection}
+        rules_by_section = {
+            section: self.rules_of(section) for section in self.sections
+        }
         blocks = []
         for section, rules in rules_by_section.items():
             if not rules and not any(
@@ -148,17 +220,17 @@ class AgentsInstructions:
     @property
     def rules_block(self) -> str:
         """
-        The block of shared rules, from its opening to its closing marker line.
+        The block of generated rules, from its opening to its closing marker line.
         """
         return (
-            f"{RulesBlockMarker.BEGIN}\n\n{self.shared_rules}\n\n{RulesBlockMarker.END}"
+            f"{RulesBlockMarker.BEGIN}\n\n{self.rules_text}\n\n{RulesBlockMarker.END}"
         )
 
     def render(self) -> str:
         """
         Compose the content ``AGENTS.md`` must have.
 
-        :return: The current file with its block of shared rules replaced, the block
+        :return: The current file with its block of generated rules replaced, the block
             followed by the current file if it has no block yet, or the block alone if
             there is no file yet.
         :raises MalformedRulesBlock: If the file holds a marker line, but not exactly
@@ -187,7 +259,7 @@ class AgentsInstructions:
 
     def is_current(self) -> bool:
         """
-        :return: Whether ``AGENTS.md`` exists and its block of shared rules equals the
+        :return: Whether ``AGENTS.md`` exists and its block of generated rules equals the
             rules it must hold.
         :raises MalformedRulesBlock: If the file holds a marker line, but not exactly
             one block.
@@ -198,7 +270,7 @@ class AgentsInstructions:
 
     def write(self) -> bool:
         """
-        Write ``AGENTS.md`` with the block of shared rules it must hold, keeping the text
+        Write ``AGENTS.md`` with the block of generated rules it must hold, keeping the text
         around the block.
 
         :return: Whether the file changed.

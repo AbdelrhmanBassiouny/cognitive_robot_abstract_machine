@@ -35,9 +35,29 @@ class SectionHeading:
         return f"{'#' * self.level} {self.title}"
 
 
-class RuleSection(Enum):
+class SectionHeadings(Enum):
     """
-    The sections of the rules, in the order ``AGENTS.md`` lists them.
+    The sections of a set of rules, in the order ``AGENTS.md`` lists them, each member's
+    value being its :class:`SectionHeading`.
+    """
+
+    @property
+    def subsections(self) -> list[SectionHeadings]:
+        """
+        The sections of the same set nested under this one, at any depth.
+        """
+        sections = list(type(self))
+        nested = []
+        for section in sections[sections.index(self) + 1 :]:
+            if section.value.level <= self.value.level:
+                break
+            nested.append(section)
+        return nested
+
+
+class RuleSection(SectionHeadings):
+    """
+    The sections of the shared rules, listed before any repository's own sections.
     """
 
     CODE_QUALITY_RULES = SectionHeading("Code Quality Rules", 1)
@@ -63,19 +83,6 @@ class RuleSection(Enum):
     VERSION_CONTROL = SectionHeading("Version Control", 2)
     MISC = SectionHeading("Misc", 2)
 
-    @property
-    def subsections(self) -> list[RuleSection]:
-        """
-        The sections nested under this one, at any depth.
-        """
-        sections = list(RuleSection)
-        nested = []
-        for section in sections[sections.index(self) + 1 :]:
-            if section.value.level <= self.value.level:
-                break
-            nested.append(section)
-        return nested
-
 
 # %% rules
 
@@ -86,9 +93,10 @@ class AgentRule:
     One rule agents follow, rendered as a Markdown list item.
     """
 
-    section: RuleSection
+    section: SectionHeadings
     """
-    The section ``AGENTS.md`` lists the rule under.
+    The section ``AGENTS.md`` lists the rule under, a shared :class:`RuleSection` or one
+    of the repository's own.
     """
 
     statement: str
@@ -125,6 +133,13 @@ class KrroodRule(AgentRule):
     """
 
 
+@dataclass(frozen=True)
+class ProjectRule(AgentRule):
+    """
+    A rule for one repository only, declared in that repository's rules file.
+    """
+
+
 class RuleCatalogue(Enum):
     """
     A set of rules, one member per rule, each member's value being its
@@ -132,7 +147,7 @@ class RuleCatalogue(Enum):
     """
 
     @classmethod
-    def rules_in(cls, section: RuleSection) -> list[AgentRule]:
+    def rules_in(cls, section: SectionHeadings) -> list[AgentRule]:
         """
         :param section: The section to collect.
         :return: The catalogue's rules for ``section``, in declaration order.

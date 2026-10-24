@@ -16,6 +16,7 @@ from typing_extensions import Sequence
 
 from krrood.development_tools.agent_instructions import (
     AgentsInstructions,
+    ProjectRulesModule,
     RepositoryInstructionsFile,
     RuleSet,
 )
@@ -39,7 +40,7 @@ class Subcommand(StrEnum):
 
     AGENTS_MD = "agents-md"
     """
-    Write the block of shared rules in the repository's ``AGENTS.md``.
+    Write the block of generated rules in the repository's ``AGENTS.md``.
     """
 
 
@@ -56,6 +57,11 @@ class Option(StrEnum):
     RULE_SETS = "--rule-sets"
     """
     Choose the rule sets a generated ``AGENTS.md`` contains.
+    """
+
+    PROJECT_RULES = "--project-rules"
+    """
+    Name the module declaring the repository's own rules.
     """
 
 
@@ -121,7 +127,7 @@ class CommandLine:
 
         agents_parser = subparsers.add_parser(
             Subcommand.AGENTS_MD,
-            help="Write the block of shared rules in AGENTS.md.",
+            help="Write the block of generated rules in AGENTS.md.",
         )
         agents_parser.add_argument(
             Option.CHECK,
@@ -135,6 +141,13 @@ class CommandLine:
             choices=list(RuleSet),
             default=list(RuleSet),
             help="The rule sets the block contains; all of them when omitted.",
+        )
+        agents_parser.add_argument(
+            Option.PROJECT_RULES,
+            type=Path,
+            default=Path(RepositoryInstructionsFile.PROJECT_RULES),
+            help="The module declaring the repository's own rules, relative to the "
+            "repository root; no own rules if it does not exist.",
         )
         agents_parser.set_defaults(run=self.generate_agents_instructions)
 
@@ -153,24 +166,27 @@ class CommandLine:
 
     def generate_agents_instructions(self, arguments: argparse.Namespace) -> ExitStatus:
         """
-        Write, or with :attr:`Option.CHECK` verify, the block of shared rules in the
+        Write, or with :attr:`Option.CHECK` verify, the block of generated rules in the
         ``AGENTS.md`` of the current directory.
 
         :param arguments: The parsed command line.
         :return: :attr:`ExitStatus.FAILURE` if the file was rewritten or is stale.
         """
-        catalogues = tuple(
+        shared_catalogues = tuple(
             rule_set.catalogue
             for rule_set in RuleSet
             if rule_set in arguments.rule_sets
         )
-        instructions = AgentsInstructions(Path.cwd(), catalogues)
+        project_rules = ProjectRulesModule(Path.cwd(), arguments.project_rules)
+        instructions = AgentsInstructions(
+            Path.cwd(), shared_catalogues + project_rules.catalogues
+        )
         if arguments.check:
             if instructions.is_current():
                 return ExitStatus.SUCCESS
             logger.error(
-                "The block of shared rules in %s is missing, out of date or edited by "
-                "hand. Change a shared rule in the module the comment above it names, "
+                "The block of generated rules in %s is missing, out of date or edited by "
+                "hand. Change a rule in the module the comment above it names, "
                 "never inside the block; then run `%s %s`.",
                 RepositoryInstructionsFile.AGENTS,
                 self.program_name,
