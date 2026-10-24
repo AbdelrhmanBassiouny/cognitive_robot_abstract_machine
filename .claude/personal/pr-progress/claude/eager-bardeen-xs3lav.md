@@ -1,11 +1,10 @@
 PR #517 (draft; head claude/festive-pascal-g09gl3, same commit as this branch): dev tools in krrood.
 
 Plan
-- krrood.development_tools: `krrood format`; `krrood agents-md` generates whole AGENTS.md (Jinja) from Section classes holding AgentRule attributes; RuleSet roots PythonRules/KrroodRules/ProjectRules (project = ProjectRules subclasses imported via repo agent_rules.py).
+- krrood.development_tools: `krrood format`; `krrood agents-md` generates whole AGENTS.md (Jinja) from sections = `Section(AgentRule, Enum)` enums (members are rules), nested via `parent` classproperty; rule sets = RuleSet subclasses (RuleSet.available); project sections imported via repo agent_rules.py.
 
 Done
-- Pushed a4c4f0c58: titles derived from class names (sentence case, acronyms kept), SectionWithoutTitle removed; 30 tool tests pass.
+- Pushed 5bdb9da78 (enum sections + parent nesting); all review threads resolved; 31 tool tests pass, AGENTS.md unchanged.
 
 Next
-- Await user on r4368270223 (subsections) + r4368285294 (Enum): proposed `class Section(AgentRule, Enum)` with members as str/(statement, details) and nesting via `parent` classproperty (Generic on Enum impossible: subscripting = member lookup). Implement on "go".
-- CI on a4c4f0c58 not yet seen.
+- CI on 5bdb9da78 not yet seen; wait for further review.
