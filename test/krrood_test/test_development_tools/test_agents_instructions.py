@@ -19,7 +19,6 @@ from krrood.development_tools.command_line import (
     Option,
     Subcommand,
 )
-from krrood.development_tools.exceptions import SectionWithoutTitle
 from krrood.development_tools.repository_files import RepositoryInstructionsFile
 from krrood.exceptions import DataclassException
 from krrood.patterns import path_enumeration
@@ -29,7 +28,7 @@ from .dataset.rule_sections import (
     Deployment,
     DesignPrinciples,
     Errors,
-    UntitledSubsection,
+    ReleasesThroughCI,
 )
 from .dataset_files import DatasetFile
 
@@ -45,7 +44,7 @@ def test_a_rule_set_lists_its_sections_and_their_rules(repository_root: Path) ->
 
 
 def test_a_subclass_of_a_section_is_its_subsection() -> None:
-    assert DesignPrinciples.subsections == [Errors, UntitledSubsection]
+    assert DesignPrinciples.subsections == [Errors]
 
 
 def test_a_section_lists_only_its_own_rules() -> None:
@@ -56,9 +55,8 @@ def test_a_section_without_rules_has_none_to_list() -> None:
     assert not Deployment.has_rules
 
 
-def test_a_section_without_a_title_of_its_own_is_rejected() -> None:
-    with pytest.raises(SectionWithoutTitle):
-        UntitledSubsection.heading
+def test_a_title_keeps_acronyms_in_capitals() -> None:
+    assert ReleasesThroughCI.title == "Releases through CI"
 
 
 def test_the_rule_sets_are_the_subsections_of_rule_set() -> None:

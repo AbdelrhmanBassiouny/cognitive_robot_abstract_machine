@@ -6,6 +6,7 @@ sets those sections form.
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,7 +14,6 @@ from types import ModuleType
 
 from typing_extensions import Any, Callable
 
-from krrood.development_tools.exceptions import SectionWithoutTitle
 from krrood.development_tools.repository_files import RepositoryInstructionsFile
 from krrood.ormatic.utils import classproperty
 
@@ -90,9 +90,18 @@ class Section:
     @classproperty
     def title(cls) -> str:
         """
-        The text of the section's heading.
+        The text of the section's heading: the words of the class name in sentence case,
+        keeping acronyms such as ``CI`` in capitals.
         """
-        raise SectionWithoutTitle(cls)
+        first_word, *other_words = re.findall(
+            r"[A-Z]+(?![a-z])|[A-Z][a-z0-9]*", cls.__name__
+        )
+        return " ".join(
+            [
+                first_word,
+                *(word if word.isupper() else word.lower() for word in other_words),
+            ]
+        )
 
     @classproperty
     def rules(cls) -> list[AgentRule]:
@@ -122,11 +131,7 @@ class Section:
         """
         The section's heading as a line of Markdown, one level deeper than the section
         it is nested under.
-
-        :raises SectionWithoutTitle: If the section declares no title of its own.
         """
-        if "title" not in vars(cls):
-            raise SectionWithoutTitle(cls)
         level = sum(
             1
             for base in cls.__mro__
@@ -165,19 +170,11 @@ class PythonRules(RuleSet):
     The rule set for any Python repository.
     """
 
-    @classproperty
-    def title(cls) -> str:
-        return "Python Rules"
-
 
 class KrroodRules(RuleSet):
     """
     The rule set for a repository built on krrood, naming the krrood API it uses.
     """
-
-    @classproperty
-    def title(cls) -> str:
-        return "krrood Rules"
 
 
 class ProjectRules(RuleSet):
@@ -186,10 +183,6 @@ class ProjectRules(RuleSet):
     :attr:`~krrood.development_tools.repository_files.RepositoryInstructionsFile.PROJECT_RULES`
     or in modules that one imports.
     """
-
-    @classproperty
-    def title(cls) -> str:
-        return "Project Rules"
 
     @classmethod
     def import_from(cls, repository_root: Path) -> ModuleType | None:

@@ -21,10 +21,6 @@ class ApplyingTheseRules(PythonRules):
     The rules on when and how far the other rules apply.
     """
 
-    @classproperty
-    def title(cls) -> str:
-        return "Applying These Rules"
-
     LEAVE_UNTOUCHED_CODE_ALONE = AgentRule(
         "Existing code that breaks these rules stays as it is unless a change "
         "touches it or the user asks for the cleanup. When you modify a function "
@@ -47,10 +43,6 @@ class AskTheDeveloper(PythonRules):
     The rules on what to ask the developer instead of deciding.
     """
 
-    @classproperty
-    def title(cls) -> str:
-        return "Ask the Developer"
-
     ASK_INSTEAD_OF_INVENTING_REASONS = AgentRule(
         "When you are unsure why something was done or why a specific number was "
         "chosen, ask; never invent a reason and write it down as a comment"
@@ -68,19 +60,11 @@ class Testing(PythonRules):
     The rules on tests.
     """
 
-    @classproperty
-    def title(cls) -> str:
-        return "Testing"
-
 
 class WritingTests(Testing):
     """
     The rules on writing tests.
     """
-
-    @classproperty
-    def title(cls) -> str:
-        return "Writing Tests"
 
     WRITE_TESTS_WITH_PYTEST = AgentRule(
         "Write tests with pytest: plain test functions or classes, pytest "
@@ -116,10 +100,6 @@ class Assertions(Testing):
     The rules on what a test asserts.
     """
 
-    @classproperty
-    def title(cls) -> str:
-        return "Assertions"
-
     ASSERT_EXACT_EXPECTED_VALUES = AgentRule(
         "Assert equality to the expected value whenever it can be determined, "
         "never only a weaker check such as not-None or not-empty"
@@ -148,10 +128,6 @@ class ExternalServicesAndCI(Testing):
     The rules on tests that reach external services, and on tests in CI.
     """
 
-    @classproperty
-    def title(cls) -> str:
-        return "External Services and CI"
-
     EVERY_TEST_RUNS_IN_CI = AgentRule(
         "Every added test is part of the CI suite. A test that needs live external "
         "calls or credentials CI does not have is skipped there (or removed, if "
@@ -179,10 +155,6 @@ class RunningTests(Testing):
     The rules on running tests.
     """
 
-    @classproperty
-    def title(cls) -> str:
-        return "Running Tests"
-
     RUN_TESTS_WITH_PYTEST = AgentRule("Run tests with pytest")
 
     RUN_THE_SUITE_IN_PARTS = AgentRule(
@@ -203,10 +175,6 @@ class CodeStyle(PythonRules):
     """
     The rules on the shape of code.
     """
-
-    @classproperty
-    def title(cls) -> str:
-        return "Code Style"
 
     USE_DATACLASSES = AgentRule("Always use dataclasses")
 
@@ -247,10 +215,6 @@ class Naming(CodeStyle):
     """
     The rules on naming.
     """
-
-    @classproperty
-    def title(cls) -> str:
-        return "Naming"
 
     CORRECT_SIMPLE_DESCRIPTIVE_NAMES = AgentRule(
         "Names are technically correct, simple and descriptive, in that order. An "
@@ -340,10 +304,6 @@ class Imports(PythonRules):
     The rules on imports.
     """
 
-    @classproperty
-    def title(cls) -> str:
-        return "Imports"
-
     ABSOLUTE_IMPORTS = AgentRule(
         "Imports are absolute. Exception: a test imports another test module (a "
         "shared mimic or fixture from the test datasets) relatively"
@@ -361,10 +321,6 @@ class DesignPrinciples(PythonRules):
     """
     The rules on the design of classes and modules.
     """
-
-    @classproperty
-    def title(cls) -> str:
-        return "Design Principles"
 
     OBJECT_ORIENTED_AND_SOLID = AgentRule(
         "Use strictly object-oriented design and always apply the SOLID principles:",
@@ -401,10 +357,6 @@ class Methods(DesignPrinciples):
     """
     The rules on methods.
     """
-
-    @classproperty
-    def title(cls) -> str:
-        return "Methods"
 
     EXTRACT_METHODS_THAT_EARN_THEIR_ABSTRACTION = AgentRule(
         "Every method hides what actually runs from the reader, so extract one "
@@ -443,10 +395,6 @@ class Errors(DesignPrinciples):
     The rules on raising and declaring exceptions.
     """
 
-    @classproperty
-    def title(cls) -> str:
-        return "Errors"
-
     NEVER_TRY_EXCEPT = AgentRule(
         "Never use try-except; a program in an illegal state raises an appropriate "
         "exception"
@@ -482,10 +430,6 @@ class ConstantsAndClassLevelValues(DesignPrinciples):
     The rules on constants and values shared by a class.
     """
 
-    @classproperty
-    def title(cls) -> str:
-        return "Constants and Class-Level Values"
-
     NO_GLOBAL_OR_CLASS_VARIABLES = AgentRule(
         "Never use global variables, module-level constants or "
         f"{CodeReference(ClassVar).name}. Instead:",
@@ -512,10 +456,6 @@ class StructuredData(DesignPrinciples):
     """
     The rules on representing data with structure instead of bare literals.
     """
-
-    @classproperty
-    def title(cls) -> str:
-        return "Structured Data"
 
     PREFER_STRUCTURED_DATA = AgentRule(
         "Structured data is the default over bare strings, hardcoded values and "
@@ -565,10 +505,6 @@ class TypeHints(PythonRules):
     The rules on type hints.
     """
 
-    @classproperty
-    def title(cls) -> str:
-        return "Type Hints"
-
     ANNOTATE_EVERYTHING = AgentRule(
         "Every parameter and return value has an accurate type hint, "
         f"{CodeReference(Any).name} and `-> "
@@ -597,10 +533,6 @@ class Documentation(PythonRules):
     """
     The rules on docstrings and comments.
     """
-
-    @classproperty
-    def title(cls) -> str:
-        return "Documentation"
 
     DOCUMENT_EVERYTHING = AgentRule(
         "Every class and method has meaningful, non-trivial documentation in "
@@ -663,10 +595,6 @@ class VersionControl(PythonRules):
     The rules on commits, pushes and pull requests.
     """
 
-    @classproperty
-    def title(cls) -> str:
-        return "Version Control"
-
     AUTHOR_AS_THE_HUMAN = AgentRule(
         "Author commits as the human user running the tool, with their own "
         "configured git `user.name` and `user.email`. Never author or amend a "
@@ -704,10 +632,6 @@ class Miscellaneous(PythonRules):
     """
     The rules that fit no other section.
     """
-
-    @classproperty
-    def title(cls) -> str:
-        return "Miscellaneous"
 
     USE_THE_PROJECT_INTERPRETER = AgentRule(
         "Always use the project's configured Python interpreter for tests and commands"

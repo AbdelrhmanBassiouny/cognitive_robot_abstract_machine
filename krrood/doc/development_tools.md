@@ -21,8 +21,9 @@ for formatting hooks.
 The rules are code. A rule set is a subclass of `RuleSet` and becomes a top-level heading
 of `AGENTS.md`. A section is a subclass of its rule set, and a subsection subclasses the
 section it is nested under, so `Errors` subclasses `DesignPrinciples`, which subclasses
-`PythonRules`. Each section declares its `title` and lists its rules as class attributes
-holding an `AgentRule`: a statement and any details that spell it out. For example,
+`PythonRules`. A section's heading is its class name in words, in sentence case
+(`ExternalServicesAndCI` becomes "External services and CI"), and it lists its rules as
+class attributes holding an `AgentRule`: a statement and any details that spell it out. For example,
 `Errors.NEVER_TRY_EXCEPT` is one of the Python rules on errors. A rule that names code
 builds that name from the imported object with `CodeReference`, so the rule follows a
 rename.
@@ -86,18 +87,13 @@ rather than krrood.
 A repository's own rules are code too. Declare them as sections of `ProjectRules` in
 `agent_rules.py` at the repository root, or in modules that one imports; `krrood
 agents-md` imports that module, and every subclass of `ProjectRules` it declares becomes
-a section under "Project Rules":
+a section under "Project rules":
 
 ```python
 from krrood.development_tools.agent_rule import AgentRule, ProjectRules
-from krrood.ormatic.utils import classproperty
 
 
 class Deployment(ProjectRules):
-    @classproperty
-    def title(cls) -> str:
-        return "Deployment"
-
     DEPLOY_FROM_TAGS = AgentRule("Deploy only tagged commits")
 ```
 

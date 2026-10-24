@@ -6,17 +6,12 @@ after the shared rule sets.
 from __future__ import annotations
 
 from krrood.development_tools.agent_rule import AgentRule, ProjectRules
-from krrood.ormatic.utils import classproperty
 
 
 class RunningTests(ProjectRules):
     """
     The rules on running this repository's tests.
     """
-
-    @classproperty
-    def title(cls) -> str:
-        return "Running Tests"
 
     NEVER_BUILD_ORM_INTERFACES_IN_TEST_RUNS = AgentRule(
         (
@@ -26,14 +21,10 @@ class RunningTests(ProjectRules):
     )
 
 
-class GeneratedOrmInterfaces(ProjectRules):
+class GeneratedORMInterfaces(ProjectRules):
     """
     The rules on the generated ORM interfaces.
     """
-
-    @classproperty
-    def title(cls) -> str:
-        return "Generated ORM Interfaces"
 
     NEVER_EDIT_ORM_INTERFACES = AgentRule(
         (
@@ -78,10 +69,6 @@ class KrroodIsolation(ProjectRules):
     The rules keeping krrood independent of the other workspace packages.
     """
 
-    @classproperty
-    def title(cls) -> str:
-        return "krrood Isolation"
-
     KRROOD_IMPORTS_NO_WORKSPACE_PACKAGE = AgentRule(
         (
             "`krrood`, including its tests under `test/krrood_test`, never imports "
@@ -113,10 +100,6 @@ class DomainSpecificConventions(ProjectRules):
     """
     The rules pointing to the conventions of one domain.
     """
-
-    @classproperty
-    def title(cls) -> str:
-        return "Domain-Specific Conventions"
 
     FOLLOW_THE_SPATIAL_STYLE_GUIDE = AgentRule(
         (
