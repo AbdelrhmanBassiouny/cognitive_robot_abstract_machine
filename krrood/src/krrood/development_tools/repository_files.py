@@ -14,11 +14,12 @@ class RepositoryInstructionsFile(StrEnum):
 
     AGENTS = "AGENTS.md"
     """
-    The instructions agents read, holding the block of generated rules.
+    The instructions agents read, generated from the rule sets.
     """
 
     PROJECT_RULES = "agent_rules.py"
     """
-    The module declaring the repository's own rules as subclasses of
-    :class:`~krrood.development_tools.agent_rule.ProjectRules`.
+    The module ``krrood agents-md`` imports to find the repository's own rules: the
+    subclasses of :class:`~krrood.development_tools.agent_rule.ProjectRules` it declares
+    or imports.
     """

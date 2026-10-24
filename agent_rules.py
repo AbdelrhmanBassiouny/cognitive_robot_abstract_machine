@@ -1,64 +1,22 @@
 """
 The rules for this repository only, which ``krrood agents-md`` writes into ``AGENTS.md``
-alongside the shared rules.
+after the shared rule sets.
 """
 
 from __future__ import annotations
 
-from krrood.development_tools.agent_rule import AgentRule, ProjectRules, Section
-from krrood.development_tools.rules.sections import RunningTests
+from krrood.development_tools.agent_rule import AgentRule, ProjectRules
 from krrood.ormatic.utils import classproperty
 
-# %% sections
 
-
-class CramProjectRules(Section):
-    """
-    The rules for this repository only, listed after the shared sections.
-    """
-
-    @classproperty
-    def title(cls) -> str:
-        return "Project Rules"
-
-
-class GeneratedOrmInterfaces(CramProjectRules):
-    """
-    The rules on the ORM interfaces ORMatic generates.
-    """
-
-    @classproperty
-    def title(cls) -> str:
-        return "Generated ORM Interfaces"
-
-
-class KrroodIsolation(CramProjectRules):
-    """
-    The rules keeping krrood independent of the other workspace packages.
-    """
-
-    @classproperty
-    def title(cls) -> str:
-        return "krrood Isolation"
-
-
-class DomainSpecificConventions(CramProjectRules):
-    """
-    The rules pointing to the conventions of one domain.
-    """
-
-    @classproperty
-    def title(cls) -> str:
-        return "Domain-Specific Conventions"
-
-
-# %% rules
-
-
-class CramRunningTests(RunningTests, ProjectRules):
+class RunningTests(ProjectRules):
     """
     The rules on running this repository's tests.
     """
+
+    @classproperty
+    def title(cls) -> str:
+        return "Running Tests"
 
     NEVER_BUILD_ORM_INTERFACES_IN_TEST_RUNS = AgentRule(
         (
@@ -68,10 +26,14 @@ class CramRunningTests(RunningTests, ProjectRules):
     )
 
 
-class OrmInterfaceRules(GeneratedOrmInterfaces, ProjectRules):
+class GeneratedOrmInterfaces(ProjectRules):
     """
     The rules on the generated ORM interfaces.
     """
+
+    @classproperty
+    def title(cls) -> str:
+        return "Generated ORM Interfaces"
 
     NEVER_EDIT_ORM_INTERFACES = AgentRule(
         (
@@ -111,10 +73,14 @@ class OrmInterfaceRules(GeneratedOrmInterfaces, ProjectRules):
     )
 
 
-class KrroodIsolationRules(KrroodIsolation, ProjectRules):
+class KrroodIsolation(ProjectRules):
     """
     The rules keeping krrood independent of the other workspace packages.
     """
+
+    @classproperty
+    def title(cls) -> str:
+        return "krrood Isolation"
 
     KRROOD_IMPORTS_NO_WORKSPACE_PACKAGE = AgentRule(
         (
@@ -143,10 +109,14 @@ class KrroodIsolationRules(KrroodIsolation, ProjectRules):
     )
 
 
-class DomainConventionRules(DomainSpecificConventions, ProjectRules):
+class DomainSpecificConventions(ProjectRules):
     """
     The rules pointing to the conventions of one domain.
     """
+
+    @classproperty
+    def title(cls) -> str:
+        return "Domain-Specific Conventions"
 
     FOLLOW_THE_SPATIAL_STYLE_GUIDE = AgentRule(
         (

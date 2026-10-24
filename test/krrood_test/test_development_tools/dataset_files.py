@@ -38,25 +38,18 @@ class DatasetFile(PathEnumeration):
     A module ruff rejects.
     """
 
-    INTRODUCTION = Path(__file__).parent / "dataset" / "introduction.md"
-    """
-    Hand-written text an ``AGENTS.md`` under test holds before its block of shared
-    rules.
-    """
-
     HAND_WRITTEN_RULES = Path(__file__).parent / "dataset" / "hand_written_rules.md"
     """
-    Hand-written rules an ``AGENTS.md`` under test holds after its block of shared
-    rules.
+    An ``AGENTS.md`` written by hand.
     """
 
     PROJECT_RULES_MODULE = Path(__file__).parent / "dataset" / "project_rules_module.py"
     """
-    A module declaring a repository's own rules, one in a shared section and one in a
-    section of its own.
+    A module declaring a repository's own rules.
     """
 
-    PROJECT_RULES_TEXT = Path(__file__).parent / "dataset" / "project_rules_text.md"
+    RULE_SECTIONS_TEXT = Path(__file__).parent / "dataset" / "rule_sections_text.md"
     """
-    The rules text of :attr:`PROJECT_RULES_MODULE`'s rules alone.
+    The ``AGENTS.md`` listing only the rule set of ``dataset/rule_sections.py``, with
+    ``{source_path}`` standing for the path of that module.
     """

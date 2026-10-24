@@ -14,8 +14,8 @@
 - id: krrood-agents-md
   name: Update the rules in AGENTS.md
   description: >
-    Rewrites the marked block of rules in AGENTS.md from the rules krrood ships and
-    the repository's own rules in agent_rules.py, keeping the text around the block.
+    Generates AGENTS.md from the rules krrood ships and the repository's own rules
+    in agent_rules.py.
   entry: krrood agents-md
   language: system
   pass_filenames: false

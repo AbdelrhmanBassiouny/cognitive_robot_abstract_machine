@@ -1,21 +1,19 @@
 """
-The rules agents follow, the sections ``AGENTS.md`` groups them under and the rule sets
-they belong to.
+The rules agents follow, the sections of ``AGENTS.md`` that declare them and the rule
+sets those sections form.
 """
 
 from __future__ import annotations
 
+import importlib.util
+import sys
 from dataclasses import dataclass
-from enum import Enum
 from pathlib import Path
 from types import ModuleType
 
 from typing_extensions import Any, Callable
 
-from krrood.development_tools.exceptions import (
-    CatalogueWithoutSection,
-    SectionWithoutTitle,
-)
+from krrood.development_tools.exceptions import SectionWithoutTitle
 from krrood.development_tools.repository_files import RepositoryInstructionsFile
 from krrood.ormatic.utils import classproperty
 
@@ -60,48 +58,6 @@ class CodeReference:
         return f"`{self.target.__name__}`"
 
 
-# %% sections
-
-
-class Section:
-    """
-    A section of the rules in ``AGENTS.md``. A subclass of a section is a subsection
-    nested under it, unless it is a :class:`RuleCatalogue`, which holds rules of the
-    section instead.
-    """
-
-    @classproperty
-    def title(cls) -> str:
-        """
-        The text of the section's heading.
-        """
-        raise SectionWithoutTitle(cls)
-
-    @classproperty
-    def subsections(cls) -> list[type[Section]]:
-        """
-        The sections nested directly under this one, in definition order.
-        """
-        return [
-            subclass
-            for subclass in cls.__subclasses__()
-            if not issubclass(subclass, RuleCatalogue)
-        ]
-
-    @classproperty
-    def heading(cls) -> str:
-        """
-        The section's heading as a line of Markdown, one level deeper than the section
-        it is nested under.
-        """
-        level = sum(
-            1
-            for base in cls.__mro__
-            if issubclass(base, Section) and base is not Section
-        )
-        return f"{'#' * level} {cls.title}"
-
-
 # %% rules
 
 
@@ -122,32 +78,67 @@ class AgentRule:
     """
 
 
-class RuleCatalogue(Enum):
+# %% sections
+
+
+class Section:
     """
-    The rules of one rule set in one section, one member per rule, each member's value
-    being its :class:`AgentRule`. A catalogue subclasses its rule set and the
-    :class:`Section` its rules belong to.
+    A section of ``AGENTS.md``, listing the rules declared as its class attributes. A
+    subclass of a section is a subsection nested under it.
     """
 
     @classproperty
-    def section(cls) -> type[Section]:
+    def title(cls) -> str:
         """
-        The section the catalogue's rules belong to.
+        The text of the section's heading.
         """
-        sections = [
-            base
+        raise SectionWithoutTitle(cls)
+
+    @classproperty
+    def rules(cls) -> list[AgentRule]:
+        """
+        The rules the section lists directly, in declaration order.
+        """
+        return [rule for rule in vars(cls).values() if isinstance(rule, AgentRule)]
+
+    @classproperty
+    def subsections(cls) -> list[type[Section]]:
+        """
+        The sections nested directly under this one, in definition order.
+        """
+        return cls.__subclasses__()
+
+    @classproperty
+    def has_rules(cls) -> bool:
+        """
+        Whether the section lists any rule, directly or in a subsection.
+        """
+        return bool(cls.rules) or any(
+            subsection.has_rules for subsection in cls.subsections
+        )
+
+    @classproperty
+    def heading(cls) -> str:
+        """
+        The section's heading as a line of Markdown, one level deeper than the section
+        it is nested under.
+
+        :raises SectionWithoutTitle: If the section declares no title of its own.
+        """
+        if "title" not in vars(cls):
+            raise SectionWithoutTitle(cls)
+        level = sum(
+            1
             for base in cls.__mro__
-            if issubclass(base, Section) and not issubclass(base, RuleCatalogue)
-        ]
-        if not sections:
-            raise CatalogueWithoutSection(cls)
-        return sections[0]
+            if issubclass(base, Section) and base not in (Section, RuleSet)
+        )
+        return f"{'#' * level} {cls.title}"
 
     @classproperty
     def source_path(cls) -> Path:
         """
-        The path of the module declaring the catalogue, relative to the directory of
-        its top-level package.
+        The path of the module declaring the section, relative to the directory its
+        top-level package or module lies in.
         """
         return Path(*cls.__module__.split(".")).with_suffix(".py")
 
@@ -155,27 +146,68 @@ class RuleCatalogue(Enum):
 # %% rule sets
 
 
-class PythonRules(RuleCatalogue):
+class RuleSet(Section):
+    """
+    A set of rules a repository adopts as a whole: a top-level section of
+    ``AGENTS.md``. The rule sets are the subsections of this class.
+    """
+
+    @classproperty
+    def command_line_name(cls) -> str:
+        """
+        The name the command line chooses the rule set by.
+        """
+        return cls.__name__.removesuffix("Rules").lower()
+
+
+class PythonRules(RuleSet):
     """
     The rule set for any Python repository.
     """
 
+    @classproperty
+    def title(cls) -> str:
+        return "Python Rules"
 
-class KrroodRules(RuleCatalogue):
+
+class KrroodRules(RuleSet):
     """
     The rule set for a repository built on krrood, naming the krrood API it uses.
     """
 
+    @classproperty
+    def title(cls) -> str:
+        return "krrood Rules"
 
-class ProjectRules(RuleCatalogue):
+
+class ProjectRules(RuleSet):
     """
-    The rule set of one repository only, declared in that repository's
-    :attr:`~krrood.development_tools.repository_files.RepositoryInstructionsFile.PROJECT_RULES`.
+    The rule set of one repository only, whose sections the repository declares in its
+    :attr:`~krrood.development_tools.repository_files.RepositoryInstructionsFile.PROJECT_RULES`
+    or in modules that one imports.
     """
 
     @classproperty
-    def source_path(cls) -> Path:
+    def title(cls) -> str:
+        return "Project Rules"
+
+    @classmethod
+    def import_from(cls, repository_root: Path) -> ModuleType | None:
         """
-        The repository's rules module, relative to the repository root.
+        Import the repository's rules module, once per process, which declares the
+        repository's sections.
+
+        :param repository_root: The directory holding the module.
+        :return: The module; none if the repository has no such module.
         """
-        return Path(RepositoryInstructionsFile.PROJECT_RULES)
+        path = repository_root / RepositoryInstructionsFile.PROJECT_RULES
+        if not path.is_file():
+            return None
+        module_name = path.stem
+        if module_name in sys.modules:
+            return sys.modules[module_name]
+        specification = importlib.util.spec_from_file_location(module_name, path)
+        module = importlib.util.module_from_spec(specification)
+        sys.modules[module_name] = module
+        specification.loader.exec_module(module)
+        return module

@@ -1,5 +1,5 @@
 """
-The rules for a repository built on krrood, one catalogue per section.
+The rules for a repository built on krrood, one section per class.
 """
 
 from __future__ import annotations
@@ -15,22 +15,20 @@ from krrood.adapters.json_serializer import (
     SubclassJSONSerializer,
 )
 from krrood.development_tools.agent_rule import AgentRule, CodeReference, KrroodRules
-from krrood.development_tools.rules.sections import (
-    Errors,
-    ConstantsAndClassLevelValues,
-    StructuredData,
-    TypeHints,
-)
 from krrood.exceptions import DataclassException
 from krrood.ormatic.utils import classproperty
 from krrood.patterns.path_enumeration import PathEnumeration
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 
 
-class KrroodErrors(Errors, KrroodRules):
+class Errors(KrroodRules):
     """
     The krrood rules on errors.
     """
+
+    @classproperty
+    def title(cls) -> str:
+        return "Errors"
 
     SUBCLASS_DATACLASS_EXCEPTION = AgentRule(
         f"Custom exceptions subclass {CodeReference(DataclassException).path}, "
@@ -39,10 +37,14 @@ class KrroodErrors(Errors, KrroodRules):
     )
 
 
-class KrroodConstantsAndClassLevelValues(ConstantsAndClassLevelValues, KrroodRules):
+class ConstantsAndClassLevelValues(KrroodRules):
     """
     The krrood rules on constants and class-level values.
     """
+
+    @classproperty
+    def title(cls) -> str:
+        return "Constants and Class-Level Values"
 
     USE_KRROOD_CLASSPROPERTY = AgentRule(
         f"Use the {CodeReference(classproperty).name} {CodeReference(krrood).name} "
@@ -50,10 +52,14 @@ class KrroodConstantsAndClassLevelValues(ConstantsAndClassLevelValues, KrroodRul
     )
 
 
-class KrroodStructuredData(StructuredData, KrroodRules):
+class StructuredData(KrroodRules):
     """
     The krrood rules on structured data.
     """
+
+    @classproperty
+    def title(cls) -> str:
+        return "Structured Data"
 
     PATH_ENUMS_SUBCLASS_PATH_ENUMERATION = AgentRule(
         f"A path enum subclasses {CodeReference(PathEnumeration).path}, so every "
@@ -76,10 +82,14 @@ class KrroodStructuredData(StructuredData, KrroodRules):
     )
 
 
-class KrroodTypeHints(TypeHints, KrroodRules):
+class TypeHints(KrroodRules):
     """
     The krrood rules on type hints.
     """
+
+    @classproperty
+    def title(cls) -> str:
+        return "Type Hints"
 
     SUBCLASS_SAFE_GENERICS = AgentRule(
         f"Generic classes inherit {CodeReference(Generic).name} and then "

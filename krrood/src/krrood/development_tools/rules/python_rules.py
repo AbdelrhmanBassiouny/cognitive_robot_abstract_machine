@@ -1,5 +1,5 @@
 """
-The rules for any Python repository, one catalogue per section.
+The rules for any Python repository, one section per class.
 """
 
 from __future__ import annotations
@@ -13,33 +13,17 @@ import typing_extensions
 from typing_extensions import Any, ClassVar, Protocol
 
 from krrood.development_tools.agent_rule import AgentRule, CodeReference, PythonRules
-from krrood.development_tools.rules.sections import (
-    ApplyingTheseRules,
-    AskTheDeveloper,
-    WritingTests,
-    Assertions,
-    ExternalServicesAndCI,
-    RunningTests,
-    CodeStyle,
-    Naming,
-    Imports,
-    DesignPrinciples,
-    Methods,
-    Errors,
-    ConstantsAndClassLevelValues,
-    StructuredData,
-    TypeHints,
-    Documentation,
-    VersionControl,
-    Misc,
-)
 from krrood.ormatic.utils import classproperty
 
 
-class PythonApplyingTheseRules(ApplyingTheseRules, PythonRules):
+class ApplyingTheseRules(PythonRules):
     """
-    The Python rules on applying these rules.
+    The rules on when and how far the other rules apply.
     """
+
+    @classproperty
+    def title(cls) -> str:
+        return "Applying These Rules"
 
     LEAVE_UNTOUCHED_CODE_ALONE = AgentRule(
         "Existing code that breaks these rules stays as it is unless a change "
@@ -58,10 +42,14 @@ class PythonApplyingTheseRules(ApplyingTheseRules, PythonRules):
     )
 
 
-class PythonAskTheDeveloper(AskTheDeveloper, PythonRules):
+class AskTheDeveloper(PythonRules):
     """
-    The Python rules on what to ask the developer.
+    The rules on what to ask the developer instead of deciding.
     """
+
+    @classproperty
+    def title(cls) -> str:
+        return "Ask the Developer"
 
     ASK_INSTEAD_OF_INVENTING_REASONS = AgentRule(
         "When you are unsure why something was done or why a specific number was "
@@ -75,10 +63,24 @@ class PythonAskTheDeveloper(AskTheDeveloper, PythonRules):
     ASK_BEFORE_ADDING_DEPENDENCIES = AgentRule("Before adding a new dependency, ask")
 
 
-class PythonWritingTests(WritingTests, PythonRules):
+class Testing(PythonRules):
     """
-    The Python rules on writing tests.
+    The rules on tests.
     """
+
+    @classproperty
+    def title(cls) -> str:
+        return "Testing"
+
+
+class WritingTests(Testing):
+    """
+    The rules on writing tests.
+    """
+
+    @classproperty
+    def title(cls) -> str:
+        return "Writing Tests"
 
     WRITE_TESTS_WITH_PYTEST = AgentRule(
         "Write tests with pytest: plain test functions or classes, pytest "
@@ -109,10 +111,14 @@ class PythonWritingTests(WritingTests, PythonRules):
     )
 
 
-class PythonAssertions(Assertions, PythonRules):
+class Assertions(Testing):
     """
-    The Python rules on assertions.
+    The rules on what a test asserts.
     """
+
+    @classproperty
+    def title(cls) -> str:
+        return "Assertions"
 
     ASSERT_EXACT_EXPECTED_VALUES = AgentRule(
         "Assert equality to the expected value whenever it can be determined, "
@@ -137,10 +143,14 @@ class PythonAssertions(Assertions, PythonRules):
     )
 
 
-class PythonExternalServicesAndCI(ExternalServicesAndCI, PythonRules):
+class ExternalServicesAndCI(Testing):
     """
-    The Python rules on external services and CI.
+    The rules on tests that reach external services, and on tests in CI.
     """
+
+    @classproperty
+    def title(cls) -> str:
+        return "External Services and CI"
 
     EVERY_TEST_RUNS_IN_CI = AgentRule(
         "Every added test is part of the CI suite. A test that needs live external "
@@ -164,10 +174,14 @@ class PythonExternalServicesAndCI(ExternalServicesAndCI, PythonRules):
     )
 
 
-class PythonRunningTests(RunningTests, PythonRules):
+class RunningTests(Testing):
     """
-    The Python rules on running tests.
+    The rules on running tests.
     """
+
+    @classproperty
+    def title(cls) -> str:
+        return "Running Tests"
 
     RUN_TESTS_WITH_PYTEST = AgentRule("Run tests with pytest")
 
@@ -185,10 +199,14 @@ class PythonRunningTests(RunningTests, PythonRules):
     )
 
 
-class PythonCodeStyle(CodeStyle, PythonRules):
+class CodeStyle(PythonRules):
     """
-    The Python rules on code style.
+    The rules on the shape of code.
     """
+
+    @classproperty
+    def title(cls) -> str:
+        return "Code Style"
 
     USE_DATACLASSES = AgentRule("Always use dataclasses")
 
@@ -225,10 +243,14 @@ class PythonCodeStyle(CodeStyle, PythonRules):
     )
 
 
-class PythonNaming(Naming, PythonRules):
+class Naming(CodeStyle):
     """
-    The Python rules on naming.
+    The rules on naming.
     """
+
+    @classproperty
+    def title(cls) -> str:
+        return "Naming"
 
     CORRECT_SIMPLE_DESCRIPTIVE_NAMES = AgentRule(
         "Names are technically correct, simple and descriptive, in that order. An "
@@ -313,10 +335,14 @@ class PythonNaming(Naming, PythonRules):
     )
 
 
-class PythonImports(Imports, PythonRules):
+class Imports(PythonRules):
     """
-    The Python rules on imports.
+    The rules on imports.
     """
+
+    @classproperty
+    def title(cls) -> str:
+        return "Imports"
 
     ABSOLUTE_IMPORTS = AgentRule(
         "Imports are absolute. Exception: a test imports another test module (a "
@@ -331,10 +357,14 @@ class PythonImports(Imports, PythonRules):
     GUARD_TYPE_ONLY_IMPORTS = AgentRule("Guard type-only imports with `TYPE_CHECKING`")
 
 
-class PythonDesignPrinciples(DesignPrinciples, PythonRules):
+class DesignPrinciples(PythonRules):
     """
-    The Python rules on design principles.
+    The rules on the design of classes and modules.
     """
+
+    @classproperty
+    def title(cls) -> str:
+        return "Design Principles"
 
     OBJECT_ORIENTED_AND_SOLID = AgentRule(
         "Use strictly object-oriented design and always apply the SOLID principles:",
@@ -367,10 +397,14 @@ class PythonDesignPrinciples(DesignPrinciples, PythonRules):
     HARD_TO_MISUSE_INTERFACES = AgentRule("Make interfaces hard to misuse")
 
 
-class PythonMethods(Methods, PythonRules):
+class Methods(DesignPrinciples):
     """
-    The Python rules on methods.
+    The rules on methods.
     """
+
+    @classproperty
+    def title(cls) -> str:
+        return "Methods"
 
     EXTRACT_METHODS_THAT_EARN_THEIR_ABSTRACTION = AgentRule(
         "Every method hides what actually runs from the reader, so extract one "
@@ -404,10 +438,14 @@ class PythonMethods(Methods, PythonRules):
     )
 
 
-class PythonErrors(Errors, PythonRules):
+class Errors(DesignPrinciples):
     """
-    The Python rules on errors.
+    The rules on raising and declaring exceptions.
     """
+
+    @classproperty
+    def title(cls) -> str:
+        return "Errors"
 
     NEVER_TRY_EXCEPT = AgentRule(
         "Never use try-except; a program in an illegal state raises an appropriate "
@@ -439,10 +477,14 @@ class PythonErrors(Errors, PythonRules):
     )
 
 
-class PythonConstantsAndClassLevelValues(ConstantsAndClassLevelValues, PythonRules):
+class ConstantsAndClassLevelValues(DesignPrinciples):
     """
-    The Python rules on constants and class-level values.
+    The rules on constants and values shared by a class.
     """
+
+    @classproperty
+    def title(cls) -> str:
+        return "Constants and Class-Level Values"
 
     NO_GLOBAL_OR_CLASS_VARIABLES = AgentRule(
         "Never use global variables, module-level constants or "
@@ -466,10 +508,14 @@ class PythonConstantsAndClassLevelValues(ConstantsAndClassLevelValues, PythonRul
     )
 
 
-class PythonStructuredData(StructuredData, PythonRules):
+class StructuredData(DesignPrinciples):
     """
-    The Python rules on structured data.
+    The rules on representing data with structure instead of bare literals.
     """
+
+    @classproperty
+    def title(cls) -> str:
+        return "Structured Data"
 
     PREFER_STRUCTURED_DATA = AgentRule(
         "Structured data is the default over bare strings, hardcoded values and "
@@ -514,10 +560,14 @@ class PythonStructuredData(StructuredData, PythonRules):
     )
 
 
-class PythonTypeHints(TypeHints, PythonRules):
+class TypeHints(PythonRules):
     """
-    The Python rules on type hints.
+    The rules on type hints.
     """
+
+    @classproperty
+    def title(cls) -> str:
+        return "Type Hints"
 
     ANNOTATE_EVERYTHING = AgentRule(
         "Every parameter and return value has an accurate type hint, "
@@ -543,10 +593,14 @@ class PythonTypeHints(TypeHints, PythonRules):
     )
 
 
-class PythonDocumentation(Documentation, PythonRules):
+class Documentation(PythonRules):
     """
-    The Python rules on documentation.
+    The rules on docstrings and comments.
     """
+
+    @classproperty
+    def title(cls) -> str:
+        return "Documentation"
 
     DOCUMENT_EVERYTHING = AgentRule(
         "Every class and method has meaningful, non-trivial documentation in "
@@ -604,10 +658,14 @@ class PythonDocumentation(Documentation, PythonRules):
     )
 
 
-class PythonVersionControl(VersionControl, PythonRules):
+class VersionControl(PythonRules):
     """
-    The Python rules on version control.
+    The rules on commits, pushes and pull requests.
     """
+
+    @classproperty
+    def title(cls) -> str:
+        return "Version Control"
 
     AUTHOR_AS_THE_HUMAN = AgentRule(
         "Author commits as the human user running the tool, with their own "
@@ -642,10 +700,14 @@ class PythonVersionControl(VersionControl, PythonRules):
     )
 
 
-class PythonMisc(Misc, PythonRules):
+class Miscellaneous(PythonRules):
     """
-    The Python rules on anything no other section covers.
+    The rules that fit no other section.
     """
+
+    @classproperty
+    def title(cls) -> str:
+        return "Miscellaneous"
 
     USE_THE_PROJECT_INTERPRETER = AgentRule(
         "Always use the project's configured Python interpreter for tests and commands"
