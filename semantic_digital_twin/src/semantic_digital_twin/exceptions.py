@@ -30,7 +30,8 @@ if TYPE_CHECKING:
         HasRootBody,
         HasSupportingSurface,
     )
-    from semantic_digital_twin.grasping.grasp_candidates import HasGraspCandidates
+    from semantic_digital_twin.semantic_annotations.mixins import HasGraspCandidates
+    from semantic_digital_twin.grasping.surface_grasp import SurfaceGrasp
     from semantic_digital_twin.robots.robot_parts import (
         AbstractRobot,
         AbstractRobotPart,
@@ -544,6 +545,49 @@ class MissingConnectionAxisError(UsageError):
 
     def suggest_correction(self) -> str:
         return "pass a movement axis via the 'axis' keyword argument."
+
+
+@dataclass
+class MissingURDFJointAxisError(UsageError):
+    """
+    Raised when a movable URDF joint declares no axis to move along.
+    """
+
+    joint_name: str
+    """
+    The name of the joint that declares no axis.
+    """
+
+    joint_type: str
+    """
+    The URDF type of the joint.
+    """
+
+    def error_message(self) -> str:
+        return f"The {self.joint_type} URDF joint '{self.joint_name}' declares no axis."
+
+    def suggest_correction(self) -> str:
+        return (
+            'declare the axis the joint moves along with an <axis xyz="..."/> element.'
+        )
+
+
+@dataclass
+class ZeroLengthURDFJointAxisError(UsageError):
+    """
+    Raised when a URDF joint declares an axis of zero length, which names no direction.
+    """
+
+    joint_name: str
+    """
+    The name of the joint whose axis has zero length.
+    """
+
+    def error_message(self) -> str:
+        return f"The URDF joint '{self.joint_name}' declares an axis of zero length."
+
+    def suggest_correction(self) -> str:
+        return "declare a non-zero axis for the joint."
 
 
 @dataclass
@@ -1283,14 +1327,14 @@ class InsufficientVectorsError(SpatialTypesError):
 
 @dataclass
 class ReferenceFrameMismatchError(SpatialTypesError):
-    expected_frame: KinematicStructureEntity
+    expected_frame: KinematicStructureEntity | None
     """
-    The frame the operation requires.
+    The frame the operation requires, or ``None`` if it requires no frame.
     """
 
-    actual_frame: KinematicStructureEntity
+    actual_frame: KinematicStructureEntity | None
     """
-    The frame that was found instead.
+    The frame that was found instead, or ``None`` if the value has no frame.
     """
 
     context: Optional[str] = None
@@ -1301,9 +1345,20 @@ class ReferenceFrameMismatchError(SpatialTypesError):
     def error_message(self) -> str:
         checked_value = self.context or "the given value"
         return (
-            f"Expected {checked_value} to be expressed in frame '{self.expected_frame.name}', "
-            f"but it is expressed in frame '{self.actual_frame.name}'."
+            f"Expected {checked_value} to be expressed in "
+            f"{self._describe(self.expected_frame)}, "
+            f"but it is expressed in {self._describe(self.actual_frame)}."
         )
+
+    @staticmethod
+    def _describe(frame: KinematicStructureEntity | None) -> str:
+        """
+        :param frame: The frame to describe.
+        :return: The frame as it reads in the error message.
+        """
+        if frame is None:
+            return "no frame"
+        return f"frame '{frame.name}'"
 
     def suggest_correction(self) -> str:
         return (
@@ -2148,6 +2203,36 @@ class NoGraspGeometry(UsageError):
         return (
             "give the root body collision geometry, or annotate the object with a type "
             "whose grasps do not depend on its shape."
+        )
+
+
+@dataclass
+class SurfaceGraspNotOnSurfaceError(UsageError):
+    """
+    Raised when a surface grasp names a point the object's grasp surface does not reach.
+    """
+
+    surface_grasp: SurfaceGrasp
+    """
+    The grasp that missed.
+    """
+
+    graspable: HasGraspCandidates
+    """
+    The object it was meant for.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"No surface of '{self.graspable.name}' lies at azimuth "
+            f"{self.surface_grasp.azimuth:.3f} rad and height "
+            f"{self.surface_grasp.height:.3f} of its bounding box."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "keep the height of a surface grasp between 0 and 1, and check with "
+            "SurfaceGrasp.reaches_surface_of before asking for its grasp candidate."
         )
 
 

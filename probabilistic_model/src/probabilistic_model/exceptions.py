@@ -12,6 +12,28 @@ if TYPE_CHECKING:
 
 
 @dataclass
+class UnboundedEventError(DataclassException):
+    """
+    Raised when a uniform measure is asked for over an event that does not bound one of
+    its continuous variables from below and above.
+    """
+
+    variable: Variable
+    """
+    The variable without bounds.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The event does not bound '{self.variable.name}' from below and above, so "
+            f"no uniform measure over it exists."
+        )
+
+    def suggest_correction(self) -> str:
+        return f"Bound '{self.variable.name}' from below and above in the event."
+
+
+@dataclass
 class IntractableError(DataclassException):
     """
     Exception raised when an inference is intractable for a model.

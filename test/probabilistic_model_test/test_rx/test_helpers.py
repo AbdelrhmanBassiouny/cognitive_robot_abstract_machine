@@ -7,6 +7,7 @@ from random_events.interval import singleton, closed
 from random_events.product_algebra import SimpleEvent
 from random_events.set import SetElement
 from random_events.variable import Continuous, Symbolic
+from probabilistic_model.exceptions import UnboundedEventError
 from probabilistic_model.probabilistic_circuit.rx.helper import (
     fully_factorized,
     uniform_measure_of_event,
@@ -42,13 +43,45 @@ class FullyFactorizedTestCase(unittest.TestCase):
             .complement()
         )
         model = self.model
-        model, _ = model.truncated(event)
-        mode, _ = model.mode()
+        model = model.truncated(event).distribution
+        mode = model.mode().event
         # TODO this does not work due to numeric impression. Wait for david for updates
         # truncated, _ = model.truncated(mode)
         # self.assertIsNotNone(truncated)
         # model = uniform_measure_of_event(event)
         # self.assertIsNotNone(model)
+
+
+class UniformMeasureTestCase(unittest.TestCase):
+
+    x = Continuous("x")
+    y = Continuous("y")
+
+    def test_uniform_measure_of_a_bounded_event(self):
+        event = SimpleEvent.from_data(
+            {self.x: closed(0, 1) | closed(3, 4), self.y: closed(0, 2)}
+        ).as_composite_set()
+
+        model = uniform_measure_of_event(event)
+
+        self.assertAlmostEqual(
+            model.probability(
+                SimpleEvent.from_data(
+                    {self.x: closed(0, 1), self.y: closed(0, 2)}
+                ).as_composite_set()
+            ),
+            0.5,
+        )
+
+    def test_an_unbounded_event_has_no_uniform_measure(self):
+        event = SimpleEvent.from_data(
+            {self.x: closed(0, np.inf), self.y: closed(0, 2)}
+        ).as_composite_set()
+
+        with self.assertRaises(UnboundedEventError) as raised:
+            uniform_measure_of_event(event)
+
+        self.assertEqual(raised.exception.variable, self.x)
 
 
 if __name__ == "__main__":

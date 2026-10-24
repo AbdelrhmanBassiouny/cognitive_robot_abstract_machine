@@ -47,9 +47,9 @@ class UniformDistributionTestCase(unittest.TestCase):
         self.assertEqual(self.distribution.probability(event), 0.75)
 
     def test_mode(self):
-        modes, likelihood = self.distribution.mode()
-        self.assertEqual(modes, self.distribution.support)
-        self.assertEqual(likelihood, 0.5)
+        mode = self.distribution.mode()
+        self.assertEqual(mode.event, self.distribution.support)
+        self.assertEqual(mode.likelihood, 0.5)
 
     def test_sample(self):
         samples = self.distribution.sample(100)
@@ -59,34 +59,34 @@ class UniformDistributionTestCase(unittest.TestCase):
 
     def test_conditional_no_intersection(self):
         event = SimpleEvent.from_data({self.x: closed(3, 4)}).as_composite_set()
-        conditional, probability = self.distribution.truncated(event)
-        self.assertIsNone(conditional)
-        self.assertEqual(probability, 0)
+        truncation = self.distribution.truncated(event)
+        self.assertIsNone(truncation.distribution)
+        self.assertEqual(truncation.probability, 0)
 
     def test_conditional_singleton_intersection(self):
         event = SimpleEvent.from_data(
             {self.distribution.variable: singleton(1)}
         ).as_composite_set()
-        conditional, probability = self.distribution.truncated(event)
-        self.assertIsNone(conditional)
-        self.assertEqual(probability, 0.0)
+        truncation = self.distribution.truncated(event)
+        self.assertIsNone(truncation.distribution)
+        self.assertEqual(truncation.probability, 0.0)
 
         point = {self.distribution.variable: 1.0}
-        conditional, probability = self.distribution.conditional(point)
-        self.assertIsInstance(conditional, DiracDeltaDistribution)
-        self.assertEqual(probability, 0.5)
+        conditioning = self.distribution.conditional(point)
+        self.assertIsInstance(conditioning.distribution, DiracDeltaDistribution)
+        self.assertEqual(conditioning.likelihood, 0.5)
 
     def test_conditional_simple_intersection(self):
         event = SimpleEvent.from_data(
             {self.distribution.variable: closed(1, 2)}
         ).as_composite_set()
-        conditional, probability = self.distribution.truncated(event)
+        truncation = self.distribution.truncated(event)
         conditional_by_hand = UniformDistribution(
             variable=self.x,
             interval=SimpleInterval.from_data(1, 2, Bound.CLOSED, Bound.OPEN),
         )
-        self.assertEqual(conditional, conditional_by_hand)
-        self.assertEqual(probability, 0.5)
+        self.assertEqual(truncation.distribution, conditional_by_hand)
+        self.assertEqual(truncation.probability, 0.5)
 
     def test_moment(self):
         expectation = self.distribution.moment(
@@ -128,12 +128,12 @@ class UniformDistributionTestCase(unittest.TestCase):
 
         # singleton_allowed=False (default)
         event = SimpleEvent.from_data({x: singleton(1)}).as_composite_set()
-        conditional, probability = dist.truncated(event)
-        self.assertIsNone(conditional)
-        self.assertEqual(probability, 0.0)
+        truncation = dist.truncated(event)
+        self.assertIsNone(truncation.distribution)
+        self.assertEqual(truncation.probability, 0.0)
 
         # singleton_allowed=True
-        conditional, probability = dist.truncated(event, singleton_allowed=True)
-        self.assertIsInstance(conditional, DiracDeltaDistribution)
-        self.assertEqual(conditional.location, 1.0)
-        self.assertAlmostEqual(probability, 0.5)  # exp(log(0.5)) = 0.5
+        truncation = dist.truncated(event, singleton_allowed=True)
+        self.assertIsInstance(truncation.distribution, DiracDeltaDistribution)
+        self.assertEqual(truncation.distribution.location, 1.0)
+        self.assertAlmostEqual(truncation.probability, 0.5)  # exp(log(0.5)) = 0.5

@@ -1,3 +1,5 @@
+import copy
+import json
 import sys
 import unittest
 from enum import IntEnum
@@ -41,27 +43,27 @@ class IntegerDistributionTestCase(unittest.TestCase):
         self.assertEqual(self.model.probability(event), 9 / 20)
 
     def test_mode(self):
-        mode, likelihood = self.model.mode()
-        self.assertAlmostEqual(likelihood, 11 / 20)
+        mode = self.model.mode()
+        self.assertAlmostEqual(mode.likelihood, 11 / 20)
         self.assertEqual(
-            mode, SimpleEvent.from_data({self.x: singleton(4)}).as_composite_set()
+            mode.event, SimpleEvent.from_data({self.x: singleton(4)}).as_composite_set()
         )
 
     def test_conditional(self):
         event = SimpleEvent.from_data(
             {self.x: closed(0, 1) | closed(3, 4)}
         ).as_composite_set()
-        conditional, probability = self.model.truncated(event)
-        self.assertEqual(probability, 15 / 20)
-        self.assertAlmostEqual(conditional.probabilities[1], 4 / 15)
-        self.assertAlmostEqual(conditional.probabilities[4], 11 / 15)
+        truncation = self.model.truncated(event)
+        self.assertEqual(truncation.probability, 15 / 20)
+        self.assertAlmostEqual(truncation.distribution.probabilities[1], 4 / 15)
+        self.assertAlmostEqual(truncation.distribution.probabilities[4], 11 / 15)
 
     def test_conditional_impossible(self):
         event = SimpleEvent.from_data({self.x: open(0, 1)}).as_composite_set()
 
-        conditional, probability = self.model.truncated(event)
-        self.assertIsNone(conditional)
-        self.assertEqual(probability, 0)
+        truncation = self.model.truncated(event)
+        self.assertIsNone(truncation.distribution)
+        self.assertEqual(truncation.probability, 0)
 
     def test_sample(self):
         samples = self.model.sample(100)
@@ -69,7 +71,7 @@ class IntegerDistributionTestCase(unittest.TestCase):
         self.assertTrue(all(likelihoods > 0))
 
     def test_copy(self):
-        copied = self.model.__copy__()
+        copied = copy.deepcopy(self.model)
         self.assertEqual(copied, self.model)
         copied.probabilities = MissingDict(float)
         # self.assertNotEqual(copied, self.model)
@@ -121,16 +123,25 @@ class SymbolicDistributionTestCase(unittest.TestCase):
         probabilities[hash(TestEnum.B)] = 13 / 20
         self.model = SymbolicDistribution(variable=self.x, probabilities=probabilities)
 
+    def test_a_value_unseen_before_serialization_has_no_probability_after_it(self):
+        """
+        A distribution read back from JSON text keeps giving the values it never saw a
+        probability of zero, as the distribution it was written from does.
+        """
+        deserialized = from_json(json.loads(json.dumps(to_json(self.model))))
+
+        self.assertEqual(deserialized.probabilities[hash(TestEnum.C)], 0.0)
+
     def test_sample(self):
         samples = self.model.sample(100)
         likelihoods = self.model.likelihood(samples)
         self.assertTrue(all(likelihoods > 0))
 
     def test_mode(self):
-        mode, likelihood = self.model.mode()
-        self.assertEqual(likelihood, 13 / 20)
+        mode = self.model.mode()
+        self.assertEqual(mode.likelihood, 13 / 20)
         self.assertEqual(
-            mode, SimpleEvent.from_data({self.x: TestEnum.B}).as_composite_set()
+            mode.event, SimpleEvent.from_data({self.x: TestEnum.B}).as_composite_set()
         )
 
     def test_plot(self):
@@ -237,17 +248,17 @@ class DiracDeltaDistributionTestCase(unittest.TestCase):
         event = SimpleEvent.from_data(
             {self.model.variable: closed(-1, 2)}
         ).as_composite_set()
-        conditional, probability = self.model.truncated(event)
-        self.assertEqual(conditional, self.model)
-        self.assertEqual(probability, 1)
+        truncation = self.model.truncated(event)
+        self.assertEqual(truncation.distribution, self.model)
+        self.assertEqual(truncation.probability, 1)
 
     def test_conditional_impossible(self):
         event = SimpleEvent.from_data(
             {self.model.variable: closed(1, 2)}
         ).as_composite_set()
-        conditional, probability = self.model.truncated(event)
-        self.assertIsNone(conditional)
-        self.assertEqual(0, probability)
+        truncation = self.model.truncated(event)
+        self.assertIsNone(truncation.distribution)
+        self.assertEqual(0, truncation.probability)
 
     def test_truncating_to_its_own_support_keeps_the_distribution(self):
         """
@@ -268,16 +279,16 @@ class DiracDeltaDistributionTestCase(unittest.TestCase):
             ),
             1.0,
         )
-        truncated, probability = distribution.truncated(
+        truncation = distribution.truncated(
             SimpleEvent.from_data({self.x: support}).as_composite_set()
         )
-        self.assertEqual(truncated, distribution)
-        self.assertEqual(probability, 1.0)
+        self.assertEqual(truncation.distribution, distribution)
+        self.assertEqual(truncation.probability, 1.0)
 
     def test_mode(self):
-        mode, log_likelihood = self.model.univariate_log_mode()
-        self.assertEqual(mode, singleton(0))
-        self.assertEqual(log_likelihood, np.log(2))
+        mode = self.model.univariate_log_mode()
+        self.assertEqual(mode.assignment, singleton(0))
+        self.assertEqual(mode.log_likelihood, np.log(2))
 
     def test_sample(self):
         samples = self.model.sample(100)
@@ -310,17 +321,15 @@ class DiracDeltaDistributionTestCase(unittest.TestCase):
 
         # singleton at the location
         event = SimpleEvent.from_data({x: singleton(1.0)}).as_composite_set()
-        conditional, probability = dist.truncated(event)
-        self.assertEqual(conditional, dist)
-        self.assertAlmostEqual(probability, 1.0)
+        truncation = dist.truncated(event)
+        self.assertEqual(truncation.distribution, dist)
+        self.assertAlmostEqual(truncation.probability, 1.0)
 
         # singleton elsewhere
         event_away = SimpleEvent.from_data({x: singleton(0.0)}).as_composite_set()
-        conditional_away, probability_away = dist.truncated(
-            event_away, singleton_allowed=True
-        )
-        self.assertIsNone(conditional_away)
-        self.assertEqual(probability_away, 0.0)
+        truncation_away = dist.truncated(event_away, singleton_allowed=True)
+        self.assertIsNone(truncation_away.distribution)
+        self.assertEqual(truncation_away.probability, 0.0)
 
     def test_integer_distribution_singleton(self):
         x = Integer("x")
@@ -330,10 +339,10 @@ class DiracDeltaDistributionTestCase(unittest.TestCase):
         event = SimpleEvent.from_data({x: singleton(1)}).as_composite_set()
 
         # For discrete distributions, singleton is just a normal event
-        conditional, probability = dist.truncated(event, singleton_allowed=True)
-        self.assertIsInstance(conditional, IntegerDistribution)
-        self.assertEqual(conditional.probabilities[1], 1.0)
-        self.assertAlmostEqual(probability, 0.3)
+        truncation = dist.truncated(event, singleton_allowed=True)
+        self.assertIsInstance(truncation.distribution, IntegerDistribution)
+        self.assertEqual(truncation.distribution.probabilities[1], 1.0)
+        self.assertAlmostEqual(truncation.probability, 0.3)
 
     def test_symbolic_distribution_singleton(self):
         x = Symbolic("x", domain=Set.from_iterable(["a", "b"]))
@@ -342,9 +351,9 @@ class DiracDeltaDistributionTestCase(unittest.TestCase):
 
         event = SimpleEvent.from_data({x: "a"}).as_composite_set()
 
-        conditional, probability = dist.truncated(event, singleton_allowed=True)
-        self.assertIsInstance(conditional, SymbolicDistribution)
-        self.assertAlmostEqual(probability, 0.4)
+        truncation = dist.truncated(event, singleton_allowed=True)
+        self.assertIsInstance(truncation.distribution, SymbolicDistribution)
+        self.assertAlmostEqual(truncation.probability, 0.4)
 
 
 if __name__ == "__main__":

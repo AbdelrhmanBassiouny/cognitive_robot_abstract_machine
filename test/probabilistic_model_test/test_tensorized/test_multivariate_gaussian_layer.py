@@ -345,10 +345,10 @@ class MultivariateGaussianQueryTestCase(unittest.TestCase):
     def test_mode_is_the_mean(self):
         rx_circuit = single_gaussian()
         layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
-        mode, log_likelihood = layered.log_mode()
-        expected_mode, expected_log_likelihood = rx_circuit.log_mode()
-        self.assertEqual(mode, expected_mode)
-        self.assertAlmostEqual(log_likelihood, expected_log_likelihood)
+        mode = layered.log_mode()
+        expected_mode = rx_circuit.log_mode()
+        self.assertEqual(mode.event, expected_mode.event)
+        self.assertAlmostEqual(mode.log_likelihood, expected_mode.log_likelihood)
 
     def test_samples_have_the_mean_of_the_circuit(self):
         rx_circuit = gaussian_mixture()
@@ -390,54 +390,52 @@ class MultivariateGaussianTruncationTestCase(unittest.TestCase):
             with self.subTest(name):
                 rx_circuit = ALL_CIRCUITS[name]()
                 layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
-                rx_truncated, rx_probability = rx_circuit.truncated(
-                    event.__deepcopy__()
-                )
-                truncated, probability = layered.truncated(event.__deepcopy__())
+                rx_truncation = rx_circuit.truncated(event.__deepcopy__())
+                truncation = layered.truncated(event.__deepcopy__())
                 self.assertAlmostEqual(
-                    probability, rx_probability, delta=NUMERICAL_INTEGRATION_TOLERANCE
+                    truncation.probability,
+                    rx_truncation.probability,
+                    delta=NUMERICAL_INTEGRATION_TOLERANCE,
                 )
                 self.assertTrue(
                     any(
                         isinstance(layer, TruncatedMultivariateGaussianLayer)
-                        for layer in truncated.layers
+                        for layer in truncation.distribution.layers
                     )
                 )
-                samples = rx_truncated.sample(200)
+                samples = rx_truncation.distribution.sample(200)
                 np.testing.assert_allclose(
-                    truncated.log_likelihood(samples),
-                    rx_truncated.log_likelihood(samples),
+                    truncation.distribution.log_likelihood(samples),
+                    rx_truncation.distribution.log_likelihood(samples),
                     atol=1e-3,
                 )
 
     def test_likelihood_outside_the_box_is_minus_infinity(self):
         layered = RustworkxCircuitToLayeredCircuitConverter.convert(gaussian_mixture())
-        truncated, _ = layered.truncated(
+        truncated = layered.truncated(
             box(x=closed(-1.0, 2.0), y=open_interval(0.0, 1.5)).as_composite_set()
-        )
+        ).distribution
         outside = np.array([[3.0, 1.0], [0.0, 1.5], [0.0, 0.0]])
         self.assertTrue(np.all(np.isneginf(truncated.log_likelihood(outside))))
 
     def test_truncation_to_the_whole_space_keeps_the_gaussians(self):
         layered = RustworkxCircuitToLayeredCircuitConverter.convert(gaussian_mixture())
-        truncated, probability = layered.truncated(
-            box(x=reals(), y=reals()).as_composite_set()
-        )
-        np.testing.assert_allclose(probability, 1.0)
+        truncation = layered.truncated(box(x=reals(), y=reals()).as_composite_set())
+        np.testing.assert_allclose(truncation.probability, 1.0)
         self.assertTrue(
             any(
                 isinstance(layer, MultivariateGaussianLayer)
-                for layer in truncated.layers
+                for layer in truncation.distribution.layers
             )
         )
 
     def test_truncation_to_an_impossible_event(self):
         layered = RustworkxCircuitToLayeredCircuitConverter.convert(gaussian_mixture())
-        truncated, probability = layered.truncated(
+        truncation = layered.truncated(
             box(x=singleton(0.0), y=reals()).as_composite_set()
         )
-        self.assertIsNone(truncated)
-        self.assertEqual(probability, 0.0)
+        self.assertIsNone(truncation.distribution)
+        self.assertEqual(truncation.probability, 0.0)
 
     def test_truncation_to_a_box_far_in_the_tail_keeps_its_probability(self):
         component = first_component()
@@ -446,12 +444,12 @@ class MultivariateGaussianTruncationTestCase(unittest.TestCase):
         deviation = np.sqrt(component.covariance.matrix[position, position])
         lower, upper = mean + 9 * deviation, mean + 10 * deviation
         layered = RustworkxCircuitToLayeredCircuitConverter.convert(single_gaussian())
-        truncated, probability = layered.truncated(
+        truncation = layered.truncated(
             box(x=reals(), y=closed(lower, upper)).as_composite_set()
         )
-        self.assertIsNotNone(truncated)
+        self.assertIsNotNone(truncation.distribution)
         self.assertAlmostEqual(
-            np.log(probability),
+            np.log(truncation.probability),
             np.log(norm.sf(lower, mean, deviation) - norm.sf(upper, mean, deviation)),
         )
 
@@ -461,15 +459,17 @@ class MultivariateGaussianTruncationTestCase(unittest.TestCase):
         event = box(
             x=closed(-2.0, 0.0) | closed(1.0, 3.0), y=closed(-1.0, 2.0)
         ).as_composite_set()
-        rx_truncated, rx_probability = rx_circuit.truncated(event.__deepcopy__())
-        truncated, probability = layered.truncated(event.__deepcopy__())
+        rx_truncation = rx_circuit.truncated(event.__deepcopy__())
+        truncation = layered.truncated(event.__deepcopy__())
         self.assertAlmostEqual(
-            probability, rx_probability, delta=NUMERICAL_INTEGRATION_TOLERANCE
+            truncation.probability,
+            rx_truncation.probability,
+            delta=NUMERICAL_INTEGRATION_TOLERANCE,
         )
-        samples = rx_truncated.sample(200)
+        samples = rx_truncation.distribution.sample(200)
         np.testing.assert_allclose(
-            truncated.log_likelihood(samples),
-            rx_truncated.log_likelihood(samples),
+            truncation.distribution.log_likelihood(samples),
+            rx_truncation.distribution.log_likelihood(samples),
             atol=1e-3,
         )
 
@@ -488,15 +488,17 @@ class MultivariateGaussianTruncationTestCase(unittest.TestCase):
         simple_events = list(event.__deepcopy__().simple_sets)
         self.assertTrue(layered.can_truncate_in_one_batch(simple_events))
 
-        rx_truncated, rx_probability = rx_circuit.truncated(event.__deepcopy__())
-        truncated, probability = layered.truncated(event.__deepcopy__())
+        rx_truncation = rx_circuit.truncated(event.__deepcopy__())
+        truncation = layered.truncated(event.__deepcopy__())
         self.assertAlmostEqual(
-            probability, rx_probability, delta=NUMERICAL_INTEGRATION_TOLERANCE
+            truncation.probability,
+            rx_truncation.probability,
+            delta=NUMERICAL_INTEGRATION_TOLERANCE,
         )
-        samples = rx_truncated.sample(200)
+        samples = rx_truncation.distribution.sample(200)
         np.testing.assert_allclose(
-            truncated.log_likelihood(samples),
-            rx_truncated.log_likelihood(samples),
+            truncation.distribution.log_likelihood(samples),
+            rx_truncation.distribution.log_likelihood(samples),
             atol=1e-3,
         )
 
@@ -506,22 +508,26 @@ class MultivariateGaussianTruncationTestCase(unittest.TestCase):
         first = box(x=closed(-1.0, 2.0), y=closed(0.0, 1.5)).as_composite_set()
         second = box(x=closed(0.0, 3.0), y=closed(-1.0, 1.0)).as_composite_set()
 
-        rx_truncated, _ = rx_circuit.truncated(first.__deepcopy__())
-        rx_twice, rx_probability = rx_truncated.truncated(second.__deepcopy__())
-        truncated, _ = layered.truncated(first.__deepcopy__())
-        twice, probability = truncated.truncated(second.__deepcopy__())
+        rx_truncated = rx_circuit.truncated(first.__deepcopy__()).distribution
+        rx_truncation = rx_truncated.truncated(second.__deepcopy__())
+        truncated = layered.truncated(first.__deepcopy__()).distribution
+        truncation = truncated.truncated(second.__deepcopy__())
 
         self.assertAlmostEqual(
-            probability, rx_probability, delta=NUMERICAL_INTEGRATION_TOLERANCE
+            truncation.probability,
+            rx_truncation.probability,
+            delta=NUMERICAL_INTEGRATION_TOLERANCE,
         )
-        self.assertEqual(twice.support, rx_twice.support)
+        self.assertEqual(
+            truncation.distribution.support, rx_truncation.distribution.support
+        )
 
     def test_queries_of_a_truncated_circuit(self):
         rx_circuit = gaussian_mixture()
         layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
         event = box(x=closed(-1.0, 2.0), y=closed(0.0, 1.5)).as_composite_set()
-        rx_truncated, _ = rx_circuit.truncated(event.__deepcopy__())
-        truncated, _ = layered.truncated(event.__deepcopy__())
+        rx_truncated = rx_circuit.truncated(event.__deepcopy__()).distribution
+        truncated = layered.truncated(event.__deepcopy__()).distribution
 
         points = np.array([[0.5, 0.5], [1.5, 1.0], [-2.0, 1.0], [3.0, 3.0]])
         np.testing.assert_allclose(
@@ -542,19 +548,21 @@ class MultivariateGaussianTruncationTestCase(unittest.TestCase):
         layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
         # the box excludes the mean, so the mode lies on its boundary
         event = box(x=closed(1.0, 2.0), y=closed(-1.0, 0.0)).as_composite_set()
-        rx_truncated, _ = rx_circuit.truncated(event.__deepcopy__())
-        truncated, _ = layered.truncated(event.__deepcopy__())
-        mode, log_likelihood = truncated.log_mode()
-        expected_mode, expected_log_likelihood = rx_truncated.log_mode()
-        self.assertEqual(mode, expected_mode)
-        self.assertAlmostEqual(log_likelihood, expected_log_likelihood, delta=1e-3)
+        rx_truncated = rx_circuit.truncated(event.__deepcopy__()).distribution
+        truncated = layered.truncated(event.__deepcopy__()).distribution
+        mode = truncated.log_mode()
+        expected_mode = rx_truncated.log_mode()
+        self.assertEqual(mode.event, expected_mode.event)
+        self.assertAlmostEqual(
+            mode.log_likelihood, expected_mode.log_likelihood, delta=1e-3
+        )
 
     def test_samples_of_a_truncated_circuit_lie_in_the_box(self):
         rx_circuit = gaussian_mixture()
         layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
         event = box(x=closed(-1.0, 2.0), y=closed(0.0, 1.5)).as_composite_set()
-        rx_truncated, _ = rx_circuit.truncated(event.__deepcopy__())
-        truncated, _ = layered.truncated(event.__deepcopy__())
+        rx_truncated = rx_circuit.truncated(event.__deepcopy__()).distribution
+        truncated = layered.truncated(event.__deepcopy__()).distribution
 
         samples = truncated.sample(5000)
         self.assertEqual(samples.shape, (5000, 2))
@@ -565,9 +573,9 @@ class MultivariateGaussianTruncationTestCase(unittest.TestCase):
 
     def test_a_truncated_gaussian_has_no_marginal_over_some_of_its_variables(self):
         layered = RustworkxCircuitToLayeredCircuitConverter.convert(gaussian_mixture())
-        truncated, _ = layered.truncated(
+        truncated = layered.truncated(
             box(x=closed(-1.0, 2.0), y=closed(0.0, 1.5)).as_composite_set()
-        )
+        ).distribution
         with self.assertRaises(NoClosedFormError):
             truncated.marginal([x])
 
@@ -575,8 +583,8 @@ class MultivariateGaussianTruncationTestCase(unittest.TestCase):
         rx_circuit = gaussian_mixture()
         layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
         event = box(x=closed(-1.0, 2.0), y=closed(0.0, 1.5)).as_composite_set()
-        rx_truncated, _ = rx_circuit.truncated(event.__deepcopy__())
-        truncated, _ = layered.truncated(event.__deepcopy__())
+        rx_truncated = rx_circuit.truncated(event.__deepcopy__()).distribution
+        truncated = layered.truncated(event.__deepcopy__()).distribution
 
         expectation = truncated.expectation([x, y])
         variance = truncated.variance([x, y])
@@ -590,9 +598,9 @@ class MultivariateGaussianTruncationTestCase(unittest.TestCase):
 
     def test_the_expectation_of_a_truncated_gaussian_is_the_mean_of_its_samples(self):
         layered = RustworkxCircuitToLayeredCircuitConverter.convert(gaussian_mixture())
-        truncated, _ = layered.truncated(
+        truncated = layered.truncated(
             box(x=closed(-1.0, 2.0), y=closed(0.0, 1.5)).as_composite_set()
-        )
+        ).distribution
         expectation = truncated.expectation([x, y])
         np.testing.assert_allclose(
             [expectation[x], expectation[y]],
@@ -605,7 +613,7 @@ class MultivariateGaussianTruncationTestCase(unittest.TestCase):
     ):
         rx_circuit = single_gaussian()
         event = box(x=closed(-1.0, 2.0), y=closed(0.0, 1.5)).as_composite_set()
-        rx_truncated, _ = rx_circuit.truncated(event)
+        rx_truncated = rx_circuit.truncated(event).distribution
         [leaf] = rx_truncated.leaves
         moment_integration = MomentIntegration(
             deviations_integrated_over=6.0, panels=8, nodes_per_panel=12
@@ -614,9 +622,9 @@ class MultivariateGaussianTruncationTestCase(unittest.TestCase):
             leaf.distribution, moment_integration=moment_integration
         )
         layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_truncated)
-        further, _ = layered.truncated(
+        further = layered.truncated(
             box(x=closed(-0.5, 1.0), y=closed(0.0, 1.5)).as_composite_set()
-        )
+        ).distribution
         [restored] = LayeredCircuitToRustworkxCircuitConverter.convert(further).leaves
         self.assertEqual(restored.distribution.moment_integration, moment_integration)
 
@@ -624,8 +632,8 @@ class MultivariateGaussianTruncationTestCase(unittest.TestCase):
         rx_circuit = gaussian_mixture()
         layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
         event = box(x=closed(-1.0, 2.0), y=closed(0.0, 1.5)).as_composite_set()
-        rx_truncated, _ = rx_circuit.truncated(event.__deepcopy__())
-        truncated, _ = layered.truncated(event.__deepcopy__())
+        rx_truncated = rx_circuit.truncated(event.__deepcopy__()).distribution
+        truncated = layered.truncated(event.__deepcopy__()).distribution
         order = VariableMap({x: 3, y: 4})
         center = VariableMap({x: 0.5, y: 0.0})
         moment = truncated.moment(order, center)
@@ -645,25 +653,30 @@ class MultivariateGaussianConditioningTestCase(unittest.TestCase):
                 rx_circuit = ALL_CIRCUITS[name]()
                 layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
                 point = {x: 0.5}
-                rx_conditioned, rx_log_probability = rx_circuit.log_conditional(point)
-                conditioned, log_probability = layered.log_conditional(point)
-                self.assertAlmostEqual(log_probability, rx_log_probability)
+                rx_conditioning = rx_circuit.log_conditional(point)
+                conditioning = layered.log_conditional(point)
+                self.assertAlmostEqual(
+                    conditioning.log_likelihood, rx_conditioning.log_likelihood
+                )
 
                 free = [variable for variable in rx_circuit.variables if variable != x]
-                samples = rx_conditioned.marginal(free).sample(200)
+                samples = rx_conditioning.distribution.marginal(free).sample(200)
                 np.testing.assert_allclose(
-                    conditioned.marginal(free).log_likelihood(samples),
-                    rx_conditioned.marginal(free).log_likelihood(samples),
+                    conditioning.distribution.marginal(free).log_likelihood(samples),
+                    rx_conditioning.distribution.marginal(free).log_likelihood(samples),
                 )
 
     def test_conditioning_on_every_variable_is_the_likelihood(self):
         rx_circuit = gaussian_mixture()
         layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
-        conditioned, log_probability = layered.log_conditional({x: 0.5, y: -0.25})
+        conditioning = layered.log_conditional({x: 0.5, y: -0.25})
         self.assertAlmostEqual(
-            log_probability, float(layered.log_likelihood(np.array([[0.5, -0.25]]))[0])
+            conditioning.log_likelihood,
+            float(layered.log_likelihood(np.array([[0.5, -0.25]]))[0]),
         )
-        self.assertEqual(conditioned.sample(3).tolist(), [[0.5, -0.25]] * 3)
+        self.assertEqual(
+            conditioning.distribution.sample(3).tolist(), [[0.5, -0.25]] * 3
+        )
 
     def test_conditioning_a_truncated_circuit_agrees_with_rustworkx(self):
         event = box(x=closed(-1.0, 2.0), y=closed(0.0, 1.5)).as_composite_set()
@@ -673,26 +686,30 @@ class MultivariateGaussianConditioningTestCase(unittest.TestCase):
             with self.subTest(name):
                 rx_circuit = ALL_CIRCUITS[name]()
                 layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
-                rx_truncated, _ = rx_circuit.truncated(event.__deepcopy__())
-                truncated, _ = layered.truncated(event.__deepcopy__())
+                rx_truncated = rx_circuit.truncated(event.__deepcopy__()).distribution
+                truncated = layered.truncated(event.__deepcopy__()).distribution
 
-                expected, expected_log_probability = rx_truncated.log_conditional(point)
-                conditioned, log_probability = truncated.log_conditional(point)
+                expected_conditioning = rx_truncated.log_conditional(point)
+                conditioning = truncated.log_conditional(point)
                 self.assertAlmostEqual(
-                    log_probability, expected_log_probability, delta=1e-3
+                    conditioning.log_likelihood,
+                    expected_conditioning.log_likelihood,
+                    delta=1e-3,
                 )
                 np.testing.assert_allclose(
-                    conditioned.marginal([y]).log_likelihood(values),
-                    expected.marginal([y]).log_likelihood(values),
+                    conditioning.distribution.marginal([y]).log_likelihood(values),
+                    expected_conditioning.distribution.marginal([y]).log_likelihood(
+                        values
+                    ),
                     atol=1e-3,
                 )
 
     def test_conditioning_a_truncated_mixture_is_the_density_of_the_marginal(self):
         layered = RustworkxCircuitToLayeredCircuitConverter.convert(gaussian_mixture())
-        truncated, _ = layered.truncated(
+        truncated = layered.truncated(
             box(x=closed(-1.0, 2.0), y=closed(0.0, 1.5)).as_composite_set()
-        )
-        _, log_probability = truncated.log_conditional({x: 0.5})
+        ).distribution
+        log_probability = truncated.log_conditional({x: 0.5}).log_likelihood
 
         # the density of x at 0.5 integrates the joint density over the slice of y
         grid = np.linspace(0.0, 1.5, 20001)
@@ -705,12 +722,12 @@ class MultivariateGaussianConditioningTestCase(unittest.TestCase):
 
     def test_conditioning_outside_the_box_is_impossible(self):
         layered = RustworkxCircuitToLayeredCircuitConverter.convert(gaussian_mixture())
-        truncated, _ = layered.truncated(
+        truncated = layered.truncated(
             box(x=closed(-1.0, 2.0), y=closed(0.0, 1.5)).as_composite_set()
-        )
-        conditioned, log_probability = truncated.log_conditional({x: 5.0})
-        self.assertIsNone(conditioned)
-        self.assertEqual(log_probability, -np.inf)
+        ).distribution
+        conditioning = truncated.log_conditional({x: 5.0})
+        self.assertIsNone(conditioning.distribution)
+        self.assertEqual(conditioning.log_likelihood, -np.inf)
 
 
 # %% changing the circuit in place
@@ -728,9 +745,9 @@ class MultivariateGaussianTransformationTestCase(unittest.TestCase):
                     gaussian_mixture()
                 )
                 if truncate:
-                    layered, _ = layered.truncated(
+                    layered = layered.truncated(
                         box(x=closed(-1.0, 2.0), y=closed(0.0, 1.5)).as_composite_set()
-                    )
+                    ).distribution
                 samples = layered.sample(50)
                 expected = layered.log_likelihood(samples)
                 layered.apply_translation({x: 1.0, y: -2.0})
@@ -745,9 +762,9 @@ class MultivariateGaussianTransformationTestCase(unittest.TestCase):
                     gaussian_mixture()
                 )
                 if truncate:
-                    layered, _ = layered.truncated(
+                    layered = layered.truncated(
                         box(x=closed(-1.0, 2.0), y=closed(0.0, 1.5)).as_composite_set()
-                    )
+                    ).distribution
                 samples = layered.sample(50)
                 expected = layered.log_likelihood(samples) - np.log(2.0 * 3.0)
                 layered.apply_scaling({x: 2.0, y: 3.0})
@@ -775,9 +792,9 @@ class MultivariateGaussianSerializationTestCase(unittest.TestCase):
 
     def test_json_round_trip(self):
         layered = RustworkxCircuitToLayeredCircuitConverter.convert(gaussian_mixture())
-        truncated, _ = layered.truncated(
+        truncated = layered.truncated(
             box(x=closed(-1.0, 2.0), y=closed(0.0, 1.5)).as_composite_set()
-        )
+        ).distribution
         points = np.array([[0.5, 0.5], [1.5, 1.0]])
         for circuit in (layered, truncated):
             with self.subTest(type(circuit.layers[-1]).__name__):

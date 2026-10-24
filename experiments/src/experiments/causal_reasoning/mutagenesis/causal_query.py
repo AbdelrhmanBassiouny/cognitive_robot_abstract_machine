@@ -380,9 +380,10 @@ class BranchingAtomCountCausalQuery:
         event = SimpleEvent.from_data(
             {branching_atom_count_variable: float(branching_atom_count_value)}
         ).as_composite_set()
-        truncated_circuit, _ = interventional_circuit.truncated(
+        truncated_circuit = interventional_circuit.truncated(
             event.fill_missing_variables_pure(interventional_circuit.variables)
-        )
+        ).distribution
+
         true_event = (
             SimpleEvent.from_data({mutagenic_variable: True})
             .as_composite_set()

@@ -182,21 +182,21 @@ class TruncationOfInputLayersTestCase(unittest.TestCase):
         event = SimpleEvent.from_data(
             {x: closed(0.0, 1.0) | closed(3.0, 4.0)}
         ).as_composite_set()
-        truncated, probability = circuit.truncated(event)
+        truncation = circuit.truncated(event)
 
-        self.assertAlmostEqual(probability, 0.5)
+        self.assertAlmostEqual(truncation.probability, 0.5)
 
         # the single uniform node became two, mixed back together by a sum layer
         uniform_layers = [
             candidate
-            for candidate in truncated.layers
+            for candidate in truncation.distribution.layers
             if isinstance(candidate, UniformLayer)
         ]
         self.assertEqual(len(uniform_layers), 1)
         self.assertEqual(uniform_layers[0].number_of_nodes, 2)
 
         np.testing.assert_allclose(
-            truncated.likelihood(np.array([[0.5], [2.0], [3.5]])),
+            truncation.distribution.likelihood(np.array([[0.5], [2.0], [3.5]])),
             np.array([0.5, 0.0, 0.5]),
         )
 
@@ -207,11 +207,14 @@ class TruncationOfInputLayersTestCase(unittest.TestCase):
         )
 
         event = SimpleEvent.from_data({x: singleton(1.0)}).as_composite_set()
-        truncated, probability = circuit.truncated(event, singleton_allowed=True)
+        truncation = circuit.truncated(event, singleton_allowed=True)
 
-        self.assertAlmostEqual(probability, 0.5)
+        self.assertAlmostEqual(truncation.probability, 0.5)
         self.assertTrue(
-            any(isinstance(layer, DiracDeltaLayer) for layer in truncated.layers)
+            any(
+                isinstance(layer, DiracDeltaLayer)
+                for layer in truncation.distribution.layers
+            )
         )
 
     def test_an_impossible_node_is_removed_but_its_siblings_survive(self):
@@ -225,18 +228,19 @@ class TruncationOfInputLayersTestCase(unittest.TestCase):
         circuit = LayeredProbabilisticCircuit(SortedSet([x]), root)
 
         event = SimpleEvent.from_data({x: closed(2.0, 3.0)}).as_composite_set()
-        truncated, probability = circuit.truncated(event)
+        truncation = circuit.truncated(event)
 
-        self.assertAlmostEqual(probability, 0.75)
+        self.assertAlmostEqual(truncation.probability, 0.75)
         remaining = [
             candidate
-            for candidate in truncated.layers
+            for candidate in truncation.distribution.layers
             if isinstance(candidate, UniformLayer)
         ]
         self.assertEqual(len(remaining), 1)
         self.assertEqual(remaining[0].number_of_nodes, 1)
         np.testing.assert_allclose(
-            truncated.likelihood(np.array([[2.5], [0.5]])), np.array([1.0, 0.0])
+            truncation.distribution.likelihood(np.array([[2.5], [0.5]])),
+            np.array([1.0, 0.0]),
         )
 
 
@@ -287,22 +291,22 @@ class VectorizedTruncationTestCase(unittest.TestCase):
                         log_probabilities = truncated.log_probabilities
 
                         for node, distribution in enumerate(distributions):
-                            expected, expected_log_probability = (
+                            expected_truncation = (
                                 distribution.log_conditional_from_simple_interval(
                                     event_interval, False
                                 )
                             )
-                            if expected is None:
+                            if expected_truncation.distribution is None:
                                 self.assertEqual(log_probabilities[node], -np.inf)
                                 continue
 
                             self.assertAlmostEqual(
                                 float(log_probabilities[node]),
-                                float(expected_log_probability),
+                                float(expected_truncation.log_probability),
                             )
                             self.assertEqual(
                                 truncated_layer.simple_interval_of(node),
-                                expected.interval,
+                                expected_truncation.distribution.interval,
                             )
 
     def test_a_singleton_turns_every_node_into_a_dirac_delta(self):
@@ -313,14 +317,16 @@ class VectorizedTruncationTestCase(unittest.TestCase):
         log_probabilities = truncated.log_probabilities
         self.assertIsInstance(truncated_layer, DiracDeltaLayer)
         for node in range(layer.number_of_nodes):
-            expected, expected_log_probability = layer.node_distribution(
+            expected_truncation = layer.node_distribution(
                 node, x
             ).log_conditional_from_simple_interval(assignment.simple_sets[0], True)
             self.assertAlmostEqual(
-                float(log_probabilities[node]), float(expected_log_probability)
+                float(log_probabilities[node]),
+                float(expected_truncation.log_probability),
             )
             self.assertEqual(
-                truncated_layer.node_distribution(node, x).location, expected.location
+                truncated_layer.node_distribution(node, x).location,
+                expected_truncation.distribution.location,
             )
 
     def test_a_composite_assignment_mixes_the_truncations_to_its_simple_intervals(
@@ -355,7 +361,7 @@ class VectorizedTruncationTestCase(unittest.TestCase):
                 expected_log_probabilities = [
                     layer.node_distribution(node, x).log_truncated(
                         event.as_composite_set()
-                    )[1]
+                    ).log_probability
                     for node in range(layer.number_of_nodes)
                 ]
                 np.testing.assert_array_equal(
@@ -406,9 +412,9 @@ class VectorizedTruncationTestCase(unittest.TestCase):
                 ).log_probabilities
                 for node in range(layer.number_of_nodes):
                     distribution = layer.node_distribution(node, x)
-                    _, expected = distribution.log_truncated(
+                    expected = distribution.log_truncated(
                         SimpleEvent.from_data({x: assignment}).as_composite_set()
-                    )
+                    ).log_probability
                     self.assertEqual(float(log_probabilities[node]), float(expected))
 
     def test_a_structural_pass_does_not_write_into_the_circuit_it_reads(self):
@@ -465,19 +471,19 @@ class VectorizedTruncationTestCase(unittest.TestCase):
                 truncated_layer = truncated.layer
                 log_probabilities = truncated.log_probabilities
                 for node, distribution in enumerate(distributions):
-                    expected, expected_log_probability = distribution.log_truncated(
+                    truncation = distribution.log_truncated(
                         SimpleEvent.from_data({n: assignment}).as_composite_set()
                     )
-                    if expected is None:
+                    if truncation.distribution is None:
                         self.assertEqual(log_probabilities[node], -np.inf)
                         continue
                     self.assertAlmostEqual(
                         float(log_probabilities[node]),
-                        float(expected_log_probability),
+                        float(truncation.log_probability),
                     )
                     self.assertEqual(
                         truncated_layer.probabilities_of_node(node),
-                        expected.probabilities,
+                        truncation.distribution.probabilities,
                     )
 
     def test_gaussian_layer_agrees_with_the_scalar_truncation(self):
@@ -507,23 +513,26 @@ class VectorizedTruncationTestCase(unittest.TestCase):
                     log_probabilities = truncated.log_probabilities
 
                     for node, distribution in enumerate(distributions):
-                        expected, expected_log_probability = (
+                        expected_truncation = (
                             distribution.log_conditional_from_simple_interval(
                                 event_interval, False
                             )
                         )
-                        if expected is None:
+                        if expected_truncation.distribution is None:
                             self.assertEqual(log_probabilities[node], -np.inf)
                             continue
 
                         self.assertAlmostEqual(
                             float(log_probabilities[node]),
-                            float(expected_log_probability),
+                            float(expected_truncation.log_probability),
                         )
-                        self.assertIsInstance(expected, TruncatedGaussianDistribution)
+                        self.assertIsInstance(
+                            expected_truncation.distribution,
+                            TruncatedGaussianDistribution,
+                        )
                         self.assertEqual(
                             truncated_layer.simple_interval_of(node),
-                            expected.interval,
+                            expected_truncation.distribution.interval,
                         )
 
     def test_gaussian_layer_truncated_to_the_real_line_stays_gaussian(self):
@@ -600,20 +609,21 @@ class VectorizedTruncationTestCase(unittest.TestCase):
                 truncated = layer.log_truncated_of_assignment(assignment, False)
                 self.assertIsInstance(truncated.layer, TruncatedGaussianLayer)
                 for node, distribution in enumerate(distributions):
-                    expected, expected_log_probability = distribution.log_truncated(
+                    truncation = distribution.log_truncated(
                         SimpleEvent.from_data({x: assignment}).as_composite_set()
                     )
                     self.assertAlmostEqual(
-                        truncated.log_probabilities[node], expected_log_probability
+                        truncated.log_probabilities[node], truncation.log_probability
                     )
                     self.assertEqual(
-                        truncated.layer.simple_interval_of(node), expected.interval
+                        truncated.layer.simple_interval_of(node),
+                        truncation.distribution.interval,
                     )
                     np.testing.assert_allclose(
                         np.exp(
                             truncated.layer.log_likelihood_of_nodes(points)[:, node]
                         ),
-                        expected.likelihood(points),
+                        truncation.distribution.likelihood(points),
                         atol=1e-9,
                     )
 
@@ -1101,15 +1111,16 @@ class JointProbabilityTreeIntegrationTestCase(unittest.TestCase):
             {variable: half.as_composite_set()}
         ).as_composite_set()
 
-        rx_truncated, rx_probability = self.rx_circuit.truncated(event.__deepcopy__())
-        truncated, probability = self.layered.truncated(event.__deepcopy__())
+        expected = self.rx_circuit.truncated(event.__deepcopy__())
+        truncation = self.layered.truncated(event.__deepcopy__())
 
-        self.assertAlmostEqual(probability, rx_probability)
-        truncated.validate()
+        self.assertAlmostEqual(truncation.probability, expected.probability)
+        truncation.distribution.validate()
 
-        samples = truncated.sample(300)
+        samples = truncation.distribution.sample(300)
         np.testing.assert_allclose(
-            truncated.log_likelihood(samples), rx_truncated.log_likelihood(samples)
+            truncation.distribution.log_likelihood(samples),
+            expected.distribution.log_likelihood(samples),
         )
 
     def test_round_trip_through_rustworkx(self):

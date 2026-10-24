@@ -32,6 +32,7 @@ from typing_extensions import (
 
 import numpy
 import mujoco
+from numpy.typing import NDArray
 from physics_simulators.mujoco_simulator import MujocoSimulator
 from physics_simulators.base_simulator import (
     BaseSimulator,
@@ -40,6 +41,7 @@ from physics_simulators.base_simulator import (
     SimulatorConstraints,
 )
 from krrood.exceptions import UnboundGenericParameter
+from krrood.ormatic.utils import classproperty
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood.utils import recursive_subclasses
 from scipy.spatial.transform import Rotation
@@ -73,6 +75,7 @@ from semantic_digital_twin.world_description.connections import (
     Connection6DoF,
     OmniDrive,
     DifferentialDrive,
+    WheeledDrive,
 )
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 from semantic_digital_twin.world_description.geometry import (
@@ -1481,7 +1484,7 @@ class MujocoCylinderConverter(MujocoGeomConverter, CylinderConverter):
         shape_props.update(
             MujocoGeomConverter._post_convert(self, entity, shape_props, **kwargs)
         )
-        shape_props.update({"size": [entity.width / 2, entity.height, 0.0]})
+        shape_props.update({"size": [entity.radius, entity.height / 2, 0.0]})
         return shape_props
 
 
@@ -1691,6 +1694,14 @@ class MujocoConnectionJoints(Generic[ConnectionType], SubClassSafeGeneric, ABC):
         """
         return actuator.set_point
 
+    def own_actuator_controls(self) -> Dict[str, float]:
+        """
+        :return: The control input of every MuJoCo actuator the realisation builds
+            itself, beyond those realising the world's actuators, by its name; none by
+            default.
+        """
+        return {}
+
     def measured_positions(
         self, simulator: MujocoSimulator
     ) -> Dict[DegreeOfFreedom, float]:
@@ -1823,21 +1834,64 @@ class MujocoFixedConnectionJoints(MujocoNoJoint[FixedConnection]):
 
 
 @dataclass
-class MujocoDifferentialDriveJoints(MujocoNoJoint[DifferentialDrive]):
+class DriveAxis:
     """
-    A differential drive, which is not simulated yet: its base stays where it is built.
+    One of the joints a wheeled drive's base moves across the floor with.
     """
+
+    measured: DegreeOfFreedom
+    """
+    The degree of freedom the joint's position is measured as.
+    """
+
+    joint_type: mujoco.mjtJoint
+    """
+    The kind of joint.
+    """
+
+    direction: NDArray[numpy.float64]
+    """
+    The joint's axis in the drive's ``odom`` frame.
+    """
+
+    commanded: DegreeOfFreedom | None = None
+    """
+    The degree of freedom whose servo drives the joint; ``None`` where no servo of the
+    world drives it.
+    """
+
+
+DriveType = TypeVar("DriveType", bound=WheeledDrive)
+"""
+The type of wheeled drive a realisation realises.
+"""
 
 
 @dataclass
-class MujocoOmniDriveJoints(MujocoConnectionJoints[OmniDrive]):
+class MujocoWheeledDriveJoints(MujocoConnectionJoints[DriveType], ABC):
     """
-    An omnidirectional drive. If servos drive the velocities it is commanded with, it is
+    A wheeled drive. If servos drive the degrees of freedom it is commanded with, it is
     built as a slide along x, a slide along y and a hinge about z, all in the drive's
     ``odom`` frame: the servos push its base across the floor at the commanded
     velocity, and the positions the joints reach are the drive's odometry. Otherwise it
     is built as no joint at all and its base stays where it is built.
     """
+
+    @classproperty
+    @abstractmethod
+    def kind(cls) -> str:
+        """
+        :return: What the drive's joints are named as, after the robot the drive moves
+            and before the axis each joint moves along.
+        """
+
+    @property
+    @abstractmethod
+    def axes_when_servoed(self) -> List[DriveAxis]:
+        """
+        :return: The joints the base moves with, in the order they are built in, once
+            servos drive it.
+        """
 
     @property
     def servoed(self) -> bool:
@@ -1855,38 +1909,12 @@ class MujocoOmniDriveJoints(MujocoConnectionJoints[OmniDrive]):
         } <= actuated
 
     @property
-    def axes(
-        self,
-    ) -> List[Tuple[DegreeOfFreedom, DegreeOfFreedom, mujoco.mjtJoint, numpy.ndarray]]:
+    def axes(self) -> List[DriveAxis]:
         """
-        :return: For each joint the base moves with, in the order the joints are built
-            in: the degree of freedom its servo is commanded through, the degree of
-            freedom its position is measured as, its type and its axis in the drive's
-            ``odom`` frame; none if the drive is not servoed.
+        :return: The joints the base moves with, in the order they are built in; none
+            if the drive is not servoed.
         """
-        if not self.servoed:
-            return []
-        drive = self.connection
-        return [
-            (
-                drive.x_velocity,
-                drive.x,
-                mujoco.mjtJoint.mjJNT_SLIDE,
-                numpy.array([1.0, 0.0, 0.0]),
-            ),
-            (
-                drive.y_velocity,
-                drive.y,
-                mujoco.mjtJoint.mjJNT_SLIDE,
-                numpy.array([0.0, 1.0, 0.0]),
-            ),
-            (
-                drive.yaw,
-                drive.yaw,
-                mujoco.mjtJoint.mjJNT_HINGE,
-                numpy.array([0.0, 0.0, 1.0]),
-            ),
-        ]
+        return self.axes_when_servoed if self.servoed else []
 
     def build(self, builder: MujocoBuilder) -> None:
         axes = self.axes
@@ -1896,18 +1924,16 @@ class MujocoOmniDriveJoints(MujocoConnectionJoints[OmniDrive]):
         child_T_connection = inverse_frame(
             self.connection.connection_T_child_expression.to_np()
         )
-        for commanded, _, joint_type, axis in axes:
+        for axis in axes:
             child_body_spec.add_joint(
-                name=self.joint_name_of(commanded),
-                type=joint_type,
-                axis=(child_T_connection[:3, :3] @ axis).tolist(),
+                name=self.joint_name_of(axis.measured),
+                type=axis.joint_type,
+                axis=(child_T_connection[:3, :3] @ axis.direction).tolist(),
                 pos=child_T_connection[:3, 3].tolist(),
             )
 
     def home_joint_positions(self) -> List[float]:
-        return [
-            self.world.state[measured.id].position for _, measured, _, _ in self.axes
-        ]
+        return [self.world.state[axis.measured.id].position for axis in self.axes]
 
     def joint_name_of(self, degree_of_freedom: DegreeOfFreedom) -> str:
         """
@@ -1916,40 +1942,13 @@ class MujocoOmniDriveJoints(MujocoConnectionJoints[OmniDrive]):
         :return: The name of the joint it belongs to, after the robot the drive moves
             and the axis the joint moves along.
         """
-        for commanded, measured, _, _ in self.axes:
-            if degree_of_freedom in (commanded, measured):
+        for axis in self.axes:
+            if degree_of_freedom in (axis.commanded, axis.measured):
                 robot_name = self.connection.name.prefix or self.connection.name.name
-                return f"{robot_name}_omni_drive_{measured.name.name}"
+                return f"{robot_name}_{self.kind}_{axis.measured.name.name}"
         raise MujocoEntityNotFoundError(
             entity_name=degree_of_freedom.name.name,
             entity_type=mujoco.mjtObj.mjOBJ_JOINT,
-        )
-
-    def control_of(self, actuator: Actuator) -> float:
-        """
-        The drive is commanded with velocities in the frame of its base, while the
-        slides move along the axes of its ``odom``, so the commanded translational
-        velocity is turned by the drive's yaw, as
-        :meth:`~semantic_digital_twin.world_description.connections.OmniDrive.update_state`
-        does.
-
-        :param actuator: An actuator driving one of the drive's degrees of freedom.
-        :return: The velocity the joint it reaches is commanded to.
-        """
-        drive = self.connection
-        [degree_of_freedom] = actuator.dofs
-        if degree_of_freedom not in (drive.x_velocity, drive.y_velocity):
-            return super().control_of(actuator)
-        state = self.world.state
-        yaw = state[drive.yaw.id].position
-        base_velocity_x = state[drive.x_velocity.id].velocity
-        base_velocity_y = state[drive.y_velocity.id].velocity
-        if degree_of_freedom == drive.x_velocity:
-            return float(
-                numpy.cos(yaw) * base_velocity_x - numpy.sin(yaw) * base_velocity_y
-            )
-        return float(
-            numpy.sin(yaw) * base_velocity_x + numpy.cos(yaw) * base_velocity_y
         )
 
     def measured_positions(
@@ -1961,16 +1960,181 @@ class MujocoOmniDriveJoints(MujocoConnectionJoints[OmniDrive]):
         """
         model = simulator._mj_model
         measured_positions = {}
-        for commanded, measured, _, _ in self.axes:
+        for axis in self.axes:
             joint_id = mujoco.mj_name2id(
-                model, mujoco.mjtObj.mjOBJ_JOINT, self.joint_name_of(commanded)
+                model, mujoco.mjtObj.mjOBJ_JOINT, self.joint_name_of(axis.measured)
             )
             if joint_id == -1:
                 continue
-            measured_positions[measured] = float(
+            measured_positions[axis.measured] = float(
                 simulator._mj_data.qpos[model.jnt_qposadr[joint_id]]
             )
         return measured_positions
+
+    def _in_odom(self, base_velocity: NDArray[numpy.float64]) -> NDArray[numpy.float64]:
+        """
+        :param base_velocity: A velocity along the base's x and y.
+        :return: The same velocity along the x and the y of the drive's ``odom``, turned
+            by the drive's yaw, as the drive's ``update_state`` turns it.
+        """
+        yaw = self.world.state[self.connection.yaw.id].position
+        odom_R_base = numpy.array(
+            [[numpy.cos(yaw), -numpy.sin(yaw)], [numpy.sin(yaw), numpy.cos(yaw)]]
+        )
+        return odom_R_base @ base_velocity
+
+
+@dataclass
+class MujocoOmniDriveJoints(MujocoWheeledDriveJoints[OmniDrive]):
+    """
+    An omnidirectional drive, whose servos drive its velocities along the base's x and
+    y and its yaw.
+    """
+
+    @classproperty
+    def kind(cls) -> str:
+        return "omni_drive"
+
+    @property
+    def axes_when_servoed(self) -> List[DriveAxis]:
+        drive = self.connection
+        return [
+            DriveAxis(
+                measured=drive.x,
+                joint_type=mujoco.mjtJoint.mjJNT_SLIDE,
+                direction=numpy.array([1.0, 0.0, 0.0]),
+                commanded=drive.x_velocity,
+            ),
+            DriveAxis(
+                measured=drive.y,
+                joint_type=mujoco.mjtJoint.mjJNT_SLIDE,
+                direction=numpy.array([0.0, 1.0, 0.0]),
+                commanded=drive.y_velocity,
+            ),
+            DriveAxis(
+                measured=drive.yaw,
+                joint_type=mujoco.mjtJoint.mjJNT_HINGE,
+                direction=numpy.array([0.0, 0.0, 1.0]),
+                commanded=drive.yaw,
+            ),
+        ]
+
+    def control_of(self, actuator: Actuator) -> float:
+        """
+        The drive is commanded with velocities in the frame of its base, while the
+        slides move along the axes of its ``odom``, so the commanded translational
+        velocity is turned by the drive's yaw.
+
+        :param actuator: An actuator driving one of the drive's degrees of freedom.
+        :return: The velocity the joint it reaches is commanded to.
+        """
+        drive = self.connection
+        [degree_of_freedom] = actuator.dofs
+        if degree_of_freedom not in (drive.x_velocity, drive.y_velocity):
+            return super().control_of(actuator)
+        state = self.world.state
+        odom_velocity = self._in_odom(
+            numpy.array(
+                [
+                    state[drive.x_velocity.id].velocity,
+                    state[drive.y_velocity.id].velocity,
+                ]
+            )
+        )
+        return float(odom_velocity[0 if degree_of_freedom == drive.x_velocity else 1])
+
+
+@dataclass
+class MujocoDifferentialDriveJoints(MujocoWheeledDriveJoints[DifferentialDrive]):
+    """
+    A differential drive, whose servos drive its velocity along the base's x and its
+    yaw.
+
+    The base only moves along its own x, which in ``odom`` takes both slides, so the
+    slide along y gets a velocity servo of its own, with the gains of the servo of the
+    forward velocity.
+    """
+
+    @classproperty
+    def kind(cls) -> str:
+        return "differential_drive"
+
+    @property
+    def axes_when_servoed(self) -> List[DriveAxis]:
+        drive = self.connection
+        return [
+            DriveAxis(
+                measured=drive.x,
+                joint_type=mujoco.mjtJoint.mjJNT_SLIDE,
+                direction=numpy.array([1.0, 0.0, 0.0]),
+                commanded=drive.x_velocity,
+            ),
+            DriveAxis(
+                measured=drive.y,
+                joint_type=mujoco.mjtJoint.mjJNT_SLIDE,
+                direction=numpy.array([0.0, 1.0, 0.0]),
+            ),
+            DriveAxis(
+                measured=drive.yaw,
+                joint_type=mujoco.mjtJoint.mjJNT_HINGE,
+                direction=numpy.array([0.0, 0.0, 1.0]),
+                commanded=drive.yaw,
+            ),
+        ]
+
+    @property
+    def sideways_servo_name(self) -> str:
+        """
+        :return: The name of the servo of the slide along y.
+        """
+        return f"{self.joint_name_of(self.connection.y)}_servo"
+
+    @property
+    def _forward_velocity_in_odom(self) -> NDArray[numpy.float64]:
+        """
+        :return: The velocity the drive is commanded to along its base's x, along the
+            x and the y of its ``odom``.
+        """
+        forward_velocity = self.world.state[self.connection.x_velocity.id].velocity
+        return self._in_odom(numpy.array([forward_velocity, 0.0]))
+
+    def build(self, builder: MujocoBuilder) -> None:
+        super().build(builder)
+        if not self.servoed:
+            return
+        [forward_servo] = [
+            actuator
+            for actuator in self.world.actuators
+            if self.connection.x_velocity in actuator.dofs
+        ]
+        builder.build_actuator_on_joint(
+            forward_servo,
+            self.sideways_servo_name,
+            self.joint_name_of(self.connection.y),
+        )
+
+    def control_of(self, actuator: Actuator) -> float:
+        """
+        The forward velocity is commanded along the base's x, while the slide moves
+        along the x of its ``odom``, so it is turned by the drive's yaw.
+
+        :param actuator: An actuator driving one of the drive's degrees of freedom.
+        :return: The velocity the joint it reaches is commanded to.
+        """
+        drive = self.connection
+        [degree_of_freedom] = actuator.dofs
+        if degree_of_freedom != drive.x_velocity:
+            return super().control_of(actuator)
+        return float(self._forward_velocity_in_odom[0])
+
+    def own_actuator_controls(self) -> Dict[str, float]:
+        """
+        :return: The velocity the slide along y is commanded to: the forward velocity,
+            turned by the drive's yaw.
+        """
+        if not self.servoed:
+            return {}
+        return {self.sideways_servo_name: float(self._forward_velocity_in_odom[1])}
 
 
 @dataclass
@@ -2671,17 +2835,47 @@ class MujocoBuilder(MultiSimBuilder):
         MujocoConnectionJoints.of(connection, self.world).build(self)
 
     def _build_actuator(self, actuator: Actuator):
+        [degree_of_freedom] = actuator.dofs
+        self._add_actuator(
+            actuator,
+            actuator.name.name,
+            self._transmission_for_degree_of_freedom(degree_of_freedom),
+        )
+
+    def build_actuator_on_joint(
+        self, actuator: Actuator, name: str, joint_name: str
+    ) -> None:
+        """
+        Add a MuJoCo actuator working like one of the world's actuators on another
+        joint.
+
+        :param actuator: The actuator of the world whose kind and gains it takes.
+        :param name: The name of the MuJoCo actuator.
+        :param joint_name: The joint it drives.
+        """
+        self._add_actuator(
+            actuator,
+            name,
+            {"target": joint_name, "trntype": mujoco.mjtTrn.mjTRN_JOINT},
+        )
+
+    def _add_actuator(
+        self, actuator: Actuator, name: str, transmission: Dict[str, Any]
+    ) -> None:
+        """
+        :param actuator: The actuator of the world whose kind and gains the MuJoCo
+            actuator takes.
+        :param name: The name of the MuJoCo actuator.
+        :param transmission: What the MuJoCo actuator drives.
+        """
         actuator_props = MujocoActuatorConverter.convert(actuator)
         actuator_props.pop("dof_names")
-        [degree_of_freedom] = actuator.dofs
-        actuator_props.update(
-            self._transmission_for_degree_of_freedom(degree_of_freedom)
-        )
-        actuator_name = actuator.name.name
+        actuator_props["name"] = name
+        actuator_props.update(transmission)
         actuator_spec = self.spec.add_actuator(**actuator_props)
         if actuator_spec is None:
             raise MujocoEntityNotFoundError(
-                entity_name=actuator_name,
+                entity_name=name,
                 entity_type=mujoco.mjtObj.mjOBJ_ACTUATOR,
                 action="add",
             )
@@ -3764,7 +3958,7 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         """
         :return: The control input of every actuator, by its name, as the realisation
             of the connection moving its degree of freedom works it out from the
-            actuator's set point.
+            actuator's set point, and of every actuator a realisation builds itself.
         """
         connection_by_dof_id = {
             degree_of_freedom.id: connection
@@ -3781,6 +3975,12 @@ class MujocoSynchronizer(MultiSimSynchronizer):
                 else MujocoConnectionJoints.of(connection, self._world).control_of(
                     actuator
                 )
+            )
+        for connection in self._world.connections:
+            controls.update(
+                MujocoConnectionJoints.of(
+                    connection, self._world
+                ).own_actuator_controls()
             )
         return controls
 
