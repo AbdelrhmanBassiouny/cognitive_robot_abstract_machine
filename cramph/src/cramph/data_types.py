@@ -82,6 +82,13 @@ class StatechartPayloadKey(StrEnum):
     The structure of the statechart, sent once per goal.
     """
 
+    JOINED_NODES = "joined_nodes"
+    """
+    The structure of the nodes that joined the statechart since the structure of the
+    nodes before them was sent, as
+    :meth:`~cramph.statechart.Statechart.nodes_from_to_json` writes them.
+    """
+
     LIFE_CYCLE_STATE = "life_cycle_state"
     """
     The life cycle state of every node.

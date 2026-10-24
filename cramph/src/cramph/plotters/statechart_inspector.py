@@ -33,12 +33,7 @@ from typing_extensions import Any
 
 from cramph.data_types import StatechartPayloadKey
 from cramph.plotters.graphviz import StatechartGraphviz
-from cramph.statechart import (
-    LastObservationState,
-    LifeCycleState,
-    ObservationState,
-    Statechart,
-)
+from cramph.reported_statechart import ReportedStatechart
 from semantic_digital_twin.adapters.ros import rospy
 
 # %% the window
@@ -91,12 +86,12 @@ class DotGraphViewer(QWidget):
     new_message_signal: pyqtSignal = pyqtSignal(object)
     last_goal_id: int | None
     graphs_by_goal: dict[int, list[Any]]
-    motion_statechart: Statechart | None
+    reported_statechart: ReportedStatechart
 
     def __init__(self):
         super().__init__()
         self.last_goal_id = None
-        self.motion_statechart = None
+        self.reported_statechart = ReportedStatechart()
 
         # Connect the signal to the slot
         self.new_message_signal.connect(self.handle_new_message)
@@ -257,12 +252,18 @@ class DotGraphViewer(QWidget):
         self.new_message_signal.emit(msg)
 
     def handle_new_message(self, msg: JsonAction_FeedbackMessage) -> None:
-        # This runs in the main thread
+        """
+        Take over the statechart `msg` reports and draw it, showing the drawing if the
+        newest one was shown before. Runs in the Qt main thread.
+
+        :param msg: A feedback message of the followed action server.
+        """
         json_data = json.loads(msg.feedback.feedback)
         msg_goal_id = json_data[StatechartPayloadKey.GOAL_ID]
 
-        self.parse_new_motion_statechart(json_data)
-        self.parse_state(json_data)
+        self.reported_statechart.take_over(json_data)
+        if self.reported_statechart.statechart is None:
+            return
 
         at_last_msg = True
         if len(self.goals) > 0:
@@ -297,34 +298,14 @@ class DotGraphViewer(QWidget):
                 update_position_label=False,
             )
 
-    def plot_motion_statechart(self, goal_id: int):
-        graph = StatechartGraphviz(self.motion_statechart).to_dot_graph()
+    def plot_motion_statechart(self, goal_id: int) -> None:
+        """
+        Draw the reported statechart as the newest drawing of `goal_id`.
+
+        :param goal_id: The goal, numbered in the order the goals arrived.
+        """
+        graph = StatechartGraphviz(self.reported_statechart.statechart).to_dot_graph()
         self.graphs_by_goal[goal_id].append(graph)
-
-    def parse_new_motion_statechart(self, json_data: dict[str, Any]):
-        motion_statechart_data = json_data.get(StatechartPayloadKey.STATECHART)
-        if motion_statechart_data is not None:
-            self.motion_statechart = Statechart.from_json(motion_statechart_data)
-            self.motion_statechart._add_transitions()
-
-    def parse_state(self, json_data: dict[str, Any]):
-        life_cycle_data = json_data.get(StatechartPayloadKey.LIFE_CYCLE_STATE)
-        life_cycle_state = LifeCycleState.from_json(
-            life_cycle_data, statechart=self.motion_statechart
-        )
-        observation_data = json_data.get(StatechartPayloadKey.OBSERVATION_STATE)
-        observation_state = ObservationState.from_json(
-            observation_data, statechart=self.motion_statechart
-        )
-        last_observation_data = json_data.get(
-            StatechartPayloadKey.LAST_OBSERVATION_STATE
-        )
-        last_observation_state = LastObservationState.from_json(
-            last_observation_data, statechart=self.motion_statechart
-        )
-        self.motion_statechart.life_cycle_state.data = life_cycle_state.data
-        self.motion_statechart.observation_state.data = observation_state.data
-        self.motion_statechart.last_observation_state.data = last_observation_state.data
 
     def display_graph(
         self, goal_index: int, message_index: int, update_position_label: bool = True

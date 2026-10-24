@@ -23,6 +23,7 @@ from cramph.executor import StatechartExecutor
 from cramph.monitors import CountTicks
 from cramph.node import StatechartNode
 from cramph.nodes_for_testing import NodeSucceedingOnObservingTrue
+from cramph.reported_statechart import ReportedStatechart
 from cramph.statechart import Statechart
 from giskardpy.middleware.ros2.child_choices import (
     ChildChoiceClient,
@@ -525,6 +526,27 @@ def test_the_running_side_asks_again_only_once_the_repeat_period_passed(
     exchange.feedback_publisher.publish_if_changed()
 
     assert len(exchange.action_server.sent_feedback) == 1
+
+
+# %% the statechart rebuilt from the feedback
+
+
+def test_the_statechart_rebuilt_from_the_feedback_holds_the_children_that_joined(
+    exchange: ClientAndRunningStatechart,
+) -> None:
+    exchange.feedback_publisher.publish_structure()
+    exchange.let_both_nodes_be_answered_before_any_choice_is_taken()
+    exchange.executor.tick()
+    exchange.executor.tick()
+    exchange.feedback_publisher.publish()
+
+    reported_statechart = ReportedStatechart()
+    for message in exchange.action_server.sent_feedback:
+        reported_statechart.take_over(json.loads(message.feedback))
+
+    assert [node.name for node in reported_statechart.statechart.nodes] == [
+        node.name for node in exchange.running.statechart.nodes
+    ]
 
 
 def test_the_running_side_repeats_nothing_while_no_node_waits_for_a_child() -> None:
