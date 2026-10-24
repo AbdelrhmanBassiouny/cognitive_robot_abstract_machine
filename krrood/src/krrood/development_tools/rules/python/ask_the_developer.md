@@ -1,0 +1,3 @@
+- When you are unsure why something was done or why a specific number was chosen, ask; never invent a reason and write it down as a comment
+- When a method is never used outside of tests, ask whether it can be removed
+- Before adding a new dependency, ask

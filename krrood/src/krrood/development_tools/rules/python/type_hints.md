@@ -1,0 +1,4 @@
+- Every parameter and return value has an accurate type hint, `Any` and `-> None` included
+- Use builtin generics and `X | None` (`list[int]`, `Pose | None`), never `typing.List`, `Dict`, `Optional` or `Union`; import every other typing construct from `typing_extensions`, never from `typing`
+- Use `from __future__ import annotations` instead of wrapping types in strings
+- When each class in a family declares the type it handles, carry that type as a bound generic parameter, not a `ClassVar`, so it is part of the signature and cannot disagree with a separate attribute: bind it in each member (`class MemberOfFamily(Family[ConcreteType])`)

@@ -1,18 +1,18 @@
-# The hooks of .pre-commit-hooks.yaml, run from the cram-development-tools package in
-# this repository's development environment (`uv sync --extra dev` installs it), so a
-# change to the package applies here before it is released.
+# The hooks of .pre-commit-hooks.yaml, run from krrood's development tools in this
+# repository's development environment (`uv sync --extra dev` installs them), so a change
+# to them applies here before it is released.
 repos:
   - repo: local
     hooks:
-      - id: cram-development-tools-format
-        name: Format Python (black, then docformatter where it doesn't conflict with black)
-        entry: cram-development-tools format
+      - id: krrood-format
+        name: Format Python (ruff, then docformatter where it doesn't conflict with ruff)
+        entry: krrood format
         language: system
         types: [python]
-        exclude: (?x)^(.*/ormatic_interface\.py|test/cram_development_tools_test/dataset/.*)$
-      - id: cram-development-tools-agents-md
+        exclude: (?x)^(.*/ormatic_interface\.py|test/krrood_test/test_development_tools/dataset/.*)$
+      - id: krrood-agents-md
         name: Generate AGENTS.md
-        entry: cram-development-tools agents-md
+        entry: krrood agents-md
         language: system
         pass_filenames: false
         always_run: true

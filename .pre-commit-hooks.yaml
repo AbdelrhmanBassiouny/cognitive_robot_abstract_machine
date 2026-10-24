@@ -1,21 +1,22 @@
-# Hooks for the cram-development-tools package (cram_development_tools/). They run the
-# installed `cram-development-tools` command, so the repository using them installs the
-# package in its development environment; see cram_development_tools/README.md.
-- id: cram-development-tools-format
-  name: Format Python (black, then docformatter where it doesn't conflict with black)
+# Hooks for krrood's development tools (krrood/src/krrood/development_tools). They run the
+# installed `krrood` command, so the repository using them installs
+# `krrood[development-tools]` in its development environment; see
+# krrood/doc/development_tools.md.
+- id: krrood-format
+  name: Format Python (ruff, then docformatter where it doesn't conflict with ruff)
   description: >
-    Runs black, then docformatter on top of it, keeping docformatter's docstring changes
-    only when a subsequent black pass leaves them unchanged.
-  entry: cram-development-tools format
+    Runs ruff format, then docformatter on top of it, keeping docformatter's docstring
+    changes only when a subsequent ruff pass leaves them unchanged.
+  entry: krrood format
   language: system
   types: [python]
 
-- id: cram-development-tools-agents-md
+- id: krrood-agents-md
   name: Generate AGENTS.md
   description: >
-    Writes AGENTS.md as the generic rules shipped with cram-development-tools followed by
-    the repository's own AGENTS.project.md.
-  entry: cram-development-tools agents-md
+    Writes AGENTS.md as the rules krrood ships followed by the repository's own
+    AGENTS.project.md.
+  entry: krrood agents-md
   language: system
   pass_filenames: false
   always_run: true

@@ -1,5 +1,5 @@
 """
-The ``cram-development-tools`` command.
+The ``krrood`` command.
 """
 
 from __future__ import annotations
@@ -14,8 +14,12 @@ from pathlib import Path
 
 from typing_extensions import Sequence
 
-from cram_development_tools.agents_instructions import AgentsInstructions
-from cram_development_tools.docstring_formatting import DocstringFormatter
+from krrood.development_tools.agent_instructions import (
+    AgentsInstructions,
+    RepositoryInstructionsFile,
+    RuleSet,
+)
+from krrood.development_tools.formatting import DocstringFormatter
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +29,12 @@ logger = logging.getLogger(__name__)
 
 class Subcommand(StrEnum):
     """
-    The subcommands of ``cram-development-tools``.
+    The subcommands of ``krrood``.
     """
 
     FORMAT = "format"
     """
-    Format Python files with black and docformatter.
+    Format Python files with ruff and docformatter.
     """
 
     AGENTS_MD = "agents-md"
@@ -47,6 +51,11 @@ class Option(StrEnum):
     CHECK = "--check"
     """
     Verify a generated file instead of writing it.
+    """
+
+    RULE_SETS = "--rule-sets"
+    """
+    Choose the rule sets a generated ``AGENTS.md`` contains.
     """
 
 
@@ -72,11 +81,11 @@ class ExitStatus(IntEnum):
 @dataclass
 class CommandLine:
     """
-    The ``cram-development-tools`` command line: its subcommands, their arguments and
-    running the one a command line names.
+    The ``krrood`` command line: its subcommands, their arguments and running the one a
+    command line names.
     """
 
-    program_name: str = "cram-development-tools"
+    program_name: str = "krrood"
     """
     The name the command is invoked by.
     """
@@ -105,19 +114,27 @@ class CommandLine:
 
         format_parser = subparsers.add_parser(
             Subcommand.FORMAT,
-            help="Format Python files with black, then docformatter where they agree.",
+            help="Format Python files with ruff, then docformatter where they agree.",
         )
         format_parser.add_argument("files", nargs="*", type=Path)
         format_parser.set_defaults(run=self.format_files)
 
         agents_parser = subparsers.add_parser(
             Subcommand.AGENTS_MD,
-            help="Generate AGENTS.md from the packaged rules and AGENTS.project.md.",
+            help="Generate AGENTS.md from the shared rules and AGENTS.project.md.",
         )
         agents_parser.add_argument(
             Option.CHECK,
             action="store_true",
             help="Only verify that AGENTS.md is up to date; exit non-zero if it is not.",
+        )
+        agents_parser.add_argument(
+            Option.RULE_SETS,
+            nargs="+",
+            type=RuleSet,
+            choices=list(RuleSet),
+            default=list(RuleSet),
+            help="The rule sets AGENTS.md contains; all of them when omitted.",
         )
         agents_parser.set_defaults(run=self.generate_agents_instructions)
 
@@ -142,13 +159,20 @@ class CommandLine:
         :param arguments: The parsed command line.
         :return: :attr:`ExitStatus.FAILURE` if the file was rewritten or is stale.
         """
-        instructions = AgentsInstructions(Path.cwd())
+        rule_sets = tuple(
+            rule_set for rule_set in RuleSet if rule_set in arguments.rule_sets
+        )
+        instructions = AgentsInstructions(Path.cwd(), rule_sets)
         if arguments.check:
             if instructions.is_current():
                 return ExitStatus.SUCCESS
             logger.error(
-                "%s is out of date; run `%s %s` to regenerate it",
-                instructions.generated_path.name,
+                "%s is out of date. Never edit it by hand: write this repository's own "
+                "rules in %s and change a shared rule in its file under %s, then run "
+                "`%s %s`.",
+                RepositoryInstructionsFile.GENERATED,
+                RepositoryInstructionsFile.PROJECT,
+                instructions.rules_directory,
                 self.program_name,
                 Subcommand.AGENTS_MD,
             )

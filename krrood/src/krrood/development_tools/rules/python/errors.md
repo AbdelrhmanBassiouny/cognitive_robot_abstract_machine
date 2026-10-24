@@ -1,0 +1,6 @@
+- Never use try-except; a program in an illegal state raises an appropriate exception
+- Create meaningful custom exceptions as dataclasses
+- Put each exception in the `exceptions.py` closest to the code that raises it:
+  - An exception raised only within one subpackage goes in that subpackage's `exceptions.py`; create the file if the subpackage has none
+  - An exception raised across several subpackages goes in the `exceptions.py` of their nearest common package
+- Never use `assert` outside tests: Python drops it when run with `-O`, so the check silently disappears. Raise a custom exception instead

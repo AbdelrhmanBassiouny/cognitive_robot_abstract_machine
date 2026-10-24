@@ -1,0 +1,1 @@
+- A Python rule about errors

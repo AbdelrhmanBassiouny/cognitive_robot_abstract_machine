@@ -1,0 +1,7 @@
+- Always use dataclasses
+- Divide every file, source and test, into sections with `# %% <short description>` headers (e.g. `# %% same-noun disambiguation`), never decorative box-drawing dividers
+- A group of primitives that travels together, or a return type that keeps being repeated, becomes a dataclass
+- Never duplicate code. Never put methods in a catch-all module such as `utils.py`; move them onto the class that owns the behaviour
+- Access attributes with `.`, never with `getattr`, and never wrap attribute access in try-except
+- Never use mutable objects as default arguments
+- Never reimplement what the codebase or an existing dependency already provides. When searching for it, never cut off the output of grep or other searches; narrow the search instead

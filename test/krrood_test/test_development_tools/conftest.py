@@ -1,9 +1,5 @@
 """
-Fixtures shared by the cram-development-tools tests.
-
-This suite runs in the lightweight test_cram_development_tools CI job with --confcutdir
-pointed here, so the repository-root test/conftest.py - which imports the robotics stack
-that job does not install - is never loaded for it.
+Fixtures shared by the development tools tests.
 """
 
 from __future__ import annotations
@@ -12,19 +8,22 @@ import shutil
 from pathlib import Path
 
 import pytest
+from typing_extensions import Callable
 
 from .dataset_files import DatasetFile
 
 
 @pytest.fixture
-def copy_into_temporary_directory(tmp_path: Path):
+def copy_into_temporary_directory(
+    tmp_path: Path,
+) -> Callable[[DatasetFile, str], Path]:
     """
     :return: A function copying a dataset file into ``tmp_path`` under a given name.
     """
 
     def copy(dataset_file: DatasetFile, file_name: str) -> Path:
         destination = tmp_path / file_name
-        shutil.copyfile(dataset_file.value, destination)
+        shutil.copyfile(dataset_file, destination)
         return destination
 
     return copy

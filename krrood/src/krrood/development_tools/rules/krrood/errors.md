@@ -1,0 +1,1 @@
+- Custom exceptions subclass `krrood.exceptions.DataclassException`, implementing its `error_message` and `suggest_correction`

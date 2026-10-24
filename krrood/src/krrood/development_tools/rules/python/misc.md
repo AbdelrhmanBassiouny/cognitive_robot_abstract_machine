@@ -1,0 +1,2 @@
+- Always use the project's configured Python interpreter for tests and commands
+- If a package could be replaced by a more powerful one, tell us

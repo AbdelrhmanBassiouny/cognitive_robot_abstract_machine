@@ -1,0 +1,3 @@
+- Imports are absolute. Exception: a test imports another test module (a shared mimic or fixture from the test datasets) relatively
+- Imports go at the top of the module; fix an import cycle by restructuring the modules, never with a local import
+- Guard type-only imports with `TYPE_CHECKING`
