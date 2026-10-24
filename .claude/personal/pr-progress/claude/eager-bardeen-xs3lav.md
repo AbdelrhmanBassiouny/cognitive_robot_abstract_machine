@@ -1,11 +1,11 @@
 PR #517 (draft; head claude/festive-pascal-g09gl3, same commit as this branch): dev tools in krrood.
 
 Plan
-- krrood.development_tools: `krrood format` (ruff+docformatter); `krrood agents-md` generates a marked block from rule catalogues: PythonRules/KrroodRules (shared) + ProjectRule catalogues in the repo's agent_rules.py (CRAM: CramRules/CramSection).
+- krrood.development_tools: `krrood format`; `krrood agents-md` renders a marked block (Jinja) from Section subclasses + catalogues (enum per rule set x section: PythonRules/KrroodRules shared, ProjectRules subclasses in repo agent_rules.py).
 
 Done
-- Pushed 0f839cbef (project rules in code); all #517 review threads resolved; 40 tool tests pass; --no-deps check passes.
+- Pushed 1b6d7aefd (sections as classes, CodeReference, template, subclass registration, markers renamed); 8 of 9 new threads resolved; 42 tool tests pass.
 
 Next
-- User/team review of #517, then promotion; CI on 0f839cbef not yet seen.
-- basstler adoption waits for krrood-light-core item krrood-core-and-all-extras.
+- Open thread r4367788807: user to confirm full-deps agents-md (no-deps CI job dropped; check now in krrood job) vs text references.
+- CI on 1b6d7aefd not yet seen; basstler adoption waits for krrood-core-and-all-extras.
