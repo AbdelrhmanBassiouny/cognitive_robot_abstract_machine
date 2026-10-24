@@ -1,3 +1,0 @@
-- Run tests with pytest
-- Never run the whole test suite in one invocation: run one package or a few test directories at a time, and wait for each run to finish before starting the next
-- Make sure a test run can never exhaust the machine's working memory: check the free memory before starting, cap the run's memory so the run is killed rather than the machine, and account for other test runs already going on the same machine

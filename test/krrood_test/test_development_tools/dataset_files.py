@@ -49,9 +49,3 @@ class DatasetFile(PathEnumeration):
     Hand-written rules an ``AGENTS.md`` under test holds after its block of shared
     rules.
     """
-
-    RULES = Path(__file__).parent / "dataset" / "rules"
-    """
-    A rules directory whose Python rule set has rules on errors and whose krrood rule
-    set has rules on errors and structured data.
-    """

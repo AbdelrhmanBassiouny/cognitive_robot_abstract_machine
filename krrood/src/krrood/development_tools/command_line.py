@@ -159,19 +159,20 @@ class CommandLine:
         :param arguments: The parsed command line.
         :return: :attr:`ExitStatus.FAILURE` if the file was rewritten or is stale.
         """
-        rule_sets = tuple(
-            rule_set for rule_set in RuleSet if rule_set in arguments.rule_sets
+        catalogues = tuple(
+            rule_set.catalogue
+            for rule_set in RuleSet
+            if rule_set in arguments.rule_sets
         )
-        instructions = AgentsInstructions(Path.cwd(), rule_sets)
+        instructions = AgentsInstructions(Path.cwd(), catalogues)
         if arguments.check:
             if instructions.is_current():
                 return ExitStatus.SUCCESS
             logger.error(
                 "The block of shared rules in %s is missing, out of date or edited by "
-                "hand. Change a shared rule in the file the comment above it names, "
-                "under %s, never inside the block; then run `%s %s`.",
+                "hand. Change a shared rule in the module the comment above it names, "
+                "never inside the block; then run `%s %s`.",
                 RepositoryInstructionsFile.AGENTS,
-                instructions.rules_directory,
                 self.program_name,
                 Subcommand.AGENTS_MD,
             )

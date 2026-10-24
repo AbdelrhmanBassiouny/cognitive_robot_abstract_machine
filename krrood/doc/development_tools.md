@@ -11,7 +11,8 @@ can use the same conventions:
 - `krrood agents-md [--rule-sets SET ...] [--check]` keeps the block of shared rules in
   the repository's `AGENTS.md` equal to the rules of the chosen rule sets. It rewrites
   only what lies between the block's two marker lines and keeps the repository's own
-  text around it; without an `AGENTS.md` it writes one holding just the block. With
+  text around it. An `AGENTS.md` without the marker lines gets the block above its
+  text, and without an `AGENTS.md` it writes one holding just the block. With
   `--check` it writes nothing and exits non-zero when the block differs; run that in CI.
 
 Both commands exit with 1 when they modified a file, following pre-commit's convention
@@ -19,13 +20,17 @@ for formatting hooks.
 
 ## Rule sets
 
-The rules are grouped into rule sets, and `--rule-sets` chooses which ones the block
-contains (all of them by default):
+The rules are code: each rule is an `AgentRule` naming its section, its statement and
+any details that spell it out. The rules are grouped into rule sets, and `--rule-sets`
+chooses which ones the block contains (all of them by default):
 
-- `python`: rules for any Python repository.
+- `python`: rules for any Python repository, the `PythonRule` members of `PythonRules`.
 - `krrood`: conventions for a repository built on krrood, naming the krrood API each one
   uses (`DataclassException`, `classproperty`, `PathEnumeration`, the JSON serializer,
-  `SubClassSafeGeneric`).
+  `SubClassSafeGeneric`), the `KrroodRule` members of `KrroodRules`.
+
+Each catalogue is an enum with one named member per rule, so the rules can be queried
+from code, for example `PythonRules.rules_in(RuleSection.NAMING)`.
 
 A repository that does not use krrood generates its block with `--rule-sets python`, in
 its pre-commit hook and in its CI check alike.
@@ -76,19 +81,19 @@ rather than krrood.
 
 - A rule for one repository only is written directly in that repository's `AGENTS.md`,
   anywhere outside the block of shared rules.
-- A shared rule is never edited inside the block: the comment above it names the file it
-  comes from, `krrood/development_tools/rules/<rule set>/<section>.md` (under
-  `krrood/src` in cognitive_robot_abstract_machine), one file per section of the rules.
-  A rule that names krrood's API goes in the `krrood` rule set; every other rule goes in
-  `python`. A new section is a new member of `RuleSection` in
-  `krrood/src/krrood/development_tools/agent_instructions.py`, which sets the order the
-  sections appear in.
+- A shared rule is never edited inside the block: the comment above it names the
+  catalogue and module it comes from, under `krrood/development_tools/rules/` (in
+  `krrood/src` of cognitive_robot_abstract_machine). Find the member by the rule's text
+  and change it there. A rule that names krrood's API is a `KrroodRule` in
+  `KrroodRules`; every other rule is a `PythonRule` in `PythonRules`. A new section is a
+  new member of `RuleSection` in `krrood/src/krrood/development_tools/agent_rule.py`,
+  which sets the order the sections appear in.
 
 After changing a shared rule, run `krrood agents-md` (the pre-commit hook does this) and
 commit the regenerated `AGENTS.md` with the change; CI fails when the block is stale or
 was edited by hand. A shared rule reaches other repositories with the next krrood
 release.
 
-To adopt the block in an existing `AGENTS.md`, run `krrood agents-md`: it stops with an
-error naming the two marker lines to add where the shared rules belong. Add them and run
-it again.
+To adopt the block in an existing `AGENTS.md`, run `krrood agents-md`: it puts the block
+above the file's text. Then delete the rules of your own the block now repeats; you may
+move the block anywhere in the file, keeping its two marker lines.

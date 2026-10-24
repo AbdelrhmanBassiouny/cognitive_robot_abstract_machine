@@ -1,6 +1,0 @@
-- Write tests with pytest: plain test functions or classes, pytest fixtures, `pytest.raises` and plain `assert`; never `unittest.TestCase` or its assertion methods
-- Reuse the existing fixtures in `conftest.py`
-- Work test-driven: prove a bug with a meaningful, failing test before fixing it. Every new feature and fix is covered by tests
-- When fixing a failing test, never modify the test itself
-- Name test classes, and the mimic classes tests use, after the pattern or behaviour they exercise, not after the external class they stand in for
-- Keep code snippets in separate files of the correct type and import or read them into the test; never embed them as strings

@@ -1,5 +1,0 @@
-- Every method hides what actually runs from the reader, so extract one only when its abstraction is worth more than reading the executed code in place
-- Keep every statement in a method on the same level of abstraction: a method either strings together named steps or carries out one step's detail, never both
-- Never write a method that only forwards to or renames another call. A one-line method is allowed only when it implements an abstract method or a `classproperty`, caches its result, or removes duplication - and in the last case, first try to abstract the duplicated code itself
-- A method with a single caller must earn its place under these rules; otherwise inline it
-- Reduce nesting and complexity with guard clauses: handle alternative outputs first by inverting conditions and returning early, so the main branch holds the main output and the biggest compute. A single level of abstraction never justifies deep nesting; split the method instead

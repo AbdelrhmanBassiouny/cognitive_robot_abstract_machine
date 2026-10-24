@@ -1,2 +1,0 @@
-- A path enum subclasses `krrood.patterns.path_enumeration.PathEnumeration`, so every path derived from a member is a plain `Path`; its members' `name` is the path's last component, so read the member name as `_name_`
-- JSON that our own classes round-trip goes through `krrood.adapters.json_serializer`: use `DataclassJSONSerializer` wherever it can (de)serialize the class; where a class needs more, subclass `SubclassJSONSerializer` and build on `DataclassJSONSerializer.to_json`/`from_json`. Never hand-write field-by-field `to_json`/`from_json`

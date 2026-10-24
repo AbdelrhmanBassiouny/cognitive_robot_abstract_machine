@@ -1,5 +1,0 @@
-- Never use global variables, module-level constants or `ClassVar`. Instead:
-  - A fixed set of related values is a module-level enum
-  - A default a caller may want to change is a parameter of the method that uses it if only that method does, otherwise a dataclass field with that default. For example, a `Heater` takes `target_temperature: float = 20.0` as a field instead of declaring `DEFAULT_TARGET_TEMPERATURE: ClassVar[float] = 20.0`
-  - A constant that belongs to a class is a `classproperty`
-  - `ClassVar` is allowed only for state that explicitly has to be shared and mutable across every instance of a class. This almost never applies

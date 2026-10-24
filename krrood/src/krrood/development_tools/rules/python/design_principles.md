@@ -1,9 +1,0 @@
-- Use strictly object-oriented design and always apply the SOLID principles:
-  - Single Responsibility: each class and method does one thing. If a method has cyclomatic complexity in the hundreds, refactor
-  - Open/Closed: open for extension, closed for modification
-  - Liskov Substitution: subtypes are substitutable for their base types without breaking behaviour
-  - Interface Segregation: many small interfaces over one large one. An interface is an explicit superclass or mixin, never a `Protocol`
-  - Dependency Inversion: depend on abstractions, not concrete implementations
-- Keep code modular and decoupled
-- Eliminate YAGNI smells
-- Make interfaces hard to misuse

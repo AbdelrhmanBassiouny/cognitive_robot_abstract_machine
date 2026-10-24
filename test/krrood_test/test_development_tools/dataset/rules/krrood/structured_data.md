@@ -1,1 +1,0 @@
-- A krrood rule about structured data

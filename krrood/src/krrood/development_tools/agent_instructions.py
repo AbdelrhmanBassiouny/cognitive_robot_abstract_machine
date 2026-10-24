@@ -6,12 +6,13 @@ ships.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum, StrEnum
-from importlib.resources import files
-from importlib.resources.abc import Traversable
+from enum import StrEnum
 from pathlib import Path
 
-from krrood.development_tools.exceptions import RulesBlockNotFound
+from krrood.development_tools.agent_rule import RuleCatalogue, RuleSection
+from krrood.development_tools.exceptions import MalformedRulesBlock
+from krrood.development_tools.rules.krrood_rules import KrroodRules
+from krrood.development_tools.rules.python_rules import PythonRules
 
 # %% file names
 
@@ -47,9 +48,12 @@ class RulesBlockMarker(StrEnum):
     """
 
 
+# %% rule sets
+
+
 class RuleSet(StrEnum):
     """
-    The sets of rules krrood ships, by the directory under ``rules`` that holds them.
+    The sets of rules krrood ships, by the name the command line chooses them by.
     """
 
     PYTHON = "python"
@@ -62,84 +66,16 @@ class RuleSet(StrEnum):
     The rules for a repository built on krrood, naming the krrood API each one uses.
     """
 
-
-# %% sections
-
-
-@dataclass(frozen=True)
-class SectionHeading:
-    """
-    The Markdown heading of one section of the rules.
-    """
-
-    title: str
-    """
-    The text of the heading.
-    """
-
-    level: int
-    """
-    The heading level, 1 for a top-level heading.
-    """
-
     @property
-    def markdown(self) -> str:
+    def catalogue(self) -> type[RuleCatalogue]:
         """
-        The heading as a line of Markdown.
+        The catalogue holding this rule set's rules.
         """
-        return f"{'#' * self.level} {self.title}"
-
-
-class RuleSection(Enum):
-    """
-    The sections of the rules, in the order ``AGENTS.md`` lists them.
-
-    Each rule set holds a Markdown file of rules for any section it adds to, named after
-    the member in lower case.
-    """
-
-    CODE_QUALITY_RULES = SectionHeading("Code Quality Rules", 1)
-    APPLYING_THESE_RULES = SectionHeading("Applying These Rules", 2)
-    ASK_THE_DEVELOPER = SectionHeading("Ask the Developer", 2)
-    TESTING = SectionHeading("Testing", 2)
-    WRITING_TESTS = SectionHeading("Writing Tests", 3)
-    ASSERTIONS = SectionHeading("Assertions", 3)
-    EXTERNAL_SERVICES_AND_CI = SectionHeading("External Services and CI", 3)
-    RUNNING_TESTS = SectionHeading("Running Tests", 3)
-    CODE_STYLE = SectionHeading("Code Style", 2)
-    NAMING = SectionHeading("Naming", 3)
-    IMPORTS = SectionHeading("Imports", 2)
-    DESIGN_PRINCIPLES = SectionHeading("Design Principles", 2)
-    METHODS = SectionHeading("Methods", 3)
-    ERRORS = SectionHeading("Errors", 3)
-    CONSTANTS_AND_CLASS_LEVEL_VALUES = SectionHeading(
-        "Constants and Class-Level Values", 3
-    )
-    STRUCTURED_DATA = SectionHeading("Structured Data", 3)
-    TYPE_HINTS = SectionHeading("Type Hints", 2)
-    DOCUMENTATION = SectionHeading("Documentation", 2)
-    VERSION_CONTROL = SectionHeading("Version Control", 2)
-    MISC = SectionHeading("Misc", 2)
-
-    @property
-    def file_name(self) -> str:
-        """
-        The name of the file holding this section's rules in a rule set.
-        """
-        return f"{self._name_.lower()}.md"
-
-    @property
-    def subsections(self) -> list[RuleSection]:
-        """
-        The sections nested under this one, at any depth.
-        """
-        sections = list(RuleSection)
-        nested = []
-        for section in sections[sections.index(self) + 1 :]:
-            if section.value.level <= self.value.level:
-                break
-            nested.append(section)
-        return nested
+        match self:
+            case RuleSet.PYTHON:
+                return PythonRules
+            case RuleSet.KRROOD:
+                return KrroodRules
 
 
 # %% generation
@@ -149,7 +85,7 @@ class RuleSection(Enum):
 class AgentsInstructions:
     """
     The ``AGENTS.md`` of one repository, whose block of shared rules holds the rules of
-    the chosen rule sets and whose text around that block is written by hand.
+    the chosen catalogues and whose text around that block is written by hand.
     """
 
     repository_root: Path
@@ -157,24 +93,11 @@ class AgentsInstructions:
     The directory holding the repository's ``AGENTS.md``.
     """
 
-    rule_sets: tuple[RuleSet, ...] = tuple(RuleSet)
-    """
-    The rule sets whose rules the block contains.
-    """
-
-    rules_directory: Traversable = field(
-        default_factory=lambda: files(__package__).joinpath("rules")
+    catalogues: tuple[type[RuleCatalogue], ...] = field(
+        default_factory=lambda: tuple(rule_set.catalogue for rule_set in RuleSet)
     )
     """
-    The directory holding one directory of section files per rule set.
-    """
-
-    rules_directory_name: Path = field(
-        default_factory=lambda: Path(*__package__.split("."), "rules")
-    )
-    """
-    The path the block names a rule file by, relative to the directory krrood is
-    installed in.
+    The catalogues whose rules the block contains, in the order it lists them.
     """
 
     @property
@@ -187,23 +110,29 @@ class AgentsInstructions:
     def rules_of(self, section: RuleSection) -> str:
         """
         :param section: The section to collect.
-        :return: The rules every chosen rule set has for ``section``, in rule set order,
-            each rule file's rules preceded by a comment naming that file.
+        :return: The rules every chosen catalogue has for ``section``, in catalogue
+            order, each catalogue's rules preceded by a comment naming it and its module.
         """
-        rules_per_file = []
-        for rule_set in self.rule_sets:
-            rule_file = self.rules_directory / rule_set / section.file_name
-            if not rule_file.is_file():
+        rules_per_catalogue = []
+        for catalogue in self.catalogues:
+            rules = catalogue.rules_in(section)
+            if not rules:
                 continue
-            source_name = self.rules_directory_name / rule_set / section.file_name
-            rules = rule_file.read_text(encoding="utf-8").strip("\n")
-            rules_per_file.append(f"<!-- from {source_name} -->\n{rules}")
-        return "\n".join(rules_per_file)
+            module_path = Path(*catalogue.__module__.split(".")).with_suffix(".py")
+            rules_per_catalogue.append(
+                "\n".join(
+                    [
+                        f"<!-- from {catalogue.__qualname__} in {module_path} -->",
+                        *(rule.markdown for rule in rules),
+                    ]
+                )
+            )
+        return "\n".join(rules_per_catalogue)
 
     @property
     def shared_rules(self) -> str:
         """
-        The rules of the chosen rule sets, under the headings of the sections that have
+        The rules of the chosen catalogues, under the headings of the sections that have
         any.
         """
         rules_by_section = {section: self.rules_of(section) for section in RuleSection}
@@ -229,13 +158,20 @@ class AgentsInstructions:
         """
         Compose the content ``AGENTS.md`` must have.
 
-        :return: The current file with its block of shared rules replaced, or the block
-            alone if there is no file yet.
-        :raises RulesBlockNotFound: If the file exists without exactly one block.
+        :return: The current file with its block of shared rules replaced, the block
+            followed by the current file if it has no block yet, or the block alone if
+            there is no file yet.
+        :raises MalformedRulesBlock: If the file holds a marker line, but not exactly
+            one block.
         """
         if not self.path.is_file():
             return f"{self.rules_block}\n"
         content = self.path.read_text(encoding="utf-8")
+        if (
+            RulesBlockMarker.BEGIN not in content
+            and RulesBlockMarker.END not in content
+        ):
+            return f"{self.rules_block}\n\n{content}"
         before_block, _, from_block = content.partition(RulesBlockMarker.BEGIN)
         _, _, after_block = from_block.partition(RulesBlockMarker.END)
         has_one_block = (
@@ -244,7 +180,7 @@ class AgentsInstructions:
             and RulesBlockMarker.END in from_block
         )
         if not has_one_block:
-            raise RulesBlockNotFound(
+            raise MalformedRulesBlock(
                 self.path, RulesBlockMarker.BEGIN, RulesBlockMarker.END
             )
         return f"{before_block}{self.rules_block}{after_block}"
@@ -253,7 +189,8 @@ class AgentsInstructions:
         """
         :return: Whether ``AGENTS.md`` exists and its block of shared rules equals the
             rules it must hold.
-        :raises RulesBlockNotFound: If the file exists without exactly one block.
+        :raises MalformedRulesBlock: If the file holds a marker line, but not exactly
+            one block.
         """
         if not self.path.is_file():
             return False
@@ -265,7 +202,8 @@ class AgentsInstructions:
         around the block.
 
         :return: Whether the file changed.
-        :raises RulesBlockNotFound: If the file exists without exactly one block.
+        :raises MalformedRulesBlock: If the file holds a marker line, but not exactly
+            one block.
         """
         if self.is_current():
             return False

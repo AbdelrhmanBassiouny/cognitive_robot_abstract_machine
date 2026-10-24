@@ -1,1 +1,0 @@
-- Use the `classproperty` `krrood` provides

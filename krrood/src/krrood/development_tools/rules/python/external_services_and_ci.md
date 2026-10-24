@@ -1,4 +1,0 @@
-- Every added test is part of the CI suite. A test that needs live external calls or credentials CI does not have is skipped there (or removed, if new) so it cannot break the pipeline
-- A test that needs credentials in CI must be approved by the user and have those credentials available in CI; otherwise it is skipped there
-- Mock external APIs; call one live only to download a dataset other tests need
-- A test that calls an external API live must have a skip condition so it does not run in CI, and must be paired with an equivalent mocked test that does
