@@ -9,11 +9,13 @@ import importlib.util
 import re
 import sys
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from types import ModuleType
 
 from typing_extensions import Any, Callable
 
+from krrood.development_tools.exceptions import SectionWithoutParent
 from krrood.development_tools.repository_files import RepositoryInstructionsFile
 from krrood.ormatic.utils import classproperty
 
@@ -81,11 +83,21 @@ class AgentRule:
 # %% sections
 
 
-class Section:
+class Section(AgentRule, Enum):
     """
-    A section of ``AGENTS.md``, listing the rules declared as its class attributes. A
-    subclass of a section is a subsection nested under it.
+    A section of ``AGENTS.md``, whose members are the rules it lists. A member's value
+    is the rule's statement, or its statement and details.
     """
+
+    @classproperty
+    def parent(cls) -> type[Section] | None:
+        """
+        The section this one is nested under; none for a rule set.
+
+        :raises SectionWithoutParent: If the section names no section it is nested
+            under.
+        """
+        raise SectionWithoutParent(cls)
 
     @classproperty
     def title(cls) -> str:
@@ -104,18 +116,20 @@ class Section:
         )
 
     @classproperty
-    def rules(cls) -> list[AgentRule]:
+    def rules(cls) -> list[Section]:
         """
         The rules the section lists directly, in declaration order.
         """
-        return [rule for rule in vars(cls).values() if isinstance(rule, AgentRule)]
+        return list(cls)
 
     @classproperty
     def subsections(cls) -> list[type[Section]]:
         """
         The sections nested directly under this one, in definition order.
         """
-        return cls.__subclasses__()
+        return [
+            section for section in Section.__subclasses__() if section.parent is cls
+        ]
 
     @classproperty
     def has_rules(cls) -> bool:
@@ -127,17 +141,18 @@ class Section:
         )
 
     @classproperty
+    def depth(cls) -> int:
+        """
+        How deeply the section is nested, counting a rule set as depth 1.
+        """
+        return 1 if cls.parent is None else cls.parent.depth + 1
+
+    @classproperty
     def heading(cls) -> str:
         """
-        The section's heading as a line of Markdown, one level deeper than the section
-        it is nested under.
+        The section's heading as a line of Markdown.
         """
-        level = sum(
-            1
-            for base in cls.__mro__
-            if issubclass(base, Section) and base not in (Section, RuleSet)
-        )
-        return f"{'#' * level} {cls.title}"
+        return f"{'#' * cls.depth} {cls.title}"
 
     @classproperty
     def source_path(cls) -> Path:
@@ -154,8 +169,19 @@ class Section:
 class RuleSet(Section):
     """
     A set of rules a repository adopts as a whole: a top-level section of
-    ``AGENTS.md``. The rule sets are the subsections of this class.
+    ``AGENTS.md``. The rule sets are the subclasses of this class.
     """
+
+    @classproperty
+    def parent(cls) -> None:
+        return None
+
+    @classproperty
+    def available(cls) -> list[type[RuleSet]]:
+        """
+        Every rule set declared, in definition order.
+        """
+        return cls.__subclasses__()
 
     @classproperty
     def command_line_name(cls) -> str:
