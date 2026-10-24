@@ -74,12 +74,7 @@ items:
   - projection-interface
   - planar-point-interface
   branch: claude/krrimage-depth-segmentation
-  notes: 'Camera model = Projection[ImagePoint, Ray3] behind krrimage''s optional
-    krrspatial[casadi] extra. Capture is a krrood Role[ImagePlane] with camera and instant (world,
-    time; state from a WorldStateTrajectory or kept with it); real cameras, MuJoCo renders and
-    recordings all yield captures, and a video is a list of them. Unprojecting needs express at the
-    recorded state. First user: montessori perception, numpy-batched. Also one Resolution and
-    placing an image on a plane.'
+  notes: 'Camera model = Projection[ImagePoint, Ray3] behind krrimage''s optional krrspatial[casadi] extra; its target ImagePlane is the sensor''s, one per sensor, shared by all its images. An Image base holds pixels in an ImageCoordinateSystem on that plane: ColorImage, DepthImage, SegmentationImage; a crop is a new image in a new coordinate system on the same plane. Capture is a krrood Role[Image] with camera and instant (world, time); real, MuJoCo and recorded images all yield captures, a video is a list of them. Measure role cost per frame; fallback a plain dataclass. First user: montessori.'
 - id: projection-interface
   title: A Projection interface (project, projection_line, unproject) shared by orthogonal
     projection and camera models, with Ray3

@@ -7,5 +7,6 @@
 - Every 2D point implements PlanarPoint[CoordinateSystemT, CoordinateT], binding both parameters exactly once; ImagePoint is krrimage's PlanarPoint[ImageCoordinateSystem, float], Pixel stays a grid cell. Mapping an image point to a metric point is a projection behind an optional extra.
 - Every map between 2D and 3D (orthogonal projection, camera model) implements krrspatial's Projection: project, projection_line, unproject. An image reaches a ReferenceFrame only through a Projection, never by being one.
 - Dimension belongs to a space, not to its values or changes. A world is the space its bodies chart, one space per world; a frame not in a world has no space. A 2D value is given in a plane's coordinate system, which a 3D frame induces.
+- One image plane per sensor, shared by every image it takes; an image is pixels in an ImageCoordinateSystem on it. Where and when an image was taken is a Capture role on the image, never fields of the image.
 - Moved classes stay importable from their old module, so old imports and JSON type names keep resolving.
 - Package names (krrspatial, krrimage, krrollywood) are open to change in review.
