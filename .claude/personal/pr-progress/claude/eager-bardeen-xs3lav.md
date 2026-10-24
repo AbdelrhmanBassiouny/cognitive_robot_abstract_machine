@@ -1,12 +1,11 @@
 PR #517 (draft; head claude/festive-pascal-g09gl3, same commit as this branch): dev tools in krrood.
 
 Plan
-- krrood.development_tools: `krrood format` (ruff+docformatter), `krrood agents-md` keeps a marked block of shared rules; rules are AgentRule (PythonRule/KrroodRule) members of PythonRules/KrroodRules enums; block auto-added when no markers.
+- krrood.development_tools: `krrood format` (ruff+docformatter); `krrood agents-md` generates a marked block from rule catalogues: PythonRules/KrroodRules (shared) + ProjectRule catalogues in the repo's agent_rules.py (CRAM: CramRules/CramSection).
 
 Done
-- Pushed ee3285b3d (rules in code, auto-adopt); 33 tool tests pass; --check passes with --no-deps install.
+- Pushed 0f839cbef (project rules in code); all #517 review threads resolved; 40 tool tests pass; --no-deps check passes.
 
 Next
-- Open thread: user decides whether ProjectRule (generated project rules) replaces hand-written ones.
-- User/team review of #517, then promotion; CI on ee3285b3d not yet seen.
+- User/team review of #517, then promotion; CI on 0f839cbef not yet seen.
 - basstler adoption waits for krrood-light-core item krrood-core-and-all-extras.
