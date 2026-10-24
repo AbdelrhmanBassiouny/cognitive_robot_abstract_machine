@@ -8,17 +8,18 @@ can use the same conventions:
   docformatter can disagree with ruff about the blank lines after an attribute docstring
   that precedes a decorated definition; for such a file ruff's output is kept, so the two
   tools never oscillate.
-- `krrood agents-md [--rule-sets SET ...] [--check]` writes the repository's `AGENTS.md`:
-  a generated-file notice, the rules of the chosen rule sets, then the repository's own
-  `AGENTS.project.md` if it has one. With `--check` it writes nothing and exits non-zero
-  when the committed `AGENTS.md` differs; run that in CI.
+- `krrood agents-md [--rule-sets SET ...] [--check]` keeps the block of shared rules in
+  the repository's `AGENTS.md` equal to the rules of the chosen rule sets. It rewrites
+  only what lies between the block's two marker lines and keeps the repository's own
+  text around it; without an `AGENTS.md` it writes one holding just the block. With
+  `--check` it writes nothing and exits non-zero when the block differs; run that in CI.
 
 Both commands exit with 1 when they modified a file, following pre-commit's convention
 for formatting hooks.
 
 ## Rule sets
 
-The rules are grouped into rule sets, and `--rule-sets` chooses which ones `AGENTS.md`
+The rules are grouped into rule sets, and `--rule-sets` chooses which ones the block
 contains (all of them by default):
 
 - `python`: rules for any Python repository.
@@ -26,7 +27,7 @@ contains (all of them by default):
   uses (`DataclassException`, `classproperty`, `PathEnumeration`, the JSON serializer,
   `SubClassSafeGeneric`).
 
-A repository that does not use krrood generates its file with `--rule-sets python`, in
+A repository that does not use krrood generates its block with `--rule-sets python`, in
 its pre-commit hook and in its CI check alike.
 
 ## Installation
@@ -53,7 +54,7 @@ repos:
         additional_dependencies: ["krrood[development-tools]==<version>"]
         types: [python]
       - id: krrood-agents-md
-        name: Generate AGENTS.md
+        name: Update the shared rules in AGENTS.md
         entry: krrood agents-md
         language: python
         additional_dependencies: ["krrood[development-tools]==<version>"]
@@ -73,15 +74,21 @@ rather than krrood.
 
 ## Changing a rule
 
-`AGENTS.md` is generated; never edit it by hand, and CI fails when it is stale.
+- A rule for one repository only is written directly in that repository's `AGENTS.md`,
+  anywhere outside the block of shared rules.
+- A shared rule is never edited inside the block: the comment above it names the file it
+  comes from, `krrood/development_tools/rules/<rule set>/<section>.md` (under
+  `krrood/src` in cognitive_robot_abstract_machine), one file per section of the rules.
+  A rule that names krrood's API goes in the `krrood` rule set; every other rule goes in
+  `python`. A new section is a new member of `RuleSection` in
+  `krrood/src/krrood/development_tools/agent_instructions.py`, which sets the order the
+  sections appear in.
 
-- A rule for one repository only goes in that repository's `AGENTS.project.md`.
-- A shared rule lives in `krrood/src/krrood/development_tools/rules/<rule set>/<section>.md`,
-  one file per section of the rules. A rule that names krrood's API goes in the `krrood`
-  rule set; every other rule goes in `python`. A new section is a new member of
-  `RuleSection` in `krrood/src/krrood/development_tools/agent_instructions.py`, which
-  sets the order the sections appear in.
+After changing a shared rule, run `krrood agents-md` (the pre-commit hook does this) and
+commit the regenerated `AGENTS.md` with the change; CI fails when the block is stale or
+was edited by hand. A shared rule reaches other repositories with the next krrood
+release.
 
-Then run `krrood agents-md` (the pre-commit hook does this) and commit the regenerated
-`AGENTS.md` with the change. A shared rule reaches other repositories with the next
-krrood release.
+To adopt the block in an existing `AGENTS.md`, run `krrood agents-md`: it stops with an
+error naming the two marker lines to add where the shared rules belong. Add them and run
+it again.

@@ -38,9 +38,16 @@ class DatasetFile(PathEnumeration):
     A module ruff rejects.
     """
 
+    INTRODUCTION = Path(__file__).parent / "dataset" / "introduction.md"
+    """
+    Hand-written text an ``AGENTS.md`` under test holds before its block of shared
+    rules.
+    """
+
     PROJECT_RULES = Path(__file__).parent / "dataset" / "project_rules.md"
     """
-    An ``AGENTS.project.md`` of a repository under test.
+    Hand-written rules an ``AGENTS.md`` under test holds after its block of shared
+    rules.
     """
 
     RULES = Path(__file__).parent / "dataset" / "rules"

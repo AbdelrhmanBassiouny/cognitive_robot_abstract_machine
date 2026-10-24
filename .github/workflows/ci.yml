@@ -70,9 +70,9 @@ jobs:
           fi
 
   check_agents_md_is_generated:
-    # AGENTS.md is generated from the rules krrood ships and AGENTS.project.md; a hand
-    # edit or a forgotten regeneration fails here. Generating it needs only the standard
-    # library, so krrood is installed without its dependencies.
+    # The marked block of shared rules in AGENTS.md is generated from the rules krrood
+    # ships; a hand edit inside it or a forgotten regeneration fails here. Generating it
+    # needs only the standard library, so krrood is installed without its dependencies.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

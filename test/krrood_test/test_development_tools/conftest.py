@@ -10,6 +10,11 @@ from pathlib import Path
 import pytest
 from typing_extensions import Callable
 
+from krrood.development_tools.agent_instructions import (
+    RepositoryInstructionsFile,
+    RulesBlockMarker,
+)
+
 from .dataset_files import DatasetFile
 
 
@@ -37,3 +42,18 @@ def repository_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """
     monkeypatch.chdir(tmp_path)
     return tmp_path
+
+
+@pytest.fixture
+def instructions_with_empty_rules_block(repository_root: Path) -> Path:
+    """
+    :return: The ``AGENTS.md`` of :func:`repository_root`, holding hand-written text
+        before and after an empty block of shared rules.
+    """
+    path = repository_root / RepositoryInstructionsFile.AGENTS
+    path.write_text(
+        f"{DatasetFile.INTRODUCTION.read_text()}\n"
+        f"{RulesBlockMarker.BEGIN}\n{RulesBlockMarker.END}\n\n"
+        f"{DatasetFile.PROJECT_RULES.read_text()}"
+    )
+    return path

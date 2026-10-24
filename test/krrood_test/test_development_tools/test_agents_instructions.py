@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
+
+import pytest
 
 from krrood.development_tools.agent_instructions import (
     AgentsInstructions,
     RepositoryInstructionsFile,
     RuleSection,
     RuleSet,
+    RulesBlockMarker,
 )
 from krrood.development_tools.command_line import (
     CommandLine,
@@ -15,36 +17,66 @@ from krrood.development_tools.command_line import (
     Option,
     Subcommand,
 )
+from krrood.development_tools.exceptions import RulesBlockNotFound
 
 from .dataset_files import DatasetFile
 
-# %% composition
+# %% block of shared rules
 
 
-def test_composes_notice_shared_rules_and_project_rules(
-    repository_root: Path,
-) -> None:
-    shutil.copyfile(
-        DatasetFile.PROJECT_RULES,
-        repository_root / RepositoryInstructionsFile.PROJECT,
-    )
+def test_a_new_file_holds_only_the_rules_block(repository_root: Path) -> None:
     instructions = AgentsInstructions(repository_root)
 
-    assert instructions.render() == (
-        f"{instructions.notice}\n\n"
-        f"{instructions.shared_rules.strip()}\n\n"
-        f"{DatasetFile.PROJECT_RULES.read_text().strip()}\n"
+    assert instructions.render() == f"{instructions.rules_block}\n"
+
+
+def test_the_rules_block_is_enclosed_by_its_markers() -> None:
+    instructions = AgentsInstructions(Path.cwd())
+
+    assert instructions.rules_block == (
+        f"{RulesBlockMarker.BEGIN}\n\n{instructions.shared_rules}\n\n"
+        f"{RulesBlockMarker.END}"
     )
 
 
-def test_composes_notice_and_shared_rules_without_project_rules(
-    repository_root: Path,
+def test_text_around_the_block_is_kept(
+    instructions_with_empty_rules_block: Path,
 ) -> None:
-    instructions = AgentsInstructions(repository_root)
+    instructions = AgentsInstructions(instructions_with_empty_rules_block.parent)
 
     assert instructions.render() == (
-        f"{instructions.notice}\n\n{instructions.shared_rules.strip()}\n"
+        f"{DatasetFile.INTRODUCTION.read_text()}\n"
+        f"{instructions.rules_block}\n\n"
+        f"{DatasetFile.PROJECT_RULES.read_text()}"
     )
+
+
+def test_a_file_without_the_block_is_rejected(repository_root: Path) -> None:
+    (repository_root / RepositoryInstructionsFile.AGENTS).write_text(
+        DatasetFile.PROJECT_RULES.read_text()
+    )
+
+    with pytest.raises(RulesBlockNotFound):
+        AgentsInstructions(repository_root).render()
+
+
+def test_a_file_with_two_blocks_is_rejected(
+    instructions_with_empty_rules_block: Path,
+) -> None:
+    content = instructions_with_empty_rules_block.read_text()
+    instructions_with_empty_rules_block.write_text(content + content)
+
+    with pytest.raises(RulesBlockNotFound):
+        AgentsInstructions(instructions_with_empty_rules_block.parent).render()
+
+
+def test_a_block_closed_before_it_opens_is_rejected(repository_root: Path) -> None:
+    (repository_root / RepositoryInstructionsFile.AGENTS).write_text(
+        f"{RulesBlockMarker.END}\n{RulesBlockMarker.BEGIN}\n"
+    )
+
+    with pytest.raises(RulesBlockNotFound):
+        AgentsInstructions(repository_root).render()
 
 
 # %% rule sets
@@ -63,12 +95,15 @@ def test_every_rule_file_belongs_to_a_section() -> None:
     assert rule_file_names <= section_file_names
 
 
-def test_a_section_lists_the_rules_of_each_chosen_rule_set_in_order() -> None:
+def test_a_section_lists_the_rules_of_each_chosen_rule_set_under_their_source() -> None:
     instructions = AgentsInstructions(Path.cwd(), rules_directory=DatasetFile.RULES)
+    file_name = RuleSection.ERRORS.file_name
 
     assert instructions.rules_of(RuleSection.ERRORS) == (
-        f"{(DatasetFile.RULES / RuleSet.PYTHON / RuleSection.ERRORS.file_name).read_text().strip()}\n"
-        f"{(DatasetFile.RULES / RuleSet.KRROOD / RuleSection.ERRORS.file_name).read_text().strip()}"
+        f"<!-- from {instructions.rules_directory_name / RuleSet.PYTHON / file_name} -->\n"
+        f"{(DatasetFile.RULES / RuleSet.PYTHON / file_name).read_text().strip()}\n"
+        f"<!-- from {instructions.rules_directory_name / RuleSet.KRROOD / file_name} -->\n"
+        f"{(DatasetFile.RULES / RuleSet.KRROOD / file_name).read_text().strip()}"
     )
 
 
@@ -98,7 +133,12 @@ def test_headings_of_sections_without_rules_are_left_out() -> None:
 
 
 def test_python_rules_name_no_krrood_api() -> None:
-    python_rules = AgentsInstructions(Path.cwd(), (RuleSet.PYTHON,)).shared_rules
+    instructions = AgentsInstructions(Path.cwd(), (RuleSet.PYTHON,))
+    python_rules = "\n".join(
+        (instructions.rules_directory / RuleSet.PYTHON / section.file_name).read_text()
+        for section in RuleSection
+        if (instructions.rules_directory / RuleSet.PYTHON / section.file_name).is_file()
+    )
 
     assert "krrood" not in python_rules.lower()
 
@@ -112,29 +152,26 @@ def test_shared_rules_name_no_cram_package() -> None:
 # %% command line
 
 
-def test_agents_md_command_writes_the_composed_file(repository_root: Path) -> None:
-    shutil.copyfile(
-        DatasetFile.PROJECT_RULES,
-        repository_root / RepositoryInstructionsFile.PROJECT,
-    )
-
+def test_agents_md_command_writes_a_new_file(repository_root: Path) -> None:
     exit_status = CommandLine.main([Subcommand.AGENTS_MD])
 
     assert exit_status == ExitStatus.FAILURE
-    assert (repository_root / RepositoryInstructionsFile.GENERATED).read_text() == (
-        AgentsInstructions(repository_root).render()
+    assert (repository_root / RepositoryInstructionsFile.AGENTS).read_text() == (
+        f"{AgentsInstructions(repository_root).rules_block}\n"
     )
 
 
-def test_agents_md_command_writes_without_project_rules(
-    repository_root: Path,
+def test_agents_md_command_fills_the_block_and_keeps_the_text_around_it(
+    instructions_with_empty_rules_block: Path,
 ) -> None:
+    expected_content = AgentsInstructions(
+        instructions_with_empty_rules_block.parent
+    ).render()
+
     exit_status = CommandLine.main([Subcommand.AGENTS_MD])
 
     assert exit_status == ExitStatus.FAILURE
-    assert (repository_root / RepositoryInstructionsFile.GENERATED).read_text() == (
-        AgentsInstructions(repository_root).render()
-    )
+    assert instructions_with_empty_rules_block.read_text() == expected_content
 
 
 def test_agents_md_command_writes_only_the_chosen_rule_sets(
@@ -142,7 +179,7 @@ def test_agents_md_command_writes_only_the_chosen_rule_sets(
 ) -> None:
     CommandLine.main([Subcommand.AGENTS_MD, Option.RULE_SETS, RuleSet.PYTHON])
 
-    assert (repository_root / RepositoryInstructionsFile.GENERATED).read_text() == (
+    assert (repository_root / RepositoryInstructionsFile.AGENTS).read_text() == (
         AgentsInstructions(repository_root, (RuleSet.PYTHON,)).render()
     )
 
@@ -154,12 +191,12 @@ def test_agents_md_command_keeps_rule_set_order_whatever_the_order_given(
         [Subcommand.AGENTS_MD, Option.RULE_SETS, RuleSet.KRROOD, RuleSet.PYTHON]
     )
 
-    assert (repository_root / RepositoryInstructionsFile.GENERATED).read_text() == (
+    assert (repository_root / RepositoryInstructionsFile.AGENTS).read_text() == (
         AgentsInstructions(repository_root, tuple(RuleSet)).render()
     )
 
 
-def test_agents_md_command_succeeds_when_the_file_is_current(
+def test_agents_md_command_succeeds_when_the_block_is_current(
     repository_root: Path,
 ) -> None:
     CommandLine.main([Subcommand.AGENTS_MD])
@@ -167,31 +204,25 @@ def test_agents_md_command_succeeds_when_the_file_is_current(
     assert CommandLine.main([Subcommand.AGENTS_MD]) == ExitStatus.SUCCESS
 
 
-def test_check_passes_on_a_freshly_written_file(repository_root: Path) -> None:
-    shutil.copyfile(
-        DatasetFile.PROJECT_RULES,
-        repository_root / RepositoryInstructionsFile.PROJECT,
-    )
+def test_check_passes_after_text_outside_the_block_changes(
+    instructions_with_empty_rules_block: Path,
+) -> None:
     CommandLine.main([Subcommand.AGENTS_MD])
+    with instructions_with_empty_rules_block.open("a") as instructions_file:
+        instructions_file.write(DatasetFile.PROJECT_RULES.read_text())
 
     assert CommandLine.main([Subcommand.AGENTS_MD, Option.CHECK]) == ExitStatus.SUCCESS
 
 
-def test_check_fails_on_a_stale_file_without_rewriting_it(
-    repository_root: Path,
+def test_check_fails_on_an_edited_block_without_rewriting_it(
+    instructions_with_empty_rules_block: Path,
 ) -> None:
-    CommandLine.main([Subcommand.AGENTS_MD])
-    shutil.copyfile(
-        DatasetFile.PROJECT_RULES,
-        repository_root / RepositoryInstructionsFile.PROJECT,
-    )
-    generated_path = repository_root / RepositoryInstructionsFile.GENERATED
-    stale_content = generated_path.read_text()
+    edited_content = instructions_with_empty_rules_block.read_text()
 
     exit_status = CommandLine.main([Subcommand.AGENTS_MD, Option.CHECK])
 
     assert exit_status == ExitStatus.FAILURE
-    assert generated_path.read_text() == stale_content
+    assert instructions_with_empty_rules_block.read_text() == edited_content
 
 
 def test_check_fails_when_the_file_is_missing(repository_root: Path) -> None:

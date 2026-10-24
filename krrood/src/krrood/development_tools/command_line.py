@@ -39,7 +39,7 @@ class Subcommand(StrEnum):
 
     AGENTS_MD = "agents-md"
     """
-    Generate the repository's ``AGENTS.md``.
+    Write the block of shared rules in the repository's ``AGENTS.md``.
     """
 
 
@@ -121,12 +121,12 @@ class CommandLine:
 
         agents_parser = subparsers.add_parser(
             Subcommand.AGENTS_MD,
-            help="Generate AGENTS.md from the shared rules and AGENTS.project.md.",
+            help="Write the block of shared rules in AGENTS.md.",
         )
         agents_parser.add_argument(
             Option.CHECK,
             action="store_true",
-            help="Only verify that AGENTS.md is up to date; exit non-zero if it is not.",
+            help="Only verify that the block is up to date; exit non-zero if it is not.",
         )
         agents_parser.add_argument(
             Option.RULE_SETS,
@@ -134,7 +134,7 @@ class CommandLine:
             type=RuleSet,
             choices=list(RuleSet),
             default=list(RuleSet),
-            help="The rule sets AGENTS.md contains; all of them when omitted.",
+            help="The rule sets the block contains; all of them when omitted.",
         )
         agents_parser.set_defaults(run=self.generate_agents_instructions)
 
@@ -153,8 +153,8 @@ class CommandLine:
 
     def generate_agents_instructions(self, arguments: argparse.Namespace) -> ExitStatus:
         """
-        Write, or with :attr:`Option.CHECK` verify, the ``AGENTS.md`` of the current
-        directory.
+        Write, or with :attr:`Option.CHECK` verify, the block of shared rules in the
+        ``AGENTS.md`` of the current directory.
 
         :param arguments: The parsed command line.
         :return: :attr:`ExitStatus.FAILURE` if the file was rewritten or is stale.
@@ -167,18 +167,17 @@ class CommandLine:
             if instructions.is_current():
                 return ExitStatus.SUCCESS
             logger.error(
-                "%s is out of date. Never edit it by hand: write this repository's own "
-                "rules in %s and change a shared rule in its file under %s, then run "
-                "`%s %s`.",
-                RepositoryInstructionsFile.GENERATED,
-                RepositoryInstructionsFile.PROJECT,
+                "The block of shared rules in %s is missing, out of date or edited by "
+                "hand. Change a shared rule in the file the comment above it names, "
+                "under %s, never inside the block; then run `%s %s`.",
+                RepositoryInstructionsFile.AGENTS,
                 instructions.rules_directory,
                 self.program_name,
                 Subcommand.AGENTS_MD,
             )
             return ExitStatus.FAILURE
         if instructions.write():
-            logger.info("Wrote %s", instructions.generated_path.name)
+            logger.info("Wrote %s", RepositoryInstructionsFile.AGENTS)
             return ExitStatus.FAILURE
         return ExitStatus.SUCCESS
 

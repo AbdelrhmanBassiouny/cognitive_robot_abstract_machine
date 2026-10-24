@@ -11,7 +11,7 @@ repos:
         types: [python]
         exclude: (?x)^(.*/ormatic_interface\.py|test/krrood_test/test_development_tools/dataset/.*)$
       - id: krrood-agents-md
-        name: Generate AGENTS.md
+        name: Update the shared rules in AGENTS.md
         entry: krrood agents-md
         language: system
         pass_filenames: false
