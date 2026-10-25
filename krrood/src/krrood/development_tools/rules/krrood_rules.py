@@ -14,61 +14,49 @@ from krrood.adapters.json_serializer import (
     DataclassJSONSerializer,
     SubclassJSONSerializer,
 )
-from krrood.development_tools.agent_rule import CodeReference, KrroodRules, Section
+from krrood.development_tools.agent_rule import AgentRule, CodeReference, KrroodRules
 from krrood.exceptions import DataclassException
 from krrood.ormatic.utils import classproperty
 from krrood.patterns.path_enumeration import PathEnumeration
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 
 
-class Errors(Section):
+class Errors(KrroodRules):
     """
     The krrood rules on errors.
     """
 
-    @classproperty
-    def parent(cls) -> type[Section]:
-        return KrroodRules
-
-    SUBCLASS_DATACLASS_EXCEPTION = (
+    SUBCLASS_DATACLASS_EXCEPTION = AgentRule(
         f"Custom exceptions subclass {CodeReference(DataclassException).path}, "
         f"implementing its {CodeReference(DataclassException.error_message).name} "
         f"and {CodeReference(DataclassException.suggest_correction).name}"
     )
 
 
-class ConstantsAndClassLevelValues(Section):
+class ConstantsAndClassLevelValues(KrroodRules):
     """
     The krrood rules on constants and class-level values.
     """
 
-    @classproperty
-    def parent(cls) -> type[Section]:
-        return KrroodRules
-
-    USE_KRROOD_CLASSPROPERTY = (
+    USE_KRROOD_CLASSPROPERTY = AgentRule(
         f"Use the {CodeReference(classproperty).name} {CodeReference(krrood).name} "
         "provides"
     )
 
 
-class StructuredData(Section):
+class StructuredData(KrroodRules):
     """
     The krrood rules on structured data.
     """
 
-    @classproperty
-    def parent(cls) -> type[Section]:
-        return KrroodRules
-
-    PATH_ENUMS_SUBCLASS_PATH_ENUMERATION = (
+    PATH_ENUMS_SUBCLASS_PATH_ENUMERATION = AgentRule(
         f"A path enum subclasses {CodeReference(PathEnumeration).path}, so every "
         f"path derived from a member is a plain {CodeReference(Path).name}; its "
         "members' `name` is the path's last "
         "component, so read the member name as `_name_`"
     )
 
-    SERIALIZE_JSON_WITH_KRROOD = (
+    SERIALIZE_JSON_WITH_KRROOD = AgentRule(
         "JSON that our own classes round-trip goes through "
         f"{CodeReference(json_serializer).path}: use "
         f"{CodeReference(DataclassJSONSerializer).name} wherever it can "
@@ -82,16 +70,12 @@ class StructuredData(Section):
     )
 
 
-class TypeHints(Section):
+class TypeHints(KrroodRules):
     """
     The krrood rules on type hints.
     """
 
-    @classproperty
-    def parent(cls) -> type[Section]:
-        return KrroodRules
-
-    SUBCLASS_SAFE_GENERICS = (
+    SUBCLASS_SAFE_GENERICS = AgentRule(
         f"Generic classes inherit {CodeReference(Generic).name} and then "
         f"{CodeReference(SubClassSafeGeneric).path}, which narrows field types "
         "when a subclass binds a parameter. Read a bound type with "

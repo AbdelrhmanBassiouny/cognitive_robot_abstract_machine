@@ -12,7 +12,6 @@ from krrood.development_tools.agent_rule import (
     ProjectRules,
     PythonRules,
     RuleSet,
-    Section,
 )
 from krrood.development_tools.command_line import (
     CommandLine,
@@ -20,7 +19,6 @@ from krrood.development_tools.command_line import (
     Option,
     Subcommand,
 )
-from krrood.development_tools.exceptions import SectionWithoutParent
 from krrood.development_tools.repository_files import RepositoryInstructionsFile
 from krrood.exceptions import DataclassException
 from krrood.patterns import path_enumeration
@@ -45,13 +43,8 @@ def test_a_rule_set_lists_its_sections_and_their_rules(repository_root: Path) ->
     )
 
 
-def test_the_subsections_of_a_section_name_it_as_their_parent() -> None:
+def test_a_subclass_of_a_section_is_its_subsection() -> None:
     assert DesignPrinciples.subsections == [Errors]
-
-
-def test_a_section_naming_no_parent_is_rejected() -> None:
-    with pytest.raises(SectionWithoutParent):
-        Section.parent
 
 
 def test_a_section_lists_only_its_own_rules() -> None:
@@ -66,8 +59,8 @@ def test_a_title_keeps_acronyms_in_capitals() -> None:
     assert ReleasesThroughCI.title == "Releases through CI"
 
 
-def test_the_rule_sets_are_the_subclasses_of_rule_set() -> None:
-    assert RuleSet.available[:3] == [PythonRules, KrroodRules, ProjectRules]
+def test_the_rule_sets_are_the_subsections_of_rule_set() -> None:
+    assert RuleSet.subsections[:3] == [PythonRules, KrroodRules, ProjectRules]
 
 
 def test_python_rules_name_no_krrood_api(repository_root: Path) -> None:
@@ -155,7 +148,7 @@ def test_agents_md_command_writes_a_new_file(repository_root: Path) -> None:
 
     assert exit_status == ExitStatus.FAILURE
     assert (repository_root / RepositoryInstructionsFile.AGENTS).read_text() == (
-        AgentsInstructions(repository_root, tuple(RuleSet.available)).text
+        AgentsInstructions(repository_root, tuple(RuleSet.subsections)).text
     )
 
 
@@ -168,7 +161,7 @@ def test_agents_md_command_replaces_a_hand_written_file(
     CommandLine.main([Subcommand.AGENTS_MD])
 
     assert path.read_text() == (
-        AgentsInstructions(repository_root, tuple(RuleSet.available)).text
+        AgentsInstructions(repository_root, tuple(RuleSet.subsections)).text
     )
 
 
