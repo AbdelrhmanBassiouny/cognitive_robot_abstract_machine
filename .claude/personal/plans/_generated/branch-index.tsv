@@ -58,7 +58,6 @@ claude/episode-replayed-world-kickoff-6ye5bb	knowledge-directed-expectation
 claude/plan-item-kickoff-expectations-2zvpmn	knowledge-directed-expectation
 perception_robokudo_detector	knowledge-directed-expectation
 tracy_icra	knowledge-directed-expectation
-montessori_perception_on_main	knowledge-directed-grounding
 perception_surfaces_from_world	knowledge-directed-grounding
 perception_per_supporting_surface	knowledge-directed-grounding
 claude/plan-item-kickoff-kdp-z4pv7l	knowledge-directed-grounding

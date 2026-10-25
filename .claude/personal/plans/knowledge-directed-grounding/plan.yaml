@@ -34,27 +34,13 @@ tracks:
     rather than left to the end. Runs in parallel with the surfaces track: an item merges
     into tracy_icra when it works, not when its pull request lands.'
 items:
-- id: montessori-perception-on-main
-  title: Land the Montessori perception package on main
-  branch: montessori_perception_on_main
-  pull_request_number: 202
-  track: package-landing
-  depends_on: []
-  status: in_progress
-  session: https://claude.ai/code/session_01Pk12hDbP8k2C16ZQWvcroA
-  notes: 'Cuts a branch off `main` carrying the Montessori perception package alone - sorinar329''s
-    original node commit 75258debd plus the seven that follow it - so the rest of the plan
-    stacks on reviewable ground instead of a branch whose upstream points at a colleague''s
-    fork (`tracy_icra` itself is left alone). `depends_on: []`, and nothing in this plan waits
-    for it to merge, per the plan''s standing rule that `depends_on` means stacked on, never
-    waiting for a merge. Built 2026-08-28 as PR #202 (12 commits, 34 files, +9,664/-0).'
 - id: surfaces-from-world
   title: Take the workspace from the table the robot knows about, not from a constant
   branch: perception_surfaces_from_world
   pull_request_number: 205
   track: surfaces
   depends_on:
-  - montessori-perception-on-main
+  - montessori-perception-split/perception-node-on-main
   status: in_progress
   session: https://claude.ai/code/session_01ScJk8zKUuToafxg38Bcag5
   blockers:
@@ -149,7 +135,7 @@ items:
   pull_request_number: 223
   track: package-landing
   depends_on:
-  - montessori-perception-on-main
+  - montessori-perception-split/perception-node-on-main
   status: in_progress
   session: https://claude.ai/code/session_01PWzamoTtp8TNZyqhWornUs
   notes: experiments/src/experiments/montessori/ has no __init__.py, and never has on any
