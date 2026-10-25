@@ -5,9 +5,7 @@ description: 'The expectation wave of knowledge-directed-perception (split out o
   to get every successor under the plan-size budget): what the robot did, and what Segmind
   saw it do, say where a thing should now be. Perception looks there, and reports a violated
   expectation as a failure rather than as an absence - the end-to-end story the paper is written
-  around. Depends on items of `knowledge-directed-requests` and `knowledge-directed-grounding`
-  that could not be preserved as `depends_on` across the plan split - see the affected items''
-  own `blockers`.'
+  around.'
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 201
 waves:
@@ -85,13 +83,11 @@ items:
   branch: perception_robokudo_detector
   pull_request_number: null
   track: executors
-  depends_on: []
+  depends_on:
+  - knowledge-directed-requests/choose-detection-method
   status: deferred
   blockers:
   - 'Deferred past the 2026-09-15 deadline: nothing depends on it and no demo item needs it.'
-  - Depends on `knowledge-directed-requests`'s `choose-detection-method` (in_progress) - a
-    cross-plan dependency that `split-knowledge-directed-perception` could not preserve (`depends_on`
-    cannot cross a plan).
   notes: 'One adapter implementing the detector interface over a RoboKudo analysis engine,
     so the rule tree can choose a learned detector (RoboKudo ships CLIP and YOLO annotators)
     for a target with no geometric model. Proves the reasoning layer is executor-agnostic
@@ -105,11 +101,8 @@ items:
   track: demo-expectation
   depends_on:
   - expectations-from-events
+  - knowledge-directed-requests/demo-asks-by-query
   status: not_started
-  blockers:
-  - Depends on `knowledge-directed-requests`'s `demo-asks-by-query` (not_started) - a cross-plan
-    dependency that `split-knowledge-directed-perception` could not preserve (`depends_on`
-    cannot cross a plan).
   notes: 'The end-to-end story the paper is written around: the robot picks a piece, Segmind''s
     LossOfSupportEvent takes the table out of the search, the insertion''s declared effect
     points perception at the board''s lid, and when the insertion fails perception finds the
