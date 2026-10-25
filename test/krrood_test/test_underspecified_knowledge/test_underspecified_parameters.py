@@ -3,7 +3,10 @@ from typing import List, Any
 
 import pytest
 
-from krrood.parametrization.exceptions import InvalidEllipsis
+from krrood.parametrization.exceptions import (
+    AttributeNotParameterized,
+    InvalidEllipsis,
+)
 from ..dataset.semantic_world_like_classes import Body
 from krrood.entity_query_language.factories import (
     variable,
@@ -14,6 +17,7 @@ from krrood.parametrization.parameterizer import UnderspecifiedParameters
 from random_events.interval import singleton, reals
 
 from ..dataset.example_classes import (
+    KRROODPose,
     KRROODPosition,
     TestEnum,
     ListOfEnum,
@@ -71,7 +75,7 @@ def test_assignments_for_conditioning():
 def test_union_types_easy():
     prob_q = a(KRROODPosition)(x=..., y=..., z=...)
     prob_q.where(
-        prob_q.variable.x < 5.0,
+        prob_q.x < 5.0,
     )
     parameters = UnderspecifiedParameters(prob_q)
     variables = parameters.variables
@@ -80,7 +84,7 @@ def test_union_types_easy():
 
 def test_union_types():
     prob_q = a(KRROODPosition)(x=..., y=..., z=variable(int, domain=[10, 20]))
-    prob_q.where(prob_q.variable.x < 5.0)
+    prob_q.where(prob_q.x < 5.0)
 
     parameters = UnderspecifiedParameters(prob_q)
     variables = parameters.variables
@@ -150,3 +154,25 @@ def test_list_of_enum_field_produces_indexed_variables():
 
     assert "ListOfEnum.list_of_enum[0]" in parameters.variables
     assert "ListOfEnum.list_of_enum[1]" in parameters.variables
+
+
+# %% variable lookup by attribute
+
+
+def test_variable_of_nested_attribute_is_the_variable_its_literal_conditions():
+    x = 1.0
+    y = 2.0
+    pose = a(KRROODPose)(position=a(KRROODPosition)(x=x, y=y, z=...))
+    parameters = UnderspecifiedParameters(pose)
+    conditions = parameters.conditioning_assignments_from_literal_values
+
+    assert conditions[parameters.variable_of(pose.position.x)] == x
+    assert conditions[parameters.variable_of(pose.position.y)] == y
+
+
+def test_variable_of_attribute_missing_from_the_pattern_raises():
+    position = a(KRROODPosition)(x=1.0, y=...)
+    parameters = UnderspecifiedParameters(position)
+
+    with pytest.raises(AttributeNotParameterized):
+        parameters.variable_of(position.z)
