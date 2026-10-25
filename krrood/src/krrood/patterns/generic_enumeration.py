@@ -36,8 +36,8 @@ class GenericEnumeration(Enum, metaclass=GenericEnumerationType):
     An enumeration that can be generic.
 
     Subscripting one that inherits :class:`~typing_extensions.Generic` with types binds
-    its parameters, as in ``class Colours(Labelled[str])``, while subscripting any one
-    with a member's name still looks up that member.
+    its parameters, as in ``class Starters(NestedEnumeration[Menu])``, while
+    subscripting any one with a member's name still looks up that member.
 
     .. note:: Only an enumeration without members can be subclassed, so the generic
         base binding its parameters declares no members.
