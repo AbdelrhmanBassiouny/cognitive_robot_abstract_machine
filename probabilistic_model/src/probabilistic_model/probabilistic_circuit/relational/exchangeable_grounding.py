@@ -4,6 +4,7 @@ Grounding relational probabilistic circuits for queries, independent of the circ
 
 from __future__ import annotations
 
+import copy
 import enum
 import itertools
 from dataclasses import dataclass, field, replace
@@ -373,7 +374,9 @@ class ExchangeablePartGrounder(Generic[NodeType], SubClassSafeGeneric):
             raise UndeterminedLatentsNotPartitionedError(
                 list(self.undetermined_latents)
             )
-        branches = [proposal.truncated(region)[0] for region in branch_regions]
+        branches = [
+            proposal.truncated(region).distribution for region in branch_regions
+        ]
 
         # each node's weights must be read off the class circuit before the
         # undetermined latents are removed from it below
@@ -525,8 +528,9 @@ class ExchangeablePartGrounder(Generic[NodeType], SubClassSafeGeneric):
         """
         values = {}
         for variable in undetermined_latents:
-            mode, _ = branch.marginal([variable]).log_mode(check_determinism=False)
+            mode = branch.marginal([variable]).log_mode(check_determinism=False).event
             region = mode.simple_sets[0][variable]
+
             values[variable] = (
                 region.simple_sets[0].lower
                 if isinstance(region, Interval)
@@ -567,7 +571,7 @@ class RelationalGrounding:
         relational_circuit = self.relational_circuit
         if relational_circuit.class_probabilistic_circuit is None:
             raise CircuitNotFittedError()
-        circuit = relational_circuit.class_probabilistic_circuit.__deepcopy__()
+        circuit = copy.deepcopy(relational_circuit.class_probabilistic_circuit)
         if not relational_circuit.exchangeable_distribution_templates:
             return circuit
         instance = query.construct_instance()

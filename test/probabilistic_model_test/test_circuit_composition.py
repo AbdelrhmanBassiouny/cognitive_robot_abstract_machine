@@ -90,22 +90,6 @@ def event_of(**ranges: tuple) -> Event:
     ).as_composite_set()
 
 
-@pytest.fixture
-def x() -> Continuous:
-    """
-    The variable a single-variable composition is over.
-    """
-    return Continuous("x")
-
-
-@pytest.fixture
-def y() -> Continuous:
-    """
-    The second variable a product factorizes over.
-    """
-    return Continuous("y")
-
-
 def variables_of(circuit: ProbabilisticCircuitRepresentation) -> List[Variable]:
     """
     :param circuit: A circuit.
