@@ -8,7 +8,7 @@ import threading
 import uuid
 from contextlib import contextmanager
 from copy import deepcopy, copy
-from dataclasses import dataclass, field, fields, is_dataclass
+from dataclasses import dataclass, field
 from functools import wraps, cached_property
 from itertools import chain
 from uuid import UUID
@@ -51,7 +51,6 @@ from semantic_digital_twin.exceptions import (
     AlreadyBelongsToAWorldError,
     MissingWorldModificationContextError,
     WorldEntityWithIDNotFoundError,
-    WorldEntityWithIDBelongsToAnotherWorld,
     MissingReferenceFrameError,
     MismatchingPublishChangesAttribute,
     AtomicWorldModificationNotAtomic,
@@ -72,7 +71,6 @@ from semantic_digital_twin.spatial_computations.ik_solver import InverseKinemati
 from semantic_digital_twin.spatial_computations.raytracer import RayTracer
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
-    Quaternion,
     Point3,
 )
 from semantic_digital_twin.spatial_types.derivatives import Derivatives
@@ -84,6 +82,10 @@ from semantic_digital_twin.world_description.connections import (
 from semantic_digital_twin.world_description.connections import HasUpdateState
 from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedom,
+)
+from semantic_digital_twin.world_description.world_entity_rebinding import (
+    RelocatableType,
+    WorldEntityRebinding,
 )
 from semantic_digital_twin.world_description.visitors import (
     CollisionBodyCollector,
@@ -132,8 +134,6 @@ logger = logging.getLogger("semantic_digital_twin")
 GenericSemanticAnnotation = TypeVar(
     "GenericSemanticAnnotation", bound=SemanticAnnotation
 )
-
-RelocatableType = TypeVar("RelocatableType")
 
 FunctionStack = List[Tuple[Callable, Dict[str, Any]]]
 
@@ -1256,7 +1256,12 @@ class World(HasSimulatorProperties):
         The atomic method that removes a semantic annotation from the current list of
         semantic annotations.
         """
-        self.semantic_annotations.remove(semantic_annotation)
+        index = next(
+            index
+            for index, candidate in enumerate(self.semantic_annotations)
+            if candidate is semantic_annotation
+        )
+        del self.semantic_annotations[index]
         semantic_annotation.remove_from_world()
 
     def remove_actuator(self, actuator: Actuator) -> None:
@@ -1654,7 +1659,10 @@ class World(HasSimulatorProperties):
         Walks `obj` recursively through dataclass fields, list like classes and dict values.
         A :class:`~semantic_digital_twin.world_description.world_entity.WorldEntityWithID`
         is looked up here by its id. Anything else is deep-copied, so `obj` and the
-        result never share mutable state.
+        result never share mutable state. Each object is rebound once, so objects that
+        refer to each other, or one object reached from several places, keep that shape
+        in the result. A type that defines how it is deep-copied is copied its own way
+        rather than walked.
 
         An entity this world does not contain is left as it is: it is not this world's
         state to rebind, and leaving it behaves exactly as not rebinding at all.
@@ -1669,30 +1677,7 @@ class World(HasSimulatorProperties):
             entity that reports belonging elsewhere, rather than letting it fail later
             wherever it ends up being used.
         """
-        if isinstance(obj, WorldEntityWithID):
-            try:
-                found = self.get_world_entity_with_id_by_id(obj.id)
-            except WorldEntityWithIDNotFoundError:
-                return obj
-            if found._world is not self:
-                raise WorldEntityWithIDBelongsToAnotherWorld(
-                    world=self, world_entity=found
-                )
-            return found
-        if isinstance(obj, list_like_classes):
-            return type(obj)(self.rebind_world_entities(item) for item in obj)
-        if isinstance(obj, dict):
-            return {
-                key: self.rebind_world_entities(value) for key, value in obj.items()
-            }
-        if is_dataclass(obj) and not isinstance(obj, type):
-            result = deepcopy(obj)
-            for f in fields(obj):
-                setattr(
-                    result, f.name, self.rebind_world_entities(getattr(obj, f.name))
-                )
-            return result
-        return deepcopy(obj)
+        return WorldEntityRebinding(world=self).rebind(obj)
 
     def get_kinematic_structure_entity_by_id(
         self, id: UUID
@@ -1818,7 +1803,7 @@ class World(HasSimulatorProperties):
     ) -> None:
         """
         Merge a world into the existing one by merging degrees of freedom, states,
-        connections, and bodies. This removes all bodies and connections from `other`.
+        connections, bodies and actuators. This removes all of them from `other`.
 
         :param other: The world to be added.
         :param root_connection: If provided, this connection will be used to connect the
@@ -2622,6 +2607,10 @@ class World(HasSimulatorProperties):
         for kinematic_structure_entity in self.kinematic_structure_entities:
             self.remove_kinematic_structure_entity(kinematic_structure_entity)
 
+        # actuators reference degrees of freedom, so they go first
+        for actuator in copy(self.actuators):
+            self.remove_actuator(actuator)
+
         for degree_of_freedom in copy(self.degrees_of_freedom):
             self.remove_degree_of_freedom(degree_of_freedom)
 
@@ -2639,20 +2628,14 @@ class World(HasSimulatorProperties):
         """
         Transform a given spatial object from its reference frame to a target frame.
 
-        Calculate the transformation from the reference frame of the provided
-        spatial object to the specified target frame. Apply the transformation
-        differently depending on the type of the spatial object:
-
-        - If the object is a Quaternion, compute its rotation matrix, transform it, and
-          convert back to a Quaternion.
-        - For other types, apply the transformation matrix directly.
+        How the transformation applies is the spatial type's own business -- see
+        :meth:`~semantic_digital_twin.spatial_types.spatial_types.SpatialType.transform`
+        -- so a type that needs more than a matrix multiplication says so itself.
 
         :param spatial_object: The spatial object to be transformed.
         :param target_frame: The target KinematicStructureEntity frame to which the spatial object should
             be transformed.
-        :return: The spatial object transformed to the target frame. If the input object
-            is a Quaternion, the returned object is a Quaternion. Otherwise, it is the
-            transformed spatial object.
+        :return: The spatial object, of the same type, expressed in the target frame.
         """
         if spatial_object.reference_frame is None:
             raise MissingReferenceFrameError(spatial_object)
@@ -2662,13 +2645,7 @@ class World(HasSimulatorProperties):
             root=target_frame, tip=spatial_object.reference_frame
         )
 
-        match spatial_object:
-            case Quaternion():
-                reference_frame_R = spatial_object.to_rotation_matrix()
-                target_frame_R = target_frame_T_reference_frame @ reference_frame_R
-                return target_frame_R.to_quaternion()
-            case _:
-                return target_frame_T_reference_frame @ spatial_object
+        return spatial_object.transform(target_frame_T_reference_frame)
 
     def __deepcopy__(self, memo):
         memo = {} if memo is None else memo
@@ -2746,6 +2723,13 @@ class World(HasSimulatorProperties):
 
     def get_world_model_manager(self) -> WorldModelManager:
         return self._model_manager
+
+    @property
+    def modification_history(self) -> List[WorldModelModificationBlock]:
+        """
+        :return: The modification blocks that were applied to this world, oldest first.
+        """
+        return self._model_manager.model_modification_blocks
 
     def rollback_modification_blocks(
         self, count: int = 1

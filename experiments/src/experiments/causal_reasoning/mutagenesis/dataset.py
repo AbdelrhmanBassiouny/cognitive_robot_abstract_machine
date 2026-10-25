@@ -2,7 +2,7 @@
 Loading the CTU Mutagenesis dataset (https://relational.fel.cvut.cz/dataset/Mutagenesis)
 into :class:`~experiments.causal_reasoning.mutagenesis.domain.MutagenesisMolecule`
 instances, plus a synthetic generator with the same shape for the CI-safe pairing
-:mod:`test.causal_reasoning_test.test_mutagenesis_pipeline` needs alongside its
+:mod:`test.experiments_test.causal_reasoning_test.test_mutagenesis_pipeline` needs alongside its
 live-dataset tests.
 """
 
@@ -165,7 +165,7 @@ def synthetic_mutagenesis_molecules(
     Each molecule's chlorine count is drawn to be either 0 or ``atom_count`` (all
     chlorine, none hydrogen), and ``mutagenic`` is set to match, baking in a real
     chlorine-count/mutagenicity correlation so a fitted circuit has something genuine to
-    pick up, mirroring ``_room_with_chair_count`` in ``test_rspns.py``.
+    pick up, mirroring ``_room_with_chair_count`` in ``test_relational_probabilistic_circuit.py``.
 
     :param random_state: Source of randomness for the non-causal fields.
     :param molecule_count: How many molecules to generate.

@@ -3,6 +3,7 @@ import time
 
 import numpy as np
 
+from krrood.adapters.json_field import JSONField
 from krrood.adapters.json_serializer import from_json
 from semantic_digital_twin.adapters.ros.world_fetcher import (
     FetchWorldServer,
@@ -247,7 +248,12 @@ def test_get_payload_as_json(rclpy_node, pr2_world_state_reset):
     )
 
     payload = json.loads(fetcher.get_payload_as_json())
-    assert len(payload["modifications"][0]["modifications"]) == expected_payload_length
+    # Each block's own `modifications` field is generically serialized by
+    # DataclassJSONSerializer, which tags a list with its collection type.
+    assert (
+        len(payload["modifications"][0]["modifications"][JSONField.ITEMS])
+        == expected_payload_length
+    )
 
 
 def test_pr2_semantic_annotation(rclpy_node, pr2_world_state_reset):
@@ -258,9 +264,9 @@ def test_pr2_semantic_annotation(rclpy_node, pr2_world_state_reset):
 
     fetched_pr2 = pr2_world_copy.get_semantic_annotations_by_type(PR2)[0]
 
-    assert set(map(lambda x: x.id, fetched_pr2.get_end_effectors())) == set(
-        map(lambda x: x.id, pr2.get_end_effectors())
-    )
+    assert set(
+        map(lambda end_effector: end_effector.id, fetched_pr2.all_end_effectors)
+    ) == set(map(lambda end_effector: end_effector.id, pr2.all_end_effectors))
 
     assert [sa.name for sa in pr2_world_state_reset.semantic_annotations] == [
         sa.name for sa in pr2_world_copy.semantic_annotations

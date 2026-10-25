@@ -13,6 +13,8 @@ import trimesh
 from numpy.typing import NDArray
 from typing_extensions import Dict, List, Optional, Sequence, Tuple, Type
 
+from krrood.class_diagrams.mocking import MockedClass, MockedModule
+
 from semantic_digital_twin.adapters.package_resolver import (
     CompositePathResolver,
     PathResolver,
@@ -28,7 +30,6 @@ from semantic_digital_twin.adapters.world_model_parser import (
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.semantic_annotations.usd_semantics import UsdSemanticLabels
-from semantic_digital_twin.spatial_types.derivatives import DerivativeMap
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
     Point3,
@@ -65,6 +66,56 @@ from semantic_digital_twin.world_description.world_entity import Body
 
 logger = logging.getLogger(__name__)
 
+# %% pxr fallbacks
+#
+# Usd.Prim, Usd.Stage, and Gf.Matrix4d are used below as dataclass field types.
+# Leaving Usd/Gf unbound when usd-core is missing crashes any code that resolves
+# this module's type hints (e.g. ORM/class-diagram generation), not just code that
+# actually parses a USD stage. Binding them to these mocks keeps every annotation
+# resolvable; actually parsing a stage still fails loudly, via
+# krrood.class_diagrams.mocking.MockedClass.
+
+
+@dataclass
+class _MockedUsdPrim(MockedClass):
+    """
+    Mocked class for Usd.Prim in pxr.
+    """
+
+
+@dataclass
+class _MockedUsdStage(MockedClass):
+    """
+    Mocked class for Usd.Stage in pxr.
+    """
+
+
+@dataclass
+class _MockedUsdModule(MockedModule):
+    """
+    Mocked module for pxr.Usd.
+    """
+
+    Prim: Type[_MockedUsdPrim] = _MockedUsdPrim
+    Stage: Type[_MockedUsdStage] = _MockedUsdStage
+
+
+@dataclass
+class _MockedGfMatrix4d(MockedClass):
+    """
+    Mocked class for Gf.Matrix4d in pxr.
+    """
+
+
+@dataclass
+class _MockedGfModule(MockedModule):
+    """
+    Mocked module for pxr.Gf.
+    """
+
+    Matrix4d: Type[_MockedGfMatrix4d] = _MockedGfMatrix4d
+
+
 try:
     from pxr import Gf, Sdf, Usd, UsdGeom, UsdPhysics, UsdShade
 except ImportError:
@@ -72,6 +123,8 @@ except ImportError:
         "usd-core is required for USD parsing. Please install it using "
         "'pip install usd-core'"
     )
+    Usd = _MockedUsdModule()
+    Gf = _MockedGfModule()
 
 try:
     from pxr import UsdSemantics
@@ -729,8 +782,8 @@ class USDParser(WorldModelParser):
             parent_T_connection=parent_T_connection,
             connection_T_child=connection_T_child,
             axis=axis,
-            limits=DegreeOfFreedomLimits(
-                lower=DerivativeMap(position=lower), upper=DerivativeMap(position=upper)
+            limits=DegreeOfFreedomLimits.from_position_range_and_speed(
+                lower_position=lower, upper_position=upper
             ),
         )
 

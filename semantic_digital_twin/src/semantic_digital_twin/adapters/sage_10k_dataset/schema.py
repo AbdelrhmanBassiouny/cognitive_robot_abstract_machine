@@ -8,7 +8,7 @@ from typing import List, Dict, Any, Self
 import numpy as np
 from typing_extensions import Optional, Tuple, assert_never
 
-from krrood.adapters.exceptions import JSON_TYPE_NAME
+from krrood.adapters.json_field import JSONField
 from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json
 from krrood.utils import get_full_class_name
 from semantic_digital_twin.semantic_annotations.natural_language import (
@@ -21,14 +21,16 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Wall,
     Door,
     Handle,
-    Hinge,
     RoomWithWallsAndDoors,
     DoorWithType,
 )
+from semantic_digital_twin.specifications.connections import (
+    RevoluteConnectionSpecification,
+)
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Vector3
-from semantic_digital_twin.spatial_types.derivatives import DerivativeMap
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
+    ActiveConnection1DOF,
     Connection6DoF,
     FixedConnection,
 )
@@ -657,7 +659,7 @@ class Sage10kDoor(Sage10kWithID):
             wall_annotation.add(annotation.entry_way)
 
         self._create_handle_in_world(world, annotation)
-        self._create_hinge_in_world(world, annotation)
+        self._create_hinge_in_world(annotation)
         return annotation
 
     def _create_handle_in_world(self, world: World, door: Door) -> Handle:
@@ -704,36 +706,28 @@ class Sage10kDoor(Sage10kWithID):
             door.add(handle)
         return handle
 
-    def _create_hinge_in_world(self, world: World, door: Door) -> Hinge:
+    def _create_hinge_in_world(self, door: Door) -> ActiveConnection1DOF:
         """
-        Create the hinge (the joint that makes the door openable) of the door.
+        Hang the door on the hinge that makes it openable.
 
-        :param world: The world where the hinge is created.
         :param door: The door to create the hinge for.
-        :return: The hinge
+        :return: The revolute connection the door swings on.
         """
-        world_root_T_hinge = door.calculate_world_T_hinge_based_on_handle(Vector3.Z())
-
         if self.opens_inward:
-            lower = DerivativeMap(position=0.0)
-            upper = DerivativeMap(position=np.pi / 2)
-        else:
-            upper = DerivativeMap(position=0.0)
-            lower = DerivativeMap(position=-np.pi / 2)
-
-        with world.modify_world():
-            hinge = Hinge.create_with_new_body_in_world(
-                name=f"{self.id}_hinge",
-                world=world,
-                world_root_T_self=world_root_T_hinge,
-                parent_connection_specification=Hinge.parent_connection_specification(
-                    axis=Vector3.Z(),
-                    dof_limits=DegreeOfFreedomLimits(lower=lower, upper=upper),
-                ),
+            limits = DegreeOfFreedomLimits.from_position_range_and_speed(
+                lower_position=0.0, upper_position=np.pi / 2
             )
-            door.add(hinge)
+        else:
+            limits = DegreeOfFreedomLimits.from_position_range_and_speed(
+                lower_position=-np.pi / 2, upper_position=0.0
+            )
 
-        return hinge
+        return door.mount_on_movable_joint(
+            RevoluteConnectionSpecification(
+                axis=Vector3.Z(),
+                dof_limits=limits,
+            )
+        )
 
 
 @dataclass
@@ -910,7 +904,7 @@ class Sage10kRoom(Sage10kWithID):
 
     def to_json(self, **kwargs) -> Dict[str, Any]:
         return {
-            JSON_TYPE_NAME: get_full_class_name(self.__class__),
+            JSONField.TYPE: get_full_class_name(self.__class__),
             "id": self.id,
             "room_type": self.room_type,
             "dimensions": to_json(self.dimensions, **kwargs),

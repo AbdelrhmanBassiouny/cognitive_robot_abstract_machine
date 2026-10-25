@@ -31,6 +31,8 @@ from .dataset import (
     semantic_world_like_classes,
     alternative_mappings_construction_order,
     clashing_field_names,
+    classes_with_generic,
+    single_value_classes,
 )
 from .dataset.example_classes import (
     KRROODPhysicalObject,
@@ -83,6 +85,8 @@ def generate_sqlalchemy_interface():
     all_classes |= set(classes_of_module(roles_over_a_value_stored_as_json))
     all_classes |= set(classes_of_module(alternative_mappings_construction_order))
     all_classes |= set(classes_of_module(clashing_field_names))
+    all_classes |= set(classes_of_module(classes_with_generic))
+    all_classes |= set(classes_of_module(single_value_classes))
     all_classes |= {Symbol, Role}
 
     # remove classes that don't need persistence

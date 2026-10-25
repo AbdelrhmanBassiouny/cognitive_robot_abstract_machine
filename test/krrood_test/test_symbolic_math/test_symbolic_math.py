@@ -1,5 +1,8 @@
 import copy
+import gc
+import itertools
 import operator
+import weakref
 
 import casadi as ca
 import numpy as np
@@ -15,7 +18,6 @@ from krrood.symbolic_math.exceptions import (
     NotColumnVectorError,
     NotEnoughArgumentsError,
     NotSquareMatrixError,
-    SymbolicMathNotJsonSerializableError,
 )
 from krrood.symbolic_math.symbolic_math import VariableParameters
 from .reference_implementations import (
@@ -91,6 +93,46 @@ def test_to_sx():
     assert ca.is_equal(sx_list[0], v_sx)
     assert ca.is_equal(sx_list[1], 2)
     assert ca.is_equal(sx_list[2], 3)
+
+
+class TestBinaryLogic:
+    """
+    The two-valued logic operators.
+    """
+
+    @pytest.mark.parametrize(
+        "logic_operator, identity",
+        [
+            (sm.logic_and, sm.Scalar.const_true()),
+            (sm.logic_or, sm.Scalar.const_false()),
+        ],
+    )
+    def test_an_operator_combines_any_number_of_arguments(
+        self, logic_operator, identity
+    ):
+        """
+        Chaining several arguments gives the same value as combining them pairwise.
+        """
+        for values in itertools.product([0, 1], repeat=3):
+            arguments = [sm.Scalar(value) for value in values]
+            pairwise = identity
+            for argument in arguments:
+                pairwise = logic_operator(pairwise, argument)
+            assert float(logic_operator(*arguments)) == float(pairwise), f"{values}"
+
+    @pytest.mark.parametrize("logic_operator", [sm.logic_and, sm.logic_or])
+    def test_an_operator_of_one_argument_is_that_argument(self, logic_operator):
+        a = sm.FloatVariable(name="a")
+
+        assert logic_operator(a).free_variables() == [a]
+        assert ca.is_equal(logic_operator(a).casadi_sx, a.casadi_sx)
+
+    @pytest.mark.parametrize("logic_operator", [sm.logic_and, sm.logic_or])
+    def test_an_operator_without_arguments_is_rejected(self, logic_operator):
+        with pytest.raises(NotEnoughArgumentsError) as error:
+            logic_operator()
+        assert error.value.minimum_number_of_arguments == 1
+        assert error.value.actual_number_of_arguments == 0
 
 
 class TestLogic3:
@@ -1638,27 +1680,23 @@ class TestMatrix:
 # %% JSON serialization
 
 
+def scalar_expression(x: sm.FloatVariable, y: sm.FloatVariable) -> sm.Scalar:
+    return sm.sin(x) * y + x
+
+
+def vector_expression(x: sm.FloatVariable, y: sm.FloatVariable) -> sm.Vector:
+    return sm.Vector([x, y * 2, 3])
+
+
+def matrix_expression(x: sm.FloatVariable, y: sm.FloatVariable) -> sm.Matrix:
+    return sm.Matrix([[x, y], [x * y, 1]])
+
+
 class TestJsonSerialization:
     """
-    A symbolic math value reaches JSON only as numbers: a constant round-trips, a value
-    that depends on variables is refused.
+    A symbolic math value round-trips through JSON, and the variables it depends on come
+    back as the variables they were while those still exist.
     """
-
-    def test_variable_is_not_json_serializable(self):
-        variable = sm.FloatVariable("x")
-
-        with pytest.raises(SymbolicMathNotJsonSerializableError) as error:
-            to_json(variable)
-
-        assert error.value.expression is variable
-
-    def test_expression_with_a_variable_is_not_json_serializable(self):
-        expression = sm.FloatVariable("x") + 1
-
-        with pytest.raises(SymbolicMathNotJsonSerializableError) as error:
-            to_json(expression)
-
-        assert error.value.expression is expression
 
     @pytest.mark.parametrize(
         "constant",
@@ -1677,12 +1715,112 @@ class TestJsonSerialization:
         assert constant_copy.shape == constant.shape
         assert np.array_equal(constant_copy.to_np(), constant.to_np())
 
-    def test_error_holding_a_variable_is_not_json_serializable(self):
-        """
-        An error is serialized field by field, so a variable it holds is refused rather
-        than serialized without end.
-        """
+    def test_variable_round_trips_to_itself(self):
         variable = sm.FloatVariable("x")
 
-        with pytest.raises(SymbolicMathNotJsonSerializableError):
+        assert from_json(to_json(variable)) is variable
+
+    def test_variable_without_a_living_original_is_recreated(self):
+        variable = sm.FloatVariable("x")
+        variable_json = to_json(variable)
+        variable_id, variable_name = variable.id, variable.name
+        del variable
+        gc.collect()
+
+        variable_copy = from_json(variable_json)
+
+        assert type(variable_copy) is sm.FloatVariable
+        assert variable_copy.id == variable_id
+        assert variable_copy.name == variable_name
+
+    @pytest.mark.parametrize(
+        "build_expression",
+        [scalar_expression, vector_expression, matrix_expression],
+        ids=["scalar", "vector", "matrix"],
+    )
+    def test_expression_round_trips(self, build_expression):
+        x, y = sm.FloatVariable("x"), sm.FloatVariable("y")
+        expression = build_expression(x, y)
+        values = [2.0, 3.0]
+
+        expression_copy = from_json(to_json(expression))
+
+        assert type(expression_copy) is type(expression)
+        assert expression_copy.shape == expression.shape
+        assert {id(variable) for variable in expression_copy.free_variables()} == {
+            id(x),
+            id(y),
+        }
+        assert np.array_equal(
+            expression_copy.substitute([x, y], values).to_np(),
+            expression.substitute([x, y], values).to_np(),
+        )
+
+    def test_variables_sharing_a_name_stay_apart(self):
+        first, second = sm.FloatVariable("x"), sm.FloatVariable("x")
+        expression = sm.Vector([first, second * 2])
+        values = [2.0, 3.0]
+
+        expression_copy = from_json(to_json(expression))
+
+        assert np.array_equal(
+            expression_copy.substitute([first, second], values).to_np(),
+            expression.substitute([first, second], values).to_np(),
+        )
+
+    def test_recreated_variables_sharing_a_name_stay_apart(self):
+        first, second = sm.FloatVariable("x"), sm.FloatVariable("x")
+        expression = sm.Vector([first, second * 2])
+        values = [2.0, 3.0]
+        expected = expression.substitute([first, second], values).to_np()
+        expression_json = to_json(expression)
+        first_id, second_id = first.id, second.id
+        originals = [weakref.ref(first), weakref.ref(second)]
+        del first, second, expression
+        gc.collect()
+        assert [original() for original in originals] == [None, None]
+
+        expression_copy = from_json(expression_json)
+
+        variables_by_id = {
+            variable.id: variable for variable in expression_copy.free_variables()
+        }
+        assert variables_by_id.keys() == {first_id, second_id}
+        assert np.array_equal(
+            expression_copy.substitute(
+                [variables_by_id[first_id], variables_by_id[second_id]], values
+            ).to_np(),
+            expected,
+        )
+
+    def test_expression_keeps_shared_subexpressions(self):
+        x, y = sm.FloatVariable("x"), sm.FloatVariable("y")
+        shared = x * y
+        expression = sm.Vector([sm.sin(shared), sm.cos(shared)])
+
+        expression_copy = from_json(to_json(expression))
+
+        assert ca.n_nodes(expression_copy.casadi_sx) == ca.n_nodes(expression.casadi_sx)
+
+    def test_variable_shared_by_two_expressions_is_deserialized_once(self):
+        variable = sm.FloatVariable("x")
+        expressions_json = to_json([variable + 1, variable * 2])
+        del variable
+        gc.collect()
+
+        first, second = from_json(
+            expressions_json, **sm.FloatVariableTracker().create_kwargs()
+        )
+
+        (first_variable,) = first.free_variables()
+        (second_variable,) = second.free_variables()
+        assert first_variable is second_variable
+
+    def test_error_holding_a_variable_round_trips_it(self):
+        variable = sm.FloatVariable("x")
+
+        error_copy = from_json(
             to_json(FloatVariableAlreadyHasResolveError(variable=variable))
+        )
+
+        assert error_copy.variable is variable

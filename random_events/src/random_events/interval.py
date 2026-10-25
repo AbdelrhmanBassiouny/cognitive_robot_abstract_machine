@@ -162,6 +162,23 @@ class SimpleInterval(sigma_algebra.AbstractSimpleSet):
         """
         return (self.lower + self.upper) / 2
 
+    def nearest_contained_value(self, value: float) -> float:
+        """
+        :param value: Any value.
+        :return: The value of this interval nearest to the given one. An excluded end
+            has no nearest value inside, so the next representable value past it stands
+            in for it.
+        """
+        if value <= self.lower:
+            if self.left == Bound.OPEN:
+                return math.nextafter(self.lower, math.inf)
+            return self.lower
+        if value >= self.upper:
+            if self.right == Bound.OPEN:
+                return math.nextafter(self.upper, -math.inf)
+            return self.upper
+        return value
+
     def contained_integers(self) -> Iterable[int]:
         """
         :return: Yield integers contained in the interval
@@ -176,7 +193,7 @@ class SimpleInterval(sigma_algebra.AbstractSimpleSet):
 
         yield from range(rounded_lower, rounded_upper + 1)
 
-    def __deepcopy__(self):
+    def __deepcopy__(self, memo: dict[int, Any] | None = None) -> Self:
         return SimpleInterval.from_data(self.lower, self.upper, self.left, self.right)
 
 
