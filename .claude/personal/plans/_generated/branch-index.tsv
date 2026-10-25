@@ -14,11 +14,11 @@ claude/krrimage-coordinate-change	domain-models
 claude/world-as-euclidean-space	domain-models
 claude/perception-typed-images	domain-models
 claude/robokudo-captures	domain-models
+fix/eql-correlated-quantifiers	eql-existential-semantics
 claude/split-performatives-prs-xbluus-agreement	eql-performatives
 claude/split-performatives-prs-xbluus	eql-performatives
 claude/performatives-clean	eql-performatives
 claude/eql-performatives-unify	eql-performatives
-fix/eql-correlated-quantifiers	eql-planning
 eql-planning/state-aware-predicate-cache	eql-planning
 eql-planning/fluent-state-overlay	eql-planning
 eql-planning/action-schema-progression	eql-planning

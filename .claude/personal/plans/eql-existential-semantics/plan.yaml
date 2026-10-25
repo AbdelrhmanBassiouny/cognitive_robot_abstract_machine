@@ -82,10 +82,7 @@ items:
   track: binding-order
   depends_on:
   - evaluation-benchmark
-  status: blocked
-  blockers:
-  - 'Cross-plan: PR #99 (rdr-refactor) refactors base_expressions.py, logical_quantifiers.py
-    and core_logical_operators.py — the same functions. Start off main once #99 merges.'
+  status: not started
   notes: 'GOAL: the outer relation exists before any filter condition runs. Concretely, an(entity(box).where(<filter>))
     binds box first, then evaluates <filter> per binding — rather than letting the condition''s
     own enumeration be the only thing that ever binds box. WHY IT IS THE PREREQUISITE, NOT
@@ -121,6 +118,17 @@ items:
     sets — because selected variables are enumerated independently of the condition. Correct
     today, but incidentally so: nothing states or enforces it, and the docstring says something
     else.'
+- id: correlated-quantifiers
+  title: Quantifiers range per outer binding, so goals with exists, not_ and for_all are correct
+  branch: fix/eql-correlated-quantifiers
+  pull_request_number: 495
+  track: quantifiers
+  status: in_progress
+  notes: 'Already merged into aamas27-unification-revision. Source commits 3853c9b6d8, 1cd3425d67,
+    c95bbfb41b, 3308cb252f on aamas27-fast-translation (ontomatic-port''s former eql-correlated-quantifiers).
+    Overlaps exists-semijoin and negation-antijoin: settle which supersedes which before either
+    starts.'
+  depends_on: []
 - id: exists-semijoin
   title: 'Make exists() a semi-join: per outer binding, no escaping locals'
   branch: null
