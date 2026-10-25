@@ -4,10 +4,12 @@ import itertools
 import logging
 import math
 import os
+import re
 import shutil
 from abc import ABC, abstractmethod
 from copy import deepcopy
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, Field
+from enum import StrEnum, auto
 from functools import cached_property
 from pathlib import Path
 
@@ -26,23 +28,27 @@ from typing_extensions import (
     Self,
     Tuple,
     TYPE_CHECKING,
-    Generic,
     TypeVar,
 )
 
 from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json, from_json
-from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
+from krrood.bounds import Bounds, BoundsInterface
 from random_events.interval import SimpleInterval, Bound, closed
 from random_events.product_algebra import SimpleEvent
 from semantic_digital_twin.datastructures.variables import SpatialVariables
+from semantic_digital_twin.exceptions import MalformedHexColor
 from semantic_digital_twin.mixin import HasSimulatorProperties
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
+    Point,
     Point2,
     Point3,
     Vector3,
 )
-from semantic_digital_twin.world_description.mesh_file_storage import MeshFileStorage
+from semantic_digital_twin.world_description.mesh_file_storage import (
+    MeshFileSources,
+    MeshFileStorage,
+)
 
 if TYPE_CHECKING:
     from semantic_digital_twin.world_description.world_entity import (
@@ -95,11 +101,26 @@ class Color:
         self.B = float(self.B)
         self.A = float(self.A)
 
+    def __hash__(self):
+        return hash((self.R, self.G, self.B, self.A))
+
     def to_rgba(self) -> Tuple[float, float, float, float]:
         return (self.R, self.G, self.B, self.A)
 
     def to_rgb(self) -> Tuple[float, float, float]:
         return (self.R, self.G, self.B)
+
+    def to_hex(self, prefix: str = "#") -> str:
+        """
+        :param prefix: The characters the digits are written behind.
+        :return: The color written as ``#RRGGBB``, two hex digits per channel.
+
+        ..note:: The opacity is not part of it, the same way it is not part of
+            :meth:`to_rgb`.
+        """
+        return prefix + "".join(
+            f"{round(channel * 255):02X}" for channel in self.to_rgb()
+        )
 
     @classmethod
     def RED(self):
@@ -178,6 +199,36 @@ class Color:
         return cls(*rgba)
 
     @classmethod
+    def from_hex(
+        cls,
+        hex_color: str,
+        prefix: str = "#",
+        pattern: str = "(?:[0-9a-fA-F]{2}){3,4}",
+    ) -> Self:
+        """
+        Read a color written as two hex digits per channel, red first.
+
+        A fourth pair of digits sets the opacity; without it the color is fully opaque.
+
+        :param hex_color: The color, optionally preceded by a ``#`` and written in
+            either case.
+        :param prefix: The characters the digits may be written behind.
+        :param pattern: What the digits have to look like, by default three or four
+            channels of two hex digits each.
+        :raises MalformedHexColor: If the string is not written that way.
+        :return: The color it names.
+        """
+        digits = hex_color.removeprefix(prefix)
+        if re.fullmatch(pattern, digits) is None:
+            raise MalformedHexColor(hex_color)
+        return cls.from_list(
+            [
+                int(digits[index : index + 2], 16) / 255
+                for index in range(0, len(digits), 2)
+            ]
+        )
+
+    @classmethod
     def PINK(cls) -> Self:
         return cls(1, 0, 1, 1)
 
@@ -250,6 +301,30 @@ class Texture:
         across a serialization round-trip, which restores the pair as a list.
         """
         self.repeat = tuple(float(value) for value in self.repeat)
+
+
+class SurfaceFinish(StrEnum):
+    """
+    How a surface reflects the light that falls on it.
+    """
+
+    MATTE = auto()
+    """
+    Scatters light evenly in every direction, so the surface shows its own color and
+    keeps a sharp boundary against whatever rests on it.
+    """
+
+    GLOSSY = auto()
+    """
+    Scatters light unevenly, so the surface shows its own color under a highlight that
+    moves with the viewpoint.
+    """
+
+    MIRROR = auto()
+    """
+    Reflects light directionally, so the surface shows what stands on and above it
+    rather than its own color.
+    """
 
 
 @dataclass
@@ -375,6 +450,15 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
     trimesh visual instead.
     """
 
+    finish: Optional[SurfaceFinish] = None
+    """
+    How this shape's surface takes light, or ``None`` where nobody has stated it.
+
+    ..note:: ``None`` is deliberately distinct from :attr:`SurfaceFinish.MATTE`, so a
+        reader deciding how to look at the surface can tell a surface nobody described
+        from one described as matte.
+    """
+
     @property
     @abstractmethod
     def volume(self) -> float:
@@ -414,13 +498,31 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
         world_mesh.apply_transform(world.transform(self.origin, target_frame).to_np())
         return world_mesh
 
-    def to_json(self) -> Dict[str, Any]:
+    @classmethod
+    def _serialized_fields(cls) -> List[Field]:
+        """
+        The fields a shape carries in its json: everything its constructor takes.
+        """
+        return [field_ for field_ in fields(cls) if field_.init]
+
+    def to_json(self, **kwargs) -> Dict[str, Any]:
         return {
-            **super().to_json(),
-            "origin": to_json(self.origin),
-            "color": to_json(self.color),
-            "texture": to_json(self.texture) if self.texture is not None else None,
+            **super().to_json(**kwargs),
+            **{
+                field_.name: to_json(getattr(self, field_.name), **kwargs)
+                for field_ in self._serialized_fields()
+            },
         }
+
+    @classmethod
+    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+        return cls(
+            **{
+                field_.name: from_json(data[field_.name], **kwargs)
+                for field_ in cls._serialized_fields()
+                if field_.name in data
+            }
+        )
 
     def __eq__(self, other: Shape) -> bool:
         """
@@ -486,7 +588,7 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
         center_z = (bounding_box.min_z + bounding_box.max_z) / 2
         self.origin = HomogeneousTransformationMatrix.from_point_rotation_matrix(
             point=Point3(-center_x, -center_y, -center_z),
-            rotation_matrix=self.origin.to_rotation_matrix(),
+            rotation_matrix=self.origin.rotation_matrix,
             reference_frame=self.origin.reference_frame,
         )
 
@@ -547,7 +649,19 @@ class Mesh(Shape):
             mesh.convert_units("meters")
         return mesh
 
-    def to_json(self) -> Dict[str, Any]:
+    @classmethod
+    def _serialized_fields(cls) -> List[Field]:
+        """
+        A mesh carries its geometry rather than the file it was read from, which the
+        process reading the json may not have.
+        """
+        return [
+            field_
+            for field_ in super()._serialized_fields()
+            if field_.name != "filename"
+        ]
+
+    def to_json(self, **kwargs) -> Dict[str, Any]:
         # Serialize the unscaled geometry and the scale separately. This is the same
         # mesh :attr:`mesh` exposes, so a deserialized mesh reproduces the original
         # rather than a differently tessellated version of the same file.
@@ -563,9 +677,9 @@ class Mesh(Shape):
             ).tolist()
         file_type = self.filename.split(".")[-1]
         return {
-            **super().to_json(),
+            **super().to_json(**kwargs),
             "mesh": mesh_dict,
-            "scale": to_json(self.scale),
+            "scale": to_json(self.scale, **kwargs),
             "file_type": file_type,
         }
 
@@ -587,7 +701,11 @@ class Mesh(Shape):
         if vertex_colors is not None:
             file_type = "obj"
         return cls.from_trimesh(
-            mesh=mesh, origin=origin, scale=scale, file_type=file_type
+            mesh=mesh,
+            origin=origin,
+            scale=scale,
+            file_type=file_type,
+            finish=from_json(data.get("finish"), **kwargs),
         )
 
     @classmethod
@@ -627,11 +745,22 @@ class Mesh(Shape):
         return copy_mesh
 
     @property
+    def local_file(self) -> Path:
+        """
+        The mesh's file on this machine.
+
+        A :attr:`filename` naming a file this machine does not hold is answered by
+        whichever registered source claims it, which copies it here first. The material
+        and texture files the mesh refers to by name sit beside the answer.
+        """
+        return MeshFileSources().resolve(self.filename)
+
+    @property
     def unscaled_mesh(self) -> trimesh.Trimesh:
         """
         The mesh exactly as the file describes it, before this shape's scale is applied.
         """
-        mesh = self._load_in_meters(self.filename, process=False)
+        mesh = self._load_in_meters(str(self.local_file), process=False)
         if mesh.visual.kind != "vertex":
             # Welding duplicate vertices is what makes a mesh watertight, which volume
             # and boolean operations require; formats like STL give every face its own
@@ -657,6 +786,20 @@ class Mesh(Shape):
                 self.color.to_rgba()
             )
         return mesh
+
+    @cached_property
+    def is_textured(self) -> bool:
+        """
+        Whether the mesh's file paints its surface with a texture.
+
+        Answering it leaves :attr:`mesh` unloaded and the textures of the file's parts
+        unmerged.
+        """
+        file_scene = trimesh.load_scene(str(self.local_file), process=False)
+        return any(
+            isinstance(part.visual, TextureVisuals)
+            for part in file_scene.geometry.values()
+        )
 
     @classmethod
     def from_file(
@@ -739,6 +882,7 @@ class Mesh(Shape):
         texture_file_path: Optional[str] = None,
         directory: Optional[Path] = None,
         file_type: str = "obj",
+        finish: Optional[SurfaceFinish] = None,
     ) -> "Mesh":
         """
         Create a Mesh by exporting a trimesh to a file.
@@ -757,6 +901,7 @@ class Mesh(Shape):
         :param directory: Where to place the mesh's own directory inside of /tmp, defaulting to a root
             that is removed when this process exits.
         :param file_type: Format to export the mesh in.
+        :param finish: How the exported mesh's surface takes light.
         :return: Mesh reading from the exported file.
         """
         file_type = file_type.lower()
@@ -786,6 +931,7 @@ class Mesh(Shape):
             origin=origin,
             scale=scale,
             filename=str(mesh_file_path),
+            finish=finish,
         )
 
     @classmethod
@@ -808,6 +954,35 @@ class Mesh(Shape):
             origin=origin,
             scale=scale,
         )
+
+    @classmethod
+    def triangular_prism(
+        cls,
+        side: float,
+        height: float,
+        origin: Optional[HomogeneousTransformationMatrix] = None,
+    ) -> "Mesh":
+        """
+        Create an upright prism of equilateral cross-section, its apex pointing along +x.
+
+        The prism is centred on the middle of its bounding box rather than on its
+        centroid, so its flat face and its apex stand equally far from its origin.
+
+        :param side: Side of the triangular cross-section.
+        :param height: Height of the prism along z.
+        :param origin: Origin of the mesh.
+        :return: Mesh wrapping the prism.
+        """
+        circumradius = side / math.sqrt(3)
+        inradius = side / (2 * math.sqrt(3))
+        outline = np.array(
+            [[circumradius, 0.0], [-inradius, side / 2], [-inradius, -side / 2]]
+        )
+        solid = trimesh.creation.extrude_triangulation(
+            vertices=outline, faces=np.array([[0, 1, 2]]), height=height
+        )
+        solid.apply_translation([-(circumradius - inradius) / 2, 0.0, -height / 2])
+        return cls.from_trimesh(mesh=solid, origin=origin)
 
     @classmethod
     def from_vertices_and_faces(
@@ -991,19 +1166,6 @@ class Sphere(Shape):
             self.origin,
         )
 
-    def to_json(self) -> Dict[str, Any]:
-        return {**super().to_json(), "radius": self.radius}
-
-    @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        texture = data.get("texture")
-        return cls(
-            radius=data["radius"],
-            origin=from_json(data["origin"], **kwargs),
-            color=from_json(data["color"], **kwargs),
-            texture=from_json(texture, **kwargs) if texture is not None else None,
-        )
-
 
 @dataclass(eq=False)
 class Cylinder(Shape):
@@ -1055,20 +1217,6 @@ class Cylinder(Shape):
             self.origin,
         )
 
-    def to_json(self) -> Dict[str, Any]:
-        return {**super().to_json(), "width": self.width, "height": self.height}
-
-    @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        texture = data.get("texture")
-        return cls(
-            width=data["width"],
-            height=data["height"],
-            origin=from_json(data["origin"], **kwargs),
-            color=from_json(data["color"], **kwargs),
-            texture=from_json(texture, **kwargs) if texture is not None else None,
-        )
-
 
 @dataclass(eq=False)
 class Box(Shape):
@@ -1115,37 +1263,11 @@ class Box(Shape):
             self.origin,
         )
 
-    def to_json(self) -> Dict[str, Any]:
-        return {**super().to_json(), "scale": to_json(self.scale)}
-
-    @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        texture = data.get("texture")
-        return cls(
-            scale=from_json(data["scale"], **kwargs),
-            origin=from_json(data["origin"], **kwargs),
-            color=from_json(data["color"], **kwargs),
-            texture=from_json(texture, **kwargs) if texture is not None else None,
-        )
-
-
-T = TypeVar("T")
-
 
 @dataclass
-class Bounds(Generic[T], SubClassSafeGeneric):
+class CoordinateBounds(Bounds[npt.NDArray[np.float64]]):
     """
-    The lower and upper corner of an axis-aligned region.
-    """
-
-    lower: T
-    """
-    The corner with the smallest coordinate on every axis.
-    """
-
-    upper: T
-    """
-    The corner with the largest coordinate on every axis.
+    Bounds whose corners are plain coordinate vectors, one coordinate per axis.
     """
 
     def clip_segment(
@@ -1154,9 +1276,6 @@ class Bounds(Generic[T], SubClassSafeGeneric):
         """
         Clip the parametrized segment ``start + t * direction`` (``t`` in ``[0, 1]``)
         against this region, using the slab method.
-
-        Assumes ``lower``/``upper`` are plain numeric arrays, as returned by
-        :meth:`VolumetricBoundingBox.to_array_bounds`.
 
         .. note::
             ``start``/``direction`` are plain arrays rather than :class:`Point3`/
@@ -1189,8 +1308,17 @@ class Bounds(Generic[T], SubClassSafeGeneric):
         return SimpleInterval.from_data(t_min, t_max, Bound.CLOSED, Bound.CLOSED)
 
 
+PointT = TypeVar("PointT", bound=Point)
+"""
+The point type an :class:`AxisAlignedBox` subclass is asked about --
+:class:`~semantic_digital_twin.spatial_types.Point3` for a box expressed over three
+axes, :class:`~semantic_digital_twin.spatial_types.Point2` for one expressed over a
+plane.
+"""
+
+
 @dataclass(eq=False)
-class AxisAlignedBox(ABC):
+class AxisAlignedBox(BoundsInterface[PointT], ABC):
     """
     Shared behaviour for an axis-aligned box expressed over a fixed set of spatial axes.
 
@@ -1243,10 +1371,19 @@ class AxisAlignedBox(ABC):
         return len(cls.axes())
 
     @abstractmethod
-    def get_points(self) -> List[Point3] | List[Point2]:
+    def contains(self, point: PointT) -> bool:
         """
-        :return: This box's corners, in its own local frame -- ``Point3`` for
-            :class:`VolumetricBoundingBox`, ``Point2`` for :class:`PlanarBoundingBox`.
+        Check whether this box contains a point.
+
+        :param point: The point to check, in any reference frame.
+        :return: True if the box contains the point.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_points(self) -> List[PointT]:
+        """
+        :return: This box's corners, in its own local frame.
         """
         raise NotImplementedError
 
@@ -1276,7 +1413,23 @@ class AxisAlignedBox(ABC):
             }
         )
 
-    def to_array_bounds(self) -> Bounds[npt.NDArray[np.float64]]:
+    @property
+    def lower(self) -> PointT:
+        return self._corner_at([interval.lower for interval in self._ordered_intervals])
+
+    @property
+    def upper(self) -> PointT:
+        return self._corner_at([interval.upper for interval in self._ordered_intervals])
+
+    def _corner_at(self, coordinates: List[float]) -> PointT:
+        """
+        :param coordinates: The corner's coordinate along each of :meth:`axes`.
+        :return: The corner, in the reference frame of the box's origin.
+        """
+        point_type = self.get_type_of_generic_parameter(PointT)
+        return point_type(*coordinates, reference_frame=self.origin.reference_frame)
+
+    def to_array_bounds(self) -> CoordinateBounds:
         """
         Express this bounding box's lower and upper corners as plain-float vectors.
 
@@ -1290,7 +1443,7 @@ class AxisAlignedBox(ABC):
         intervals = self._ordered_intervals
         lower = np.array([interval.lower for interval in intervals], dtype=np.float64)
         upper = np.array([interval.upper for interval in intervals], dtype=np.float64)
-        return Bounds(lower, upper)
+        return CoordinateBounds(lower, upper)
 
     @classmethod
     def from_array_bounds(
@@ -1376,7 +1529,7 @@ class AxisAlignedBox(ABC):
 
 
 @dataclass(eq=False)
-class VolumetricBoundingBox(AxisAlignedBox):
+class VolumetricBoundingBox(AxisAlignedBox[Point3]):
     """
     An axis-aligned box in three-dimensional space.
     """
@@ -1450,27 +1603,6 @@ class VolumetricBoundingBox(AxisAlignedBox):
         :return: The z interval of the bounding box.
         """
         return self._interval(self.min_z, self.max_z, self.origin.z)
-
-    def to_point3_bounds(self) -> Bounds[Point3]:
-        """
-        Express this bounding box's lower and upper corners as ``Point3`` instances.
-
-        :return: The corners, in the same frame as ``origin``.
-        """
-        x, y, z = self.x_interval, self.y_interval, self.z_interval
-        lower = Point3(
-            x.lower,
-            y.lower,
-            z.lower,
-            reference_frame=self.origin.reference_frame,
-        )
-        upper = Point3(
-            x.upper,
-            y.upper,
-            z.upper,
-            reference_frame=self.origin.reference_frame,
-        )
-        return Bounds(lower, upper)
 
     @property
     def scale(self) -> Scale:
@@ -1687,7 +1819,7 @@ class VolumetricBoundingBox(AxisAlignedBox):
 
 
 @dataclass(eq=False)
-class PlanarBoundingBox(AxisAlignedBox):
+class PlanarBoundingBox(AxisAlignedBox[Point2]):
     """
     An axis-aligned box in the x-y plane, with no z-extent.
 
@@ -1799,10 +1931,10 @@ class PlanarBoundingBox(AxisAlignedBox):
         """
         Check if the bounding box contains a point.
         """
-        point_in_bb = point.reference_frame._world.transform(
-            point.to_point3(), self.origin.reference_frame
+        point_in_box_frame = point.reference_frame._world.transform(
+            point, self.origin.reference_frame
         )
-        x, y = float(point_in_bb.x), float(point_in_bb.y)
+        x, y = float(point_in_box_frame.x), float(point_in_box_frame.y)
         return self.simple_event.contains((x, y))
 
     def extrude(self, half_height: float) -> VolumetricBoundingBox:

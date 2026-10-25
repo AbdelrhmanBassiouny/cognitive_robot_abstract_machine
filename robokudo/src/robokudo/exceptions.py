@@ -1,4 +1,6 @@
-"""RoboKudo-specific exception types."""
+"""
+RoboKudo-specific exception types.
+"""
 
 from __future__ import annotations
 
@@ -12,28 +14,39 @@ from krrood.exceptions import DataclassException
 
 @dataclass
 class RoboKudoError(DataclassException, ABC):
-    """Base class for RoboKudo-specific errors."""
+    """
+    Base class for RoboKudo-specific errors.
+    """
 
 
 @dataclass
 class ColorToDepthRatioMissing(RoboKudoError, RuntimeError):
-    """Raised when COLOR2DEPTH_RATIO is required but missing."""
+    """
+    Raised when an operation needs the color-to-depth ratio, but the CAS holds none.
+    """
 
     operation: str = "continue"
+    """
+    The operation that needs the color-to-depth ratio.
+    """
 
     def error_message(self) -> str:
-        return f"COLOR2DEPTH_RATIO is missing from the CAS. Can't {self.operation}."
+        return (
+            f"The color-to-depth ratio is missing from the CAS. Can't {self.operation}."
+        )
 
     def suggest_correction(self) -> str:
         return (
-            "make sure the camera driver or reader stores COLOR2DEPTH_RATIO in the CAS "
-            "before this operation."
+            "make sure the camera driver or reader stores the color-to-depth ratio in "
+            "the CAS before this operation."
         )
 
 
 @dataclass
 class UnknownMode(RoboKudoError, ValueError):
-    """Raised when a configured mode value is not supported."""
+    """
+    Raised when a configured mode value is not supported.
+    """
 
     mode: Any
     context: str = "RoboKudo component"
@@ -47,7 +60,9 @@ class UnknownMode(RoboKudoError, ValueError):
 
 @dataclass
 class CameraDataMissing(RoboKudoError):
-    """Raised when a camera callback requires a message that was not provided."""
+    """
+    Raised when a camera callback requires a message that was not provided.
+    """
 
     data_name: str
     context: str
@@ -61,16 +76,24 @@ class CameraDataMissing(RoboKudoError):
 
 @dataclass
 class CVBridgeImageConversionError(RoboKudoError, ValueError):
-    """Raised when image conversion through the cv_bridge workaround fails."""
+    """
+    Raised when image conversion through the cv_bridge workaround fails.
+    """
 
     source_encoding: str
-    """Source ROS image encoding."""
+    """
+    Source ROS image encoding.
+    """
 
     target_encoding: str
-    """Requested target image encoding."""
+    """
+    Requested target image encoding.
+    """
 
     reason: str
-    """Reason why the image conversion cannot be performed."""
+    """
+    Reason why the image conversion cannot be performed.
+    """
 
     def error_message(self) -> str:
         return (
@@ -84,13 +107,19 @@ class CVBridgeImageConversionError(RoboKudoError, ValueError):
 
 @dataclass
 class CVBridgeImageShapeError(RoboKudoError, ValueError):
-    """Raised when an image array shape cannot represent a ROS image."""
+    """
+    Raised when an image array shape cannot represent a ROS image.
+    """
 
     shape: tuple[int, ...]
-    """Image array shape."""
+    """
+    Image array shape.
+    """
 
     dimensions: int
-    """Number of image array dimensions."""
+    """
+    Number of image array dimensions.
+    """
 
     def error_message(self) -> str:
         return (
@@ -104,13 +133,19 @@ class CVBridgeImageShapeError(RoboKudoError, ValueError):
 
 @dataclass
 class CVBridgeROSImageShapeError(RoboKudoError, ValueError):
-    """Raised when a ROS image message has invalid dimensions."""
+    """
+    Raised when a ROS image message has invalid dimensions.
+    """
 
     height: int
-    """ROS image height."""
+    """
+    ROS image height.
+    """
 
     width: int
-    """ROS image width."""
+    """
+    ROS image width.
+    """
 
     def error_message(self) -> str:
         return f"Invalid ROS image shape height={self.height}, width={self.width}."
@@ -121,13 +156,19 @@ class CVBridgeROSImageShapeError(RoboKudoError, ValueError):
 
 @dataclass
 class CVBridgeROSImageStepError(RoboKudoError, ValueError):
-    """Raised when a ROS image row step cannot contain one pixel row."""
+    """
+    Raised when a ROS image row step cannot contain one pixel row.
+    """
 
     row_bytes: int
-    """Configured ROS image row size in bytes."""
+    """
+    Configured ROS image row size in bytes.
+    """
 
     pixel_row_bytes: int
-    """Minimum row size required by width, channels, and dtype."""
+    """
+    Minimum row size required by width, channels, and dtype.
+    """
 
     def error_message(self) -> str:
         return (
@@ -141,13 +182,19 @@ class CVBridgeROSImageStepError(RoboKudoError, ValueError):
 
 @dataclass
 class CVBridgeROSImagePayloadError(RoboKudoError, ValueError):
-    """Raised when a ROS image payload is too small for its metadata."""
+    """
+    Raised when a ROS image payload is too small for its metadata.
+    """
 
     actual_bytes: int
-    """Number of bytes available in the ROS image payload."""
+    """
+    Number of bytes available in the ROS image payload.
+    """
 
     required_bytes: int
-    """Minimum number of bytes required by height and row step."""
+    """
+    Minimum number of bytes required by height and row step.
+    """
 
     def error_message(self) -> str:
         return (
@@ -161,13 +208,19 @@ class CVBridgeROSImagePayloadError(RoboKudoError, ValueError):
 
 @dataclass
 class CVBridgeUnsupportedImageData(RoboKudoError, ValueError):
-    """Raised when image data cannot be mapped to a ROS image encoding."""
+    """
+    Raised when image data cannot be mapped to a ROS image encoding.
+    """
 
     dtype: str
-    """Image array data type."""
+    """
+    Image array data type.
+    """
 
     channel_count: int
-    """Number of image channels."""
+    """
+    Number of image channels.
+    """
 
     def error_message(self) -> str:
         return (
@@ -183,10 +236,14 @@ class CVBridgeUnsupportedImageData(RoboKudoError, ValueError):
 
 @dataclass
 class CVBridgeUnsupportedEncoding(RoboKudoError, ValueError):
-    """Raised when the cv_bridge workaround receives an unknown encoding."""
+    """
+    Raised when the cv_bridge workaround receives an unknown encoding.
+    """
 
     encoding: str
-    """Unsupported ROS image encoding."""
+    """
+    Unsupported ROS image encoding.
+    """
 
     def error_message(self) -> str:
         return f"Unsupported ROS image encoding '{self.encoding}'."
@@ -197,10 +254,14 @@ class CVBridgeUnsupportedEncoding(RoboKudoError, ValueError):
 
 @dataclass
 class CVBridgeUnsupportedTargetEncoding(RoboKudoError, ValueError):
-    """Raised when the cv_bridge workaround cannot produce an encoding."""
+    """
+    Raised when the cv_bridge workaround cannot produce an encoding.
+    """
 
     target_encoding: str
-    """Requested target image encoding."""
+    """
+    Requested target image encoding.
+    """
 
     def error_message(self) -> str:
         return f"Unsupported desired encoding '{self.target_encoding}'."
@@ -211,7 +272,9 @@ class CVBridgeUnsupportedTargetEncoding(RoboKudoError, ValueError):
 
 @dataclass
 class StoredCameraTransformFrameMetadataMissing(RoboKudoError):
-    """Raised when stored camera transform frame metadata is missing."""
+    """
+    Raised when stored camera transform frame metadata is missing.
+    """
 
     def error_message(self) -> str:
         return "Stored CAMERA_TO_WORLD_TRANSFORM is missing frame-name metadata."
@@ -222,12 +285,16 @@ class StoredCameraTransformFrameMetadataMissing(RoboKudoError):
 
 @dataclass
 class AnalysisPreconditionError(RoboKudoError, ABC):
-    """Base class for unmet analysis preconditions."""
+    """
+    Base class for unmet analysis preconditions.
+    """
 
 
 @dataclass
 class CASCheckConfigurationError(AnalysisPreconditionError, ValueError):
-    """Raised when a CAS check annotator is not configured correctly."""
+    """
+    Raised when a CAS check annotator is not configured correctly.
+    """
 
     component_name: str
 
@@ -243,7 +310,9 @@ class CASCheckConfigurationError(AnalysisPreconditionError, ValueError):
 
 @dataclass
 class CASCheckFailed(AnalysisPreconditionError):
-    """Raised when a configured CAS check condition fails."""
+    """
+    Raised when a configured CAS check condition fails.
+    """
 
     reason: str
 
@@ -255,7 +324,9 @@ class CASCheckFailed(AnalysisPreconditionError):
 
 
 class PointCloudThresholdRelation(StrEnum):
-    """Relative position of a point cloud size to a configured threshold."""
+    """
+    Relative position of a point cloud size to a configured threshold.
+    """
 
     BELOW = "below"
     ABOVE = "above"
@@ -263,7 +334,9 @@ class PointCloudThresholdRelation(StrEnum):
 
 @dataclass
 class PointCloudThresholdError(AnalysisPreconditionError):
-    """Raised when point cloud size violates a configured threshold."""
+    """
+    Raised when point cloud size violates a configured threshold.
+    """
 
     point_count: int
     threshold: int
@@ -284,7 +357,9 @@ class PointCloudThresholdError(AnalysisPreconditionError):
 
 @dataclass
 class PlaneModelMissing(AnalysisPreconditionError):
-    """Raised when an algorithm requires a plane model in the CAS."""
+    """
+    Raised when an algorithm requires a plane model in the CAS.
+    """
 
     context: str
 
@@ -299,7 +374,9 @@ class PlaneModelMissing(AnalysisPreconditionError):
 
 @dataclass
 class PointCloudTooSmallForClustering(AnalysisPreconditionError):
-    """Raised when too few points are available for point-cloud clustering."""
+    """
+    Raised when too few points are available for point-cloud clustering.
+    """
 
     point_count: int
     minimum_point_count: int
@@ -317,7 +394,9 @@ class PointCloudTooSmallForClustering(AnalysisPreconditionError):
 
 @dataclass
 class EmptyPointCloud(AnalysisPreconditionError):
-    """Raised when an algorithm requires a non-empty point cloud."""
+    """
+    Raised when an algorithm requires a non-empty point cloud.
+    """
 
     context: str
 
@@ -330,7 +409,9 @@ class EmptyPointCloud(AnalysisPreconditionError):
 
 @dataclass
 class ImageContourMissing(AnalysisPreconditionError):
-    """Raised when an algorithm requires an image contour but none was found."""
+    """
+    Raised when an algorithm requires an image contour but none was found.
+    """
 
     context: str
 
@@ -345,12 +426,16 @@ class ImageContourMissing(AnalysisPreconditionError):
 
 @dataclass
 class WorldDescriptorError(RoboKudoError, ABC):
-    """Base class for world descriptor related errors."""
+    """
+    Base class for world descriptor related errors.
+    """
 
 
 @dataclass
 class WorldDescriptorLoadError(WorldDescriptorError, RuntimeError):
-    """Raised when loading a world descriptor fails."""
+    """
+    Raised when loading a world descriptor fails.
+    """
 
     ros_package: str
     module_name: str
@@ -370,7 +455,9 @@ class WorldDescriptorLoadError(WorldDescriptorError, RuntimeError):
 
 @dataclass
 class WorldDescriptorBootstrapError(WorldDescriptorError, RuntimeError):
-    """Raised when merging or removing world descriptor content fails."""
+    """
+    Raised when merging or removing world descriptor content fails.
+    """
 
     operation: str
 
@@ -382,3 +469,45 @@ class WorldDescriptorBootstrapError(WorldDescriptorError, RuntimeError):
             "inspect the original chained exception for the underlying world model "
             "operation that failed."
         )
+
+
+@dataclass
+class DetectionModelNotConfigured(RoboKudoError, ValueError):
+    """
+    Raised when an annotator is given no model to load.
+    """
+
+    annotator_name: str
+    """
+    Name of the annotator that has no model configured.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.annotator_name} has neither a pretrained model nor weights inside "
+            f"a ROS package configured."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "set 'pretrained_model', or set both 'ros_package_name' and "
+            "'weights_path' in the annotator's parameters."
+        )
+
+
+@dataclass
+class ParentPipelineMissing(RoboKudoError, RuntimeError):
+    """
+    Raised when a behaviour that operates on its pipeline is not part of one.
+    """
+
+    behaviour_name: str
+    """
+    Name of the behaviour without a parent pipeline.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.behaviour_name} is not part of a Pipeline."
+
+    def suggest_correction(self) -> str:
+        return "add the behaviour as a descendant of a Pipeline."

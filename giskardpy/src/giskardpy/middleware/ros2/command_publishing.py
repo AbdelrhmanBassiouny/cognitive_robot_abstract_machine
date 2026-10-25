@@ -13,13 +13,15 @@ from __future__ import annotations
 import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Dict, List, Union
+from typing import Dict, Generic, List, Union
 
+from control_msgs.msg import MultiDOFCommand
 from geometry_msgs.msg import Twist
 from rclpy.publisher import Publisher
 from std_msgs.msg import Float64, Float64MultiArray
-from typing_extensions import Self
+from typing_extensions import Self, TypeVar
 
+from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from giskardpy.middleware.ros2 import rospy
 from giskardpy.middleware.ros2.exceptions import UnknownMinimumVelocityJointError
 from giskardpy.middleware.ros2.ros2_interface import get_parameters
@@ -256,6 +258,69 @@ class JointVelocityCommand:
         ]
 
 
+# %% message formats of group controllers
+
+CommandMessage = TypeVar("CommandMessage")
+"""
+The ROS message type a group controller consumes.
+"""
+
+
+@dataclass
+class GroupCommandFormat(Generic[CommandMessage], SubClassSafeGeneric, ABC):
+    """
+    Builds the message a joint group velocity controller consumes from the velocities of
+    the joints it commands.
+
+    Each subclass binds the message type it builds, so the type a format publishes and
+    the type it packs are the same declaration.
+    """
+
+    @classmethod
+    def message_type(cls) -> type[CommandMessage]:
+        """
+        The ROS message type published on the command topic.
+        """
+        return cls.get_generic_type_parameters()[0]
+
+    @abstractmethod
+    def create_message(self, velocities: List[float]) -> CommandMessage:
+        """
+        Pack the velocities into a fresh message of :meth:`message_type`.
+
+        :param velocities: The velocity of every commanded joint, in the order the
+            controller expects them.
+        :return: The message to publish.
+        """
+
+
+@dataclass
+class Float64MultiArrayFormat(GroupCommandFormat[Float64MultiArray]):
+    """
+    Commands a controller that consumes :class:`std_msgs.msg.Float64MultiArray`.
+    """
+
+    def create_message(self, velocities: List[float]) -> Float64MultiArray:
+        message = Float64MultiArray()
+        message.data = velocities
+        return message
+
+
+@dataclass
+class MultiDOFCommandFormat(GroupCommandFormat[MultiDOFCommand]):
+    """
+    Commands a controller that consumes :class:`control_msgs.msg.MultiDOFCommand`.
+
+    ..note:: ``dof_names`` is left empty, so the controller applies the values in its own
+        joint order.
+    """
+
+    def create_message(self, velocities: List[float]) -> MultiDOFCommand:
+        message = MultiDOFCommand()
+        message.values = velocities
+        return message
+
+
 # %% publishers
 
 
@@ -330,7 +395,7 @@ class JointVelocityCommandPublisher(CommandPublisher):
     def __post_init__(self):
         for namespace in self.namespaces:
             self.publishers.append(
-                rospy.node.create_publisher(Float64, f"/{namespace}/command", 10)
+                rospy.get_node().create_publisher(Float64, f"/{namespace}/command", 10)
             )
             joint_name = (
                 get_parameters(parameters=["joint"], node_name=namespace)
@@ -392,6 +457,11 @@ class JointGroupVelocityCommandPublisher(CommandPublisher):
     Minimum velocities of the commanded joints.
     """
 
+    command_format: GroupCommandFormat = field(default_factory=Float64MultiArrayFormat)
+    """
+    Message format the controller on ``command_topic`` consumes.
+    """
+
     commands: List[JointVelocityCommand] = field(init=False, default_factory=list)
     """
     What to send for every connection.
@@ -402,19 +472,14 @@ class JointGroupVelocityCommandPublisher(CommandPublisher):
     Reads the commanded velocities from the world state.
     """
 
-    message: Float64MultiArray = field(init=False, default_factory=Float64MultiArray)
-    """
-    The message reused for every publication.
-    """
-
     command_publisher: Publisher = field(init=False)
     """
     The publisher for ``cmd_topic``.
     """
 
     def __post_init__(self):
-        self.command_publisher = rospy.node.create_publisher(
-            Float64MultiArray, self.command_topic, 10
+        self.command_publisher = rospy.get_node().create_publisher(
+            self.command_format.message_type(), self.command_topic, 10
         )
         for connection in self.connections:
             connection.has_hardware_interface = True
@@ -425,23 +490,24 @@ class JointGroupVelocityCommandPublisher(CommandPublisher):
             world=self.world,
             degrees_of_freedom=[connection.raw_dof for connection in self.connections],
         )
-        rospy.node.get_logger().info(
+        rospy.get_node().get_logger().info(
             f"Created publisher for {self.command_topic} for "
             f"{[connection.name.name for connection in self.connections]}"
         )
 
     def publish(self) -> None:
-        self.message.data = [
+        velocities = [
             command.from_state_velocity(state_velocity)
             for command, state_velocity in zip(
                 self.commands, self.velocity_reader.velocities()
             )
         ]
-        self.command_publisher.publish(self.message)
+        self.command_publisher.publish(self.command_format.create_message(velocities))
 
     def stop(self) -> None:
-        self.message.data = [0.0] * len(self.commands)
-        self.command_publisher.publish(self.message)
+        self.command_publisher.publish(
+            self.command_format.create_message([0.0] * len(self.commands))
+        )
 
 
 @dataclass
@@ -491,7 +557,7 @@ class DriveVelocityCommandPublisher(CommandPublisher):
     """
 
     def __post_init__(self):
-        self.velocity_publisher = rospy.node.create_publisher(
+        self.velocity_publisher = rospy.get_node().create_publisher(
             Twist, self.command_topic, 10
         )
         self.connection.has_hardware_interface = True
@@ -500,7 +566,9 @@ class DriveVelocityCommandPublisher(CommandPublisher):
             degrees_of_freedom=self.translation_degrees_of_freedom()
             + [self.connection.yaw],
         )
-        rospy.node.get_logger().info(f"Created publisher for {self.command_topic}.")
+        rospy.get_node().get_logger().info(
+            f"Created publisher for {self.command_topic}."
+        )
 
     def translation_degrees_of_freedom(self) -> List[DegreeOfFreedom]:
         """

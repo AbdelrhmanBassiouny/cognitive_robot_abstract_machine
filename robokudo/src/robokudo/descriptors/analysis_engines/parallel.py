@@ -22,10 +22,10 @@ from robokudo.analysis_engine import AnalysisEngineInterface
 
 from robokudo.annotators.collection_reader import CollectionReaderAnnotator
 from robokudo.annotators.image_preprocessor import ImagePreprocessorAnnotator
-from robokudo.annotators.outputs import ClearAnnotatorOutputs
 from robokudo.annotators.pipeline_trigger import PipelineTrigger
 from robokudo.annotators.testing import SlowAnnotator
 from robokudo.tree_components.better_parallel import Parallel, ParallelPolicy
+from robokudo.behaviours.clear_annotator_outputs import ClearAnnotatorOutputs
 from robokudo.pipeline import Pipeline
 from robokudo.descriptors.factories.cr_descriptor_factory import (
     CollectionReaderDescriptorFactory,
@@ -84,8 +84,9 @@ class AnalysisEngine(AnalysisEngineInterface):
         kinect_config = CollectionReaderDescriptorFactory.create_descriptor("kinect")
 
         seq = Pipeline("RWPipeline")
-        # parallel = py_trees.composites.Parallel()
-        parallel = Parallel(policy=ParallelPolicy.SuccessOnAll(synchronise=True))
+        parallel = Parallel(
+            name="Parallel", policy=ParallelPolicy.SuccessOnAll(synchronise=True)
+        )
         parallel.add_children(
             [
                 # py_trees.behaviours.Count(name="Annotator A", fail_until=-1, running_until=30, success_until=1000),

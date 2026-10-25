@@ -1,5 +1,5 @@
 import os
-from krrood.utils import memoize
+from krrood.patterns.caching import memoize
 
 
 @memoize

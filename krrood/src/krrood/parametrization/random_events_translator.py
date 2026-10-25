@@ -65,9 +65,14 @@ class WhereExpressionToRandomEventTranslator:
                 or not comparator._is_literal_comparator_()
             ):
                 continue
+            # A random-events variable is identified by its name, so the two spellings
+            # of one field have to arrive here as one: a chain taken from a query is
+            # read in the variable-rooted form the same chain taken from the variable
+            # already has.
+            subject = comparator.left._variable_rooted_
             result[comparator.left] = (
                 random_events.variable.variable_from_name_and_type(
-                    comparator.left._name_, comparator.left._type_
+                    subject._name_, subject._type_
                 )
             )
         return result

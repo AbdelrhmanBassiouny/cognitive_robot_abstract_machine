@@ -25,7 +25,7 @@ from __future__ import annotations
 import logging
 import struct
 import warnings
-from threading import Lock, Thread
+from threading import Lock
 
 import builtin_interfaces.msg
 import cv2
@@ -39,7 +39,7 @@ from rclpy.node import Node
 from rclpy.time import Time
 from sensor_msgs.msg import CompressedImage, CameraInfo, Image
 from tf2_ros import Buffer
-from typing_extensions import Optional, List, Any, TYPE_CHECKING, Union, Tuple
+from typing_extensions import Optional, List, Any, TYPE_CHECKING, Union
 
 from robokudo.cas import CASViews, CAS
 from robokudo.defs import PACKAGE_NAME
@@ -52,10 +52,13 @@ from robokudo.world import (
     update_connection_transform,
     world_instance,
 )
+from semantic_digital_twin.adapters.ros.node_registry import ROSNodeRegistry
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 
 if TYPE_CHECKING:
     import numpy.typing as npt
+
+    from robokudo.types.cv import ColorToDepthRatio
 
 
 class CameraInterface(object):
@@ -188,7 +191,7 @@ class ROSCameraInterface(CameraInterface):
         """
         super().__init__(camera_config)
 
-        self.node = node if node is not None else Node("ros_camera_node")
+        self.node = node if node is not None else ROSNodeRegistry().get()
         """
         ROS node for communication with ROS.
         """
@@ -306,13 +309,13 @@ class ROSCameraInterface(CameraInterface):
         )
 
         translation = (
-            np.asarray(camera_to_world_transform.to_position().to_np())
+            np.asarray(camera_to_world_transform.position.to_np())
             .reshape(-1)[:3]
             .astype(float)
             .tolist()
         )
         rotation = (
-            np.asarray(camera_to_world_transform.to_quaternion().to_np())
+            np.asarray(camera_to_world_transform.quaternion.to_np())
             .reshape(-1)[:4]
             .astype(float)
             .tolist()
@@ -420,7 +423,7 @@ class KinectCameraInterface(ROSCameraInterface):
 
         :param camera_config: Configuration for the Kinect camera
         """
-        super().__init__(camera_config, node=Node("kinect_camera_node"))
+        super().__init__(camera_config)
 
         self.color_subscriber: message_filters.Subscriber = Subscriber(
             self.node,
@@ -475,7 +478,7 @@ class KinectCameraInterface(ROSCameraInterface):
         Open3D camera intrinsics
         """
 
-        self.color2depth_ratio: Optional[Tuple[float, float]] = None
+        self.color_to_depth_ratio: ColorToDepthRatio | None = None
         """
         Ratio between color and depth image sizes
         """
@@ -490,16 +493,6 @@ class KinectCameraInterface(ROSCameraInterface):
 
         self.bridge: CVBridgeWorkaround = CVBridgeWorkaround()
         """NumPy-compatible replacement for cv_bridge."""
-        # rclpy.spin_once(self.node)
-
-        Thread(
-            target=rclpy.spin,
-            args=(self.node,),
-            daemon=True,
-            name="Camera Interface Thread",
-        ).start()
-
-        # Thread(target=rclpy.spin_once(self.node), args=(self.node,), daemon=True).start()
 
     def compressed_depth_configured(self) -> bool:
         """
@@ -637,13 +630,13 @@ class KinectCameraInterface(ROSCameraInterface):
         cy = self.camera_info.k[5]
         self.camera_intrinsic.set_intrinsics(width, height, fx, fy, cx, cy)
 
-        self.color2depth_ratio = self.camera_config.color2depth_ratio
+        self.color_to_depth_ratio = self.camera_config.color_to_depth_ratio
 
         cas.set(CASViews.COLOR_IMAGE, self.color)
         cas.set(CASViews.DEPTH_IMAGE, self.depth)
         cas.set(CASViews.CAMERA_INFO, self.camera_info)
         cas.set(CASViews.CAMERA_INTRINSIC, self.camera_intrinsic)
-        cas.set(CASViews.COLOR2DEPTH_RATIO, self.color2depth_ratio)
+        cas.set(CASViews.COLOR_TO_DEPTH_RATIO, self.color_to_depth_ratio)
 
         self.store_camera_to_world_transform_from_tf(cas, self.timestamp)
 

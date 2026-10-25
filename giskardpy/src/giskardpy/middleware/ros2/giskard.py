@@ -14,11 +14,12 @@ from giskardpy.data_types.exceptions import NoControlledJointsError
 from giskardpy.executor import Executor
 from giskardpy.middleware.ros2 import rospy
 from giskardpy.middleware.ros2.action_server import ActionServerHandler
+from giskardpy.middleware.ros2.client_presence import ClientWatchdog, HeartbeatPresence
 from giskardpy.middleware.ros2.control_loop import ControlLoop
 from giskardpy.middleware.ros2.feedback_publisher import ActionFeedbackPublisher
 from giskardpy.middleware.ros2.graceful_shutdown import GracefulShutdownSignals
 from giskardpy.middleware.ros2.cycle_counter import CycleCounter
-from giskardpy.middleware.ros2.input_synchronization import WorldStateInputs
+from semantic_digital_twin.input_synchronization import WorldStateInputs
 from giskardpy.middleware.ros2.motion_server import MotionServer
 from giskardpy.middleware.ros2.post_goal_plotters import (
     GoalGanttChartPlotter,
@@ -34,7 +35,7 @@ from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.qp.qp_controller_config import QPControllerConfig
 from giskardpy.ros_executor import Ros2Executor
 from krrood.ormatic.utils import create_engine
-from krrood.utils import clear_memoization_cache
+from krrood.patterns.caching import clear_memoization_cache
 from semantic_digital_twin.adapters.ros.tf_publisher import TFPublisher
 from semantic_digital_twin.adapters.ros.visualization.collision_viz_marker import (
     CollisionVisualizationMarkerPublisher,
@@ -100,7 +101,7 @@ class Giskard:
             self.world_config.setup_world()
             clear_memoization_cache(self.world_config.world)
             self.executor = Ros2Executor(
-                ros_node=rospy.node,
+                ros_node=rospy.get_node(),
                 context=MotionStatechartContext(
                     world=self.world_config.world,
                     qp_controller_config=self.qp_controller_config,
@@ -120,7 +121,10 @@ class Giskard:
         """
         world = self.world_config.world
         action_server = ActionServerHandler(
-            action_name=f"{rospy.node.get_name()}/command", action_type=JsonAction
+            action_name=f"{rospy.get_node().get_name()}/command", action_type=JsonAction
+        )
+        client_watchdog = ClientWatchdog(
+            presence=HeartbeatPresence(node=rospy.get_node()),
         )
         feedback_publisher = ActionFeedbackPublisher(
             executor=self.executor, action_server=action_server
@@ -133,8 +137,9 @@ class Giskard:
         control_loop = ControlLoop(
             executor=self.executor,
             action_server=action_server,
+            client_watchdog=client_watchdog,
             feedback_publisher=feedback_publisher,
-            inputs=WorldStateInputs(world=world),
+            inputs=WorldStateInputs(world=world, reapplies_inputs=True),
             cycle_counter=cycle_counter,
             world_updates=world_updates,
         )
@@ -142,6 +147,7 @@ class Giskard:
             executor=self.executor,
             action_server=action_server,
             control_loop=control_loop,
+            client_watchdog=client_watchdog,
             world_updates=world_updates,
             world_synchronizer=self.world_synchronizer,
             feedback_publisher=feedback_publisher,
@@ -182,7 +188,7 @@ class Giskard:
             session = sessionmaker(bind=engine)()
 
             self.model_reload_synchronizer = ModelReloadSynchronizer(
-                node=rospy.node,
+                node=rospy.get_node(),
                 _world=self.world_config.world,
                 session=session,
                 defer_incoming_reloads=True,
@@ -198,20 +204,20 @@ class Giskard:
         # keep being published through the normal callbacks.
         self.world_synchronizer = WorldSynchronizer(
             _world=self.world_config.world,
-            node=rospy.node,
+            node=rospy.get_node(),
             defer_incoming_updates=True,
         )
         self.world_fetcher = FetchWorldServer(
-            node=rospy.node, world=self.world_config.world
+            node=rospy.get_node(), world=self.world_config.world
         )
         self.tf_publisher = TFPublisher.create_with_ignore_existing_tf(
-            node=rospy.node, world=self.world_config.world
+            node=rospy.get_node(), world=self.world_config.world
         )
         self.viz_marker_publisher = VizMarkerPublisher(
-            node=rospy.node, _world=self.world_config.world
+            node=rospy.get_node(), _world=self.world_config.world
         )
         self.collision_marker_publisher = CollisionVisualizationMarkerPublisher(
-            node=rospy.node, throttle=5, world=self.world_config.world
+            node=rospy.get_node(), throttle=5, world=self.world_config.world
         )
 
     def close_world_model_ros_interface(self):
@@ -227,6 +233,7 @@ class Giskard:
         if self.model_reload_synchronizer is not None:
             self.model_reload_synchronizer.close()
         self.world_fetcher.close()
+        self.motion_server.client_watchdog.presence.stop()
         self.tf_publisher.stop()
         self.viz_marker_publisher.stop()
 
@@ -249,7 +256,7 @@ class Giskard:
         if len(controlled_joints) == 0 and len(world.connections) > 0:
             raise NoControlledJointsError()
         if len(non_controlled_joints) > 0:
-            rospy.node.get_logger().info(
+            rospy.get_node().get_logger().info(
                 f"The following joints are non-fixed according to the urdf, "
                 f"but not flagged as controlled: {[c.name for c in non_controlled_joints]}."
             )

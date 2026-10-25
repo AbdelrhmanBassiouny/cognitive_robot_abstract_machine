@@ -3,7 +3,6 @@ from __future__ import annotations
 import itertools
 import math
 import plotly.graph_objects as go
-from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
     Union,
@@ -37,6 +36,14 @@ from random_events.interval import closed, SimpleInterval, Interval
 from abc import abstractmethod, ABC
 
 from probabilistic_model.exceptions import IntractableError, UndefinedOperationError
+from probabilistic_model.query_results import (
+    Conditioning,
+    LogConditioning,
+    LogMode,
+    LogTruncation,
+    Mode,
+    Truncation,
+)
 from probabilistic_model.utils import neighbouring_points
 from random_events.plotting import EventPlotter, SimpleEventPlotter
 from random_events.product_algebra import VariableMap, Event, SimpleEvent
@@ -44,6 +51,11 @@ from random_events.variable import Integer, Continuous, Variable, Symbolic
 
 # Type definitions
 FullEvidenceType = np.array  # [Union[float, int, SetElement]]
+
+PartialPointType = Dict[Variable, Any]
+"""
+A partial point: one value for each of some variables of a model.
+"""
 
 # # Type hinting for Python 3.7 to 3.9
 if TYPE_CHECKING:
@@ -56,7 +68,6 @@ else:
     MomentType = VariableMap
 
 
-@dataclass
 class ProbabilisticModel(ABC):
     """
     Abstract base class for probabilistic models.
@@ -67,6 +78,16 @@ class ProbabilisticModel(ABC):
 
     This class can be used as an interface to any kind of probabilistic model, tractable
     or not.
+
+    .. note::
+        ``variables`` is a type-annotated contract, which leaves each subclass free to
+        store it as a plain field or compute it as a property. A subclass that provides
+        neither raises ``AttributeError`` on first access.
+    """
+
+    variables: Tuple[Variable, ...]
+    """
+    The variables of the model.
     """
 
     @property
@@ -75,13 +96,6 @@ class ProbabilisticModel(ABC):
         The symbol used to represent this distribution.
         """
         return self.__class__.__name__
-
-    @property
-    @abstractmethod
-    def variables(self) -> Tuple[Variable, ...]:
-        """
-        :return: The variables of the model.
-        """
 
     def get_variable_by_name(self, name: str) -> Variable:
         [variable] = [v for v in self.variables if v.name == name]
@@ -169,7 +183,7 @@ class ProbabilisticModel(ABC):
         :return: The probability of the event.
         """
 
-    def mode(self) -> Tuple[Event, float]:
+    def mode(self) -> Mode:
         """
         Calculate the mode of the model.
 
@@ -182,11 +196,10 @@ class ProbabilisticModel(ABC):
 
                 :return: The mode and its likelihood.
         """
-        mode, log_likelihood = self.log_mode()
-        return mode, np.exp(log_likelihood)
+        return self.log_mode().exponentiated()
 
     @abstractmethod
-    def log_mode(self) -> Tuple[Event, float]:
+    def log_mode(self) -> LogMode:
         """
         Calculate the mode of the model.
 
@@ -206,7 +219,7 @@ class ProbabilisticModel(ABC):
 
     def truncated(
         self, event: Event, singleton_allowed: bool = False
-    ) -> Tuple[Optional[ProbabilisticModel], float]:
+    ) -> Truncation[ProbabilisticModel]:
         """
         Calculate the truncated distribution P(*| event) and the probability of the
         event.
@@ -226,13 +239,12 @@ class ProbabilisticModel(ABC):
         :return: The truncated distribution and the probability of the event.
         """
         event.fill_missing_variables(set(self.variables))
-        conditional, log_probability = self.log_truncated(event, singleton_allowed)
-        return conditional, np.exp(log_probability)
+        return self.log_truncated(event, singleton_allowed).exponentiated()
 
     @abstractmethod
     def log_truncated(
         self, event: Event, singleton_allowed: bool = False
-    ) -> Tuple[Optional[Union[ProbabilisticModel, Self]], float]:
+    ) -> LogTruncation[ProbabilisticModel]:
         """
         Calculate the truncated distribution P(*| event) and the probability of the
         event.
@@ -244,27 +256,24 @@ class ProbabilisticModel(ABC):
         :return: The truncated distribution and the log-probability of the event.
         """
 
-    def conditional(self, point: Dict[Variable, Any]) -> Tuple[Optional[Self], float]:
+    def conditional(self, point: PartialPointType) -> Conditioning[Self]:
         """
         Calculate the conditioned distribution P(*| point) and the probability of the
         event.
 
         :param point: A partial point to calculate the conditioned distribution on.
-        :return: The conditioned distribution and the log-probability of the point.
+        :return: The conditioned distribution and the likelihood of the point.
         """
-        conditional, log_probability = self.log_conditional(point)
-        return conditional, np.exp(log_probability)
+        return self.log_conditional(point).exponentiated()
 
     @abstractmethod
-    def log_conditional(
-        self, point: Dict[Variable, Any]
-    ) -> Tuple[Optional[Self], float]:
+    def log_conditional(self, point: PartialPointType) -> LogConditioning[Self]:
         """
         Calculate the conditioned distribution P(*| point) and the probability of the
         event. Check the documentation of `conditional` for more information.
 
         :param point: A partial point to calculate the conditioned distribution on.
-        :return: The conditioned distribution and the log-probability of the point.
+        :return: The conditioned distribution and the log-likelihood of the point.
         """
 
     @abstractmethod
@@ -360,9 +369,6 @@ class ProbabilisticModel(ABC):
 
         :param scaling: The variable value pairs to scale the model by.
         """
-        raise NotImplementedError
-
-    def __copy__(self):
         raise NotImplementedError
 
     def plotly_layout(self) -> Dict[str, Any]:
@@ -532,7 +538,8 @@ class ProbabilisticModel(ABC):
         # plot the mode if possible
         if mode:
             try:
-                mode, maximum_likelihood = self.mode()
+                most_likely = self.mode()
+                mode, maximum_likelihood = most_likely.event, most_likely.likelihood
             except IntractableError:
                 mode, maximum_likelihood = None, max(pdf)
         else:
@@ -837,8 +844,7 @@ class ProbabilisticModel(ABC):
         :return: traces for the mode of a multivariate model.
         """
         try:
-            mode, _ = self.mode()
-            mode_traces = EventPlotter(mode).plot(color=MODE_TRACE_COLOR)
+            mode_traces = EventPlotter(self.mode().event).plot(color=MODE_TRACE_COLOR)
             for trace in mode_traces:
                 trace.update(name=MODE_TRACE_NAME, mode="lines+markers")
         except IntractableError:

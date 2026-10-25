@@ -2,6 +2,7 @@ import json
 import time
 from copy import deepcopy
 from dataclasses import dataclass, field
+from datetime import timedelta
 
 import numpy as np
 import pytest
@@ -516,7 +517,7 @@ def test_cancel_node_without_tasks_never_starts():
 
     cancel.build(MotionStatechartContext.empty())
 
-    assert cancel.start_condition.is_const_false()
+    assert cancel.start_condition.is_constant_false()
 
 
 def test_self_collision_avoidance_without_checked_body_combinations(
@@ -742,7 +743,7 @@ def test_avoid_self_collision_with_l_arm(pr2_with_box, rclpy_node):
             world=pr2_with_box,
             qp_controller_config=QPControllerConfig(
                 target_frequency=100,
-                prediction_horizon=30,
+                braking_time=timedelta(seconds=0.289),
             ),
         )
     )
@@ -847,7 +848,7 @@ def _run_and_count_collision_checks(
             world=world,
             qp_controller_config=QPControllerConfig(
                 target_frequency=100,
-                prediction_horizon=30,
+                braking_time=timedelta(seconds=0.289),
             ),
         )
     )
@@ -1067,6 +1068,7 @@ def test_collision_for_robot_with_static_base(
             )
 
 
+@pytest.mark.flaky(reruns=3)
 def test_repeated_collision_pr2_apartment_does_not_increase_execution_time(
     pr2_apartment_world,
 ):

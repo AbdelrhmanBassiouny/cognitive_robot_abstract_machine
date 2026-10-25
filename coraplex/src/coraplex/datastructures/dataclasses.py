@@ -5,37 +5,26 @@ from dataclasses import dataclass, field
 
 from typing_extensions import (
     Optional,
-    Any,
     TYPE_CHECKING,
-    ClassVar,
     List,
     Type,
+    TypeVar,
 )
 
+from coraplex.plans.plan_entity import PlanEntity
 from krrood.entity_query_language.backends import (
     QueryBackend,
     EntityQueryLanguageGenerativeBackend,
 )
-from krrood.class_diagrams.mocking import MockedClass, MockedModule
-from krrood.utils import memoize
-from coraplex.plans.plan import Plan
-from coraplex.plans.plan_entity import PlanEntity
+from krrood.patterns.caching import memoize
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 
 if TYPE_CHECKING:
     from coraplex.plans.plan import Plan
     from semantic_digital_twin.world import World
     from coraplex.alternative_motion_mapping import AlternativeMotion
-
-try:
-    import rclpy
-except ImportError as e:
-    from semantic_digital_twin.utils import mocked_rclpy
-
-    logging.warning(
-        "Could not import rclpy. This is expected if you are not using ROS. Mocking rclpy."
-    )
-    rclpy = mocked_rclpy
+    from coraplex.plans.plan_transformation import PlanTransformation
+    from rclpy.node import Node
 
 
 @dataclass
@@ -78,7 +67,7 @@ class Context(PlanEntity):
     The semantic robot annotation which should execute the plan.
     """
 
-    ros_node: Optional[rclpy.node.Node] = field(default=None)
+    ros_node: Optional[Node] = field(default=None)
     """
     A ROS node that should be used for communication in this plan.
     """
@@ -109,9 +98,29 @@ class Context(PlanEntity):
     use their default motion chart.
     """
 
+    plan_transformations: List[PlanTransformation] = field(default_factory=list)
+    """
+    The transformations that rewrite the plans of this context while they are expanded.
+
+    A transformation is applied to every node it applies to, right after that node
+    has been expanded. If empty, actions are performed as they describe themselves.
+    """
+
     _debug: bool = field(default=False)
     """
     Should debug information be printed or visualized.
+    """
+
+    sampling_seed: Optional[int] = field(default=None, kw_only=True)
+    """
+    Seed for the locations of this plan that have none of their own, so a run can be
+    repeated; ``None`` samples afresh each run.
+    """
+
+    candidates_to_try: int = field(default=50, kw_only=True)
+    """
+    How many candidates an underspecified step of this plan tries before giving up,
+    unless the step has a limit of its own.
     """
 
     motion_tolerances: MotionToleranceConfig = field(
@@ -152,7 +161,7 @@ class Context(PlanEntity):
 
         Memoized (not ``functools.cached_property``) so the cached wrapper, which
         holds a reference to :attr:`world`, can be invalidated explicitly via
-        :func:`krrood.utils.clear_memoization_cache` if the world it was built for is
+        :func:`krrood.patterns.caching.clear_memoization_cache` if the world it was built for is
         ever replaced.
         """
         from giskardpy.middleware.ros2.python_interface import GiskardWrapper

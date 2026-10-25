@@ -10,7 +10,11 @@ from types import UnionType, EllipsisType
 import numpy as np
 from typing_extensions import (
     Any,
+    Dict,
+    Hashable,
     Iterable,
+    Iterator,
+    List,
     Optional,
     TYPE_CHECKING,
     Type,
@@ -18,13 +22,16 @@ from typing_extensions import (
     get_args,
 )
 from krrood.parametrization.exceptions import (
+    AmbiguousVariableName,
+    AttributeNotParameterized,
+    DomainElementsIndistinguishableInSamples,
     EmptyVariableDomain,
     InvalidEllipsis,
     JointQueryAcrossClassesNotSupported,
 )
 import random_events.variable
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
-from krrood.entity_query_language.core.mapped_variable import Attribute
+from krrood.entity_query_language.core.mapped_variable import Attribute, MappedVariable
 from krrood.entity_query_language.operators.causal import (
     Cause,
     CausesEffect,
@@ -37,12 +44,12 @@ from krrood.entity_query_language.operators.core_logical_operators import (
     flatten_operands,
 )
 from krrood.entity_query_language.query.match import Match, AttributeMatch
-from krrood.ormatic.data_access_objects.helper import to_dao
-from krrood.ormatic.data_access_objects.to_dao import ToDataAccessObjectState
 from krrood.parametrization.random_events_translator import (
     WhereExpressionToRandomEventTranslator,
 )
+from krrood.parametrization.feature_extraction.aggregations import get_aggregation_class
 from krrood.parametrization.feature_extraction.feature_extractor import FeatureExtractor
+from krrood.symbol_graph.helpers import get_method_return_type
 from random_events.interval import singleton
 from random_events.product_algebra import Event, SimpleEvent
 from random_events.set import Set
@@ -75,6 +82,19 @@ class ModelQueryParameters(ABC):
         :return: A dictionary that maps variable names to the random events variables
             this query references.
         """
+
+    def variable_of(self, attribute: MappedVariable) -> random_events.variable.Variable:
+        """
+        :param attribute: An attribute of the query, such as
+            ``query.pose.position.x``.
+        :return: The random events variable that stands for the attribute.
+        :raises AttributeNotParameterized: If the query has no variable for the
+            attribute.
+        """
+        name = attribute._variable_rooted_._name_
+        if name not in self.variables:
+            raise AttributeNotParameterized(attribute)
+        return self.variables[name]
 
     @property
     @abstractmethod
@@ -110,6 +130,47 @@ class ModelQueryParameters(ABC):
         if len(owner_classes) != 1:
             raise JointQueryAcrossClassesNotSupported(owner_classes)
         return owner_classes.pop()
+
+
+@dataclass
+class SampleColumn:
+    """
+    How one column of the samples of a probabilistic model sets an attribute of the
+    instances constructed from them.
+    """
+
+    index: int
+    """
+    The index of the column.
+    """
+
+    mapped_variable: MappedVariable
+    """
+    The variable of the attribute the column sets.
+    """
+
+    values_by_sample_value: Optional[Dict[float, Hashable]] = None
+    """
+    The value of the attribute for every value of a symbolic column, or ``None`` if the
+    samples are the values themselves.
+    """
+
+    is_integer: bool = False
+    """
+    Whether the attribute holds whole numbers, which the samples store as floats.
+    """
+
+    def value_in(self, sample: np.ndarray) -> Any:
+        """
+        :param sample: A sample of the model.
+        :return: The value of the attribute in the sample.
+        """
+        value = sample[self.index]
+        if self.values_by_sample_value is not None:
+            return self.values_by_sample_value[float(value)]
+        if self.is_integer:
+            return int(value)
+        return value.item()
 
 
 @dataclass
@@ -203,7 +264,7 @@ class UnderspecifiedParameters(ModelQueryParameters):
     """
 
     def __post_init__(self):
-        self.statement.expression.build()
+        self.statement._get_expression_().build()
         self._random_event_compiler = WhereExpressionToRandomEventTranslator(
             and_(*self.statement._where_conditions_)
         )
@@ -239,7 +300,7 @@ class UnderspecifiedParameters(ModelQueryParameters):
         """
         result = {v.name: v for v in self._random_event_compiler.variables.values()}
 
-        for attribute_match in self.statement.matches_with_variables:
+        for attribute_match in self.statement._matches_with_variables_:
             if attribute_match.assigned_value is None:
                 continue
 
@@ -267,16 +328,16 @@ class UnderspecifiedParameters(ModelQueryParameters):
         :param model: The model to condition and truncate.
         :return: The resulting model, or ``None`` if any step leaves no solution.
         """
-        conditioned, _ = model.conditional(
+        conditioned = model.conditional(
             self.conditioning_assignments_from_literal_values
-        )
+        ).distribution
         if conditioned is None:
             return None
 
         if self.truncation_assignments_from_where_conditions:
-            truncated, _ = conditioned.truncated(
+            truncated = conditioned.truncated(
                 self.truncation_assignments_from_where_conditions
-            )
+            ).distribution
         else:
             truncated = conditioned
         if truncated is None:
@@ -301,8 +362,7 @@ class UnderspecifiedParameters(ModelQueryParameters):
         complete_event.fill_missing_variables(self.variables.values())
         for event in self.truncation_assignments_from_krrood_variables[1:]:
             complete_event = complete_event.intersection_with(event)
-        truncated, _ = model.truncated(complete_event, singleton_allowed=True)
-        return truncated
+        return model.truncated(complete_event, singleton_allowed=True).distribution
 
     def _extract_variables_from_attribute_match(
         self, attribute_match: AttributeMatch
@@ -343,11 +403,9 @@ class UnderspecifiedParameters(ModelQueryParameters):
         :param attribute_match: The attribute match with a ``Cause`` assigned value.
         :return: A dictionary of extracted variables.
         """
-        name = attribute_match.name_from_variable_access_path
-        krrood_variable = attribute_match.assigned_variable
-        type_ = self._process_attribute_match_type(krrood_variable._type_)
+        name, type_ = self._resolve_search_variable_name_and_type(attribute_match)
 
-        if not issubclass(type_, compatible_types):
+        if type_ is None or not issubclass(type_, compatible_types):
             raise InvalidEllipsis(type_)
 
         cause_variable = variable_from_name_and_type(name=name, type_=type_)
@@ -369,16 +427,55 @@ class UnderspecifiedParameters(ModelQueryParameters):
             value.
         :return: A dictionary of extracted variables.
         """
-        name = attribute_match.name_from_variable_access_path
-        krrood_variable = attribute_match.assigned_variable
-        type_ = self._process_attribute_match_type(krrood_variable._type_)
+        name, type_ = self._resolve_search_variable_name_and_type(attribute_match)
 
-        if not issubclass(type_, compatible_types):
+        if type_ is None or not issubclass(type_, compatible_types):
             raise InvalidEllipsis(type_)
 
         confounder_variable = variable_from_name_and_type(name=name, type_=type_)
         self.search_confounder_variables.append(confounder_variable)
         return {name: confounder_variable}
+
+    def _resolve_search_variable_name_and_type(
+        self, attribute_match: AttributeMatch
+    ) -> tuple[str, Optional[Type]]:
+        """
+        Resolve the qualified name and type a ``cause``/``confounder``-marked
+        attribute match ranges over.
+
+        A marked keyword usually names a literal field, whose access path already
+        gives the right qualified name and whose type
+        :meth:`AttributeMatch.assigned_variable` already carries. One that instead
+        names an aggregation statistic (e.g. ``chlorine_count`` on a class whose
+        :class:`~krrood.parametrization.feature_extraction.aggregations.AggregationStatistic`
+        subclass declares it) has no field of its own on the owner class: its type
+        falls back to that statistic's own return annotation, and its name is built
+        the same way EQL's own ``variable(AggregationClass).method()`` attribute
+        access names it (``"{AggregationClass}.{method}()"``), matching how grounding
+        actually names that variable on the circuit -- the owner class's own dotted
+        access path does not.
+
+        :param attribute_match: The attribute match to resolve a name and type for.
+        :return: The resolved name, and the resolved type (``None`` if neither a
+            field nor a matching aggregation statistic exists).
+        """
+        type_ = self._process_attribute_match_type(
+            attribute_match.assigned_variable._type_
+        )
+        if type_ is not None:
+            return attribute_match.name_from_variable_access_path, type_
+
+        owner_class = attribute_match.attribute._owner_class_
+        if owner_class is None:
+            return attribute_match.name_from_variable_access_path, None
+        aggregation_class = get_aggregation_class(owner_class)
+        if aggregation_class is None:
+            return attribute_match.name_from_variable_access_path, None
+        name = f"{aggregation_class.__name__}.{attribute_match.attribute_name}()"
+        type_ = get_method_return_type(
+            aggregation_class, attribute_match.attribute_name
+        )
+        return name, type_
 
     def _handle_literal_attribute_match(
         self, attribute_match: AttributeMatch
@@ -499,8 +596,7 @@ class UnderspecifiedParameters(ModelQueryParameters):
         """
         Extract variables from a single non-primitive literal value.
 
-        Converts ``value`` to a DAO, runs feature extraction, and registers a
-        conditioning assignment for every discovered feature.
+        Runs feature extraction on ``value`` and registers a conditioning assignment for every discovered feature.
 
         :param value: The non-primitive literal to decompose.
         :param name_prefix: Attribute access path used to namespace the feature names
@@ -508,8 +604,7 @@ class UnderspecifiedParameters(ModelQueryParameters):
         :return: A dictionary mapping prefixed feature names to their variables.
         """
         result = {}
-        dao_state = ToDataAccessObjectState()
-        extractor = FeatureExtractor.from_instances([to_dao(value, dao_state)])
+        extractor = FeatureExtractor.from_instances([value])
         for feature in extractor.features:
             feature_name = (
                 f"{name_prefix}.{feature.get_clean_name_from_mapped_variable()}"
@@ -547,7 +642,7 @@ class UnderspecifiedParameters(ModelQueryParameters):
         domain_objects = attribute_match.assigned_value.tolist()
 
         if not domain_objects:
-            raise EmptyVariableDomain(attribute_match.variable)
+            raise EmptyVariableDomain(attribute_match._variable_)
 
         if not type_ is None and issubclass(type_, compatible_types):
             return self._extract_variables_from_primitive_krrood_variable(
@@ -599,11 +694,9 @@ class UnderspecifiedParameters(ModelQueryParameters):
         :param domain_objects: The objects in the variable's domain.
         :return: A dictionary of extracted variables.
         """
-        state = ToDataAccessObjectState()
         hashes = [hash(obj) for obj in domain_objects]
-        data_access_objects = [to_dao(obj, state=state) for obj in domain_objects]
 
-        extractor = FeatureExtractor.from_instances(data_access_objects)
+        extractor = FeatureExtractor.from_instances(domain_objects)
 
         result = {}
 
@@ -622,8 +715,8 @@ class UnderspecifiedParameters(ModelQueryParameters):
         result[identifier_variable.name] = identifier_variable
 
         simple_events = []
-        for hash_, dao in zip(hashes, data_access_objects):
-            current_feature_values = extractor.apply_mapping(dao)
+        for hash_, domain_object in zip(hashes, domain_objects):
+            current_feature_values = extractor.apply_mapping(domain_object)
 
             data = {identifier_variable: hash_}
             for feature, value in zip(extractor.features, current_feature_values):
@@ -644,61 +737,130 @@ class UnderspecifiedParameters(ModelQueryParameters):
 
         return result
 
-    def construct_instance_from_model_sample(
+    def construct_instances_from_model_samples(
         self,
         variables: Iterable[random_events.variable.Variable],
-        sample: np.ndarray,
-    ) -> dict[random_events.variable.Variable, Any]:
+        samples: np.ndarray,
+    ) -> Iterator[Any]:
         """
-        Construct an instance from a sample of a probabilistic model.
+        Construct one instance per sample of a probabilistic model.
 
-        :param variables: The variables from a probabilistic model.
-        :param sample: A sample from the same model.
-        :return: The constructed instance.
+        :param variables: The variables of the model, in the order of the columns of
+            the samples.
+        :param samples: Samples of the model.
+        :return: The constructed instances, in the order of the samples.
         """
-        sample_mapping = dict(zip(variables, sample))
-        for variable_, value in sample_mapping.items():
-            mapped_variable = self.statement._get_mapped_variable_by_name(
-                variable_.name
+        columns = self._sample_columns_of(variables)
+        matches_with_variables = list(self.statement._matches_with_variables_)
+        for sample in samples:
+            for column in columns:
+                column.mapped_variable._value_ = column.value_in(sample)
+            for attribute_match in matches_with_variables:
+                attribute_match._update_kwargs_from(self.statement)
+            yield self.statement.construct_instance()
+
+    def _sample_columns_of(
+        self, variables: Iterable[random_events.variable.Variable]
+    ) -> List[SampleColumn]:
+        """
+        :param variables: The variables of a model, in the order of the columns of its
+            samples.
+        :return: How every column that belongs to an attribute of the statement sets
+            that attribute.
+        :raises AmbiguousVariableName: If several attributes of the statement have the
+            name of a variable.
+        """
+        attribute_matches_by_name: Dict[str, List[AttributeMatch]] = {}
+        for attribute_match in self.statement._matches_with_variables_:
+            attribute_matches_by_name.setdefault(
+                attribute_match.name_from_variable_access_path, []
+            ).append(attribute_match)
+
+        columns = []
+        for index, variable_ in enumerate(variables):
+            attribute_matches = attribute_matches_by_name.get(variable_.name, [])
+            if len(attribute_matches) > 1:
+                raise AmbiguousVariableName(
+                    variable=variable_, attribute_matches=attribute_matches
+                )
+            if not attribute_matches:
+                continue
+            [attribute_match] = attribute_matches
+            if attribute_match.assigned_variable is None:
+                continue
+            columns.append(
+                SampleColumn(
+                    index=index,
+                    mapped_variable=attribute_match.assigned_variable,
+                    values_by_sample_value=self._values_by_sample_value(
+                        variable_, attribute_match
+                    ),
+                    is_integer=isinstance(variable_, random_events.variable.Integer),
+                )
             )
-            attribute_match = [
-                match
-                for match in self.statement.matches_with_variables
-                if match.name_from_variable_access_path == variable_.name
-            ]
-            attribute_match = attribute_match[0] if attribute_match else None
-            if attribute_match is None:
-                continue
-            if mapped_variable is None:
-                continue
+        return columns
 
-            if (
-                attribute_match
-                and isinstance(attribute_match.assigned_value, SymbolicExpression)
-                and not isinstance(attribute_match.assigned_value, Literal)
-            ):
-                [domain_index] = [
-                    val
-                    for index, val in variable_.domain.hash_map.items()
-                    if index == value
-                ]
-                [value] = [
-                    domain_value
-                    for domain_value in attribute_match.assigned_value.tolist()
-                    if hash(domain_value) == domain_index
-                ]
-            elif not variable_.is_numeric:
-                [value] = [
-                    domain_value.element
+    @staticmethod
+    def _values_by_sample_value(
+        variable_: random_events.variable.Variable, attribute_match: AttributeMatch
+    ) -> Optional[Dict[float, Hashable]]:
+        """
+        :param variable_: A variable of a model.
+        :param attribute_match: The attribute the variable belongs to.
+        :return: The value of the attribute for every value a sample of a symbolic
+            variable can have, or ``None`` for a numeric variable, whose samples are the
+            values themselves.
+        :raises DomainElementsIndistinguishableInSamples: If two elements of the domain
+            of a symbolic variable have hashes that a sample cannot tell apart.
+        """
+        assigned_value = attribute_match.assigned_value
+        if isinstance(assigned_value, SymbolicExpression) and not isinstance(
+            assigned_value, Literal
+        ):
+            domain_values_by_hash = {
+                hash(domain_value): domain_value
+                for domain_value in assigned_value.tolist()
+            }
+            return UnderspecifiedParameters._by_sample_value(
+                variable_,
+                {
+                    sample_value: domain_values_by_hash[domain_index]
+                    for sample_value, domain_index in variable_.domain.hash_map.items()
+                    if domain_index in domain_values_by_hash
+                },
+            )
+        if not variable_.is_numeric:
+            return UnderspecifiedParameters._by_sample_value(
+                variable_,
+                {
+                    hash(domain_value): domain_value.element
                     for domain_value in variable_.domain
-                    if hash(domain_value) == value
-                ]
-            else:
-                value = value.item()
-            mapped_variable._value_ = value
+                },
+            )
+        return None
 
-        self.statement._update_kwargs_from_literal_values()
-        result = self.statement.construct_instance()
+    @staticmethod
+    def _by_sample_value(
+        variable_: random_events.variable.Variable,
+        values_by_hash: Dict[int, Hashable],
+    ) -> Dict[float, Hashable]:
+        """
+        :param variable_: A symbolic variable of a model.
+        :param values_by_hash: The value of the attribute for the hash of every element
+            of the domain of the variable.
+        :return: The value of the attribute for every hash as a sample holds it, which
+            is a float and rounds hashes larger than ``2**53``.
+        :raises DomainElementsIndistinguishableInSamples: If two hashes round to the
+            same float.
+        """
+        result: Dict[float, Hashable] = {}
+        for hash_, value in values_by_hash.items():
+            sample_value = float(hash_)
+            if sample_value in result:
+                raise DomainElementsIndistinguishableInSamples(
+                    variable=variable_, elements=[result[sample_value], value]
+                )
+            result[sample_value] = value
         return result
 
     @staticmethod

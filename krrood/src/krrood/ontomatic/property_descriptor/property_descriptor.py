@@ -37,7 +37,7 @@ from krrood.symbol_graph.symbol_graph import (
     SymbolGraph,
 )
 from krrood.entity_query_language.utils import make_set
-from krrood.utils import memoize
+from krrood.patterns.caching import memoize
 
 SymbolType = Type[Symbol]
 """

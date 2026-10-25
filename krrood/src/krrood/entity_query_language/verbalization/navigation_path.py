@@ -66,10 +66,10 @@ class PathStep:
     """
 
     name: str
-    """The display text for this hop (e.g. ``"amount"``, ``"handle[0]"``, ``"()"``)."""
+    """The display text for this hop (e.g. ``"amount"``, ``"handle[0]"``, ``"first"``)."""
 
     source_reference: Optional[SourceReference] = None
-    """The attribute's source reference, or ``None`` for composite / index / call hops."""
+    """The attribute's source reference, or ``None`` for composite / index hops."""
 
     relation: Optional[RelationStep] = None
     """When set, this hop is a *relation* named as a verb (``assigned_to``) and renders as a relative
@@ -125,7 +125,8 @@ def build_path_parts(
       of …"* or a raw subscript (``"tasks[0]"``). An index that does not follow a plain attribute
       (e.g. on a call result) stays a standalone ordinal hop. Non-integer keys keep the ``"[key]"``
       bracket form.
-    * ``Call`` nodes appear as ``"()"`` with no source reference.
+    * ``Call`` nodes name no hop of their own: the attribute hop before them already names the
+      method, so *"the collision of a Body"* rather than *"the () of the collision of a Body"*.
     * Nodes that are not a :class:`SingleValueMapping` are skipped.
 
     :param chain: Innermost-first chain list (nearest the root first).
@@ -168,7 +169,8 @@ def build_path_parts(
         elif isinstance(node, Index):
             _append_index(parts, node)
         elif isinstance(node, Call):
-            parts.append(PathStep("()", None))
+            # A call names no step of its own: the attribute it invokes already named it.
+            pass
         elif not isinstance(node, SingleValueMapping):
             # A flattening names no step of its own: it chooses among the values the
             # step before it reached, which the path already names.
