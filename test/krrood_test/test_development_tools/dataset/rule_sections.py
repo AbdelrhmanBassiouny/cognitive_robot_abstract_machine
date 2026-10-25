@@ -4,7 +4,7 @@ A small rule set standing in for the ones krrood ships.
 
 from __future__ import annotations
 
-from krrood.development_tools.agent_rule import NestedIn, RuleSet, Section
+from krrood.development_tools.agent_rule import RuleSet, Subsection
 
 # %% rule set
 
@@ -18,7 +18,7 @@ class DatasetRules(RuleSet):
 # %% sections
 
 
-class DesignPrinciples(NestedIn[DatasetRules], Section):
+class DesignPrinciples(Subsection[DatasetRules]):
     """
     A section listing rules and holding a subsection.
     """
@@ -26,7 +26,7 @@ class DesignPrinciples(NestedIn[DatasetRules], Section):
     KEEP_DESIGNS_SIMPLE = "A rule about design"
 
 
-class Errors(NestedIn[DesignPrinciples], Section):
+class Errors(Subsection[DesignPrinciples]):
     """
     A subsection whose first rule is spelled out by details.
     """
@@ -36,13 +36,13 @@ class Errors(NestedIn[DesignPrinciples], Section):
     NAME_ERRORS = "Another rule about errors"
 
 
-class Testing(NestedIn[DatasetRules], Section):
+class Testing(Subsection[DatasetRules]):
     """
     A section listing rules only in its subsection.
     """
 
 
-class Assertions(NestedIn[Testing], Section):
+class Assertions(Subsection[Testing]):
     """
     The subsection of a section without rules of its own.
     """
@@ -50,13 +50,13 @@ class Assertions(NestedIn[Testing], Section):
     ASSERT_EXACTLY = "A rule about assertions"
 
 
-class Deployment(NestedIn[DatasetRules], Section):
+class Deployment(Subsection[DatasetRules]):
     """
     A section without rules.
     """
 
 
-class ReleasesThroughCI(NestedIn[Deployment], Section):
+class ReleasesThroughCI(Subsection[Deployment]):
     """
     A subsection whose name ends in an acronym.
     """

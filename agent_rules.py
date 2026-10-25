@@ -5,10 +5,10 @@ after the shared rule sets.
 
 from __future__ import annotations
 
-from krrood.development_tools.agent_rule import NestedIn, ProjectRules, Section
+from krrood.development_tools.agent_rule import ProjectRules, Subsection
 
 
-class RunningTests(NestedIn[ProjectRules], Section):
+class RunningTests(Subsection[ProjectRules]):
     """
     The rules on running this repository's tests.
     """
@@ -19,7 +19,7 @@ class RunningTests(NestedIn[ProjectRules], Section):
     )
 
 
-class GeneratedORMInterfaces(NestedIn[ProjectRules], Section):
+class GeneratedORMInterfaces(Subsection[ProjectRules]):
     """
     The rules on the generated ORM interfaces.
     """
@@ -52,7 +52,7 @@ class GeneratedORMInterfaces(NestedIn[ProjectRules], Section):
     )
 
 
-class KrroodIsolation(NestedIn[ProjectRules], Section):
+class KrroodIsolation(Subsection[ProjectRules]):
     """
     The rules keeping krrood independent of the other workspace packages.
     """
@@ -78,7 +78,7 @@ class KrroodIsolation(NestedIn[ProjectRules], Section):
     )
 
 
-class DomainSpecificConventions(NestedIn[ProjectRules], Section):
+class DomainSpecificConventions(Subsection[ProjectRules]):
     """
     The rules pointing to the conventions of one domain.
     """

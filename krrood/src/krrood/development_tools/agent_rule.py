@@ -9,7 +9,7 @@ import importlib.util
 import re
 import sys
 from dataclasses import dataclass
-from enum import Enum
+from enum import Enum, EnumMeta
 from pathlib import Path
 from types import ModuleType
 
@@ -84,11 +84,27 @@ class AgentRule:
 # %% sections
 
 
-class Section(AgentRule, Enum):
+class SectionType(EnumMeta):
+    """
+    The type of every section, which lets a section be subscripted with the section it
+    is nested under, as well as with the name of one of its rules.
+    """
+
+    def __getitem__(cls, key: str | type[Section]) -> Any:
+        """
+        :param key: The name of a rule, or the section a subsection is nested under.
+        :return: The rule of that name, or the subsection base naming that section.
+        """
+        if isinstance(key, type):
+            return cls.__class_getitem__(key)
+        return super().__getitem__(key)
+
+
+class Section(AgentRule, Enum, metaclass=SectionType):
     """
     A section of ``AGENTS.md``, whose members are the rules it lists. A member's value
-    is the rule's statement, or its statement and details. A section other than a rule
-    set names the section it is nested under through :class:`NestedIn`.
+    is the rule's statement, or its statement and details. A section nested under
+    another is a :class:`Subsection`.
     """
 
     @classproperty
@@ -130,7 +146,7 @@ class Section(AgentRule, Enum):
         The sections nested directly under this one, in definition order.
         """
         return [
-            section for section in NestedIn.__subclasses__() if section.parent is cls
+            section for section in Subsection.__subclasses__() if section.parent is cls
         ]
 
     @classproperty
@@ -171,16 +187,15 @@ The section or rule set a section is nested under.
 """
 
 
-class NestedIn(Generic[ParentSection]):
+class Subsection(Generic[ParentSection], Section):
     """
-    The base naming, as its type parameter, the section or rule set a section is nested
-    under, as in ``class Errors(NestedIn[DesignPrinciples], Section)``. It precedes
-    :class:`Section` in the bases.
+    A section nested under the section or rule set its type parameter names, as in
+    ``class Errors(Subsection[DesignPrinciples])``.
     """
 
     @classproperty
     def parent(cls) -> type[Section]:
-        return get_generic_type_parameters(cls, NestedIn)[0]
+        return get_generic_type_parameters(cls, Subsection)[0]
 
 
 # %% rule sets

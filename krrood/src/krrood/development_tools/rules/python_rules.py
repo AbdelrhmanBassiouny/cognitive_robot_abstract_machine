@@ -14,14 +14,13 @@ from typing_extensions import Any, ClassVar, Protocol
 
 from krrood.development_tools.agent_rule import (
     CodeReference,
-    NestedIn,
     PythonRules,
-    Section,
+    Subsection,
 )
 from krrood.ormatic.utils import classproperty
 
 
-class ApplyingTheseRules(NestedIn[PythonRules], Section):
+class ApplyingTheseRules(Subsection[PythonRules]):
     """
     The rules on when and how far the other rules apply.
     """
@@ -43,7 +42,7 @@ class ApplyingTheseRules(NestedIn[PythonRules], Section):
     )
 
 
-class AskTheDeveloper(NestedIn[PythonRules], Section):
+class AskTheDeveloper(Subsection[PythonRules]):
     """
     The rules on what to ask the developer instead of deciding.
     """
@@ -60,13 +59,13 @@ class AskTheDeveloper(NestedIn[PythonRules], Section):
     ASK_BEFORE_ADDING_DEPENDENCIES = "Before adding a new dependency, ask"
 
 
-class Testing(NestedIn[PythonRules], Section):
+class Testing(Subsection[PythonRules]):
     """
     The rules on tests.
     """
 
 
-class WritingTests(NestedIn[Testing], Section):
+class WritingTests(Subsection[Testing]):
     """
     The rules on writing tests.
     """
@@ -100,7 +99,7 @@ class WritingTests(NestedIn[Testing], Section):
     )
 
 
-class Assertions(NestedIn[Testing], Section):
+class Assertions(Subsection[Testing]):
     """
     The rules on what a test asserts.
     """
@@ -128,7 +127,7 @@ class Assertions(NestedIn[Testing], Section):
     )
 
 
-class ExternalServicesAndCI(NestedIn[Testing], Section):
+class ExternalServicesAndCI(Subsection[Testing]):
     """
     The rules on tests that reach external services, and on tests in CI.
     """
@@ -155,7 +154,7 @@ class ExternalServicesAndCI(NestedIn[Testing], Section):
     )
 
 
-class RunningTests(NestedIn[Testing], Section):
+class RunningTests(Subsection[Testing]):
     """
     The rules on running tests.
     """
@@ -176,7 +175,7 @@ class RunningTests(NestedIn[Testing], Section):
     )
 
 
-class CodeStyle(NestedIn[PythonRules], Section):
+class CodeStyle(Subsection[PythonRules]):
     """
     The rules on the shape of code.
     """
@@ -214,7 +213,7 @@ class CodeStyle(NestedIn[PythonRules], Section):
     )
 
 
-class Naming(NestedIn[CodeStyle], Section):
+class Naming(Subsection[CodeStyle]):
     """
     The rules on naming.
     """
@@ -302,7 +301,7 @@ class Naming(NestedIn[CodeStyle], Section):
     )
 
 
-class Imports(NestedIn[PythonRules], Section):
+class Imports(Subsection[PythonRules]):
     """
     The rules on imports.
     """
@@ -320,7 +319,7 @@ class Imports(NestedIn[PythonRules], Section):
     GUARD_TYPE_ONLY_IMPORTS = "Guard type-only imports with `TYPE_CHECKING`"
 
 
-class DesignPrinciples(NestedIn[PythonRules], Section):
+class DesignPrinciples(Subsection[PythonRules]):
     """
     The rules on the design of classes and modules.
     """
@@ -356,7 +355,7 @@ class DesignPrinciples(NestedIn[PythonRules], Section):
     HARD_TO_MISUSE_INTERFACES = "Make interfaces hard to misuse"
 
 
-class Methods(NestedIn[DesignPrinciples], Section):
+class Methods(Subsection[DesignPrinciples]):
     """
     The rules on methods.
     """
@@ -393,7 +392,7 @@ class Methods(NestedIn[DesignPrinciples], Section):
     )
 
 
-class Errors(NestedIn[DesignPrinciples], Section):
+class Errors(Subsection[DesignPrinciples]):
     """
     The rules on raising and declaring exceptions.
     """
@@ -426,7 +425,7 @@ class Errors(NestedIn[DesignPrinciples], Section):
     )
 
 
-class ConstantsAndClassLevelValues(NestedIn[DesignPrinciples], Section):
+class ConstantsAndClassLevelValues(Subsection[DesignPrinciples]):
     """
     The rules on constants and values shared by a class.
     """
@@ -453,7 +452,7 @@ class ConstantsAndClassLevelValues(NestedIn[DesignPrinciples], Section):
     )
 
 
-class StructuredData(NestedIn[DesignPrinciples], Section):
+class StructuredData(Subsection[DesignPrinciples]):
     """
     The rules on representing data with structure instead of bare literals.
     """
@@ -501,7 +500,7 @@ class StructuredData(NestedIn[DesignPrinciples], Section):
     )
 
 
-class TypeHints(NestedIn[PythonRules], Section):
+class TypeHints(Subsection[PythonRules]):
     """
     The rules on type hints.
     """
@@ -530,7 +529,7 @@ class TypeHints(NestedIn[PythonRules], Section):
     )
 
 
-class Documentation(NestedIn[PythonRules], Section):
+class Documentation(Subsection[PythonRules]):
     """
     The rules on docstrings and comments.
     """
@@ -591,7 +590,7 @@ class Documentation(NestedIn[PythonRules], Section):
     )
 
 
-class VersionControl(NestedIn[PythonRules], Section):
+class VersionControl(Subsection[PythonRules]):
     """
     The rules on commits, pushes and pull requests.
     """
@@ -627,7 +626,7 @@ class VersionControl(NestedIn[PythonRules], Section):
     )
 
 
-class Miscellaneous(NestedIn[PythonRules], Section):
+class Miscellaneous(Subsection[PythonRules]):
     """
     The rules that fit no other section.
     """

@@ -17,8 +17,7 @@ from krrood.adapters.json_serializer import (
 from krrood.development_tools.agent_rule import (
     CodeReference,
     KrroodRules,
-    NestedIn,
-    Section,
+    Subsection,
 )
 from krrood.exceptions import DataclassException
 from krrood.ormatic.utils import classproperty
@@ -26,7 +25,7 @@ from krrood.patterns.path_enumeration import PathEnumeration
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 
 
-class Errors(NestedIn[KrroodRules], Section):
+class Errors(Subsection[KrroodRules]):
     """
     The krrood rules on errors.
     """
@@ -38,7 +37,7 @@ class Errors(NestedIn[KrroodRules], Section):
     )
 
 
-class ConstantsAndClassLevelValues(NestedIn[KrroodRules], Section):
+class ConstantsAndClassLevelValues(Subsection[KrroodRules]):
     """
     The krrood rules on constants and class-level values.
     """
@@ -49,7 +48,7 @@ class ConstantsAndClassLevelValues(NestedIn[KrroodRules], Section):
     )
 
 
-class StructuredData(NestedIn[KrroodRules], Section):
+class StructuredData(Subsection[KrroodRules]):
     """
     The krrood rules on structured data.
     """
@@ -75,7 +74,7 @@ class StructuredData(NestedIn[KrroodRules], Section):
     )
 
 
-class TypeHints(NestedIn[KrroodRules], Section):
+class TypeHints(Subsection[KrroodRules]):
     """
     The krrood rules on type hints.
     """
