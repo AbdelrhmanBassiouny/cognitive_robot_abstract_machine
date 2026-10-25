@@ -32,6 +32,9 @@ tracks:
 - id: demo-requests
   name: The demo asks by query
   wave: requests
+- id: perception-join
+  name: Joining the grounding and requests lineages
+  wave: requests
 items:
 - id: perception-backend
   title: Answer a query by looking, as a backend of the entity query language
@@ -69,14 +72,12 @@ items:
   track: request-language
   depends_on:
   - perception-predicates-guide-the-search
+  - knowledge-directed-grounding/pieces-looked-for-where-expected
   status: in_progress
   session: https://claude.ai/code/session_013HJ4gSb7tjesc6vB1GAtwu
   blockers:
   - One of the six review threads of 2026-09-02 is still open, and it is the developer's to
     close rather than work for this item.
-  - Depends on `knowledge-directed-grounding`'s `pieces-looked-for-where-expected` (in_progress)
-    - a cross-plan dependency that `split-knowledge-directed-perception` could not preserve
-    (`depends_on` cannot cross a plan).
   notes: Clips the search to the region a spatial predicate allows - the same economy the
     supporting-surface pushdown already buys, stated in the world's vocabulary instead of
     an attribute's, so narrowing stops being a filter over what a detector returned and becomes
@@ -202,33 +203,29 @@ items:
   track: method-selection
   depends_on:
   - surfaces-found-by-looking
+  - knowledge-directed-grounding/holes-fitted-like-pieces
   status: in_progress
   session: https://claude.ai/code/session_01ViZEJchUqcVcsFMbYHeVR6
-  blockers:
-  - Depends on `knowledge-directed-grounding`'s `holes-fitted-like-pieces` (in_progress) -
-    a cross-plan dependency that `split-knowledge-directed-perception` could not preserve
-    (`depends_on` cannot cross a plan).
   notes: 'Added 2026-09-05 at the developer''s direction on #259, folding the two threads
     he asked to keep together (r3940349876 and r3940351882): "since we have a 3d model of
     the world, we can use this information to maybe even calibrate the camera ...'
 - id: observation-matched-against-the-piece-set
-  title: Recognise a piece by matching what was seen against the piece set's instances, in EQL
+  title: Recognise a piece by matching what was seen against the piece set's instances, in
+    EQL
   branch: null
   pull_request_number: null
   track: method-selection
   depends_on:
   - a-look-is-described-by-a-match
   - detector-parameters-from-knowledge
+  - montessori-perception-split/shape-vocabulary-on-main
   status: not_started
-  blockers:
-  - Needs `montessori-perception-split`'s `shape-vocabulary-on-main` (#488, PieceSet as worlds
-    of bodies) - a cross-plan dependency `depends_on` cannot express.
   notes: 'Added 2026-10-13 at the developer''s direction, from the KnownPiece thread on #488
     (r4250836397). A seen blob becomes a partial EQL description (outline from above, measured
-    hue, height) resolved against the PieceSet instances with tolerance predicates (hue,
-    height, outline fit), replacing PieceMatcher''s Python hue filter and outline fit and
-    detector_choice.py''s exact colour equality. #265 is an integration branch, so the parts
-    it needs are taken from #222/#275, not from #265.'
+    hue, height) resolved against the PieceSet instances with tolerance predicates (hue, height,
+    outline fit), replacing PieceMatcher''s Python hue filter and outline fit and detector_choice.py''s
+    exact colour equality. #265 is an integration branch, so the parts it needs are taken
+    from #222/#275, not from #265.'
 - id: demo-asks-by-query
   title: The demo's perception runs because a query was evaluated
   branch: tracy_icra
@@ -236,13 +233,41 @@ items:
   track: demo-requests
   depends_on:
   - choose-detection-method
+  - knowledge-directed-grounding/demo-runs-on-grounded-perception
   status: not_started
-  blockers:
-  - Depends on `knowledge-directed-grounding`'s `demo-runs-on-grounded-perception` (not_started)
-    - a cross-plan dependency that `split-knowledge-directed-perception` could not preserve
-    (`depends_on` cannot cross a plan).
   notes: 'Every perception call in montessori_demo.py goes through the backend rather than
     calling the pipeline by hand, and the detector that answers is the one the rule tree chose
     from the surface and the target - visibly a different one for the steel table than for
     the board''s lid. This is the wave''s claim made demonstrable: the same question, answered
     differently because the robot knows what it is looking at.'
+- id: perception-join
+  title: Join the two perception lineages, in the pull request that already is the join
+  branch: claude/detector-consolidation-analysis-rgg3xg
+  pull_request_number: 299
+  track: perception-join
+  depends_on:
+  - knowledge-directed-grounding/competing-explanations
+  - a-look-is-described-by-a-match
+  status: blocked
+  notes: '#299''s 9c4840bf94 already is the join commit -- its own message says the two detectors
+    "arrived on the same detector from different branches of #231, onto the rewrite #236 had
+    already landed" -- sitting on #265 because no other base held both lineages. knowledge-directed-grounding''s
+    chain (#202 to #270) is correctly stacked and is one side; knowledge-directed-requests''
+    (#231 to #275, plus #259) is the other. Merging the tips leaves roughly 23 conflict hunks
+    over 1,100 lines, 13 of them in pipeline.py.'
+  blockers:
+  - 'Eleven commits on #265 touch #299''s own eight files and are on no lineage branch. Four
+    are convergence glue a correctly ordered stack does not need; the other seven are perception-direct-commits.'
+- id: perception-direct-commits
+  title: Replay the seven perception features that reached no pull request
+  branch: null
+  pull_request_number: null
+  track: perception-join
+  depends_on:
+  - perception-join
+  status: not_started
+  notes: '6c968260eb, 9ab3729019, 746f8ea3c6, 280832645d, 3d6504f7d9, 4bf6694f1d and 54b4ec5848
+    -- real features pushed straight onto #265, in no pull request''s diff. The other four
+    of the eleven (0e4d632b3f, a3acc06fbe, 83c3eae1b7, 5f63f0f503) are reconciliation glue
+    that exists only because the lineages were merged all at once, and a correctly ordered
+    stack should not need them.'

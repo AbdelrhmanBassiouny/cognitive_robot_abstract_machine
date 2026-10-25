@@ -76,6 +76,7 @@ claude/knowledge-directed-perception-detector-zrm57t	knowledge-directed-requests
 perception_interactive_rule_tuning	knowledge-directed-requests
 claude/knowledge-directed-perception-vz2hhq	knowledge-directed-requests
 claude/camera-pose-fitted-p2mk7d	knowledge-directed-requests
+claude/detector-consolidation-analysis-rgg3xg	knowledge-directed-requests
 claude/symbol-graph-without-matplotlib	krrood-light-core
 krrood_eql_orm_fixes	montessori-eql-stack
 sdt_numeric_geometry_and_panda	montessori-eql-stack
@@ -148,5 +149,4 @@ D-store	rdr-interface-and-decorator
 D-deco	rdr-interface-and-decorator
 claude/the-place-an-insertion-builds-on	review-reaches-main
 claude/an-insertion-is-an-action-of-its-own	review-reaches-main
-claude/detector-consolidation-analysis-rgg3xg	review-reaches-main
 claude/mcrdr-stop-only-flaky-skip	test-suite-fixes
