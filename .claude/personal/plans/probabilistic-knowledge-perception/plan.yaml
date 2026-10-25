@@ -31,8 +31,9 @@ items:
   depends_on: []
   status: not_started
   notes: 'Two halves, in order, with a decision between them. The prototype comes first and
-    is a measurement, not a feature: on the six captures `montessori-perception-on-main` ships,
-    label every place-and-account pair the pipeline already forms, and ask whether `Explanation.strength`
-    can be mapped monotonically onto a log-likelihood ratio that separates real pieces from
-    ghosts better than a level on the raw score does. Held out, since six captures fitted
-    and evaluated on themselves would only be `required_lead` re-tuned with more steps.'
+    is a measurement, not a feature: on the six captures `montessori-perception-split/perception-node-on-main`
+    ships, label every place-and-account pair the pipeline already forms, and ask whether
+    `Explanation.strength` can be mapped monotonically onto a log-likelihood ratio that separates
+    real pieces from ghosts better than a level on the raw score does. Held out, since six
+    captures fitted and evaluated on themselves would only be `required_lead` re-tuned with
+    more steps.'
