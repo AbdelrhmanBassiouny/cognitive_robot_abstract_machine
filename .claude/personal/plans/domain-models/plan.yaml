@@ -3,8 +3,8 @@ id: domain-models
 title: Standalone domain models (krrspatial, krrimage, krrollywood)
 description: Shared types move out of SemDT and crollywood into standalone packages under
   domain_models/. krrspatial holds SemDT's casadi spatial types behind a ReferenceFrame interface;
-  krrimage holds images, colours and pixels on krrood alone; krrollywood becomes its own repository
-  on krrimage.
+  krrimage holds images, colours and pixels on krrood alone; Moving krrollywood onto krrimage
+  is general-video-production's krrollywood-on-krrimage.
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 525
 waves:
@@ -18,7 +18,7 @@ waves:
 - id: perception
   name: 'Wave 3: Perception moved onto them'
   description: SemDT's ray tracer and RoboKudo use krrimage images and captures, after cram2#761
-    and #795 land.
+    and
 tracks:
 - id: spatial
   name: krrspatial
@@ -59,19 +59,10 @@ items:
   - planar-point-interface
   session: https://claude.ai/code/session_01J17aVY3vyQM8goACbkHkcp
   notes: '#524 on #527: ImagePoint implements PlanarPoint[ImageCoordinateSystem, float]; Pixel
-    stays a grid cell. Pushed 2a830dd575; CI pending. cram2#761 rewrites SemDT''s Color
-    (mutable setters, HueSaturationValue): #524 lands after it and moves Color as #761 left
-    it, HueSaturationValue included; ask before dropping the setters. Whichever of #524/#526
-    lands second merges the domain_models/README.md entries.'
-- id: krrollywood-on-krrimage
-  title: krrollywood (cram2/crollywood) depends on krrimage instead of its own frame types
-  repository: cram2/crollywood
-  track: image-consumers
-  status: not_started
-  depends_on:
-  - krrimage
-  notes: '#472 is not merged; crollywood becomes its own repository, renamed krrollywood.'
-  branch: claude/krrollywood-on-krrimage
+    stays a grid cell. Pushed 2a830dd575; CI pending. cram2#761 rewrites SemDT''s Color (mutable
+    setters, HueSaturationValue): #524 lands after it and moves Color as #761 left it, HueSaturationValue
+    included; ask before dropping the setters. Whichever of #524/#526 lands second merges
+    the domain_models/README.md entries.'
 - id: image-extensions
   title: Depth and segmentation images, camera intrinsics, SemDT's CameraResolution and VideoResolution
     collapsed into Resolution
@@ -82,7 +73,12 @@ items:
   - projection-interface
   - planar-point-interface
   branch: claude/krrimage-depth-segmentation
-  notes: 'Waits for cram2#761 to land, then moves its SemDT CameraModel family (pinhole, field of view, distortion, range, modality) into krrimage''s camera extra as a Projection[ImagePoint, Ray3] onto the sensor''s ImagePlane; principal_point an ImagePoint, CameraResolution and VideoResolution become Resolution, scaled() an ImageCoordinateChange. Adds the Image base (ColorImage, DepthImage, SegmentationImage) and Capture, a Role[Image] (camera, instant). Old imports stay.'
+  notes: Waits for cram2#761 to land, then moves its SemDT CameraModel family (pinhole, field
+    of view, distortion, range, modality) into krrimage's camera extra as a Projection[ImagePoint,
+    Ray3] onto the sensor's ImagePlane; principal_point an ImagePoint, CameraResolution and
+    VideoResolution become Resolution, scaled() an ImageCoordinateChange. Adds the Image base
+    (ColorImage, DepthImage, SegmentationImage) and Capture, a Role[Image] (camera, instant).
+    Old imports stay.
 - id: projection-interface
   title: A Projection interface (project, projection_line, unproject) shared by orthogonal
     projection and camera models, with Ray3
@@ -92,10 +88,10 @@ items:
   depends_on:
   - krrspatial-numeric
   notes: 'OrthogonalProjection and Line3 are in krrspatial (#526). Add the Projection interface
-    they implement: project, projection_line, unproject(p, t) = the point at t on
-    projection_line(p), generic in image and preimage types (Projection[Point2, Line3]), and Ray3
-    for cameras. A projection maps between two spaces; a change within one space is a
-    CoordinateChange. The inverse laws become one test suite run against every implementation.'
+    they implement: project, projection_line, unproject(p, t) = the point at t on projection_line(p),
+    generic in image and preimage types (Projection[Point2, Line3]), and Ray3 for cameras.
+    A projection maps between two spaces; a change within one space is a CoordinateChange.
+    The inverse laws become one test suite run against every implementation.'
 - id: frame-checked-arithmetic
   title: Arithmetic in krrspatial checks frames, and a transformation only applies to values
     in its child frame
@@ -121,8 +117,8 @@ items:
   notes: 'A change acts on values of its own coordinate-system kind and keeps their type:
     a point by R p + t, a vector by R v, an orientation by composition. Each value implements
     the action (double dispatch) instead of HomogeneousTransformationMatrix.dot and RotationMatrix.dot
-    listing operands; planar changes act on Point2 and Pose2D. Waits
-    on Simon''s answers to Q4 (Point3 in RotationMatrix.dot) and Q5 (AxisAngle).'
+    listing operands; planar changes act on Point2 and Pose2D. Waits on Simon''s answers to
+    Q4 (Point3 in RotationMatrix.dot) and Q5 (AxisAngle).'
 - id: planar-coordinate-system
   title: Point2 and Pose2D are given in the x-y plane of their reference frame, with dimension
     on the space and planar rigid changes
@@ -131,12 +127,12 @@ items:
   status: not_started
   depends_on:
   - krrspatial-numeric
-  notes: 'Space gets a dimension; a frame''s x-y plane is a 2D plane space''s coordinate system,
+  notes: Space gets a dimension; a frame's x-y plane is a 2D plane space's coordinate system,
     derived from the frame. A plane refers to the space it lies in; planes are equal when
     they share it and their points (ImagePlane has none). Point2 and Pose2D keep reference_frame;
-    only coordinate_system becomes the plane''s, so SpatialType is generic in its coordinate-system
+    only coordinate_system becomes the plane's, so SpatialType is generic in its coordinate-system
     kind. SE(2) is RigidCoordinateChange of the plane kind, only between frames sharing one
-    x-y plane; Point2.transform stays a projection otherwise.'
+    x-y plane; Point2.transform stays a projection otherwise.
 - id: krrspatial-imports
   title: The workspace imports spatial types from krrspatial instead of SemDT's re-export
     module
@@ -145,9 +141,9 @@ items:
   status: not_started
   depends_on:
   - krrspatial-numeric
-  notes: 'About 334 files (SemDT, giskardpy, coraplex, robokudo, cramera, segmind, experiments,
+  notes: About 334 files (SemDT, giskardpy, coraplex, robokudo, cramera, segmind, experiments,
     tests) import semantic_digital_twin.spatial_types.spatial_types. Mechanical; the re-export
-    module stays so JSON type names and outside code keep resolving.'
+    module stays so JSON type names and outside code keep resolving.
 - id: video-on-a-plane
   title: Show a video on a plane of the world (a wall, a table top) in a camera image or through
     a projector
@@ -206,8 +202,8 @@ items:
     in a space, or frames of different spaces, then calls an abstract hook. If a world ever
     holds unrelated parts, switch to has-a.'
 - id: perception-typed-images
-  title: SemDT's ray tracer renders, and RoboKudo's CAS holds, krrimage images instead of bare
-    arrays
+  title: SemDT's ray tracer renders, and RoboKudo's CAS holds, krrimage images instead of
+    bare arrays
   branch: claude/perception-typed-images
   track: perception
   status: not_started
@@ -217,19 +213,20 @@ items:
   notes: 'After cram2#761 and #795 land. RayTracer.render returns ColorImage, DepthImage and
     SegmentationImage, not RenderedRGBDFrame (BGR and millimetres move into the types), and
     create_camera_rays becomes projection_line. CAS colour and depth views hold those images;
-    Point2D, Rect and ImageROI become ImagePoint, ImageBox, PixelBox and a SegmentationImage mask;
-    ColorToDepthRatio and crops become ImageCoordinateChanges on one ImagePlane. Old views stay
-    readable.'
+    Point2D, Rect and ImageROI become ImagePoint, ImageBox, PixelBox and a SegmentationImage
+    mask; ColorToDepthRatio and crops become ImageCoordinateChanges on one ImagePlane. Old
+    views stay readable.'
 - id: robokudo-captures
-  title: RoboKudo's CameraObservation becomes krrimage's Capture, and camera placement takes it
+  title: RoboKudo's CameraObservation becomes krrimage's Capture, and camera placement takes
+    it
   branch: claude/robokudo-captures
   track: perception
   status: not_started
   depends_on:
   - perception-typed-images
   - world-as-euclidean-space
-  notes: 'CameraObservation (camera, effective model, world_T_camera, timestamp) is a Capture of
-    the frame''s images: the effective model comes from each image''s coordinate system, not
-    stored; instant holds the world and time, or a sampled camera pose when no state trajectory
+  notes: 'CameraObservation (camera, effective model, world_T_camera, timestamp) is a Capture
+    of the frame''s images: the effective model comes from each image''s coordinate system,
+    not stored; instant holds the world and time, or a sampled camera pose when no state trajectory
     exists (live ROS, replay). The ray tracer and MuJoCo recorder yield captures; #795''s
     CameraPlacement and RecordedCameraWorld take them instead of frame-name strings.'

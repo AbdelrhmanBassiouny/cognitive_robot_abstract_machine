@@ -1,7 +1,6 @@
 claude/symbolic-expression-stack-refactor-ridull	dag-facade-hardening
 claude/krrspatial	domain-models
 claude/crollywood-refactor-shared-classes-e8jtm9	domain-models
-claude/krrollywood-on-krrimage	domain-models
 claude/krrimage-depth-segmentation	domain-models
 claude/krrspatial-projection-interface	domain-models
 claude/krrspatial-frame-checked-arithmetic	domain-models
@@ -38,6 +37,7 @@ eql-symbolic-function-sdt	eql-verbalization
 claude/eql-verbalization-aggregate-repeat-gdz9g2	eql-verbalization
 claude/plan-item-kickoff-match-query-npzr78	eql-verbalization
 claude/match-query-ergonomics-chain-tozhhq	eql-verbalization
+claude/krrollywood-on-krrimage	general-video-production
 claude/the-icra-video-shows-the-plan-being-answered	general-video-production
 claude/general-figure-scenes	general-video-production
 claude/video-manim-scenes	general-video-production
