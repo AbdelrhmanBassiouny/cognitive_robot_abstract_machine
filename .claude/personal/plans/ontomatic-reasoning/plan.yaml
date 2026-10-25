@@ -1,0 +1,110 @@
+schema_version: 1
+id: ontomatic-reasoning
+title: 'Ontomatic past the port: close the OWL 2 RL gaps, then grow towards OWL 2 DL'
+description: 'Once ontomatic-port has Ontomatic on main at parity with the paper, close the OWL 2 RL gaps
+  the AAMAS 2027 supplement lists (6 unsupported and 18 partial rules) and the paper''s limitations, then
+  extend Ontomatic natively in Python towards OWL 2 DL: profile detection, EL classification, witnesses
+  for existentials and open-world query answers.
+
+  '
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 531
+waves:
+- id: robustness
+  name: Close the OWL 2 RL gaps
+  description: The supplement's unsupported and partial rules, and the paper's limitations.
+- id: beyond-rl
+  name: Beyond OWL 2 RL, natively in Python
+  description: Profile detection, EL classification, witnesses, open-world query answers.
+tracks:
+- id: rl-gaps
+  name: OWL 2 RL gaps
+  wave: robustness
+  description: Independent PRs, each proven by a failing test first.
+- id: dl-extensions
+  name: OWL 2 DL extensions
+  wave: beyond-rl
+  description: Sound always, complete where a tractable procedure exists, explicit otherwise.
+items:
+- id: rl-unsupported-constructs
+  branch: rl-unsupported-constructs
+  title: oneOf, someValuesFrom owl:Thing, owl:Nothing, subclass and subproperty cycles
+  track: rl-gaps
+  depends_on:
+  - ontomatic-port/closure-verification
+  status: not_started
+- id: rl-data-properties
+  branch: rl-data-properties
+  title: Multi-valued data properties, datatype check, data-property cardinality and disjointness
+  track: rl-gaps
+  depends_on:
+  - ontomatic-port/closure-verification
+  status: not_started
+- id: rl-nested-expressions
+  branch: rl-nested-expressions
+  title: Unions and complements inside class expressions, intersections as equivalent classes
+  track: rl-gaps
+  depends_on:
+  - ontomatic-port/closure-verification
+  status: not_started
+- id: rl-runtime-classification
+  branch: rl-runtime-classification
+  title: Evaluate every compiled class axiom at runtime, not only hasValue
+  track: rl-gaps
+  depends_on:
+  - ontomatic-port/closure-verification
+  status: not_started
+- id: roles-without-markers
+  branch: roles-without-markers
+  title: Designate roles without roleFor markers, keep multiply classified individuals whole
+  track: rl-gaps
+  depends_on:
+  - ontomatic-port/closure-verification
+  status: not_started
+- id: inference-retraction
+  branch: inference-retraction
+  title: Retract inferred facts incrementally over recorded provenance
+  track: rl-gaps
+  depends_on:
+  - ontomatic-port/closure-verification
+  - ontomatic-port/descriptor-provenance
+  status: not_started
+- id: owl-profile-detection
+  branch: owl-profile-detection
+  title: Classify the ontology and each axiom into OWL 2 EL/QL/RL/DL with reasons
+  track: dl-extensions
+  depends_on:
+  - ontomatic-port/terminology-model
+  status: not_started
+- id: el-classification
+  branch: el-classification
+  title: Consequence-based OWL 2 EL TBox classification compiled as inheritance
+  track: dl-extensions
+  depends_on:
+  - owl-profile-detection
+  - ontomatic-port/model-compiler
+  status: not_started
+  notes: Brings LUBM into scope.
+- id: existential-witnesses
+  branch: existential-witnesses
+  title: Witness objects for existentials in superclass position, chase with blocking
+  track: dl-extensions
+  depends_on:
+  - el-classification
+  - ontomatic-port/abox-loader
+  status: not_started
+- id: open-world-query-answers
+  branch: open-world-query-answers
+  title: Unions, complements and allValuesFrom as three-valued query-time conditions
+  track: dl-extensions
+  depends_on:
+  - existential-witnesses
+  status: not_started
+- id: sroiq-classification
+  branch: sroiq-classification
+  title: 'Research: Python hypertableau for full SROIQ TBox classification'
+  track: dl-extensions
+  depends_on:
+  - open-world-query-answers
+  status: deferred
+  notes: Optional; decide after open-world-query-answers on evidence from real ontologies.

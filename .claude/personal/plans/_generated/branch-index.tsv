@@ -107,6 +107,17 @@ abox-loader	ontomatic-port
 owl2rl-consistency-check	ontomatic-port
 closure-verification	ontomatic-port
 owl2bench-experiments	ontomatic-port
+rl-unsupported-constructs	ontomatic-reasoning
+rl-data-properties	ontomatic-reasoning
+rl-nested-expressions	ontomatic-reasoning
+rl-runtime-classification	ontomatic-reasoning
+roles-without-markers	ontomatic-reasoning
+inference-retraction	ontomatic-reasoning
+owl-profile-detection	ontomatic-reasoning
+el-classification	ontomatic-reasoning
+existential-witnesses	ontomatic-reasoning
+open-world-query-answers	ontomatic-reasoning
+sroiq-classification	ontomatic-reasoning
 D-core-underspecified	rdr-core-engine
 D-core-corner-case	rdr-core-engine
 D-core-serialization	rdr-core-engine
