@@ -15,6 +15,9 @@ tracks:
 - id: framework-migration
   name: Framework extraction, operand naming, sdt migration
   wave: verbalization-framework
+- id: signature-bugs
+  name: Query assembler structural signatures
+  wave: verbalization-framework
 items:
 - id: p4-sdt-migration
   title: 'P4: migrate semantic_digital_twin predicates off the framework'
@@ -25,9 +28,6 @@ items:
   depends_on: []
   status: blocked
   blockers:
-  - 'The rebase this item owes cannot start yet: #229 (`sdt_predicates_answer_whether_they_hold`),
-    which the developer decided on 2026-08-31 should carry the predicate classes, is still
-    **open and unmerged** as of 2026-09-04 (state `open`, not draft, `mergeable_state: clean`).'
   - 'Three review threads on #33 are still open, not two as previously recorded (9 of 37 threads
     are unresolved, but six of them are the same decision repeated on consecutive lines of
     `verbalization_surfaces.py`).'
@@ -57,11 +57,9 @@ items:
   pull_request_number: 264
   track: framework-migration
   session: https://claude.ai/code/session_01Hwf7n1eUMVXD4vLdQwMYvP
-  blockers:
-  - 'integration-conflict-triage: Sequence collision with PR #196 (`claude/plan-item-kickoff-match-query-npzr78`,
-    `match-query-ergonomics`).'
-  depends_on: []
-  status: blocked
+  depends_on:
+  - aggregate-signature-reads-a-missing-attribute
+  status: in progress
   notes: 'Found and measured on match-query-ergonomics''s PR #196 (aggregate-signature-reads-a-missing-attribute)
     self-review round: a ranked set_of selecting two aggregates of one kind (two Sums) verbalizes
     as "...the sum of the amount of its net, and the sum" - the trailing "the sum" is a correct-by-identity
@@ -69,3 +67,34 @@ items:
     referent_id=node._id_, verbalization/grammar/aggregation/rules.py), but reads to a human
     as referring to the just-mentioned net instead, since proximity is how anaphora normally
     resolves.'
+- id: aggregate-signature-reads-a-missing-attribute
+  title: 'Bug: every aggregate of one kind gets the same structural signature'
+  branch: claude/plan-item-kickoff-match-query-npzr78
+  pull_request_number: 196
+  track: signature-bugs
+  depends_on: []
+  status: in_progress
+  session: https://claude.ai/code/session_01QK8o4m3ft424DyGFmw5vE3
+  notes: 'Found on #192 (2026-08-23, roadmap section 17) and measured there: verbalization/grammar/query/assembler.py:285
+    reads expression._chain_expression_ on an Aggregator, which has no such attribute. A variable
+    claims no underscore-prefixed name, so the read silently becomes a symbolic attribute
+    of the aggregator itself, and QueryAssembler._expression_signature returns (''Sum'', None,
+    ((''_chain_expression_'', None),)) for *every* Sum - reproduced directly on two different
+    aggregates.'
+- id: chain-signature-reads-attribute-only-names
+  title: 'Bug: a structural signature cannot tell two chains apart unless every step is an
+    attribute'
+  branch: claude/match-query-ergonomics-chain-tozhhq
+  pull_request_number: 248
+  track: signature-bugs
+  session: https://claude.ai/code/session_01UqhcpSE2EKFycf3vtvU25c
+  depends_on: []
+  status: in_progress
+  blockers: []
+  notes: 'Found and measured during the kickoff of aggregate-signature-reads-a-missing-attribute
+    (roadmap section 21), which fixes the same root cause one line above it. QueryAssembler._expression_signature
+    builds its path as (step._attribute_name_, step._owner_class_) for every step of the chain,
+    and both names belong to Attribute alone - so an Index, Call or FlatVariable step takes
+    the same silent-symbolic read the aggregate one did, and the signature cannot tell two
+    chains apart when only that step differs. Measured on main 2b44f1e5: order.lines[0].price
+    and order.lines[1].price get equal signatures.'
