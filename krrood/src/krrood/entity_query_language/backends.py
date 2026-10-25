@@ -1,3 +1,4 @@
+import copy
 import enum
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
@@ -36,7 +37,7 @@ from krrood.entity_query_language.exceptions import (
     SelectiveBackendCannotResolveEllipsisMatch,
     UnderspecifiedStatementInfeasibleForEntityQueryLanguageGeneration,
 )
-from krrood.entity_query_language.factories import entity, set_of, variable
+from krrood.entity_query_language.factories import set_of, variable
 from krrood.entity_query_language.query.match import Match, AttributeMatch
 from krrood.entity_query_language.query.query import Entity, Query
 from krrood.ormatic.eql_interface import eql_to_sql
@@ -117,7 +118,7 @@ class QueryBackend(ABC):
 
         :param expression: The expression about to be evaluated.
         """
-        if not (isinstance(expression, Match) and expression.has_cause_attributes):
+        if not (isinstance(expression, Match) and expression._has_cause_attributes_):
             return
         if self.raise_on_unresolvable_cause:
             raise BackendCannotEvaluateCause(expression, backend_type=type(self))
@@ -138,7 +139,7 @@ class SelectiveBackend(QueryBackend, ABC):
     """
 
     def evaluate(self, expression: Evaluable) -> Iterable[T]:
-        if isinstance(expression, Match) and expression.has_ellipsis_attributes:
+        if isinstance(expression, Match) and expression._has_ellipsis_attributes_:
             raise SelectiveBackendCannotResolveEllipsisMatch(expression)
         self._warn_or_raise_on_unresolved_cause_(expression)
         yield from self._evaluate(expression)
@@ -206,28 +207,25 @@ class EntityQueryLanguageGenerativeBackend(GenerativeBackend):
     A generative backend that constructs new instances deterministically: it treats a
     match's unspecified leaves as variables, enumerates every combination over their
     (discrete) domains, constructs an instance per combination via the type's
-    constructor, and keeps those that satisfy the match's ``where`` conditions.
+    constructor, and keeps those that satisfy the match: the values its pattern states
+    and its ``where`` conditions.
     """
 
     def _evaluate(self, expression: Match[T]) -> Iterable[T]:
         self._warn_or_raise_on_unresolved_cause_(expression)
         variables: Dict[str, Variable] = {}
-        for attribute_match in expression.matches_with_variables:
+        for attribute_match in expression._matches_with_variables_:
             self._check_attribute_match_is_suitable_for_generation(attribute_match)
             variables[attribute_match.name_from_variable_access_path] = (
                 self._convert_attribute_match_to_variable(attribute_match)
             )
 
-        expression.variable._update_domain_(
+        satisfying = expression._select_satisfying_(
             self._generate_raw_results(expression, variables)
         )
-
-        filtered_results = entity(expression.variable)._quantify_(
+        yield from satisfying._quantify_(
             expression._quantifier_type_
-        )
-        if expression._where_conditions_:
-            filtered_results = filtered_results.where(*expression._where_conditions_)
-        yield from filtered_results._evaluate_natively_()
+        )._evaluate_natively_()
 
     @staticmethod
     def _check_attribute_match_is_suitable_for_generation(
@@ -298,6 +296,10 @@ class ProbabilisticBackend(GenerativeBackend):
     """
     A backend that generates elements from a tractable probabilistic model using a model
     registry.
+
+    A sampled instance contradicting the match, in a value the model does not cover such
+    as a property's, is rejected, so fewer instances than :attr:`number_of_samples` may
+    be generated.
     """
 
     model_registry: ModelRegistry = field(default_factory=FullyFactorizedRegistry)
@@ -410,21 +412,23 @@ class ProbabilisticBackend(GenerativeBackend):
             truncated = parameters.resolve_conditioned_and_truncated_model(model)
 
         if truncated is None:
-            raise NoSolutionFound(expression.expression)
+            raise NoSolutionFound(expression._get_expression_())
 
-        number_of_samples = expression.expression._limit_ or self.number_of_samples
+        number_of_samples = (
+            expression._get_expression_()._limit_ or self.number_of_samples
+        )
 
         # sample and sort by log likelihood
         samples = truncated.sample(number_of_samples)
         log_likelihoods = truncated.log_likelihood(samples)
         samples = samples[log_likelihoods.argsort()[::-1]]
 
-        # create new objects with the values from the samples
-        for sample in samples:
-            instance = parameters.construct_instance_from_model_sample(
-                truncated.variables, sample
-            )
-            yield instance
+        # create new objects with the values from the samples, and reject those
+        # contradicting a value the model does not cover, such as a property's
+        instances = parameters.construct_instances_from_model_samples(
+            truncated.variables, samples
+        )
+        yield from expression._select_satisfying_(instances)._evaluate_natively_()
 
     @staticmethod
     def _resolve_cause_and_effect_variables(
@@ -448,7 +452,7 @@ class ProbabilisticBackend(GenerativeBackend):
         :return: The resolved cause candidates and effect variable.
         """
         if not parameters.effect_variables_from_causes_effect:
-            raise NoCausesEffectConditionForCause(expression.expression)
+            raise NoCausesEffectConditionForCause(expression._get_expression_())
         if len(parameters.effect_variables_from_causes_effect) > 1:
             raise MultipleEffectVariablesNotSupported(
                 parameters.effect_variables_from_causes_effect
@@ -502,7 +506,7 @@ class ProbabilisticBackend(GenerativeBackend):
             confounder_variables,
         )
         if not scored_interventions:
-            raise NoSolutionFound(expression.expression)
+            raise NoSolutionFound(expression._get_expression_())
         return scored_interventions[0]
 
     @classmethod
@@ -586,7 +590,7 @@ class ProbabilisticBackend(GenerativeBackend):
         """
         parameters = UnderspecifiedParameters(expression)
         if not parameters.search_cause_variables:
-            raise NoCauseVariablesForRanking(expression.expression)
+            raise NoCauseVariablesForRanking(expression._get_expression_())
         model = self.model_registry.get_model(parameters)
         if not isinstance(model, CausalCircuit):
             raise DoRequiresCausalCircuitModel(model)
@@ -649,14 +653,11 @@ class ProbabilisticBackend(GenerativeBackend):
         # `.truncated()` fills in missing variables *in place* on the event it is
         # given, so reusing the same event object across several `.truncated()` calls
         # (each on a differently-shaped circuit) would leak one call's variables into
-        # the next -- pass a fresh copy each time. `Event` defines its own
-        # no-argument `__deepcopy__`, incompatible with the `copy` module's
-        # memo-passing convention, so it is called directly rather than through
-        # `copy.deepcopy`.
+        # the next -- pass a fresh copy each time.
         if effect_truncation_event:
-            effect_truncated, _ = interventional.truncated(
-                effect_truncation_event.__deepcopy__()
-            )
+            effect_truncated = interventional.truncated(
+                copy.deepcopy(effect_truncation_event)
+            ).distribution
         else:
             effect_truncated = interventional
         if effect_truncated is None:
@@ -666,20 +667,19 @@ class ProbabilisticBackend(GenerativeBackend):
         if best_region is None:
             return None
 
-        region_only, region_prior_probability = interventional.truncated(
+        region = interventional.truncated(
             best_region.fill_missing_variables_pure(interventional.variables)
         )
-        if region_only is None or region_prior_probability <= 0.0:
+        if region.distribution is None or region.probability <= 0.0:
             return None
 
-        if effect_truncation_event:
-            narrowed, effect_given_region_probability = region_only.truncated(
-                effect_truncation_event.__deepcopy__()
-            )
-        else:
-            narrowed, effect_given_region_probability = region_only, 1.0
-        if narrowed is None or effect_given_region_probability <= 0.0:
+        if not effect_truncation_event:
+            return ScoredIntervention(cause_variable, 1.0, region.distribution)
+
+        narrowed = region.distribution.truncated(copy.deepcopy(effect_truncation_event))
+        if narrowed.distribution is None or narrowed.probability <= 0.0:
+
             return None
         return ScoredIntervention(
-            cause_variable, float(effect_given_region_probability), narrowed
+            cause_variable, float(narrowed.probability), narrowed.distribution
         )
