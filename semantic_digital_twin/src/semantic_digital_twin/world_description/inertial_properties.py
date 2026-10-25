@@ -21,8 +21,8 @@ class NPMatrix3x3(SubclassJSONSerializer):
     def __matmul__(self, other: GenericMatrix3x3Type) -> GenericMatrix3x3Type:
         return NPMatrix3x3(data=self.data @ other.data)
 
-    def to_json(self) -> Dict[str, Any]:
-        return {**super().to_json(), "data": self.data.tolist()}
+    def to_json(self, **kwargs) -> Dict[str, Any]:
+        return {**super().to_json(**kwargs), "data": self.data.tolist()}
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
@@ -59,8 +59,8 @@ class NPVector3(SubclassJSONSerializer):
         """
         return NPMatrix3x3(data=np.diag(self.data))
 
-    def to_json(self) -> Dict[str, Any]:
-        return {**super().to_json(), "data": self.data.tolist()}
+    def to_json(self, **kwargs) -> Dict[str, Any]:
+        return {**super().to_json(**kwargs), "data": self.data.tolist()}
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any]) -> Self:
@@ -247,3 +247,15 @@ class Inertial:
     The inertia tensor of the body about its center of mass, expressed in the body's
     local coordinate frame.
     """
+
+    @classmethod
+    def negligible(cls) -> Self:
+        """
+        :return: The inertial of a body whose material belongs to another body it is
+            fixed to: too light for a simulator to notice, yet stated, so that no
+            simulator weighs the body by its shapes instead.
+        """
+        return cls(
+            mass=1e-6,
+            inertia=InertiaTensor.from_values(1e-12, 1e-12, 1e-12, 0.0, 0.0, 0.0),
+        )

@@ -4,27 +4,34 @@ import json
 import time
 import traceback
 from dataclasses import dataclass, field
+from threading import Event, Thread
 from typing import Any, Dict, List
 
 import rclpy
 from json_msgs.action import JsonAction
 
-from giskardpy.data_types.exceptions import DontPrintStackTrace
 from giskardpy.executor import Executor, RealTimePacer
 from giskardpy.middleware.ros2 import rospy
 from giskardpy.middleware.ros2.action_server import ActionServerHandler
+from giskardpy.middleware.ros2.client_presence import ClientWatchdog
 from giskardpy.middleware.ros2.control_loop import ControlLoop
+from giskardpy.middleware.ros2.cycle_counter import CycleCounter
 from giskardpy.middleware.ros2.exceptions import (
+    ClientDisconnectedError,
     ExecutionCanceledException,
+    MotionServerThreadStillRunningError,
     RequiredWorldUpdateNotReceivedError,
+    UnserializableGoalError,
 )
 from giskardpy.middleware.ros2.feedback_publisher import ActionFeedbackPublisher
-from giskardpy.middleware.ros2.cycle_counter import CycleCounter
-from giskardpy.middleware.ros2.input_synchronization import WorldStateInputs
+from semantic_digital_twin.input_synchronization import WorldStateInputs
 from giskardpy.middleware.ros2.motion_goal import MotionGoal
 from giskardpy.middleware.ros2.post_goal_plotters import PostGoalPlotter
 from giskardpy.middleware.ros2.world_updates import IncomingWorldUpdates
+from krrood.adapters.exceptions import JSONSerializationError
 from krrood.adapters.json_serializer import to_json
+from krrood.exceptions import DataclassException
+from krrood.utils import get_full_class_name
 from semantic_digital_twin.adapters.ros.messages import StreamPosition
 from semantic_digital_twin.adapters.ros.world_synchronizer import PublicationProgress
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
@@ -56,6 +63,12 @@ class MotionServer:
     control_loop: ControlLoop
     """
     Executes a compiled motion statechart.
+    """
+
+    client_watchdog: ClientWatchdog
+    """
+    Watches the client of the running goal, so that a motion nobody waits for any more
+    is stopped instead of run to its end.
     """
 
     world_updates: IncomingWorldUpdates
@@ -108,6 +121,16 @@ class MotionServer:
     How far this world had published when the running goal was accepted.
     """
 
+    _background_thread: Thread | None = field(init=False, default=None, repr=False)
+    """
+    The thread running :meth:`live`, if it was started with :meth:`start_in_background`.
+    """
+
+    _stop_requested: Event = field(init=False, default_factory=Event, repr=False)
+    """
+    Set by :meth:`stop` to make :meth:`live` return after its current idle cycle.
+    """
+
     def __post_init__(self):
         self.idle_pacer = RealTimePacer()
         self.idle_pacer.target_frequency = self.idle_frequency
@@ -120,22 +143,47 @@ class MotionServer:
 
     def live(self) -> None:
         """
-        Run the idle loop until ROS shuts down.
+        Run the idle loop until ROS shuts down or :meth:`stop` is called.
 
         A KeyboardInterrupt is raised when the process is asked to shut down (see
         :class:`~giskardpy.middleware.ros2.graceful_shutdown.GracefulShutdownSignals`),
         whether that happens while idle or while a goal is running. Either way the robot
         is stopped before the interrupt is allowed to propagate further.
         """
-        rospy.node.get_logger().info("giskard is ready")
+        rospy.get_node().get_logger().info("giskard is ready")
         try:
-            while rclpy.ok():
+            while rclpy.ok() and not self._stop_requested.is_set():
                 self.run_idle_cycle()
                 self.idle_pacer.sleep()
         except KeyboardInterrupt:
-            rospy.node.get_logger().info("Interrupted, stopping the robot.")
+            rospy.get_node().get_logger().info("Interrupted, stopping the robot.")
             self.control_loop.stop()
             raise
+
+    def start_in_background(self) -> None:
+        """
+        Run :meth:`live` on a new background thread.
+        """
+        self._stop_requested.clear()
+        self._background_thread = Thread(target=self.live, name="motion server")
+        self._background_thread.start()
+
+    def stop(self, timeout: float = 2.0) -> None:
+        """
+        Make a background :meth:`live` loop return and wait for it to finish.
+
+        Does nothing if :meth:`start_in_background` was never called.
+
+        :param timeout: Seconds to wait for the loop to notice and exit.
+        :raises MotionServerThreadStillRunningError: If it has not stopped by then.
+        """
+        self._stop_requested.set()
+        if self._background_thread is None:
+            return
+        self._background_thread.join(timeout)
+        if self._background_thread.is_alive():
+            raise MotionServerThreadStillRunningError(timeout=timeout)
+        self._background_thread = None
 
     def run_idle_cycle(self) -> None:
         """
@@ -164,12 +212,14 @@ class MotionServer:
         error: Exception | None = None
         try:
             goal = MotionGoal.from_json(json.loads(self.action_server.goal_msg.goal))
+            self.client_watchdog.watch(goal.client)
             self.wait_for_required_world_updates(goal.required_position)
             self.compile_goal(goal)
             self.control_loop.run()
         except Exception as exception:
-            if not isinstance(
-                exception, (DontPrintStackTrace, ExecutionCanceledException)
+            if not (
+                isinstance(exception, DataclassException)
+                and not exception.print_stack_trace
             ):
                 traceback.print_exc()
             error = exception
@@ -182,8 +232,13 @@ class MotionServer:
         """
         Wait until the world contains the change the goal was built on.
 
+        The change is the one the client published, so a client that left is never going
+        to deliver it and waiting out the timeout would only delay the answer.
+
         :raises RequiredWorldUpdateNotReceivedError: If that change does not arrive
             within ``world_update_timeout``.
+        :raises ClientDisconnectedError: If the client of the goal disconnects while its
+            change is awaited.
         """
         if required_position is None:
             return
@@ -192,6 +247,8 @@ class MotionServer:
             self.world_updates.apply_all()
             if self.world_updates.has_applied(required_position):
                 return
+            if self.client_watchdog.is_client_gone():
+                raise ClientDisconnectedError(client=self.client_watchdog.client)
             if time.monotonic() >= deadline:
                 raise RequiredWorldUpdateNotReceivedError(
                     current_sequence_number=self.world_synchronizer.published_sequence_number,
@@ -205,7 +262,7 @@ class MotionServer:
         """
         Turn the goal message into a compiled motion statechart.
         """
-        rospy.node.get_logger().info(
+        rospy.get_node().get_logger().info(
             f"Parsing goal #{self.action_server.goal_id} message."
         )
         tracker = WorldEntityWithIDKwargsTracker.from_world(self.world)
@@ -214,7 +271,7 @@ class MotionServer:
         motion_statechart = goal.parse_motion_statechart(**kwargs)
         self.executor.compile(motion_statechart)
         self.feedback_publisher.publish_structure()
-        rospy.node.get_logger().info("Done parsing goal message.")
+        rospy.get_node().get_logger().info("Done parsing goal message.")
 
     def finish_goal(self, error: Exception | None) -> None:
         """
@@ -224,6 +281,7 @@ class MotionServer:
         here cannot make it wait forever.
         """
         try:
+            self.client_watchdog.stop_watching()
             self.control_loop.stop()
             if self.executor.motion_statechart is not None:
                 self.executor.motion_statechart.cleanup_nodes(
@@ -241,27 +299,50 @@ class MotionServer:
 
         A failed goal also reports the error itself, because the ROS action status alone
         cannot tell a client whether sending the goal again would help. The error is
-        serialized so that the client can rebuild and raise the very same exception.
+        serialized so that the client can rebuild and raise the very same exception, see
+        :meth:`serialize_error`.
         """
         match error:
             case ExecutionCanceledException():
                 self.action_server.set_canceled()
-                rospy.node.get_logger().warning("Goal canceled by user.")
+                rospy.get_node().get_logger().warning("Goal canceled by user.")
             case None:
                 self.action_server.set_succeeded()
-                rospy.node.get_logger().info("Goal succeeded.")
+                rospy.get_node().get_logger().info("Goal succeeded.")
             case _:
                 self.action_server.set_aborted()
-                rospy.node.get_logger().error(f"Goal aborted: {error}")
+                rospy.get_node().get_logger().error(f"Goal aborted: {error}")
         states = self.create_states()
         if error is not None:
-            states["error"] = to_json(error)
+            states["error"] = self.serialize_error(error)
         published_position = self.published_position_of_goal()
         if published_position is not None:
             states["published_position"] = to_json(published_position)
         result = JsonAction.Result()
         result.result = json.dumps(states)
         return result
+
+    def serialize_error(self, error: Exception) -> Dict[str, Any]:
+        """
+        Serialize the error a goal failed with, so that the client can rebuild it.
+
+        An error that cannot be serialized, for instance because it holds expressions of
+        the motion statechart, is reported as :class:`UnserializableGoalError` carrying
+        its message, so that the client is answered either way.
+        """
+        try:
+            return to_json(error)
+        except JSONSerializationError as serialization_error:
+            rospy.get_node().get_logger().error(
+                f"Cannot send {type(error).__name__} to the client: "
+                f"{serialization_error}"
+            )
+            return to_json(
+                UnserializableGoalError(
+                    error_class_name=get_full_class_name(type(error)),
+                    message=str(error),
+                )
+            )
 
     def published_position_of_goal(self) -> StreamPosition | None:
         """
@@ -299,7 +380,7 @@ class MotionServer:
             try:
                 plotter.plot(self.action_server.goal_id)
             except Exception:
-                rospy.node.get_logger().error(
+                rospy.get_node().get_logger().error(
                     f"{type(plotter).__name__} failed to plot goal "
                     f"#{self.action_server.goal_id}:\n{traceback.format_exc()}"
                 )

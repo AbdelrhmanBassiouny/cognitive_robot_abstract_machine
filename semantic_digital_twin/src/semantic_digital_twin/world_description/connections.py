@@ -6,9 +6,8 @@ from dataclasses import dataclass, field
 from uuid import UUID
 
 import numpy as np
-from typing_extensions import TYPE_CHECKING, Union, Optional, Dict, Any, Self
+from typing_extensions import TYPE_CHECKING, Union, Optional, Self
 
-from krrood.adapters.json_serializer import from_json, to_json
 from semantic_digital_twin.world_description.connection_properties import JointDynamics
 from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedom,
@@ -17,9 +16,6 @@ from semantic_digital_twin.world_description.degree_of_freedom import (
 from semantic_digital_twin.world_description.world_entity import (
     Connection,
     KinematicStructureEntity,
-)
-from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
-    WorldEntityWithIDKwargsTracker,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.datastructures.types import NpMatrix4x4
@@ -30,7 +26,6 @@ from semantic_digital_twin.spatial_types import (
     Point3,
     Quaternion,
 )
-from semantic_digital_twin.spatial_types.derivatives import DerivativeMap
 
 if TYPE_CHECKING:
     from semantic_digital_twin.world import World
@@ -158,36 +153,6 @@ class ActiveConnection1DOF(ActiveConnection, ABC):
     """
     Dynamic properties of the joint.
     """
-
-    def to_json(self) -> Dict[str, Any]:
-        result = super().to_json()
-        result["axis"] = self.axis.to_np().tolist()
-        result["multiplier"] = self.multiplier
-        result["offset"] = self.offset
-        result["dof_id"] = to_json(self.raw_dof.id)
-        return result
-
-    @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        tracker = WorldEntityWithIDKwargsTracker.from_kwargs(kwargs)
-        parent = tracker.get_world_entity_with_id(id=from_json(data["parent_id"]))
-        child = tracker.get_world_entity_with_id(id=from_json(data["child_id"]))
-        raw_dof = tracker.get_world_entity_with_id(id=from_json(data["dof_id"]))
-        return cls(
-            name=from_json(data["name"]),
-            parent=parent,
-            child=child,
-            parent_T_connection_expression=from_json(
-                data["parent_T_connection_expression"], **kwargs
-            ),
-            connection_T_child_expression=from_json(
-                data["connection_T_child_expression"], **kwargs
-            ),
-            axis=Vector3.from_iterable(data["axis"]),
-            multiplier=data["multiplier"],
-            offset=data["offset"],
-            raw_dof=raw_dof,
-        )
 
     @classmethod
     def create_with_dofs(
@@ -334,6 +299,7 @@ class ActiveConnection1DOF(ActiveConnection, ABC):
             multiplier=self.multiplier,
             offset=self.offset,
             raw_dof=world.get_degree_of_freedom_by_id(self.raw_dof.id),
+            dynamics=self.dynamics,
         )
 
     def copy_with_new_parent(
@@ -486,34 +452,6 @@ class ScrewConnection(ActiveConnection1DOF):
         )
         return connection
 
-    def to_json(self) -> Dict[str, Any]:
-        result = super().to_json()
-        result["screw_pitch"] = self.screw_pitch
-        return result
-
-    @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        tracker = WorldEntityWithIDKwargsTracker.from_kwargs(kwargs)
-        parent = tracker.get_world_entity_with_id(id=from_json(data["parent_id"]))
-        child = tracker.get_world_entity_with_id(id=from_json(data["child_id"]))
-        raw_dof = tracker.get_world_entity_with_id(id=from_json(data["dof_id"]))
-        return cls(
-            name=from_json(data["name"]),
-            parent=parent,
-            child=child,
-            parent_T_connection_expression=from_json(
-                data["parent_T_connection_expression"], **kwargs
-            ),
-            connection_T_child_expression=from_json(
-                data["connection_T_child_expression"], **kwargs
-            ),
-            axis=Vector3.from_iterable(data["axis"]),
-            multiplier=data["multiplier"],
-            offset=data["offset"],
-            raw_dof=raw_dof,
-            screw_pitch=data["screw_pitch"],
-        )
-
     def copy_for_world(self, world: World):
         (
             other_parent,
@@ -533,6 +471,7 @@ class ScrewConnection(ActiveConnection1DOF):
             offset=self.offset,
             raw_dof=world.get_degree_of_freedom_by_id(self.raw_dof.id),
             screw_pitch=self.screw_pitch,
+            dynamics=self.dynamics,
         )
 
     def copy_with_new_parent(
@@ -590,41 +529,6 @@ class Connection6DoF(Connection):
     KinematicStructureEntity represented as a quaternion.
     """
 
-    def to_json(self) -> Dict[str, Any]:
-        result = super().to_json()
-        result["x_id"] = to_json(self.x.id)
-        result["y_id"] = to_json(self.y.id)
-        result["z_id"] = to_json(self.z.id)
-        result["qx_id"] = to_json(self.qx.id)
-        result["qy_id"] = to_json(self.qy.id)
-        result["qz_id"] = to_json(self.qz.id)
-        result["qw_id"] = to_json(self.qw.id)
-        return result
-
-    @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        tracker = WorldEntityWithIDKwargsTracker.from_kwargs(kwargs)
-        parent = tracker.get_world_entity_with_id(id=from_json(data["parent_id"]))
-        child = tracker.get_world_entity_with_id(id=from_json(data["child_id"]))
-        return cls(
-            name=from_json(data["name"]),
-            parent=parent,
-            child=child,
-            parent_T_connection_expression=from_json(
-                data["parent_T_connection_expression"], **kwargs
-            ),
-            connection_T_child_expression=from_json(
-                data["connection_T_child_expression"], **kwargs
-            ),
-            x=tracker.get_world_entity_with_id(id=from_json(data["x_id"])),
-            y=tracker.get_world_entity_with_id(id=from_json(data["y_id"])),
-            z=tracker.get_world_entity_with_id(id=from_json(data["z_id"])),
-            qx=tracker.get_world_entity_with_id(id=from_json(data["qx_id"])),
-            qy=tracker.get_world_entity_with_id(id=from_json(data["qy_id"])),
-            qz=tracker.get_world_entity_with_id(id=from_json(data["qz_id"])),
-            qw=tracker.get_world_entity_with_id(id=from_json(data["qw_id"])),
-        )
-
     def add_to_world(self, world: World):
         super().add_to_world(world)
         parent_P_child = Point3(
@@ -637,7 +541,7 @@ class Connection6DoF(Connection):
             y=self.qy.variables.position,
             z=self.qz.variables.position,
             w=self.qw.variables.position,
-        ).to_rotation_matrix()
+        ).rotation_matrix
         self._kinematics = HomogeneousTransformationMatrix.from_point_rotation_matrix(
             point=parent_P_child,
             rotation_matrix=parent_R_child,
@@ -746,13 +650,13 @@ class Connection6DoF(Connection):
             :class:`~semantic_digital_twin.exceptions.MissingReferenceFrameError`
             otherwise); does not need to already be expressed in the parent frame. Other
             spatial types (e.g. ``Pose``) must be converted with their own
-            ``to_homogeneous_matrix()`` before being assigned here.
+            ``homogeneous_matrix`` before being assigned here.
         """
         local_kinematics = self._calculate_local_kinematics(
             self._world.transform(transformation, self.parent)
         )
-        position = local_kinematics.to_position()
-        orientation = local_kinematics.to_rotation_matrix().to_quaternion()
+        position = local_kinematics.position
+        orientation = local_kinematics.rotation_matrix.quaternion
         with self._world._world_lock:
             self._world.state[self.x.id].position = position[0]
             self._world.state[self.y.id].position = position[1]
@@ -875,8 +779,8 @@ class WheeledDrive(ActiveConnection, HasUpdateState, ABC):
         :param transformation: The desired parent-to-child origin.
         """
         local_kinematics = self._calculate_local_kinematics(transformation)
-        position = local_kinematics.to_position()
-        roll, pitch, yaw = local_kinematics.to_rotation_matrix().to_rpy()
+        position = local_kinematics.position
+        roll, pitch, yaw = local_kinematics.rotation_matrix.rpy
         with self._world._world_lock:
             self._world.state[self.x.id].position = position.x
             self._world.state[self.y.id].position = position.y
@@ -915,45 +819,6 @@ class OmniDrive(WheeledDrive):
 
     Represented with respect to the child frame.
     """
-
-    def to_json(self) -> Dict[str, Any]:
-        result = super().to_json()
-        result["x_id"] = to_json(self.x.id)
-        result["y_id"] = to_json(self.y.id)
-        result["roll_id"] = to_json(self.roll.id)
-        result["pitch_id"] = to_json(self.pitch.id)
-        result["yaw_id"] = to_json(self.yaw.id)
-        result["x_velocity_id"] = to_json(self.x_velocity.id)
-        result["y_velocity_id"] = to_json(self.y_velocity.id)
-        return result
-
-    @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        tracker = WorldEntityWithIDKwargsTracker.from_kwargs(kwargs)
-        parent = tracker.get_world_entity_with_id(id=from_json(data["parent_id"]))
-        child = tracker.get_world_entity_with_id(id=from_json(data["child_id"]))
-        return cls(
-            name=from_json(data["name"], **kwargs),
-            parent=parent,
-            child=child,
-            parent_T_connection_expression=from_json(
-                data["parent_T_connection_expression"], **kwargs
-            ),
-            connection_T_child_expression=from_json(
-                data["connection_T_child_expression"], **kwargs
-            ),
-            x=tracker.get_world_entity_with_id(from_json(data["x_id"])),
-            y=tracker.get_world_entity_with_id(from_json(data["y_id"])),
-            roll=tracker.get_world_entity_with_id(from_json(data["roll_id"])),
-            pitch=tracker.get_world_entity_with_id(from_json(data["pitch_id"])),
-            yaw=tracker.get_world_entity_with_id(from_json(data["yaw_id"])),
-            x_velocity=tracker.get_world_entity_with_id(
-                from_json(data["x_velocity_id"])
-            ),
-            y_velocity=tracker.get_world_entity_with_id(
-                from_json(data["y_velocity_id"])
-            ),
-        )
 
     def add_to_world(self, world: World):
         super().add_to_world(world)
@@ -1020,14 +885,6 @@ class OmniDrive(WheeledDrive):
         """
         name = name or cls._generate_default_name(parent=parent, child=child)
         stringified_name = str(name)
-        lower_translation_limits = DerivativeMap()
-        lower_translation_limits.velocity = -translation_velocity_limits
-        upper_translation_limits = DerivativeMap()
-        upper_translation_limits.velocity = translation_velocity_limits
-        lower_rotation_limits = DerivativeMap()
-        lower_rotation_limits.velocity = -rotation_velocity_limits
-        upper_rotation_limits = DerivativeMap()
-        upper_rotation_limits.velocity = rotation_velocity_limits
 
         x = DegreeOfFreedom(name=PrefixedName("x", stringified_name))
         world.add_degree_of_freedom(x)
@@ -1039,26 +896,23 @@ class OmniDrive(WheeledDrive):
         world.add_degree_of_freedom(pitch)
         yaw = DegreeOfFreedom(
             name=PrefixedName("yaw", stringified_name),
-            limits=DegreeOfFreedomLimits(
-                lower=lower_rotation_limits,
-                upper=upper_rotation_limits,
+            limits=DegreeOfFreedomLimits.from_position_range_and_speed(
+                maximum_speed=rotation_velocity_limits
             ),
         )
         world.add_degree_of_freedom(yaw)
 
         x_vel = DegreeOfFreedom(
             name=PrefixedName("x_vel", stringified_name),
-            limits=DegreeOfFreedomLimits(
-                lower=lower_translation_limits,
-                upper=upper_translation_limits,
+            limits=DegreeOfFreedomLimits.from_position_range_and_speed(
+                maximum_speed=translation_velocity_limits
             ),
         )
         world.add_degree_of_freedom(x_vel)
         y_vel = DegreeOfFreedom(
             name=PrefixedName("y_vel", stringified_name),
-            limits=DegreeOfFreedomLimits(
-                lower=lower_translation_limits,
-                upper=upper_translation_limits,
+            limits=DegreeOfFreedomLimits.from_position_range_and_speed(
+                maximum_speed=translation_velocity_limits
             ),
         )
         world.add_degree_of_freedom(y_vel)
@@ -1170,41 +1024,6 @@ class DifferentialDrive(WheeledDrive):
     Represented with respect to the child frame.
     """
 
-    def to_json(self) -> Dict[str, Any]:
-        result = super().to_json()
-        result["x_id"] = to_json(self.x.id)
-        result["y_id"] = to_json(self.y.id)
-        result["roll_id"] = to_json(self.roll.id)
-        result["pitch_id"] = to_json(self.pitch.id)
-        result["yaw_id"] = to_json(self.yaw.id)
-        result["x_velocity_id"] = to_json(self.x_velocity.id)
-        return result
-
-    @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        tracker = WorldEntityWithIDKwargsTracker.from_kwargs(kwargs)
-        parent = tracker.get_world_entity_with_id(id=from_json(data["parent_id"]))
-        child = tracker.get_world_entity_with_id(id=from_json(data["child_id"]))
-        return cls(
-            name=from_json(data["name"], **kwargs),
-            parent=parent,
-            child=child,
-            parent_T_connection_expression=HomogeneousTransformationMatrix.from_json(
-                data["parent_T_connection_expression"], **kwargs
-            ),
-            connection_T_child_expression=from_json(
-                data["connection_T_child_expression"], **kwargs
-            ),
-            x=tracker.get_world_entity_with_id(from_json(data["x_id"])),
-            y=tracker.get_world_entity_with_id(from_json(data["y_id"])),
-            roll=tracker.get_world_entity_with_id(from_json(data["roll_id"])),
-            pitch=tracker.get_world_entity_with_id(from_json(data["pitch_id"])),
-            yaw=tracker.get_world_entity_with_id(from_json(data["yaw_id"])),
-            x_velocity=tracker.get_world_entity_with_id(
-                from_json(data["x_velocity_id"])
-            ),
-        )
-
     def add_to_world(self, world: World):
         super().add_to_world(world)
         odom_T_bf = HomogeneousTransformationMatrix.from_xyz_rpy(
@@ -1265,14 +1084,6 @@ class DifferentialDrive(WheeledDrive):
         """
         name = name or cls._generate_default_name(parent=parent, child=child)
         stringified_name = str(name)
-        lower_translation_limits = DerivativeMap()
-        lower_translation_limits.velocity = -translation_velocity_limits
-        upper_translation_limits = DerivativeMap()
-        upper_translation_limits.velocity = translation_velocity_limits
-        lower_rotation_limits = DerivativeMap()
-        lower_rotation_limits.velocity = -rotation_velocity_limits
-        upper_rotation_limits = DerivativeMap()
-        upper_rotation_limits.velocity = rotation_velocity_limits
 
         x = DegreeOfFreedom(name=PrefixedName("x", stringified_name))
         world.add_degree_of_freedom(x)
@@ -1284,18 +1095,16 @@ class DifferentialDrive(WheeledDrive):
         world.add_degree_of_freedom(pitch)
         yaw = DegreeOfFreedom(
             name=PrefixedName("yaw", stringified_name),
-            limits=DegreeOfFreedomLimits(
-                lower=lower_rotation_limits,
-                upper=upper_rotation_limits,
+            limits=DegreeOfFreedomLimits.from_position_range_and_speed(
+                maximum_speed=rotation_velocity_limits
             ),
         )
         world.add_degree_of_freedom(yaw)
 
         x_vel = DegreeOfFreedom(
             name=PrefixedName("x_vel", stringified_name),
-            limits=DegreeOfFreedomLimits(
-                lower=lower_translation_limits,
-                upper=upper_translation_limits,
+            limits=DegreeOfFreedomLimits.from_position_range_and_speed(
+                maximum_speed=translation_velocity_limits
             ),
         )
         world.add_degree_of_freedom(x_vel)

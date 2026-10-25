@@ -22,9 +22,9 @@ from coraplex.plans.plan_node import (
     ActionNode,
     MotionNode,
     PlanNode,
-    UnderspecifiedNode,
 )
-from giskardpy.motion_statechart.goals.templates import Sequence
+from coraplex.plans.underspecified import UnderspecifiedNode
+from giskardpy.motion_statechart.goals.templates import NodeListGoal, Sequence
 from giskardpy.motion_statechart.graph_node import Goal
 
 # %% a chart builder that is not a plan node
@@ -65,7 +65,7 @@ class ChartBuilderWithoutPlan(BuildsMotionStateChart):
         return False
 
     def add_to_motion_state_chart(
-        self, parent_goal: Goal, executable: GiskardExecutable
+        self, parent_goal: NodeListGoal, executable: GiskardExecutable
     ) -> Goal:
         self.added_goal = self.create_goal()
         parent_goal.add_node(self.added_goal)
@@ -93,12 +93,12 @@ def test_only_goal_owning_nodes_build_charts():
 # %% building a chart outside a plan
 
 
-def test_executable_is_built_without_a_plan(immutable_simple_pr2_world):
+def test_executable_is_built_without_a_plan(simple_pr2_context):
     """
     The mixin builds a complete executable from the hooks alone, without reaching into a
     plan tree.
     """
-    world, robot_view, context = immutable_simple_pr2_world
+    world, robot_view, context = simple_pr2_context
     builder = ChartBuilderWithoutPlan(context)
     child = ChartBuilderWithoutPlan(context)
 
@@ -108,20 +108,17 @@ def test_executable_is_built_without_a_plan(immutable_simple_pr2_world):
     assert executable.context is context
     assert type(executable.root_node) is Sequence
     assert executable.root_node.nodes == [child.added_goal]
-    assert executable.motion_state_chart.nodes == [
-        executable.root_node,
-        child.added_goal,
-    ]
+    assert executable.motion_state_chart.nodes == [executable.root_node]
 
 
 # %% children that contribute nothing
 
 
-def test_children_without_motions_are_left_out_of_the_chart(immutable_simple_pr2_world):
+def test_children_without_motions_are_left_out_of_the_chart(simple_pr2_context):
     """
     A child contributing no motions is skipped, so it cannot leave an empty goal behind.
     """
-    world, robot_view, context = immutable_simple_pr2_world
+    world, robot_view, context = simple_pr2_context
     builder = ChartBuilderWithoutPlan(context)
     without_motions = ChartBuilderWithoutPlan(context, contributes_motions=False)
     with_motions = ChartBuilderWithoutPlan(context)

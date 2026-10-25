@@ -22,20 +22,24 @@ classifiers = [
 keywords=["robotics", "perception"]
 dynamic = ["version"]
 dependencies = [
-    "open3d>=0.15.2",
+    "open3d>=0.20.0",
     "numpy>=1.22.3",
     "pydot>=1.4.2",
     "scipy>=1.8.0",
     "pymongo",
-    "numba==0.61.2",
+    "numba>=0.61.2",
     "pyyaml",
     "transforms3d",
     "opencv-python>=4.11.0.86",
     "matplotlib>=3.0",
     "setuptools",
     "pooch",
+    "filelock",
     "krrood",
     "semantic_digital_twin",
+    "transformers",
+    "faiss-cpu",
+    "ultralytics"
 ]
 
 [project.urls]
@@ -58,4 +62,6 @@ workspace = [
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0,<8.0.0",
+    "torch",
+    "ultralytics",
 ]

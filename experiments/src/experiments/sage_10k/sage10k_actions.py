@@ -3,8 +3,6 @@ from dataclasses import dataclass
 import rustworkx
 
 from krrood.entity_query_language.factories import a, an, variable
-from coraplex.datastructures.enums import Arms, ApproachDirection, VerticalAlignment
-from coraplex.datastructures.grasp import GraspDescription
 from coraplex.plans.factories import sequential
 from coraplex.plans.plan_node import PlanNode
 from coraplex.robot_plans.actions.base import ActionDescription
@@ -16,7 +14,6 @@ from semantic_digital_twin.spatial_types import Point2, Pose2D, Pose
 from semantic_digital_twin.world_description.graph_of_convex_sets.boxes import (
     PlanarGraphOfBoundingBoxes,
 )
-from semantic_digital_twin.exceptions import PointOccupiedError
 
 
 @dataclass
@@ -43,7 +40,7 @@ class Sage10kOpenDoor(ActionDescription):
             target=self.door.handle.root
         )
 
-        arm = Arms.LEFT
+        arm = self.robot.all_arms[0]
 
         min_p = self.door.handle.root.collision.min_point
         max_p = self.door.handle.root.collision.max_point
@@ -59,10 +56,6 @@ class Sage10kOpenDoor(ActionDescription):
         # Find a node in free space that is near the pre-grasp pose. gcs is planar, so
         # the query point is its floor-plane projection, not the full 3D position.
         target_node = gcs.node_of_point(Point2.from_pose(pre_grasp_pose))
-        if target_node is None:
-            raise PointOccupiedError(
-                self.world.transform(pre_grasp_pose, self.world.root).position
-            )
 
         gcs = gcs.create_subgraph(
             list(
@@ -74,16 +67,13 @@ class Sage10kOpenDoor(ActionDescription):
 
         reach_query = a(MoveToReach)(
             target_pose_offset_robot=a(Pose2D)(
-                x=..., y=..., yaw=..., reference_frame=None
+                position=a(Point2)(x=..., y=..., reference_frame=None),
+                yaw=...,
+                reference_frame=None,
             ),
             hip_rotation=0.0,
-            target_pose_end_effector=pre_grasp_pose,
-            grasp_description=a(GraspDescription)(
-                approach_direction=ApproachDirection.FRONT,
-                vertical_alignment=VerticalAlignment.NoAlignment,
-                end_effector=variable(EndEffector, self.world.semantic_annotations),
-                rotate_gripper=False,
-            ),
+            reference_T_grasp=pre_grasp_pose,
+            end_effector=variable(EndEffector, self.world.semantic_annotations),
         )
 
         # constrain_to_free_space attaches the condition to the underlying Entity,
@@ -93,11 +83,11 @@ class Sage10kOpenDoor(ActionDescription):
         # -- appended directly rather than via Match.where(), since that would re-add
         # it to the Entity a second time.
         free_space_condition = gcs.constrain_to_free_space(
-            reach_query.expression.target_pose_offset_robot
+            reach_query.target_pose_offset_robot.position
         )
         reach_query._where_conditions_.append(free_space_condition)
         reach_action = reach_query
 
-        open_action = OpenAction(object_designator=self.door.handle.root, arm=arm)
+        open_action = OpenAction(handle=self.door.handle, arm=arm)
 
         return sequential([reach_action, open_action])

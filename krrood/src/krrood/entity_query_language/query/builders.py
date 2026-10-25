@@ -52,7 +52,7 @@ from krrood.entity_query_language.core.variable import (
     Literal,
 )
 from krrood.entity_query_language.core.mapped_variable import MappedVariable
-from krrood.utils import memoize
+from krrood.patterns.caching import memoize
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.factories import ConditionType

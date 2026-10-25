@@ -25,7 +25,11 @@ from krrood.class_diagrams.exceptions import CouldNotResolveType
 from krrood.class_diagrams.utils import (
     get_and_resolve_generic_type_hints_of_object_using_substitutions,
 )
-from krrood.exceptions import MismatchingNumberOfGenericParametersAndResolvedTypes
+from krrood.patterns.interface import Interface
+from krrood.exceptions import (
+    MismatchingNumberOfGenericParametersAndResolvedTypes,
+    UnboundGenericParameter,
+)
 from krrood.utils import (
     get_generic_type_parameters,
     ensure_hashable,
@@ -56,7 +60,7 @@ ResolvableType: TypeAlias = (
 )
 
 
-@dataclass
+@dataclass(eq=False)
 class SubClassSafeGeneric(ABC):
     """
     Generic-agnostic engine that updates field types when a subclass binds the generic type
@@ -109,9 +113,23 @@ class SubClassSafeGeneric(ABC):
             logger.debug(message)
             return
         for name, result in resolution_results.items():
-            if not result.resolved:
+            if not result.resolved or cls._is_declared_by_an_interface(name):
                 continue
             cls._update_field_kwargs(name, {"type": result.resolved_type})
+
+    @classmethod
+    def _is_declared_by_an_interface(cls, name: str) -> bool:
+        """
+        :param name: The name of an annotated attribute of this class.
+        :return: Whether the nearest class annotating it is an interface, which
+            declares the attribute without making it a field.
+        """
+        declaring_class = next(
+            base
+            for base in cls.__mro__
+            if name in vars(base).get("__annotations__", {})
+        )
+        return Interface.is_interface(declaring_class)
 
     @classmethod
     def get_generic_type_parameters(cls) -> List[Type]:
@@ -119,6 +137,23 @@ class SubClassSafeGeneric(ABC):
         :return: The generic type parameters of this class.
         """
         return get_generic_type_parameters(cls, SubClassSafeGeneric)
+
+    @classmethod
+    def get_type_of_generic_parameter(cls, parameter: TypeVar) -> ResolvableType:
+        """
+        Read back the type this class binds one type parameter to.
+
+        The parameter may be declared anywhere in the inheritance chain, so a class that
+        binds its own parameter still reports what its bases bound theirs to.
+
+        :param parameter: The type parameter to read.
+        :return: The concrete type it is bound to.
+        :raises UnboundGenericParameter: If it is bound to no concrete type.
+        """
+        bound_type = cls._get_generic_type_substitutions().get(parameter)
+        if bound_type is None or isinstance(bound_type, (TypeVar, TypeVarTuple)):
+            raise UnboundGenericParameter(cls, parameter)
+        return bound_type
 
     @staticmethod
     def _substitutions_bind_a_concrete_type(

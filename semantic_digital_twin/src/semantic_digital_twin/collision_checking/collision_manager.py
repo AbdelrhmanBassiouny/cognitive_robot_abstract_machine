@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from krrood.utils import memoize, clear_memoization_cache
 from typing import Dict, Any, Self
 
 from typing_extensions import List, TYPE_CHECKING
 
 from krrood.adapters.json_serializer import to_json, from_json
+from krrood.patterns.caching import memoize, clear_memoization_cache
+from semantic_digital_twin.callbacks.callback import ModelChangeCallback
+from krrood.patterns.field_metadata import JSONMetadata
 from semantic_digital_twin.collision_checking.collision_detector import (
     CollisionMatrix,
     CollisionCheckingResult,
@@ -17,9 +19,9 @@ from semantic_digital_twin.collision_checking.collision_matrix import (
     CollisionRule,
     MaxAvoidedCollisionsRule,
     DefaultMaxAvoidedCollisions,
-    CollisionCheck,
 )
 from semantic_digital_twin.collision_checking.collision_rules import (
+    AllowCollisionBetweenEndEffectorsAndHeldBodies,
     AllowCollisionForAdjacentPairs,
     AllowNonRobotCollisions,
     AvoidCollisionRule,
@@ -28,7 +30,6 @@ from semantic_digital_twin.collision_checking.collision_rules import (
 from semantic_digital_twin.collision_checking.pybullet_collision_detector import (
     BulletCollisionDetector,
 )
-from semantic_digital_twin.callbacks.callback import ModelChangeCallback
 from semantic_digital_twin.world_description.world_entity import Body
 from semantic_digital_twin.world_description.world_modification import (
     synchronized_attribute_modification,
@@ -125,6 +126,7 @@ class CollisionManager(ModelChangeCallback):
         default_factory=lambda: [
             AllowCollisionForAdjacentPairs(),
             AllowNonRobotCollisions(),
+            AllowCollisionBetweenEndEffectorsAndHeldBodies(),
         ]
     )
     """
@@ -132,7 +134,8 @@ class CollisionManager(ModelChangeCallback):
 
     The permanently allow collisions and cannot be overwritten by other rules.
 
-    By default we allow collisions between non-robot bodies and between adjacent bodies.
+    By default we allow collisions between non-robot bodies, between adjacent bodies,
+    and between end effectors and the bodies they hold.
 
     .. note: This is only meant for collision that should NEVER be checked.
         Allow collision rules can also be added to default or temporary rules if needed.
@@ -147,7 +150,9 @@ class CollisionManager(ModelChangeCallback):
     between two bodies.
     """
 
-    collision_consumers: list[CollisionConsumer] = field(default_factory=list)
+    collision_consumers: list[CollisionConsumer] = field(
+        default_factory=list, metadata=JSONMetadata(serialize=False).as_dict()
+    )
     """
     Objects that are notified about changes in the collision matrix.
     """
@@ -315,14 +320,16 @@ class CollisionManager(ModelChangeCallback):
         """
         return self.default_rules + self.temporary_rules + self.ignore_collision_rules
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self, **kwargs) -> Dict[str, Any]:
         return {
-            **super().to_json(),
-            "id": to_json(self.id),
-            "default_rules": to_json(self.default_rules),
-            "temporary_rules": to_json(self.temporary_rules),
-            "ignore_collision_rules": to_json(self.ignore_collision_rules),
-            "max_avoided_bodies_rules": to_json(self.max_avoided_bodies_rules),
+            **super().to_json(**kwargs),
+            "id": to_json(self.id, **kwargs),
+            "default_rules": to_json(self.default_rules, **kwargs),
+            "temporary_rules": to_json(self.temporary_rules, **kwargs),
+            "ignore_collision_rules": to_json(self.ignore_collision_rules, **kwargs),
+            "max_avoided_bodies_rules": to_json(
+                self.max_avoided_bodies_rules, **kwargs
+            ),
         }
 
     @classmethod

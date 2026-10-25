@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import importlib
 import uuid
+from abc import ABC
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum, auto
 from pathlib import Path
 from types import FunctionType, NoneType
@@ -25,8 +26,10 @@ from krrood.ormatic.data_access_objects.alternative_mappings import (
     AlternativeMapping,
     T,
 )
+from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood.symbol_graph.symbol_graph import Symbol
 from krrood import logger
+
 try:
     from random_events.interval import Bound, SimpleInterval
     from krrood.parametrization.feature_extraction.aggregations import (
@@ -36,8 +39,9 @@ try:
 except ImportError as e:
     # Was added to allow this to work on Windows which random_events does not support.
     logger.debug(f"Could not import random_events: {e}")
-    class AggregationStatistic(MockedClass, Generic[T]):
-        ...
+
+    class AggregationStatistic(MockedClass, Generic[T]): ...
+
     aggregation_statistic = lambda *args: lambda *args2: args2
     Bound = NoneType
     SimpleInterval = NoneType
@@ -116,7 +120,7 @@ class KRROODPositionsSubclassWithAnotherKRROODPosition(KRROODPositions):
 
 
 # check that one to many relationships work where the many side is of the same type
-@dataclass
+@dataclass(eq=False)
 class DoubleKRROODPositionAggregator(Symbol):
     positions1: List[KRROODPosition]
     positions2: List[KRROODPosition]
@@ -323,7 +327,7 @@ class BackreferenceMapping(AlternativeMapping[Backreference]):
         return Backreference({v: v for v in self.values}, self.reference)
 
 
-@dataclass
+@dataclass(eq=False)
 class AlternativeMappingAggregator(Symbol):
     entities1: List[Entity]
     entities2: List[Entity]
@@ -638,6 +642,50 @@ class JSONWrapper:
     more_objects: List[JSONSerializableClass] = field(default_factory=list)
 
 
+JSONSerializableAnswer = TypingTypeVar("JSONSerializableAnswer")
+"""
+What a :class:`GenericJSONSerializableClass` answers with.
+"""
+
+
+@dataclass
+class GenericJSONSerializableClass(
+    SubclassJSONSerializer, Generic[JSONSerializableAnswer], SubClassSafeGeneric, ABC
+):
+    """
+    A JSON-serializable base that is used as a field type without binding its parameter,
+    so the field says only that some subclass of it is stored.
+    """
+
+    label: str = ""
+    """
+    What this value stands for.
+    """
+
+    def to_json(self) -> Dict[str, Any]:
+        return {**super().to_json(), "label": to_json(self.label)}
+
+    @classmethod
+    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+        return cls(label=from_json(data["label"]))
+
+
+@dataclass
+class TextJSONSerializableClass(GenericJSONSerializableClass[str]): ...
+
+
+@dataclass
+class GenericJSONWrapper:
+    """
+    Holds the generic JSON value under a field that leaves the parameter free.
+    """
+
+    json_serializable_object: GenericJSONSerializableClass
+    """
+    The value, whose own JSON names which subclass it is.
+    """
+
+
 @dataclass
 class HolderOfSimpleInterval:
     """
@@ -805,6 +853,18 @@ class PathAssociation:
     path: Path
 
 
+@dataclass
+class DurationAssociation:
+    """
+    Holds a duration, to test that the ORM stores a time span.
+    """
+
+    duration: timedelta
+    """
+    The stored time span.
+    """
+
+
 class SceneObjectType(Enum):
     TABLE = "table"
     CHAIR = "chair"
@@ -816,6 +876,24 @@ class SceneObject:
 
 
 @dataclass
+class ApproachSceneObject:
+    """
+    An action standing for one whose argument is a whole entity carrying an enum, so a
+    query over it has to describe that entity's own kind as well as its own fields.
+    """
+
+    target: SceneObject
+    """
+    The object approached, named outright rather than described.
+    """
+
+    speed: float
+    """
+    How fast it is approached, which a query may leave underspecified.
+    """
+
+
+@dataclass
 class SceneRoom:
     position: KRROODPosition
     orientation: KRROODOrientation
@@ -824,13 +902,16 @@ class SceneRoom:
 
 
 @dataclass
-class TestExParts:
+class SceneWithExchangeableParts:
     objects: List[SceneObject]
     rooms: List[SceneRoom]
 
 
-@dataclass
-class SceneObjectAggregationBase(AggregationStatistic[T]):
+TSceneObjectHolder = TypingTypeVar("TSceneObjectHolder", bound=object)
+
+
+@dataclass(eq=False)
+class SceneObjectAggregationBase(AggregationStatistic[TSceneObjectHolder]):
     """
     Abstract base providing shared aggregation statistics over a
     ``objects: List[SceneObject]`` field.
@@ -838,12 +919,12 @@ class SceneObjectAggregationBase(AggregationStatistic[T]):
     Concrete subclasses bind ``T`` to the owner type and are auto-registered.
     """
 
-    @aggregation_statistic("objects")
+    @aggregation_statistic(variable(SceneRoom).objects)
     def chair_count(self) -> int:
         """
         Count of CHAIR-type objects.
         """
-        type_var = variable(SceneObject, self.instance.objects).type
+        type_var = variable(SceneObject, self.objects).type
         [cou] = (
             entity(count_range(type_var))
             .where(type_var == SceneObjectType.CHAIR)
@@ -851,12 +932,12 @@ class SceneObjectAggregationBase(AggregationStatistic[T]):
         )
         return cou
 
-    @aggregation_statistic("objects")
+    @aggregation_statistic(variable(SceneRoom).objects)
     def table_count(self) -> int:
         """
         Count of TABLE-type objects.
         """
-        type_var = variable(SceneObject, self.instance.objects).type
+        type_var = variable(SceneObject, self.objects).type
         [cou] = (
             entity(count_range(type_var))
             .where(type_var == SceneObjectType.TABLE)
@@ -864,36 +945,205 @@ class SceneObjectAggregationBase(AggregationStatistic[T]):
         )
         return cou
 
-    @aggregation_statistic("objects")
+    @aggregation_statistic(variable(SceneRoom).objects)
     def total_count(self) -> int:
         """
         Total number of objects.
         """
-        [cou] = count(variable(SceneObject, self.instance.objects)).tolist()
+        [cou] = count(variable(SceneObject, self.objects)).tolist()
         return cou
 
 
-@dataclass
+@dataclass(eq=False)
 class SceneRoomAggregations(SceneObjectAggregationBase[SceneRoom]):
     """
     Aggregation statistics for :class:`SceneRoom` over its ``objects`` field.
     """
 
 
-@dataclass
-class TestExPartsAggregations(SceneObjectAggregationBase[TestExParts]):
+@dataclass(eq=False)
+class SceneWithExchangeablePartsAggregations(
+    SceneObjectAggregationBase[SceneWithExchangeableParts]
+):
     """
-    Aggregation statistics for :class:`TestExParts` over its ``objects`` and
+    Aggregation statistics for :class:`SceneWithExchangeableParts` over its ``objects`` and
     ``rooms`` fields.
     """
 
-    @aggregation_statistic("rooms")
+    @aggregation_statistic(variable(SceneWithExchangeableParts).rooms)
     def room_count(self) -> int:
         """
         Total number of rooms.
         """
-        [cou] = count(variable(SceneRoom, self.instance.rooms)).tolist()
+        [cou] = count(variable(SceneRoom, self.rooms)).tolist()
         return cou
+
+
+@dataclass
+class SceneFloor:
+    """
+    A level of a building, holding rooms; a mimic of an entity that is itself an
+    exchangeable part and holds exchangeable parts.
+    """
+
+    rooms: List[SceneRoom]
+    """
+    The rooms on this floor.
+    """
+
+
+@dataclass
+class SceneBuilding:
+    """
+    A building, holding floors; the root of a three-level chain of exchangeable parts.
+    """
+
+    floors: List[SceneFloor]
+    """
+    The floors of this building.
+    """
+
+
+@dataclass(eq=False)
+class SceneFloorAggregations(AggregationStatistic[SceneFloor]):
+    """
+    Aggregation statistics for :class:`SceneFloor` over its ``rooms`` field.
+    """
+
+    @aggregation_statistic(variable(SceneFloor).rooms)
+    def room_count(self) -> int:
+        """
+        Total number of rooms on the floor.
+        """
+        [cou] = count(variable(SceneRoom, self.rooms)).tolist()
+        return cou
+
+
+@dataclass(eq=False)
+class SceneBuildingAggregations(AggregationStatistic[SceneBuilding]):
+    """
+    Aggregation statistics for :class:`SceneBuilding` over its ``floors`` field.
+    """
+
+    @aggregation_statistic(variable(SceneBuilding).floors)
+    def floor_count(self) -> int:
+        """
+        Total number of floors in the building.
+        """
+        [cou] = count(variable(SceneFloor, self.floors)).tolist()
+        return cou
+
+
+# %% Relational causal experiment (skill-confounded grasp attempts)
+
+
+@dataclass
+class GraspAttempt:
+    """
+    A single grasp attempt, whose arm position and outcome may be confounded by
+    the robot's shared skill level.
+    """
+
+    arm: float
+    """
+    The arm's position at the time of this attempt.
+    """
+
+    grasped: bool
+    """
+    Whether this attempt succeeded.
+    """
+
+
+@dataclass
+class PickingRobot:
+    """
+    A robot performing a series of grasp attempts, with a skill level shared
+    across every attempt it makes.
+    """
+
+    skill: float
+    """
+    The robot's skill level, generated independently of any single attempt.
+    """
+
+    attempts: List[GraspAttempt]
+    """
+    The robot's grasp attempts.
+    """
+
+
+@dataclass(eq=False)
+class PickingRobotAggregations(AggregationStatistic[PickingRobot]):
+    """
+    Aggregation statistics for :class:`PickingRobot` over its ``attempts`` field.
+    """
+
+    @aggregation_statistic(variable(PickingRobot).attempts)
+    def success_count(self) -> int:
+        """
+        Count of successful grasp attempts.
+        """
+        grasped_var = variable(GraspAttempt, self.attempts).grasped
+        [result] = entity(count_range(grasped_var)).where(grasped_var == True).tolist()
+        return result
+
+    @aggregation_statistic(variable(PickingRobot).attempts)
+    def total_count(self) -> int:
+        """
+        Total number of grasp attempts.
+        """
+        [result] = count(variable(GraspAttempt, self.attempts)).tolist()
+        return result
+
+
+class RobotStation(Enum):
+    """
+    Where a picking robot is stationed.
+    """
+
+    LAB = auto()
+    FACTORY = auto()
+
+
+@dataclass
+class StationedPickingRobot:
+    """
+    A picking robot with a class-level enum attribute -- its station -- alongside its
+    exchangeable grasp attempts.
+    """
+
+    station: RobotStation
+    """
+    Where the robot is stationed.
+    """
+
+    skill: float
+    """
+    The robot's skill level.
+    """
+
+    attempts: List[GraspAttempt]
+    """
+    The robot's grasp attempts.
+    """
+
+
+@dataclass(eq=False)
+class StationedPickingRobotAggregations(AggregationStatistic[StationedPickingRobot]):
+    """
+    Aggregation statistics for :class:`StationedPickingRobot` over its ``attempts``
+    field.
+    """
+
+    @aggregation_statistic(variable(StationedPickingRobot).attempts)
+    def success_count(self) -> int:
+        """
+        Count of successful grasp attempts.
+        """
+        grasped_var = variable(GraspAttempt, self.attempts).grasped
+        [result] = entity(count_range(grasped_var)).where(grasped_var == True).tolist()
+        return result
 
 
 @dataclass
@@ -911,7 +1161,7 @@ class MissingBaseClass:
     objects: List[ExampleInt] = field(default_factory=list)
 
 
-@dataclass
+@dataclass(eq=False)
 class ActionWithMissingAggregationsMixin:
     """
     Action with a field whose domain type has exchangeable parts but no

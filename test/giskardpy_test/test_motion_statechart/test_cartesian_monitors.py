@@ -22,6 +22,7 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import (
 )
 from giskardpy.motion_statechart.tasks.pointing import Pointing
 from semantic_digital_twin.spatial_types import (
+    AxisAngle,
     HomogeneousTransformationMatrix,
     Point3,
     Vector3,
@@ -67,9 +68,10 @@ def test_position_reached_binding_policies(
     pr2_world_state_reset: World, binding_policy: GoalBindingPolicy
 ):
     """
-    The robot is driven toward a goal expressed relative to the tip. The monitor captures the same
-    goal with the same policy and serves as the end condition, so the motion only ends once the
-    monitor detects the goal was reached.
+    The robot is driven toward a goal expressed relative to the tip.
+
+    The monitor captures the same goal with the same policy and serves as the success
+    condition, so the motion only ends once the monitor detects the goal was reached.
     """
     tip = pr2_world_state_reset.get_kinematic_structure_entity_by_name("base_footprint")
     root = pr2_world_state_reset.get_kinematic_structure_entity_by_name("odom_combined")
@@ -102,7 +104,7 @@ def test_orientation_reached(pr2_world_state_reset: World):
     )
     root = pr2_world_state_reset.get_kinematic_structure_entity_by_name("odom_combined")
     goal_orientation = RotationMatrix.from_axis_angle(
-        Vector3.Z(reference_frame=root), 0.3
+        AxisAngle(Vector3.Z(reference_frame=root), 0.3)
     )
     goal_orientation.reference_frame = root
 

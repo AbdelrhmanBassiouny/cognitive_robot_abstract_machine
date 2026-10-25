@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import inspect
 from dataclasses import dataclass
 
-from typing_extensions import Type
+from typing_extensions import Any, Callable, List, Type
 
 from krrood.exceptions import DataclassException
 
@@ -78,3 +79,114 @@ class RoleAttributeNotDeclaredError(DataclassException):
             f"Declare '{self.attribute_name}' as a field on {self.role_type.__name__}, or assign "
             f"through .role_taker to change the underlying entity."
         )
+
+
+@dataclass
+class UnmemoizableOwnerError(DataclassException):
+    """
+    Raised when a memoized call's owner cannot hold a cache.
+
+    A memoization cache lives exactly as long as the object whose results it caches, so
+    an owner whose lifetime cannot be observed has nowhere to keep one.
+    """
+
+    owner: Any
+    """
+    The receiver of the memoized call.
+    """
+
+    function_name: str
+    """
+    The name of the memoized function that was called.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.function_name}() was called on a {type(self.owner).__name__}, which cannot be "
+            f"weakly referenced and therefore cannot own a memoization cache."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            f"Memoize on an object whose lifetime can be tracked, or cache "
+            f"{self.function_name}() with functools.lru_cache instead."
+        )
+
+
+@dataclass
+class KeywordNamesNoFactoryParameter(DataclassException, TypeError):
+    """
+    Raised when a keyword argument given for construction names no parameter of the
+    factory it is given to, which would otherwise be lost without a trace.
+    """
+
+    factory: Callable[..., Any]
+    """
+    The factory the keyword argument was given to.
+    """
+
+    keyword: str
+    """
+    The keyword argument that names no parameter of the factory.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.factory.__qualname__} has no parameter named {self.keyword!r}, so it "
+            f"cannot be constructed with it."
+        )
+
+    def suggest_correction(self) -> str:
+        parameter_names = ", ".join(inspect.signature(self.factory).parameters)
+        return (
+            f"Check the spelling of {self.keyword!r}; the parameters of "
+            f"{self.factory.__qualname__} are: {parameter_names}."
+        )
+
+
+@dataclass
+class AmbiguousRuleError(DataclassException):
+    """
+    Two or more rules of a family are equally specific for the same subject, a collision
+    that would otherwise resolve silently by registration order.
+
+    Surfaced as an error so an accidental overlap is caught rather than masked.
+    """
+
+    subject: Any
+    """
+    What the rules were asked about when the collision occurred.
+    """
+
+    candidates: List[Type]
+    """
+    The equally specific rule classes that collided.
+    """
+
+    def error_message(self) -> str:
+        names = ", ".join(sorted(candidate.__name__ for candidate in self.candidates))
+        return f"{names} are equally specific for {self.subject!r}."
+
+    def suggest_correction(self) -> str:
+        return (
+            "Make the colliding guards mutually exclusive, or have one rule subclass the other "
+            "to declare it the more-specific special case."
+        )
+
+
+@dataclass
+class InterfaceInstantiationError(DataclassException, TypeError):
+    """
+    Raised when an interface itself is instantiated instead of a class implementing it.
+    """
+
+    interface: Type
+    """
+    The interface that was instantiated.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.interface.__name__} is an interface and cannot be instantiated."
+
+    def suggest_correction(self) -> str:
+        return f"Instantiate a subclass that implements {self.interface.__name__}."

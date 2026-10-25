@@ -15,8 +15,7 @@ from collections.abc import Iterator
 from copy import deepcopy, copy
 from dataclasses import is_dataclass, fields
 from enum import Enum
-from krrood.utils import memoize
-from os.path import dirname
+from krrood.patterns.caching import memoize
 from pathlib import Path
 from subprocess import check_call
 from tempfile import NamedTemporaryFile
@@ -32,6 +31,7 @@ from krrood.code_generation.imports import get_imports_from_types
 from krrood.utils import (
     is_builtin_type,
     get_import_path_from_path,
+    make_path_importable,
     get_method_name,
     get_method_class_name_if_exists,
     get_method_file_name,
@@ -92,7 +92,8 @@ import ast
 
 class IDGenerator:
     """
-    A class that generates incrementing, unique IDs and caches them for every object this is called on.
+    A class that generates incrementing, unique IDs and caches them for every object
+    this is called on.
     """
 
     _counter = 0
@@ -155,7 +156,8 @@ def get_and_import_python_modules_in_a_package(
     :param parent_package_name: The name of the parent package to use for relative imports.
     :return: The imported modules.
     """
-    package_path = dirname(file_paths[0])
+    package_path = Path(file_paths[0]).parent
+    make_path_importable(package_path)
     package_import_path = get_import_path_from_path(package_path)
     file_names = [Path(file_path).name.replace(".py", "") for file_path in file_paths]
     module_import_paths = [
@@ -188,7 +190,8 @@ def get_and_import_python_module(
     :return: The imported module.
     """
     if package_import_path is None:
-        package_path = dirname(python_file_path)
+        package_path = Path(python_file_path).parent
+        make_path_importable(package_path)
         package_import_path = get_import_path_from_path(package_path)
     file_name = Path(python_file_path).name.replace(".py", "")
     module_import_path = (
@@ -325,7 +328,6 @@ def build_user_input_from_conclusion(conclusion: Any) -> str:
     :param conclusion: The conclusion to use for the callable expression.
     :return: The user input string.
     """
-
     # set user_input to the string representation of the conclusion
     if isinstance(conclusion, Callable):
         user_input = inspect.getsource(conclusion)
@@ -714,7 +716,8 @@ def get_class_file_path(cls):
 
 def get_function_representation(func: Callable) -> str:
     """
-    Get a string representation of a function, including its module and class if applicable.
+    Get a string representation of a function, including its module and class if
+    applicable.
 
     :param func: The function to represent.
     :return: A string representation of the function.
@@ -798,7 +801,8 @@ def is_iterable(obj: Any) -> bool:
 
 def get_type_from_string(type_path: str):
     """
-    Get a type from a string describing its path using the format "module_path.ClassName".
+    Get a type from a string describing its path using the format
+    "module_path.ClassName".
 
     :param type_path: The path to the type.
     """
@@ -845,7 +849,9 @@ def recursive_subclasses(cls):
 
 
 def _pickle_thread(thread_obj) -> Any:
-    """Return a plain object with user-defined attributes but no thread behavior."""
+    """
+    Return a plain object with user-defined attributes but no thread behavior.
+    """
 
     class DummyThread:
         pass
@@ -891,8 +897,11 @@ def copy_case(case: Union[Case, SQLTable]) -> Union[Case, SQLTable, Any]:
 
 def copy_orm_instance(instance: SQLTable) -> SQLTable:
     """
-    Copy an ORM instance by expunging it from the session then deep copying it and adding it back to the session. This
-    is useful when you want to copy an instance and make changes to it without affecting the original instance.
+    Copy an ORM instance by expunging it from the session then deep copying it and
+    adding it back to the session.
+
+    This is useful when you want to copy an instance and make changes to it without
+    affecting the original instance.
 
     :param instance: The instance to copy.
     :return: The copied instance.
@@ -998,7 +1007,7 @@ def get_origin_and_args_from_type_hint(
     type_hint: Type,
 ) -> Tuple[Optional[Type], Tuple[Type]]:
     """
-    Get the origin and arguments from a type hint.W
+    Get the origin and arguments from a type hint.W.
 
     :param type_hint: The type hint to get the origin and arguments from.
     :return: The origin and arguments of the type hint.
@@ -1091,8 +1100,10 @@ def get_attribute_name(
     possible_value: Optional[Any] = None,
 ) -> Optional[str]:
     """
-    Get the name of an attribute from an object. The attribute can be given as a value, a type or a target value.
-    And this method will try to find the attribute name using the given information.
+    Get the name of an attribute from an object.
+
+    The attribute can be given as a value, a type or a target value. And this method
+    will try to find the attribute name using the given information.
 
     :param obj: The object to get the attribute name from.
     :param attribute: The attribute to get the name of.
@@ -1166,8 +1177,8 @@ def get_attribute_name_from_value(obj: Any, attribute_value: Any) -> Optional[st
 
 def get_attribute_values_transitively(obj: Any, attribute: Any) -> Any:
     """
-    Get an attribute from a python object, if it is iterable, get the attribute values from all elements and unpack them
-    into a list.
+    Get an attribute from a python object, if it is iterable, get the attribute values
+    from all elements and unpack them into a list.
 
     :param obj: The object to get the sub attribute from.
     :param attribute: The  attribute to get.
@@ -1640,7 +1651,9 @@ subgraph cluster_legend {
 
     @staticmethod
     def esc(value):
-        """Escape Strings."""
+        """
+        Escape Strings.
+        """
         return _RE_ESC.sub(lambda m: r"\%s" % m.group(0), six.text_type(value))
 
 
@@ -1751,7 +1764,8 @@ def encapsulate_code_lines_into_a_function(
     case_query: CaseQuery,
 ) -> str:
     """
-    Encapsulate the given code lines into a function with the specified name, signature, and docstring.
+    Encapsulate the given code lines into a function with the specified name, signature,
+    and docstring.
 
     :param code_lines: The lines of code to include in the user input.
     :param function_name: The name of the function to include in the user input.

@@ -3,28 +3,35 @@ from __future__ import annotations
 import logging
 from abc import abstractmethod, ABC
 from collections import deque
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional, Any, List, Type, TYPE_CHECKING, Iterable, Iterator
+from typing import Optional, Any, List, Type, TYPE_CHECKING, Iterable
 
-from typing_extensions import Union
+from typing_extensions import Union, Iterator
 
+from coraplex.datastructures.enums import NodeDetail
+from coraplex.exceptions import NodeNotInPlanTree
 from coraplex.plans.designator import Designator
+from coraplex.plans.failures import PlanFailure
+from giskardpy.motion_statechart.goals.templates import NodeListGoal
 from giskardpy.motion_statechart.graph_node import Goal
 from krrood.entity_query_language.query.match import Match
-from coraplex.datastructures.enums import TaskStatus
+from krrood.patterns.field_metadata import JSONMetadata
+from giskardpy.motion_statechart.data_types import LifeCycleValues
 from coraplex.datastructures.execution_data import ExecutionData
 from coraplex.plans.executables import (
     Executable,
     GiskardExecutable,
-    UnderspecifiedExecutable,
 )
-from coraplex.plans.failures import PlanFailure
 from coraplex.plans.motion_state_chart_building import BuildsMotionStateChart
+from coraplex.plans.node_info import NodeInfo, NodeInfoSection
 from coraplex.plans.plan_entity import PlanEntity
 
 if TYPE_CHECKING:
+    from giskardpy.motion_statechart.motion_statechart import MotionStatechart
     from giskardpy.motion_statechart.graph_node import Task
+    from coraplex.language import SequentialNode
     from coraplex.datastructures.dataclasses import Context
     from coraplex.robot_plans.actions.base import ActionDescription
     from coraplex.robot_plans.motions.base import BaseMotion
@@ -47,9 +54,9 @@ class PlanNode(PlanEntity):
     A node in the plan.
     """
 
-    status: TaskStatus = TaskStatus.CREATED
+    status: LifeCycleValues = LifeCycleValues.NOT_STARTED
     """
-    The status of the node from the TaskStatus enum.
+    Where this node is in its execution.
     """
 
     start_time: Optional[datetime] = field(default_factory=datetime.now)
@@ -62,14 +69,32 @@ class PlanNode(PlanEntity):
     The ending time of the function, optional.
     """
 
-    reason: Optional[PlanFailure] = None
+    reason: PlanFailure | None = None
     """
-    The reason of failure if the action failed.
+    The structured plan failure retained in persisted execution records.
+    """
+
+    execution_error: BaseException | None = field(
+        default=None,
+        init=False,
+        repr=False,
+        compare=False,
+        metadata=JSONMetadata(serialize=False).as_dict(),
+    )
+    """
+    The original runtime exception, excluded from persistent execution records.
     """
 
     result: Optional[Any] = None
     """
     Result from the execution of this node.
+    """
+
+    _execution_in_progress: bool = field(
+        default=False, init=False, repr=False, compare=False
+    )
+    """
+    Whether a call is already executing this node.
     """
 
     index: Optional[int] = field(default=None, init=False, repr=False)
@@ -214,13 +239,17 @@ class PlanNode(PlanEntity):
         nodes.
 
         :return: The previous nodes as a list of nodes
+        :raises NodeNotInPlanTree: If this node cannot be reached from the plan's root.
         """
         previous_nodes = []
-        for search_node in self.plan.nodes:
+        to_visit = [self.plan.root]
+        while to_visit:
+            search_node = to_visit.pop()
             if search_node is self:
-                break
+                return previous_nodes
             previous_nodes.append(search_node)
-        return previous_nodes
+            to_visit.extend(reversed(search_node.children))
+        raise NodeNotInPlanTree(self)
 
     def get_previous_node_by_designator_type(
         self, *type_: Type[Designator]
@@ -246,7 +275,7 @@ class PlanNode(PlanEntity):
         """
         Interrupts the execution of this node and all nodes below.
         """
-        self.status = TaskStatus.INTERRUPTED
+        self.status = LifeCycleValues.INTERRUPTED
         logger.info(f"Interrupted node: {str(self)}")
         # TODO: cancel giskard execution
 
@@ -254,13 +283,13 @@ class PlanNode(PlanEntity):
         """
         Resumes the execution of this node and all nodes below.
         """
-        self.status = TaskStatus.RUNNING
+        self.status = LifeCycleValues.RUNNING
 
     def pause(self):
         """
         Suspends the execution of this node and all nodes below.
         """
-        self.status = TaskStatus.PAUSE
+        self.status = LifeCycleValues.PAUSED
 
     def add_child(self, child: PlanNode):
         self.plan.add_edge(self, child)
@@ -268,33 +297,77 @@ class PlanNode(PlanEntity):
     @property
     def is_interrupted(self) -> bool:
         return any(
-            parent.status == TaskStatus.INTERRUPTED for parent in [self] + self.path
+            parent.status == LifeCycleValues.INTERRUPTED
+            for parent in [self] + self.path
         )
 
     @property
     def is_paused(self) -> bool:
-        return any(parent.status == TaskStatus.PAUSE for parent in [self] + self.path)
+        return any(
+            parent.status == LifeCycleValues.PAUSED for parent in [self] + self.path
+        )
 
     def perform(self):
         """
         Perform the node and update the fields of this node.
         """
         for parent in self.path:
-            if parent.status == TaskStatus.INTERRUPTED:
-                self.status = TaskStatus.INTERRUPTED
+            if parent.status == LifeCycleValues.INTERRUPTED:
+                self.status = LifeCycleValues.INTERRUPTED
                 return
 
-        self.status = TaskStatus.RUNNING
-        try:
+        with self.execution_scope():
             self.notify()
             self.result = self.parse().execute()
-        except PlanFailure as e:
-            self.status = TaskStatus.FAILED
-            self.reason = e
-            raise e
+
+    @contextmanager
+    def execution_scope(self) -> Iterator[None]:
+        """
+        Track execution and publish boundaries owned by the call scope.
+        """
+        if self._execution_in_progress:
+            yield
+            return
+        self._execution_in_progress = True
+        self.reason = None
+        self.execution_error = None
+        try:
+            self._start_execution()
+            yield
+        except BaseException as error:
+            self._fail_execution(error)
+            raise
         finally:
-            self.end_time = datetime.now()
-        self.status = TaskStatus.SUCCEEDED
+            self._finish_execution()
+
+    def _start_execution(self) -> None:
+        self.status = LifeCycleValues.RUNNING
+        self.start_time = datetime.now()
+        self.end_time = None
+        self.plan.notify_node_started(self)
+
+    def _fail_execution(self, error: BaseException) -> None:
+        self.execution_error = error
+        self.reason = error if isinstance(error, PlanFailure) else None
+        self.status = (
+            LifeCycleValues.FAILED
+            if isinstance(error, Exception)
+            else LifeCycleValues.INTERRUPTED
+        )
+
+    def _end_execution(self) -> None:
+        if self.status == LifeCycleValues.RUNNING:
+            self.status = LifeCycleValues.SUCCEEDED
+        self.end_time = datetime.now()
+        self.plan.notify_node_ended(self)
+
+    def _finish_execution(self) -> None:
+        self._execution_in_progress = False
+        try:
+            self._end_execution()
+        except BaseException:
+            if self.execution_error is None:
+                raise
 
     def mount_subplan(self, root: PlanNode):
         """
@@ -350,6 +423,24 @@ class PlanNode(PlanEntity):
         Perform the node without managing the fields of this node.
         """
 
+    def notify_children(self) -> None:
+        """
+        Notifies every child, including the ones that only appear while the earlier
+        children are being notified.
+
+        A plan transformation applied to a child can put further children here, and
+        those have to be expanded too instead of staying unexpanded leaves.
+        """
+        # Keyed by identity, holding the node itself: expanding a child simplifies the
+        # plan, which can remove nodes and free their graph index for a later one.
+        notified: Dict[int, PlanNode] = {}
+        pending = self.children
+        while pending:
+            notified.update({id(child): child for child in pending})
+            for child in pending:
+                child.notify()
+            pending = [child for child in self.children if id(child) not in notified]
+
     def parse(self) -> Executable: ...
 
     @property
@@ -372,17 +463,32 @@ class PlanNode(PlanEntity):
             for node in [self] + self.descendants
         )
 
-    def __node_info__(self):
-        return [
-            f"status: {self.status.name}",
-            f"start: {self.start_time}",
-            f"end: {self.end_time}",
-            f"result: {self.result}",
-            f"reason: {self.reason}",
-        ]
+    @property
+    def node_info(self) -> NodeInfo:
+        """
+        :return: How far this node got and what came out of it.
+        """
+        return NodeInfo(
+            [
+                NodeInfoSection(
+                    NodeDetail.EXECUTION,
+                    {
+                        NodeDetail.STATUS: self.status.name,
+                        NodeDetail.START_TIME: self.start_time,
+                        NodeDetail.END_TIME: self.end_time,
+                        NodeDetail.RESULT: self.result,
+                        NodeDetail.REASON: self.reason,
+                    },
+                )
+            ]
+        )
 
-    def __node_label__(self):
-        return f"{self.__class__.__name__}"
+    @property
+    def node_label(self) -> str:
+        """
+        :return: The name this node is drawn under.
+        """
+        return type(self).__name__
 
 
 @dataclass(eq=False, repr=False)
@@ -390,115 +496,6 @@ class ExecutionBoundaryNode(ABC, PlanNode):
     """
     A PlanNode that interrupts the merging of surrounding motions into one chart.
     """
-
-
-@dataclass(eq=False, repr=False)
-class UnderspecifiedNode(ExecutionBoundaryNode):
-    """
-    An action or language expression that is described by an underspecified `an(...)`
-    match statement.
-
-    This node is used to generate fully specified actions  or language expressions.
-    The semantics are: try until it succeeds or fails if the underspecified action is exhausted.
-    If you want to limit the number of attempts, add a limit clause to the underspecified action.
-    """
-
-    underspecified_action: Match = field(kw_only=True)
-    """
-    The underspecified statement that can be used to generate actions.
-    """
-
-    _action_iterator: Optional[Iterator[ActionDescription]] = field(
-        default=None, kw_only=True
-    )
-    """
-    The iterator that is used to generate the actions.
-
-    Only available after the first call to notify.
-    """
-
-    current_candidate: Optional[ActionNode] = field(
-        default=None, init=False, repr=False
-    )
-    """
-    The action candidate this node currently resolves to, set by `advance` at execution
-    time.
-
-    On failure, `advance` replaces it with the next candidate.
-    """
-
-    @property
-    def designator_type(self) -> Type:
-        return self.underspecified_action.type
-
-    def _next_candidate(self) -> Optional[ActionNode]:
-        """
-        Pull the next grounded action from the iterator and make it the current
-        candidate.
-
-        :return: The new candidate node, or None if the iterator is exhausted.
-        """
-        if self._action_iterator is None:
-            self._action_iterator = self.context.query_backend.evaluate(
-                self.underspecified_action
-            )
-
-        grounded_action = next(self._action_iterator, None)
-        if grounded_action is None:
-            self._action_iterator = None
-            return None
-
-        candidate = ActionNode(designator=grounded_action)
-        self.add_child(candidate)
-        self.current_candidate = candidate
-        return candidate
-
-    def stop_grounding(self) -> None:
-        """
-        Release the action iterator once no further candidate will be requested from it.
-
-        Between candidates the iterator is left suspended (rather than exhausted) so a
-        later retry can resume the search instead of restarting it; a suspended
-        generator keeps every value its frame holds alive, including resources a
-        candidate generator only builds to validate against (for example a location's
-        deep-copied test world). Once a candidate is accepted and no retry will happen,
-        closing the iterator here releases those resources immediately instead of
-        retaining them for this node's whole lifetime.
-        """
-        if self._action_iterator is not None:
-            self._action_iterator.close()
-            self._action_iterator = None
-
-    def notify(self):
-        # Resolution is deferred to execution time: the underspecified statement can
-        # only be grounded once the preceding actions have run and mutated the world
-        # (e.g. the torso is raised, the object is in the gripper). The grounding
-        # happens in UnderspecifiedExecutable, so expansion does nothing here.
-        pass
-
-    def advance(self) -> bool:
-        """
-        Resolve the next candidate and expand it against the current world state.
-
-        Driven by :class:`~pycram.plans.executables.UnderspecifiedExecutable` to ground the
-        action at execution time, and reused by failure handling to retry with a freshly
-        generated action.
-
-        :return: True if a new candidate was generated, False if the iterator is
-            exhausted.
-        """
-        if self._next_candidate() is None:
-            return False
-        self.current_candidate.notify()
-        return True
-
-    def parse(self) -> Executable:
-        # Defer resolution to execution: the returned executable grounds the action
-        # when it is reached, against the world state produced by the preceding nodes.
-        return UnderspecifiedExecutable(node=self, context=self.context)
-
-    def __repr__(self):
-        return f"{self.designator_type.__name__}"
 
 
 @dataclass(eq=True, repr=False)
@@ -538,25 +535,27 @@ class DesignatorNode(PlanNode, ABC):
     def __hash__(self):
         return id(self)
 
-    def __node_info__(self):
-        parent_infos = super().__node_info__()
-        designator_field = [
-            f"{field.name}: {getattr(self.designator, field.name)}"
-            for field in self.designator.fields
-        ]
-        parent_infos.append(
-            "---------------- Designator Parameter --------------------"
+    @property
+    def node_info(self) -> NodeInfo:
+        """
+        :return: The execution details of this node, followed by the designator it
+            manages.
+        """
+        info = super().node_info
+        info.sections.append(
+            NodeInfoSection(
+                NodeDetail.DESIGNATOR_PARAMETER,
+                {
+                    NodeDetail.DESIGNATOR_TYPE: type(self.designator).__name__,
+                    **self.designator.designator_parameter,
+                },
+            )
         )
-        parent_infos.extend(
-            [
-                f"Designator Type: {self.designator.__class__.__name__}",
-                *designator_field,
-            ]
-        )
-        return parent_infos
+        return info
 
-    def __node_label__(self):
-        return f"{self.designator.__class__.__name__}"
+    @property
+    def node_label(self) -> str:
+        return type(self.designator).__name__
 
 
 @dataclass(eq=False, repr=False)
@@ -624,10 +623,10 @@ class ActionNode(DesignatorNode, BuildsMotionStateChart):
     def notify(self):
         if not self.children:
             self.action.expand()
+            self.plan.apply_plan_transformations(self)
 
         # recursively expand nested actions, conditions are only evaluated during execution
-        for child in self.children:
-            child.notify()
+        self.notify_children()
 
     @property
     def body_children(self) -> List[PlanNode]:
@@ -638,7 +637,7 @@ class ActionNode(DesignatorNode, BuildsMotionStateChart):
         return self.children[1:-1]
 
     def add_to_motion_state_chart(
-        self, parent_goal: Goal, executable: GiskardExecutable
+        self, parent_goal: NodeListGoal, executable: GiskardExecutable
     ) -> Goal:
         """
         Add this action's body as its own goal below `parent_goal`.
@@ -673,7 +672,8 @@ class ActionNode(DesignatorNode, BuildsMotionStateChart):
         return executable
 
     def execute(self):
-        self.parse().execute()
+        with self.execution_scope():
+            self.parse().execute()
 
 
 @dataclass(eq=False, repr=False)
@@ -689,6 +689,19 @@ class MotionNode(DesignatorNode, BuildsMotionStateChart):
     """
     Reference to the motion designator which is linked to this node.
     """
+
+    motion_statechart: MotionStatechart | None = field(
+        default=None, init=False, repr=False, compare=False
+    )
+    """
+    The native chart bound to this motion for its current execution.
+    """
+
+    def _start_execution(self) -> None:
+        pass
+
+    def _end_execution(self) -> None:
+        pass
 
     @property
     def motion(self) -> BaseMotion:
@@ -721,7 +734,7 @@ class MotionNode(DesignatorNode, BuildsMotionStateChart):
         return True
 
     def add_to_motion_state_chart(
-        self, parent_goal: Goal, executable: GiskardExecutable
+        self, parent_goal: NodeListGoal, executable: GiskardExecutable
     ) -> Task:
         """
         Add this motion's giskard task below `parent_goal` and record it on

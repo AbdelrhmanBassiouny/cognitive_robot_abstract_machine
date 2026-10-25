@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from giskardpy.middleware.ros2 import rospy
 from giskardpy.middleware.ros2.server_config import ExecutionMode, GiskardServerConfig
 from giskardpy.middleware.ros2.giskard import Giskard
@@ -14,10 +16,10 @@ from rclpy.exceptions import ParameterUninitializedException
 def main():
     rospy.init_node("giskard")
     try:
-        rospy.node.declare_parameters(
+        rospy.get_node().declare_parameters(
             namespace="", parameters=[("robot_description", Parameter.Type.STRING)]
         )
-        robot_description = rospy.node.get_parameter_or("robot_description").value
+        robot_description = rospy.get_node().get_parameter_or("robot_description").value
     except ParameterUninitializedException as e:
         robot_description = load_xacro(
             "package://iai_daisy_description/robots/daisy.urdf.xacro"
@@ -27,7 +29,9 @@ def main():
         robot_interface_config=DAiSyVelocityInterface(),
         server_config=GiskardServerConfig(execution_mode=ExecutionMode.CLOSED_LOOP),
         qp_controller_config=QPControllerConfig(
-            target_frequency=80, prediction_horizon=30
+            # reproduces the braking of the former prediction_horizon=30
+            target_frequency=80,
+            braking_time=timedelta(seconds=0.36),
         ),
     )
     giskard.live()
