@@ -102,6 +102,7 @@ items:
   track: performatives
   depends_on:
   - performatives-core
+  - rdr-core-engine/d-core-expert
   status: not_started
   notes: 'Surfaced during the rdr-refactor plan''s d-core-expert item (PR #98) review: the
     Expert policy''s conclusion/conditions validators (ConclusionDomain.hint(), AnswerName.CONDITIONS.example_assignment,
@@ -124,6 +125,7 @@ items:
   track: performatives
   depends_on:
   - plannode-performable
+  - eql-existential-semantics/threshold-connective
   status: not_started
   notes: 'Phases C and D of the unification. Requires the shared shape functions and the Performable
     mixin from #15 to exist first. Cross-plan note (2026-08-29, from eql-existential-semantics
