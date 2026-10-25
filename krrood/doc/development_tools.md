@@ -19,14 +19,16 @@ for formatting hooks.
 ## Rule sets
 
 The rules are code. A rule set is a subclass of `RuleSet` and becomes a top-level heading
-of `AGENTS.md`. A section is a subclass of its rule set, and a subsection subclasses the
-section it is nested under, so `Errors` subclasses `DesignPrinciples`, which subclasses
-`PythonRules`. A section's heading is its class name in words, in sentence case
-(`ExternalServicesAndCI` becomes "External services and CI"), and it lists its rules as
-class attributes holding an `AgentRule`: a statement and any details that spell it out. For example,
-`Errors.NEVER_TRY_EXCEPT` is one of the Python rules on errors. A rule that names code
-builds that name from the imported object with `CodeReference`, so the rule follows a
-rename.
+of `AGENTS.md`. A section is an enum subclassing `Section`, whose members are its rules:
+each member's value is the rule's statement, or a tuple of the statement and the details
+that spell it out. Every member is an `AgentRule`, so `Errors.NEVER_TRY_EXCEPT.statement`
+is one of the Python rules on errors. A section names the section or rule set it is
+nested under as the type parameter of a `NestedIn` base, listed before `Section`:
+`class Errors(NestedIn[DesignPrinciples], Section)`, where `DesignPrinciples` is in turn
+`NestedIn[PythonRules]`. A section's heading is its class name in words, in
+sentence case (`ExternalServicesAndCI` becomes "External services and CI"). A rule that
+names code builds that name from the imported object with `CodeReference`, so the rule
+follows a rename.
 
 `--rule-sets` chooses the rule sets `AGENTS.md` lists (all of them by default):
 
@@ -86,21 +88,22 @@ rather than krrood.
 
 A repository's own rules are code too. Declare them as sections of `ProjectRules` in
 `agent_rules.py` at the repository root, or in modules that one imports; `krrood
-agents-md` imports that module, and every subclass of `ProjectRules` it declares becomes
-a section under "Project rules":
+agents-md` imports that module, and every section nested in `ProjectRules` becomes a
+section under "Project rules":
 
 ```python
-from krrood.development_tools.agent_rule import AgentRule, ProjectRules
+from krrood.development_tools.agent_rule import NestedIn, ProjectRules, Section
 
 
-class Deployment(ProjectRules):
-    DEPLOY_FROM_TAGS = AgentRule("Deploy only tagged commits")
+class Deployment(NestedIn[ProjectRules], Section):
+    DEPLOY_FROM_TAGS = "Deploy only tagged commits"
+    TAG_RELEASES = "Tag every release", ("Use semantic versions", "Sign the tag")
 ```
 
 ## Changing a rule
 
 Never edit `AGENTS.md`: the comment above each section's rules names the class and
-module they come from. Find the attribute by the rule's text and change it there.
+module they come from. Find the member by the rule's text and change it there.
 
 - A repository's own rule is in a `ProjectRules` section in its `agent_rules.py` or a
   module it imports.

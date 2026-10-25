@@ -26,3 +26,24 @@ class FormatterNotInstalled(DataclassException):
 
     def suggest_correction(self) -> str:
         return 'Install the formatting tools with `pip install "krrood[development-tools]"`.'
+
+
+@dataclass
+class SectionWithoutParent(DataclassException):
+    """
+    Raised when a section of the rules names no section it is nested under.
+    """
+
+    section: type
+    """
+    The section without a parent.
+    """
+
+    def error_message(self) -> str:
+        return f"The section {self.section.__qualname__} names no section it is nested under."
+
+    def suggest_correction(self) -> str:
+        return (
+            "Add `NestedIn[...]`, naming the section or rule set it is nested under, "
+            "before `Section` in the section's bases."
+        )
