@@ -261,6 +261,45 @@ class EventTestCase(unittest.TestCase):
         self.assertEqual(bounding_box, result)
         self.assertEqual(event, event_before_bounding_box)
 
+    def test_one_simple_interval_per_variable_is_a_box(self):
+        event = SimpleEvent.from_data(
+            {self.x: closed(0, 1), self.y: closed(2, 3)}
+        ).as_composite_set()
+        self.assertTrue(event.is_box())
+
+    def test_a_variable_on_several_simple_intervals_is_not_a_box(self):
+        event = SimpleEvent.from_data(
+            {self.x: closed(0, 1) | closed(2, 3), self.y: closed(2, 3)}
+        ).as_composite_set()
+        self.assertFalse(event.is_box())
+
+    def test_several_simple_events_are_not_a_box(self):
+        event = (
+            SimpleEvent.from_data({self.x: closed(0, 1)}).as_composite_set()
+            | SimpleEvent.from_data({self.x: closed(2, 3)}).as_composite_set()
+        )
+        self.assertFalse(event.is_box())
+
+    def test_one_value_per_variable_is_a_singleton(self):
+        a_set = Set.from_simple_sets(SetElement.from_data("a", str_set))
+        event = SimpleEvent.from_data(
+            {self.x: singleton(1), self.a: a_set}
+        ).as_composite_set()
+        self.assertTrue(event.is_singleton())
+
+    def test_a_variable_with_several_values_is_not_a_singleton(self):
+        event = SimpleEvent.from_data(
+            {self.x: singleton(1), self.y: closed(2, 3)}
+        ).as_composite_set()
+        self.assertFalse(event.is_singleton())
+
+    def test_several_points_are_not_a_singleton(self):
+        event = (
+            SimpleEvent.from_data({self.x: singleton(0)}).as_composite_set()
+            | SimpleEvent.from_data({self.x: singleton(1)}).as_composite_set()
+        )
+        self.assertFalse(event.is_singleton())
+
     def test_complex_event_bounding_box_with_references(self):
         event1 = SimpleEvent.from_data(
             {self.x: closed(0, 1) | closed(2, 3), self.y: closed(0, 1) | closed(2, 3)}
