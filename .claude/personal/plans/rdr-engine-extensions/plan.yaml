@@ -61,12 +61,9 @@ items:
   branch: rdr/feature-registry
   pull_request_number: null
   track: feature-layer
-  depends_on: []
-  status: blocked
-  blockers:
-  - Blocked until the Wave-0 stack lands on main.
-  - Stacked on d-core-backend (#210) in the rdr-core-engine plan. Cross-plan, so no dependency
-    chip.
+  depends_on:
+  - rdr-core-engine/d-core-backend
+  status: not started
   notes: Registry + CaseView memoization + EQL name resolution.
 - id: rdr-feature-capture
   title: KA-time feature capture
@@ -82,12 +79,9 @@ items:
   branch: rdr/multi-class
   pull_request_number: null
   track: multi-tree-engines
-  depends_on: []
-  status: blocked
-  blockers:
-  - Blocked until the Wave-0 stack lands on main.
-  - Stacked on d-core-backend (#210) in the rdr-core-engine plan; it lifts the single-valued
-    guard that backend enforces. Cross-plan, so no dependency chip.
+  depends_on:
+  - rdr-core-engine/d-core-backend
+  status: not started
   notes: Lifts the single-valued guard in underspecified.py.
 - id: rdr-general-fixpoint
   title: GRDR naive fixpoint engine
@@ -132,12 +126,8 @@ items:
   depends_on:
   - rdr-concept-trees
   status: blocked
-  blockers:
-  - Blocked on eql/truth-unification (single truth source) and rdr/general-fixpoint (dependency
-    graph + blackboard).
   notes: Justification value object + JustificationRecorder(EvaluationObserver) + retraction
-    propagation over the dependency graph. Also needs eql-truth-unification (#99), now in
-    the eql-core-and-code-generation plan; it has merged, so nothing is waiting on it.
+    propagation over the dependency graph.
 - id: rdr-oo-recognition
   title: 'OO recognition layer: candidate generators + definitions'
   branch: rdr/oo-recognition
