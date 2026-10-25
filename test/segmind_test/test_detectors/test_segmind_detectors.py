@@ -16,12 +16,12 @@ from segmind.datastructures.events import (
     RotationEvent,
     StopRotationEvent,
 )
-from segmind.detectors.atomic_event_detectors_nodes import RotationDetector, StopRotationDetector, ContactDetector, \
-    LossOfContactDetector, TranslationDetector, StopTranslationDetector
+from segmind.detectors.atomic_event_detectors_nodes import RotationDetector, ContactDetector, \
+    TranslationDetector
 from segmind.detectors.base import SegmindContext
 from segmind.detectors.coarse_event_detector_nodes import PickUpDetector, PlacingDetector
-from segmind.detectors.spatial_relation_detector_nodes import SupportDetector, LossOfSupportDetector, \
-    ContainmentDetector, LossOfContainmentDetector, InsertionDetector
+from segmind.detectors.spatial_relation_detector_nodes import SupportDetector, \
+    ContainmentDetector, InsertionDetector
 from segmind.episode_segmenter import EpisodeSegmenterExecutor
 from segmind.statecharts.segmind_statechart import SegmindStatechart
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -38,7 +38,7 @@ from semantic_digital_twin.world_description.world_entity import Body
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _build_executor(world):
+def _build_executor(world: World):
     context = MotionStatechartContext(world=world)
     milk = world.get_body_by_name("milk.stl")
     box1 = world.get_body_by_name("box")
@@ -57,7 +57,7 @@ def events_of(segmind_context, event_type):
 
 def test_contact_detector(_simple_apartment_setup):
     segmind_executor, segmind_context, milk, box1, box2 = _build_executor(_simple_apartment_setup)
-    statechart = SegmindStatechart().build_statechart([ContactDetector(),LossOfContactDetector()])
+    statechart = SegmindStatechart().build_statechart([ContactDetector()])
     segmind_executor.compile(statechart)
     segmind_executor.tick()
 
@@ -84,7 +84,7 @@ def test_contact_detector(_simple_apartment_setup):
 
 def test_support_detector(_simple_apartment_setup):
     segmind_executor, segmind_context, milk, box1, box2 = _build_executor(_simple_apartment_setup)
-    statechart = SegmindStatechart().build_statechart([SupportDetector(), LossOfSupportDetector()])
+    statechart = SegmindStatechart().build_statechart([SupportDetector()])
     milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(-1.7, 0, 0.93, reference_frame=milk.parent_connection.parent)
     segmind_executor.compile(statechart)
     segmind_executor.tick()
@@ -111,33 +111,80 @@ def test_support_detector(_simple_apartment_setup):
     assert len(events_of(segmind_context, LossOfSupportEvent)) == 3
     milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(-1.7, 0, 1.07, yaw=np.pi, reference_frame=milk.parent_connection.parent)
 
-def test_containment_detector(_simple_apartment_setup):
-    segmind_executor, segmind_context, milk, box1, box2 = _build_executor(_simple_apartment_setup)
-    statechart = SegmindStatechart().build_statechart([ContainmentDetector(), LossOfContainmentDetector()])
+def test_containment_detector(box_and_trays):
+    world = box_and_trays.world
+    box = box_and_trays.box
+    segmind_executor = EpisodeSegmenterExecutor(context=MotionStatechartContext(world=world))
+    segmind_context = segmind_executor.context.require_extension(SegmindContext)
+    statechart = SegmindStatechart().build_statechart([SupportDetector(), ContainmentDetector()])
     segmind_executor.compile(statechart)
     segmind_executor.tick()
 
     assert len(events_of(segmind_context, ContainmentEvent)) == 0
 
-    milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(box1.global_pose.x, box1.global_pose.y,
-                                                                                 box1.global_pose.z, reference_frame=milk.parent_connection.parent)
+    box.parent_connection.origin = box_and_trays.set_down_in_the_tray
     segmind_executor.tick()
     assert len(events_of(segmind_context, ContainmentEvent)) == 1
 
-    milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(box2.global_pose.x, box2.global_pose.y,
-                                                                                 box2.global_pose.z, reference_frame=milk.parent_connection.parent)
+    box.parent_connection.origin = box_and_trays.set_down_in_the_hole
     segmind_executor.tick()
     assert len(events_of(segmind_context, ContainmentEvent)) == 2
     assert len(events_of(segmind_context, LossOfContainmentEvent)) == 1
 
-    milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(z=1, reference_frame=milk.parent_connection.parent)
+    box.parent_connection.origin = box_and_trays.lifted_out_of_the_tray
     segmind_executor.tick()
     assert len(events_of(segmind_context, LossOfContainmentEvent)) == 2
-    milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(-1.7, 0, 1.07, yaw=np.pi, reference_frame=milk.parent_connection.parent)
+
+
+def test_containment_detector_ignores_an_object_held_up_inside_a_container(box_and_trays):
+    """
+    Something carried through a container's walls has not been put into it.
+    """
+    world = box_and_trays.world
+    box = box_and_trays.box
+    segmind_executor = EpisodeSegmenterExecutor(context=MotionStatechartContext(world=world))
+    segmind_context = segmind_executor.context.require_extension(SegmindContext)
+    statechart = SegmindStatechart().build_statechart([SupportDetector(), ContainmentDetector()])
+    segmind_executor.compile(statechart)
+
+    box.parent_connection.origin = box_and_trays.held_up_in_the_tray
+    segmind_executor.tick()
+
+    assert len(events_of(segmind_context, ContainmentEvent)) == 0
+
+def test_containment_is_not_looked_for_without_the_supports_it_is_read_from(box_and_trays):
+    """
+    Containment is looked for once an object comes to rest, which only a support
+    detector ticked alongside can tell.
+    """
+    world = box_and_trays.world
+    box = box_and_trays.box
+    segmind_executor = EpisodeSegmenterExecutor(context=MotionStatechartContext(world=world))
+    segmind_context = segmind_executor.context.require_extension(SegmindContext)
+    segmind_executor.compile(SegmindStatechart().build_statechart([ContainmentDetector()]))
+
+    box.parent_connection.origin = box_and_trays.set_down_in_the_tray
+    segmind_executor.tick()
+
+    assert len(events_of(segmind_context, ContainmentEvent)) == 0
+
+
+def test_asking_which_bodies_came_to_rest_twice_gives_the_same_answer(box_and_trays):
+    box = box_and_trays.box
+    tray = box_and_trays.tray
+    detector = ContainmentDetector()
+    segmind_context = SegmindContext()
+    segmind_context.latest_support[box] = {tray}
+
+    first_answer = detector.bodies_come_to_rest(segmind_context, [box])
+    second_answer = detector.bodies_come_to_rest(segmind_context, [box])
+
+    assert first_answer == second_answer == [box]
+
 
 def test_pickup(_simple_apartment_setup):
     segmind_executor, segmind_context, milk, box1, box2 = _build_executor(_simple_apartment_setup)
-    statechart = SegmindStatechart().build_statechart([PickUpDetector(), SupportDetector(), TranslationDetector(), LossOfSupportDetector()])
+    statechart = SegmindStatechart().build_statechart([PickUpDetector(), SupportDetector(), TranslationDetector()])
     milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(-1.7, 0, 0.93, reference_frame=milk.parent_connection.parent)
 
     segmind_executor.compile(statechart)
@@ -160,7 +207,7 @@ def test_pickup(_simple_apartment_setup):
 def test_placing(_simple_apartment_setup):
     segmind_executor, segmind_context, milk, box1, box2 = _build_executor(_simple_apartment_setup)
     statechart = SegmindStatechart().build_statechart(
-        [SupportDetector(), TranslationDetector(), StopTranslationDetector(), PlacingDetector()])
+        [SupportDetector(), TranslationDetector(), PlacingDetector()])
     segmind_executor.compile(statechart)
     segmind_executor.tick()
 
@@ -188,8 +235,8 @@ def test_placing(_simple_apartment_setup):
 def test_pickup_then_place_back_on_same_surface(_simple_apartment_setup):
     segmind_executor, segmind_context, milk, box1, box2 = _build_executor(_simple_apartment_setup)
     statechart = SegmindStatechart().build_statechart(
-        [PickUpDetector(), PlacingDetector(), SupportDetector(), LossOfSupportDetector(),
-         TranslationDetector(), StopTranslationDetector()])
+        [PickUpDetector(), PlacingDetector(), SupportDetector(),
+         TranslationDetector()])
     milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
         x=box2.global_pose.x, y=box2.global_pose.y, z=box2.global_pose.z + 0.56, reference_frame=milk.parent_connection.parent)
 
@@ -250,10 +297,44 @@ def test_translation(_simple_apartment_setup):
     milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(-1.7, 0, 1.07, yaw=np.pi, reference_frame=milk.parent_connection.parent)
 
 
+def test_a_motion_event_states_its_poses_in_the_world_frame(_simple_apartment_setup):
+    world = _simple_apartment_setup
+    segmind_executor, segmind_context, milk, box1, box2 = _build_executor(world)
+    segmind_executor.compile(SegmindStatechart().build_statechart([TranslationDetector()]))
+    segmind_executor.tick()
+
+    for i in range(5):
+        milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
+            x=1 + i * 0.1, y=-3, z=0.25, reference_frame=milk.parent_connection.parent)
+        segmind_executor.tick()
+
+    [translation] = events_of(segmind_context, TranslationEvent)
+    assert translation.world_T_start_pose.reference_frame is world.root
+    assert translation.world_T_current_pose.reference_frame is world.root
+    milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(-1.7, 0, 1.07, yaw=np.pi, reference_frame=milk.parent_connection.parent)
+
+
+def test_a_contact_event_states_the_poses_of_both_objects_in_the_world_frame(
+    _simple_apartment_setup,
+):
+    world = _simple_apartment_setup
+    segmind_executor, segmind_context, milk, box1, box2 = _build_executor(world)
+    segmind_executor.compile(SegmindStatechart().build_statechart([ContactDetector()]))
+    segmind_executor.tick()
+    milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
+        box1.global_pose.x, box1.global_pose.y, box1.global_pose.z, reference_frame=milk.parent_connection.parent)
+    segmind_executor.tick()
+
+    [contact_event] = events_of(segmind_context, ContactEvent)
+    assert contact_event.world_T_tracked_object.reference_frame is world.root
+    assert contact_event.world_T_with_object.reference_frame is world.root
+    milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(-1.7, 0, 1.07, yaw=np.pi, reference_frame=milk.parent_connection.parent)
+
+
 def test_stop_translation(_simple_apartment_setup):
     segmind_executor, segmind_context, milk, box1, box2 = _build_executor(_simple_apartment_setup)
     statechart = SegmindStatechart().build_statechart(
-        [SupportDetector(), TranslationDetector(), StopTranslationDetector(), PlacingDetector()])
+        [SupportDetector(), TranslationDetector(), PlacingDetector()])
     segmind_executor.compile(statechart)
     segmind_executor.tick()
 
@@ -271,39 +352,25 @@ def test_stop_translation(_simple_apartment_setup):
     milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(-1.7, 0, 1.07, yaw=np.pi, reference_frame=milk.parent_connection.parent)
 
 
-def test_insertion(_simple_apartment_setup):
-    segmind_executor, segmind_context, milk, box1, box2 = _build_executor(_simple_apartment_setup)
+def test_insertion(box_and_trays):
+    world = box_and_trays.world
+    box = box_and_trays.box
+    segmind_executor = EpisodeSegmenterExecutor(context=MotionStatechartContext(world=world))
+    segmind_context = segmind_executor.context.require_extension(SegmindContext)
     statechart = SegmindStatechart().build_statechart(
-        [ContactDetector(), InsertionDetector(), LossOfContactDetector(), ContainmentDetector()])
-
-    with segmind_executor.context.world.modify_world():
-        hole = Body(
-            name=PrefixedName("box_hole"),
-            collision=ShapeCollection([Box(scale=Scale(1, 1, 1))]),
-            visual=ShapeCollection([Box(scale=Scale(1, 1, 1))]),
-        )
-        hole_connection = FixedConnection(
-            parent=segmind_executor.context.world.root,
-            child=hole,
-            parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
-                2, 2, 2, reference_frame=segmind_executor.context.world.root
-            ),
-        )
-        segmind_executor.context.world.add_connection(hole_connection)
+        [ContactDetector(), SupportDetector(), InsertionDetector(), ContainmentDetector()])
     segmind_executor.compile(statechart)
     segmind_executor.tick()
 
     assert len(events_of(segmind_context, InsertionEvent)) == 0
-    milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(hole.global_pose.x, hole.global_pose.y,
-                                                                                 hole.global_pose.z, reference_frame=milk.parent_connection.parent)
 
+    box.parent_connection.origin = box_and_trays.set_down_in_the_hole
     segmind_executor.tick()
 
-    milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(box2.global_pose.x,box2.global_pose.y,box2.global_pose.z, reference_frame=milk.parent_connection.parent)
+    box.parent_connection.origin = box_and_trays.lifted_out_of_the_tray
     segmind_executor.tick()
 
     assert len(events_of(segmind_context, InsertionEvent)) == 1
-    milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(-1.7, 0, 1.07, yaw=np.pi, reference_frame=milk.parent_connection.parent)
 
 
 def test_rotation(_simple_apartment_setup):
@@ -330,7 +397,7 @@ def test_rotation(_simple_apartment_setup):
 def test_stop_rotation(_simple_apartment_setup):
     segmind_executor, segmind_context, milk, box1, box2 = _build_executor(_simple_apartment_setup)
     statechart = SegmindStatechart().build_statechart(
-        [RotationDetector(), StopRotationDetector()])
+        [RotationDetector()])
     segmind_executor.compile(statechart)
     segmind_executor.tick()
 
@@ -362,7 +429,7 @@ def test_slow_motion_with_all_motion_detectors(_simple_apartment_setup):
     """
     segmind_executor, segmind_context, milk, box1, box2 = _build_executor(_simple_apartment_setup)
     statechart = SegmindStatechart().build_statechart(
-        [TranslationDetector(), StopTranslationDetector(), RotationDetector(), StopRotationDetector()])
+        [TranslationDetector(), RotationDetector()])
     segmind_executor.compile(statechart)
 
     # Move the object to its start pose and let the pose windows settle, so that the events

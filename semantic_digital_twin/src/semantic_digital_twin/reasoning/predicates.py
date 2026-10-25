@@ -30,8 +30,6 @@ from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech impor
     Verb,
 )
 from krrood.inheritance_path_length import inheritance_path_length
-from random_events.interval import Interval
-from semantic_digital_twin.datastructures.variables import SpatialVariables
 from semantic_digital_twin.spatial_computations.ik_solver import (
     MaxIterationsException,
     UnreachableException,
@@ -97,7 +95,9 @@ class InContactWith(Triple[TBody, TBody]):
             the collision detector reports no result for the pair at all.
         """
         detector = self.body1._world.collision_manager.collision_detector
-        result = detector.check_collision_between_bodies(self.body1, self.body2)
+        result = detector.check_collision_between_bodies(
+            self.body1, self.body2, distance=self.maximum_distance
+        )
         if result is None:
             return None
         return result.distance
@@ -193,8 +193,8 @@ def compute_euclidean_planar_distance(
     :return: The Euclidean distance between the two bodies in the 2D plane after
         ignoring the specified dimension.
     """
-    body1_position = body1.global_pose.to_position()
-    body2_position = body2.global_pose.to_position()
+    body1_position = body1.global_pose.position
+    body2_position = body2.global_pose.position
 
     if np.allclose(ignore_dimension, Vector3.X()):
         body1_position.x = 0.0
@@ -214,9 +214,10 @@ class SupportedBy(Triple[TBody, TBody]):
     """
     Whether one body rests on another.
 
-    Read from how far the two bodies' bounding boxes overlap vertically: enough overlap
-    is unhandled clipping rather than support, which is what
-    :attr:`maximum_intersection_height` draws the line at.
+    An object rests on what touches it and pushes it up, which is read off how the two
+    meet rather than from where their middles lie: a container carries its own middle
+    above what stands on its floor, a wall's bounding box reaches far past the wall, and
+    what touches an object only from the side does not hold it up. Up is the world's up.
     """
 
     supported: TBody
@@ -231,8 +232,26 @@ class SupportedBy(Triple[TBody, TBody]):
 
     maximum_intersection_height: float = 0.1
     """
-    How far the two may overlap vertically, in metres, before the reading is refused as
-    unhandled clipping.
+    How deep, in metres, the two may sink into each other. Sunk deeper, they are a
+    clipping the simulation did not resolve, and the reading is refused.
+    """
+
+    contact_tolerance: float = 0.005
+    """
+    How far apart, in metres, the two may be and still count as touching, and so how
+    far above the supporting body the supported body may stand and still rest on it.
+
+    A body is set down by a motion that stops where it can rather than exactly on the
+    surface, so a support read from overlapping volume alone would hold for almost no
+    placement at all. Measured on a robot stacking boxes, a placement missed the surface
+    it was aimed at by 1.9 mm; the default leaves room for that while staying far below
+    the centimetres by which a body that is genuinely in the air clears a surface.
+    """
+
+    maximum_slope: float = np.radians(30.0)
+    """
+    How steeply, in radians, the supporting body may slope where the two meet and still
+    hold the supported body up.
     """
 
     @property
@@ -262,31 +281,23 @@ class SupportedBy(Triple[TBody, TBody]):
         )
 
     def __call__(self) -> bool:
-        if Below(
-            self.supported.center_of_mass,
-            self.supporting.center_of_mass,
-            self.supported.global_transform,
-        )():
-            return False
-        supported_bounding_box = (
-            self.supported.collision.as_bounding_box_collection_at_origin(
-                HomogeneousTransformationMatrix(reference_frame=self.supported)
-            ).event
-        )
-        supporting_bounding_box = (
-            self.supporting.collision.as_bounding_box_collection_at_origin(
-                HomogeneousTransformationMatrix(reference_frame=self.supported)
-            ).event
-        )
-
-        intersection = (supported_bounding_box & supporting_bounding_box).bounding_box()
-
-        if intersection.is_empty():
+        if self.supported is self.supporting:
             return False
 
-        z_intersection: Interval = intersection[SpatialVariables.z.value]
-        size = sum([si.upper - si.lower for si in z_intersection.simple_sets])
-        return size < self.maximum_intersection_height
+        collision_detector = self.supported._world.collision_manager.collision_detector
+        touch = collision_detector.check_collision_between_bodies(
+            self.supported, self.supporting, distance=self.contact_tolerance
+        )
+        if touch is None or touch.distance >= self.contact_tolerance:
+            return False
+
+        if touch.body_a is not self.supported:
+            touch = touch.reverse()
+        root_V_push = touch.root_V_contact_normal_from_b_to_a[:3]
+        if root_V_push[2] < np.cos(self.maximum_slope) * np.linalg.norm(root_V_push):
+            return False
+
+        return -touch.distance < self.maximum_intersection_height
 
 
 @dataclass(eq=False)
@@ -504,8 +515,8 @@ class ViewDependentSpatialRelation(PointSpatialRelation, ABC):
             reference_frame=self.point_of_view.reference_frame,
         )
 
-        s_body = front_norm.dot(self.point.to_vector3())
-        s_other = front_norm.dot(self.other.to_vector3())
+        s_body = front_norm.dot(self.point.vector3)
+        s_other = front_norm.dot(self.other.vector3)
         return (s_body - s_other).compile()()
 
 
@@ -613,41 +624,33 @@ class InsideOf(KinematicStructureEntitySpatialRelation):
 
     def compute_containment_ratio(self) -> float:
         """
-        Compute the containment ratio of self.body inside self.other.
+        :return: The fraction of the vertices of :attr:`body` that lie within the
+            world-aligned bounding box of :attr:`other`, or 0 when either has no mesh or
+            that box encloses no volume.
         """
-        if self.other.combined_mesh is None:
-            return 0.0
-
-        # Get meshes in their local (body) frames
-        mesh_a_local = self.body.combined_mesh
-        mesh_b_local = self.other.combined_mesh
-
-        # Check if either mesh is empty
+        body_mesh = self.body.combined_mesh
+        other_mesh = self.other.combined_mesh
         if (
-            mesh_a_local is None
-            or mesh_a_local.is_empty
-            or mesh_b_local is None
-            or mesh_b_local.is_empty
+            body_mesh is None
+            or body_mesh.is_empty
+            or other_mesh is None
+            or other_mesh.is_empty
         ):
             return 0.0
 
-        # Transform meshes from body frame to world frame
-        mesh_a = mesh_a_local.copy()
-        mesh_a.apply_transform(self.body.global_transform.to_np())
-
-        mesh_b = mesh_b_local.copy()
-        mesh_b.apply_transform(self.other.global_transform.to_np())
-
-        # Use bounding box of mesh_b to check if mesh_a is inside mesh_b
-        mesh_b_bbox = mesh_b.bounding_box
-
-        if not mesh_b_bbox.is_watertight:
+        other_vertices = trimesh.transform_points(
+            other_mesh.vertices, self.other.global_transform.to_np()
+        )
+        lower = other_vertices.min(axis=0)
+        upper = other_vertices.max(axis=0)
+        if np.any(upper <= lower):
             return 0.0
 
-        inside = mesh_b_bbox.contains(mesh_a.vertices)
-        if len(inside) == 0:
-            return 0.0
-        return sum(inside) / len(inside)
+        body_vertices = trimesh.transform_points(
+            body_mesh.vertices, self.body.global_transform.to_np()
+        )
+        inside = np.all((body_vertices >= lower) & (body_vertices <= upper), axis=1)
+        return float(inside.mean())
 
     @classmethod
     def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:

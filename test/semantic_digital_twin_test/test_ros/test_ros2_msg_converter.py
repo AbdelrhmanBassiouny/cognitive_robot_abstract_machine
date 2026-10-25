@@ -1,14 +1,26 @@
 import os
+import subprocess
+import sys
 
 import geometry_msgs.msg as geometry_msgs
+import pytest
 from importlib.resources import files
 from pathlib import Path
 
+from krrood.utils import get_full_class_name
+from semantic_digital_twin.adapters.ros.exceptions import (
+    CannotConvertRos2ToSemDTError,
+    CannotConvertSemDTToRos2Error,
+)
 from semantic_digital_twin.adapters.ros.msg_converter import (
     Ros2ToSemDTConverter,
     SemDTToRos2Converter,
 )
+from semantic_digital_twin.adapters.ros.ros2_to_semdt_converters import (
+    LaserScanToSemDTConverter,
+)
 from semantic_digital_twin.adapters.ros.semdt_to_ros2_converters import (
+    BoxToRos2Converter,
     PoseToRos2Converter,
 )
 from semantic_digital_twin.spatial_types import (
@@ -38,8 +50,8 @@ def test_convert_transform(cylinder_bot_world):
     transformation_matrix = Ros2ToSemDTConverter.convert(
         transform, world=cylinder_bot_world
     )
-    position = transformation_matrix.to_position().evaluate()
-    rotation = transformation_matrix.to_quaternion().evaluate()
+    position = transformation_matrix.position.evaluate()
+    rotation = transformation_matrix.quaternion.evaluate()
     assert position[0] == transform.transform.translation.x
     assert position[1] == transform.transform.translation.y
     assert position[2] == transform.transform.translation.z
@@ -134,8 +146,8 @@ def test_convert_pose_stamped(cylinder_bot_world):
 
     pose = Ros2ToSemDTConverter.convert(pose_msg, world=cylinder_bot_world)
 
-    pos = pose.to_position().evaluate()
-    quat = pose.to_quaternion().evaluate()
+    pos = pose.position.evaluate()
+    quat = pose.quaternion.evaluate()
 
     assert pos[0] == pose_msg.pose.position.x
     assert pos[1] == pose_msg.pose.position.y
@@ -164,8 +176,8 @@ def test_convert_pose(cylinder_bot_world):
 
     pose = Ros2ToSemDTConverter.convert(pose_msg, world=cylinder_bot_world)
 
-    pos = pose.to_position().evaluate()
-    quat = pose.to_quaternion().evaluate()
+    pos = pose.position.evaluate()
+    quat = pose.quaternion.evaluate()
 
     assert pos[0] == pose_msg.position.x
     assert pos[1] == pose_msg.position.y
@@ -267,3 +279,89 @@ def test_convert_mesh_shape(cylinder_bot_world):
 
     shape2 = SemDTToRos2Converter.convert(mesh2)
     assert shape == shape2
+
+
+# %% drawing a mesh from its file
+
+
+def textured_chair(cylinder_bot_world) -> Mesh:
+    """
+    :return: A mesh whose file paints it with a texture, placed in the map of
+        `cylinder_bot_world`.
+    """
+    ply_directory = os.path.join(
+        Path(files("semantic_digital_twin")).parent.parent, "resources", "ply"
+    )
+    return Mesh.from_ply_file(
+        ply_file_path=os.path.join(ply_directory, "chair.ply"),
+        texture_file_path=os.path.join(ply_directory, "chair_texture.png"),
+        origin=HomogeneousTransformationMatrix.from_xyz_rpy(
+            reference_frame=cylinder_bot_world.get_body_by_name("map")
+        ),
+    )
+
+
+def test_a_textured_mesh_is_drawn_with_the_materials_of_its_file(cylinder_bot_world):
+    marker = SemDTToRos2Converter.convert(textured_chair(cylinder_bot_world))
+
+    assert marker.mesh_use_embedded_materials
+
+
+def test_drawing_a_mesh_leaves_its_geometry_unloaded(cylinder_bot_world):
+    """
+    The marker refers to the mesh's file, so converting it must not keep the mesh's
+    geometry and textures in memory.
+    """
+    mesh = textured_chair(cylinder_bot_world)
+
+    SemDTToRos2Converter.convert(mesh)
+
+    assert "mesh" not in vars(mesh)
+
+
+# %% nothing converts the given object
+
+
+def test_a_message_no_converter_handles_is_reported_as_unconvertible_to_semdt():
+    with pytest.raises(CannotConvertRos2ToSemDTError):
+        Ros2ToSemDTConverter.get_to_converter(object())
+
+
+def test_an_object_no_converter_handles_is_reported_as_unconvertible_to_ros2():
+    with pytest.raises(CannotConvertSemDTToRos2Error):
+        SemDTToRos2Converter.get_to_converter(object())
+
+
+# %% discovery in a process that imported nothing else
+
+
+def run_cold_import_script(script_name: str) -> str:
+    """
+    :param script_name: Name of the script beside this module to run.
+    :return: What the script printed, with surrounding whitespace removed.
+    """
+    result = subprocess.run(
+        [sys.executable, str(Path(__file__).parent / script_name)],
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    return result.stdout.strip()
+
+
+def test_converters_are_found_without_anything_having_imported_them():
+    found = run_cold_import_script("converter_lookup_from_cold_import.py")
+
+    assert found.splitlines() == [
+        LaserScanToSemDTConverter.__name__,
+        BoxToRos2Converter.__name__,
+    ]
+
+
+def test_a_message_is_serializable_once_its_serializer_module_is_imported():
+    serialized_type = run_cold_import_script(
+        "message_serialization_from_cold_import.py"
+    )
+
+    assert serialized_type == get_full_class_name(geometry_msgs.Point)

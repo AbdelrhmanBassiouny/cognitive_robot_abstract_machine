@@ -10,7 +10,6 @@ from dataclasses import dataclass, field
 
 import numpy as np
 from krrood.entity_query_language.factories import a, cause, confounder, variable
-from krrood.ormatic.data_access_objects.helper import to_dao
 from krrood.parametrization.model_registries import RelationalCircuitRegistry
 from krrood.parametrization.parameterizer import UnderspecifiedParameters
 from random_events.product_algebra import SimpleEvent
@@ -27,7 +26,7 @@ from probabilistic_model.learning.learning_method import StratifiedLearning
 from probabilistic_model.probabilistic_circuit.relational.causal import (
     RelationalCausalCircuit,
 )
-from probabilistic_model.probabilistic_circuit.relational.rspn import (
+from probabilistic_model.probabilistic_circuit.relational.relational_probabilistic_circuit import (
     RelationalProbabilisticCircuit,
 )
 
@@ -200,14 +199,13 @@ class BranchingAtomCountCausalQuery:
             MutagenesisMoleculeAggregations
         ).branching_atom_count()
         model = RelationalProbabilisticCircuit(
-            MutagenesisMolecule,
             monte_carlo_sample_count=monte_carlo_sample_count,
             learning_method=StratifiedLearning(
                 variables=[branching_atom_count_variable_expression._name_],
                 method=JointProbabilityTree(),
             ),
         )
-        model.fit([to_dao(molecule) for molecule in training_molecules])
+        model.fit(training_molecules)
 
         query = self._build_query(atom_count, bond_count)
         registry = RelationalCircuitRegistry(relational_probabilistic_circuit=model)
@@ -325,7 +323,7 @@ class BranchingAtomCountCausalQuery:
             :meth:`classify_by_branching_atom_count_and_indicator_1` groups by.
         """
         return (
-            MutagenesisMoleculeAggregations(instance=molecule).branching_atom_count(),
+            MutagenesisMoleculeAggregations(role_taker=molecule).branching_atom_count(),
             molecule.indicator_1,
         )
 
@@ -382,9 +380,10 @@ class BranchingAtomCountCausalQuery:
         event = SimpleEvent.from_data(
             {branching_atom_count_variable: float(branching_atom_count_value)}
         ).as_composite_set()
-        truncated_circuit, _ = interventional_circuit.truncated(
+        truncated_circuit = interventional_circuit.truncated(
             event.fill_missing_variables_pure(interventional_circuit.variables)
-        )
+        ).distribution
+
         true_event = (
             SimpleEvent.from_data({mutagenic_variable: True})
             .as_composite_set()
