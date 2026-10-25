@@ -1,19 +1,20 @@
 schema_version: 1
 id: general-video-production
 title: General video production for experiments
-description: Pull the reusable video-making machinery out of the ICRA 2027 supplementary video (#429)
-  into a general package on main that any experiment can use to render narrated, subtitled videos from
-  its own scenes, then rebuild the ICRA video on top of it.
+description: Pull the reusable video-making machinery out of the ICRA 2027 supplementary video
+  (#429) into a general package on main that any experiment can use to render narrated, subtitled
+  videos from its own scenes, then rebuild the ICRA video on top of it.
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 471
 waves:
 - id: wave-1
   name: 'Wave 1: General package on main'
-  description: A usable video package on main, proven by rendering a minimal video in its tests.
+  description: A usable video package on main, proven by rendering a minimal video in its
+    tests.
 - id: wave-2
   name: 'Wave 2: Built on the package'
-  description: The ICRA video keeps only its own scenes and imports the rest; animated explainer scenes
-    (Naren's Manim reference) join the package as a second kind of scene.
+  description: The ICRA video keeps only its own scenes and imports the rest; animated explainer
+    scenes (Naren's Manim reference) join the package as a second kind of scene.
 - id: wave-3
   name: 'Wave 3: Figure close-ups for everyone'
   description: The typst-figure scenes made general.
@@ -31,18 +32,17 @@ tracks:
   name: Explainer animation
   wave: wave-2
 items:
-- id: video-core
-  title: A general video package on main that renders a minimal narrated video end to end
-  branch: claude/pensive-albattani-2j50zr
-  pull_request_number: 472
+- id: krrollywood-on-krrimage
+  title: krrollywood (cram2/crollywood) depends on krrimage instead of its own frame types
+  repository: cram2/crollywood
   track: video-package
-  status: deferred
-  session: https://claude.ai/code/session_01HQ4cooKAuKSVwcZpKfsCUc
-  blockers: []
-  depends_on: []
-  notes: '#472 (cram2#742) will not be merged. crollywood becomes its own repository, cram2/crollywood,
-    renamed krrollywood, and depends on krrimage (domain-models plan, items krrimage and krrollywood-on-krrimage).
-    Its shared frame types moved to krrimage (#524).'
+  status: not_started
+  depends_on:
+  - domain-models/krrimage
+  notes: '#472 (cram2#742) will not be merged: crollywood becomes its own repository, cram2/crollywood,
+    renamed krrollywood, on krrimage instead of its own frame types (moved to krrimage in
+    #524).'
+  branch: claude/krrollywood-on-krrimage
 - id: icra-video-on-core
   title: '#429 rebuilt on the general package, keeping only the ICRA scenes'
   branch: claude/the-icra-video-shows-the-plan-being-answered
@@ -50,17 +50,14 @@ items:
   track: icra-video
   status: not_started
   depends_on:
-  - video-core
-  notes: '#429 imports crollywood (renamed from cramcorder) and must follow its API changes listed on
-    #471 (the latest: the renames of ee1e7bdad; an experiments/video module that restores SubmissionLimits,
-    its check and VideoOutsideTheLimits from ee1e7bdad with their tests, as a VideoProduction subclass
-    overriding size_allowed_for; and a ResultsTable subclass of TabularDataSlide there). #429 is based
-    on real-experiments-tracy-icra-2026, so the package must reach that branch first (merge main into
-    it once video-core lands). The ICRA branch keeps sources, perception, twin, grasp, rules, attribution,
-    perturbations, long_term, script, icra_video, the framework.typ changes, backend inks, TABLE_FRAMING
-    and the icra_2027 limits.
-
-    Targets the krrollywood repository instead of #472.'
+  - krrollywood-on-krrimage
+  notes: '#429 imports krrollywood and must follow its API changes listed on #471 (latest:
+    ee1e7bdad''s renames, and an experiments/video module restoring SubmissionLimits and VideoOutsideTheLimits
+    as a VideoProduction subclass, with a ResultsTable slide). #429 is based on real-experiments-tracy-icra-2026,
+    so the package must reach that branch first (merge main into it once krrollywood-on-krrimage
+    lands). The ICRA branch keeps sources, perception, twin, grasp, rules, attribution, perturbations,
+    long_term, script, icra_video, the framework.typ changes, backend inks, TABLE_FRAMING
+    and the icra_2027 limits.'
 - id: figure-stages-general
   title: Typst-figure close-ups (magnify, pointer, answering) made general
   branch: claude/general-figure-scenes
@@ -68,19 +65,19 @@ items:
   status: not_started
   depends_on:
   - icra-video-on-core
-  notes: stages.py and figure.py behind a figure abstraction, so other experiments grow close-ups from
-    their own figures.
+  notes: stages.py and figure.py behind a figure abstraction, so other experiments grow close-ups
+    from their own figures.
 - id: manim-scenes
   title: Animated explainer scenes drawn with Manim, narrated and timed by the package
   branch: claude/video-manim-scenes
   track: explainer-animation
   status: not_started
   depends_on:
-  - video-core
-  notes: 'Stacked on #472. An AnimatedScene in crollywood.animation (its own optional extra, since Manim
-    needs cairo and pango) turns a Manim scene into a TimelineScene''s video: the storyboard hands it
-    each NarratedLine''s spoken length (replacing timing.json), one beat per line (the beats-used check
-    becomes an exception), no sound or captions of its own, rendered to PNG frames or a lossless clip
-    and read back so the picture is compressed once.
+  - krrollywood-on-krrimage
+  notes: 'An AnimatedScene in crollywood.animation (its own optional extra, since Manim needs
+    cairo and pango) turns a Manim scene into a TimelineScene''s video: the storyboard hands
+    it each NarratedLine''s spoken length (replacing timing.json), one beat per line (the
+    beats-used check becomes an exception), no sound or captions of its own, rendered to PNG
+    frames or a lossless clip and read back so the picture is compressed once.
 
     Targets the krrollywood repository instead of #472.'
