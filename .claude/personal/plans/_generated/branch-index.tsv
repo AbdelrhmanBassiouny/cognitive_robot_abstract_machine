@@ -95,7 +95,6 @@ claude/eql-underspecified-queries-hwufbl	montessori-eql-stack
 montessori_detachable_panels	montessori-eql-stack
 claude/clever-carson-wp7c09	montessori-perception-split
 claude/ecstatic-knuth-curscv	montessori-perception-split
-eql-correlated-quantifiers	ontomatic-port
 eql-predicate-call-memo	ontomatic-port
 ormatic-collection-translation	ontomatic-port
 ormatic-identifier-selection	ontomatic-port
@@ -108,17 +107,6 @@ abox-loader	ontomatic-port
 owl2rl-consistency-check	ontomatic-port
 closure-verification	ontomatic-port
 owl2bench-experiments	ontomatic-port
-rl-unsupported-constructs	ontomatic-port
-rl-data-properties	ontomatic-port
-rl-nested-expressions	ontomatic-port
-rl-runtime-classification	ontomatic-port
-roles-without-markers	ontomatic-port
-inference-retraction	ontomatic-port
-owl-profile-detection	ontomatic-port
-el-classification	ontomatic-port
-existential-witnesses	ontomatic-port
-open-world-query-answers	ontomatic-port
-sroiq-classification	ontomatic-port
 D-core-underspecified	rdr-core-engine
 D-core-corner-case	rdr-core-engine
 D-core-serialization	rdr-core-engine
