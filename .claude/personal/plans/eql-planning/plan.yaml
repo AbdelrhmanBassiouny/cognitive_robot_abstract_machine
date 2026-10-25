@@ -29,27 +29,17 @@ tracks:
   name: Constraints and external planners
   wave: evaluation
 items:
-- id: correlated-quantifiers
-  title: Quantifiers range per outer binding, so goals with exists, not_ and for_all are correct
-  branch: fix/eql-correlated-quantifiers
-  pull_request_number: 495
-  track: eql-prerequisites
-  status: in_progress
-  notes: Already merged into aamas27-unification-revision. Also listed in ontomatic-port as
-    eql-correlated-quantifiers, which records no PR; overlaps eql-existential-semantics.
 - id: state-aware-predicate-cache
   branch: eql-planning/state-aware-predicate-cache
   title: Predicate results cached per state, not per argument tuple alone
   track: eql-prerequisites
   depends_on:
   - fluent-state-overlay
+  - ontomatic-port/eql-predicate-call-memo
   status: deferred
   notes: 'Changes the per-argument cache (ontomatic-port eql-predicate-call-memo, commit 08f9178dd
     on aamas27-unification-revision): fold into whichever PR lands that cache. Keys on the
     State that fluent-state-overlay introduces. Deferred at kickoff on 2026-10-20.'
-  blockers:
-  - 'eql-predicate-call-memo has no PR; it waits on #495 (needs-resolution).'
-  - fluent-state-overlay has not started, so there is no State to key the cache on.
 - id: fluent-state-overlay
   branch: eql-planning/fluent-state-overlay
   title: Fluents and a State overlay that EQL queries are evaluated against
@@ -69,7 +59,7 @@ items:
   track: planning-core
   depends_on:
   - action-schema-progression
-  - correlated-quantifiers
+  - eql-existential-semantics/correlated-quantifiers
   status: not_started
 - id: regression-and-explanation
   branch: eql-planning/regression-and-explanation
