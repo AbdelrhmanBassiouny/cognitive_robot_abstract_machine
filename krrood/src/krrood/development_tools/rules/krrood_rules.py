@@ -21,8 +21,10 @@ from krrood.development_tools.agent_rule import (
 )
 from krrood.exceptions import DataclassException
 from krrood.ormatic.utils import classproperty
+from krrood.patterns.generic_enumeration import GenericEnumeration
 from krrood.patterns.path_enumeration import PathEnumeration
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
+from krrood.utils import get_generic_type_parameters
 
 
 class Errors(Subsection[KrroodRules]):
@@ -86,4 +88,14 @@ class TypeHints(Subsection[KrroodRules]):
         f"{CodeReference(SubClassSafeGeneric.get_type_of_generic_parameter).name}, "
         "never via `__orig_bases__`. Such "
         "classes cannot be frozen dataclasses"
+    )
+
+    GENERIC_ENUMERATIONS = (
+        f"A generic enum inherits {CodeReference(Generic).name} and then "
+        f"{CodeReference(GenericEnumeration).path} instead of "
+        f"{CodeReference(SubClassSafeGeneric).name}, whose metaclass conflicts with "
+        "the enum's, so a subclass binds the parameter by subscripting it "
+        "(`class MemberOfFamily(Family[ConcreteType])`) while subscripting with a "
+        "member's name still looks the member up. Read a bound type with "
+        f"{CodeReference(get_generic_type_parameters).path}"
     )

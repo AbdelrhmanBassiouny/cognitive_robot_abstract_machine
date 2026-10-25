@@ -9,7 +9,6 @@ import importlib.util
 import re
 import sys
 from dataclasses import dataclass
-from enum import Enum, EnumMeta
 from pathlib import Path
 from types import ModuleType
 
@@ -18,6 +17,7 @@ from typing_extensions import Any, Callable, Generic, TypeVar
 from krrood.development_tools.exceptions import SectionWithoutParent
 from krrood.development_tools.repository_files import RepositoryInstructionsFile
 from krrood.ormatic.utils import classproperty
+from krrood.patterns.generic_enumeration import GenericEnumeration
 from krrood.utils import get_generic_type_parameters
 
 # %% code named by rules
@@ -84,23 +84,7 @@ class AgentRule:
 # %% sections
 
 
-class SectionType(EnumMeta):
-    """
-    The type of every section, which lets a section be subscripted with the section it
-    is nested under, as well as with the name of one of its rules.
-    """
-
-    def __getitem__(cls, key: str | type[Section]) -> Any:
-        """
-        :param key: The name of a rule, or the section a subsection is nested under.
-        :return: The rule of that name, or the subsection base naming that section.
-        """
-        if isinstance(key, type):
-            return cls.__class_getitem__(key)
-        return super().__getitem__(key)
-
-
-class Section(AgentRule, Enum, metaclass=SectionType):
+class Section(AgentRule, GenericEnumeration):
     """
     A section of ``AGENTS.md``, whose members are the rules it lists. A member's value
     is the rule's statement, or its statement and details. A section nested under

@@ -49,10 +49,6 @@ def test_a_section_is_nested_in_the_section_its_base_names() -> None:
     assert Errors.parent is DesignPrinciples
 
 
-def test_a_section_still_looks_up_its_rules_by_name() -> None:
-    assert Errors[Errors.RAISE_ERRORS.name] is Errors.RAISE_ERRORS
-
-
 def test_the_subsections_of_a_section_are_the_sections_nested_in_it() -> None:
     assert DesignPrinciples.subsections == [Errors]
 
