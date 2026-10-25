@@ -1,10 +1,11 @@
-PR #517 (draft; head claude/festive-pascal-g09gl3, same commit as this branch): dev tools in krrood.
+PR #517 (draft; head claude/festive-pascal-g09gl3, same commit as this branch; base claude/generic-enumeration = PR #530): dev tools in krrood.
 
 Plan
-- krrood.development_tools: `krrood format`; `krrood agents-md` generates whole AGENTS.md (Jinja) from sections = `Section(AgentRule, Enum)` enums (members are rules), nested via `class X(Subsection[Parent])` (Subsection is a Section; Section subclasses new pattern krrood.patterns.generic_enumeration.GenericEnumeration, whose metaclass sends str keys to member lookup, others to Generic); rule sets = RuleSet subclasses; project sections imported via repo agent_rules.py.
+- krrood.development_tools: `krrood format`; `krrood agents-md` generates whole AGENTS.md (Jinja) from sections = `Section(AgentRule, GenericEnumeration)` enums (members are rules), nested via `class X(Subsection[Parent])`; rule sets = RuleSet subclasses; project sections via repo agent_rules.py.
+- PR #530 (draft, claude/generic-enumeration off main): krrood.patterns.generic_enumeration.GenericEnumeration + InvalidEnumerationKey(KeyError, TypeError) + tests. #517 merges that branch; retarget #517 to main once #530 lands.
 
 Done
-- Pushed (after 0225c9f1e) InvalidEnumerationKey(KeyError, TypeError) for non-name keys on non-generic enums; 46 tests pass, AGENTS.md regenerated.
+- Split the pattern into #530 (ce1461a61); #517 at d8a67595c (merge of it, no content change); 46 tests pass.
 
 Next
-- CI on latest head not yet seen; wait for further review.
+- CI on both not yet seen; wait for review.
