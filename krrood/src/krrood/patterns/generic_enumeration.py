@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from enum import Enum, EnumMeta
 
-from typing_extensions import Any
+from typing_extensions import Any, Generic
+
+from krrood.patterns.exceptions import InvalidEnumerationKey
 
 # %% enumeration that can be generic
 
@@ -19,9 +21,13 @@ class GenericEnumerationType(EnumMeta):
             are bound to.
         :return: The member of that name, or the enumeration with its parameters bound
             to those types.
+        :raises InvalidEnumerationKey: If the key is not a name and the enumeration has
+            no unbound type parameter.
         """
         if isinstance(key, str):
             return super().__getitem__(key)
+        if not issubclass(cls, Generic) or not cls.__parameters__:
+            raise InvalidEnumerationKey(cls, key)
         return cls.__class_getitem__(key)
 
 
