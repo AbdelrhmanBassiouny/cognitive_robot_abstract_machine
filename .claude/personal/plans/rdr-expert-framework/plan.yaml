@@ -23,13 +23,9 @@ items:
   branch: null
   pull_request_number: null
   track: capability-guards
-  depends_on: []
-  status: blocked
-  blockers:
-  - Blocked until the Wave-0 engine stack lands on main.
-  - Needs d-core-single-class (#159) in the rdr-core-engine plan, whose condition resolver
-    carries the _try_auto_resolve clauses this guard generalizes. Cross-plan, so no dependency
-    chip.
+  depends_on:
+  - rdr-core-engine/d-core-single-class
+  status: not started
   notes: 'Abstract Expert declares full question vocabulary; each impl carries an evaluable
     EQL capability guard. Lit: blackboard activation conditions, Contract-Net, Chain-of-Responsibility.'
 - id: expert-ensembles
@@ -50,9 +46,6 @@ items:
   track: capability-guards
   depends_on:
   - expert-capability-guards
-  status: blocked
-  blockers:
-  - Blocked on expert-capability-guards and W1 (rdr-why-answer).
-  - Also needs rdr-why-answer (#81) in the rdr-explanation plan, whose rule-tree explanation
-    machinery this reuses. Cross-plan, so no dependency chip.
+  - rdr-explanation/rdr-why-answer
+  status: not started
   notes: The guard is EQL, so it is inspectable and verbalizable. Ties to the Why track.
