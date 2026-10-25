@@ -21,11 +21,11 @@ class DifferentiableContinuousLayer(DifferentiableInputLayer, ABC):
     """
 
 
-class DifferentiableContinuousLayerWithFiniteSupport(
+class DifferentiableContinuousLayerWithConstrainedSupport(
     DifferentiableContinuousLayer, ABC
 ):
     """
-    Abstract class for continuous univariate input units with finite support.
+    Abstract class for continuous univariate input units with constrained support.
     """
 
     interval: jax.Array = eqx.field(static=True)

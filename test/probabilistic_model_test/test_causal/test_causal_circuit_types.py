@@ -1,8 +1,8 @@
 """
 Tests that causal inference gives the same answers in both circuit types.
 
-Every circuit of :mod:`test_causal_circuit` is read both as a graph of units and as a
-stack of layers, and the two are asked the same questions: whether they are support-
+Every circuit of :mod:`causal_circuits` is read both as a graph of units and as a stack
+of layers, and the two are asked the same questions: whether they are support-
 deterministic, what probability they give the interventional distribution, and which
 cause they blame for a failure.
 """
@@ -44,17 +44,17 @@ from probabilistic_model.probabilistic_circuit.tensorized.layered_probabilistic_
     LayeredProbabilisticCircuit,
 )
 
-from .test_causal_circuit import (
-    _build_cause_specific_effect_circuit,
-    _build_circuit_with_a_rounded_cause_region,
-    _build_confounded_circuit,
-    _build_correlated_circuit,
-    _build_discrete_confounded_circuit,
-    _build_independent_circuit,
-    _build_nested_overlap_circuit,
-    _build_shared_cause_subcircuit_circuit,
-    _build_three_variable_circuit,
-    _build_unnormalized_circuit,
+from .causal_circuits import (
+    cause_specific_effect_circuit,
+    circuit_with_a_rounded_cause_region,
+    confounded_circuit,
+    correlated_circuit,
+    discrete_confounded_circuit,
+    independent_circuit,
+    nested_overlap_circuit,
+    shared_cause_subcircuit_circuit,
+    three_variable_circuit,
+    unnormalized_circuit,
 )
 
 # %% the causal queries both circuit types answer
@@ -96,42 +96,42 @@ class CausalQuery:
 
 
 def independent() -> CausalQuery:
-    circuit, x, y = _build_independent_circuit()
+    circuit, x, y = independent_circuit()
     return CausalQuery(circuit, [x], y, observations={x: 0.5})
 
 
 def three_variables_adjusted() -> CausalQuery:
-    circuit, x, y, z = _build_three_variable_circuit()
+    circuit, x, y, z = three_variable_circuit()
     return CausalQuery(circuit, [x], z, adjustment=[y], observations={x: 1.5})
 
 
 def correlated() -> CausalQuery:
-    circuit, x, w, y = _build_correlated_circuit()
+    circuit, x, w, y = correlated_circuit()
     return CausalQuery(circuit, [x, w], y, observations={x: 0.5, w: 1.5})
 
 
 def confounded() -> CausalQuery:
-    circuit, x, y, z = _build_confounded_circuit()
+    circuit, x, y, z = confounded_circuit()
     return CausalQuery(circuit, [x], y, adjustment=[z], observations={x: 0.5})
 
 
 def shared_cause_subcircuit() -> CausalQuery:
-    circuit, x, y = _build_shared_cause_subcircuit_circuit()
+    circuit, x, y = shared_cause_subcircuit_circuit()
     return CausalQuery(circuit, [x], y, observations={x: 0.5})
 
 
 def rounded_cause_region() -> CausalQuery:
-    circuit, x, y, z = _build_circuit_with_a_rounded_cause_region()
+    circuit, x, y, z = circuit_with_a_rounded_cause_region()
     return CausalQuery(circuit, [x], y, adjustment=[z], observations={x: 1.0})
 
 
 def discrete_confounded() -> CausalQuery:
-    circuit, treatment, season, outcome = _build_discrete_confounded_circuit()
+    circuit, treatment, season, outcome = discrete_confounded_circuit()
     return CausalQuery(circuit, [treatment], outcome, adjustment=[season])
 
 
 def cause_specific_effect() -> CausalQuery:
-    circuit, treatment, season, outcome = _build_cause_specific_effect_circuit()
+    circuit, treatment, season, outcome = cause_specific_effect_circuit()
     return CausalQuery(circuit, [treatment], outcome, adjustment=[season])
 
 
@@ -151,12 +151,12 @@ The queries whose circuits pass the support-determinism check.
 
 
 def nested_overlap() -> CausalQuery:
-    circuit, x, y = _build_nested_overlap_circuit()
+    circuit, x, y = nested_overlap_circuit()
     return CausalQuery(circuit, [x], y)
 
 
 def unnormalized() -> CausalQuery:
-    circuit, x, y = _build_unnormalized_circuit()
+    circuit, x, y = unnormalized_circuit()
     return CausalQuery(circuit, [x], y)
 
 
@@ -248,7 +248,9 @@ def events_over(variables: List[Variable], number_of_events: int) -> List[Event]
     return events
 
 
-def probabilities_of(circuit: ProbabilisticCircuitRepresentation, events: List[Event]) -> List[float]:
+def probabilities_of(
+    circuit: ProbabilisticCircuitRepresentation, events: List[Event]
+) -> List[float]:
     """
     :param circuit: The circuit to query.
     :param events: The events to query it with.
