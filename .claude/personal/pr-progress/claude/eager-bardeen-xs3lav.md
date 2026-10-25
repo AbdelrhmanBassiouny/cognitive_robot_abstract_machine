@@ -5,7 +5,7 @@ Plan
 - PR #530 (draft, claude/generic-enumeration off main): krrood.patterns.generic_enumeration.GenericEnumeration + InvalidEnumerationKey(KeyError, TypeError) + tests. #517 merges that branch; retarget #517 to main once #530 lands.
 
 Done
-- Split the pattern into #530 (ce1461a61); #517 at d8a67595c (merge of it, no content change); 46 tests pass.
+- #530 review: test example now NestedEnumeration[Menu] (513761b04), thread resolved; #517 at ed3b77970 (merge of it); 41 tests pass.
 
 Next
 - CI on both not yet seen; wait for review.
