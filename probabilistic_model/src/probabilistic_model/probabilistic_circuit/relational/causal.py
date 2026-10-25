@@ -3,9 +3,9 @@ Bridges ``RelationalProbabilisticCircuit`` grounding into ``CausalCircuit``
 construction.
 
 .. note::
-    This module mirrors how ``rspn.py`` deliberately bridges ``probabilistic_model``
+    This module mirrors how ``relational_probabilistic_circuit.py`` deliberately bridges ``probabilistic_model``
     and ``krrood``: it is the seam where relational grounding meets exact causal
-    inference, kept separate from both ``rspn.py`` and ``causal_circuit.py`` so
+    inference, kept separate from both ``relational_probabilistic_circuit.py`` and ``causal_circuit.py`` so
     neither needs to depend on the other.
 """
 
@@ -14,13 +14,9 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass
-from typing_extensions import TYPE_CHECKING, List, Optional
+from typing_extensions import TYPE_CHECKING
 
-import pandas as pd
 from krrood.entity_query_language.core.mapped_variable import MappedVariable
-from krrood.ormatic.data_access_objects.dao import DataAccessObject
-from probabilistic_model.learning.jpt.jpt import JointProbabilityTree
-from probabilistic_model.learning.jpt.variables import AnnotatedVariable
 from probabilistic_model.probabilistic_circuit.causal.causal_circuit import (
     CausalCircuit,
     MarginalDeterminismTreeNode,
@@ -29,13 +25,16 @@ from probabilistic_model.probabilistic_circuit.relational.exceptions import (
     AmbiguousVariablePathError,
     VariableNotFoundError,
 )
-from probabilistic_model.probabilistic_circuit.relational.rspn import (
+from probabilistic_model.probabilistic_circuit.relational.relational_probabilistic_circuit import (
     GroundingMode,
     RelationalProbabilisticCircuit,
 )
-from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
-    ProbabilisticCircuit,
-    SumUnit,
+from probabilistic_model.probabilistic_circuit.groundable_circuit import (
+    GroundableCircuit,
+)
+from probabilistic_model.probabilistic_circuit.probabilistic_circuit_representation import (
+    RepresentationType,
+    ProbabilisticCircuitRepresentation,
 )
 from random_events.variable import Variable
 
@@ -56,14 +55,14 @@ class RelationalCausalCircuit:
     adjustment_region_count_warning_threshold: int = 1000
     """
     Warn rather than silently proceed when the Cartesian product of an adjustment set's
-    leaf-region counts exceeds this.
+    region counts exceeds this.
 
     See :meth:`from_grounded_circuit`.
     """
 
     @staticmethod
     def resolve_variable(
-        circuit: ProbabilisticCircuit, path: str | MappedVariable
+        circuit: ProbabilisticCircuitRepresentation, path: str | MappedVariable
     ) -> Variable:
         """
         Resolve a dotted access-path suffix to the Variable it names in a grounded
@@ -97,90 +96,16 @@ class RelationalCausalCircuit:
             raise VariableNotFoundError(path, list(circuit.variables))
         raise AmbiguousVariablePathError(path, matches)
 
-    def fit(
-        self,
-        relational_probabilistic_circuit: RelationalProbabilisticCircuit,
-        instances: List[DataAccessObject],
-        stratify_by: str,
-        dataframe_from_parent: Optional[pd.DataFrame] = None,
-    ) -> RelationalProbabilisticCircuit:
-        """
-        Fit ``relational_probabilistic_circuit`` support-deterministically over
-        ``stratify_by``, the precondition ``CausalCircuit.verify_support_determinism``
-        checks.
-
-        Partitions the training dataframe by ``stratify_by``'s exact value and fits one
-        sub-circuit per partition (see :meth:`_fit_stratified_class_circuit`), rather
-        than the plain, unconstrained fit ``RelationalProbabilisticCircuit.fit``
-        otherwise runs: every row sharing a value then ends up under one circuit branch
-        by construction, instead of possibly split across sibling leaves.
-
-        :param relational_probabilistic_circuit: The circuit to fit, in place.
-        :param instances: Training instances; all must share the same DAO class.
-        :param stratify_by: Name of the class-level dataframe column to partition the
-            training data by -- an EQL attribute-access expression's own ``._name_``, or
-            the equivalent dotted access-path string.
-        :param dataframe_from_parent: Forwarded to
-            ``RelationalProbabilisticCircuit.fit``.
-        :return:``relational_probabilistic_circuit``, fitted, to allow chaining.
-        """
-        relational_probabilistic_circuit.class_circuit_builder = (
-            lambda class_dataframe, variables: self._fit_stratified_class_circuit(
-                class_dataframe, variables, stratify_by
-            )
-        )
-        return relational_probabilistic_circuit.fit(
-            instances, dataframe_from_parent=dataframe_from_parent
-        )
-
-    @staticmethod
-    def _fit_stratified_class_circuit(
-        class_dataframe: pd.DataFrame,
-        variables: List[AnnotatedVariable],
-        stratify_by: str,
-    ) -> ProbabilisticCircuit:
-        """
-        Fit one class circuit per distinct value of ``stratify_by``, combined under a
-        root ``SumUnit`` weighted by each value's relative frequency.
-
-        Every row of one partition shares the same ``stratify_by`` value, so that
-        variable's fitted distribution within each partition's sub-circuit is a single
-        point by construction, regardless of how the sub-circuit's own induction
-        subsequently splits on the remaining variables -- unlike fitting one
-        unconstrained tree over the whole dataframe, where two rows sharing a value can
-        still end up under different sibling leaves.
-
-        :param class_dataframe: The full class-level training dataframe.
-        :param variables: The variables inferred over the full dataframe, reused as the
-            annotation (mean, standard deviation, split thresholds) for every
-            partition's own fit.
-        :param stratify_by: Name of the column to partition the dataframe by.
-        :return: The combined circuit.
-        """
-        result = ProbabilisticCircuit()
-        root = SumUnit(probabilistic_circuit=result)
-        total_row_count = len(class_dataframe)
-        for _, partition in class_dataframe.groupby(stratify_by):
-            partition_circuit = JointProbabilityTree(annotated_variables=variables).fit(
-                partition.reset_index(drop=True)
-            )
-            node_index_map = result.mount(partition_circuit.root)
-            root.add_subcircuit(
-                node_index_map[partition_circuit.root.index],
-                math.log(len(partition) / total_row_count),
-            )
-        return result
-
     def ground(
         self,
         relational_probabilistic_circuit: RelationalProbabilisticCircuit,
         query: Match,
-        causal_variables: List[Variable],
-        effect_variables: List[Variable],
-        adjustment_variables: Optional[List[Variable]] = None,
+        causal_variables: list[Variable],
+        effect_variables: list[Variable],
+        adjustment_variables: list[Variable] | None = None,
         grounding_mode: GroundingMode = GroundingMode.SAMPLED,
         trim_to_registered_variables: bool = False,
-    ) -> CausalCircuit:
+    ) -> CausalCircuit[GroundableCircuit]:
         """
         Ground a relational circuit for a query and wrap it as a ``CausalCircuit``.
 
@@ -202,8 +127,8 @@ class RelationalCausalCircuit:
         :param grounding_mode: How to represent aggregation latents the query leaves
             undetermined. Defaults to :attr:`GroundingMode.SAMPLED`, which always
             succeeds; :attr:`GroundingMode.EXACT` gives reproducible, domain-covering
-            regions but may fall back internally if its precondition isn't met. See
-            :class:`~probabilistic_model.probabilistic_circuit.relational.rspn.GroundingMode`.
+            regions but raises if its precondition isn't met. See
+            :class:`~probabilistic_model.probabilistic_circuit.relational.relational_probabilistic_circuit.GroundingMode`.
         :param trim_to_registered_variables: See :meth:`from_grounded_circuit`.
         :return: A verified, support-deterministic ``CausalCircuit`` over the grounded
             circuit.
@@ -223,12 +148,12 @@ class RelationalCausalCircuit:
 
     def from_grounded_circuit(
         self,
-        grounded_circuit: ProbabilisticCircuit,
-        causal_variables: List[Variable],
-        effect_variables: List[Variable],
-        adjustment_variables: Optional[List[Variable]] = None,
+        grounded_circuit: RepresentationType,
+        causal_variables: list[Variable],
+        effect_variables: list[Variable],
+        adjustment_variables: list[Variable] | None = None,
         trim_to_registered_variables: bool = False,
-    ) -> CausalCircuit:
+    ) -> CausalCircuit[RepresentationType]:
         """
         Wrap an already-grounded circuit as a verified ``CausalCircuit``.
 
@@ -273,51 +198,49 @@ class RelationalCausalCircuit:
                 registered_variables
             )
 
-        self._warn_if_adjustment_regions_are_expensive(
-            grounded_circuit, adjustment_variables
-        )
-
         tree = MarginalDeterminismTreeNode.from_causal_graph(
             causal_variables, effect_variables
         )
         causal_circuit = CausalCircuit.from_probabilistic_circuit(
             grounded_circuit, tree, causal_variables, effect_variables
         )
+        self._warn_if_adjustment_regions_are_expensive(
+            causal_circuit, adjustment_variables
+        )
         causal_circuit.verify_support_determinism()
         return causal_circuit
 
     def _warn_if_adjustment_regions_are_expensive(
         self,
-        grounded_circuit: ProbabilisticCircuit,
-        adjustment_variables: List[Variable],
+        causal_circuit: CausalCircuit,
+        adjustment_variables: list[Variable],
     ) -> None:
         """
         Warn when registering ``adjustment_variables`` together would make
-        ``CausalCircuit.backdoor_adjustment``'s Cartesian product over their leaf
-        regions expensive, rather than waiting to discover this at query time.
+        ``CausalCircuit.backdoor_adjustment``'s Cartesian product over their regions
+        expensive, rather than waiting to discover this at query time.
 
         A relational adjustment variable's region count can grow with the training data
-        under :attr:`~probabilistic_model.probabilistic_circuit.relational.rspn.GroundingMode.EXACT`,
-        unlike :attr:`~probabilistic_model.probabilistic_circuit.relational.rspn.GroundingMode.SAMPLED`,
+        under :attr:`~probabilistic_model.probabilistic_circuit.relational.relational_probabilistic_circuit.GroundingMode.EXACT`,
+        unlike :attr:`~probabilistic_model.probabilistic_circuit.relational.relational_probabilistic_circuit.GroundingMode.SAMPLED`,
         whose region count is capped by ``monte_carlo_sample_count``. This is a
-        best-effort diagnostic based on
-        ``grounded_circuit``'s actual leaf-region counts, not a guarantee: it flags
-        expensive adjustment sets regardless of how they were grounded.
+        best-effort diagnostic based on the circuit's actual region counts, not a
+        guarantee: it flags expensive adjustment sets regardless of how they were
+        grounded.
 
-        :param grounded_circuit: The grounded circuit to extract leaf-region counts
-            from.
+        :param causal_circuit: The causal circuit to read the region counts from.
         :param adjustment_variables: The resolved adjustment variables.
         """
         if len(adjustment_variables) < 2:
             return
         region_counts = [
-            len(grounded_circuit.marginal([variable]).leaves)
+            causal_circuit.number_of_regions_of(variable)
             for variable in adjustment_variables
         ]
         region_product = math.prod(region_counts)
         if region_product > self.adjustment_region_count_warning_threshold:
             logger.warning(
-                "Adjustment set [%s] has a Cartesian product of %d leaf regions (%s), "
+                "Adjustment set [%s] has a Cartesian product of %d regions (%s), "
                 "exceeding the configured threshold of %d; "
                 "CausalCircuit.backdoor_adjustment's region-extraction cost scales "
                 "with this.",

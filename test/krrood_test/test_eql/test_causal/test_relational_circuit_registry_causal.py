@@ -10,16 +10,14 @@ from __future__ import annotations
 import numpy as np
 
 from krrood.entity_query_language.factories import a, cause, variable
-from krrood.ormatic.data_access_objects.helper import to_dao
 from krrood.parametrization.model_registries import RelationalCircuitRegistry
 from krrood.parametrization.parameterizer import UnderspecifiedParameters
 from probabilistic_model.probabilistic_circuit.causal.causal_circuit import (
     CausalCircuit,
 )
-from probabilistic_model.probabilistic_circuit.relational.causal import (
-    RelationalCausalCircuit,
-)
-from probabilistic_model.probabilistic_circuit.relational.rspn import (
+from probabilistic_model.learning.jpt.jpt import JointProbabilityTree
+from probabilistic_model.learning.learning_method import StratifiedLearning
+from probabilistic_model.probabilistic_circuit.relational.relational_probabilistic_circuit import (
     GroundingMode,
     RelationalProbabilisticCircuit,
 )
@@ -31,7 +29,7 @@ from ...dataset.example_classes import (
     SceneRoom,
     SceneRoomAggregations,
 )
-from ...test_feature_extraction.test_rspns import (  # noqa: F401
+from ...test_feature_extraction.test_relational_probabilistic_circuit import (  # noqa: F401
     _room_with_chair_count,
     correlated_room_query,
     relational_probabilistic_circuit,
@@ -45,7 +43,7 @@ def _cause_and_effect_query():
         orientation=a(KRROODOrientation)(x=..., y=..., z=..., w=...),
         objects=[a(SceneObject)(type=...) for _ in range(4)],
     )
-    query.causes_effect(query.variable.objects[0].type == SceneObjectType.CHAIR)
+    query.causes_effect(query.objects[0].type == SceneObjectType.CHAIR)
     return query
 
 
@@ -169,13 +167,13 @@ def test_cause_on_an_aggregation_statistic_grounds_through_the_registry():
     rooms = [_room_with_chair_count(rng, 1) for _ in range(20)] + [
         _room_with_chair_count(rng, 3) for _ in range(20)
     ]
-    model = RelationalProbabilisticCircuit(SceneRoom)
     chair_count_variable = variable(SceneRoomAggregations).chair_count()
-    RelationalCausalCircuit().fit(
-        model,
-        [to_dao(room) for room in rooms],
-        stratify_by=chair_count_variable._name_,
+    model = RelationalProbabilisticCircuit(
+        learning_method=StratifiedLearning(
+            variables=[chair_count_variable._name_], method=JointProbabilityTree()
+        ),
     )
+    model.fit(rooms)
 
     query = a(SceneRoom)(
         position=a(KRROODPosition)(x=..., y=..., z=...),
@@ -183,7 +181,7 @@ def test_cause_on_an_aggregation_statistic_grounds_through_the_registry():
         objects=[a(SceneObject)(type=...) for _ in range(3)],
         chair_count=cause,
     )
-    query.causes_effect(query.variable.objects[0].type == SceneObjectType.CHAIR)
+    query.causes_effect(query.objects[0].type == SceneObjectType.CHAIR)
 
     registry = RelationalCircuitRegistry(relational_probabilistic_circuit=model)
 
