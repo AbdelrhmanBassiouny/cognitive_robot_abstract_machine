@@ -1,9 +1,10 @@
 schema_version: 1
 id: rdr-interface-and-decorator
 title: The interactive expert interface and the @rdr decorator
-description: 'What a user of the engine touches: the case-table rendering, the IPython shell and its magics
-  that ask the expert for conditions and conclusions, the @rdr decorator that declares a model, and the
-  file store that holds it. Stacked on the core engine''s tip and merged after it.'
+description: 'What a user of the engine touches: the case-table rendering, the IPython shell
+  and its magics that ask the expert for conditions and conclusions, the @rdr decorator that
+  declares a model, and the file store that holds it. Stacked on the core engine''s tip and
+  merged after it.'
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 94
 waves:
@@ -25,19 +26,17 @@ items:
   branch: D-ui-rendering
   pull_request_number: 79
   track: interactive
-  depends_on: []
+  depends_on:
+  - rdr-core-engine/d-core-backend
   status: in_progress
   session: https://claude.ai/code/session_01W5rkhDr2xdFuFVExi6bXb4
-  notes: 'Rebuilt onto `D-core-backend` (#210) on 2026-08-30, which is what unblocked it: its old base
-    `D-ui-splice-fix` (#78, closed unmerged) led nowhere, and the re-target its own note prescribed —
-    `D-core-engine` (#68) — is deferred and leads nowhere either. Rebuilt as a branch reset rather than
-    a merge so #78''s production commit (reintroducing `_last_parent_of_type_`, superseded by #118 and
-    forbidden by dag-facade-hardening''s Wave-1 guard) stays out of #79''s diff; pre-rebuild tip `0a305c68`
-    if it is ever wanted back. `depends_on` now names `d-core-backend`, which is where the branch actually
-    sits.'
-  blockers:
-  - Stacked on d-core-backend (#210) in the rdr-core-engine plan. depends_on cannot name an item in another
-    plan, so this edge is recorded here instead and carries no dependency chip or automatic readiness.
+  notes: 'Rebuilt onto `D-core-backend` (#210) on 2026-08-30, which is what unblocked it:
+    its old base `D-ui-splice-fix` (#78, closed unmerged) led nowhere, and the re-target its
+    own note prescribed — `D-core-engine` (#68) — is deferred and leads nowhere either. Rebuilt
+    as a branch reset rather than a merge so #78''s production commit (reintroducing `_last_parent_of_type_`,
+    superseded by #118 and forbidden by dag-facade-hardening''s Wave-1 guard) stays out of
+    #79''s diff; pre-rebuild tip `0a305c68` if it is ever wanted back. `depends_on` now names
+    `d-core-backend`, which is where the branch actually sits.'
 - id: D-ui
   title: 'RDR engine: interactive expert interface (IPython shell, magics, prompt sections/examples)'
   branch: D-ui
@@ -47,14 +46,15 @@ items:
   - D-ui-rendering
   status: in_progress
   session: https://claude.ai/code/session_01W5rkhDr2xdFuFVExi6bXb4
-  notes: '2026-08-23: outstanding work added from the #159 review - **default the progress reporter to
-    IPythonProgressBar here**. The engine keeps NullProgressReporter, which is the only default correct
-    for a caller it knows nothing about; the developer agreed the interactive default belongs in this
-    layer, which is the one that knows there is a shell to draw on. Done 2026-08-30, as part of the same
-    change as the ExpertInterface segregation below - see roadmap.md sections 30 and 36.'
+  notes: '2026-08-23: outstanding work added from the #159 review - **default the progress
+    reporter to IPythonProgressBar here**. The engine keeps NullProgressReporter, which is
+    the only default correct for a caller it knows nothing about; the developer agreed the
+    interactive default belongs in this layer, which is the one that knows there is a shell
+    to draw on. Done 2026-08-30, as part of the same change as the ExpertInterface segregation
+    below - see roadmap.md sections 30 and 36.'
   blockers:
-  - CI has never run on this branch - the pull request reports zero check runs on any head it has had
-    - so every figure recorded for it is a local measurement.
+  - CI has never run on this branch - the pull request reports zero check runs on any head
+    it has had - so every figure recorded for it is a local measurement.
 - id: D-store
   title: 'D-store: RDRFileStore for the @rdr model-file lifecycle'
   branch: D-store
@@ -63,10 +63,11 @@ items:
   depends_on:
   - D-ui
   status: in_progress
-  notes: 'Path resolution + model-file lifecycle; standalone, no decorator dependency. 2026-08-30 (later):
-    a `/plan-item-resolve` session read the branch''s live state and found the restack the roadmap''s
-    Open section predicted, never recorded on the item: the head is from 2026-07-19, its CI is red, and
-    the branch was skipped by two maintenance passes. Recorded as blockers before any work started.'
+  notes: 'Path resolution + model-file lifecycle; standalone, no decorator dependency. 2026-08-30
+    (later): a `/plan-item-resolve` session read the branch''s live state and found the restack
+    the roadmap''s Open section predicted, never recorded on the item: the head is from 2026-07-19,
+    its CI is red, and the branch was skipped by two maintenance passes. Recorded as blockers
+    before any work started.'
   session: https://claude.ai/code/session_01Lr5K9cBX5g6YrFEErmJMYZ
 - id: D-deco
   title: 'D-deco: @rdr decorator + RDR file store (final rdr-engine slice)'
@@ -77,10 +78,10 @@ items:
   - D-store
   status: in_progress
   session: https://claude.ai/code/session_01Wf62T3vDfRPgxbi4ew7KAm
-  notes: 'rdr() factory + RDRWrapper, stacked on D-store. 2026-08-31 (resolve): the restack the roadmap''s
-    Open section had predicted since the rebuilds. The head was from 2026-07-19 and still merged D-store''s
-    pre-rebuild tip `07cb6831`, so it carried #78''s `cfe32ad0`; GitHub read the pull request `dirty`
-    at 16,493 additions across 52 files, and two maintenance passes had each hit 44 conflicting files
-    and left it `needs- resolution`. Rebuilt as a branch reset onto `ae3fdb05`, per decision 1, never
-    a merge; pre- rebuild tip `c46c0c5b`. The slice''s own work replays as one commit, 1,529 lines in
-    6 files.'
+  notes: 'rdr() factory + RDRWrapper, stacked on D-store. 2026-08-31 (resolve): the restack
+    the roadmap''s Open section had predicted since the rebuilds. The head was from 2026-07-19
+    and still merged D-store''s pre-rebuild tip `07cb6831`, so it carried #78''s `cfe32ad0`;
+    GitHub read the pull request `dirty` at 16,493 additions across 52 files, and two maintenance
+    passes had each hit 44 conflicting files and left it `needs- resolution`. Rebuilt as a
+    branch reset onto `ae3fdb05`, per decision 1, never a merge; pre- rebuild tip `c46c0c5b`.
+    The slice''s own work replays as one commit, 1,529 lines in 6 files.'
