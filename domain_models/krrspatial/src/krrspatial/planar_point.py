@@ -3,8 +3,7 @@ from __future__ import annotations
 from typing_extensions import Generic, TypeVar
 
 from krrood.patterns.interface import Interface
-from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
-from krrspatial.coordinate_system import CoordinateSystemT
+from krrspatial.coordinate_system import CoordinateRepresentation, CoordinateSystemT
 
 # %% points given by two coordinates
 
@@ -15,7 +14,9 @@ What a coordinate of a point is stored as.
 
 
 class PlanarPoint(
-    Generic[CoordinateSystemT, CoordinateT], SubClassSafeGeneric, Interface
+    CoordinateRepresentation[CoordinateSystemT],
+    Generic[CoordinateSystemT, CoordinateT],
+    Interface,
 ):
     """
     A point given by two coordinates in a coordinate system.
@@ -33,9 +34,4 @@ class PlanarPoint(
     y: CoordinateT
     """
     The second coordinate.
-    """
-
-    coordinate_system: CoordinateSystemT | None
-    """
-    The coordinate system the coordinates are given in; ``None`` where it is not known.
     """

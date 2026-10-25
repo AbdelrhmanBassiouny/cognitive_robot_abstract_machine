@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass
 
 import numpy as np
 from random_events.product_algebra import Event, SimpleEvent, VariableMap
 from random_events.variable import Symbolic, Variable
 from sortedcontainers import SortedSet
-from typing_extensions import Dict, Iterable, List, Optional, Self, Tuple, Type
+from typing_extensions import Any, Dict, Iterable, List, Optional, Self, Tuple, Type
 
+from krrood.patterns.dataclass_deep_copy import DataclassDeepcopyMixin
 from probabilistic_model.distributions.distributions import (
     IntegerDistribution,
     SymbolicDistribution,
@@ -65,6 +67,7 @@ from probabilistic_model.probabilistic_circuit.tensorized.structural_query impor
     LayerWithLogProbabilities,
     StructuralQuery,
 )
+from probabilistic_model.query_results import LogConditioning, LogMode, LogTruncation
 from probabilistic_model.probabilistic_circuit.tensorized.symbolic_encoding import (
     SymbolicEncoding,
 )
@@ -121,7 +124,7 @@ class LayerNode:
 
 
 @dataclass(eq=False)
-class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode]):
+class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode], DataclassDeepcopyMixin):
     """
     A probabilistic circuit whose units are grouped into layers of numpy arrays.
 
@@ -280,11 +283,11 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode]):
     def support(self) -> Event:
         return self.root.support_of_nodes(self.variables)[0]
 
-    def log_mode(self, check_determinism: bool = True) -> Tuple[Event, float]:
+    def log_mode(self, check_determinism: bool = True) -> LogMode:
         if check_determinism and not self.is_deterministic():
             raise IntractableError(self)
         modes, values = self.root.log_mode_of_nodes(self.variables)
-        return modes[0], float(values[0])
+        return LogMode(modes[0], float(values[0]))
 
     def sample(self, amount: int) -> SampleArray:
         order = self.root.all_layers()
@@ -327,13 +330,13 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode]):
 
     def log_truncated(
         self, event: Event, singleton_allowed: bool = False
-    ) -> Tuple[Optional[Self], float]:
-        result = self.__deepcopy__()
+    ) -> LogTruncation[Self]:
+        result = copy.deepcopy(self)
         return result.log_truncated_in_place(event, singleton_allowed)
 
     def log_truncated_in_place(
         self, event: Event, singleton_allowed: bool = False
-    ) -> Tuple[Optional[Self], float]:
+    ) -> LogTruncation[Self]:
         """
         Truncate this circuit to an event in place.
 
@@ -343,10 +346,10 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode]):
 
         :param event: The event to truncate to.
         :param singleton_allowed: Whether singletons are allowed in the event.
-        :return: This circuit and the log-probability of the event, or ``(None, -inf)``.
+        :return: This circuit and the log-probability of the event.
         """
         if event.is_empty():
-            return None, -np.inf
+            return LogTruncation.impossible()
 
         event.fill_missing_variables(set(self.variables))
 
@@ -357,42 +360,44 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode]):
 
         simple_events = list(event.simple_sets)
         if self.can_truncate_in_one_batch(simple_events, singleton_allowed):
-            root, total_log_probability = self.truncated_root_of_simple_events(
+            truncation = self.truncated_root_of_simple_events(
                 simple_events, singleton_allowed
             )
-            if root is None:
-                return None, -np.inf
-            self.root = root
-            return self, total_log_probability
+            if truncation.distribution is None:
+                return LogTruncation.impossible()
+            self.root = truncation.distribution
+            return LogTruncation(self, truncation.log_probability)
 
         # no copy per simple set: a structural pass never writes into the layers it was
         # given, it builds new ones, so all the truncations can read the same circuit
-        truncated = []
-        for simple_event in event.simple_sets:
-            root, log_probability = self.truncated_root_of_simple_event(
-                simple_event, singleton_allowed
-            )
-            if root is not None and log_probability > -np.inf:
-                truncated.append((root, log_probability))
+        truncations = [
+            self.truncated_root_of_simple_event(simple_event, singleton_allowed)
+            for simple_event in event.simple_sets
+        ]
+        truncations = [
+            truncation
+            for truncation in truncations
+            if truncation.distribution is not None
+        ]
 
-        if not truncated:
-            return None, -np.inf
+        if not truncations:
+            return LogTruncation.impossible()
+
+        log_probabilities = [truncation.log_probability for truncation in truncations]
 
         # the simple sets of an event are disjoint, so P(E) = sum_k P(E_k)
-        total_log_probability = float(
-            logsumexp(np.array([log_probability for _, log_probability in truncated]))
-        )
+        total_log_probability = float(logsumexp(np.array(log_probabilities)))
 
         self.root = SumLayer.mixture_of(
-            [root for root, _ in truncated],
-            [log_probability for _, log_probability in truncated],
+            [truncation.distribution for truncation in truncations], log_probabilities
         )
+
         self.root.normalize()
-        return self, total_log_probability
+        return LogTruncation(self, total_log_probability)
 
     def truncated_root_of_simple_event(
         self, event: SimpleEvent, singleton_allowed: bool = False
-    ) -> Tuple[Optional[Layer], float]:
+    ) -> LogTruncation[Layer]:
         """
         Build the root of this circuit truncated to a simple event.
 
@@ -402,8 +407,7 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode]):
 
         :param event: The simple event to truncate to.
         :param singleton_allowed: Whether singletons are allowed in the event.
-        :return: The new root layer and the log-probability of the event, or
-            ``(None, -inf)`` if the event is impossible.
+        :return: The new root layer and the log-probability of the event.
         """
         query = StructuralQuery(self.variables, singleton_allowed)
         truncated = self.root.log_truncated_of_simple_event(
@@ -412,15 +416,15 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode]):
 
         log_probability = float(truncated.log_probabilities[0])
         if log_probability == -np.inf:
-            return None, -np.inf
+            return LogTruncation.impossible()
 
         pruned = truncated.layer.prune(query.log_probabilities)
         if pruned is None:
-            return None, -np.inf
+            return LogTruncation.impossible()
 
         root = pruned.simplify()
         root.normalize()
-        return root, log_probability
+        return LogTruncation(root, log_probability)
 
     def can_truncate_in_one_batch(
         self, events: List[SimpleEvent], singleton_allowed: bool = False
@@ -438,7 +442,7 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode]):
 
     def truncated_root_of_simple_events(
         self, events: List[SimpleEvent], singleton_allowed: bool = False
-    ) -> Tuple[Optional[Layer], float]:
+    ) -> LogTruncation[Layer]:
         """
         Build the root of this circuit truncated to several simple events in one pass.
 
@@ -453,8 +457,7 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode]):
 
         :param events: The simple events to truncate to.
         :param singleton_allowed: Whether singletons are allowed in the events.
-        :return: The new root and the log-probability of the union of the events, or
-            ``(None, -inf)`` if the events are impossible.
+        :return: The new root and the log-probability of the union of the events.
         """
         query = StructuralQuery(self.variables, singleton_allowed)
         replicated = self.root.log_truncated_of_simple_events(
@@ -465,7 +468,7 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode]):
         # the simple sets of an event are disjoint, so P(E) = sum_k P(E_k)
         total_log_probability = float(logsumexp(node_log_probabilities))
         if total_log_probability == -np.inf:
-            return None, -np.inf
+            return LogTruncation.impossible()
 
         # mix the copy of the root that belongs to each event by the probability of that
         # event, which turns the replicated root into the single root of the result
@@ -487,38 +490,36 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode]):
 
         pruned = mixture.prune(query.log_probabilities)
         if pruned is None:
-            return None, -np.inf
+            return LogTruncation.impossible()
 
         root = pruned.simplify()
         root.normalize()
-        return root, total_log_probability
+        return LogTruncation(root, total_log_probability)
 
     def log_truncated_of_simple_event_in_place(
         self, event: SimpleEvent, singleton_allowed: bool = False
-    ) -> Tuple[Optional[Self], float]:
+    ) -> LogTruncation[Self]:
         """
         Truncate this circuit to a simple event in place.
 
         :param event: The simple event to truncate to.
         :param singleton_allowed: Whether singletons are allowed in the event.
-        :return: This circuit and the log-probability of the event, or ``(None, -inf)``.
+        :return: This circuit and the log-probability of the event.
         """
-        root, log_probability = self.truncated_root_of_simple_event(
-            event, singleton_allowed
-        )
-        if root is None:
-            return None, -np.inf
+        truncation = self.truncated_root_of_simple_event(event, singleton_allowed)
+        if truncation.distribution is None:
+            return LogTruncation.impossible()
 
-        self.root = root
-        return self, log_probability
+        self.root = truncation.distribution
+        return LogTruncation(self, truncation.log_probability)
 
-    def log_conditional(self, point: PartialPointType) -> Tuple[Optional[Self], float]:
-        result = self.__deepcopy__()
+    def log_conditional(self, point: PartialPointType) -> LogConditioning[Self]:
+        result = copy.deepcopy(self)
         return result.log_conditional_in_place(point)
 
     def log_conditional_in_place(
         self, point: PartialPointType
-    ) -> Tuple[Optional[Self], float]:
+    ) -> LogConditioning[Self]:
         """
         Condition this circuit on a partial point in place.
 
@@ -526,7 +527,7 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode]):
         reattached as Dirac layers under a new product root.
 
         :param point: The partial point.
-        :return: This circuit and the log-density at the point, or ``(None, -inf)``.
+        :return: This circuit and the log-density at the point.
         """
         query = StructuralQuery(self.variables)
         conditioned = self.root.log_conditional_of_point(
@@ -535,11 +536,11 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode]):
 
         log_probability = float(conditioned.log_probabilities[0])
         if log_probability == -np.inf:
-            return None, -np.inf
+            return LogConditioning.impossible()
 
         pruned = conditioned.layer.prune(query.log_probabilities)
         if pruned is None:
-            return None, -np.inf
+            return LogConditioning.impossible()
 
         self.root = pruned
 
@@ -549,7 +550,7 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode]):
         children: List[Layer] = []
         if remaining:
             if self.marginal_in_place(remaining) is None:
-                return None, -np.inf
+                return LogConditioning.impossible()
             self.restore_variables(original_variables)
             children.append(self.root)
 
@@ -562,7 +563,7 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode]):
 
         self.root = ProductLayer.product_of(children).simplify()
         self.root.normalize()
-        return self, log_probability
+        return LogConditioning(self, log_probability)
 
     @staticmethod
     def point_masses_layer(
@@ -604,7 +605,7 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode]):
         self.variables = variables
 
     def marginal(self, variables: Iterable[Variable]) -> Optional[Self]:
-        result = self.__deepcopy__()
+        result = copy.deepcopy(self)
         if result.marginal_in_place(variables) is None:
             return None
         return result
@@ -621,7 +622,7 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode]):
         return self.simplify()
 
     def restrict_to_variables(self, variables: Iterable[Variable]) -> Optional[Self]:
-        result = self.__deepcopy__()
+        result = copy.deepcopy(self)
         return result.restrict_to_variables_in_place(variables)
 
     def restrict_to_variables_in_place(
@@ -812,7 +813,7 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode]):
     def mixture_of(cls, components: List[Self], log_weights: Iterable[float]) -> Self:
         log_weights = list(log_weights)
         ProbabilisticCircuitRepresentation.validate_mixture(components, log_weights)
-        copies = [component.__deepcopy__() for component in components]
+        copies = [copy.deepcopy(component) for component in components]
         root = SumLayer.mixture_of([copy.root for copy in copies], log_weights)
         root.normalize_own()
         return cls(SortedSet(components[0].variables), root)
@@ -825,10 +826,13 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode]):
             variables |= factor.variables
         copies = []
         for factor in factors:
-            copy = factor.__deepcopy__()
-            copy.restore_variables(variables)
-            copies.append(copy)
-        return cls(variables, ProductLayer.product_of([copy.root for copy in copies]))
+            factor_copy = copy.deepcopy(factor)
+            factor_copy.restore_variables(variables)
+            copies.append(factor_copy)
+        return cls(
+            variables,
+            ProductLayer.product_of([factor_copy.root for factor_copy in copies]),
+        )
 
     # %% operations on nodes
 
@@ -926,9 +930,3 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode]):
                 attached, np.array(layer_nodes), np.array(children)
             )
         self.reset_scopes()
-
-    def __deepcopy__(self, memo=None) -> Self:
-        return self.__class__(SortedSet(self.variables), self.root.__deepcopy__({}))
-
-    def __copy__(self) -> Self:
-        return self.__deepcopy__()

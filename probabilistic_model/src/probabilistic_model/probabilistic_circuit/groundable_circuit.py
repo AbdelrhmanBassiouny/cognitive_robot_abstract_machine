@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
-from random_events.product_algebra import Event, VariableMap
+from random_events.product_algebra import VariableMap
 from random_events.variable import Variable
 from sortedcontainers import SortedSet
 from typing_extensions import (
@@ -14,7 +14,6 @@ from typing_extensions import (
     List,
     Optional,
     Self,
-    Tuple,
     TypeVar,
 )
 
@@ -26,6 +25,7 @@ from probabilistic_model.probabilistic_circuit.probabilistic_circuit_representat
     ProbabilisticCircuitRepresentation,
 )
 from probabilistic_model.probabilistic_model import PartialPointType, ProbabilisticModel
+from probabilistic_model.query_results import LogMode
 
 """
 The type of the nodes of a circuit type.
@@ -98,7 +98,7 @@ class GroundableCircuit(ProbabilisticCircuitRepresentation[NodeType], ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def log_mode(self, check_determinism: bool = True) -> Tuple[Event, float]:
+    def log_mode(self, check_determinism: bool = True) -> LogMode:
         """
         :param check_determinism: Whether to check that the circuit is deterministic.
         :return: The mode of the circuit and its log-likelihood.
@@ -122,10 +122,6 @@ class GroundableCircuit(ProbabilisticCircuitRepresentation[NodeType], ABC):
 
         :param new_variables: The new variable of every variable to replace.
         """
-        raise NotImplementedError
-
-    @abstractmethod
-    def __deepcopy__(self, memo=None) -> Self:
         raise NotImplementedError
 
     # %% operations on nodes

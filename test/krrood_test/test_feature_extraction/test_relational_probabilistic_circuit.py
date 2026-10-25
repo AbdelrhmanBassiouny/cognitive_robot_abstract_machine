@@ -736,11 +736,10 @@ def test_exact_grounding_preserves_correlation_with_the_retained_latent(
     point) into conditioning, which always failed and silently fell back to grounding
     every branch from the same unconditioned distribution -- and even after fixing that,
     a single, undifferentiated partition branch was treated as trivially valid instead
-    of being rejected, discarding the correlation either way.
-    P(objects[0].type=CHAIR | do(chair_count=1)) and P(objects[0].type=CHAIR |
-    do(chair_count=3)) must therefore differ, reflecting chair_count=1 rooms never
-    having their first object be a chair and chair_count=3 rooms always having it be
-    one.
+    of being rejected, discarding the correlation either way. P(objects[0].type=CHAIR |
+    do(chair_count=1)) and P(objects[0].type=CHAIR | do(chair_count=3)) must therefore
+    differ, reflecting chair_count=1 rooms never having their first object be a chair
+    and chair_count=3 rooms always having it be one.
     """
     np.random.seed(0)
     grounded = correlated_relational_probabilistic_circuit.ground(
@@ -807,11 +806,9 @@ def test_representative_value_returns_a_point_not_a_region():
     )
 
     assert representative_value == {variable: 2.0}
-    conditioning_result, log_likelihood = branch.distribution.log_conditional(
-        representative_value
-    )
-    assert conditioning_result is not None
-    assert log_likelihood > -np.inf
+    conditioning = branch.distribution.log_conditional(representative_value)
+    assert conditioning.distribution is not None
+    assert conditioning.log_likelihood > -np.inf
 
 
 def test_node_local_branch_log_probabilities_reflect_each_nodes_own_correlation():

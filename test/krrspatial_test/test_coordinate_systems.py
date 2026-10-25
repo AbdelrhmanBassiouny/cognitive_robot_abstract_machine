@@ -6,17 +6,24 @@ import pytest
 
 from krrood.patterns.exceptions import InterfaceInstantiationError
 from krrspatial.coordinate_system import (
+    AffineCoordinateChange,
     CoordinateChange,
+    CoordinateRepresentation,
     CoordinateSystem,
     CoordinateSystemT,
     ImageCoordinateSystem,
+    RigidCoordinateChange,
     SpaceT,
 )
 from krrspatial.reference_frame import ReferenceFrame
 from krrspatial.space import EuclideanSpace, ImagePlane, Space
 
 from .dataset.frames import NamedFrame
-from .dataset.spaces import NamedImageCoordinateSystem, StoredImageCoordinateChange
+from .dataset.spaces import (
+    NamedImageCoordinateSystem,
+    StoredFrameChange,
+    StoredImageCoordinateChange,
+)
 
 # %% spaces
 
@@ -65,12 +72,51 @@ def test_a_reference_frame_is_not_an_image_coordinate_system(table_frame: NamedF
     assert not isinstance(table_frame, ImageCoordinateSystem)
 
 
+# %% values given in a coordinate system
+
+
+def test_a_coordinate_representation_cannot_be_instantiated():
+    with pytest.raises(InterfaceInstantiationError):
+        CoordinateRepresentation()
+
+
 # %% changing coordinates within one space
 
 
-def test_a_coordinate_change_cannot_be_instantiated():
+@pytest.mark.parametrize(
+    "change_kind",
+    [CoordinateChange, AffineCoordinateChange, RigidCoordinateChange],
+)
+def test_a_coordinate_change_interface_cannot_be_instantiated(change_kind):
     with pytest.raises(InterfaceInstantiationError):
-        CoordinateChange()
+        change_kind()
+
+
+def test_a_coordinate_change_declares_inverting_and_composing():
+    assert CoordinateChange.__abstractmethods__ == {
+        CoordinateChange.inverse.__name__,
+        CoordinateChange.__matmul__.__name__,
+    }
+
+
+def test_a_rigid_change_is_an_affine_change():
+    assert issubclass(RigidCoordinateChange, AffineCoordinateChange)
+
+
+def test_an_affine_change_is_a_coordinate_change():
+    assert issubclass(AffineCoordinateChange, CoordinateChange)
+
+
+def test_a_change_of_image_coordinates_is_affine_but_not_rigid():
+    assert issubclass(StoredImageCoordinateChange, AffineCoordinateChange)
+    assert not issubclass(StoredImageCoordinateChange, RigidCoordinateChange)
+
+
+def test_a_rigid_change_reports_the_kind_of_coordinate_system_it_changes():
+    assert (
+        StoredFrameChange.get_type_of_generic_parameter(CoordinateSystemT)
+        is ReferenceFrame
+    )
 
 
 def test_a_coordinate_change_reports_the_kind_of_coordinate_system_it_changes():

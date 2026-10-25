@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing_extensions import Generic, TypeVar
+from abc import abstractmethod
+
+from typing_extensions import Generic, Self, TypeVar
 
 from krrood.adapters.object_reference import IdentifiedObject
 from krrood.patterns.interface import Interface
@@ -39,12 +41,34 @@ class ImageCoordinateSystem(CoordinateSystem[ImagePlane], Interface):
     """
 
 
-# %% changing coordinates within one space
+# %% values given in a coordinate system
 
 CoordinateSystemT = TypeVar("CoordinateSystemT", bound=CoordinateSystem)
 """
 The kind of coordinate system coordinates are given in.
 """
+
+
+class CoordinateRepresentation(
+    Generic[CoordinateSystemT], SubClassSafeGeneric, Interface
+):
+    """
+    A geometric value, such as a point, a direction or an orientation, given by its
+    coordinates in a coordinate system.
+
+    .. seealso::
+        T. De Laet, S. Bellens and H. Bruyninckx, "Geometric Relations Between Rigid
+        Bodies (Part 1): Semantics for Standardization", IEEE Robotics & Automation
+        Magazine, 2013, which separates a geometric value from its coordinates.
+    """
+
+    coordinate_system: CoordinateSystemT | None
+    """
+    The coordinate system the coordinates are given in; ``None`` where it is not known.
+    """
+
+
+# %% changing coordinates within one space
 
 
 class CoordinateChange(Generic[CoordinateSystemT], SubClassSafeGeneric, Interface):
@@ -67,4 +91,35 @@ class CoordinateChange(Generic[CoordinateSystemT], SubClassSafeGeneric, Interfac
     """
     The coordinate system the coordinates are changed into; ``None`` where it is not
     known.
+    """
+
+    @abstractmethod
+    def inverse(self) -> Self:
+        """
+        :return: The change from the target coordinate system back to the source one.
+        """
+
+    @abstractmethod
+    def __matmul__(self, other: Self) -> Self:
+        """
+        :param other: The change applied first, whose target coordinate system is the
+            source one of this change.
+        :return: The change that applies the other change and then this one.
+        """
+
+
+class AffineCoordinateChange(CoordinateChange[CoordinateSystemT], Interface):
+    """
+    A coordinate change that scales, shears, rotates or reflects the axes and shifts the
+    origin.
+
+    It keeps straight lines, parallel lines and ratios of lengths along one line.
+    """
+
+
+class RigidCoordinateChange(AffineCoordinateChange[CoordinateSystemT], Interface):
+    """
+    An affine coordinate change that only rotates the axes and shifts the origin.
+
+    It also keeps distances and angles.
     """
