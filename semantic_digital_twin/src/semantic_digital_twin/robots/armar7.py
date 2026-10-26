@@ -482,7 +482,7 @@ class Armar7RightArm(Arm[Armar7RightGripper]):
 
 
 @dataclass(eq=False)
-class AzureKinectRGB(RobotCamera):
+class AzureKinectRGB(RobotCamera[FieldOfViewCameraModel]):
 
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(

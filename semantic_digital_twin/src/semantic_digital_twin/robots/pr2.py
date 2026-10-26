@@ -169,7 +169,7 @@ class PR2JointDrive:
 
 
 @dataclass(eq=False)
-class PR2KinectV1(RobotCamera):
+class PR2KinectV1(RobotCamera[FieldOfViewCameraModel]):
     """
     Kinect V1 camera attached to its RGB optical frame.
     """

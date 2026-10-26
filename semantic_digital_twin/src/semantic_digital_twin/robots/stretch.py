@@ -221,7 +221,7 @@ class StretchArm(Arm[StretchGripper]):
 
 
 @dataclass(eq=False)
-class StretchCameraColor(RobotCamera):
+class StretchCameraColor(RobotCamera[FieldOfViewCameraModel]):
     """
     Camera attached to its robot model's optical frame.
     """
@@ -258,7 +258,7 @@ class StretchCameraColor(RobotCamera):
 
 
 @dataclass(eq=False)
-class StretchCameraDepth(RobotCamera):
+class StretchCameraDepth(RobotCamera[FieldOfViewCameraModel]):
     """
     Camera attached to its robot model's optical frame.
     """
@@ -294,7 +294,7 @@ class StretchCameraDepth(RobotCamera):
 
 
 @dataclass(eq=False)
-class StretchCameraInfra1(RobotCamera):
+class StretchCameraInfra1(RobotCamera[FieldOfViewCameraModel]):
     """
     Camera attached to its robot model's optical frame.
     """
@@ -330,7 +330,7 @@ class StretchCameraInfra1(RobotCamera):
 
 
 @dataclass(eq=False)
-class StretchCameraInfra2(RobotCamera):
+class StretchCameraInfra2(RobotCamera[FieldOfViewCameraModel]):
     """
     Camera attached to its robot model's optical frame.
     """

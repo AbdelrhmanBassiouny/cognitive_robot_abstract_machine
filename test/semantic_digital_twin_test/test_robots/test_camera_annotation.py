@@ -4,7 +4,10 @@ import numpy as np
 import pytest
 from typing_extensions import TYPE_CHECKING
 
-from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
+from semantic_digital_twin.datastructures.camera_model import (
+    FieldOfViewCameraModel,
+    PinholeCameraModel,
+)
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -73,14 +76,14 @@ def test_robot_camera_preserves_robot_part_and_sensor_types():
 
 @pytest.mark.parametrize("camera_type", [PR2KinectV1, StretchCameraColor, GarmiCamera])
 def test_robot_camera_accepts_projection_model_and_optical_root(
-    camera_type: type[RobotCamera], table_world: World
+    camera_type: type[RobotCamera[FieldOfViewCameraModel]], table_world: World
 ) -> None:
     """
     Robot cameras retain their supplied projection model and optical root.
     """
-    model = PinholeCameraModel.from_field_of_view(
-        resolution=CameraResolution(width=320, height=240),
-        field_of_view=FieldOfView(),
+    model = FieldOfViewCameraModel(
+        image_resolution=CameraResolution(width=320, height=240),
+        angular_extent=FieldOfView(),
     )
     camera = camera_type(
         name=PrefixedName(name="camera"),

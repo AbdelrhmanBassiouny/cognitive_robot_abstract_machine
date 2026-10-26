@@ -194,7 +194,7 @@ class HSRBGripper(EndEffector, HasTwoFingers[HSRBLeftFinger, HSRBRightFinger]):
 
 
 @dataclass(eq=False)
-class HSRBHandCamera(RobotCamera):
+class HSRBHandCamera(RobotCamera[FieldOfViewCameraModel]):
 
     def setup_hardware_interfaces(self) -> None:
         pass
@@ -264,7 +264,7 @@ class HSRBArm(Arm[HSRBGripper], HasSensors[HSRBHandCamera]):
 
 
 @dataclass(eq=False)
-class HSRBHeadCenterCamera(RobotCamera):
+class HSRBHeadCenterCamera(RobotCamera[FieldOfViewCameraModel]):
 
     def setup_hardware_interfaces(self) -> None:
         pass
@@ -292,7 +292,7 @@ class HSRBHeadCenterCamera(RobotCamera):
 
 
 @dataclass(eq=False)
-class HSRBHeadLeftCamera(RobotCamera):
+class HSRBHeadLeftCamera(RobotCamera[FieldOfViewCameraModel]):
 
     def setup_hardware_interfaces(self) -> None:
         pass
@@ -319,7 +319,7 @@ class HSRBHeadLeftCamera(RobotCamera):
 
 
 @dataclass(eq=False)
-class HSRBHeadRightCamera(RobotCamera):
+class HSRBHeadRightCamera(RobotCamera[FieldOfViewCameraModel]):
 
     def setup_hardware_interfaces(self) -> None:
         pass
@@ -346,7 +346,7 @@ class HSRBHeadRightCamera(RobotCamera):
 
 
 @dataclass(eq=False)
-class HSRBHeadRGBDCamera(RobotCamera):
+class HSRBHeadRGBDCamera(RobotCamera[FieldOfViewCameraModel]):
 
     def setup_hardware_interfaces(self) -> None:
         pass

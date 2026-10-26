@@ -168,7 +168,7 @@ class GarmiJoint(StrEnum):
 
 
 @dataclass(eq=False)
-class GarmiCamera(RobotCamera):
+class GarmiCamera(RobotCamera[FieldOfViewCameraModel]):
     """
     The head camera of the GARMI robot.
     """

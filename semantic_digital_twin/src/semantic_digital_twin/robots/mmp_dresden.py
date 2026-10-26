@@ -158,7 +158,7 @@ class MMPDresdenGripper(
 
 
 @dataclass(eq=False)
-class MMPDresdenCamera(RobotCamera):
+class MMPDresdenCamera(RobotCamera[FieldOfViewCameraModel]):
 
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(

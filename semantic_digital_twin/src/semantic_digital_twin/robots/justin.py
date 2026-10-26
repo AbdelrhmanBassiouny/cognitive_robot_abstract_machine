@@ -434,7 +434,7 @@ class JustinRightArm(Arm[JustinRightHand]):
 
 
 @dataclass(eq=False)
-class JustinCamera(RobotCamera):
+class JustinCamera(RobotCamera[FieldOfViewCameraModel]):
 
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(

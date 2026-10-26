@@ -755,7 +755,7 @@ def test_empty_gripper_is_not_holding_something():
 
 
 @dataclass(eq=False)
-class ReviewCamera(Camera):
+class ReviewCamera(Camera[FieldOfViewCameraModel]):
     """
     Minimal concrete Camera for predicate tests.
     """

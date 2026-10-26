@@ -324,7 +324,7 @@ class DAiSyRightArm(Arm[DAiSyRightGripper]):
 
 
 @dataclass(eq=False)
-class DAiSyCamera(RobotCamera):
+class DAiSyCamera(RobotCamera[FieldOfViewCameraModel]):
     """
     DAiSy does not currently have a dedicated camera.
 

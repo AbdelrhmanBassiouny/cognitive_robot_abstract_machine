@@ -570,7 +570,7 @@ class ICub3RightArm(Arm[ICub3RightHand]):
 
 
 @dataclass(eq=False)
-class ICub3Camera(RobotCamera):
+class ICub3Camera(RobotCamera[FieldOfViewCameraModel]):
 
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(

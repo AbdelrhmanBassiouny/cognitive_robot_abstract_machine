@@ -397,7 +397,7 @@ class TiagoRightArm(Arm[TiagoRightGripper]):
 
 
 @dataclass(eq=False)
-class TiagoCamera(RobotCamera):
+class TiagoCamera(RobotCamera[FieldOfViewCameraModel]):
     """
     Camera attached to its robot model's optical frame.
     """
@@ -1016,7 +1016,7 @@ class TiagoMujocoRightArm(Arm[TiagoMujocoRightGripper], ServoedByItsMujocoModel)
 
 
 @dataclass(eq=False)
-class TiagoMujocoCamera(RobotCamera):
+class TiagoMujocoCamera(RobotCamera[FieldOfViewCameraModel]):
     """
     Head-mounted camera with optical forward aligned to the head's positive X axis.
     """

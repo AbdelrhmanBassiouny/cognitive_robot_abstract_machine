@@ -414,7 +414,7 @@ class UnitreeG1RightArm(Arm[UnitreeG1RightHand]):
 
 
 @dataclass(eq=False)
-class D435(RobotCamera):
+class D435(RobotCamera[FieldOfViewCameraModel]):
 
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(

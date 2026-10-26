@@ -388,7 +388,7 @@ class TracyRightArm(UR10eArm[TracyRightGripper]):
 
 
 @dataclass(eq=False)
-class TracyCamera(RobotCamera):
+class TracyCamera(RobotCamera[FieldOfViewCameraModel]):
     """
     Tracy's fixed camera rooted at its calibrated camera link.
     """

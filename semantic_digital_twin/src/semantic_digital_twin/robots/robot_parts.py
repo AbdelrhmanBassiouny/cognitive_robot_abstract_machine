@@ -21,6 +21,7 @@ from krrood.class_diagrams.attribute_introspector import (
 )
 from krrood.entity_query_language.factories import variable, contains, a, entity
 from krrood.ormatic.utils import classproperty
+from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood.utils import get_generic_type_parameters
 from semantic_digital_twin.datastructures.camera_model import (
     CameraModel,
@@ -577,8 +578,15 @@ class Sensor(HasRootBody, ABC):
     """
 
 
+# %% Camera projection types
+TCameraModel = TypeVar("TCameraModel", bound=CameraModel)
+"""
+Projection model accepted by a camera.
+"""
+
+
 @dataclass(eq=False)
-class Camera(Sensor):
+class Camera(Sensor, Generic[TCameraModel], SubClassSafeGeneric):
     """
     An image sensor rooted at its optical frame.
 
@@ -586,7 +594,7 @@ class Camera(Sensor):
     Its mounting pose belongs to the world connection of the root body.
     """
 
-    camera_model: CameraModel = field(kw_only=True)
+    camera_model: TCameraModel = field(kw_only=True)
     """
     Native projection model of the camera.
     """
@@ -650,7 +658,7 @@ A kind of camera.
 
 
 @dataclass(eq=False)
-class RobotCamera(Camera, AbstractRobotPart, ABC):
+class RobotCamera(Camera[TCameraModel], AbstractRobotPart, Generic[TCameraModel], ABC):
     """
     An optical-frame-rooted camera that participates in robot-part lifecycle handling.
     """
