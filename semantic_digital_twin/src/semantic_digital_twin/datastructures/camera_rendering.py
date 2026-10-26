@@ -21,9 +21,10 @@ class ColorRenderingMode(StrEnum):
     Select how the ray tracer produces the color image.
     """
 
-    SEMANTIC = "semantic"
+    BODY_COLOR = "body_color"
     """
-    Color visible bodies with their semantic geometry colors.
+    Color each visible body uniformly with its first collision geometry color,
+    falling back to its first visual geometry color or the default body color.
     """
 
     TEXTURED = "textured"
@@ -86,9 +87,9 @@ class RenderedRGBDFrame:
     Body-index segmentation image aligned with the color and depth images.
     """
 
-    object_color_map: dict[str, str]
+    object_color_map: dict[str, list[str]]
     """
-    Mapping from semantic RGB color keys to object names.
+    Visible body names grouped by comma-separated RGB color keys.
     """
 
     camera_model: PinholeCameraModel
@@ -142,14 +143,14 @@ class RayIntersections:
 @dataclass
 class RenderedColorFrame:
     """
-    BGR image values and the associated semantic color names.
+    BGR image values and the associated body names grouped by color.
     """
 
     color_image: np.ndarray
     """
     Width-first color image in BGR channel order.
     """
-    object_color_map: dict[str, str]
+    object_color_map: dict[str, list[str]]
     """
-    Object names indexed by semantic RGB color keys.
+    Visible body names grouped by comma-separated RGB color keys.
     """

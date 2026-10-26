@@ -28,9 +28,9 @@ from semantic_digital_twin.datastructures.camera_rendering import (
 # %% Interface integration
 
 
-def test_interface_publishes_aligned_semantic_rgbd_frame():
+def test_interface_publishes_aligned_body_color_rgbd_frame() -> None:
     """
-    The complete interface publishes images and matching semantic camera state.
+    The complete interface publishes images and matching camera state.
     """
     interface = RayTracingCameraInterface(
         RayTracingCameraConfiguration(
@@ -117,7 +117,7 @@ def test_interface_publishes_shared_rendered_frame(monkeypatch: MonkeyPatch) -> 
     render.assert_called_once_with(
         context.camera, rgb_mode=interface.camera_config.rgb_mode
     )
-    assert interface.camera_config.rgb_mode is ColorRenderingMode.SEMANTIC
+    assert interface.camera_config.rgb_mode is ColorRenderingMode.BODY_COLOR
     np.testing.assert_array_equal(cas.color_image, frame.color_bgr.swapaxes(0, 1))
     np.testing.assert_array_equal(
         cas.depth_image, frame.depth_in_millimeters.swapaxes(0, 1)

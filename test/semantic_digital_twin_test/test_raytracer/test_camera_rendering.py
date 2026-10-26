@@ -193,16 +193,42 @@ def test_combined_render_handles_no_hits(
 # %% RGB-D products
 
 
-def test_semantic_rgbd_render_preserves_encodings(
+def test_body_color_map_preserves_bodies_sharing_a_color(
+    camera_intersections: CameraIntersections,
+    ray_test_world: tuple[World, Body, Body, Body, Body],
+) -> None:
+    """
+    A shared geometry color maps to every visible body with that color.
+    """
+    fixture = camera_intersections
+    _, first_body, second_body, *_ = ray_test_world
+    color = Color.RED()
+    first_body.collision[0].color = color
+    second_body.collision[0].color = color
+    fixture.query.return_value.bodies = [first_body, second_body]
+
+    frame = fixture.ray_tracer.render(fixture.camera)
+
+    assert frame.object_color_map == {
+        ",".join(
+            str(channel) for channel in fixture.ray_tracer.get_body_color(first_body)
+        ): [
+            body.name.name
+            for body in sorted([first_body, second_body], key=lambda body: body.index)
+        ]
+    }
+
+
+def test_body_color_rgbd_render_preserves_encodings(
     camera_intersections: CameraIntersections,
 ) -> None:
     """
-    Semantic colors, optical depth, and body labels share the same hit query.
+    Body colors, optical depth, and body labels share the same hit query.
     """
     fixture = camera_intersections
     fixture.body.collision[0].color = Color.from_rgba(red=1.0, green=0.0, blue=0.0)
     frame = fixture.ray_tracer.render(
-        fixture.camera, rgb_mode=ColorRenderingMode.SEMANTIC
+        fixture.camera, rgb_mode=ColorRenderingMode.BODY_COLOR
     )
     expected_color = np.zeros(
         (fixture.resolution.width, fixture.resolution.height, 3), dtype=np.uint8
@@ -216,7 +242,7 @@ def test_semantic_rgbd_render_preserves_encodings(
         -fixture.query.return_value.hit_points[:, 2]
     )
     np.testing.assert_array_equal(frame.depth_in_millimeters, expected_depth)
-    assert frame.object_color_map == {"255,0,0": fixture.body.name.name}
+    assert frame.object_color_map == {"255,0,0": [fixture.body.name.name]}
     assert frame.camera_model is fixture.camera.camera_model
     fixture.query.assert_called_once()
 
@@ -255,7 +281,7 @@ def test_mesh_render_preserves_rgb_channels(
     camera_intersections: CameraIntersections, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """
-    Mesh images are published in BGR order with no semantic color map.
+    Mesh images are published in BGR order with no body color map.
     """
     fixture = camera_intersections
     image = Image.new(
@@ -382,13 +408,13 @@ def test_rgbd_render_supports_explicit_depth_mode(
     )
 
 
-# %% Semantic body colors
+# %% Body colors
 @pytest.mark.parametrize("collision_color", [True, False])
-def test_semantic_body_color_uses_available_geometry(
+def test_body_color_uses_available_geometry(
     camera_intersections: CameraIntersections, collision_color: bool
 ) -> None:
     """
-    Collision or visual geometry supplies the same unsigned-byte semantic color.
+    Collision or visual geometry supplies the same unsigned-byte body color.
     """
     body = Mock(spec=Body)
     geometry = Mock()
@@ -401,7 +427,7 @@ def test_semantic_body_color_uses_available_geometry(
     )
 
 
-def test_semantic_body_color_defaults_to_gray(
+def test_body_color_defaults_to_gray(
     camera_intersections: CameraIntersections,
 ) -> None:
     """

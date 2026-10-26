@@ -79,7 +79,7 @@ class RayTracer:
         default_factory=lambda: Color.from_rgba(red=0.5, green=0.5, blue=0.5)
     )
     """
-    Semantic color for a body without collision or visual geometry.
+    Color for a body without collision or visual geometry.
     """
 
     scene: Scene = field(default_factory=Scene, init=False)
@@ -429,7 +429,7 @@ class RayTracer:
     def render(
         self,
         camera: Camera,
-        rgb_mode: ColorRenderingMode = ColorRenderingMode.SEMANTIC,
+        rgb_mode: ColorRenderingMode = ColorRenderingMode.BODY_COLOR,
         depth_mode: DepthMode = DepthMode.OPTICAL_AXIS,
     ) -> RenderedRGBDFrame:
         """
@@ -496,12 +496,12 @@ class RayTracer:
         rgb_mode: ColorRenderingMode,
     ) -> RenderedColorFrame:
         """
-        Return BGR colors and their semantic names for the selected rendering mode.
+        Return BGR colors and visible body names grouped by color.
 
         :param segmentation: Body indices identifying visible geometry at each pixel.
         :param resolution: Pixel dimensions of the rendered image.
         :param rgb_mode: Source of the rendered color values.
-        :return: Width-first BGR colors and the semantic color-to-name mapping.
+        :return: Width-first BGR colors and the RGB color-to-body-names mapping.
         """
         if rgb_mode == ColorRenderingMode.TEXTURED:
             return RenderedColorFrame(
@@ -509,13 +509,13 @@ class RayTracer:
                 object_color_map={},
             )
         color_rgb = np.zeros((*segmentation.shape, 3), dtype=np.uint8)
-        object_color_map: dict[str, str] = {}
+        object_color_map: dict[str, list[str]] = {}
         for body_index in np.unique(segmentation[segmentation >= 0]):
             body = self.world.kinematic_structure[int(body_index)]
             body_rgb = self.get_body_color(body)
             color_rgb[segmentation == body_index] = body_rgb
             color_key = ",".join(str(channel) for channel in body_rgb)
-            object_color_map[color_key] = body.name.name
+            object_color_map.setdefault(color_key, []).append(body.name.name)
         return RenderedColorFrame(
             color_image=color_rgb[:, :, ::-1].copy(), object_color_map=object_color_map
         )

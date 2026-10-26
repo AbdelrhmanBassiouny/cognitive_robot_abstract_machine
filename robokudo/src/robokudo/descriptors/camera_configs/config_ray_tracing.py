@@ -97,7 +97,7 @@ class RayTracingCameraConfiguration(BaseCameraConfig):
     Scale factor from RGB image to depth image resolution.
     """
 
-    rgb_mode: ColorRenderingMode = ColorRenderingMode.SEMANTIC
+    rgb_mode: ColorRenderingMode = ColorRenderingMode.BODY_COLOR
     """
     Method used to create the rendered color image.
     """
