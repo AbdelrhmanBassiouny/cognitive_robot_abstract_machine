@@ -26,6 +26,8 @@ from semantic_digital_twin.datastructures.camera_rendering import (
     RayIntersections,
     RenderedColorFrame,
     DepthMode,
+    OpticalAxisDepthMode,
+    RayDistanceDepthMode,
     RenderedRGBDFrame,
     SegmentationDepthFrame,
     ColorRenderingMode,
@@ -183,7 +185,7 @@ class RayTracer:
         min_distance: float = 0,
         max_distance: float = np.inf,
         field_of_view: FieldOfView | None = None,
-        depth_mode: DepthMode = DepthMode.RAY_DISTANCE,
+        depth_mode: DepthMode = RayDistanceDepthMode(),
     ) -> np.ndarray:
         """
         Return meter depths per pixel, or negative values for missed rays.
@@ -216,7 +218,7 @@ class RayTracer:
         min_distance: float = 0,
         max_distance: float = np.inf,
         field_of_view: FieldOfView | None = None,
-        depth_mode: DepthMode = DepthMode.RAY_DISTANCE,
+        depth_mode: DepthMode = RayDistanceDepthMode(),
         camera_model: PinholeCameraModel | None = None,
     ) -> SegmentationDepthFrame:
         """
@@ -276,18 +278,15 @@ class RayTracer:
         hit_pixels = pixels[ray_indices]
         segmentation[hit_pixels[:, 0], hit_pixels[:, 1]] = body_indices
 
-        if depth_mode == DepthMode.OPTICAL_AXIS:
-            camera_T_world = np.linalg.inv(self.scene.camera_transform)
-            world_P_hits = np.concatenate([points, np.ones((len(points), 1))], axis=1)
-            camera_P_hits = (camera_T_world @ world_P_hits.T).T
-            hit_depths = -camera_P_hits[:, 2]
-            valid_depths = hit_depths > 0.0
-            hit_pixels = hit_pixels[valid_depths]
-            hit_depths = hit_depths[valid_depths]
-        else:
-            hit_depths = trimesh.util.diagonal_dot(
-                points - ray_origins[ray_indices], ray_directions[ray_indices]
-            )
+        hit_depths = depth_mode.hit_depth(
+            hit_points=points,
+            ray_origins=ray_origins[ray_indices],
+            ray_directions=ray_directions[ray_indices],
+            world_T_camera=self.scene.camera_transform,
+        )
+        valid_depths = hit_depths >= 0.0
+        hit_pixels = hit_pixels[valid_depths]
+        hit_depths = hit_depths[valid_depths]
         depth[hit_pixels[:, 0], hit_pixels[:, 1]] = hit_depths.astype(np.float32)
         return SegmentationDepthFrame(segmentation=segmentation, depth=depth)
 
@@ -422,7 +421,7 @@ class RayTracer:
         self,
         camera: Camera,
         rgb_mode: ColorRenderingMode = ColorRenderingMode.BODY_COLOR,
-        depth_mode: DepthMode = DepthMode.OPTICAL_AXIS,
+        depth_mode: DepthMode = OpticalAxisDepthMode(),
     ) -> RenderedRGBDFrame:
         """
         Render camera colors, body labels, and unsigned millimeter depths.

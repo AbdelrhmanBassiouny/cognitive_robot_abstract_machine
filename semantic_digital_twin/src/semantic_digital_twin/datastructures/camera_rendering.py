@@ -5,12 +5,16 @@ Color and depth conventions for aligned ray-traced camera images.
 from __future__ import annotations
 
 # %% Imports
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import StrEnum
 import numpy as np
+import trimesh
 from typing_extensions import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    import numpy.typing as npt
+
     from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
     from semantic_digital_twin.world_description.world_entity import Body
 
@@ -32,19 +36,69 @@ class ColorRenderingMode(StrEnum):
     """
 
 
-class DepthMode(StrEnum):
+# %% Depth conventions
+@dataclass(frozen=True)
+class DepthMode(ABC):
     """
-    Distance convention represented by a rendered depth image.
+    Compute one meter depth per surface hit, using negative values for invalid depths.
     """
 
-    RAY_DISTANCE = "ray_distance"
+    @abstractmethod
+    def hit_depth(
+        self,
+        hit_points: npt.NDArray[np.float64],
+        ray_origins: npt.NDArray[np.float64],
+        ray_directions: npt.NDArray[np.float64],
+        world_T_camera: npt.NDArray[np.float64],
+    ) -> npt.NDArray[np.float64]:
+        """
+        Return depths aligned with the input hits.
+
+        :param hit_points: World-space surface points, one row per hit.
+        :param ray_origins: World-space ray origins aligned with the hits.
+        :param ray_directions: World-space unit ray directions aligned with the hits.
+        :param world_T_camera: Pose of the rendering camera, looking along its negative z axis.
+        :return: Meter depths, with negative values for invalid depths.
+        """
+        ...
+
+
+@dataclass(frozen=True)
+class OpticalAxisDepthMode(DepthMode):
     """
-    Distance from the camera along each viewing ray.
+    Measure depth along the rendering camera's negative z axis.
     """
-    OPTICAL_AXIS = "optical_axis"
+
+    def hit_depth(
+        self,
+        hit_points: npt.NDArray[np.float64],
+        ray_origins: npt.NDArray[np.float64],
+        ray_directions: npt.NDArray[np.float64],
+        world_T_camera: npt.NDArray[np.float64],
+    ) -> npt.NDArray[np.float64]:
+        camera_T_world = np.linalg.inv(world_T_camera)
+        world_P_hits = np.concatenate(
+            [hit_points, np.ones((len(hit_points), 1))], axis=1
+        )
+        camera_P_hits = (camera_T_world @ world_P_hits.T).T
+        depths = -camera_P_hits[:, 2]
+        return np.where(depths > 0.0, depths, -1.0)
+
+
+@dataclass(frozen=True)
+class RayDistanceDepthMode(DepthMode):
     """
-    Distance projected onto the camera's optical axis.
+    Measure depth from each ray origin along its viewing direction.
     """
+
+    def hit_depth(
+        self,
+        hit_points: npt.NDArray[np.float64],
+        ray_origins: npt.NDArray[np.float64],
+        ray_directions: npt.NDArray[np.float64],
+        world_T_camera: npt.NDArray[np.float64],
+    ) -> npt.NDArray[np.float64]:
+        return trimesh.util.diagonal_dot(hit_points - ray_origins, ray_directions)
 
 
 # %% Aligned depth and segmentation

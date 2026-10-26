@@ -26,6 +26,8 @@ from semantic_digital_twin.datastructures.camera_rendering import (
     CameraRays,
     RayIntersections,
     DepthMode,
+    OpticalAxisDepthMode,
+    RayDistanceDepthMode,
     ColorRenderingMode,
 )
 from semantic_digital_twin.robots.robot_parts import Camera
@@ -121,7 +123,7 @@ def camera_intersections(
 
 
 # %% Depth conventions
-@pytest.mark.parametrize("depth_mode", list(DepthMode))
+@pytest.mark.parametrize("depth_mode", [RayDistanceDepthMode(), OpticalAxisDepthMode()])
 def test_combined_render_uses_requested_depth_convention(
     camera_intersections: CameraIntersections, depth_mode: DepthMode
 ) -> None:
@@ -140,7 +142,7 @@ def test_combined_render_uses_requested_depth_convention(
         (fixture.resolution.width, fixture.resolution.height), -1.0, dtype=np.float32
     )
     expected_depth[0, 0] = 2.0
-    expected_depth[1, 0] = 2.5 if depth_mode == DepthMode.RAY_DISTANCE else 2.0
+    expected_depth[1, 0] = 2.5 if isinstance(depth_mode, RayDistanceDepthMode) else 2.0
     expected_segmentation = np.full(
         (fixture.resolution.width, fixture.resolution.height), -1, dtype=np.int32
     )
@@ -158,7 +160,7 @@ def test_combined_render_uses_requested_depth_convention(
     )
 
 
-@pytest.mark.parametrize("depth_mode", list(DepthMode))
+@pytest.mark.parametrize("depth_mode", [RayDistanceDepthMode(), OpticalAxisDepthMode()])
 def test_combined_render_handles_no_hits(
     camera_intersections: CameraIntersections, depth_mode: DepthMode
 ) -> None:
@@ -348,7 +350,7 @@ def test_textured_render_generates_camera_rays_once(
     fixture.query.assert_called_once()
 
 
-@pytest.mark.parametrize("depth_mode", list(DepthMode))
+@pytest.mark.parametrize("depth_mode", [RayDistanceDepthMode(), OpticalAxisDepthMode()])
 def test_combined_render_uses_same_first_hit_for_depth_and_segmentation(
     camera_intersections: CameraIntersections,
     depth_mode: DepthMode,
@@ -374,7 +376,7 @@ def test_combined_render_uses_same_first_hit_for_depth_and_segmentation(
     assert frame.depth[0, 0] == 2.0
 
 
-@pytest.mark.parametrize("depth_mode", list(DepthMode))
+@pytest.mark.parametrize("depth_mode", [RayDistanceDepthMode(), OpticalAxisDepthMode()])
 def test_depth_map_supports_explicit_depth_mode(
     camera_intersections: CameraIntersections,
     depth_mode: DepthMode,
@@ -388,10 +390,10 @@ def test_depth_map_supports_explicit_depth_mode(
         resolution=fixture.resolution,
         depth_mode=depth_mode,
     )
-    assert depth[1, 0] == (2.5 if depth_mode == DepthMode.RAY_DISTANCE else 2.0)
+    assert depth[1, 0] == (2.5 if isinstance(depth_mode, RayDistanceDepthMode) else 2.0)
 
 
-@pytest.mark.parametrize("depth_mode", list(DepthMode))
+@pytest.mark.parametrize("depth_mode", [RayDistanceDepthMode(), OpticalAxisDepthMode()])
 def test_rgbd_render_supports_explicit_depth_mode(
     camera_intersections: CameraIntersections,
     depth_mode: DepthMode,
@@ -403,7 +405,7 @@ def test_rgbd_render_supports_explicit_depth_mode(
     frame = fixture.ray_tracer.render(fixture.camera, depth_mode=depth_mode)
     assert frame.depth_in_millimeters[1, 0] == (
         RayTracer.convert_depth_to_millimeters(
-            np.array(2.5 if depth_mode == DepthMode.RAY_DISTANCE else 2.0)
+            np.array(2.5 if isinstance(depth_mode, RayDistanceDepthMode) else 2.0)
         )
     )
 
