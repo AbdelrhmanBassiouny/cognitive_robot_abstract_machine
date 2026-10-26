@@ -673,30 +673,33 @@ class RobotCamera(Camera, Sensor, ABC):
     """
 
     @staticmethod
-    def create_optical_root(
-        parent: Body, parent_T_optical: HomogeneousTransformationMatrix
+    def create_optical_body(
+        mounting_body: Body, parent_T_optical: HomogeneousTransformationMatrix
     ) -> Body:
         """
-        Add a geometry-free optical body fixed to its mounting body.
+        Add a geometry-free optical body when the robot description lacks an optical frame.
 
-        :param parent: Mounting body in the robot world.
+        Use the returned body as the camera root. If the description already provides
+        an optical frame, use that body directly as the camera root instead.
+
+        :param mounting_body: Mounting body in the robot world.
         :param parent_T_optical: Optical pose relative to the mounting body.
         :return: Optical body attached by a fixed connection.
         """
         optical_root = Body(
             name=PrefixedName(
-                name=f"{parent.name.name}_camera_optical_frame",
-                prefix=parent.name.prefix,
+                name=f"{mounting_body.name.name}_camera_optical_frame",
+                prefix=mounting_body.name.prefix,
             )
         )
-        with parent._world.modify_world():
-            parent._world.add_connection(
+        with mounting_body._world.modify_world():
+            mounting_body._world.add_connection(
                 FixedConnection(
-                    parent=parent,
+                    parent=mounting_body,
                     child=optical_root,
                     parent_T_connection_expression=HomogeneousTransformationMatrix(
                         data=parent_T_optical,
-                        reference_frame=parent,
+                        reference_frame=mounting_body,
                         child_frame=optical_root,
                     ),
                 )
