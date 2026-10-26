@@ -71,6 +71,11 @@ class ActionFeedbackPublisher:
     changes.
     """
 
+    sent_node_count: int = field(init=False, default=0)
+    """
+    How many nodes of the statechart the feedback sent the structure of so far.
+    """
+
     _last_sent_time: float = field(init=False, default=-float("inf"))
     """
     The :func:`time.monotonic` time the most recent feedback was sent at.
@@ -91,6 +96,7 @@ class ActionFeedbackPublisher:
         )
         data[StatechartPayloadKey.GOAL_ID] = self.action_server.goal_id
         self.last_history_length = len(self.executor.statechart.state_history)
+        self.sent_node_count = len(self.executor.statechart.nodes)
         self.send(data)
 
     def publish_if_changed(self) -> None:
@@ -130,12 +136,21 @@ class ActionFeedbackPublisher:
 
     def publish(self) -> None:
         """
-        Send feedback regardless of whether anything changed.
+        Send feedback regardless of whether anything changed, with the structure of the
+        nodes that joined the statechart since the structure was sent last.
         """
-        if self.executor.statechart is None:
+        statechart = self.executor.statechart
+        if statechart is None:
             return
         data = self.create_states()
         data[StatechartPayloadKey.GOAL_ID] = self.action_server.goal_id
+        if len(statechart.nodes) > self.sent_node_count:
+            data[
+                StatechartPayloadKey.JOINED_NODES
+            ] = statechart.create_structure_copy().nodes_from_to_json(
+                first_node_index=self.sent_node_count
+            )
+            self.sent_node_count = len(statechart.nodes)
         self.send(data)
 
     def create_states(self) -> dict[str, Any]:
