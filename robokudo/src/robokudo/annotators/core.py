@@ -373,13 +373,7 @@ class BaseAnnotator(Behaviour):
         timing_dict = self._times
         timing_dict[func] = value
 
-    #########################################################
-    # Data publishing handling                               #
-    #                                                        #
-    # Collect float variables in your Annotators             #
-    # that you want to analyze with external tools.          #
-    # The following methods handle to publish these via ROS. #
-    ##########################################################
+    # %% Variable publishing
 
     def shall_publish_variables(self) -> bool:
         """
