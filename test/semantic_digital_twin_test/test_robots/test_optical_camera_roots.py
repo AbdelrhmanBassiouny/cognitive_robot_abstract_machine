@@ -58,7 +58,7 @@ def test_optical_root_preserves_mounting_pose(table_world: World) -> None:
         yaw=0.6,
         reference_frame=table_world.root,
     )
-    optical_root = RobotCamera.create_optical_root(table_world.root, parent_T_optical)
+    optical_root = RobotCamera.create_optical_body(table_world.root, parent_T_optical)
     np.testing.assert_allclose(
         optical_root.global_transform.to_np(),
         table_world.root.global_transform.to_np() @ parent_T_optical.to_np(),
@@ -111,7 +111,7 @@ def test_optical_mount_follows_parent_motion(
     parent_T_optical = HomogeneousTransformationMatrix.from_xyz_rpy(
         x=0.2, roll=0.3, yaw=0.4
     )
-    optical_root = RobotCamera.create_optical_root(parent, parent_T_optical)
+    optical_root = RobotCamera.create_optical_body(parent, parent_T_optical)
     with world.modify_world():
         parent.parent_connection.origin = HomogeneousTransformationMatrix(
             data=HomogeneousTransformationMatrix.from_xyz_rpy(

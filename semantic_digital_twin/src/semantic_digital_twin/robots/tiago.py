@@ -1032,7 +1032,7 @@ class TiagoMujocoCamera(RobotCamera):
         :return: Camera configured for the head's mounting frame.
         """
         return cls(
-            root=cls.create_optical_root(
+            root=cls.create_optical_body(
                 robot_root._world.get_body_in_branch_by_name(
                     robot_root, TiagoMujocoBody.HEAD
                 ),

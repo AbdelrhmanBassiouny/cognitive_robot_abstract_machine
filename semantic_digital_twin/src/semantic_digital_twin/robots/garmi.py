@@ -192,7 +192,7 @@ class GarmiCamera(RobotCamera):
         Sets up the default configuration for the camera.
         """
         return cls(
-            root=cls.create_optical_root(
+            root=cls.create_optical_body(
                 robot_root._world.get_body_in_branch_by_name(robot_root, "head"),
                 HomogeneousTransformationMatrix(
                     data=RotationMatrix.from_vectors(

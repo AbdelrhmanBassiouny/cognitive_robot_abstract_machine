@@ -227,7 +227,7 @@ class MyRobotRightFinger(Finger):
 A robot camera needs an optical root body plus a camera model.
 The root uses positive x to the image right, positive y down, and positive z into the scene.
 Select the corresponding sensor's optical frame from the robot description. If none
-exists, `RobotCamera.create_optical_root(parent, parent_T_optical)` adds an optical
+exists, `RobotCamera.create_optical_body(mounting_body, parent_T_optical)` adds an optical
 body with a fixed mounting pose to the world graph.
 `default_camera=True` marks this as the camera returned by `robot.get_default_camera()`.
 Exactly one camera across the entire robot must have `default_camera=True`.
