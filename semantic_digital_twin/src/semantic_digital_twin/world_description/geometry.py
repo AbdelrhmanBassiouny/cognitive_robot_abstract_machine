@@ -9,7 +9,7 @@ import re
 import shutil
 from abc import ABC, abstractmethod
 from copy import deepcopy
-from dataclasses import dataclass, field, fields, Field
+from dataclasses import dataclass, field, fields, Field, replace
 from enum import StrEnum, auto
 from functools import cached_property
 from pathlib import Path
@@ -30,11 +30,11 @@ from typing_extensions import (
     Tuple,
     TYPE_CHECKING,
     TypeVar,
-    ClassVar,
 )
 
 from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json, from_json
 from krrood.bounds import Bounds, BoundsInterface
+from krrood.ormatic.utils import classproperty
 from random_events.interval import SimpleInterval, Bound, closed
 from random_events.product_algebra import SimpleEvent
 from semantic_digital_twin.datastructures.variables import SpatialVariables
@@ -78,16 +78,22 @@ class Hue:
     How far round the colour circle from red it lies, in degrees.
     """
 
-    FULL_TURN: ClassVar[float] = 360.0
-    """
-    How many degrees take a hue once round the colour circle, back to where it started.
-    """
+    @classproperty
+    def full_turn(cls) -> float:
+        """
+        How many degrees take a hue once round the colour circle, back to where it
+        started.
+        """
+        return 360.0
 
-    DECIMAL_PLACES: ClassVar[int] = 9
-    """
-    How many decimal places of a degree a hue read off a color keeps, which drops the
-    rounding error that converting to red, green and blue and back leaves behind.
-    """
+    @classproperty
+    def decimal_places(cls) -> int:
+        """
+        How many decimal places of a degree a hue read off a color keeps, which drops
+        the rounding error that converting to red, green and blue and back leaves
+        behind.
+        """
+        return 9
 
     def distance(self, degrees: npt.ArrayLike) -> npt.ArrayLike:
         """
@@ -96,8 +102,8 @@ class Hue:
         :param degrees: A hue in degrees, or an array of them.
         :return: The distance in degrees, element by element when given an array.
         """
-        apart = np.abs(np.asarray(degrees, dtype=float) - self.degrees) % self.FULL_TURN
-        return np.minimum(apart, self.FULL_TURN - apart)
+        apart = np.abs(np.asarray(degrees, dtype=float) - self.degrees) % self.full_turn
+        return np.minimum(apart, self.full_turn - apart)
 
 
 @dataclass
@@ -275,7 +281,7 @@ class Color:
         :param value: How bright it is, from zero (black) to one.
         :return: The color.
         """
-        return cls(*colorsys.hsv_to_rgb(hue.degrees / Hue.FULL_TURN, saturation, value))
+        return cls(*colorsys.hsv_to_rgb(hue.degrees / Hue.full_turn, saturation, value))
 
     @property
     def hue(self) -> Hue:
@@ -285,8 +291,8 @@ class Color:
         ..note:: A color with no saturation has no hue to speak of and reads as red.
         """
         fraction_of_a_turn, _, _ = colorsys.rgb_to_hsv(*self.to_rgb())
-        degrees = round(fraction_of_a_turn * Hue.FULL_TURN, Hue.DECIMAL_PLACES)
-        return Hue(degrees % Hue.FULL_TURN)
+        degrees = round(fraction_of_a_turn * Hue.full_turn, Hue.decimal_places)
+        return Hue(degrees % Hue.full_turn)
 
     @classmethod
     def PINK(cls) -> Self:
@@ -2069,20 +2075,13 @@ class Polygon2D:
     that repeats the first is dropped.
     """
 
-    CIRCLE_CORNER_COUNT: ClassVar[int] = 64
-    """
-    How many corners :meth:`circle` draws a circle with, which for a circle a few
-    centimetres across puts every corner within a tenth of a millimetre of the true
-    circle.
-    """
-
-    ALIGNMENT_ANGLE_STEP: ClassVar[float] = math.radians(1.0)
+    alignment_angle_step: float = math.radians(1.0)
     """
     How finely, in radians, :meth:`turn_onto` tries turns: a degree moves a corner of a
     polygon a few centimetres across by under half a millimetre.
     """
 
-    CORNER_MATCH_TOLERANCE: ClassVar[float] = 1e-9
+    corner_match_tolerance: float = 1e-9
     """
     How far a corner may lie from another, in the polygon's own units, and still be
     taken for the same corner when the polygon is compared with itself turned.
@@ -2113,14 +2112,16 @@ class Polygon2D:
         )
 
     @classmethod
-    def circle(cls, diameter: float) -> Self:
+    def circle(cls, diameter: float, corner_count: int = 64) -> Self:
         """
-        A regular polygon of :attr:`CIRCLE_CORNER_COUNT` corners standing in for a
-        circle centred on the origin.
+        A regular polygon standing in for a circle centred on the origin.
 
         :param diameter: The circle's diameter.
+        :param corner_count: How many corners to draw the circle with; the default puts
+            every corner of a circle a few centimetres across within a tenth of a
+            millimetre of the true circle.
         """
-        angles = np.linspace(0.0, 2 * math.pi, cls.CIRCLE_CORNER_COUNT, endpoint=False)
+        angles = np.linspace(0.0, 2 * math.pi, corner_count, endpoint=False)
         return cls(np.stack([np.cos(angles), np.sin(angles)], axis=1) * diameter / 2)
 
     @classmethod
@@ -2198,7 +2199,7 @@ class Polygon2D:
         """
         This polygon moved so that its :attr:`centroid` lies on the origin.
         """
-        return Polygon2D(self.vertices - self.centroid.to_np())
+        return replace(self, vertices=self.vertices - self.centroid.to_np())
 
     def turned(self, angle: float) -> Polygon2D:
         """
@@ -2207,7 +2208,9 @@ class Polygon2D:
         :param angle: How far to turn it, in radians, counter-clockwise.
         """
         cosine, sine = math.cos(angle), math.sin(angle)
-        return Polygon2D(self.vertices @ np.array([[cosine, sine], [-sine, cosine]]))
+        return replace(
+            self, vertices=self.vertices @ np.array([[cosine, sine], [-sine, cosine]])
+        )
 
     def distance_to_boundary(self, points: np.ndarray) -> np.ndarray:
         """
@@ -2243,7 +2246,7 @@ class Polygon2D:
         target = other.centered()
         target = Polygon2D(target.vertices * math.sqrt(own.area / target.area))
         turns = np.arange(
-            0.0, own.rotational_symmetry_angle(), self.ALIGNMENT_ANGLE_STEP
+            0.0, own.rotational_symmetry_angle(), self.alignment_angle_step
         )
         mismatches = []
         for turn in turns:
@@ -2272,7 +2275,7 @@ class Polygon2D:
             apart = np.linalg.norm(
                 turned[:, None, :] - centered.vertices[None, :, :], axis=-1
             )
-            if (apart.min(axis=1) <= self.CORNER_MATCH_TOLERANCE).all():
+            if (apart.min(axis=1) <= self.corner_match_tolerance).all():
                 return math.tau / order
         return math.tau
 

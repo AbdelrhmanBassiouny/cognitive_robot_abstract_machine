@@ -111,7 +111,7 @@ def test_a_piece_turned_against_its_hole_is_turned_onto_it_when_inserted(world):
 
     _, _, yaw = pose.rotation_matrix.rpy
     assert float(yaw) % math.pi == pytest.approx(
-        math.pi / 2, abs=Polygon2D.ALIGNMENT_ANGLE_STEP
+        math.pi / 2, abs=Polygon2D.alignment_angle_step
     )
 
 
@@ -123,7 +123,7 @@ def test_a_piece_lined_up_with_its_hole_is_inserted_unturned(world):
     )
 
     _, _, yaw = pose.rotation_matrix.rpy
-    assert float(yaw) == pytest.approx(0.0, abs=Polygon2D.ALIGNMENT_ANGLE_STEP)
+    assert float(yaw) == pytest.approx(0.0, abs=Polygon2D.alignment_angle_step)
 
 
 def test_disk_shape_tips_onto_its_edge_to_pass_through_its_slot(world):
