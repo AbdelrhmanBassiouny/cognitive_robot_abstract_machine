@@ -10,32 +10,25 @@ default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 532
 waves:
 - id: foundation
-  branch: concept-theory/foundation
   name: Shared concept layer (Nov 2 - Dec 18)
   description: Verdict, resolutions and the core estimators; consumed by eql-planning-robots' action effects.
 - id: integration
-  branch: concept-theory/integration
   name: Consumers read the shared concepts (Jan - Feb 2027)
   description: segmind, cramph and giskardpy switch to the shared estimators once cramph lands.
 - id: evaluation
-  branch: concept-theory/evaluation
   name: Laws, agreement and transfer (Mar - Aug 2027)
   description: The experiments of the research plan and the paper.
 tracks:
 - id: theory
-  branch: concept-theory/theory
   name: Theory and evidence
   wave: foundation
 - id: estimators
-  branch: concept-theory/estimators
   name: Verdict, resolutions and estimators
   wave: foundation
 - id: consumers
-  branch: concept-theory/consumers
   name: segmind, cramph and giskardpy
   wave: integration
 - id: experiments
-  branch: concept-theory/experiments
   name: Experiments and paper
   wave: evaluation
 items:
