@@ -30,7 +30,7 @@ from probabilistic_model.probabilistic_circuit.tensorized.exceptions import (
 from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.base import Layer
 from probabilistic_model.probabilistic_circuit.tensorized.input_layer.continuous_layer_with_density import (
     ContinuousLayerWithDensity,
-    ContinuousLayerWithFiniteSupport,
+    ContinuousLayerWithConstrainedSupport,
 )
 from probabilistic_model.probabilistic_circuit.tensorized.structural_query import (
     LayerWithLogProbabilities,
@@ -230,7 +230,9 @@ class GaussianLayer(HasLocationAndScale, ContinuousLayerWithDensity):
 
 
 @dataclass(eq=False, repr=False)
-class TruncatedGaussianLayer(HasLocationAndScale, ContinuousLayerWithFiniteSupport):
+class TruncatedGaussianLayer(
+    HasLocationAndScale, ContinuousLayerWithConstrainedSupport
+):
     """
     A layer of truncated Gaussian distributions over one continuous variable.
 
@@ -242,12 +244,12 @@ class TruncatedGaussianLayer(HasLocationAndScale, ContinuousLayerWithFiniteSuppo
 
     def validate_own(self):
         HasLocationAndScale.validate_own(self)
-        ContinuousLayerWithFiniteSupport.validate_own(self)
+        ContinuousLayerWithConstrainedSupport.validate_own(self)
 
     def has_equal_parameters(self, other: Self) -> bool:
         return HasLocationAndScale.has_equal_parameters(
             self, other
-        ) and ContinuousLayerWithFiniteSupport.has_equal_parameters(self, other)
+        ) and ContinuousLayerWithConstrainedSupport.has_equal_parameters(self, other)
 
     @property
     def number_of_own_parameters(self) -> int:

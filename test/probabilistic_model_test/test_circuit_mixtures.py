@@ -18,19 +18,18 @@ from typing_extensions import List, Tuple, Type
 from probabilistic_model.adapters.rustworkx_tensorized.rustworkx_to_tensorized import (
     RustworkxCircuitToLayeredCircuitConverter,
 )
-from probabilistic_model.distributions.uniform import UniformDistribution
 from probabilistic_model.probabilistic_circuit.probabilistic_circuit_representation import (
     ProbabilisticCircuitRepresentation,
 )
 from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
     ProbabilisticCircuit,
     ProductUnit,
-    SumUnit,
-    leaf,
 )
 from probabilistic_model.probabilistic_circuit.tensorized.layered_probabilistic_circuit import (
     LayeredProbabilisticCircuit,
 )
+
+from .circuit_building import mixture_of_intervals, uniform_leaf
 
 # %% circuits of either type
 
@@ -46,24 +45,9 @@ def circuit_type(request) -> Type[ProbabilisticCircuitRepresentation]:
     return request.param
 
 
-@pytest.fixture
-def x() -> Continuous:
-    """
-    The variable the mixtures are read through.
-    """
-    return Continuous("x")
-
-
-@pytest.fixture
-def y() -> Continuous:
-    """
-    The variable the second mixture of a product is over.
-    """
-    return Continuous("y")
-
-
 def as_type(
-    circuit: ProbabilisticCircuit, circuit_type: Type[ProbabilisticCircuitRepresentation]
+    circuit: ProbabilisticCircuit,
+    circuit_type: Type[ProbabilisticCircuitRepresentation],
 ) -> ProbabilisticCircuitRepresentation:
     """
     :param circuit: A circuit built as a graph of units.
@@ -73,33 +57,6 @@ def as_type(
     if circuit_type is ProbabilisticCircuit:
         return circuit
     return RustworkxCircuitToLayeredCircuitConverter.convert(circuit)
-
-
-def mixture_of_intervals(
-    circuit: ProbabilisticCircuit,
-    variable: Continuous,
-    weighted_intervals: List[Tuple[float, float, float]],
-) -> SumUnit:
-    """
-    A sum unit of one uniform distribution per interval.
-
-    :param circuit: The circuit to build the units in.
-    :param variable: The variable of the distributions.
-    :param weighted_intervals: The weight and the bounds of every component.
-    :return: The sum unit.
-    """
-    mixture = SumUnit(probabilistic_circuit=circuit)
-    for weight, lower, upper in weighted_intervals:
-        mixture.add_subcircuit(
-            leaf(
-                UniformDistribution(
-                    variable=variable, interval=closed(lower, upper).simple_sets[0]
-                ),
-                circuit,
-            ),
-            math.log(weight),
-        )
-    return mixture
 
 
 @pytest.fixture
@@ -156,7 +113,7 @@ def test_a_mixture_within_the_tolerance_is_not_reported(circuit_type, x):
 
 def test_a_circuit_of_one_leaf_has_no_mixture_to_report(circuit_type, x):
     circuit = ProbabilisticCircuit()
-    leaf(UniformDistribution(variable=x, interval=closed(0, 1).simple_sets[0]), circuit)
+    uniform_leaf(x, 0, 1, circuit)
     assert as_type(circuit, circuit_type).unnormalized_mixtures() == []
 
 

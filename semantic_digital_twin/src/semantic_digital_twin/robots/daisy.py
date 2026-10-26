@@ -3,7 +3,6 @@ from __future__ import annotations
 # %% Imports
 import os
 from dataclasses import dataclass
-from enum import StrEnum
 from importlib.resources import files
 from pathlib import Path
 from typing_extensions import Self
@@ -14,6 +13,7 @@ from semantic_digital_twin.collision_checking.collision_rules import (
     AvoidSelfCollisions,
 )
 from semantic_digital_twin.datastructures.definitions import (
+    JointName,
     StaticJointState,
     GripperState,
 )
@@ -41,7 +41,7 @@ from semantic_digital_twin.world_description.world_entity import (
 # %% Robot parts
 
 
-class DAiSyJoint(StrEnum):
+class DAiSyJoint(JointName):
     """
     Names of the DAiSy's commandable connections, as spelled in its URDF.
 

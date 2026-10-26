@@ -4,7 +4,6 @@ from __future__ import annotations
 import os
 from collections import defaultdict
 from dataclasses import dataclass
-from enum import StrEnum
 from importlib.resources import files
 from pathlib import Path
 from typing_extensions import Self
@@ -16,6 +15,7 @@ from semantic_digital_twin.collision_checking.collision_rules import (
     SelfCollisionMatrixRule,
 )
 from semantic_digital_twin.datastructures.definitions import (
+    JointName,
     GripperState,
     StaticJointState,
     TorsoState,
@@ -57,7 +57,7 @@ from semantic_digital_twin.world_description.world_entity import (
 # %% Robot parts
 
 
-class GarmiJoint(StrEnum):
+class GarmiJoint(JointName):
     """
     Names of GARMI's commandable connections, as spelled in its URDF.
 

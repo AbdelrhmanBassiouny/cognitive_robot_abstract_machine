@@ -655,9 +655,9 @@ class ProbabilisticBackend(GenerativeBackend):
         # (each on a differently-shaped circuit) would leak one call's variables into
         # the next -- pass a fresh copy each time.
         if effect_truncation_event:
-            effect_truncated, _ = interventional.truncated(
+            effect_truncated = interventional.truncated(
                 copy.deepcopy(effect_truncation_event)
-            )
+            ).distribution
         else:
             effect_truncated = interventional
         if effect_truncated is None:
@@ -667,20 +667,19 @@ class ProbabilisticBackend(GenerativeBackend):
         if best_region is None:
             return None
 
-        region_only, region_prior_probability = interventional.truncated(
+        region = interventional.truncated(
             best_region.fill_missing_variables_pure(interventional.variables)
         )
-        if region_only is None or region_prior_probability <= 0.0:
+        if region.distribution is None or region.probability <= 0.0:
             return None
 
-        if effect_truncation_event:
-            narrowed, effect_given_region_probability = region_only.truncated(
-                copy.deepcopy(effect_truncation_event)
-            )
-        else:
-            narrowed, effect_given_region_probability = region_only, 1.0
-        if narrowed is None or effect_given_region_probability <= 0.0:
+        if not effect_truncation_event:
+            return ScoredIntervention(cause_variable, 1.0, region.distribution)
+
+        narrowed = region.distribution.truncated(copy.deepcopy(effect_truncation_event))
+        if narrowed.distribution is None or narrowed.probability <= 0.0:
+
             return None
         return ScoredIntervention(
-            cause_variable, float(effect_given_region_probability), narrowed
+            cause_variable, float(narrowed.probability), narrowed.distribution
         )

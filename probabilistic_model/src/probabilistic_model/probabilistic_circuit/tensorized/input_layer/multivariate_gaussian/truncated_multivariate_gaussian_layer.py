@@ -263,8 +263,8 @@ class TruncatedMultivariateGaussianLayer(AbstractMultivariateGaussianLayer):
             distribution.log_mode()
             for distribution in self.node_distributions(variables)
         ]
-        return [mode for mode, _ in modes], np.array(
-            [value for _, value in modes], dtype=float
+        return [mode.event for mode in modes], np.array(
+            [mode.log_likelihood for mode in modes], dtype=float
         )
 
     @memoized

@@ -15,6 +15,7 @@ from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
     leaf,
 )
 from probabilistic_model.probabilistic_model import ProbabilisticModel
+from probabilistic_model.query_results import LogConditioning, LogMode, LogTruncation
 from probabilistic_model.utils import MissingDict
 from random_events.product_algebra import SimpleEvent, Event
 from random_events.variable import Symbolic, Variable
@@ -77,7 +78,7 @@ class MultinomialDistribution(ProbabilisticModel, DataclassDeepcopyMixin):
         result.normalize()
         return result
 
-    def log_mode(self) -> Tuple[Event, float]:
+    def log_mode(self) -> LogMode:
         likelihood = np.max(self.probabilities)
         indices_of_maximum = np.transpose(
             np.asarray(self.probabilities == likelihood).nonzero()
@@ -102,14 +103,13 @@ class MultinomialDistribution(ProbabilisticModel, DataclassDeepcopyMixin):
             else:
                 mode |= current_mode
 
-        return mode, np.log(likelihood)
+        return LogMode(mode, np.log(likelihood))
 
-    def log_conditional(
-        self, point: Dict[Variable, Any]
-    ) -> Tuple[Optional[Self], float]:
+    def log_conditional(self, point: Dict[Variable, Any]) -> LogConditioning[Self]:
         event = SimpleEvent.from_data(point)
         event.fill_missing_variables(self.variables)
-        return self.log_truncated(event.as_composite_set())
+        truncation = self.log_truncated(event.as_composite_set())
+        return LogConditioning(truncation.distribution, truncation.log_probability)
 
     def __eq__(self, other: Self) -> bool:
         """
@@ -159,7 +159,7 @@ class MultinomialDistribution(ProbabilisticModel, DataclassDeepcopyMixin):
 
     def log_truncated(
         self, event: Event, singleton_allowed: bool = False
-    ) -> Tuple[Optional[Self], float]:
+    ) -> LogTruncation[Self]:
         probabilities = np.zeros_like(self.probabilities)
 
         for simple_event in event.simple_sets:
@@ -167,11 +167,11 @@ class MultinomialDistribution(ProbabilisticModel, DataclassDeepcopyMixin):
 
         sum_of_probabilities = probabilities.sum()
         if sum_of_probabilities == 0:
-            return None, -np.inf
+            return LogTruncation.impossible()
 
         result = MultinomialDistribution(self.variables, probabilities)
         result.normalize()
-        return result, np.log(sum_of_probabilities)
+        return LogTruncation(result, np.log(sum_of_probabilities))
 
     def indices_from_simple_event(self, event: SimpleEvent) -> Tuple[List[int], ...]:
         """

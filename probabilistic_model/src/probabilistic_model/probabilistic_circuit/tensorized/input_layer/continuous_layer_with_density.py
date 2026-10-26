@@ -128,9 +128,10 @@ class ContinuousLayerWithDensity(AbstractContinuousLayer, ABC):
 
 
 @dataclass(eq=False, repr=False)
-class ContinuousLayerWithFiniteSupport(ContinuousLayerWithDensity, ABC):
+class ContinuousLayerWithConstrainedSupport(ContinuousLayerWithDensity, ABC):
     """
-    Abstract base class for continuous input layers whose nodes have a finite support.
+    Abstract base class for continuous input layers whose nodes have a constrained
+    support.
     """
 
     interval: NodeIntervals

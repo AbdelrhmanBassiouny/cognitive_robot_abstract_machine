@@ -156,8 +156,8 @@ class UnivariateInputLayer(LeafLayer, ABC):
             distribution.log_mode()
             for distribution in self.node_distributions(variable)
         ]
-        return [mode for mode, _ in modes], np.array(
-            [value for _, value in modes], dtype=float
+        return [mode.event for mode in modes], np.array(
+            [mode.log_likelihood for mode in modes], dtype=float
         )
 
     @memoized

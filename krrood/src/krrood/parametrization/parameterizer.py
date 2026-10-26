@@ -328,16 +328,16 @@ class UnderspecifiedParameters(ModelQueryParameters):
         :param model: The model to condition and truncate.
         :return: The resulting model, or ``None`` if any step leaves no solution.
         """
-        conditioned, _ = model.conditional(
+        conditioned = model.conditional(
             self.conditioning_assignments_from_literal_values
-        )
+        ).distribution
         if conditioned is None:
             return None
 
         if self.truncation_assignments_from_where_conditions:
-            truncated, _ = conditioned.truncated(
+            truncated = conditioned.truncated(
                 self.truncation_assignments_from_where_conditions
-            )
+            ).distribution
         else:
             truncated = conditioned
         if truncated is None:
@@ -362,8 +362,7 @@ class UnderspecifiedParameters(ModelQueryParameters):
         complete_event.fill_missing_variables(self.variables.values())
         for event in self.truncation_assignments_from_krrood_variables[1:]:
             complete_event = complete_event.intersection_with(event)
-        truncated, _ = model.truncated(complete_event, singleton_allowed=True)
-        return truncated
+        return model.truncated(complete_event, singleton_allowed=True).distribution
 
     def _extract_variables_from_attribute_match(
         self, attribute_match: AttributeMatch

@@ -35,8 +35,10 @@ from probabilistic_model.probabilistic_model import (
     OrderType,
     ProbabilisticModel,
 )
+from probabilistic_model.query_results import LogConditioning, LogMode, LogTruncation
 
 if TYPE_CHECKING:
+
     from probabilistic_model.distributions.multivariate_gaussian import (
         MultivariateGaussianDistribution,
     )
@@ -224,7 +226,7 @@ class TruncatedMultivariateGaussianDistribution(
 
     # %% the most likely point the box still allows
 
-    def log_mode(self) -> Tuple[Event, float]:
+    def log_mode(self) -> LogMode:
         """
         The density falls away from the untruncated mean in every direction and the box
         is convex, so there is exactly one most likely point: the mean itself while the
@@ -240,7 +242,7 @@ class TruncatedMultivariateGaussianDistribution(
                 for variable, value in zip(self.variables, most_likely)
             }
         ).as_composite_set()
-        return mode, float(self.log_likelihood(most_likely.reshape(1, -1))[0])
+        return LogMode(mode, float(self.log_likelihood(most_likely.reshape(1, -1))[0]))
 
     def _most_likely_point(self, precision: npt.NDArray) -> npt.NDArray:
         """
@@ -278,7 +280,7 @@ class TruncatedMultivariateGaussianDistribution(
 
     def log_truncated(
         self, event: Event, singleton_allowed: bool = False
-    ) -> Tuple[Optional[ProbabilisticModel], float]:
+    ) -> LogTruncation[Self]:
         """
         Rule out more of the space.
 
@@ -297,15 +299,13 @@ class TruncatedMultivariateGaussianDistribution(
         surviving = box.intersection_with(self.box)
         probability = self.probability_of_simple_event(surviving)
         if probability == 0.0:
-            return None, -np.inf
-        return (
+            return LogTruncation.impossible()
+        return LogTruncation(
             dataclasses.replace(self, box=surviving),
             math.log(probability),
         )
 
-    def log_conditional(
-        self, point: Dict[Variable, Any]
-    ) -> Tuple[Optional[ProbabilisticModel], float]:
+    def log_conditional(self, point: Dict[Variable, Any]) -> LogConditioning[Self]:
         """
         Fix some of the variables at the values given and answer with the distribution
         over the rest, which is the Gaussian conditional confined to the slice the box
@@ -319,24 +319,27 @@ class TruncatedMultivariateGaussianDistribution(
         :raises ProbabilisticCircuitRequiredError: If every variable is fixed, which
             leaves a product of Dirac impulses.
         """
-        conditional, log_density = self.untruncated.log_conditional(point)
+        conditioning = self.untruncated.log_conditional(point)
         free = [variable for variable in self.variables if variable not in point]
         slice_of_the_box = SimpleEvent.from_data(
             {variable: self.box[variable] for variable in free}
         ).as_composite_set()
-        confined, log_probability = conditional.log_truncated(slice_of_the_box)
+        confinement = conditioning.distribution.log_truncated(slice_of_the_box)
 
         inside = all(
             self.box[variable].contains(value) for variable, value in point.items()
         )
         log_likelihood = (
-            log_density + log_probability - math.log(self.normalizing_constant)
+            conditioning.log_likelihood
+            + confinement.log_probability
+            - math.log(self.normalizing_constant)
             if inside
             else -np.inf
         )
         if log_likelihood == -np.inf:
-            return None, -np.inf
-        return (
+            return LogConditioning.impossible()
+        confined = confinement.distribution
+        return LogConditioning(
             dataclasses.replace(
                 self, untruncated=confined.untruncated, box=confined.box
             ),
