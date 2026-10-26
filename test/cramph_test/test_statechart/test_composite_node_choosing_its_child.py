@@ -402,6 +402,82 @@ def test_the_extensions_hold_still_before_a_node_chooses(statechart_context) -> 
     assert chooser.held_still_when_asked == [True]
 
 
+@dataclass
+class EventLog:
+    """
+    The order in which nodes started and children were chosen.
+    """
+
+    events: list[str] = field(default_factory=list)
+    """
+    What happened, oldest first.
+    """
+
+
+@dataclass(eq=False, repr=False, kw_only=True)
+class NodeNotingItsStart(NodeObservingAFixedValue):
+    """
+    Notes in a log when it starts.
+    """
+
+    log: EventLog
+    """
+    The log this node notes its start in.
+    """
+
+    def on_start(self) -> None:
+        self.log.events.append(f"{self.name} started")
+
+
+@dataclass
+class ChooserNotingItsChoice(ChildChooser[CompositeNodeChoosingItsChild]):
+    """
+    Gives one child and notes in a log when it chooses it.
+    """
+
+    log: EventLog
+    """
+    The log this chooser notes its choice in.
+    """
+
+    child: StatechartNode
+    """
+    The child to give.
+    """
+
+    def choose_child(
+        self, node: CompositeNodeChoosingItsChild
+    ) -> StatechartNode | None:
+        self.log.events.append(f"{node.name} chose")
+        return self.child
+
+
+def test_a_node_chooses_before_the_nodes_starting_beside_it_act(
+    statechart_executor: StatechartExecutor,
+) -> None:
+    """
+    A child is chosen against the world as it was before the nodes that start in the
+    same tick act on starting.
+    """
+    log = EventLog()
+    chooser = ChooserNotingItsChoice(log=log, child=_succeeding_child("child"))
+    statechart_executor.context.add_extension(ChildChooserAccess(choosers=[chooser]))
+    statechart = Statechart(context=statechart_executor.context)
+    choosing_node = CompositeNodeChoosingItsChild(name="choosing")
+    sibling = NodeNotingItsStart(
+        name="sibling", observation=ObservationStateValues.UNKNOWN, log=log
+    )
+    statechart.add_nodes([choosing_node, sibling])
+
+    statechart_executor.compile(statechart)
+    statechart_executor.tick()
+
+    assert log.events == [
+        f"{choosing_node.name} chose",
+        f"{sibling.name} started",
+    ]
+
+
 # %% choosing with the chooser of the node's kind
 
 

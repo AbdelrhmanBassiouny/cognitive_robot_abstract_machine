@@ -16,8 +16,12 @@ from coraplex.robot_plans.actions.core.navigation import (
     PathPlanningNavigateAction,
 )
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction, ReachAction
-from coraplex.robot_plans.actions.core.robot_body import MoveManipulatorAction
+from coraplex.robot_plans.actions.core.robot_body import (
+    MoveManipulatorAction,
+    SetGripperAction,
+)
 from cramph.composites import Parallel, Sequence, StatementNode
+from cramph.context import ContextExtension
 from cramph.data_types import LifeCycleValues
 from cramph.executor import StatechartExecutor, TickingExecutorExtension
 from cramph.node import StatechartNode
@@ -28,6 +32,7 @@ from giskardpy.motion_statechart.goals.base_pose_goals import (
 from giskardpy.motion_statechart.goals.grasped_mechanism import (
     ArticulateGraspedMechanism,
 )
+from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from giskardpy.motion_statechart.graph_node import ConvergingTask
 from giskardpy.motion_statechart.monitors.overwrite_state_monitors import SetOdometry
 from giskardpy.motion_statechart.tasks.align_planes import AlignPlanes
@@ -38,7 +43,12 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     HoldPose,
 )
 from krrood.entity_query_language.factories import a, variable_from
+from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
+from semantic_digital_twin.robots.garmi import (
+    Garmi,
+    GarmiLeftGripper,
+)
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.robots.tiago import Tiago
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
@@ -55,6 +65,7 @@ from ...plan_running import (
     robot_extensions,
     simulated_executor,
     statechart_of,
+    world_of,
 )
 
 # %% recording a run
@@ -750,3 +761,27 @@ def test_a_robot_of_another_type_lifts_unchanged(pr2_apartment_context) -> None:
     )
 
     assert type(goal) is CartesianPose
+
+
+# %% moving GARMI's fingers
+
+
+@pytest.fixture
+def garmi_extensions(_garmi_world_setup) -> list[ContextExtension]:
+    world = deepcopy(_garmi_world_setup)
+    return robot_extensions(world.get_semantic_annotations_by_type(Garmi)[0])
+
+
+def test_a_simulated_garmi_drives_its_fingers_with_a_giskard_goal(
+    garmi_extensions,
+) -> None:
+    gripper = world_of(garmi_extensions).get_semantic_annotations_by_type(
+        GarmiLeftGripper
+    )[0]
+
+    action = prepared(
+        SetGripperAction(gripper=gripper, motion=GripperState.OPEN),
+        simulated_executor(garmi_extensions),
+    )
+
+    assert type(action.goal) is MoveGripper

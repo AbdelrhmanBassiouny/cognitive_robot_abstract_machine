@@ -32,7 +32,11 @@ from semantic_digital_twin.collision_checking.collision_matrix import (
 
 if TYPE_CHECKING:
     from semantic_digital_twin.world import World
-    from semantic_digital_twin.robots.robot_parts import AbstractRobot, EndEffector
+    from semantic_digital_twin.robots.robot_parts import (
+        AbstractRobot,
+        EndEffector,
+        KinematicChain,
+    )
     from semantic_digital_twin.world_description.world_entity import (
         Body,
         KinematicStructureEntity,
@@ -652,6 +656,46 @@ class AllowNeverInCollision(AllowCollisionRule):
 
 
 @dataclass
+class AllowCollisionBetweenFingers(AllowCollisionRule):
+    """
+    Allows collisions between the fingers of every gripper of a robot, which touch each
+    other whenever the gripper closes on nothing.
+
+    Sampling configurations cannot find these pairs: the fingers touch only near the
+    closed state, so they are neither always, never, nor by default in collision.
+    """
+
+    robot: AbstractRobot = field(kw_only=True)
+    """
+    The robot whose grippers' fingers may touch.
+    """
+
+    def _update(self, world: World):
+        # robot_part_mixins imports the robot parts, which import the world
+        from semantic_digital_twin.robots.robot_part_mixins import HasFingers
+
+        self.allowed_collision_pairs = {
+            CollisionCheck.create_for_bodies_with_collision(body_a, body_b)
+            for end_effector in self.robot.all_end_effectors
+            if isinstance(end_effector, HasFingers)
+            for finger_a, finger_b in combinations(end_effector.fingers, 2)
+            for body_a in self._finger_bodies(finger_a)
+            for body_b in self._finger_bodies(finger_b)
+        }
+
+    @staticmethod
+    def _finger_bodies(finger: KinematicChain) -> list[Body]:
+        """
+        :param finger: A finger of a gripper.
+        :return: Its bodies with collision geometry, without the one it is mounted on,
+            which every finger of the gripper shares.
+        """
+        return [
+            body for body in finger.bodies_with_collision if body is not finger.root
+        ]
+
+
+@dataclass
 class AllowCollisionForAdjacentPairs(AllowCollisionRule):
     """
     Allow collision between body pairs of the whole world model that are connected by a chain that has no controllable connection.
@@ -824,8 +868,8 @@ class SelfCollisionMatrixRule(AllowCollisionRule, SubclassJSONSerializer):
         Computes a self-collision matrix for the given robot by applying various rules.
 
         This method systematically identifies body pairs that should be allowed to collide by
-        checking for adjacent links, default collisions, always-in-collision pairs, and
-        never-in-collision pairs.
+        checking for adjacent links, the fingers of a gripper, default collisions,
+        always-in-collision pairs, and never-in-collision pairs.
 
         :param robot: The robot for which to compute the matrix.
         :param distance_threshold_zero: Threshold for default collision check.
@@ -854,6 +898,12 @@ class SelfCollisionMatrixRule(AllowCollisionRule, SubclassJSONSerializer):
 
         # %%
         rule = AllowCollisionForAdjacentPairs()
+        rule.update(robot._world)
+        rule.apply_to_collision_matrix(collision_matrix)
+        self.allowed_collision_pairs.update(rule.allowed_collision_pairs)
+
+        # %%
+        rule = AllowCollisionBetweenFingers(robot=robot)
         rule.update(robot._world)
         rule.apply_to_collision_matrix(collision_matrix)
         self.allowed_collision_pairs.update(rule.allowed_collision_pairs)

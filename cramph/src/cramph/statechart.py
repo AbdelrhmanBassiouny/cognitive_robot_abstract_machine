@@ -746,8 +746,9 @@ class Statechart(SubclassJSONSerializer):
         Executes a single tick of the statechart in its :attr:`context`.
 
         Every node is brought to the state it reaches in this tick, see
-        :class:`~cramph.compiled_tick.CompiledTick`, then the life cycle callbacks of every change run
-        and the tick is recorded. A :class:`CancelStatechart` that started in this
+        :class:`~cramph.compiled_tick.CompiledTick`, then every node waiting for a child
+        chooses one, then the life cycle callbacks of every change run and the tick is
+        recorded. A :class:`CancelStatechart` that started in this
         tick ends the statechart only after that, even if a
         :class:`~cramph.state_history.StateHistoryObserver` of the record failed.
 
@@ -762,9 +763,11 @@ class Statechart(SubclassJSONSerializer):
         self.compiler.compile_if_changed()
         if not self.compiler.changed_since_compile:
             changes = self.compiler.compiled_tick.settle()
+            # Before the callbacks, so a child is chosen against the world as it was
+            # when the nodes starting beside it in this tick had not acted yet.
+            self._let_waiting_nodes_choose_their_child()
             for change in changes:
                 change.run_callback()
-            self._let_waiting_nodes_choose_their_child()
         try:
             self.state_history.append(
                 next_item=StateHistoryItem(

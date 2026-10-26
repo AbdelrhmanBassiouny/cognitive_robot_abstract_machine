@@ -4,7 +4,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Dict, List, Union
 
-from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 
 from cramph.executor import NoPacing, Pacer, RealTimePacer
@@ -12,7 +11,9 @@ from semantic_digital_twin.adapters.ros import rospy
 from giskardpy.middleware.ros2.command_publishing import (
     DriveVelocityCommandPublisher,
     Float64MultiArrayFormat,
+    DriveCommandFormat,
     GroupCommandFormat,
+    TwistFormat,
     JointGroupVelocityCommandPublisher,
     JointMinimumVelocities,
     JointVelocityCommandPublisher,
@@ -250,11 +251,12 @@ class ClosedLoopRobotInterfaceConfig(RobotInterfaceConfig, ABC):
         joint: Union[OmniDrive, DifferentialDrive] = None,
         minimum_linear_velocity: float = 0.0,
         minimum_angular_velocity: float = 0.0,
+        command_format: DriveCommandFormat | None = None,
     ):
         """
         Tell Giskard how it can control an odom joint of the robot.
 
-        :param cmd_vel_topic: a Twist topic
+        :param cmd_vel_topic: a topic of the message type of `command_format`
         :param joint: omni or diff drive joint. Doesn't need to be specified if there is
             only one.
         :param minimum_linear_velocity: magnitude that smaller linear velocities are
@@ -262,9 +264,14 @@ class ClosedLoopRobotInterfaceConfig(RobotInterfaceConfig, ABC):
             ``0.0`` disables raising.
         :param minimum_angular_velocity: magnitude that smaller rotational velocities
             are raised to. ``0.0`` disables raising.
+        :param command_format: message format the drive controller consumes; defaults to
+            :class:`~giskardpy.middleware.ros2.command_publishing.TwistFormat`.
         """
+        command_format = command_format or TwistFormat()
         if cmd_vel_topic is None:
-            cmd_vel_topic = search_for_unique_subscriber_of_type(Twist)
+            cmd_vel_topic = search_for_unique_subscriber_of_type(
+                command_format.message_type()
+            )
         self.control_loop.command_publishers.append(
             DriveVelocityCommandPublisher(
                 world=self.world,
@@ -272,6 +279,7 @@ class ClosedLoopRobotInterfaceConfig(RobotInterfaceConfig, ABC):
                 connection=joint,
                 minimum_linear_velocity=MinimumVelocity(minimum_linear_velocity),
                 minimum_angular_velocity=MinimumVelocity(minimum_angular_velocity),
+                command_format=command_format,
             )
         )
 
