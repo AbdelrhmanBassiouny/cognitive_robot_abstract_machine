@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from typing_extensions import Any, Dict, List, Optional
+from typing_extensions import Any, Dict, List
 
 from cramera import paths
 from cramera.recording_fields import SceneField
@@ -75,12 +75,12 @@ class SceneIndexEntry:
     Name of the robot the scene was recorded with.
     """
 
-    environment: Optional[str]
+    environment: str | None
     """
     The scene's environment models joined by ``+``, or None for a bench-only scene.
     """
 
-    task: Optional[str] = None
+    task: str | None = None
     """
     What the recorded run did, or None for a recording that named no task.
     """
@@ -132,7 +132,7 @@ class SceneIndexEntry:
         )
 
     @staticmethod
-    def _environment_of(models: List[Dict[str, Any]]) -> Optional[str]:
+    def _environment_of(models: List[Dict[str, Any]]) -> str | None:
         """
         The name of a scene's environment, or None for a bench-only scene.
 

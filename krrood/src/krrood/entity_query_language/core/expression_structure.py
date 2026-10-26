@@ -15,7 +15,7 @@ from __future__ import annotations
 import datetime
 import uuid
 
-from typing_extensions import Iterable, List, Optional, Set, Tuple
+from typing_extensions import Iterable, List, Set, Tuple
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import (
@@ -73,7 +73,7 @@ def root_variable_ids(expressions: Iterable[SymbolicExpression]) -> Set[uuid.UUI
     }
 
 
-def boolean_terminal_attribute(chain: List[MappedVariable]) -> Optional[Attribute]:
+def boolean_terminal_attribute(chain: List[MappedVariable]) -> Attribute | None:
     """
     :param chain: A walked chain (root-adjacent first).
     :return: The attribute the walked *chain* reaches a ``bool`` through, or ``None`` when

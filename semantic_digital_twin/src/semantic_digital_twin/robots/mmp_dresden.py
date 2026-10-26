@@ -5,7 +5,7 @@ from abc import ABC
 import numpy as np
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Self, List
+from typing_extensions import Self
 
 from krrood.ormatic.utils import classproperty
 from semantic_digital_twin.datastructures.definitions import (
@@ -258,7 +258,7 @@ class MMPDresdenMobileBase(MobileBase[OmniDrive], HasTorso[MMPDresdenTorso]):
     def setup_hardware_interfaces(self) -> None:
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
 

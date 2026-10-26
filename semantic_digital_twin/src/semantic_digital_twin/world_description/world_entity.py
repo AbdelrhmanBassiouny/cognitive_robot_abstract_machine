@@ -14,16 +14,9 @@ from uuid import UUID, uuid4
 import numpy as np
 import trimesh
 import trimesh.boolean
-from typing_extensions import List, Optional, TYPE_CHECKING, Tuple
+from typing_extensions import List, TYPE_CHECKING, Tuple
 from typing_extensions import Set
-from typing_extensions import (
-    Type,
-    TypeVar,
-    Dict,
-    Any,
-    Self,
-    ClassVar,
-)
+from typing_extensions import TypeVar, Dict, Any, Self, ClassVar
 
 from krrood.adapters.json_serializer import (
     DataclassJSONSerializer,
@@ -85,7 +78,7 @@ class WorldEntity(Symbol):
         The WorldEntity class is not meant to be instantiated directly.
     """
 
-    _world: Optional[World] = field(default=None, repr=False, kw_only=True, hash=False)
+    _world: World | None = field(default=None, repr=False, kw_only=True, hash=False)
     """
     The backreference to the world this entity belongs to.
     """
@@ -381,13 +374,13 @@ class KinematicStructureEntity(ABC, WorldEntityWithSimulatorProperties):
     An entity that is part of the kinematic structure of the world.
     """
 
-    _world: Optional[World] = field(default=None, repr=False, hash=False, init=False)
+    _world: World | None = field(default=None, repr=False, hash=False, init=False)
     """
     Setting init=False because it should only be set by the World, not during
     initialization.
     """
 
-    index: Optional[int] = field(default=None, init=False)
+    index: int | None = field(default=None, init=False)
     """
     The index of the entity in `_world.kinematic_structure`.
     """
@@ -398,7 +391,7 @@ class KinematicStructureEntity(ABC, WorldEntityWithSimulatorProperties):
 
     @property
     @abstractmethod
-    def combined_mesh(self) -> Optional[trimesh.Trimesh]:
+    def combined_mesh(self) -> trimesh.Trimesh | None:
         """
         Computes the combined mesh of this KinematicStructureEntity.
         """
@@ -460,7 +453,7 @@ class KinematicStructureEntity(ABC, WorldEntityWithSimulatorProperties):
         return self._world.compute_parent_kinematic_structure_entity(self)
 
     def get_first_parent_connection_of_type(
-        self, connection_type: Type[GenericConnection]
+        self, connection_type: type[GenericConnection]
     ) -> GenericConnection:
         """
         Traverse the chain up until an active connection is found.
@@ -548,12 +541,12 @@ class Body(KinematicStructureEntity):
     The poses of the shapes are relative to the link.
     """
 
-    index: Optional[int] = field(default=None, init=False)
+    index: int | None = field(default=None, init=False)
     """
     The index of the entity in `_world.kinematic_structure`.
     """
 
-    inertial: Optional[Inertial] = field(default=None, repr=False)
+    inertial: Inertial | None = field(default=None, repr=False)
     """
     Inertia properties of the body, or ``None`` if its description gives none.
     """
@@ -602,7 +595,7 @@ class Body(KinematicStructureEntity):
         self.collision = collision
 
     @property
-    def combined_mesh(self) -> Optional[trimesh.Trimesh]:
+    def combined_mesh(self) -> trimesh.Trimesh | None:
         """
         Computes the combined mesh of this KinematicStructureEntity.
         """
@@ -637,7 +630,7 @@ class Body(KinematicStructureEntity):
         return False
 
     def get_semantic_annotations_by_type(
-        self, type_: Type[GenericSemanticAnnotation]
+        self, type_: type[GenericSemanticAnnotation]
     ) -> List[GenericSemanticAnnotation]:
         """
         Returns all semantic annotations of a given type which belong to this body.
@@ -681,7 +674,7 @@ class Region(KinematicStructureEntity):
         return cls(name=name, area=shape_collection)
 
     @property
-    def combined_mesh(self) -> Optional[trimesh.Trimesh]:
+    def combined_mesh(self) -> trimesh.Trimesh | None:
         if not self.area:
             return None
         return self.area.combined_mesh
@@ -953,7 +946,7 @@ class Connection(WorldEntityWithSimulatorProperties, ABC):
     Every copy of a connection, in any world, therefore carries the same id.
     """
 
-    _world: Optional[World] = field(default=None, repr=False, hash=False, init=False)
+    _world: World | None = field(default=None, repr=False, hash=False, init=False)
     """
     Setting init=False because it should only be set by the World, not during
     initialization.
@@ -1175,11 +1168,9 @@ class Connection(WorldEntityWithSimulatorProperties, ABC):
         parent: KinematicStructureEntity,
         child: KinematicStructureEntity,
         *,
-        name: Optional[PrefixedName] = None,
-        parent_T_connection_expression: Optional[
-            HomogeneousTransformationMatrix
-        ] = None,
-        connection_T_child_expression: Optional[HomogeneousTransformationMatrix] = None,
+        name: PrefixedName | None = None,
+        parent_T_connection_expression: HomogeneousTransformationMatrix | None = None,
+        connection_T_child_expression: HomogeneousTransformationMatrix | None = None,
     ) -> Self:
         """
         Generates the degrees of freedom for this connection into the given world and
@@ -1326,7 +1317,7 @@ GenericConnection = TypeVar("GenericConnection", bound=Connection)
 
 
 def _is_entity_semantic_annotation_or_iterable(
-    obj: object, aggregation_type: Type[KinematicStructureEntity]
+    obj: object, aggregation_type: type[KinematicStructureEntity]
 ) -> bool:
     """
     Determines if an object is a KinematicStructureEntity, a semantic annotation, or an
@@ -1339,7 +1330,7 @@ def _is_entity_semantic_annotation_or_iterable(
 
 def _attr_values(
     semantic_annotation: SemanticAnnotation,
-    aggregation_type: Type[GenericKinematicStructureEntity],
+    aggregation_type: type[GenericKinematicStructureEntity],
 ) -> Iterable[object]:
     """
     Yields all dataclass fields and set properties of this semantic annotation.

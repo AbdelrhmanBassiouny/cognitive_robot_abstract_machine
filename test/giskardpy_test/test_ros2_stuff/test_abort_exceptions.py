@@ -1,6 +1,6 @@
 import json
 from dataclasses import dataclass
-from typing import Any
+from typing_extensions import Any
 
 from giskardpy.middleware.ros2.exceptions import (
     ExecutionAbortedException,

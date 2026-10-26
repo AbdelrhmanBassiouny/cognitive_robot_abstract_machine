@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from typing_extensions import List, Optional
+from typing_extensions import List
 
 from krrood.symbol_graph.symbol_graph import (
     SymbolGraph,
@@ -44,7 +44,7 @@ class SymbolGraphMapping(AlternativeMapping[SymbolGraph]):
 
 @dataclass(eq=False)
 class WrappedInstanceMapping(AlternativeMapping[WrappedInstance]):
-    instance: Optional[Symbol]
+    instance: Symbol | None
 
     @classmethod
     def from_domain_object(cls, obj: WrappedInstance):

@@ -22,10 +22,8 @@ from typing_extensions import (
     Dict,
     Iterator,
     List,
-    Optional,
     Set,
     Tuple,
-    Type,
     TYPE_CHECKING,
 )
 
@@ -35,12 +33,12 @@ if TYPE_CHECKING:
         SymbolicExpression,
     )
 
-_evaluation_context_var: ContextVar[Optional[EvaluationContext]] = ContextVar(
+_evaluation_context_var: ContextVar[EvaluationContext | None] = ContextVar(
     "_evaluation_context", default=None
 )
 
 
-def get_evaluation_context() -> Optional[EvaluationContext]:
+def get_evaluation_context() -> EvaluationContext | None:
     """
     :return: The current :class:`EvaluationContext`, or ``None`` if called outside an active evaluation.
     """
@@ -48,7 +46,7 @@ def get_evaluation_context() -> Optional[EvaluationContext]:
 
 
 def set_evaluation_context(
-    evaluation_context: Optional[EvaluationContext],
+    evaluation_context: EvaluationContext | None,
 ):
     """
     Set or clear the current evaluation context and return the reset token.
@@ -66,7 +64,7 @@ class EvaluationObserver(ABC):
     """
 
     def on_evaluate_enter(
-        self, expression: SymbolicExpression, sources: Optional[OperationResult] = None
+        self, expression: SymbolicExpression, sources: OperationResult | None = None
     ) -> None:
         """
         Called when entering an expression's _evaluate_ method.
@@ -103,7 +101,7 @@ class ActiveConditionsRoot:
     nested evaluations within the same pass never reassign it.
     """
 
-    _root_id: Optional[uuid.UUID] = field(default=None, init=False)
+    _root_id: uuid.UUID | None = field(default=None, init=False)
     """
     Identifier of the active root, or ``None`` before one has been set this pass.
     """
@@ -183,7 +181,7 @@ class EvaluatedExpressionIds:
     The expression ids recorded as evaluated so far this pass.
     """
 
-    _snapshot: Optional[Tuple[int, OrderedSet]] = field(default=None, init=False)
+    _snapshot: Tuple[int, OrderedSet] | None = field(default=None, init=False)
     """
     Cached ``(length, snapshot)`` pair.
 
@@ -228,7 +226,7 @@ class OutermostQuery:
     inside it.
     """
 
-    node: Optional[SymbolicExpression] = field(default=None, init=False)
+    node: SymbolicExpression | None = field(default=None, init=False)
     """
     The compiled query node holding the outermost role, or ``None`` before any node
     takes it.
@@ -290,7 +288,7 @@ class EvaluationContext:
     """
 
     subtree_containment_cache: Dict[
-        Tuple[uuid.UUID, Type[SymbolicExpression]], bool
+        Tuple[uuid.UUID, type[SymbolicExpression]], bool
     ] = field(default_factory=dict)
     """
     Memoizes, per ``(node id, expression type)``, whether a node's subtree contains a
@@ -333,7 +331,7 @@ class EvaluationContext:
     Tracks every expression id evaluated so far during the current evaluation pass.
     """
 
-    satisfied_condition_ids: Optional[OrderedSet] = field(default=None)
+    satisfied_condition_ids: OrderedSet | None = field(default=None)
     """
     The satisfied condition-expression ids for the current evaluation iteration, or
     ``None`` if unset.
@@ -410,7 +408,7 @@ class EvaluationContext:
         self,
         *,
         expression: SymbolicExpression,
-        sources: Optional[OperationResult] = None,
+        sources: OperationResult | None = None,
     ) -> None:
         """
         Notify all observers that evaluation of *expression* is about to begin.

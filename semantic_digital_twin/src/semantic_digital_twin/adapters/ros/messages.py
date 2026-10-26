@@ -5,7 +5,7 @@ from enum import StrEnum
 from krrood.patterns.caching import memoize
 from uuid import UUID
 
-from typing_extensions import Dict, Any, Self, List, Optional
+from typing_extensions import Dict, Any, Self, List
 
 from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json, from_json
 from semantic_digital_twin.world import World
@@ -131,10 +131,10 @@ class WorldUpdate(Message):
     Either field may be ``None`` when only one type of change is being communicated.
     """
 
-    modification_block: Optional[ModificationBlock] = None
+    modification_block: ModificationBlock | None = None
     """The model modification to apply, if any."""
 
-    state_update: Optional[WorldStateUpdate] = None
+    state_update: WorldStateUpdate | None = None
     """The state values to apply, if any."""
 
 

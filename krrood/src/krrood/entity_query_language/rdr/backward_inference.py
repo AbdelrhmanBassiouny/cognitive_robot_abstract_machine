@@ -18,16 +18,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, field
 
-from typing_extensions import (
-    TYPE_CHECKING,
-    Any,
-    Dict,
-    Iterator,
-    List,
-    Optional,
-    Set,
-    Tuple,
-)
+from typing_extensions import TYPE_CHECKING, Any, Dict, Iterator, List, Set, Tuple
 
 from krrood.entity_query_language.operators.core_logical_operators import Not
 from krrood.entity_query_language.rdr.branch_semantics import SelectorBranchSemantics
@@ -200,7 +191,7 @@ class BackwardInferenceIndex:
     Subsequent queries for any value are O(1) dict lookups.
     """
 
-    _cache: Optional[Dict[Any, ConclusionSufficientConditionSets]] = field(default=None, init=False)
+    _cache: Dict[Any, ConclusionSufficientConditionSets] | None = field(default=None, init=False)
     """
     The full index of all conclusion values, or ``None`` if the index is not built.
     """
@@ -211,7 +202,7 @@ class BackwardInferenceIndex:
 
     def query(
             self,
-            expression: Optional[SymbolicExpression],
+            expression: SymbolicExpression | None,
             conclusion_value: Any,
     ) -> ConclusionSufficientConditionSets:
         """
@@ -235,7 +226,7 @@ class BackwardInferenceIndex:
 
 
 def get_conclusion_sufficient_conditions_from_a_rule_tree(
-        expression: Optional[SymbolicExpression],
+        expression: SymbolicExpression | None,
         conclusion_value: Any,
 ) -> ConclusionSufficientConditionSets:
     """Inspect the rule tree for every rule path that produces *conclusion_value*.

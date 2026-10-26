@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Type, Self
+from typing_extensions import Dict, List, TYPE_CHECKING, Any, Type, Self
 
 import numpy as np
-from typing_extensions import Dict, List, TYPE_CHECKING, Optional
 
 from krrood.adapters.json_serializer import (
     DataclassJSONSerializer,
@@ -41,7 +40,7 @@ class JointState(SubclassJSONSerializer):
     connections.
     """
 
-    state_type: Optional[JointStateType] = field(default=None)
+    state_type: JointStateType | None = field(default=None)
     """
     A type to better describe this state.
     """

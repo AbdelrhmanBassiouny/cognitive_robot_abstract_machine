@@ -17,7 +17,7 @@ from __future__ import annotations
 import builtins
 import inspect
 
-from typing_extensions import Any, Dict, Optional, Tuple
+from typing_extensions import Any, Dict, Tuple
 
 import krrood.entity_query_language
 from krrood.entity_query_language import factories as eql
@@ -126,7 +126,7 @@ def eql_factory_namespace() -> Dict[str, Any]:
     return namespace
 
 
-def attach_definition_scope(obj: T, scope: Optional[Dict[str, Any]] = None) -> T:
+def attach_definition_scope(obj: T, scope: Dict[str, Any] | None = None) -> T:
     """
     Capture (or store a provided) caller scope onto ``obj`` for later retrieval.
 
@@ -146,7 +146,7 @@ def attach_definition_scope(obj: T, scope: Optional[Dict[str, Any]] = None) -> T
 
 
 def get_definition_scope(
-    obj: Optional[Any] = None, *, include_factories: bool = True
+    obj: Any | None = None, *, include_factories: bool = True
 ) -> Dict[str, Any]:
     """
     Return the definition scope to use for an interactive expert session.

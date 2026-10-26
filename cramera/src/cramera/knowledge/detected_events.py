@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
-from typing_extensions import Any, Dict, List, Optional
+from typing_extensions import Any, Dict, List
 
 from cramera.recording_fields import SceneField, TrajectoryField
 from cramera.knowledge.query_domain import QueryDomain
@@ -67,13 +67,13 @@ class DetectedEventRecord:
     When the event was detected.
     """
 
-    tracked_object: Optional[str] = None
+    tracked_object: str | None = None
     """
     Name of the primary body the event was detected on, or None for an event about no
     body in particular.
     """
 
-    with_object: Optional[str] = None
+    with_object: str | None = None
     """
     Name of the second body the event relates the first one to, if any.
     """

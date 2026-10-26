@@ -6,7 +6,7 @@ import uuid
 from abc import ABC
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing_extensions import Dict, List, Optional, Set, Tuple, TYPE_CHECKING
+from typing_extensions import Dict, List, Set, Tuple, TYPE_CHECKING
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import Attribute
@@ -51,7 +51,7 @@ def referring_noun_with_restrictions(
     variable: Variable,
     selected_type: str,
     definiteness: Definiteness,
-    restriction: Optional[RestrictionFragments],
+    restriction: RestrictionFragments | None,
 ) -> NounPhrase:
     """:return: a referring noun phrase for *variable* carrying *restriction* as post-nominal
     modifiers — the shared assembly behind a nested entity noun (*"a Mission with priority greater
@@ -94,7 +94,7 @@ class ParentEdge:
     parent: SymbolicExpression
     """The parent node this edge descends from."""
 
-    field_name: Optional[str] = None
+    field_name: str | None = None
     """The declared predicate field the child fills on *parent*, when *parent* is an
     :class:`InstantiatedVariable` and this edge is one of its declared fields; ``None`` for every
     other structural edge."""
@@ -132,7 +132,7 @@ def _child_edges_by_id(
     return edges
 
 
-def _sole_predicate_field(edges: List[ParentEdge]) -> Optional[ParentEdge]:
+def _sole_predicate_field(edges: List[ParentEdge]) -> ParentEdge | None:
     """:return: the sole edge in *edges* when it is a named predicate field, else ``None``. This is
     the structural (not heuristic) condition for treating a variable as an anonymous operand of that
     one field: it must be reachable through exactly that field and nowhere else in the expression.
@@ -330,7 +330,7 @@ class DistinguisherIndex:
     _next_position: Dict[str, int] = field(default_factory=dict, repr=False)
     """The next unassigned position for each noun group."""
 
-    def distinguisher_for(self, referent_id: uuid.UUID) -> Optional[Distinguisher]:
+    def distinguisher_for(self, referent_id: uuid.UUID) -> Distinguisher | None:
         """:return: the distinguishing feature for *referent_id*, or ``None`` when it is alone in
         its noun group (or shares no group at all). The first call for a given representative
         referent assigns its position, in call order; every later call for the same representative
@@ -620,7 +620,7 @@ class ReferringExpressions:
     def _resolve_head_noun(
         node: SymbolicExpression,
         edges_by_id: Dict[uuid.UUID, List[ParentEdge]],
-    ) -> Optional[str]:
+    ) -> str | None:
         """:return: The head noun a node is disambiguated (and later referred to) under — the
         operand-aware resolution (:func:`operand_head_noun`) for a (non-literal) variable, or the
         *value* type noun for a relational attribute. ``None`` for anything that does not denote a
@@ -706,7 +706,7 @@ class ReferringExpressions:
         )
 
 
-def _entity_referent_id(node: SymbolicExpression) -> Optional[uuid.UUID]:
+def _entity_referent_id(node: SymbolicExpression) -> uuid.UUID | None:
     """:return: the referent id of an entity-denoting node — a free variable, or a relational hop
     (the related entity it introduces) — else ``None``. The same notion of a numberable referent
     :meth:`ReferringExpressions._is_numberable` uses, so identity and disambiguation agree on what

@@ -3,9 +3,8 @@ from __future__ import print_function
 import sys
 import json
 import logging
-from typing import Callable
+from typing_extensions import Dict, Callable
 
-from typing_extensions import Dict
 
 from coraplex.ros import (
     get_node_names,

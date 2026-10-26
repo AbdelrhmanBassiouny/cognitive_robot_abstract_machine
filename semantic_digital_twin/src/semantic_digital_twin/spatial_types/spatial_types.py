@@ -11,11 +11,9 @@ from typing_extensions import (
     Any,
     TYPE_CHECKING,
     overload,
-    Optional,
     Dict,
     Self,
     List,
-    Union,
     Tuple,
     Callable,
     TypeVar,
@@ -94,9 +92,7 @@ class SpatialType(ABC):
     Implement Symbolic Math protocol.
     """
 
-    reference_frame: Optional[KinematicStructureEntity] = field(
-        kw_only=True, default=None
-    )
+    reference_frame: KinematicStructureEntity | None = field(kw_only=True, default=None)
     """
     The reference frame associated with the object.
 
@@ -181,7 +177,7 @@ class SpatialType(ABC):
     @classmethod
     def _parse_optional_frame_from_json(
         cls, data: Dict[str, Any], frame: SpatialFrameKey, **kwargs
-    ) -> Optional[KinematicStructureEntity]:
+    ) -> KinematicStructureEntity | None:
         """
         Resolve a kinematic structure entity a serialized spatial type refers to.
 
@@ -198,8 +194,8 @@ class SpatialType(ABC):
 
     @staticmethod
     def _ensure_consistent_frame(
-        spatial_objects: List[Optional[SpatialType]],
-    ) -> Optional[KinematicStructureEntity]:
+        spatial_objects: List[SpatialType | None],
+    ) -> KinematicStructureEntity | None:
         """
         Ensures that all provided spatial objects have a consistent reference frame.
 
@@ -279,16 +275,16 @@ class HomogeneousTransformationMatrix(
     and create transformations from various inputs such as Euler angles or quaternions.
     """
 
-    child_frame: Optional[KinematicStructureEntity] = field(kw_only=True, default=None)
+    child_frame: KinematicStructureEntity | None = field(kw_only=True, default=None)
     """
     child_frame of this transformation matrix.
     """
 
     def __init__(
         self,
-        data: Optional[sm.MatrixData] = None,
-        reference_frame: Optional[KinematicStructureEntity] = None,
-        child_frame: Optional[KinematicStructureEntity] = None,
+        data: sm.MatrixData | None = None,
+        reference_frame: KinematicStructureEntity | None = None,
+        child_frame: KinematicStructureEntity | None = None,
     ):
         """
         :param data: A 4x4 matrix of some form that represents the rotation matrix.
@@ -373,10 +369,10 @@ class HomogeneousTransformationMatrix(
     @classmethod
     def from_point_rotation_matrix(
         cls,
-        point: Optional[Point3] = None,
-        rotation_matrix: Optional[RotationMatrix] = None,
-        reference_frame: Optional[KinematicStructureEntity] = None,
-        child_frame: Optional[KinematicStructureEntity] = None,
+        point: Point3 | None = None,
+        rotation_matrix: RotationMatrix | None = None,
+        reference_frame: KinematicStructureEntity | None = None,
+        child_frame: KinematicStructureEntity | None = None,
     ) -> HomogeneousTransformationMatrix:
         """
         Constructs a TransformationMatrix object from a given point, a rotation matrix,
@@ -419,8 +415,8 @@ class HomogeneousTransformationMatrix(
         roll: sm.ScalarData = 0,
         pitch: sm.ScalarData = 0,
         yaw: sm.ScalarData = 0,
-        reference_frame: Optional[KinematicStructureEntity] = None,
-        child_frame: Optional[KinematicStructureEntity] = None,
+        reference_frame: KinematicStructureEntity | None = None,
+        child_frame: KinematicStructureEntity | None = None,
     ) -> HomogeneousTransformationMatrix:
         """
         Creates a TransformationMatrix object from position (x, y, z) and Euler angles
@@ -454,8 +450,8 @@ class HomogeneousTransformationMatrix(
         quat_y: sm.ScalarData = 0,
         quat_z: sm.ScalarData = 0,
         quat_w: sm.ScalarData = 1,
-        reference_frame: Optional[KinematicStructureEntity] = None,
-        child_frame: Optional[KinematicStructureEntity] = None,
+        reference_frame: KinematicStructureEntity | None = None,
+        child_frame: KinematicStructureEntity | None = None,
     ) -> HomogeneousTransformationMatrix:
         """
         Creates a `TransformationMatrix` instance from the provided position coordinates
@@ -491,8 +487,8 @@ class HomogeneousTransformationMatrix(
         z: sm.ScalarData = 0,
         axis: Vector3 | sm.NumericalVector = None,
         angle: sm.ScalarData = 0,
-        reference_frame: Optional[KinematicStructureEntity] = None,
-        child_frame: Optional[KinematicStructureEntity] = None,
+        reference_frame: KinematicStructureEntity | None = None,
+        child_frame: KinematicStructureEntity | None = None,
     ) -> Self:
         """
         Creates an instance of the class from x, y, z coordinates, axis and angle.
@@ -690,8 +686,8 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
     def __init__(
         self,
-        data: Optional[sm.MatrixData] = None,
-        reference_frame: Optional[KinematicStructureEntity] = None,
+        data: sm.MatrixData | None = None,
+        reference_frame: KinematicStructureEntity | None = None,
     ):
         """
         :param data: A 4x4 matrix of some form that represents the rotation matrix.
@@ -906,10 +902,10 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     @classmethod
     def from_vectors(
         cls,
-        x: Optional[Vector3] = None,
-        y: Optional[Vector3] = None,
-        z: Optional[Vector3] = None,
-        reference_frame: Optional[KinematicStructureEntity] = None,
+        x: Vector3 | None = None,
+        y: Vector3 | None = None,
+        z: Vector3 | None = None,
+        reference_frame: KinematicStructureEntity | None = None,
     ) -> RotationMatrix:
         """
         Create a rotation matrix from 2 or 3 orthogonal vectors.
@@ -948,7 +944,7 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     def from_x_axis(
         cls,
         x_vector: Vector3,
-        reference_frame: Optional[KinematicStructureEntity] = None,
+        reference_frame: KinematicStructureEntity | None = None,
     ) -> RotationMatrix:
         """
         Create a rotation matrix from the direction its x-axis points along.
@@ -980,10 +976,10 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     @classmethod
     def from_rpy(
         cls,
-        roll: Optional[sm.ScalarData] = None,
-        pitch: Optional[sm.ScalarData] = None,
-        yaw: Optional[sm.ScalarData] = None,
-        reference_frame: Optional[KinematicStructureEntity] = None,
+        roll: sm.ScalarData | None = None,
+        pitch: sm.ScalarData | None = None,
+        yaw: sm.ScalarData | None = None,
+        reference_frame: KinematicStructureEntity | None = None,
     ) -> RotationMatrix:
         """
         Conversion of roll, pitch, yaw to 4x4 rotation matrix according to:
@@ -1130,7 +1126,7 @@ class Point3(Point):
         x: sm.ScalarData = 0,
         y: sm.ScalarData = 0,
         z: sm.ScalarData = 0,
-        reference_frame: Optional[KinematicStructureEntity] = None,
+        reference_frame: KinematicStructureEntity | None = None,
     ):
         """
 
@@ -1158,7 +1154,7 @@ class Point3(Point):
     def from_iterable(
         cls,
         data: sm.VectorData,
-        reference_frame: Optional[KinematicStructureEntity] = None,
+        reference_frame: KinematicStructureEntity | None = None,
     ) -> Point3:
         """
         Creates an instance of Point3 from provided iterable data.
@@ -1379,7 +1375,7 @@ class Point2(Point):
         self,
         x: sm.ScalarData = 0,
         y: sm.ScalarData = 0,
-        reference_frame: Optional[KinematicStructureEntity] = None,
+        reference_frame: KinematicStructureEntity | None = None,
     ):
         """
         :param x: X-coordinate of the point. Defaults to 0.
@@ -1587,8 +1583,8 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         x: sm.ScalarData = 0,
         y: sm.ScalarData = 0,
         z: sm.ScalarData = 0,
-        reference_frame: Optional[KinematicStructureEntity] = None,
-        visualisation_frame: Optional[KinematicStructureEntity] = None,
+        reference_frame: KinematicStructureEntity | None = None,
+        visualisation_frame: KinematicStructureEntity | None = None,
     ):
         """
 
@@ -1634,7 +1630,7 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     def from_iterable(
         cls,
         data: sm.VectorData,
-        reference_frame: Optional[KinematicStructureEntity] = None,
+        reference_frame: KinematicStructureEntity | None = None,
     ) -> Vector3:
         """
         Creates an instance of Vector3 from provided iterable data.
@@ -1666,32 +1662,32 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         return result
 
     @classmethod
-    def X(cls, reference_frame: Optional[KinematicStructureEntity] = None) -> Vector3:
+    def X(cls, reference_frame: KinematicStructureEntity | None = None) -> Vector3:
         return cls(x=1, y=0, z=0, reference_frame=reference_frame)
 
     @classmethod
-    def Y(cls, reference_frame: Optional[KinematicStructureEntity] = None) -> Vector3:
+    def Y(cls, reference_frame: KinematicStructureEntity | None = None) -> Vector3:
         return cls(x=0, y=1, z=0, reference_frame=reference_frame)
 
     @classmethod
-    def Z(cls, reference_frame: Optional[KinematicStructureEntity] = None) -> Vector3:
+    def Z(cls, reference_frame: KinematicStructureEntity | None = None) -> Vector3:
         return cls(x=0, y=0, z=1, reference_frame=reference_frame)
 
     @classmethod
     def NEGATIVE_X(
-        cls, reference_frame: Optional[KinematicStructureEntity] = None
+        cls, reference_frame: KinematicStructureEntity | None = None
     ) -> Vector3:
         return cls(x=-1, y=0, z=0, reference_frame=reference_frame)
 
     @classmethod
     def NEGATIVE_Y(
-        cls, reference_frame: Optional[KinematicStructureEntity] = None
+        cls, reference_frame: KinematicStructureEntity | None = None
     ) -> Vector3:
         return cls(x=0, y=-1, z=0, reference_frame=reference_frame)
 
     @classmethod
     def NEGATIVE_Z(
-        cls, reference_frame: Optional[KinematicStructureEntity] = None
+        cls, reference_frame: KinematicStructureEntity | None = None
     ) -> Vector3:
         return cls(x=0, y=0, z=-1, reference_frame=reference_frame)
 
@@ -1701,7 +1697,7 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         x: sm.ScalarData = 0,
         y: sm.ScalarData = 0,
         z: sm.ScalarData = 0,
-        reference_frame: Optional[KinematicStructureEntity] = None,
+        reference_frame: KinematicStructureEntity | None = None,
     ) -> Vector3:
         v = cls(x=x, y=y, z=z, reference_frame=reference_frame)
         v.scale(1, unsafe=True)
@@ -1810,7 +1806,7 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     def safe_division(
         self,
         other: sm.ScalarData,
-        if_nan: Optional[Vector3] = None,
+        if_nan: Vector3 | None = None,
     ) -> sm.GenericSymbolicType:
         """
         A version of division where no sub-expression is ever NaN.
@@ -1963,7 +1959,7 @@ class Quaternion(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         y: sm.ScalarData = 0,
         z: sm.ScalarData = 0,
         w: sm.ScalarData = 1,
-        reference_frame: Optional[KinematicStructureEntity] = None,
+        reference_frame: KinematicStructureEntity | None = None,
     ):
         """
 
@@ -2008,7 +2004,7 @@ class Quaternion(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     def from_iterable(
         cls,
         data: sm.VectorData,
-        reference_frame: Optional[KinematicStructureEntity] = None,
+        reference_frame: KinematicStructureEntity | None = None,
     ) -> Quaternion:
         """
         Creates an instance of Quaternion from provided iterable data.
@@ -2095,7 +2091,7 @@ class Quaternion(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         roll: sm.ScalarData,
         pitch: sm.ScalarData,
         yaw: sm.ScalarData,
-        reference_frame: Optional[KinematicStructureEntity] = None,
+        reference_frame: KinematicStructureEntity | None = None,
     ) -> Quaternion:
         """
         Creates a Quaternion instance from specified roll, pitch, and yaw angles.
@@ -2140,7 +2136,7 @@ class Quaternion(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
     @classmethod
     def from_rotation_matrix(
-        cls, r: Union[RotationMatrix, HomogeneousTransformationMatrix]
+        cls, r: RotationMatrix | HomogeneousTransformationMatrix
     ) -> Quaternion:
         """
         Creates a Quaternion object initialized from a given rotation matrix.
@@ -2301,9 +2297,9 @@ class AxisAngle(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
     def __init__(
         self,
-        axis: Optional[Vector3] = None,
+        axis: Vector3 | None = None,
         angle: sm.ScalarData = 0,
-        reference_frame: Optional[KinematicStructureEntity] = None,
+        reference_frame: KinematicStructureEntity | None = None,
     ):
         """
         :param axis: The unit axis to rotate around. Defaults to the z-axis.
@@ -2401,9 +2397,9 @@ class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
     def __init__(
         self,
-        position: Optional[Point3] = None,
-        orientation: Optional[Quaternion] = None,
-        reference_frame: Optional[KinematicStructureEntity] = None,
+        position: Point3 | None = None,
+        orientation: Quaternion | None = None,
+        reference_frame: KinematicStructureEntity | None = None,
     ):
         """
         Initialize a 3D point with orientation and a reference frame in a kinematic
@@ -2463,7 +2459,7 @@ class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         roll: sm.ScalarData = 0,
         pitch: sm.ScalarData = 0,
         yaw: sm.ScalarData = 0,
-        reference_frame: Optional[KinematicStructureEntity] = None,
+        reference_frame: KinematicStructureEntity | None = None,
     ) -> Self:
         """
         Creates a Pose object from position (x, y, z) and Euler angles (roll, pitch,
@@ -2494,7 +2490,7 @@ class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         quat_y: sm.ScalarData = 0,
         quat_z: sm.ScalarData = 0,
         quat_w: sm.ScalarData = 1,
-        reference_frame: Optional[KinematicStructureEntity] = None,
+        reference_frame: KinematicStructureEntity | None = None,
     ) -> Self:
         """
         Creates a `Pose` instance from the provided position coordinates and quaternion
@@ -2525,7 +2521,7 @@ class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         z: sm.ScalarData = 0,
         axis: Vector3 | sm.NumericalVector = None,
         angle: sm.ScalarData = 0,
-        reference_frame: Optional[KinematicStructureEntity] = None,
+        reference_frame: KinematicStructureEntity | None = None,
     ) -> Self:
         """
         Creates an instance of the class from x, y, z coordinates, axis and angle.

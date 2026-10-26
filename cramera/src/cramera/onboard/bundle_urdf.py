@@ -27,15 +27,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from urllib.parse import unquote
 
-from typing_extensions import (
-    Any,
-    ClassVar,
-    Dict,
-    List,
-    Optional,
-    Pattern,
-    Set,
-)
+from typing_extensions import Any, ClassVar, Dict, List, Pattern, Set
 
 from semantic_digital_twin.adapters.package_resolver import PackageUriResolver
 from semantic_digital_twin.adapters.urdf import URDFParser
@@ -97,9 +89,9 @@ class MeshReference:
 
     def resolve(
         self,
-        hints: Optional[Dict[str, str]] = None,
-        base_directory: Optional[str] = None,
-    ) -> Optional[str]:
+        hints: Dict[str, str] | None = None,
+        base_directory: str | None = None,
+    ) -> str | None:
         """
         The existing file this reference points at, or None if nothing matched.
 
@@ -149,7 +141,7 @@ class MeshReference:
         )
         return os.path.join(self.LOCAL_MESH_DIRECTORY, os.path.basename(name))
 
-    def _resolved_package_path(self) -> Optional[str]:
+    def _resolved_package_path(self) -> str | None:
         """
         Resolve a ``package://`` URI via :class:`PackageUriResolver`.
 
@@ -205,7 +197,7 @@ class BundledAssets:
     References that could not be resolved to any file.
     """
 
-    bundle_root: Optional[str] = None
+    bundle_root: str | None = None
     """
     Directory nothing may be written outside of, or None to allow any destination.
     """
@@ -237,7 +229,7 @@ class BundledAssets:
         return sorted({os.path.splitext(path)[1].lower() for path in self.copied})
 
     def copy(
-        self, source: Optional[str], destination: str, *, reuse_source: bool = True
+        self, source: str | None, destination: str, *, reuse_source: bool = True
     ) -> bool:
         """
         Copy an asset, optionally reusing its first bundled location.
@@ -338,7 +330,7 @@ class BundledAssets:
 # %% a bundled mesh's own materials
 
 
-def companion_material_library(bundle_root: Path, mesh_path: str) -> Optional[str]:
+def companion_material_library(bundle_root: Path, mesh_path: str) -> str | None:
     """
     The bundle path of the ``.mtl`` a bundled OBJ names, or None when it names none.
 
@@ -446,8 +438,8 @@ class BundleReport:
         source: str,
         name: str,
         output_directory: str,
-        hints: Optional[Dict[str, str]] = None,
-    ) -> "BundleReport":
+        hints: Dict[str, str] | None = None,
+    ) -> BundleReport:
         """
         Bundle one URDF or xacro with every mesh it references.
 

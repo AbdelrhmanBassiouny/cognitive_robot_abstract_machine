@@ -1,8 +1,7 @@
 from dataclasses import dataclass
-from typing import Self
+from typing_extensions import List, Self
 
 import pytest
-from typing_extensions import List
 
 from krrood.entity_query_language.factories import variable
 from krrood.parametrization.feature_extraction.aggregations import (

@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import numpy.typing as npt
-from typing_extensions import Self, Any, Iterable, List, Optional, Tuple, Dict
+from typing_extensions import Self, Any, Iterable, List, Tuple, Dict
 
 from krrood.patterns.dataclass_deep_copy import DataclassDeepcopyMixin
 from probabilistic_model.exceptions import ShapeMismatchError
@@ -32,7 +32,7 @@ class MultinomialDistribution(ProbabilisticModel, DataclassDeepcopyMixin):
     The variables of the distribution.
     """
 
-    probabilities: Optional[npt.NDArray] = field(default=None)
+    probabilities: npt.NDArray | None = field(default=None)
     """
     The probability mass function.
 

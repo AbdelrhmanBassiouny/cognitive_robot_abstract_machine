@@ -11,7 +11,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from typing_extensions import Any, ClassVar, Dict, List, Optional, Set, Tuple
+from typing_extensions import Any, ClassVar, Dict, List, Set, Tuple
 
 from cramera import paths
 from cramera.knowledge.architecture_entities import Package, PythonClass
@@ -146,7 +146,7 @@ class ArchitectureScanner:
     """
 
     @classmethod
-    def of_configured_root(cls) -> "ArchitectureScanner":
+    def of_configured_root(cls) -> ArchitectureScanner:
         """
         A scanner for the repository :func:`cramera.paths.architecture_root` points at.
         """
@@ -290,7 +290,7 @@ class ArchitectureScanner:
         return module_count
 
     @staticmethod
-    def _parsed_module(path: str) -> Optional[ast.Module]:
+    def _parsed_module(path: str) -> ast.Module | None:
         """
         One module's syntax tree, or None when it cannot be parsed.
 
@@ -364,7 +364,7 @@ class ArchitectureScanner:
                     if root in package_names and root != package:
                         imports.setdefault(package, set()).add(root)
 
-    def _load_cache(self, cram_root: str, require_classes: bool) -> Optional[tuple]:
+    def _load_cache(self, cram_root: str, require_classes: bool) -> tuple | None:
         """
         The cached scan if it is usable, else None.
 

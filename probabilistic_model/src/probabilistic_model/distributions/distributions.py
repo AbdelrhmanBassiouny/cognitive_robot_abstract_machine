@@ -3,7 +3,17 @@ from __future__ import annotations
 import os
 from abc import abstractmethod
 from dataclasses import dataclass, field
-from typing import Optional, Set as PythonSet
+from typing_extensions import (
+    Union,
+    Iterable,
+    Any,
+    Self,
+    Dict,
+    List,
+    Tuple,
+    Optional,
+    Set as PythonSet,
+)
 
 import numpy as np
 import numpy.typing as npt
@@ -12,7 +22,6 @@ from krrood.patterns.dataclass_deep_copy import DataclassDeepcopyMixin
 from probabilistic_model.exceptions import UndefinedOperationError
 from random_events.interval import Interval, SimpleInterval, Bound, singleton, closed
 from random_events.product_algebra import Event, SimpleEvent, VariableMap
-from typing_extensions import Union, Iterable, Any, Self, Dict, List, Tuple
 
 from probabilistic_model.constants import SCALING_FACTOR_FOR_EXPECTATION_IN_PLOT
 from probabilistic_model.probabilistic_model import (
@@ -79,7 +88,7 @@ class UnivariateDistribution(ProbabilisticModel, DataclassDeepcopyMixin):
         """
         raise NotImplementedError
 
-    def marginal(self, variables: Iterable[Variable]) -> Optional[Self]:
+    def marginal(self, variables: Iterable[Variable]) -> Self | None:
         if self.variable in variables:
             return self
         else:
@@ -304,7 +313,7 @@ class DiscreteDistribution(UnivariateDistribution):
     Abstract base class for univariate discrete distributions.
     """
 
-    variable: Union[Symbolic, Integer] = field(kw_only=True)
+    variable: Symbolic | Integer = field(kw_only=True)
 
     probabilities: MissingDict = field(
         kw_only=True, default_factory=lambda: MissingDict(float)
@@ -345,7 +354,7 @@ class DiscreteDistribution(UnivariateDistribution):
         return self
 
     @abstractmethod
-    def probabilities_for_plotting(self) -> Dict[Union[int, str], float]:
+    def probabilities_for_plotting(self) -> Dict[int | str, float]:
         """
         :return: The probabilities as dict that can be plotted.
         """
@@ -463,7 +472,7 @@ class SymbolicDistribution(DiscreteDistribution):
         result.normalize()
         return LogTruncation(result, np.log(probability))
 
-    def probabilities_for_plotting(self) -> Dict[Union[int, str], float]:
+    def probabilities_for_plotting(self) -> Dict[int | str, float]:
         return {
             str(element): self.probabilities[hash(element)]
             for element in self.variable.domain.simple_sets
@@ -538,7 +547,7 @@ class IntegerDistribution(ContinuousDistribution, DiscreteDistribution):
                 mode |= singleton(key)
         return UnivariateLogMode(mode, np.log(max_likelihood))
 
-    def probabilities_for_plotting(self) -> Dict[Union[int, str], float]:
+    def probabilities_for_plotting(self) -> Dict[int | str, float]:
         return {x: p_x for x, p_x in self.probabilities.items() if p_x > 0}
 
     def log_conditional_from_simple_interval_if_not_singleton(

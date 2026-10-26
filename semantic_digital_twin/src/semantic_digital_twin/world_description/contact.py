@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from datetime import timedelta
 
-from typing_extensions import TYPE_CHECKING, Iterable, List, Optional
+from typing_extensions import TYPE_CHECKING, Iterable, List
 
 from semantic_digital_twin.mixin import UniqueSimulatorProperty
 
@@ -127,7 +127,7 @@ class ContactParameters(UniqueSimulatorProperty):
     Sliding, torsional and rolling friction.
     """
 
-    stiffness: Optional[ContactStiffness] = None
+    stiffness: ContactStiffness | None = None
     """
     How stiff and how damped the contacts are.
 
@@ -136,7 +136,7 @@ class ContactParameters(UniqueSimulatorProperty):
     :meth:`create_for_surface`) never resets a stiffness declared elsewhere.
     """
 
-    impedance: Optional[ContactImpedance] = None
+    impedance: ContactImpedance | None = None
     """
     How hard the contacts push back as they are penetrated.
 

@@ -15,7 +15,7 @@ from sqlalchemy.orm import (
     relationship,
     MappedColumn,
 )
-from typing_extensions import Tuple, List, Set, Optional, Self, ClassVar
+from typing_extensions import Tuple, List, Set, Self, ClassVar
 from ucimlrepo import DatasetNotFoundError, fetch_ucirepo
 
 from krrood.ripple_down_rules.datastructures.case import (
@@ -51,7 +51,7 @@ class ZooDataset:
     """
 
 
-def load_cached_dataset(cache_file) -> Optional[ZooDataset]:
+def load_cached_dataset(cache_file) -> ZooDataset | None:
     """
     Loads the dataset from cache if it exists.
     """
@@ -80,7 +80,7 @@ def save_dataset_to_cache(dataset: ZooDataset, cache_file):
     logger.info("Dataset cached successfully.")
 
 
-def get_dataset(dataset_id, cache_file: Optional[str] = None) -> Optional[ZooDataset]:
+def get_dataset(dataset_id, cache_file: str | None = None) -> ZooDataset | None:
     """
     Fetches dataset from cache or downloads it if not available.
 
@@ -119,7 +119,7 @@ def get_dataset(dataset_id, cache_file: Optional[str] = None) -> Optional[ZooDat
 
 
 def load_zoo_dataset(
-    cache_file: Optional[str] = None,
+    cache_file: str | None = None,
 ) -> Tuple[List[Case], List[Species]]:
     """
     Load the zoo dataset.
@@ -158,7 +158,7 @@ def load_zoo_dataset(
     return all_cases, targets
 
 
-def load_zoo_cases(cache_file: Optional[str] = None) -> List[Case]:
+def load_zoo_cases(cache_file: str | None = None) -> List[Case]:
     """
     Load the zoo dataset cases.
 
@@ -317,7 +317,7 @@ class MappedAnimal(MappedAsDataclass, Base):
 
 @dataclass(unsafe_hash=True)
 class WorldEntity:
-    world: Optional[World] = field(default=None, kw_only=True, repr=False, hash=False)
+    world: World | None = field(default=None, kw_only=True, repr=False, hash=False)
 
 
 @dataclass(unsafe_hash=True)
@@ -371,7 +371,7 @@ class View(WorldEntity): ...
 class Drawer(View):
     handle: Handle
     container: Container
-    correct: Optional[bool] = None
+    correct: bool | None = None
 
     def __hash__(self):
         return hash((self.__class__.__name__, self.handle, self.container))

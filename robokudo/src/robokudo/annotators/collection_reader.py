@@ -9,7 +9,7 @@ from timeit import default_timer as timer
 from py_trees.common import Status
 from py_trees.composites import Sequence
 from py_trees.display import unicode_tree
-from typing_extensions import TYPE_CHECKING, List, Optional
+from typing_extensions import TYPE_CHECKING, List
 
 from robokudo.annotators.core import BaseAnnotator
 from robokudo.descriptors.camera_configs.components import TfComponent
@@ -85,7 +85,7 @@ class CollectionReaderAnnotator(BaseAnnotator):
         self.collection_readers: List[CollectionReaderAnnotator.Descriptor] = [
             descriptor
         ]
-        self.start_timer: Optional[float] = None
+        self.start_timer: float | None = None
         self.iterations_since_last_data: int = 0
         """
         Number of consecutive ticks waiting for camera data.

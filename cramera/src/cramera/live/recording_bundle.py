@@ -7,7 +7,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from typing_extensions import Any, Dict, List, Optional
+from typing_extensions import Any, Dict, List
 
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world_description.geometry import Box, Mesh, Scale
@@ -108,7 +108,7 @@ def write_recording_bundle(
         return scene
 
 
-def finalize_recording(bridge: Bridge, recording: Recording) -> Optional[str]:
+def finalize_recording(bridge: Bridge, recording: Recording) -> str | None:
     """
     Ensure a recording's buffered frames have been written to disk, bundling them on
     first call.

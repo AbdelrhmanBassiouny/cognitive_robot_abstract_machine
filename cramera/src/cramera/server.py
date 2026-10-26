@@ -44,7 +44,7 @@ import traceback
 import webbrowser
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing_extensions import Any, Callable, ClassVar, Dict, List, Optional
+from typing_extensions import Any, Callable, ClassVar, Dict, List
 from urllib.parse import parse_qs, urlparse
 
 from cramera import paths
@@ -176,7 +176,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         """
         return parse_qs(urlparse(self.path).query)
 
-    def _requested_scene(self) -> Optional[str]:
+    def _requested_scene(self) -> str | None:
         """
         The scene the request targets, or None to let the server pick the active one.
 
@@ -281,7 +281,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         return super().do_GET()
 
     @staticmethod
-    def _expanded_node(node: str, scene: Optional[str]) -> Any:
+    def _expanded_node(node: str, scene: str | None) -> Any:
         """
         The node's subgraph, or a "not drillable" error if it has none.
 
@@ -472,7 +472,7 @@ def parse_arguments(arguments: List[str]) -> ServerOptions:
     return ServerOptions(port=port, open_browser=open_browser)
 
 
-def main(arguments: Optional[List[str]] = None) -> None:
+def main(arguments: List[str] | None = None) -> None:
     """
     ``cramera`` — serve the viewer, the scenes and the JSON API.
 

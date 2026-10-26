@@ -14,24 +14,17 @@ from inspect import isclass
 from os import PathLike
 from os.path import dirname
 from pathlib import Path
-from typing import Tuple, Generic, Hashable
-from typing import Union, Any
-
 from typing_extensions import (
     Dict,
     Iterator,
     get_origin,
     get_args,
+    Generic,
+    Hashable,
+    Any,
 )
-from typing_extensions import (
-    TypeVar,
-    Type,
-    List,
-    Optional,
-    Callable,
-    TypeVarTuple,
-    _SpecialForm,
-)
+
+from typing_extensions import TypeVar, List, Callable, TypeVarTuple, _SpecialForm
 
 from krrood import logger
 from krrood.exceptions import (
@@ -45,7 +38,7 @@ from krrood.exceptions import (
 T = TypeVar("T")
 
 
-def recursive_subclasses(cls: Type[T]) -> List[Type[T]]:
+def recursive_subclasses(cls: type[T]) -> List[type[T]]:
     """
     :param cls: The class.
     :return: A list of the classes subclasses without the class itself.
@@ -65,7 +58,7 @@ def get_full_class_name(cls):
     return cls.__module__ + "." + cls.__name__
 
 
-def module_and_class_name(type_: Union[Type, _SpecialForm]) -> str:
+def module_and_class_name(type_: type | _SpecialForm) -> str:
     """
     :param type_: A class or special form.
     :return: Its fully qualified ``"{module}.{name}"`` identifier.
@@ -73,7 +66,7 @@ def module_and_class_name(type_: Union[Type, _SpecialForm]) -> str:
     return f"{get_module_of_type(type_)}.{type_.__name__}"
 
 
-def get_module_of_type(type_: Union[Type, _SpecialForm]) -> str:
+def get_module_of_type(type_: type | _SpecialForm) -> str:
     """
     :param type_: The type of which the module is obtained.
     :return: The module name of the given type_.
@@ -83,7 +76,7 @@ def get_module_of_type(type_: Union[Type, _SpecialForm]) -> str:
     return type_.__module__
 
 
-def resolve_class_from_full_name(fully_qualified_class_name: str) -> Type:
+def resolve_class_from_full_name(fully_qualified_class_name: str) -> type:
     """
     Import and return the class named by a fully qualified name of the form
     ``"module.submodule.ClassName"``, as written by :func:`get_full_class_name` or
@@ -186,7 +179,7 @@ def get_import_root_from_path(path: Path) -> Path:
     return root
 
 
-def get_import_path_from_path(path: str) -> Optional[str]:
+def get_import_path_from_path(path: str) -> str | None:
     """
     Convert a file system path to a Python import path.
 
@@ -215,7 +208,7 @@ def make_path_importable(path: Path) -> None:
         sys.path.insert(0, root)
 
 
-def get_function_import_data(func: Callable) -> Tuple[str, str]:
+def get_function_import_data(func: Callable) -> tuple[str, str]:
     """
     Get the import path of a function.
 
@@ -260,7 +253,7 @@ def get_class_and_attribute_name(class_name: str, attribute_name: str) -> str:
     return f"{class_name}.{attribute_name}"
 
 
-def get_method_class_name_if_exists(method: Callable) -> Optional[str]:
+def get_method_class_name_if_exists(method: Callable) -> str | None:
     """
     Get the class name of a method if it has one.
 
@@ -291,9 +284,9 @@ def get_method_file_name(method: Callable) -> str:
 
 def get_relative_import(
     target_file_path: str | PathLike[str],
-    imported_module_path: Optional[str] = None,
-    module_name: Optional[str] = None,
-    package_name: Optional[str] = None,
+    imported_module_path: str | None = None,
+    module_name: str | None = None,
+    package_name: str | None = None,
 ) -> str:
     """
     Get a relative import path from the target file to the imported module.
@@ -378,10 +371,10 @@ def get_path_starting_from_latest_encounter_of(
 
 def get_generic_type_parameters(
     cls,
-    generic_base: Type,
+    generic_base: type,
     include_root_generic_base: bool = True,
     include_specialized_generic_base: bool = True,
-) -> List[Type[T]]:
+) -> List[type[T]]:
     """
     Given a subclass and its generic base, return the concrete type parameter(s).
 
@@ -425,7 +418,7 @@ def get_generic_type_parameters(
     return parameters
 
 
-def get_existing_field_by_name(cls, name: str) -> Optional[Field]:
+def get_existing_field_by_name(cls, name: str) -> Field | None:
     """
     Find the existing field in the MRO if it exists.
 
@@ -463,10 +456,10 @@ def ensure_hashable(obj) -> Hashable:
 
 
 def get_scope_from_imports(
-    file_path: Optional[str] = None,
-    tree: Optional[ast.AST] = None,
-    package_name: Optional[str] = None,
-    source: Optional[str] = None,
+    file_path: str | None = None,
+    tree: ast.AST | None = None,
+    package_name: str | None = None,
+    source: str | None = None,
 ) -> Dict[str, Any]:
     """
     Create a scope dictionary from imports in a Python file or an AST tree.
@@ -529,7 +522,7 @@ def module_level_imports(node: ast.AST) -> Iterator[ast.Import | ast.ImportFrom]
 
 
 def get_and_import_module(
-    module_name: str, package_name: Optional[str]
+    module_name: str, package_name: str | None
 ) -> types.ModuleType:
     """
     Attempt to import a module with an optional package context and return the module or
@@ -560,8 +553,8 @@ def get_and_import_module(
 
 
 def get_module_object(
-    module_name: str, package_name: Optional[str] = None
-) -> Optional[types.ModuleType]:
+    module_name: str, package_name: str | None = None
+) -> types.ModuleType | None:
     """
     :param module_name: The name of the module to import.
     :param package_name: The name of the package containing the module.
@@ -579,11 +572,11 @@ def get_module_object(
 
 
 def _resolve_relative_import(
-    file_path: Optional[str],
+    file_path: str | None,
     node: ast.ImportFrom,
-    module_name: Optional[str],
-    package_name: Optional[str],
-) -> tuple[Optional[str], Optional[str]]:
+    module_name: str | None,
+    package_name: str | None,
+) -> tuple[str | None, str | None]:
     """
     Resolve relative import context and possibly adjust module and package names based
     on file location.
@@ -624,7 +617,7 @@ def _resolve_relative_import(
 
 
 def _handle_import_node(
-    node: ast.Import, scope: Dict[str, Any], package_name: Optional[str]
+    node: ast.Import, scope: Dict[str, Any], package_name: str | None
 ) -> None:
     """
     Process a standard import node and update the provided scope mapping.
@@ -642,9 +635,9 @@ def _handle_import_node(
 
 @lru_cache(maxsize=None)
 def _log_unresolvable_import_once(
-    resolved_module_name: Optional[str],
+    resolved_module_name: str | None,
     name: str,
-    file_path: Optional[str],
+    file_path: str | None,
     error_message: str,
 ) -> None:
     """
@@ -672,9 +665,9 @@ def _log_unresolvable_import_once(
 def _handle_import_from_node(
     node: ast.ImportFrom,
     scope: Dict[str, Any],
-    file_path: Optional[str],
-    package_name: Optional[str],
-) -> Optional[str]:
+    file_path: str | None,
+    package_name: str | None,
+) -> str | None:
     """
     Process a from-import node and update the provided scope mapping.
 
@@ -740,7 +733,7 @@ def _handle_import_from_node(
     return package_name
 
 
-def is_dynamic_class(cls: Type) -> bool:
+def is_dynamic_class(cls: type) -> bool:
     """
     Check if a class is dynamically created.
 

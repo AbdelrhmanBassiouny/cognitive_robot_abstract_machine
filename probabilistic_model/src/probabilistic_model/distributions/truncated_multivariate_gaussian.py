@@ -13,15 +13,7 @@ from random_events.variable import Variable
 from scipy.optimize import lsq_linear
 from scipy.special import ndtr
 from scipy.stats import multivariate_normal, norm, truncnorm
-from typing_extensions import (
-    Any,
-    Dict,
-    Iterable,
-    Optional,
-    Self,
-    Tuple,
-    TYPE_CHECKING,
-)
+from typing_extensions import Any, Dict, Iterable, Self, Tuple, TYPE_CHECKING
 
 from krrood.patterns.dataclass_deep_copy import DataclassDeepcopyMixin
 from probabilistic_model.exceptions import (
@@ -348,7 +340,7 @@ class TruncatedMultivariateGaussianDistribution(
 
     # %% marginals and moments
 
-    def marginal(self, variables: Iterable[Variable]) -> Optional[Self]:
+    def marginal(self, variables: Iterable[Variable]) -> Self | None:
         """
         :param variables: The variables to keep.
         :return: A copy of this distribution if all of its variables are kept, or

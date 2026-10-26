@@ -15,7 +15,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import plotly.graph_objects as go
-from typing_extensions import ClassVar, Dict, List, Union
+from typing_extensions import ClassVar, Dict, List
 
 from random_events.product_algebra import Event, SimpleEvent
 from random_events.variable import Symbolic
@@ -39,7 +39,7 @@ class SimpleEventPlotter:
     The simple event to plot.
     """
 
-    def plot(self) -> Union[List[go.Scatter], List[go.Mesh3d]]:
+    def plot(self) -> List[go.Scatter] | List[go.Mesh3d]:
         """
         :return: The event's traces, dispatched on its dimensionality.
         :raises EventContainsSymbolicVariableError: If the event constrains a symbolic
@@ -266,7 +266,7 @@ class EventPlotter:
     per box.
     """
 
-    def plot(self, color: str = "#636EFA") -> Union[List[go.Scatter], List[go.Mesh3d]]:
+    def plot(self, color: str = "#636EFA") -> List[go.Scatter] | List[go.Mesh3d]:
         """
         :param color: The color to use for the event.
         :return: The traces of every simple set the event is the union of.

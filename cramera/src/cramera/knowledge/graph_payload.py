@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 
-from typing_extensions import Any, ClassVar, Dict, List, Optional
+from typing_extensions import Any, ClassVar, Dict, List
 
 
 from cramera.knowledge.enums import EdgeKind, NodeGroup
@@ -26,7 +26,7 @@ class KnowledgeGraphPayload(GraphPanelPayload):
     The knowledge-graph overview: the whole recorded episode in one graph.
     """
 
-    TAB: ClassVar[Optional[str]] = "knowledge"
+    TAB: ClassVar[str | None] = "knowledge"
 
     status: str = ""
     """

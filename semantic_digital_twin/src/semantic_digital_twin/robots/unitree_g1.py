@@ -6,7 +6,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
-from typing import Self, Union, List
+from typing_extensions import Self, Union
 
 from krrood.ormatic.utils import classproperty
 from semantic_digital_twin.collision_checking.collision_matrix import (
@@ -493,7 +493,7 @@ class UnitreeG1MobileBase(MobileBase[OmniDrive]):
     def setup_hardware_interfaces(self) -> None:
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
 

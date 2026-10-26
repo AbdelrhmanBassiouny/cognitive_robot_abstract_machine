@@ -28,16 +28,7 @@ from py_trees.behaviour import Behaviour
 from py_trees.blackboard import Blackboard
 from py_trees.common import Status
 from sensor_msgs.msg import JointState
-from typing_extensions import (
-    Any,
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Tuple,
-    Type,
-    Union,
-)
+from typing_extensions import Any, Callable, Dict, List, Tuple
 
 import robokudo.pipeline  # Work around circular import
 from robokudo.annotator_parameters import AnnotatorPredefinedParameters
@@ -315,8 +306,8 @@ class BaseAnnotator(Behaviour):
         return type(self).__name__
 
     def get_data_from_analysis_scope(
-        self, analysis_scope: List[Union[str, Type]]
-    ) -> Dict[Union[str, Type], Any]:
+        self, analysis_scope: List[str | type]
+    ) -> Dict[str | type, Any]:
         """
         Look up data to analyze based on a list of Types or String constants.
 
@@ -540,7 +531,7 @@ class ThreadedAnnotator(BaseAnnotator):
         self.rk_logger.debug("%s.__init__()" % self.__class__.__name__)
         self.compute_worker: Worker | None = None
         self.compute_worker_started: bool = False
-        self.compute_worker_thread: Optional[threading.Thread] = None
+        self.compute_worker_thread: threading.Thread | None = None
 
     def initialise(self) -> None:
         """

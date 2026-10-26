@@ -6,16 +6,7 @@ from dataclasses import dataclass
 from enum import Enum, auto
 
 import rustworkx as rx
-from typing_extensions import (
-    Any,
-    Callable,
-    ClassVar,
-    List,
-    Optional,
-    Tuple,
-    Union,
-    Dict,
-)
+from typing_extensions import Any, Callable, ClassVar, List, Tuple, Union, Dict
 
 NodePosition = Union[Tuple[float, float], Tuple[float, float, float]]
 """An explicit 2D or 3D node position, in whatever coordinate space the caller intends (for
@@ -96,7 +87,7 @@ class GraphVisualizerBase(ABC):
     required_modules: ClassVar[Tuple[str, ...]] = ()
     """The importable modules the backend needs to run."""
 
-    graph: Union[rx.PyDiGraph, rx.PyGraph]
+    graph: rx.PyDiGraph | rx.PyGraph
     """The live graph to display; re-read whenever the drawing is refreshed."""
 
     information_getter: Callable[[Any], List[str]] = describe_by_repr
@@ -105,19 +96,19 @@ class GraphVisualizerBase(ABC):
     label_getter: Callable[[Any], str] = label_by_string
     """Maps a node payload to the label drawn on the node."""
 
-    color_getter: Optional[Callable[[Any], str]] = None
+    color_getter: Callable[[Any], str] | None = None
     """Maps a node payload to its color; a constant color is used when not provided."""
 
     default_node_color: str = "#79a6d2"
     """The marker color used when no ``color_getter`` is provided."""
 
-    border_color_getter: Optional[Callable[[Any], str]] = None
+    border_color_getter: Callable[[Any], str] | None = None
     """Maps a node payload to its border color; derived automatically from its fill color when not provided."""
 
     default_border_color: str = "#888888"
     """The border color used for nodes and edges when no border color is given."""
 
-    position_getter: Optional[Callable[[Any], NodePosition]] = None
+    position_getter: Callable[[Any], NodePosition] | None = None
     """Maps a node payload to an explicit position; used when :attr:`layout` is
     :attr:`GraphLayout.FIXED`, ignored otherwise."""
 
@@ -152,7 +143,7 @@ class GraphVisualizerBase(ABC):
             return self.default_node_color
         return self.color_getter(self.graph[node_index])
 
-    def node_border_color(self, node_index: int) -> Optional[str]:
+    def node_border_color(self, node_index: int) -> str | None:
         """
         :param node_index: The rustworkx index of the node.
         :return: The border color of the node, or ``None`` to derive one automatically from its fill color.
@@ -161,7 +152,7 @@ class GraphVisualizerBase(ABC):
             return None
         return self.border_color_getter(self.graph[node_index])
 
-    def node_position(self, node_index: int) -> Optional[NodePosition]:
+    def node_position(self, node_index: int) -> NodePosition | None:
         """
         :param node_index: The rustworkx index of the node.
         :return: The node's explicit position, or ``None`` if no :attr:`position_getter` is set.

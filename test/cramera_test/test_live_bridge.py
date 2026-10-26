@@ -43,7 +43,7 @@ from semantic_digital_twin.world_description.geometry import (
 )
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
-from typing_extensions import Any, Dict, List, Optional, Tuple
+from typing_extensions import Any, Dict, List, Tuple
 
 from cramera.knowledge.enums import PlanNodeGroup
 from cramera.live.chart_structure import ChartEdgeEntry
@@ -673,7 +673,7 @@ class ChartNode:
 
     index: int
     name: str
-    parent_node_index: Optional[int] = None
+    parent_node_index: int | None = None
 
 
 @dataclass

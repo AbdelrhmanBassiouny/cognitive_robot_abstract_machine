@@ -8,9 +8,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from importlib.resources import files
 from pathlib import Path
-from typing import Self, List
+from typing_extensions import Generic, Self
 
-from typing_extensions import Generic
 
 from krrood.ormatic.utils import classproperty
 from semantic_digital_twin.adapters.sensors.lidar import Lidar, LidarSource
@@ -653,7 +652,7 @@ class PR2MobileBase(MobileBase[OmniDrive], HasTorso[PR2Torso], HasLidar[PR2BaseL
     def setup_hardware_interfaces(self):
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @property

@@ -17,7 +17,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from typing_extensions import List, Optional, Tuple
+from typing_extensions import List, Tuple
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import Attribute
@@ -55,7 +55,7 @@ from krrood.entity_query_language.verbalization.vocabulary.english import (
 )
 
 
-def subject_referent_id(variable: SymbolicExpression) -> Optional[uuid.UUID]:
+def subject_referent_id(variable: SymbolicExpression) -> uuid.UUID | None:
     """:return: The referent id for a subject/selection variable (``None`` when *variable* is not a
     single variable, which suppresses pronominalisation).
 
@@ -181,7 +181,7 @@ class SelectionAssembler:
 
     def _foldable_attribute(
         self, selection: SymbolicExpression
-    ) -> Optional[Tuple[SymbolicExpression, PathStep]]:
+    ) -> Tuple[SymbolicExpression, PathStep] | None:
         """:return: ``(owner, terminal_step)`` when *selection* is a plain genitive attribute that
         can share an owner with siblings, else ``None`` — a relational terminal (*"the Robot to
         which …"*) does not coordinate cleanly, so it is left alone.

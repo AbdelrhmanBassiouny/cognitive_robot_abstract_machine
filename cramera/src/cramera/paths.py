@@ -12,7 +12,7 @@ import os
 import re
 from pathlib import Path
 
-from typing_extensions import List, Optional
+from typing_extensions import List
 
 WEB_ROOT = Path(__file__).resolve().parent / "web"
 """
@@ -46,7 +46,7 @@ Excluded from the real scene index — never a bundle a user recorded.
 """
 
 
-def _configured_path(variable: str) -> Optional[Path]:
+def _configured_path(variable: str) -> Path | None:
     """
     The path an environment variable overrides a default with, if it is set.
 
@@ -108,7 +108,7 @@ def scene_roots() -> List[Path]:
     return [shared] if local == shared else [local, shared]
 
 
-def resolve_scene_directory(name: str) -> Optional[Path]:
+def resolve_scene_directory(name: str) -> Path | None:
     """
     The bundle directory a scene name resolves to, searched local-first, or None if no
     root has it.

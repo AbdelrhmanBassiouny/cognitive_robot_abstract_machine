@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import Any, Dict, List, Optional, Tuple
+from typing_extensions import Any, Dict, List, Tuple
 
 from cramera.body_geometry import POSE_PRECISION
 
@@ -113,7 +113,7 @@ class MarkerEntry:
     """
 
     @classmethod
-    def from_message(cls, marker: Any) -> Optional[MarkerEntry]:
+    def from_message(cls, marker: Any) -> MarkerEntry | None:
         """
         A ``visualization_msgs`` marker as the viewer renders it, read duck-typed.
 

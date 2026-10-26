@@ -4,19 +4,10 @@ from dataclasses import dataclass, field, Field
 from datetime import timedelta
 from http import HTTPStatus
 from pathlib import Path
-from typing import Dict, Set
+from typing_extensions import List, TYPE_CHECKING, Callable, Any
 from uuid import UUID
 
 import mujoco
-from typing_extensions import (
-    Optional,
-    List,
-    Type,
-    TYPE_CHECKING,
-    Callable,
-    Union,
-    Any,
-)
 
 from krrood.adapters.exceptions import UntrackedObjectError
 from krrood.exceptions import DataclassException
@@ -435,7 +426,7 @@ class WorldContainsOrphanedDegreeOfFreedom(WorldValidationError):
     freedom during validation.
     """
 
-    actual_dofs: Set[DegreeOfFreedom]
+    actual_dofs: set[DegreeOfFreedom]
     """
     The actual degrees of freedom used in connections.
     """
@@ -776,12 +767,12 @@ class NoSinglePartWholeRelationshipField(UsageError):
     type alone, but not exactly one field of the annotation holds parts of that type.
     """
 
-    annotation: Type[HasRootBody]
+    annotation: type[HasRootBody]
     """
     The annotation type the part is for.
     """
 
-    part_type: Type[HasRootBody]
+    part_type: type[HasRootBody]
     """
     The type of the part.
     """
@@ -1057,7 +1048,7 @@ class MismatchingPublishChangesAttribute(UsageError):
 
 @dataclass
 class MissingPublishChangesKWARG(UsageError):
-    kwargs: Dict[str, Any]
+    kwargs: dict[str, Any]
 
     def error_message(self) -> str:
         return (
@@ -1486,7 +1477,7 @@ class DatasetServerError(ParsingError):
 class WorldEntityNotFoundError(UsageError):
     name_or_hash: str | PrefixedName | int
 
-    suggestions: List[Union[str, PrefixedName]] = field(default_factory=list)
+    suggestions: List[str | PrefixedName] = field(default_factory=list)
     """
     Names of existing world entities that closely match the searched name.
     """
@@ -1756,7 +1747,7 @@ class WorldEntityWithIDNotInKwargs(UntrackedObjectError):
     The id of the world entity the document refers to.
     """
 
-    world_entity_name: Optional[PrefixedName] = None
+    world_entity_name: PrefixedName | None = None
     """
     The name the reference to that entity went by when it was written.
 

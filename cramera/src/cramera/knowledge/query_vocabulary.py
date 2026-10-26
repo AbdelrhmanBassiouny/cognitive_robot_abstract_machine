@@ -12,7 +12,7 @@ from enum import Enum
 from krrood.class_diagrams.attribute_introspector import DataclassOnlyIntrospector
 from krrood.entity_query_language.scope import eql_factory_namespace
 from krrood.exceptions import DataclassException
-from typing_extensions import Any, Dict, List, Optional
+from typing_extensions import Any, Dict, List
 
 from cramera.knowledge.query_domain import QueryDomain
 from cramera.knowledge.workspace_classes import WorkspaceClassIndex
@@ -305,7 +305,7 @@ class QueryVocabulary:
 
     # %% resolving a name to the type whose members follow its dot
 
-    def _type_named(self, name: str) -> Optional[type]:
+    def _type_named(self, name: str) -> type | None:
         """
         The type a name stands for, or whose instances a variable ranges over.
 
@@ -370,7 +370,7 @@ class QueryVocabulary:
         return collected
 
     @staticmethod
-    def _kind_of(attribute: Any) -> Optional[VocabularyKind]:
+    def _kind_of(attribute: Any) -> VocabularyKind | None:
         """
         Which kind of member an attribute of a class is, or None for neither.
 

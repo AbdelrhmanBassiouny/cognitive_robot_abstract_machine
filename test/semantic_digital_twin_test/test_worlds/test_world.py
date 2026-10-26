@@ -10,7 +10,7 @@ from uuid import UUID, uuid4
 import numpy as np
 import pytest
 from numpy.testing import assert_raises
-from typing_extensions import Optional, Tuple, Type
+from typing_extensions import Optional, Tuple
 
 from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.callbacks.callback import (
@@ -2271,7 +2271,7 @@ def test_move_branch_resets_free_connection_derivatives():
 
 
 def create_world_with_driven_child(
-    drive_type: Type[WheeledDrive],
+    drive_type: type[WheeledDrive],
 ) -> Tuple[World, Body, Body]:
     """
     Builds a world where ``driven_child`` hangs off the root by ``drive_type`` and

@@ -8,7 +8,7 @@ from __future__ import annotations
 import copy
 from dataclasses import dataclass, field
 
-from typing_extensions import Any, Dict, Optional, Self
+from typing_extensions import Any, Dict, Self
 
 from krrood.adapters.json_serializer import SubclassJSONSerializer, from_json, to_json
 from krrood.entity_query_language.core.mapped_variable import Attribute
@@ -32,7 +32,7 @@ class PartLearningMethods(SubclassJSONSerializer):
     attribute accesses hash by identity and compare symbolically.
     """
 
-    default: Optional[LearningMethod] = field(default_factory=JointProbabilityTree)
+    default: LearningMethod | None = field(default_factory=JointProbabilityTree)
     """
     What a part without a learning method is fitted with, copied for every such part,
     or ``None`` to require a learning method for every part.
@@ -47,7 +47,7 @@ class PartLearningMethods(SubclassJSONSerializer):
     def from_methods_and_default(
         cls,
         methods: Dict[Attribute, LearningMethod],
-        default: Optional[LearningMethod],
+        default: LearningMethod | None,
     ) -> Self:
         """
         :param methods: The learning methods of the parts.

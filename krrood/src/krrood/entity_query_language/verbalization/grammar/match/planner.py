@@ -3,7 +3,7 @@ from __future__ import annotations
 import operator
 from dataclasses import dataclass
 
-from typing_extensions import List, Optional, Tuple
+from typing_extensions import List, Tuple
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.expression_structure import walk_chain
@@ -171,7 +171,7 @@ class MatchPlanner(Planner[Match, MatchPlan]):
     @staticmethod
     def _as_assignment(
         condition: SymbolicExpression,
-    ) -> Optional[Tuple[SymbolicExpression, AttributeAssignment]]:
+    ) -> Tuple[SymbolicExpression, AttributeAssignment] | None:
         """
         :param condition: A construction-pattern condition.
         :return: ``(object, assignment)`` when *condition* is an attribute equality

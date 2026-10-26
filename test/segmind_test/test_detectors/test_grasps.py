@@ -7,7 +7,7 @@ carries it.
 from __future__ import annotations
 
 from giskardpy.motion_statechart.context import MotionStatechartContext
-from typing_extensions import List, Tuple, Type
+from typing_extensions import List, Tuple
 
 from segmind.datastructures.events import (
     ContactEvent,
@@ -134,7 +134,7 @@ def _executor_for(
 
 def _events_of(
     executor: EpisodeSegmenterExecutor,
-    event_type: Type[DetectionEvent],
+    event_type: type[DetectionEvent],
     body: Body,
     with_object: bool = False,
 ) -> List[DetectionEvent]:

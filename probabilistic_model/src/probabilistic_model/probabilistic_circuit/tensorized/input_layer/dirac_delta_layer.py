@@ -8,7 +8,7 @@ from random_events.interval import Bound, Interval
 from random_events.product_algebra import SimpleEvent
 from random_events.variable import Variable
 from sortedcontainers import SortedSet
-from typing_extensions import Any, List, Optional, Self, Type
+from typing_extensions import Any, List, Self
 
 from probabilistic_model.distributions.distributions import DiracDeltaDistribution
 from probabilistic_model.exceptions import ShapeMismatchError
@@ -134,7 +134,7 @@ class DiracDeltaLayer(AbstractContinuousLayer):
 
     def type_of_truncated_layer(
         self, assignment: Interval, singleton_allowed: bool
-    ) -> Type[Layer]:
+    ) -> type[Layer]:
         return self.__class__
 
     def contains(self, assignment: Interval) -> NodeMask:
@@ -179,7 +179,7 @@ class DiracDeltaLayer(AbstractContinuousLayer):
         self,
         event: SimpleEvent,
         variables: SortedSet,
-        cache: Optional[QueryCache] = None,
+        cache: QueryCache | None = None,
     ) -> NodeValues:
         return self.contains(event[variables[self.variable]]).astype(float)
 

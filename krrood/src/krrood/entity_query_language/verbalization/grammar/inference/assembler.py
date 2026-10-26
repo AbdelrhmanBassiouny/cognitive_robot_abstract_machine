@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from typing_extensions import List, Optional
+from typing_extensions import List
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.variable import Variable
@@ -186,7 +186,7 @@ class InferenceAssembler(Assembler[Entity, RuleStructure]):
     @staticmethod
     def _antecedent_referent_id(
         antecedent: AntecedentInformation,
-    ) -> Optional[uuid.UUID]:
+    ) -> uuid.UUID | None:
         """
         :return: The antecedent's canonical referent id — the selected variable for an entity
             root, else the root's own id (matching the variable the THEN-clause chains reference).

@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from abc import ABC
 from dataclasses import dataclass
-from typing import Optional, Any
+from typing_extensions import List, TYPE_CHECKING, Iterable, Any
 
 import numpy as np
 import trimesh.boolean
 from trimesh.collision import CollisionManager
-from typing_extensions import List, TYPE_CHECKING, Iterable, Type
 
 from krrood.entity_query_language.predicate import (
     Predicate,
@@ -680,7 +679,7 @@ class ContainsType(Predicate):
     Iterable to check for objects of the given type.
     """
 
-    obj_type: Type
+    obj_type: type
     """
     Object type to check for.
     """
@@ -723,7 +722,7 @@ class PlaceIsOccupied(Predicate):
     The world whose collidable bodies are tested against it.
     """
 
-    allowed_bodies: Optional[List[Body]] = None
+    allowed_bodies: List[Body] | None = None
     """
     Bodies that may stand there without the place counting as occupied.
     """

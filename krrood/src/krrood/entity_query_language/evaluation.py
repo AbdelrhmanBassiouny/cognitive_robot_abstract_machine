@@ -8,7 +8,7 @@ pipeline without polluting the core evaluation methods.
 from __future__ import annotations
 
 from ordered_set import OrderedSet
-from typing_extensions import Any, List, Optional
+from typing_extensions import Any, List
 
 from krrood.entity_query_language._monitoring import monitored
 from krrood.entity_query_language.core.base_expressions import (
@@ -38,7 +38,7 @@ from krrood.entity_query_language.query.query import Query
 
 def is_condition_participant(
     expression: SymbolicExpression,
-    parent: Optional[SymbolicExpression] = None,
+    parent: SymbolicExpression | None = None,
 ) -> bool:
     """
     Check whether the expression participates in condition evaluation.

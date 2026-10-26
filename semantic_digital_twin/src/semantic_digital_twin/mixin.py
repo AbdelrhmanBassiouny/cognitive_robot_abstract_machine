@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, fields
-from typing import List
+from typing_extensions import Any, Dict, TypeVar
 
 from krrood.patterns.field_metadata import FieldMetadata
-from typing_extensions import Any, Dict, Optional, Type, TypeVar
 
 from semantic_digital_twin.exceptions import DuplicateSimulatorPropertyError
 
@@ -80,7 +79,7 @@ class HasSimulatorProperties:
     Mixin class to add simulator additional properties to a data class.
     """
 
-    simulator_additional_properties: List[SimulatorAdditionalProperty] = field(
+    simulator_additional_properties: list[SimulatorAdditionalProperty] = field(
         default_factory=list, kw_only=True, repr=False
     )
     """
@@ -106,8 +105,8 @@ class HasSimulatorProperties:
         self.simulator_additional_properties.append(simulator_property)
 
     def get_simulator_property_of_type(
-        self, property_type: Type[TUniqueSimulatorProperty]
-    ) -> Optional[TUniqueSimulatorProperty]:
+        self, property_type: type[TUniqueSimulatorProperty]
+    ) -> TUniqueSimulatorProperty | None:
         """
         The property of ``property_type`` this entity carries.
 

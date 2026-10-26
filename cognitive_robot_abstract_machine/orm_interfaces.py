@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from tqdm import tqdm
-from typing_extensions import List, Optional, Sequence, Tuple
+from typing_extensions import List, Sequence, Tuple
 
 from cognitive_robot_abstract_machine import orm_generation
 from cognitive_robot_abstract_machine.exceptions import (
@@ -87,7 +87,7 @@ class BuildProgress:
     How many of them are built.
     """
 
-    bar: Optional[tqdm] = field(default=None, init=False)
+    bar: tqdm | None = field(default=None, init=False)
     """
     The bar, absent while the generators have the terminal to themselves.
     """
@@ -274,7 +274,7 @@ class GenerationOutput:
     What the classes and interfaces the run finishes are reported to.
     """
 
-    package_name: Optional[str] = field(default=None, init=False)
+    package_name: str | None = field(default=None, init=False)
     """
     The package whose generator is running, absent until the run names one.
     """

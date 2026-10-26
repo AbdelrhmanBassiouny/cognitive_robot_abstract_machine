@@ -14,7 +14,7 @@ from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedom,
     DegreeOfFreedomLimits,
 )
-from typing_extensions import List, Optional
+from typing_extensions import List
 
 #: thresholds the expression is built with; the values themselves do not matter here
 CONVERGENCE_THRESHOLDS = {
@@ -25,7 +25,7 @@ CONVERGENCE_THRESHOLDS = {
 
 
 def add_degree_of_freedom(
-    world: World, name: str, velocity_limit: Optional[float]
+    world: World, name: str, velocity_limit: float | None
 ) -> DegreeOfFreedom:
     """
     Register a degree of freedom in a world, with or without an upper velocity limit.

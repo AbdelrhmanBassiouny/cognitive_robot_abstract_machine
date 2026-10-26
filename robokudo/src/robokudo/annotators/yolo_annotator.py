@@ -25,7 +25,7 @@ import open3d as o3d
 import torch
 from krrood.ormatic.utils import classproperty
 from py_trees.common import Status
-from typing_extensions import TYPE_CHECKING, Any, Dict, List, Optional
+from typing_extensions import TYPE_CHECKING, Any, Dict, List
 from ultralytics import SAM, YOLO
 from ultralytics.utils.plotting import colors
 
@@ -121,18 +121,18 @@ class YoloAnnotator(ThreadedAnnotator):
 
                 Created during setup if it does not exist.
                 """
-                self.pretrained_model: Optional[str] = None
+                self.pretrained_model: str | None = None
                 """
                 Name of a model ultralytics provides, e.g. ``yolov8m.pt``, inside
                 :attr:`models_directory`.
 
                 Takes precedence over weights inside a ROS package.
                 """
-                self.ros_package_name: Optional[str] = None
+                self.ros_package_name: str | None = None
                 """
                 Name of the ROS package holding custom weights.
                 """
-                self.weights_path: Optional[str] = None
+                self.weights_path: str | None = None
                 """
                 Path of the custom weights, relative to the ROS package.
                 """
@@ -225,7 +225,7 @@ class YoloAnnotator(ThreadedAnnotator):
     def __init__(
         self,
         name: str = "YoloAnnotator",
-        descriptor: Optional[YoloAnnotator.Descriptor] = None,
+        descriptor: YoloAnnotator.Descriptor | None = None,
     ) -> None:
         super().__init__(name, descriptor)
 
@@ -233,7 +233,7 @@ class YoloAnnotator(ThreadedAnnotator):
         """
         Where the YOLO model is loaded from.
         """
-        self.model: Optional[YOLO] = None
+        self.model: YOLO | None = None
         """
         The YOLO detection model, loaded during setup.
         """
@@ -241,12 +241,12 @@ class YoloAnnotator(ThreadedAnnotator):
         """
         Name of each class the model detects, by class id, loaded during setup.
         """
-        self.segmentation_model: Optional[SAM] = None
+        self.segmentation_model: SAM | None = None
         """
         The SAM model refining the hypothesis masks in precision mode, loaded during
         setup.
         """
-        self.camera_intrinsics: Optional[o3d.camera.PinholeCameraIntrinsic] = None
+        self.camera_intrinsics: o3d.camera.PinholeCameraIntrinsic | None = None
         """
         Projection model at the depth image resolution.
         """
@@ -404,7 +404,7 @@ class YoloAnnotator(ThreadedAnnotator):
 
     def _most_overlapped_hypothesis(
         self, region: Rect, hypotheses: List[ObjectHypothesis]
-    ) -> Optional[ObjectHypothesis]:
+    ) -> ObjectHypothesis | None:
         """
         :return: The hypothesis overlapping the region the most, if it overlaps by more
             than the configured minimum.

@@ -4,15 +4,7 @@ import threading
 from dataclasses import dataclass, field
 
 import trimesh
-from typing_extensions import (
-    Any,
-    ClassVar,
-    Dict,
-    Optional,
-    Tuple,
-    TYPE_CHECKING,
-    Callable,
-)
+from typing_extensions import Any, ClassVar, Dict, Tuple, TYPE_CHECKING, Callable
 
 from krrood.rustworkx_utils.visualization.three_graph_visualizer import (
     ThreeGraphVisualizer,
@@ -45,7 +37,7 @@ class MeshThreeGraphVisualizer(ThreeGraphVisualizer):
     required_modules: ClassVar[Tuple[str, ...]] = ("flask", "trimesh")
     """The libraries needed to serve the application and export meshes to glTF."""
 
-    _mesh_glb_cache: Dict[int, Optional[bytes]] = field(
+    _mesh_glb_cache: Dict[int, bytes | None] = field(
         default_factory=dict, init=False, repr=False
     )
     """Exported glTF-binary (GLB) bytes for each node index, cached after the first export; ``None``
@@ -56,7 +48,7 @@ class MeshThreeGraphVisualizer(ThreeGraphVisualizer):
     )
     """Serializes GLB export across concurrently handled requests; see the class note."""
 
-    mesh_getter: Callable[[Any], Optional[trimesh.Trimesh]] = field(kw_only=True)
+    mesh_getter: Callable[[Any], trimesh.Trimesh | None] = field(kw_only=True)
     """
     Method to extract the mesh from a node
     """
@@ -218,7 +210,7 @@ class MeshThreeGraphVisualizer(ThreeGraphVisualizer):
 }})();
 """
 
-    def _mesh_glb(self, node_index: int) -> Optional[bytes]:
+    def _mesh_glb(self, node_index: int) -> bytes | None:
         """
         :param node_index: The rustworkx index of the node.
         :return: The node's mesh exported as glTF-binary (GLB) bytes, cached after the first

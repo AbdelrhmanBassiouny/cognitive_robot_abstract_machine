@@ -39,7 +39,7 @@ from rclpy.node import Node
 from rclpy.time import Time
 from sensor_msgs.msg import CompressedImage, CameraInfo, Image
 from tf2_ros import Buffer
-from typing_extensions import Optional, List, Any, TYPE_CHECKING, Union
+from typing_extensions import List, Any, TYPE_CHECKING
 
 from robokudo.cas import CASViews, CAS
 from robokudo.defs import PACKAGE_NAME
@@ -102,7 +102,7 @@ class CameraInterface(object):
         world_frame: str,
         camera_frame: str,
         world_T_camera: HomogeneousTransformationMatrix,
-        timestamp_ns: Optional[int] = None,
+        timestamp_ns: int | None = None,
     ) -> None:
         """Write a camera-to-world transform to the CAS and runtime world."""
         setup_world_for_camera_frame(world_frame=world_frame, camera_frame=camera_frame)
@@ -135,7 +135,7 @@ class CameraInterface(object):
         world_frame: str,
         camera_frame: str,
         world_T_camera: HomogeneousTransformationMatrix,
-        timestamp_ns: Optional[int] = None,
+        timestamp_ns: int | None = None,
     ) -> None:
         """Write a camera-to-world transform to the CAS and runtime world."""
         self.store_camera_to_world_transform_in_cas(
@@ -147,7 +147,7 @@ class CameraInterface(object):
         )
 
     def store_static_camera_transform_if_configured(
-        self, cas: CAS, timestamp_ns: Optional[int] = None
+        self, cas: CAS, timestamp_ns: int | None = None
     ) -> bool:
         """Write the configured static camera transform, if enabled."""
         if not self.camera_config.static_camera_transform_enabled:
@@ -468,12 +468,12 @@ class KinectCameraInterface(ROSCameraInterface):
         Latest depth image.
         """
 
-        self.camera_info: Optional[CameraInfo] = None
+        self.camera_info: CameraInfo | None = None
         """
         Latest camera info message
         """
 
-        self.camera_intrinsic: Optional[o3d.camera.PinholeCameraIntrinsic] = None
+        self.camera_intrinsic: o3d.camera.PinholeCameraIntrinsic | None = None
         """
         Latest camera info message.
         """
@@ -532,9 +532,9 @@ class KinectCameraInterface(ROSCameraInterface):
 
     def callback(
         self,
-        color_data: Union[Image, CompressedImage],
-        depth_data: Optional[Union[Image, CompressedImage]] = None,
-        camera_info: Optional[CameraInfo] = None,
+        color_data: Image | CompressedImage,
+        depth_data: Image | CompressedImage | None = None,
+        camera_info: CameraInfo | None = None,
     ) -> None:
         """
         Process synchronized camera data.

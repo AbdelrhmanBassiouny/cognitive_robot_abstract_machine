@@ -13,7 +13,7 @@ from dataclasses import asdict, dataclass, field, replace
 from enum import StrEnum
 
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
-from typing_extensions import Dict, List, Optional
+from typing_extensions import Dict, List
 
 
 @dataclass(frozen=True)
@@ -25,7 +25,7 @@ class ChartNodeStructure:
     id: str
     name: str
     class_name: str
-    parent: Optional[str]
+    parent: str | None
 
 
 @dataclass(frozen=True)
@@ -86,7 +86,7 @@ class ChartNodeEntry:
     id: str
     name: str
     class_name: str
-    parent: Optional[str]
+    parent: str | None
     life_cycle: str
     """
     The node's ``LifeCycleValues`` name (e.g. ``RUNNING``).

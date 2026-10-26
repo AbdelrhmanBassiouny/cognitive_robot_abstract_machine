@@ -51,7 +51,7 @@ from pathlib import Path
 
 from dataclasses import asdict, dataclass
 
-from typing_extensions import Any, ClassVar, Dict, Optional, Tuple, Type
+from typing_extensions import Any, ClassVar, Dict, Tuple, Type
 
 from cramera.knowledge.query_vocabulary import UnknownVocabularyName
 from cramera.knowledge.queryable_knowledge import QueryScope, UnknownQueryScope
@@ -249,7 +249,7 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             return Recording().status_payload()
         return self.bridge.recording.status_payload()
 
-    def _query_value(self, name: str) -> Optional[str]:
+    def _query_value(self, name: str) -> str | None:
         """
         One query-string parameter's value, or None if it is absent.
 
@@ -278,7 +278,7 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             return self._send_json({"error": "side asset outside mesh directory"}, 403)
         return self._send_file(str(side_path))
 
-    def _send_file(self, path: Optional[str]) -> None:
+    def _send_file(self, path: str | None) -> None:
         """
         Stream an absolute path's bytes, or 404 when it does not resolve to a file.
 
@@ -317,7 +317,7 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             return self._save_recording()
         self._send_json({"ok": False, "error": "unknown endpoint"}, 404)
 
-    def _posted_payload(self) -> Optional[Dict[str, Any]]:
+    def _posted_payload(self) -> Dict[str, Any] | None:
         """
         The request's JSON body as an object, or None when it is not one.
         """
@@ -485,7 +485,7 @@ class BridgeServer(ThreadingHTTPServer):
     found in.
     """
 
-    CLIENT_HUNG_UP: ClassVar[Tuple[Type[BaseException], ...]] = (
+    CLIENT_HUNG_UP: ClassVar[Tuple[type[BaseException], ...]] = (
         BrokenPipeError,
         ConnectionResetError,
     )

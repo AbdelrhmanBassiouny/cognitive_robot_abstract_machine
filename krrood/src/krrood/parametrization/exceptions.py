@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import Any, Hashable, List, Set, TYPE_CHECKING, Type
+from typing_extensions import Any, Hashable, List, Set, TYPE_CHECKING
 
 import random_events.variable
 from krrood.entity_query_language.core.variable import Variable
@@ -79,7 +79,7 @@ class EmptyVariableDomain(InputError):
 
 @dataclass
 class InvalidEllipsis(InputError):
-    type_: Type
+    type_: type
 
     def error_message(self) -> str:
         return f"Ellipsis is not allowed for type {self.type_}. Ellipsis are only allowed for the leaf objects (random events compatible types, see `random_events.variable.Variable.compatible_types`)."
@@ -159,7 +159,7 @@ class JointQueryAcrossClassesNotSupported(DataclassException):
     referencing zero, or more than one, classes' models yet.
     """
 
-    owner_classes: Set[Type]
+    owner_classes: Set[type]
     """
     The distinct owner classes found among the query's referenced attributes -- empty
     when it referenced none at all.

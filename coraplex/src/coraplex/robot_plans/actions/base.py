@@ -6,14 +6,7 @@ from copy import copy
 from dataclasses import dataclass
 from functools import cached_property
 
-from typing_extensions import (
-    Any,
-    TypeVar,
-    Dict,
-    Union,
-    Iterable,
-    Optional,
-)
+from typing_extensions import Any, TypeVar, Dict, Union, Iterable
 
 from coraplex.datastructures.dataclasses import Context
 from coraplex.exceptions import ContextIsUnavailable
@@ -43,7 +36,7 @@ class ActionDescription(Designator):
     """
 
     @property
-    def world(self) -> Optional[World]:
+    def world(self) -> World | None:
         if self.plan is None:
             raise ContextIsUnavailable(self)
         return self.plan.world

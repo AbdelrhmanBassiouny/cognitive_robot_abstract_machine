@@ -11,7 +11,7 @@ resemble) so causal-specific code has its own, easily reviewable surface, mirror
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing_extensions import TYPE_CHECKING, Any, Iterable, List, Optional, Type, Self
+from typing_extensions import TYPE_CHECKING, Any, Iterable, List, Self
 
 import random_events.variable
 from krrood.entity_query_language.core.base_expressions import (
@@ -47,7 +47,7 @@ class CausalRoleMarker(Literal):
 
     _value_: Any = field(default=Ellipsis, init=False)
 
-    def _as_assigned_variable_(self, attribute_type: Optional[Type]) -> Self:
+    def _as_assigned_variable_(self, attribute_type: type | None) -> Self:
         """
         :param attribute_type: The type of the attribute this marks.
         :return: This marker if it already has a type, otherwise a fresh copy of it

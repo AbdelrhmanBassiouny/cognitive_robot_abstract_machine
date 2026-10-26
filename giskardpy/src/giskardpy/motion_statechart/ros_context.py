@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import Dict, Type
+from typing_extensions import Dict
 
 try:
     from rclpy.action import ActionClient
@@ -35,7 +35,7 @@ class RosContextExtension(ContextExtension):
     """
 
     def get_or_create_action_client(
-        self, message_type: Type, action_topic: str
+        self, message_type: type, action_topic: str
     ) -> ActionClient:
         """
         Returns the cached action client for ``action_topic``, creating and caching one

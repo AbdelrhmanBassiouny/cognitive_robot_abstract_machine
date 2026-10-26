@@ -24,7 +24,7 @@ import cv2
 import numpy as np
 import open3d as o3d
 from py_trees.common import Status
-from typing_extensions import TYPE_CHECKING, Dict, Optional, Tuple
+from typing_extensions import TYPE_CHECKING, Dict, Tuple
 
 from robokudo.annotators.core import BaseAnnotator
 from robokudo.cas import CASViews
@@ -144,8 +144,8 @@ class ImageClusterExtractor(BaseAnnotator):
     ) -> None:
         super().__init__(name, descriptor)
         self.rk_logger.debug("%s.__init__()" % self.__class__.__name__)
-        self.color: Optional[npt.NDArray] = None
-        self.depth: Optional[npt.NDArray] = None
+        self.color: npt.NDArray | None = None
+        self.depth: npt.NDArray | None = None
         self.query = None
         self.camera_intrinsics = None
 

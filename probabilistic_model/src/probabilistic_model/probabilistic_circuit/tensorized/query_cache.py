@@ -3,7 +3,7 @@ from __future__ import annotations
 import functools
 from dataclasses import dataclass, field
 
-from typing_extensions import Any, Callable, Dict, Optional
+from typing_extensions import Any, Callable, Dict
 
 
 @dataclass(frozen=True)
@@ -64,7 +64,7 @@ def memoized(method: Callable) -> Callable:
     """
 
     @functools.wraps(method)
-    def wrapper(self, *args, cache: Optional[QueryCache] = None, **kwargs):
+    def wrapper(self, *args, cache: QueryCache | None = None, **kwargs):
         if cache is None:
             cache = QueryCache()
         key = QueryCacheKey(method, id(self))

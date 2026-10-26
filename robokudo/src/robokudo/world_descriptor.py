@@ -25,7 +25,7 @@ from semantic_digital_twin.world_description.world_entity import (
     Region,
     SemanticAnnotation,
 )
-from typing_extensions import Any, Dict, List, Optional
+from typing_extensions import Any, Dict, List
 
 
 @dataclass
@@ -77,7 +77,7 @@ class BaseWorldDescriptor:
         self,
         world: World | None = None,
         root_name: str = "descriptor_world_root",
-        root_prefix: Optional[str] = "world",
+        root_prefix: str | None = "world",
     ) -> None:
         """
         Initialize a world descriptor.

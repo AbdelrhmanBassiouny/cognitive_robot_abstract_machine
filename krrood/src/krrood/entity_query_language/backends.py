@@ -3,12 +3,11 @@ import enum
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
 from types import NoneType
-from typing import Iterable, TypeVar
+from typing_extensions import ClassVar, Dict, List, Iterable, TypeVar
 
 import random_events.variable
 from random_events.product_algebra import Event
 from sqlalchemy.orm import sessionmaker
-from typing_extensions import ClassVar, Dict, List, Optional
 
 from krrood import logger
 from krrood.entity_query_language.verbalization.vocabulary.english import Directive
@@ -79,7 +78,7 @@ class QueryBackend(ABC):
     Query backends are objects that answer queries by different means.
     """
 
-    opening_directive: ClassVar[Optional[Directive]] = None
+    opening_directive: ClassVar[Directive | None] = None
     """
     The opening verb a verbalization uses when this backend evaluates the expression
     (``None`` keeps the query-type default).
@@ -133,7 +132,7 @@ class SelectiveBackend(QueryBackend, ABC):
     These can take any query as input.
     """
 
-    opening_directive: ClassVar[Optional[Directive]] = Directive.FIND
+    opening_directive: ClassVar[Directive | None] = Directive.FIND
     """
     Selecting from existing data reads as *"Find …"*.
     """
@@ -157,7 +156,7 @@ class GenerativeBackend(QueryBackend, ABC):
     {py:class}`~krrood.entity_query_language.query.match.Match` is the only way to do so.
     """
 
-    opening_directive: ClassVar[Optional[Directive]] = Directive.GENERATE
+    opening_directive: ClassVar[Directive | None] = Directive.GENERATE
     """
     Generating new elements reads as *"Generate …"*.
     """
@@ -326,7 +325,7 @@ class ProbabilisticBackend(GenerativeBackend):
         yield from super().evaluate(expression)
 
     @staticmethod
-    def _bare_average_selection(expression: Evaluable) -> Optional[Average]:
+    def _bare_average_selection(expression: Evaluable) -> Average | None:
         """
         :param expression: The expression being evaluated.
         :return: The :class:`~krrood.entity_query_language.operators.aggregators.Average`
@@ -470,7 +469,7 @@ class ProbabilisticBackend(GenerativeBackend):
         model: CausalCircuit,
         cause_variables: List[random_events.variable.Variable],
         effect_variable: random_events.variable.Variable,
-        effect_truncation_event: Optional[Event],
+        effect_truncation_event: Event | None,
         expression: Match[T],
         confounder_variables: Iterable[random_events.variable.Variable] = (),
     ) -> ScoredIntervention:
@@ -515,7 +514,7 @@ class ProbabilisticBackend(GenerativeBackend):
         model: CausalCircuit,
         cause_variables: List[random_events.variable.Variable],
         effect_variable: random_events.variable.Variable,
-        effect_truncation_event: Optional[Event],
+        effect_truncation_event: Event | None,
         confounder_variables: Iterable[random_events.variable.Variable] = (),
     ) -> List[ScoredIntervention]:
         """
@@ -608,9 +607,9 @@ class ProbabilisticBackend(GenerativeBackend):
         model: CausalCircuit,
         cause_variable: random_events.variable.Variable,
         effect_variable: random_events.variable.Variable,
-        effect_truncation_event: Optional[Event],
+        effect_truncation_event: Event | None,
         confounder_variables: Iterable[random_events.variable.Variable] = (),
-    ) -> Optional[ScoredIntervention]:
+    ) -> ScoredIntervention | None:
         """
         Compute ``cause_variable``'s best-region search result and score it by how
         *reliably* that region produces the effect: ``P(effect | do(cause_variable in

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from dataclasses import fields as dc_fields
-from typing_extensions import List, Type
+from typing_extensions import List
 
 from krrood.class_diagrams.attribute_introspector import (
     AttributeIntrospector,
@@ -21,7 +21,7 @@ class DescriptorAwareIntrospector(AttributeIntrospector):
     are presented under the public attribute name.
     """
 
-    def discover(self, owner_cls: Type) -> List[DiscoveredAttribute]:
+    def discover(self, owner_cls: type) -> List[DiscoveredAttribute]:
         from krrood.ontomatic.property_descriptor.property_descriptor import (
             PropertyDescriptor,
         )

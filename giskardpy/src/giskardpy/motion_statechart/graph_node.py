@@ -14,7 +14,6 @@ from typing_extensions import (
     Dict,
     Any,
     Self,
-    Optional,
     TYPE_CHECKING,
     List,
     TypeVar,
@@ -97,7 +96,7 @@ class TrinaryCondition(SubclassJSONSerializer):
     The logical trinary condition to be evaluated.
     """
 
-    owner: Optional[MotionStatechartNode] = field(default=None)
+    owner: MotionStatechartNode | None = field(default=None)
     """
     The node this transition belongs to.
     """
@@ -110,7 +109,7 @@ class TrinaryCondition(SubclassJSONSerializer):
 
     @classmethod
     def create_true(
-        cls, kind: TransitionKind, owner: Optional[MotionStatechartNode] = None
+        cls, kind: TransitionKind, owner: MotionStatechartNode | None = None
     ) -> Self:
         """
         Creates a condition that always evaluates to true.
@@ -123,7 +122,7 @@ class TrinaryCondition(SubclassJSONSerializer):
 
     @classmethod
     def create_false(
-        cls, kind: TransitionKind, owner: Optional[MotionStatechartNode] = None
+        cls, kind: TransitionKind, owner: MotionStatechartNode | None = None
     ) -> Self:
         """
         Creates a condition that always evaluates to false.
@@ -136,7 +135,7 @@ class TrinaryCondition(SubclassJSONSerializer):
 
     @classmethod
     def create_unknown(
-        cls, kind: TransitionKind, owner: Optional[MotionStatechartNode] = None
+        cls, kind: TransitionKind, owner: MotionStatechartNode | None = None
     ) -> Self:
         """
         Creates a condition that always evaluates to unknown.
@@ -285,7 +284,7 @@ class TrinaryCondition(SubclassJSONSerializer):
         kind: TransitionKind,
         trinary_logic_str: str,
         state_variables: List[NodeStateVariable],
-        owner: Optional[MotionStatechartNode] = None,
+        owner: MotionStatechartNode | None = None,
     ):
         """
         Creates a condition from the string representation produced by :meth:`__str__`.
@@ -602,14 +601,14 @@ class NodeArtifacts:
     """
     A collection of constraints that describe a motion task. 
     """
-    observation: Optional[Scalar] = field(default=None)
+    observation: Scalar | None = field(default=None)
     """
     A symbolic expression that describes the observation state of this node.
     Instead of setting this attribute directly, you may also implement the `on_tick` method of a node.
     The advantage of using observation is that you can reuse the expressions used in constraints.
     .. warning:: the result of `on_tick` takes precedence over the observation expression.
     """
-    error: Optional[Scalar] = field(default=None)
+    error: Scalar | None = field(default=None)
     """
     How far this node is from its goal. Set by :class:`ConvergingTask`, which derives
     :attr:`observation` from it, and used to watch whether the node is still converging.
@@ -682,7 +681,7 @@ class MotionStatechartNode(SubclassJSONSerializer):
     """
     Back reference to the motion statechart that owns this node.
     """
-    index: Optional[int] = field(default=None, init=False)
+    index: int | None = field(default=None, init=False)
     """
     The index of this node in the motion statechart.
     """
@@ -696,7 +695,7 @@ class MotionStatechartNode(SubclassJSONSerializer):
     on load, and the serialized identifier only tells apart the nodes of one JSON document.
     """
 
-    parent_node_index: Optional[int] = field(
+    parent_node_index: int | None = field(
         default=None, init=False, metadata=JSONMetadata(serialize=True).as_dict()
     )
     """
@@ -720,7 +719,7 @@ class MotionStatechartNode(SubclassJSONSerializer):
     """The parameter is set after build() using its NodeArtifacts."""
     _observation_expression: Scalar = field(init=False, repr=False)
     """The parameter is set after build() using its NodeArtifacts."""
-    _error_signal: Optional[Scalar] = field(init=False, repr=False, default=None)
+    _error_signal: Scalar | None = field(init=False, repr=False, default=None)
     """The parameter is set after build() using its NodeArtifacts."""
     _debug_expressions: List[DebugExpression] = field(default_factory=list, init=False)
     """The parameter is set after build() using its NodeArtifacts."""
@@ -794,7 +793,7 @@ class MotionStatechartNode(SubclassJSONSerializer):
         )
 
     @property
-    def parent_node(self) -> Optional[MotionStatechartNode]:
+    def parent_node(self) -> MotionStatechartNode | None:
         """
         :return: Reference to the parent node of this node.
         """
@@ -837,7 +836,7 @@ class MotionStatechartNode(SubclassJSONSerializer):
         return depth
 
     @parent_node.setter
-    def parent_node(self, parent_node: Optional[MotionStatechartNode]) -> None:
+    def parent_node(self, parent_node: MotionStatechartNode | None) -> None:
         """
         :param parent_node: The node this node becomes a child of, or None to put it on the top layer.
         """
@@ -1155,7 +1154,7 @@ class MotionStatechartNode(SubclassJSONSerializer):
 
     def on_tick(
         self, context: MotionStatechartContext
-    ) -> Optional[ObservationStateValues]:
+    ) -> ObservationStateValues | None:
         """
         Triggered when the node is ticked.
         .. warning:: This method is called inside a control loop, make sure it is fast.
@@ -1524,9 +1523,9 @@ def velocity_convergence_expression(
     joint_convergence_threshold: float,
     minimum_threshold: float,
     maximum_threshold: float,
-    degrees_of_freedom: Optional[List[DegreeOfFreedom]] = None,
+    degrees_of_freedom: List[DegreeOfFreedom] | None = None,
     minimum_time: float = 1.0,
-    reference_cycle_variable: Optional[FloatVariable] = None,
+    reference_cycle_variable: FloatVariable | None = None,
 ) -> Scalar:
     """
     Builds a trinary expression that is true once every given degree of freedom's
@@ -1980,7 +1979,7 @@ class CancelMotion(TerminalNode):
 
     @classmethod
     def when_true(
-        cls, node: MotionStatechartNode, exception: Optional[Exception] = None
+        cls, node: MotionStatechartNode, exception: Exception | None = None
     ) -> Self:
         """
         Factory method for creating a CancelMotion node that activates once the given
@@ -1999,7 +1998,7 @@ class CancelMotion(TerminalNode):
 
     @classmethod
     def when_failed(
-        cls, node: MotionStatechartNode, exception: Optional[Exception] = None
+        cls, node: MotionStatechartNode, exception: Exception | None = None
     ) -> Self:
         """
         Factory method for creating a CancelMotion node that activates once the given

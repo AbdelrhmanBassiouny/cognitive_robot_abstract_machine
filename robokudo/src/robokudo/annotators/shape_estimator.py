@@ -12,7 +12,7 @@ from dataclasses import dataclass
 import numpy as np
 import open3d as o3d
 from py_trees.common import Status
-from typing_extensions import Any, Dict, List, Optional, Tuple
+from typing_extensions import Any, Dict, List, Tuple
 
 from robokudo.annotators.core import BaseAnnotator, ThreadedAnnotator
 from robokudo.types.annotation import Shape
@@ -263,7 +263,7 @@ class ShapeEstimatorAnnotator(ThreadedAnnotator):
     def _estimate_shape_for_object_hypothesis(
         self,
         object_hypothesis: ObjectHypothesis,
-    ) -> Optional[Tuple[Shape, List[Dict[str, Any]]]]:
+    ) -> Tuple[Shape, List[Dict[str, Any]]] | None:
         """Estimate one shape candidate for a single object hypothesis."""
         point_cloud = object_hypothesis.points
         if not self._valid_point_cloud(point_cloud):
@@ -303,9 +303,7 @@ class ShapeEstimatorAnnotator(ThreadedAnnotator):
         )
         return shape_annotation, visual_geometries
 
-    def _valid_point_cloud(
-        self, point_cloud: Optional[o3d.geometry.PointCloud]
-    ) -> bool:
+    def _valid_point_cloud(self, point_cloud: o3d.geometry.PointCloud | None) -> bool:
         """Return whether a point cloud has enough points for shape estimation."""
         if point_cloud is None:
             return False
@@ -410,7 +408,7 @@ class ShapeEstimatorAnnotator(ThreadedAnnotator):
         candidates: List[FittedShape],
         object_hypothesis: ObjectHypothesis,
         shape_name: str,
-        fit_result: Optional[FittedShape],
+        fit_result: FittedShape | None,
     ) -> None:
         """Append accepted candidate or log its rejection."""
         if fit_result is None:
@@ -424,8 +422,8 @@ class ShapeEstimatorAnnotator(ThreadedAnnotator):
         self._log_candidate_metrics(object_hypothesis, fit_result)
 
     def _postprocess_shape_candidate(
-        self, fit_result: Optional[FittedShape], points: np.ndarray
-    ) -> Optional[FittedShape]:
+        self, fit_result: FittedShape | None, points: np.ndarray
+    ) -> FittedShape | None:
         """Apply annotator-level stabilization policies to fitted shape candidates."""
         if isinstance(fit_result, CylinderFit):
             return self._stabilize_cylinder_axis_if_tilted(
@@ -459,7 +457,7 @@ class ShapeEstimatorAnnotator(ThreadedAnnotator):
 
     def _select_best_shape_candidate(
         self, candidates: List[FittedShape]
-    ) -> Optional[FittedShape]:
+    ) -> FittedShape | None:
         """Select the best shape candidate using descriptor preferences."""
         return select_best_shape(
             candidates=candidates,
@@ -664,7 +662,7 @@ class ShapeEstimatorAnnotator(ThreadedAnnotator):
                 return True
         return False
 
-    def _preferred_cylinder_axis_direction(self) -> Optional[np.ndarray]:
+    def _preferred_cylinder_axis_direction(self) -> np.ndarray | None:
         """Return configured preferred cylinder axis direction if valid."""
         if not self.descriptor.parameters.prefer_upright_cylinder_axis:
             return None
@@ -820,7 +818,7 @@ class ShapeEstimatorAnnotator(ThreadedAnnotator):
         smallest_axis_index: int,
         first_in_plane_axis_index: int,
         second_in_plane_axis_index: int,
-    ) -> Optional[np.ndarray]:
+    ) -> np.ndarray | None:
         """Return a cuboid rotation matrix with canonical in-plane axes."""
         normal_axis = rotation_matrix[:, smallest_axis_index]
         normal_axis = normal_axis / max(np.linalg.norm(normal_axis), 1e-9)
@@ -851,7 +849,7 @@ class ShapeEstimatorAnnotator(ThreadedAnnotator):
 
     def _first_projected_reference_axis(
         self, normal_axis: np.ndarray
-    ) -> Optional[np.ndarray]:
+    ) -> np.ndarray | None:
         """Return the first global reference axis that projects onto the cuboid plane."""
         reference_axes = [
             np.asarray([1.0, 0.0, 0.0], dtype=np.float64),

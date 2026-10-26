@@ -4,7 +4,7 @@ import logging
 from abc import abstractmethod
 from dataclasses import dataclass
 from inspect import signature
-from typing_extensions import List, TypeVar, Type, Optional
+from typing_extensions import List, TypeVar
 
 from giskardpy.motion_statechart.goals.collision_avoidance import (
     UpdateTemporaryCollisionRules,
@@ -66,7 +66,7 @@ class BaseMotion(Designator):
     def _motion_chart(self) -> Task:
         pass
 
-    def get_alternative_motion(self) -> Optional[Type[AlternativeMotion]]:
+    def get_alternative_motion(self) -> type[AlternativeMotion] | None:
         return AlternativeMotion.check_for_alternative(
             self.context.alternative_motion_mappings, self.robot, self.__class__
         )

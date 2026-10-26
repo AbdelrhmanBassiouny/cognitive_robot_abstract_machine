@@ -3,19 +3,13 @@ from __future__ import annotations
 import logging
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import Union
+from typing_extensions import List, Iterator, Set
 
 import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import NDArray
 from matplotlib import colors
 from skimage.measure import label
-from typing_extensions import (
-    List,
-    Optional,
-    Iterator,
-    Set,
-)
 
 from coraplex.locations.base import Location
 from krrood.entity_query_language.exceptions import NonPositiveLimitValue
@@ -509,7 +503,7 @@ class VisibilityCostmap(Costmap):
 
     maximum_height: float
 
-    target_object: Optional[Union[Body, Pose]] = None
+    target_object: Body | Pose | None = None
 
     def __post_init__(self) -> None:
         self.origin: Pose = (

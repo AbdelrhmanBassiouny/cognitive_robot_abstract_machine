@@ -17,10 +17,7 @@ from functools import cached_property, wraps
 from typing_extensions import (
     Iterable,
     Any,
-    Optional,
-    Type,
     Dict,
-    Union as TypingUnion,
     TYPE_CHECKING,
     List,
     Set,
@@ -206,32 +203,32 @@ class Query(
     results.
     """
 
-    _seen_results: Optional[SeenSet] = field(init=False, default=None)
+    _seen_results: SeenSet | None = field(init=False, default=None)
     """
     A set of seen results, used when distinct is called in the query.
     """
 
-    _where_builder_: Optional[WhereBuilder] = field(init=False, default=None)
+    _where_builder_: WhereBuilder | None = field(init=False, default=None)
     """
     The builder for the `Where` expression of the query.
     """
 
-    _grouped_by_builder_: Optional[GroupedByBuilder] = field(init=False, default=None)
+    _grouped_by_builder_: GroupedByBuilder | None = field(init=False, default=None)
     """
     The builder for the `GroupedBy` expression of the query.
     """
 
-    _having_builder_: Optional[HavingBuilder] = field(init=False, default=None)
+    _having_builder_: HavingBuilder | None = field(init=False, default=None)
     """
     The builder for the `Having` expression of the query.
     """
 
-    _ordered_by_builder_: Optional[OrderedByBuilder] = field(default=None, init=False)
+    _ordered_by_builder_: OrderedByBuilder | None = field(default=None, init=False)
     """
     The ordering specification applied as a pipeline stage, if the query is ordered.
     """
 
-    _quantifier_builder_: Optional[QuantifierBuilder] = field(default=None, init=False)
+    _quantifier_builder_: QuantifierBuilder | None = field(default=None, init=False)
     """
     The quantification specification applied as a pipeline stage. Defaults to `An`, which accepts all
     results.
@@ -278,7 +275,7 @@ class Query(
         self.__dict__.pop("_group_", None)
         self.__dict__.pop("_distinct_on_ids_", None)
 
-    def evaluate(self, backend: Optional[QueryBackend] = None) -> Iterator:
+    def evaluate(self, backend: QueryBackend | None = None) -> Iterator:
         """
         Evaluate the query using the given backend, returning an iterator over
         the results.
@@ -410,7 +407,7 @@ class Query(
             raise AmbiguousQueryAttribute(self, attribute)
         return attribute._reroot_on_(self._selected_variables_[0], self)
 
-    def _selection_indexed_by_(self, step: MappedVariable) -> Optional[Selectable]:
+    def _selection_indexed_by_(self, step: MappedVariable) -> Selectable | None:
         """
         A query stands for the value its selection takes, so indexing it indexes that
         value rather than naming a variable.
@@ -457,9 +454,9 @@ class Query(
     @modifies_query_structure
     def ordered_by(
         self,
-        variable: TypingUnion[Selectable[T], Any],
+        variable: Selectable[T] | Any,
         descending: bool = False,
-        key: Optional[Callable] = None,
+        key: Callable | None = None,
     ) -> Self:
         """
         Order the results by the given variable, using the given key function
@@ -479,8 +476,8 @@ class Query(
     @modifies_query_structure
     def distinct(
         self,
-        *on: TypingUnion[Selectable, Any],
-    ) -> TypingUnion[Self, T]:
+        *on: Selectable | Any,
+    ) -> Self | T:
         """
         Apply distinctness constraint to the query results.
 
@@ -493,9 +490,7 @@ class Query(
         return self
 
     @modifies_query_structure
-    def grouped_by(
-        self, *variables_to_group_by: TypingUnion[Selectable, Any]
-    ) -> TypingUnion[Self, T]:
+    def grouped_by(self, *variables_to_group_by: Selectable | Any) -> Self | T:
         """
         Specify the variables to group the results by.
 
@@ -522,8 +517,8 @@ class Query(
     @modifies_query_structure
     def _quantify_(
         self,
-        quantifier_type: Type[ResultQuantifier] = An,
-        quantification_constraint: Optional[ResultQuantificationConstraint] = None,
+        quantifier_type: type[ResultQuantifier] = An,
+        quantification_constraint: ResultQuantificationConstraint | None = None,
     ) -> Self:
         """
         Specify the quantifier type and constraint for the query results, also
@@ -636,7 +631,7 @@ class Query(
         )
         self.update_children(*children)
 
-    def _data_source_chain_head_(self) -> Optional[SymbolicExpression]:
+    def _data_source_chain_head_(self) -> SymbolicExpression | None:
         """
         Build the head of the data-source chain that feeds the selected variables. At most one of
         Having / GroupedBy / Where heads the chain, with precedence ``Having > GroupedBy > Where``
@@ -780,21 +775,21 @@ class Query(
         )
 
     @property
-    def _where_expression_(self) -> Optional[Where]:
+    def _where_expression_(self) -> Where | None:
         """
         The built `Where` expression.
         """
         return self._where_builder_.expression if self._where_builder_ else None
 
     @property
-    def _having_expression_(self) -> Optional[Having]:
+    def _having_expression_(self) -> Having | None:
         """
         The built `Having` expression.
         """
         return self._having_builder_.expression if self._having_builder_ else None
 
     @property
-    def _grouped_by_expression_(self) -> Optional[GroupedBy]:
+    def _grouped_by_expression_(self) -> GroupedBy | None:
         """
         The built `GroupedDataSource` expression.
         """
@@ -1053,7 +1048,7 @@ class SetOf(Query):
             raise UnselectedQueryVariable(self, key)
         return super().__getitem__(key)
 
-    def _selection_indexed_by_(self, step: MappedVariable) -> Optional[Selectable]:
+    def _selection_indexed_by_(self, step: MappedVariable) -> Selectable | None:
         """
         Indexing a query over several variables by one of them names that variable, the
         same way indexing one of the query's results does.
@@ -1066,7 +1061,7 @@ class SetOf(Query):
             return None
         return self._selection_named_by_(step._key_)
 
-    def _selection_named_by_(self, key: Any) -> Optional[Selectable]:
+    def _selection_named_by_(self, key: Any) -> Selectable | None:
         """
         :param key: Something this query was indexed by.
         :return: The selected variable it names, or ``None`` if it names none of them.
@@ -1116,7 +1111,7 @@ class Entity(Query[T]):
         return self._selected_variables_[0] if self._selected_variables_ else None
 
     @cached_property
-    def _type__(self) -> Optional[Type[T]]:
+    def _type__(self) -> type[T] | None:
         """
         A query over one variable stands for the value that variable takes, so it is of
         that variable's type.
@@ -1135,7 +1130,7 @@ class Entity(Query[T]):
         return selected._type_
 
     @property
-    def selected_aggregator(self) -> "Optional[Aggregator]":
+    def selected_aggregator(self) -> Aggregator | None:
         """
         :return: The :class:`~krrood.entity_query_language.operators.aggregators.Aggregator`
             this entity selects, or ``None`` when its selection is not an aggregator.

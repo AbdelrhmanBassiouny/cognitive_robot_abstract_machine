@@ -17,7 +17,6 @@ from typing_extensions import (
     Any,
     Iterator,
     Iterable,
-    Optional,
     Dict,
     FrozenSet,
     Hashable,
@@ -140,7 +139,7 @@ class GroupedBy(MultiArityExpressionThatPerformsACartesianProduct):
     """
 
     def _evaluate__(
-        self, sources: Optional[OperationResult] = None
+        self, sources: OperationResult | None = None
     ) -> Iterator[OperationResult]:
         """
         Generate results grouped by the specified variables in the grouped_by clause.
@@ -168,7 +167,7 @@ class GroupedBy(MultiArityExpressionThatPerformsACartesianProduct):
         yield from groups.values()
 
     def get_groups_and_group_key_count(
-        self, sources: Optional[OperationResult]
+        self, sources: OperationResult | None
     ) -> Tuple[GroupBindings, Dict[GroupKey, int]]:
         """
         Create a dictionary of groups and a dictionary of group keys to their corresponding counts starting from the
@@ -239,7 +238,7 @@ class GroupedBy(MultiArityExpressionThatPerformsACartesianProduct):
         )
 
     @cached_property
-    def count_occurrences_of_group_keys(self) -> Optional[Count]:
+    def count_occurrences_of_group_keys(self) -> Count | None:
         """
         :return: The first Count aggregator that is counting occurrences of group keys, if any.
         """

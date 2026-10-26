@@ -25,7 +25,7 @@ from semantic_digital_twin.world_description.world_entity import (
     SemanticAnnotation,
     Body,
 )
-from typing_extensions import Any, Dict, Optional, Self, Type, List, TYPE_CHECKING
+from typing_extensions import Any, Dict, Self, List, TYPE_CHECKING
 
 from coraplex.datastructures.enums import ExecutionType
 from coraplex.exceptions import (
@@ -58,7 +58,7 @@ class PerceptionQuery(SubclassJSONSerializer):
     reference and resolved against the world on the receiving side.
     """
 
-    semantic_annotation: Type[SemanticAnnotation]
+    semantic_annotation: type[SemanticAnnotation]
     """
     The semantic annotation for which to perceive.
     """
@@ -143,7 +143,7 @@ class Detection:
     One object reported by a perception source.
     """
 
-    semantic_annotation: Type[SemanticAnnotation]
+    semantic_annotation: type[SemanticAnnotation]
     """
     The annotation the perception source identified the object as.
     """
@@ -298,7 +298,7 @@ class PerceptionInterface(ABC):
 
     @staticmethod
     def for_execution_type(
-        execution_type: Optional[ExecutionType], ros_node: Optional[Node] = None
+        execution_type: ExecutionType | None, ros_node: Node | None = None
     ) -> PerceptionInterface:
         """
         Pick the source that matches how the plan is being executed.

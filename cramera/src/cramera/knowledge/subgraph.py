@@ -8,7 +8,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 
-from typing_extensions import Any, ClassVar, Dict, List, Optional, TYPE_CHECKING
+from typing_extensions import Any, ClassVar, Dict, List, TYPE_CHECKING
 
 from cramera.knowledge.enums import ColourGroup, EdgeKind
 from cramera.knowledge.life_cycle_style import LifeCycleStyle
@@ -40,7 +40,7 @@ class TreePosition:
     filters the tree by.
     """
 
-    parent: Optional[str] = None
+    parent: str | None = None
     """
     Id of the node's parent entry, or None for a root.
     """
@@ -72,12 +72,12 @@ class GraphNode:
     Tooltip text (label plus its detail lines, newline-joined).
     """
 
-    status: Optional[str] = None
+    status: str | None = None
     """
     Live execution status; only the plan view sets this.
     """
 
-    tree_position: Optional[TreePosition] = None
+    tree_position: TreePosition | None = None
     """
     Placement in the node's tree; set by a view the frontend renders as a tree rather
     than as a graph.
@@ -208,8 +208,8 @@ class SubgraphAccumulator:
         label: str,
         group: ColourGroup,
         lines: List[str],
-        status: Optional[str] = None,
-        tree_position: Optional[TreePosition] = None,
+        status: str | None = None,
+        tree_position: TreePosition | None = None,
     ) -> None:
         """
         Append one graph node and its detail-panel entry.
@@ -292,7 +292,7 @@ class GraphPanelPayload(CrameraPayload):
     Detail-panel entry per node id.
     """
 
-    TAB: ClassVar[Optional[str]] = None
+    TAB: ClassVar[str | None] = None
     """
     Name of the graph-panel tab this view serves, or None for a view that is only ever
     reached by drilling into a node.

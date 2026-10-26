@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from importlib.resources import files
 from pathlib import Path
-from typing import Self, List
+from typing_extensions import Self
 
 from krrood.ormatic.utils import classproperty
 from semantic_digital_twin.adapters.mjcf import MJCFParser
@@ -1113,7 +1113,7 @@ class TiagoMujocoMobileBase(MobileBase[DifferentialDrive], HasTorso[TiagoMujocoT
     def setup_hardware_interfaces(self):
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @property

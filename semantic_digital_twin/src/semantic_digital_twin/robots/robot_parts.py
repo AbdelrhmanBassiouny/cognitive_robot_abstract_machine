@@ -8,14 +8,14 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import (
-    Optional,
+from typing_extensions import (
+    get_origin,
+    get_args,
+    Generic,
+    TypeVar,
+    Unpack,
     Self,
     TYPE_CHECKING,
-    Set,
-    List,
-    DefaultDict,
-    Type,
     Union,
     Any,
     cast,
@@ -24,7 +24,6 @@ from uuid import UUID
 
 import numpy as np
 
-from typing_extensions import get_origin, get_args, Generic, TypeVar, Unpack
 
 from krrood.adapters.json_serializer import list_like_classes
 from krrood.class_diagrams.attribute_introspector import (
@@ -547,7 +546,7 @@ class KinematicChain(AbstractRobotPart, HasInputSource[JointPositionSource], ABC
         )
 
     def _kinematic_structure_entities(
-        self, visited: Set[int]
+        self, visited: set[int]
     ) -> list[KinematicStructureEntity]:
         """
         Computes the kinematic structure entities of this kinematic chain, which are the
@@ -1160,7 +1159,7 @@ class AbstractRobot(Agent, HasRobotParts, ABC):
         """
 
     @classmethod
-    def get_drive_connection_type(cls) -> Type[Connection]:
+    def get_drive_connection_type(cls) -> type[Connection]:
         """
         The connection type attaching this robot to its ``odom`` frame.
 
@@ -1225,7 +1224,7 @@ class AbstractRobot(Agent, HasRobotParts, ABC):
         ]
 
     @property
-    def degrees_of_freedom_with_hardware_interface(self) -> List[DegreeOfFreedom]:
+    def degrees_of_freedom_with_hardware_interface(self) -> list[DegreeOfFreedom]:
         """
         The number of degrees of freedom of the robot, which is the sum of the degrees
         of freedom of all its end_effectors.
@@ -1328,7 +1327,7 @@ class AbstractRobot(Agent, HasRobotParts, ABC):
 
     def tighten_dof_velocity_limits_of_1dof_connections(
         self,
-        new_limits: DefaultDict[ActiveConnection1DOF, float],
+        new_limits: defaultdict[ActiveConnection1DOF, float],
     ) -> None:
         """
         Convenience method for tightening the velocity limits of all one degree-of-
@@ -1481,7 +1480,7 @@ class AbstractRobot(Agent, HasRobotParts, ABC):
                 return part.left_arm
         return None
 
-    def get_right_arm_if_specified(self) -> Optional[Arm]:
+    def get_right_arm_if_specified(self) -> Arm | None:
         if isinstance(self, HasLeftRightArm):
             return self.right_arm
         for part in self._robot_parts:

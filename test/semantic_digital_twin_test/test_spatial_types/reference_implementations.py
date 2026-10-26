@@ -1,5 +1,5 @@
 import numpy as np
-from typing_extensions import Tuple, Union, List
+from typing_extensions import Tuple, List
 
 from semantic_digital_twin.datastructures.types import AnyMatrix4x4, NpMatrix4x4
 
@@ -26,7 +26,7 @@ def quaternion_conjugate(quaternion: np.ndarray) -> np.ndarray:
 
 
 def quaternion_from_axis_angle(
-    axis: Union[List[float], Tuple[float, float, float], np.ndarray], angle: float
+    axis: List[float] | Tuple[float, float, float] | np.ndarray, angle: float
 ) -> np.ndarray:
     half_angle = angle / 2
     return np.array(
@@ -133,7 +133,7 @@ def rotation_matrix_from_quaternion(
 
 
 def rotation_matrix_from_axis_angle(
-    axis: Union[List[float], Tuple[float, float, float], np.ndarray], angle: float
+    axis: List[float] | Tuple[float, float, float] | np.ndarray, angle: float
 ) -> NpMatrix4x4:
     return rotation_matrix_from_quaternion(*quaternion_from_axis_angle(axis, angle))
 

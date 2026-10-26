@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from textwrap import fill
 
-from typing_extensions import Optional, List, Dict, Tuple, TYPE_CHECKING, Any
+from typing_extensions import List, Dict, Tuple, TYPE_CHECKING, Any
 
 try:
     import matplotlib as mpl
@@ -50,10 +50,10 @@ class GraphVisualizer:
         curve_scale: float = 0.5,
         layout: str = "tidy",
         edge_style: str = "orthogonal",
-        label_max_chars_per_line: Optional[int] = 13,
+        label_max_chars_per_line: int | None = 13,
         orthogonal_spline_ratio_threshold: float = 3,
         orthogonal_crossings_threshold: int = 4,
-        orthogonal_min_length_threshold: Optional[float] = 4,
+        orthogonal_min_length_threshold: float | None = 4,
         filename: str = "pdf_graph.pdf",
         title: str = "Directed Query Graph (Top to Bottom)",
     ):

@@ -15,16 +15,7 @@ import json
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 
-from typing_extensions import (
-    Any,
-    ClassVar,
-    Dict,
-    Iterable,
-    List,
-    Optional,
-    Tuple,
-    TYPE_CHECKING,
-)
+from typing_extensions import Any, ClassVar, Dict, Iterable, List, Tuple, TYPE_CHECKING
 
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection1DOF,
@@ -132,7 +123,7 @@ class ConnectionActivity:
     none and therefore cannot move.
     """
 
-    changed_at: Optional[float] = None
+    changed_at: float | None = None
     """
     Timestamp of the last observed change, or None while nothing has written it.
     """

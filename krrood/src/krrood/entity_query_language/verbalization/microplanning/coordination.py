@@ -21,16 +21,7 @@ import operator
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing_extensions import (
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Tuple,
-    TypeAlias,
-    TypeVar,
-    Union,
-)
+from typing_extensions import Callable, Dict, List, Tuple, TypeAlias, TypeVar
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import Attribute, MappedVariable
@@ -173,7 +164,7 @@ class SharedSubjectConjunction:
     The shared bare variable, rendered once via the normal recursion (*"an Integer"*).
     """
 
-    tails: List[Union[Comparator, RangeFold]]
+    tails: List[Comparator | RangeFold]
     """
     The predicate tails in source order — a value :class:`Comparator` (its operator-and-
     value tail, *"not 5"*) or a folded :class:`RangeFold` (a *"between low and high"*
@@ -206,7 +197,7 @@ class CoindexedNaturalParts:
 
 # %% the conjunct-reduction pass (high-level entry)
 
-FoldNode: TypeAlias = Union[SymbolicExpression, RangeFold, CoindexedFold]
+FoldNode: TypeAlias = SymbolicExpression | RangeFold | CoindexedFold
 """
 A node the verbalization fold dispatches over: either a real EQL expression or a
 synthetic coordination artifact (:class:`RangeFold` / :class:`CoindexedFold`) produced
@@ -329,7 +320,7 @@ class _RangeBound(Enum):
     UPPER = auto()
 
 
-def chain_key(expression: SymbolicExpression) -> Optional[ChainKey]:
+def chain_key(expression: SymbolicExpression) -> ChainKey | None:
     """:return: The hashable identity of a pure attribute chain — ``(root_id, ((name, owner),
     …))`` — or ``None``.
 
@@ -352,7 +343,7 @@ def chain_key(expression: SymbolicExpression) -> Optional[ChainKey]:
     return (root._id_, tuple(parts))
 
 
-def subject_key(expression: SymbolicExpression) -> Optional[ChainKey]:
+def subject_key(expression: SymbolicExpression) -> ChainKey | None:
     """:return: The hashable identity of a comparison's subject — :func:`chain_key` for a pure
     attribute chain, or ``(variable_id, ())`` for a bare variable — so a fold can group bounds on a
     bare variable (*"an Integer"*) as readily as on a chain. ``None`` for anything else.
@@ -371,7 +362,7 @@ def subject_key(expression: SymbolicExpression) -> Optional[ChainKey]:
     return None
 
 
-def _classify(conjunct: SymbolicExpression) -> Optional[Tuple[ChainKey, _RangeBound]]:
+def _classify(conjunct: SymbolicExpression) -> Tuple[ChainKey, _RangeBound] | None:
     """
     :param conjunct: A candidate conjunct.
     :return: ``(chain_key, _RangeBound)`` when *conjunct* is a bound comparison, else ``None``.
@@ -396,7 +387,7 @@ def _classify(conjunct: SymbolicExpression) -> Optional[Tuple[ChainKey, _RangeBo
 
 def fold_range_pairs(
     conjuncts: List[SymbolicExpression],
-) -> List[Union[SymbolicExpression, RangeFold]]:
+) -> List[SymbolicExpression | RangeFold]:
     """
     Fold complementary lower/upper bound comparisons on the same chain into range items,
     preserving the order of everything else.
@@ -418,7 +409,7 @@ def fold_range_pairs(
     'Find a BankTransaction whose booking_date is between May 15, 2026 and May 30, 2026'
     """
     classifications = [_classify(conjunct) for conjunct in conjuncts]
-    slots: List[Union[SymbolicExpression, RangeFold]] = list(conjuncts)
+    slots: List[SymbolicExpression | RangeFold] = list(conjuncts)
     dropped = [False] * len(conjuncts)
     # chain_key -> indices of bounds awaiting a complement (always one direction at a time).
     awaiting: Dict[ChainKey, List[int]] = {}
@@ -463,7 +454,7 @@ def has_pair(conjuncts: List[SymbolicExpression]) -> bool:
 # %% co-indexed fold
 
 
-def _attribute_pair(node: SymbolicExpression) -> Optional[Tuple[str, type]]:
+def _attribute_pair(node: SymbolicExpression) -> Tuple[str, type] | None:
     """:return: ``(name, owner)`` when *node* is an ``Attribute`` hop, else ``None``.
 
     >>> terminal, _ = walk_chain(variable(LoveBirds, []).bird_1.name)
@@ -475,7 +466,7 @@ def _attribute_pair(node: SymbolicExpression) -> Optional[Tuple[str, type]]:
     return None
 
 
-def _terminal_attribute(expression: SymbolicExpression) -> Optional[Attribute]:
+def _terminal_attribute(expression: SymbolicExpression) -> Attribute | None:
     """:return: The leaf ``Attribute`` of a ``MappedVariable`` chain (e.g. ``month`` of
     ``p.begin.month``), or ``None`` when the chain does not end in an attribute.
 
@@ -490,7 +481,7 @@ def _terminal_attribute(expression: SymbolicExpression) -> Optional[Attribute]:
 
 def coindexed_signature(
     conjunct: SymbolicExpression,
-) -> Optional[Tuple[Tuple, Tuple[str, type]]]:
+) -> Tuple[Tuple, Tuple[str, type]] | None:
     """
     Recognise a co-indexed comparison — a comparator whose two sides compare the *same* leaf
     attribute across two attribute-chain prefixes (``p.begin.month == p.end.month``).
@@ -528,8 +519,8 @@ def coindexed_signature(
 
 
 def fold_coindexed_groups(
-    items: List[Union[SymbolicExpression, RangeFold]],
-) -> List[Union[SymbolicExpression, RangeFold, CoindexedFold]]:
+    items: List[SymbolicExpression | RangeFold],
+) -> List[SymbolicExpression | RangeFold | CoindexedFold]:
     """
     Fold groups of co-indexed comparators (``p.begin.X == p.end.X`` for several ``X``) on the same
     prefixes and operator into one :class:`CoindexedFold`, preserving the order of everything else.
@@ -562,7 +553,7 @@ def fold_coindexed_groups(
         )
         for item in items
     ]
-    slots: List[Union[SymbolicExpression, RangeFold, CoindexedFold]] = list(items)
+    slots: List[SymbolicExpression | RangeFold | CoindexedFold] = list(items)
     dropped = [False] * len(items)
     groups: Dict[Tuple, List[int]] = {}
     for index, signature in enumerate(signatures):
@@ -594,7 +585,7 @@ _Payload = TypeVar("_Payload")
 #: Classify a sibling item for owner-grouping: ``(owner, payload)`` when the item belongs to an
 #: owner (the owner is identified by its ``_id_``), or ``None`` when it does not group.
 OwnerClassifier: TypeAlias = Callable[
-    [_Item], Optional[Tuple["SymbolicExpression", _Payload]]
+    [_Item], Tuple["SymbolicExpression", _Payload] | None
 ]
 
 
@@ -658,7 +649,7 @@ def group_by_owner(
 
 def group_consecutive_by_owner(
     items: List[_Item], classify: OwnerClassifier
-) -> List[Union[OwnerGroup, _Item]]:
+) -> List[OwnerGroup | _Item]:
     """
     Replace each maximal *consecutive* run of two-or-more items sharing one owner with a single
     :class:`OwnerGroup`, leaving every other item (a lone item, or one that does not classify) in
@@ -678,8 +669,8 @@ def group_consecutive_by_owner(
     >>> folded[0].items
     ['department', 'salary']
     """
-    result: List[Union[OwnerGroup, _Item]] = []
-    run_owner: Optional[SymbolicExpression] = None
+    result: List[OwnerGroup | _Item] = []
+    run_owner: SymbolicExpression | None = None
     run_items: List[_Item] = []
     run_payloads: List[object] = []
 
@@ -710,7 +701,7 @@ def group_consecutive_by_owner(
     return result
 
 
-def coindexed_natural_parts(fold: CoindexedFold) -> Optional[CoindexedNaturalParts]:
+def coindexed_natural_parts(fold: CoindexedFold) -> CoindexedNaturalParts | None:
     """
     The pieces for the natural *"the <a> and <b> of <shared> have the same …"* rendering, or
     ``None`` when the fold should use the faithful *"… are <op> those of …"* form instead.
@@ -874,7 +865,7 @@ def disjunctive_phrase(
     return oxford_comma(members, Conjunctions.OR.as_fragment())
 
 
-def one_of(candidates: List[VerbalizationFragment]) -> Optional[VerbalizationFragment]:
+def one_of(candidates: List[VerbalizationFragment]) -> VerbalizationFragment | None:
     """
     Render a small, bounded candidate set as a membership phrase — the shared *"one of A, B, or C"*
     surface used both for a domain-constrained variable's candidate values and for a tuple of

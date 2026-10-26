@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing_extensions import List, Optional
+from typing_extensions import List
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import Attribute
@@ -104,7 +104,7 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
 
     def _inline_predict(
         self, predict_groups: List[AttributeGroup], plan: MatchPlan
-    ) -> Optional[VerbalizationFragment]:
+    ) -> VerbalizationFragment | None:
         """:return: The header-folded *"and predict its <attrs> value(s)"* clause when the only
         predicted attributes are the selection's own (the simple case), else ``None`` (a *"predict"*
         block is used instead — see :meth:`_predict_block`).
@@ -162,7 +162,7 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
 
     # %% given that
 
-    def _given_that_block(self, plan: MatchPlan) -> Optional[VerbalizationFragment]:
+    def _given_that_block(self, plan: MatchPlan) -> VerbalizationFragment | None:
         """:return: The *"given that"* block — one point per attribute group (concrete assignments)
         and per non-grouping condition — or ``None`` when there is nothing to give.
 
@@ -304,7 +304,7 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
 
     # %% where
 
-    def _where_block(self, plan: MatchPlan) -> Optional[VerbalizationFragment]:
+    def _where_block(self, plan: MatchPlan) -> VerbalizationFragment | None:
         """:return: The *"where"* block — one point per free condition — or ``None`` when absent.
 
         The points are whatever the condition verbalizer makes of the ``where`` conditions — the

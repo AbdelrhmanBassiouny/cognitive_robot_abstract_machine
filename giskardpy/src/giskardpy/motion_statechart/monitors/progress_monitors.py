@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 
 import numpy as np
-from typing_extensions import List, Optional
+from typing_extensions import List
 
 import krrood.symbolic_math.symbolic_math as sm
 from krrood.symbolic_math.symbolic_math import (
@@ -429,5 +429,5 @@ class _CancelBecauseNoProgress(CancelMotion):
     which tasks are stalled.
     """
 
-    def on_tick(self, context: MotionStatechartContext) -> Optional[float]:
+    def on_tick(self, context: MotionStatechartContext) -> float | None:
         raise NoProgressError(progress_monitor=self.progress_monitor)

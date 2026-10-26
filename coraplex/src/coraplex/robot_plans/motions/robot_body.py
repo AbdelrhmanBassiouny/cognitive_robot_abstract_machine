@@ -2,7 +2,7 @@ from __future__ import annotations
 
 # %% Imports
 from dataclasses import dataclass
-from typing import Optional
+from typing_extensions import Optional
 
 
 from giskardpy.motion_statechart.goals.templates import Parallel
@@ -56,7 +56,7 @@ class MoveJointsMotion(BaseMotion, HasMaxJointVelocity):
     Base link of the robot; typically set to the torso (optional).
     """
 
-    root_normal: Optional[Vector3] = None
+    root_normal: Vector3 | None = None
     """
     Normalized vector representing the desired orientation axis to align with
     (optional).

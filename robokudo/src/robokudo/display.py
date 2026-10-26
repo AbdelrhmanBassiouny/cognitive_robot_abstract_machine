@@ -34,7 +34,7 @@ from py_trees.common import BlackBoxLevel, VisibilityLevel, Status
 from py_trees.composites import Selector, Sequence, Parallel
 from py_trees.decorators import Decorator
 from pydot import Node, Edge
-from typing_extensions import TYPE_CHECKING, Dict, Optional, Tuple
+from typing_extensions import TYPE_CHECKING, Dict, Tuple
 
 from robokudo.pipeline import Pipeline
 from robokudo.annotators.core import BaseAnnotator
@@ -199,7 +199,7 @@ def generate_pydot_graph(
         root_dot_name: str,
         visibility_level: VisibilityLevel,
         collapse_decorators: bool,
-        timing_info_dict: Optional[Dict],
+        timing_info_dict: Dict | None,
     ) -> None:
         """
         Add edges to the dot graph recursively.
@@ -288,9 +288,9 @@ def render_dot_tree(
     root: Behaviour,
     visibility_level: VisibilityLevel = VisibilityLevel.DETAIL,
     collapse_decorators: bool = False,
-    name: Optional[str] = None,
-    threadpool_executor: Optional[ThreadPoolExecutor] = None,
-    path_prefix: Optional[str] = None,
+    name: str | None = None,
+    threadpool_executor: ThreadPoolExecutor | None = None,
+    path_prefix: str | None = None,
 ) -> None:
     """
     Render the dot tree to .dot, .svg, .png files in the current

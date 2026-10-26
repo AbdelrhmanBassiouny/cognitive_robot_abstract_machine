@@ -3,7 +3,7 @@ from __future__ import annotations
 import cv2
 import numpy as np
 from scipy.spatial.distance import euclidean
-from typing_extensions import TYPE_CHECKING, Any, Iterable, List, Union
+from typing_extensions import TYPE_CHECKING, Any, Iterable, List
 
 from robokudo.types.annotation import PositionAnnotation
 from robokudo.types.tf import Pose
@@ -49,8 +49,8 @@ class TranslationComparator(FeatureComparator):
 
     def compute_similarity(
         self,
-        query_value: Union[Iterable[float], PositionAnnotation],
-        obj_value: Union[Iterable[float], PositionAnnotation],
+        query_value: Iterable[float] | PositionAnnotation,
+        obj_value: Iterable[float] | PositionAnnotation,
     ) -> float:
         """Computes similarity based on translation distance between query and object values.
 
@@ -77,8 +77,8 @@ class OrientationComparator(FeatureComparator):
 
     def compute_similarity(
         self,
-        query_value: Union[Iterable[float], npt.NDArray[np.float64]],
-        obj_value: Union[Iterable[float], npt.NDArray[np.float64]],
+        query_value: Iterable[float] | npt.NDArray[np.float64],
+        obj_value: Iterable[float] | npt.NDArray[np.float64],
     ) -> float:
         """Computes similarity of both orientation quaternions by dot product.
 

@@ -3,10 +3,9 @@ from __future__ import annotations
 import threading
 import uuid
 from dataclasses import dataclass, field
-from typing import Union, Iterator, Optional
+from typing_extensions import MutableMapping, List, Dict, Self, TYPE_CHECKING, Iterator
 from uuid import UUID
 
-from typing_extensions import MutableMapping, List, Dict, Self, TYPE_CHECKING
 
 import numpy as np
 
@@ -235,7 +234,7 @@ class WorldState(MutableMapping[UUID, WorldStateEntryView]):
         with self.world_lock:
             return [self._data[:, self._index[dof_id]].copy() for dof_id in self._ids]
 
-    def __contains__(self, dof_or_uuid: Union[DegreeOfFreedom, UUID]) -> bool:
+    def __contains__(self, dof_or_uuid: DegreeOfFreedom | UUID) -> bool:
         with self.world_lock:
             dof_id = (
                 dof_or_uuid.id
@@ -547,12 +546,12 @@ class WorldStateTrajectory:
     Each array has shape (4, N).
     """
 
-    _times_cache: Optional[np.ndarray] = field(default=None, init=False, repr=False)
+    _times_cache: np.ndarray | None = field(default=None, init=False, repr=False)
     """
     Cache for the numpy array of timestamps.
     """
 
-    _data_cache: Optional[np.ndarray] = field(default=None, init=False, repr=False)
+    _data_cache: np.ndarray | None = field(default=None, init=False, repr=False)
     """
     Cache for the numpy array of world state data.
     """

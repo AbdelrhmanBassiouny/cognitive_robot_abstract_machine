@@ -19,7 +19,7 @@ import cv2
 import numpy as np
 from py_trees.common import Status
 from semantic_digital_twin.world_description.world_entity import Body
-from typing_extensions import TYPE_CHECKING, Dict, List, Optional
+from typing_extensions import TYPE_CHECKING, Dict, List
 
 import robokudo.world as rk_world
 from robokudo.annotators.core import BaseAnnotator
@@ -159,11 +159,11 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
         """
         super().__init__(name, descriptor)
         self.rk_logger.debug("%s.__init__()" % self.__class__.__name__)
-        self.color: Optional[npt.NDArray] = None
-        self.depth: Optional[npt.NDArray] = None
-        self.cloud: Optional[o3d.geometry.PointCloud] = None
+        self.color: npt.NDArray | None = None
+        self.depth: npt.NDArray | None = None
+        self.cloud: o3d.geometry.PointCloud | None = None
         self.camera_intrinsics = None
-        self.object_body: Optional[Body] = None
+        self.object_body: Body | None = None
         self.object_bodies_by_name: Dict[str, Body] = {}
 
     def detect_from_bb_descriptor(self, color_rgb: npt.NDArray) -> ObjectHypothesis:

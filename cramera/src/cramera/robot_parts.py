@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from typing_extensions import Any, Dict, List, Optional
+from typing_extensions import Any, Dict, List
 
 from semantic_digital_twin.robots.hsrb import HSRBArm, HSRBGripper
 from semantic_digital_twin.robots.pr2 import (
@@ -126,7 +126,7 @@ class RobotPartAnnotation:
     Whether the part is an arm, end effector, or sensor.
     """
 
-    side: Optional[ArmSide]
+    side: ArmSide | None
     """
     Which arm of the robot the part belongs to, or None for a robot that does not
     specify a left and a right arm.
@@ -139,7 +139,7 @@ class RobotPartAnnotation:
     An arm's links exclude those of its own end effector.
     """
 
-    attached_to: Optional[str] = None
+    attached_to: str | None = None
     """
     For an end effector, the name of the arm carrying it; None for an arm.
     """

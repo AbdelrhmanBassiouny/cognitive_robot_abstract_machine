@@ -3,9 +3,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from itertools import combinations, product
-from typing import Dict, Any
+from typing_extensions import Tuple, TYPE_CHECKING, Self, Any
 
-from typing_extensions import Tuple, TYPE_CHECKING, Self
 
 from krrood.adapters.json_serializer import (
     SubclassJSONSerializer,
@@ -122,7 +121,7 @@ class CollisionCheck(SubclassJSONSerializer):
         if self.body_a.id > self.body_b.id:
             self.body_a, self.body_b = self.body_b, self.body_a
 
-    def to_json(self, **kwargs) -> Dict[str, Any]:
+    def to_json(self, **kwargs) -> dict[str, Any]:
         return {
             **super().to_json(**kwargs),
             "body_a": to_json(self.body_a.id, **kwargs),
@@ -131,7 +130,7 @@ class CollisionCheck(SubclassJSONSerializer):
         }
 
     @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+    def _from_json(cls, data: dict[str, Any], **kwargs) -> Self:
         tracker = WorldEntityWithIDKwargsTracker.from_kwargs(kwargs)
         return cls(
             body_a=tracker.get(from_json(data["body_a"])),
@@ -309,7 +308,7 @@ class MaxAvoidedCollisionsOverride(MaxAvoidedCollisionsRule, SubclassJSONSeriali
             return None
         return self.value
 
-    def to_json(self, **kwargs) -> Dict[str, Any]:
+    def to_json(self, **kwargs) -> dict[str, Any]:
         return {
             **super().to_json(**kwargs),
             "value": self.value,
@@ -319,7 +318,7 @@ class MaxAvoidedCollisionsOverride(MaxAvoidedCollisionsRule, SubclassJSONSeriali
         }
 
     @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+    def _from_json(cls, data: dict[str, Any], **kwargs) -> Self:
         tracker = WorldEntityWithIDKwargsTracker.from_kwargs(kwargs)
         body_subset_ids = from_json(data["bodies"], **kwargs)
         body_subset = None

@@ -6,7 +6,7 @@ import hashlib
 import os
 import tempfile
 from pathlib import Path
-from typing import Tuple
+from typing_extensions import Dict, Generic, List, Any, ClassVar, Iterator, TypeVar
 
 import time
 from datetime import timedelta
@@ -17,18 +17,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import IntEnum, IntFlag
 from types import NoneType
-from typing_extensions import (
-    Dict,
-    Generic,
-    List,
-    Any,
-    ClassVar,
-    Iterator,
-    Type,
-    TypeVar,
-    Optional,
-    Union,
-)
 
 import numpy
 import mujoco
@@ -201,7 +189,7 @@ class MultiSimLight(SimulatorAdditionalProperty):
     The name of the light.
     """
 
-    body: Optional[Body] = None
+    body: Body | None = None
     """
     The body the light is attached to.
     """
@@ -269,7 +257,7 @@ class EntityConverter(ABC):
     A converter to convert an entity object (WorldEntity, Shape, Connection) to a dictionary of properties for Multiverse simulator.
     """
 
-    entity_type: ClassVar[Type[Any]] = Any
+    entity_type: ClassVar[type[Any]] = Any
     """
     The type of the entity to convert.
     """
@@ -337,7 +325,7 @@ class KinematicStructureEntityConverter(EntityConverter, ABC):
     - quat_str: The key for the quaternion property in the output dictionary.
     """
 
-    entity_type: ClassVar[Type[KinematicStructureEntity]] = KinematicStructureEntity
+    entity_type: ClassVar[type[KinematicStructureEntity]] = KinematicStructureEntity
     pos_str: str = "pos"
     quat_str: str = "quat"
 
@@ -380,7 +368,7 @@ class BodyConverter(KinematicStructureEntityConverter, ABC):
     Converts a Body object to a dictionary of body properties for Multiverse simulator.
     """
 
-    entity_type: ClassVar[Type[WorldEntity]] = Body
+    entity_type: ClassVar[type[WorldEntity]] = Body
     """
     The type of the entity to convert.
     """
@@ -446,7 +434,7 @@ class RegionConverter(KinematicStructureEntityConverter, ABC):
     Converts a Region object to a dictionary of region properties for Multiverse simulator.
     """
 
-    entity_type: ClassVar[Type[WorldEntity]] = Region
+    entity_type: ClassVar[type[WorldEntity]] = Region
     """
     The type of the entity to convert.
     """
@@ -458,7 +446,7 @@ class ShapeConverter(EntityConverter, ABC):
     Converts a Shape object to a dictionary of shape properties for Multiverse simulator.
     """
 
-    entity_type: ClassVar[Type[Shape]] = Shape
+    entity_type: ClassVar[type[Shape]] = Shape
     """
     The type of the entity to convert.
     """
@@ -516,7 +504,7 @@ class BoxConverter(ShapeConverter, ABC):
     Converts a Box object to a dictionary of box properties for Multiverse simulator.
     """
 
-    entity_type: ClassVar[Type[Box]] = Box
+    entity_type: ClassVar[type[Box]] = Box
 
 
 @dataclass
@@ -525,7 +513,7 @@ class SphereConverter(ShapeConverter, ABC):
     Converts a Sphere object to a dictionary of sphere properties for Multiverse simulator.
     """
 
-    entity_type: ClassVar[Type[Sphere]] = Sphere
+    entity_type: ClassVar[type[Sphere]] = Sphere
 
 
 @dataclass
@@ -534,7 +522,7 @@ class CylinderConverter(ShapeConverter, ABC):
     Converts a Cylinder object to a dictionary of cylinder properties for Multiverse simulator.
     """
 
-    entity_type: ClassVar[Type[Cylinder]] = Cylinder
+    entity_type: ClassVar[type[Cylinder]] = Cylinder
 
 
 @dataclass
@@ -543,7 +531,7 @@ class MeshConverter(ShapeConverter, ABC):
     Converts a Mesh object to a dictionary of mesh properties for Multiverse simulator.
     """
 
-    entity_type: ClassVar[Type[Mesh]] = Mesh
+    entity_type: ClassVar[type[Mesh]] = Mesh
 
 
 @dataclass
@@ -552,7 +540,7 @@ class ConnectionConverter(EntityConverter, ABC):
     Converts a Connection object to a dictionary of joint properties for Multiverse simulator.
     """
 
-    entity_type: ClassVar[Type[Connection]] = Connection
+    entity_type: ClassVar[type[Connection]] = Connection
     """
     The type of the entity to convert.
     """
@@ -573,7 +561,7 @@ class Connection1DOFConverter(ConnectionConverter, ABC):
     Converts an ActiveConnection1DOF object to a dictionary of joint properties for Multiverse simulator.
     """
 
-    entity_type: ClassVar[Type[ActiveConnection1DOF]] = ActiveConnection1DOF
+    entity_type: ClassVar[type[ActiveConnection1DOF]] = ActiveConnection1DOF
     """
     The type of the entity to convert.
     """
@@ -660,7 +648,7 @@ class ConnectionRevoluteConverter(Connection1DOFConverter, ABC):
     Converts a RevoluteConnection object to a dictionary of revolute joint properties for Multiverse simulator.
     """
 
-    entity_type: ClassVar[Type[RevoluteConnection]] = RevoluteConnection
+    entity_type: ClassVar[type[RevoluteConnection]] = RevoluteConnection
     """
     The type of the entity to convert.
     """
@@ -672,7 +660,7 @@ class ConnectionPrismaticConverter(Connection1DOFConverter, ABC):
     Converts a PrismaticConnection object to a dictionary of prismatic joint properties for Multiverse simulator.
     """
 
-    entity_type: ClassVar[Type[PrismaticConnection]] = PrismaticConnection
+    entity_type: ClassVar[type[PrismaticConnection]] = PrismaticConnection
     """
     The type of the entity to convert.
     """
@@ -684,7 +672,7 @@ class Connection6DOFConverter(ConnectionConverter, ABC):
     Converts a Connection6DoF object to a dictionary of 6DoF joint properties for Multiverse simulator.
     """
 
-    entity_type: ClassVar[Type[Connection6DoF]] = Connection6DoF
+    entity_type: ClassVar[type[Connection6DoF]] = Connection6DoF
     """
     The type of the entity to convert.
     """
@@ -707,7 +695,7 @@ class ActuatorConverter(EntityConverter, ABC):
     Converts an Actuator object to a dictionary of actuator properties for Multiverse simulator.
     """
 
-    entity_type: ClassVar[Type[Actuator]] = Actuator
+    entity_type: ClassVar[type[Actuator]] = Actuator
     """
     The type of the entity to convert.
     """
@@ -730,7 +718,7 @@ class CameraConverter(EntityConverter, ABC):
     Converts a Camera object to a dictionary of camera properties for Multiverse simulator.
     """
 
-    entity_type: ClassVar[Type[MultiSimCamera]] = MultiSimCamera
+    entity_type: ClassVar[type[MultiSimCamera]] = MultiSimCamera
     """
     The type of the entity to convert.
     """
@@ -753,7 +741,7 @@ class LightConverter(EntityConverter, ABC):
     Converts a Light object to a dictionary of light properties for Multiverse simulator.
     """
 
-    entity_type: ClassVar[Type[MultiSimLight]] = MultiSimLight
+    entity_type: ClassVar[type[MultiSimLight]] = MultiSimLight
     """
     The type of the entity to convert.
     """
@@ -1510,7 +1498,7 @@ class MujocoMeshConverter(MujocoGeomConverter, MeshConverter):
         return shape_props
 
     @staticmethod
-    def _resolve_texture_file_path(material: Any, mesh_directory: str) -> Optional[str]:
+    def _resolve_texture_file_path(material: Any, mesh_directory: str) -> str | None:
         """
         Resolves the on-disk file backing a mesh's texture.
 
@@ -1642,8 +1630,8 @@ class MujocoConnectionJoints(Generic[ConnectionType], SubClassSafeGeneric, ABC):
     @classmethod
     @lru_cache(maxsize=None)
     def _realisation_for_type(
-        cls, connection_type: Type[Connection]
-    ) -> Type[MujocoConnectionJoints]:
+        cls, connection_type: type[Connection]
+    ) -> type[MujocoConnectionJoints]:
         """
         :param connection_type: The type of a connection.
         :return: The realisation for the most specific type a connection of that type
@@ -2139,7 +2127,7 @@ class MujocoDifferentialDriveJoints(MujocoWheeledDriveJoints[DifferentialDrive])
 
 @dataclass
 class MujocoActuatorConverter(ActuatorConverter, ABC):
-    entity_type: ClassVar[Type[Actuator]] = Actuator
+    entity_type: ClassVar[type[Actuator]] = Actuator
 
 
 @dataclass
@@ -2161,7 +2149,7 @@ class MujocoPositionServoConverter(MujocoActuatorConverter):
     (see :meth:`MujocoActuator.create_servo`).
     """
 
-    entity_type: ClassVar[Type[PositionServo]] = PositionServo
+    entity_type: ClassVar[type[PositionServo]] = PositionServo
 
     def _post_convert(
         self, entity: PositionServo, actuator_props: Dict[str, Any], **kwargs
@@ -2177,7 +2165,7 @@ class MujocoVelocityServoConverter(MujocoActuatorConverter):
     (see :meth:`MujocoActuator.create_velocity_servo`).
     """
 
-    entity_type: ClassVar[Type[VelocityServo]] = VelocityServo
+    entity_type: ClassVar[type[VelocityServo]] = VelocityServo
 
     def _post_convert(
         self, entity: VelocityServo, actuator_props: Dict[str, Any], **kwargs
@@ -2189,7 +2177,7 @@ class MujocoVelocityServoConverter(MujocoActuatorConverter):
 @dataclass
 class MujocoCameraConverter(CameraConverter, ABC):
 
-    entity_type: ClassVar[Type[MujocoCamera]] = MujocoCamera
+    entity_type: ClassVar[type[MujocoCamera]] = MujocoCamera
 
     def _post_convert(
         self, entity: MujocoCamera, camera_props: Dict[str, Any], **kwargs
@@ -2219,7 +2207,7 @@ class MujocoCameraConverter(CameraConverter, ABC):
 @dataclass
 class MujocoLightConverter(LightConverter, ABC):
 
-    entity_type: ClassVar[Type[MujocoLight]] = MujocoLight
+    entity_type: ClassVar[type[MujocoLight]] = MujocoLight
 
     def _post_convert(
         self, entity: MujocoLight, light_props: Dict[str, Any], **kwargs
@@ -2250,7 +2238,7 @@ class MultiSimBuilder(ABC):
     A builder to build a world in the Multiverse simulator.
     """
 
-    _world: Optional[World] = None
+    _world: World | None = None
     """
     The world to be built.
     """
@@ -2388,7 +2376,7 @@ class MultiSimBuilder(ABC):
     @abstractmethod
     def _build_shape(
         self,
-        parent: Union[Body, Region],
+        parent: Body | Region,
         shape: Shape,
         is_visible: bool,
         is_collidable: bool,
@@ -2558,7 +2546,7 @@ class MujocoBuilder(MultiSimBuilder):
 
     def _build_shape(
         self,
-        parent: Union[Body, Region],
+        parent: Body | Region,
         shape: Shape,
         is_visible: bool,
         is_collidable: bool,
@@ -2777,7 +2765,7 @@ class MujocoBuilder(MultiSimBuilder):
     def _register_texture_material(
         self,
         texture_file_path: str,
-        texture_repeat: Tuple[float, float] = (1.0, 1.0),
+        texture_repeat: tuple[float, float] = (1.0, 1.0),
         texture_uniform: bool = False,
     ) -> str:
         """
@@ -2960,7 +2948,7 @@ class MujocoBuilder(MultiSimBuilder):
     def _build_mujoco_body(
         self,
         entity: KinematicStructureEntity,
-        additional_properties: Optional[Dict[str, Any]] = None,
+        additional_properties: Dict[str, Any] | None = None,
     ):
         """
         Builds a kinematic structure entity as a body in the Mujoco spec: MuJoCo has no
@@ -3102,9 +3090,7 @@ class MujocoBuilder(MultiSimBuilder):
         self,
         entity_type: mujoco.mjtObj,
         entity_name: str,
-    ) -> Optional[
-        Union[mujoco.MjsBody, mujoco.MjsGeom, mujoco.MjsJoint, mujoco.MjsSite]
-    ]:
+    ) -> mujoco.MjsBody | mujoco.MjsGeom | mujoco.MjsJoint | mujoco.MjsSite | None:
         """
         Finds an entity in the Mujoco spec by its type and name.
 
@@ -3125,7 +3111,7 @@ class EntitySpawner(ABC):
     A spawner to spawn a WorldEntity object in the Multiverse simulator.
     """
 
-    entity_type: ClassVar[Type[Any]] = Any
+    entity_type: ClassVar[type[Any]] = Any
     """
     The type of the entity to spawn.
     """
@@ -3167,7 +3153,7 @@ class KinematicStructureEntitySpawner(EntitySpawner):
     A spawner to spawn a KinematicStructureEntity object in the Multiverse simulator.
     """
 
-    entity_type: ClassVar[Type[KinematicStructureEntity]] = KinematicStructureEntity
+    entity_type: ClassVar[type[KinematicStructureEntity]] = KinematicStructureEntity
     """
     The type of the entity to spawn.
     """
@@ -3218,7 +3204,7 @@ class KinematicStructureEntitySpawner(EntitySpawner):
     @abstractmethod
     def _spawn_shape(
         self,
-        parent: Union[Body, Region],
+        parent: Body | Region,
         simulator: BaseSimulator,
         shape: Shape,
         visible: bool,
@@ -3244,7 +3230,7 @@ class BodySpawner(KinematicStructureEntitySpawner, ABC):
     A spawner to spawn a Body object in the Multiverse simulator.
     """
 
-    entity_type: ClassVar[Type[Body]] = Body
+    entity_type: ClassVar[type[Body]] = Body
     """
     The type of the entity to spawn.
     """
@@ -3270,7 +3256,7 @@ class RegionSpawner(KinematicStructureEntitySpawner, ABC):
     A spawner to spawn a Region object in the Multiverse simulator.
     """
 
-    entity_type: ClassVar[Type[Region]] = Region
+    entity_type: ClassVar[type[Region]] = Region
     """
     The type of the entity to spawn.
     """
@@ -3294,7 +3280,7 @@ class ConnectionSpawner(EntitySpawner):
     A spawner to spawn a Connection object in the simulator.
     """
 
-    entity_type: ClassVar[Type[Connection]] = Connection
+    entity_type: ClassVar[type[Connection]] = Connection
     """
     The type of the entity to spawn.
     """
@@ -3331,7 +3317,7 @@ class FixedConnectionSpawner(ConnectionSpawner, ABC):
     A spawner to spawn a FixedConnection object in the simulator.
     """
 
-    entity_type: ClassVar[Type[Connection]] = FixedConnection
+    entity_type: ClassVar[type[Connection]] = FixedConnection
     """
     The type of the entity to spawn.
     """
@@ -3343,7 +3329,7 @@ class Connection1DOFSpawner(ConnectionSpawner, ABC):
     A spawner to spawn an ActiveConnection1DOF object in the simulator.
     """
 
-    entity_type: ClassVar[Type[Connection]] = ActiveConnection1DOF
+    entity_type: ClassVar[type[Connection]] = ActiveConnection1DOF
     """
     The type of the entity to spawn.
     """
@@ -3355,7 +3341,7 @@ class ConnectionPrismaticSpawner(ConnectionSpawner, ABC):
     A spawner to spawn a PrismaticConnection object in the simulator.
     """
 
-    entity_type: ClassVar[Type[Connection]] = PrismaticConnection
+    entity_type: ClassVar[type[Connection]] = PrismaticConnection
     """
     The type of the entity to spawn.
     """
@@ -3367,7 +3353,7 @@ class ConnectionRevoluteSpawner(ConnectionSpawner, ABC):
     A spawner to spawn a RevoluteConnection object in the simulator.
     """
 
-    entity_type: ClassVar[Type[Connection]] = RevoluteConnection
+    entity_type: ClassVar[type[Connection]] = RevoluteConnection
     """
     The type of the entity to spawn.
     """
@@ -3379,7 +3365,7 @@ class Connection6DOFSpawner(ConnectionSpawner, ABC):
     A spawner to spawn a Connection6DoF object in the simulator.
     """
 
-    entity_type: ClassVar[Type[Connection]] = Connection6DoF
+    entity_type: ClassVar[type[Connection]] = Connection6DoF
     """
     The type of the entity to spawn.
     """
@@ -3391,7 +3377,7 @@ class ActuatorSpawner(EntitySpawner):
     A spawner to spawn an Actuator object in the simulator.
     """
 
-    entity_type: ClassVar[Type[Actuator]] = Actuator
+    entity_type: ClassVar[type[Actuator]] = Actuator
     """
     The type of the entity to spawn.
     """
@@ -3504,7 +3490,7 @@ class MujocoConnectionSpawner(MujocoEntitySpawner, ConnectionSpawner):
     A spawner to spawn a Connection object in the Mujoco simulator.
     """
 
-    mujoco_joint_converter: ClassVar[Type[MujocoJointConverter]] = Any
+    mujoco_joint_converter: ClassVar[type[MujocoJointConverter]] = Any
 
     def _spawn_connection(
         self, simulator: MujocoSimulator, connection: Connection
@@ -3541,7 +3527,7 @@ class MujocoPrismaticJointSpawner(MujocoConnectionSpawner, ConnectionPrismaticSp
     A spawner to spawn a PrismaticConnection object in the MuJoCo simulator.
     """
 
-    mujoco_joint_converter: ClassVar[Type[MujocoJointConverter]] = (
+    mujoco_joint_converter: ClassVar[type[MujocoJointConverter]] = (
         MujocoPrismaticJointConverter
     )
 
@@ -3552,7 +3538,7 @@ class MujocoRevoluteJointSpawner(MujocoConnectionSpawner, ConnectionRevoluteSpaw
     A spawner to spawn a RevoluteConnection object in the MuJoCo simulator.
     """
 
-    mujoco_joint_converter: ClassVar[Type[MujocoJointConverter]] = (
+    mujoco_joint_converter: ClassVar[type[MujocoJointConverter]] = (
         MujocoRevoluteJointConverter
     )
 
@@ -3651,17 +3637,17 @@ class MultiSimSynchronizer(ModelChangeCallback, ABC):
     The simulator to synchronize with the world.
     """
 
-    entity_converter: Type[EntityConverter] = NoneType
+    entity_converter: type[EntityConverter] = NoneType
     """
     The converter to convert WorldEntity, Shape, and Connection objects to dictionaries of properties for the simulator.
     """
 
-    entity_spawner: Type[EntitySpawner] = NoneType
+    entity_spawner: type[EntitySpawner] = NoneType
     """
     The spawner to spawn WorldEntity, Shape, and Connection objects in the simulator.
     """
 
-    _state_callback: Optional[_MultiSimStateCallback] = field(
+    _state_callback: _MultiSimStateCallback | None = field(
         init=False, default=None, repr=False
     )
     """
@@ -3729,8 +3715,8 @@ class JointBackedConnection:
 @dataclass(eq=False)
 class MujocoSynchronizer(MultiSimSynchronizer):
     simulator: MujocoSimulator
-    entity_converter: Type[EntityConverter] = field(default=MujocoConverter)
-    entity_spawner: Type[EntitySpawner] = field(default=MujocoEntitySpawner)
+    entity_converter: type[EntityConverter] = field(default=MujocoConverter)
+    entity_spawner: type[EntitySpawner] = field(default=MujocoEntitySpawner)
 
     UNTHROTTLED_SYNC_RATE_HZ: ClassVar[float] = float("inf")
     """
@@ -3771,7 +3757,7 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         super().__post_init__()
         self.simulator.read_data_from_simulator = self._sim_to_world
 
-    def _resolve_qpos_address(self, connection: Connection) -> Optional[int]:
+    def _resolve_qpos_address(self, connection: Connection) -> int | None:
         """
         Resolve the qpos address for the MuJoCo joint backing ``connection``,
         or ``None`` if the joint is not present in the model.
@@ -4213,17 +4199,17 @@ class MultiSim(ABC):
     Class to handle the simulation of a world using the simulator.
     """
 
-    simulator_class: ClassVar[Type[BaseSimulator]]
+    simulator_class: ClassVar[type[BaseSimulator]]
     """
     The class of the simulator to use.
     """
 
-    synchronizer_class: ClassVar[Type[MultiSimSynchronizer]]
+    synchronizer_class: ClassVar[type[MultiSimSynchronizer]]
     """
     The class of the MultiSimSynchronizer to use.
     """
 
-    builder_class: ClassVar[Type[MultiSimBuilder]]
+    builder_class: ClassVar[type[MultiSimBuilder]]
     """
     The class of the MultiSimBuilder to use.
     """
@@ -4248,7 +4234,7 @@ class MultiSim(ABC):
     The file the world is saved to for the simulator to load.
     """
 
-    _scene_directory: Optional[tempfile.TemporaryDirectory]
+    _scene_directory: tempfile.TemporaryDirectory | None
     """
     The temporary directory holding the scene file and its assets when no file path was
     given, removed together with this simulation; ``None`` otherwise.
@@ -4259,7 +4245,7 @@ class MultiSim(ABC):
         world: World,
         headless: bool = False,
         step_size: float = 1e-3,
-        file_path: Optional[Path] = None,
+        file_path: Path | None = None,
         **kwargs,
     ):
         """
@@ -4294,7 +4280,7 @@ class MultiSim(ABC):
             simulator=self.simulator,
         )
 
-    def start_simulation(self, constraints: Optional[SimulatorConstraints] = None):
+    def start_simulation(self, constraints: SimulatorConstraints | None = None):
         """
         Starts the simulation. This will start one physics simulation thread and render it at 60Hz.
 
@@ -4337,9 +4323,9 @@ class MultiSim(ABC):
 
 
 class MujocoSim(MultiSim):
-    simulator_class: ClassVar[Type[BaseSimulator]] = MujocoSimulator
-    synchronizer_class: ClassVar[Type[MultiSimSynchronizer]] = MujocoSynchronizer
-    builder_class: ClassVar[Type[MultiSimBuilder]] = MujocoBuilder
+    simulator_class: ClassVar[type[BaseSimulator]] = MujocoSimulator
+    synchronizer_class: ClassVar[type[MultiSimSynchronizer]] = MujocoSynchronizer
+    builder_class: ClassVar[type[MultiSimBuilder]] = MujocoBuilder
     simulator: MujocoSimulator
     synchronizer: MujocoSynchronizer
 

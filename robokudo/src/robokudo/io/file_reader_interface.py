@@ -26,7 +26,7 @@ from pathlib import Path
 
 import ament_index_python.packages
 import cv2
-from typing_extensions import Any, Dict, List, Optional, TypeVar
+from typing_extensions import Any, Dict, List, TypeVar
 
 from robokudo.cas import CAS, CASViews
 from robokudo.io.camera_interface import CameraInterface
@@ -74,7 +74,7 @@ class FileReaderInterface(CameraInterface):
             :param data_sequence: List defining iteration order
             """
 
-            self.index: Optional[int] = None
+            self.index: int | None = None
             """Current position in the sequence"""
 
             self.data: Dict[str, Dict[str, Any]] = data if data else dict()

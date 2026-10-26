@@ -60,7 +60,7 @@ class Ros2MessageJSONSerializer(ExternalClassJSONSerializer[None]):
         }
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any], clazz: Type, **kwargs: Any) -> Any:
+    def from_json(cls, data: Dict[str, Any], clazz: type, **kwargs: Any) -> Any:
         """
         Deserialize a JSON-compatible dictionary into a ROS 2 message.
         """
@@ -72,7 +72,7 @@ class Ros2MessageJSONSerializer(ExternalClassJSONSerializer[None]):
         return convert_dictionary_to_ros_message(clazz, data["data"], **valid_kwargs)
 
     @classmethod
-    def matches_generic_type(cls, clazz: Type) -> bool:
+    def matches_generic_type(cls, clazz: type) -> bool:
         """
         Check if the given class is a ROS 2 message class.
         """
@@ -105,7 +105,7 @@ class QoSProfileJSONSerializer(ExternalClassJSONSerializer[QoSProfile]):
         }
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any], clazz: Type[QoSProfile], **kwargs) -> Any:
+    def from_json(cls, data: Dict[str, Any], clazz: type[QoSProfile], **kwargs) -> Any:
         """
         Deserialize a JSON-compatible dictionary into a QoSProfile.
         """
@@ -137,7 +137,7 @@ class DurationJSONSerializer(ExternalClassJSONSerializer[Duration]):
         }
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any], clazz: Type, **kwargs) -> Any:
+    def from_json(cls, data: Dict[str, Any], clazz: type, **kwargs) -> Any:
         """
         Deserialize a JSON-compatible dictionary into a Duration.
         """

@@ -5,7 +5,7 @@ import inspect
 from dataclasses import dataclass, field
 from functools import cached_property
 
-from typing_extensions import Callable, Dict, Optional, ClassVar, Type, Any, List, Self
+from typing_extensions import Callable, Dict, ClassVar, Any, List, Self
 
 from krrood.class_diagrams.utils import get_type_hints_of_object
 from krrood.code_generation import templates
@@ -116,7 +116,7 @@ class FunctionCaseGenerator:
     Generates a dataclass FunctionCase subclass source for a given function.
     """
 
-    base_class: Type[FunctionCase] = FunctionCase
+    base_class: type[FunctionCase] = FunctionCase
     """
     The base class to inherit from.  Must be a subclass of ``FunctionCase``.
     """
@@ -135,7 +135,7 @@ class FunctionCaseGenerator:
         templates_path = importlib.resources.files(templates)
         self.code_generator = CodeGenerator(template_directory=str(templates_path))
 
-    def generate(self, function: Callable, class_name: Optional[str] = None) -> str:
+    def generate(self, function: Callable, class_name: str | None = None) -> str:
         """
         Generate Python source for a ``@dataclass`` subclass of ``FunctionCase``.
 

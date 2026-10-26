@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 import open3d as o3d
 from py_trees.common import Status
-from typing_extensions import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing_extensions import TYPE_CHECKING, Any, Dict, List, Tuple
 
 from robokudo.annotators.core import BaseAnnotator, ThreadedAnnotator
 from robokudo.cas import CASViews
@@ -114,7 +114,7 @@ class TSDFAnnotator(ThreadedAnnotator):
         :return: The most similar tracked object or none if no similar object was found.
         """
         best_sim: float = 0.0
-        best_object: Optional[Dict[str, Any]] = None
+        best_object: Dict[str, Any] | None = None
         for tracked_object in self.tracked_objects:
             sim = self.translation_comparator.compute_similarity(
                 pose.translation, tracked_object["pose"].translation

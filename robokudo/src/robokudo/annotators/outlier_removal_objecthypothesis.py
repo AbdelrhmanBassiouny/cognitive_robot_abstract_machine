@@ -26,7 +26,7 @@ import open3d as o3d
 from py_trees.common import Status
 from rcl_interfaces.msg import SetParametersResult
 from rclpy.parameter import Parameter
-from typing_extensions import Dict, List, Type
+from typing_extensions import Dict, List
 
 from robokudo.annotators.core import BaseAnnotator
 from robokudo.cas import CAS, CASViews
@@ -44,7 +44,7 @@ remaining copy of the old state for some point cloud.
 Authors: Sorin Arion, Naser Azizi 
 """
 
-_PYTYPE_TO_ROS_FIELD: Dict[Type, str] = {
+_PYTYPE_TO_ROS_FIELD: Dict[type, str] = {
     int: "integer_value",
     float: "double_value",
     str: "string_value",

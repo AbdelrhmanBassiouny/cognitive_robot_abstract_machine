@@ -56,7 +56,7 @@ from krrood.symbol_graph.symbol_graph import Symbol
 
 def symbolic_function(
     function: Callable[..., T],
-) -> Union[Callable[..., Variable[T]], T]:
+) -> Callable[..., Variable[T]] | T:
     """
     Function decorator that constructs a symbolic expression representing the function
     call when inside a symbolic_rule context.
@@ -70,7 +70,7 @@ def symbolic_function(
     """
 
     @wraps(function)
-    def wrapper(*args, **kwargs) -> Optional[Any]:
+    def wrapper(*args, **kwargs) -> Any | None:
         all_kwargs = merge_args_and_kwargs(function, args, kwargs)
         if _any_of_the_kwargs_is_a_variable(all_kwargs):
             return InstantiatedVariable(
@@ -83,7 +83,7 @@ def symbolic_function(
 
 
 def symbolic_callable_to_function(
-    symbolic_callable: Type[SymbolicCallable],
+    symbolic_callable: type[SymbolicCallable],
 ) -> Callable[..., Any]:
     """:return: a function that calls *symbolic_callable* -- the class-form counterpart of the
     :func:`symbolic_function` decorator.
@@ -142,12 +142,12 @@ class RenderedFields(Mapping):
     — without the author choosing between them.
     """
 
-    fragments: "Mapping[str, VerbalizationFragment]"
+    fragments: Mapping[str, VerbalizationFragment]
     """
     The rendered fragment for each field, keyed by field name.
     """
 
-    raw: "Mapping[str, SymbolicExpression]"
+    raw: Mapping[str, SymbolicExpression]
     """
     The raw child expression for each field, keyed by field name.
     """
@@ -455,7 +455,7 @@ class HasType(Triple[Any, Type]):
     The variable whose type is being checked.
     """
 
-    types_: Type
+    types_: type
     """
     The type or tuple of types against which the `variable` is validated.
     """
@@ -515,7 +515,7 @@ class HasTypes(HasType):
     comparison explicitly disabled.
     """
 
-    types_: Tuple[Type, ...]
+    types_: Tuple[type, ...]
     """
     A tuple containing Type objects that are associated with this instance.
     """

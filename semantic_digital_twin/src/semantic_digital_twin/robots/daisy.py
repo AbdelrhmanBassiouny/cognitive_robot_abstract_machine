@@ -4,7 +4,7 @@ import os
 from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
-from typing import Self, List
+from typing_extensions import Self
 
 from semantic_digital_twin.collision_checking.collision_rules import (
     SelfCollisionMatrixRule,
@@ -330,7 +330,7 @@ class DAiSyCamera(Camera):
     def setup_hardware_interfaces(self) -> None:
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @property

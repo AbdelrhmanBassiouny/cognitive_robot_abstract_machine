@@ -11,7 +11,7 @@ import io
 from dataclasses import dataclass, field
 
 import numpy as np
-from typing_extensions import Any, Dict, Iterable, List, Optional
+from typing_extensions import Any, Dict, Iterable, List
 from robokudo import world
 from robokudo.io.cas_annotation_codecs import krrood_to_json, krrood_from_json
 from robokudo.io.open3d_codec_utils import (
@@ -149,7 +149,7 @@ class ViewPayload:
         }
 
     @staticmethod
-    def from_document(document: dict[str, Any]) -> "ViewPayload":
+    def from_document(document: dict[str, Any]) -> ViewPayload:
         """
         Create a payload object from a storage document.
         """
@@ -611,7 +611,7 @@ class CASViewCodecRegistry:
 
     def encode_view(
         self, view_name: str, value: Any, strict: bool = True
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any] | None:
         """
         Encode a single CAS view into a storage document.
         """

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from typing_extensions import Optional, Tuple
+from typing_extensions import Tuple
 
 
 class MeshFormat(StrEnum):
@@ -42,7 +42,7 @@ class MeshFormat(StrEnum):
         return tuple(member.value for member in cls)
 
     @classmethod
-    def of_path(cls, path: str) -> Optional[MeshFormat]:
+    def of_path(cls, path: str) -> MeshFormat | None:
         """
         The format a path names, or None when it names no mesh at all.
 

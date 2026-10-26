@@ -3,12 +3,7 @@ from __future__ import annotations
 from abc import abstractmethod, ABC
 from dataclasses import dataclass
 
-from typing_extensions import (
-    Generic,
-    List,
-    Type,
-    TypeVar,
-)
+from typing_extensions import Generic, List, TypeVar
 
 from coraplex.datastructures.enums import InsertionPosition
 from coraplex.exceptions import CannotMatchOnType
@@ -35,7 +30,7 @@ class PlanTransformation(Generic[MatchedType], SubClassSafeGeneric, ABC):
     """
 
     @property
-    def matched_type(self) -> Type[MatchedType]:
+    def matched_type(self) -> type[MatchedType]:
         """
         :return: The type this selects its nodes by.
         """

@@ -7,7 +7,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 
-from typing_extensions import Any, ClassVar, Dict, List, Optional, Tuple
+from typing_extensions import Any, ClassVar, Dict, List, Tuple
 
 from cramera.robot_parts import ArmSide
 from semantic_digital_twin.spatial_types import Point3
@@ -38,7 +38,7 @@ class EpisodeKnowledgeBase:
     over.
     """
 
-    _instances: ClassVar[Dict[Optional[str], EpisodeKnowledgeBase]] = {}
+    _instances: ClassVar[Dict[str | None, EpisodeKnowledgeBase]] = {}
     """
     One built knowledge base per scene name, keyed by :meth:`of_scene`'s argument, so
     the viewer can hold several onboarded scenes open at once.
@@ -52,7 +52,7 @@ class EpisodeKnowledgeBase:
         return cls.of_scene(None)
 
     @classmethod
-    def of_scene(cls, scene: Optional[str]) -> EpisodeKnowledgeBase:
+    def of_scene(cls, scene: str | None) -> EpisodeKnowledgeBase:
         """
         The knowledge base of one scene, built on first use and cached per scene.
 
@@ -69,7 +69,7 @@ class EpisodeKnowledgeBase:
         return cls._instances[scene]
 
     @classmethod
-    def _bundle_signature(cls, scene: Optional[str]) -> Optional[int]:
+    def _bundle_signature(cls, scene: str | None) -> int | None:
         """
         Modification stamp of a scene's ``scene.json``, or None when it does not exist.
 
@@ -93,11 +93,11 @@ class EpisodeKnowledgeBase:
         """
         cls._instances = {}
 
-    scene_name: Optional[str]
+    scene_name: str | None
     """
     Name of the scene this knowledge base was built from, or None for the active one.
     """
-    bundle_signature: Optional[int]
+    bundle_signature: int | None
     """
     Modification stamp of the bundle this instance was built from, compared by
     :meth:`of_scene` to serve a rewritten bundle fresh.
@@ -151,7 +151,7 @@ class EpisodeKnowledgeBase:
     Module groups containing the scanned classes.
     """
 
-    def __init__(self, scene_name: Optional[str] = None) -> None:
+    def __init__(self, scene_name: str | None = None) -> None:
         """
         Build every entity list from a scene bundle and a static scan of the CRAM
         architecture.
@@ -269,7 +269,7 @@ class EpisodeKnowledgeBase:
         scene: Dict[str, Any],
         frames_per_second: int,
         objects_by_reference: Dict[str, BenchObject],
-        place_area: Optional[BenchObject],
+        place_area: BenchObject | None,
     ) -> List[ActionEpisode]:
         """
         Action episodes from the recorded plan segments.
@@ -300,7 +300,7 @@ class EpisodeKnowledgeBase:
             )
         return episodes
 
-    def _arm_of_segment(self, segment: Dict[str, Any]) -> Optional[RecordedArm]:
+    def _arm_of_segment(self, segment: Dict[str, Any]) -> RecordedArm | None:
         """
         The arm matching a recorded plan segment's side hint, falling back to the first
         arm if the segment picks something but names no side.
@@ -399,7 +399,7 @@ class EpisodeKnowledgeBase:
         ]
 
     @staticmethod
-    def _side_of_name(name: str) -> Optional[ArmSide]:
+    def _side_of_name(name: str) -> ArmSide | None:
         """
         Which arm a part/link name encodes, or None when it names neither.
 

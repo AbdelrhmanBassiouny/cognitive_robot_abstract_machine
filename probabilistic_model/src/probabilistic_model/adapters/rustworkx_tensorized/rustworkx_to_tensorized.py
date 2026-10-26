@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import numpy as np
 from sortedcontainers import SortedSet
-from typing_extensions import Any, Dict, List, Tuple, Type
+from typing_extensions import Any, Dict, List, Tuple
 
 from probabilistic_model.adapters.rustworkx_tensorized.converter import (
     InputType,
@@ -115,7 +115,7 @@ class UnitsToLayerConverter(RustworkxToTensorizedConverter[InputType, OutputType
     """
 
     @staticmethod
-    def type_of_unit(unit: Unit) -> Type:
+    def type_of_unit(unit: Unit) -> type:
         """
         :param unit: A unit of a rustworkx circuit.
         :return: The distribution class of a leaf, or the class of any other unit.
@@ -360,7 +360,7 @@ class RustworkxCircuitToLayeredCircuitConverter(
         :param units: The units of one level of a rustworkx circuit.
         :return: The units grouped by exact type and scope, one group per layer.
         """
-        groups: Dict[Tuple[Type, Tuple], List[Unit]] = {}
+        groups: Dict[Tuple[type, Tuple], List[Unit]] = {}
         for unit in units:
             key = (UnitsToLayerConverter.type_of_unit(unit), tuple(unit.variables))
             groups.setdefault(key, []).append(unit)

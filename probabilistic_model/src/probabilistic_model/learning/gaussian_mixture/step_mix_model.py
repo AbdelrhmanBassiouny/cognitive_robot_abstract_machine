@@ -12,7 +12,7 @@ import pandas as pd
 from random_events.variable import Continuous, Integer, Symbolic
 from sklearn.base import clone
 from stepmix.stepmix import StepMix
-from typing_extensions import Any, Iterable, List, Optional, Union
+from typing_extensions import Any, Iterable, List
 
 from probabilistic_model.distributions.distributions import (
     DiscreteDistribution,
@@ -83,7 +83,7 @@ class StepMixModel(GaussianMixtureLearningMethod):
     def fit(
         self,
         data: pd.DataFrame,
-        variables: Optional[Iterable[AnnotatedVariable]] = None,
+        variables: Iterable[AnnotatedVariable] | None = None,
     ) -> ProbabilisticCircuit:
         variables = self._variables(data, variables)
         continuous = [
@@ -137,7 +137,7 @@ class StepMixModel(GaussianMixtureLearningMethod):
 
     @staticmethod
     def _outcome_codes(
-        variable: Union[Symbolic, Integer], values: pd.Series
+        variable: Symbolic | Integer, values: pd.Series
     ) -> tuple[npt.NDArray, List[Any]]:
         """
         :return: The code ``0, 1, ...`` of every row's outcome, which StepMix reads,
@@ -154,7 +154,7 @@ class StepMixModel(GaussianMixtureLearningMethod):
 
     def _distribution(
         self,
-        variable: Union[Symbolic, Integer],
+        variable: Symbolic | Integer,
         probabilities: npt.NDArray,
         keys: List[Any],
     ) -> DiscreteDistribution:

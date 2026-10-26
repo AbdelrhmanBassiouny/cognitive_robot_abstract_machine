@@ -23,7 +23,6 @@ from typing_extensions import (
     TYPE_CHECKING,
     Hashable,
     Iterable,
-    Optional,
 )
 
 if TYPE_CHECKING:
@@ -114,7 +113,7 @@ def make_set(value: Any) -> Set:
 
 def cartesian_product_while_passing_the_bindings_around(
     expressions: Iterable[SymbolicExpression],
-    sources: Optional[OperationResult],
+    sources: OperationResult | None,
 ) -> Iterator[OperationResult]:
     """
     Evaluate the symbolic expressions by generating combinations of values from their
@@ -128,7 +127,7 @@ def cartesian_product_while_passing_the_bindings_around(
 
     def _make_stage(
         inner_expression: SymbolicExpression,
-    ) -> Callable[[Optional[OperationResult]], Iterator[OperationResult]]:
+    ) -> Callable[[OperationResult | None], Iterator[OperationResult]]:
         """
         Create a new evaluation stage for the given expression that combines the
         bindings from the previous stage with the current evaluation result.
@@ -137,7 +136,7 @@ def cartesian_product_while_passing_the_bindings_around(
         results.
         """
 
-        def stage(prev: Optional[OperationResult]) -> Iterator[OperationResult]:
+        def stage(prev: OperationResult | None) -> Iterator[OperationResult]:
             """
             Evaluate the inner expression and combine its bindings with the previous
             stage's bindings.
@@ -160,8 +159,8 @@ T = TypeVar("T")
 
 
 def chain_stages(
-    stages: List[Callable[[Optional[OperationResult]], Iterator[OperationResult]]],
-    initial: Optional[OperationResult],
+    stages: List[Callable[[OperationResult | None], Iterator[OperationResult]]],
+    initial: OperationResult | None,
 ) -> Iterator[OperationResult]:
     """
     Chains a sequence of stages into a single pipeline.
@@ -178,7 +177,7 @@ def chain_stages(
     """
 
     def evaluate_next_stage_or_yield(
-        stage_index: int, current_result: Optional[OperationResult]
+        stage_index: int, current_result: OperationResult | None
     ) -> Iterator[OperationResult]:
         """
         Recursively evaluates the next stage or yields the current binding if all stages

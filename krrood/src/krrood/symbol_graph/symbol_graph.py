@@ -13,13 +13,10 @@ from typing_extensions import (
     Any,
     Callable,
     ClassVar,
-    DefaultDict,
     Dict,
     Iterable,
     Iterator,
     List,
-    Optional,
-    Type,
     TypeVar,
 )
 
@@ -62,7 +59,7 @@ class Symbol:
     """
     Whether instances of this class should be cached or not in the symbol graph.
     """
-    _inference_explanation_: Optional[InferenceExplanation] = field(
+    _inference_explanation_: InferenceExplanation | None = field(
         default=None, init=False, repr=False, compare=False
     )
     """If this symbol was inferred, this field can contain an explanation of how it
@@ -152,12 +149,12 @@ class WrappedInstance(Generic[TSymbol], SubClassSafeGeneric):
     A weak reference to the symbol instance this wraps.
     """
 
-    index: Optional[int] = field(init=False, default=None)
+    index: int | None = field(init=False, default=None)
     """
     Index in the instance graph of the symbol graph that manages this object.
     """
 
-    symbol_graph: Optional[SymbolGraph] = field(
+    symbol_graph: SymbolGraph | None = field(
         init=False, hash=False, default=None, repr=False
     )
     """
@@ -169,7 +166,7 @@ class WrappedInstance(Generic[TSymbol], SubClassSafeGeneric):
     Rather is instance was inferred or constructed.
     """
 
-    instance_type: Type[Symbol] = field(init=False, default=None)
+    instance_type: type[Symbol] = field(init=False, default=None)
     """
     The type of the instance.
     This is needed to clean it up from the cache after the instance reference died.
@@ -180,7 +177,7 @@ class WrappedInstance(Generic[TSymbol], SubClassSafeGeneric):
         self.instance_type = type(instance)
 
     @property
-    def instance(self) -> Optional[TSymbol]:
+    def instance(self) -> TSymbol | None:
         """
         :return: The symbol that is referenced to. Can return None if this symbol is garbage collected already.
         """
@@ -240,7 +237,7 @@ class SymbolGraph(metaclass=SingletonMeta):
     Used for faster access when only the WrappedInstance.instance is available.
     """
 
-    _class_to_wrapped_instances: DefaultDict[Type, List[WrappedInstance]] = field(
+    _class_to_wrapped_instances: defaultdict[type, List[WrappedInstance]] = field(
         init=False, default_factory=lambda: defaultdict(list)
     )
     """
@@ -261,7 +258,7 @@ class SymbolGraph(metaclass=SingletonMeta):
         if self._class_diagram is None:
             self._class_diagram = self._build_class_diagram()
 
-    def _collect_symbol_classes(self) -> List[Type]:
+    def _collect_symbol_classes(self) -> List[type]:
         """Collect the ``Symbol`` subclasses that belong in the class diagram, honouring the
         configured package filter."""
         return [
@@ -319,7 +316,7 @@ class SymbolGraph(metaclass=SingletonMeta):
             if node.instance is None:
                 self.remove_node(node)
 
-    def get_instances_of_type(self, type_: Type) -> Iterable:
+    def get_instances_of_type(self, type_: type) -> Iterable:
         """
         Get all wrapped instances of the given type and all its subclasses.
 
@@ -332,7 +329,7 @@ class SymbolGraph(metaclass=SingletonMeta):
             for instance in list(self._class_to_wrapped_instances[cls])
         )
 
-    def get_wrapped_instance(self, instance: Any) -> Optional[WrappedInstance]:
+    def get_wrapped_instance(self, instance: Any) -> WrappedInstance | None:
         if isinstance(instance, WrappedInstance):
             return instance
         return self._instance_index.get(id(instance), None)
@@ -411,7 +408,7 @@ class SymbolGraph(metaclass=SingletonMeta):
     def get_incoming_relations_with_type(
         self,
         wrapped_instance: WrappedInstance,
-        relation_type: Type[PredicateClassRelation[TSymbol]],
+        relation_type: type[PredicateClassRelation[TSymbol]],
     ) -> Iterator[PredicateClassRelation[TSymbol]]:
         """
         Get all relations with the given type that are incoming to the given wrapped instance.
@@ -457,7 +454,7 @@ class SymbolGraph(metaclass=SingletonMeta):
     def get_outgoing_relations_with_type(
         self,
         wrapped_instance: WrappedInstance,
-        relation_type: Type[PredicateClassRelation],
+        relation_type: type[PredicateClassRelation],
     ) -> Iterable[PredicateClassRelation]:
         """
         Get all relations with the given type that are outgoing from the given wrapped instance.

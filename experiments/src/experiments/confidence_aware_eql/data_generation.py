@@ -17,14 +17,14 @@ from krrood.parametrization.parameterizer import UnderspecifiedParameters
 from probabilistic_model.probabilistic_circuit.rx.helper import fully_factorized
 from semantic_digital_twin.world_description.inertial_properties import Inertial
 from semantic_digital_twin.world_description.world_entity import Body
-from typing_extensions import Any, List, Type
+from typing_extensions import Any, List
 
 
 @dataclass
 class MassDistribution:
     """The familiar mass distribution to sample one class' objects from."""
 
-    object_class: Type
+    object_class: type
     """The semantic-annotation class to generate, e.g. ``Cup`` or ``Pot``."""
 
     mean: float

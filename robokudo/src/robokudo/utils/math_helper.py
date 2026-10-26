@@ -8,7 +8,7 @@ RoboKudo Team
 """
 
 from robokudo.utils.transform import get_rotation_matrix_from_q
-from typing_extensions import Iterable, Optional, Tuple, List
+from typing_extensions import Iterable, Tuple, List
 import numpy as np
 
 
@@ -121,7 +121,7 @@ def compute_line_intersection_point(
     point2: Tuple[float, float, float],
     sphere_center: Tuple[float, float, float],
     sphere_radius: float,
-) -> Optional[List[float]]:
+) -> List[float] | None:
     """
     Compute the intersection points between a sphere and a line segment.
 

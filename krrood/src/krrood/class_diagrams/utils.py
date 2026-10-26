@@ -17,9 +17,7 @@ from typing_extensions import (
     Callable,
     Dict,
     List,
-    Optional,
     Tuple,
-    Type,
     TypeVar,
     TypeVarTuple,
     get_origin,
@@ -35,7 +33,7 @@ from krrood.utils import (
 )
 
 
-def classes_of_module(module) -> List[Type]:
+def classes_of_module(module) -> List[type]:
     """
     Get all classes of a given module.
 
@@ -87,7 +85,7 @@ def _underlying_function(method: Callable) -> Callable:
 
 
 def behaves_like_a_built_in_type(
-    clazz: Type,
+    clazz: type,
 ) -> bool:
     """
     Return whether *clazz* should be treated as a built-in for class-diagram purposes.
@@ -102,7 +100,7 @@ def behaves_like_a_built_in_type(
     )
 
 
-def common_base_class(types: List[Type]) -> Optional[Type]:
+def common_base_class(types: List[type]) -> type | None:
     """
     Return the lowest common ancestor of *types*, or ``None`` if the only common
     ancestor is :class:`object`.
@@ -124,7 +122,7 @@ def common_base_class(types: List[Type]) -> Optional[Type]:
     return None
 
 
-def is_builtin_class(clazz: Type) -> bool:
+def is_builtin_class(clazz: type) -> bool:
     """
     :param clazz: The class to check.
     :return: Whether *clazz* is defined in the ``builtins`` module.
@@ -217,7 +215,7 @@ class TypeHintResolutionResult:
     substitution dictionary.
     """
 
-    resolved_type: TypeVar | Type | str
+    resolved_type: TypeVar | type | str
     """
     The resolved type or the original type hint if no substitution was made.
     """
@@ -227,14 +225,14 @@ class TypeHintResolutionResult:
     Whether any substitutions have been made.
     """
 
-    type_hint: TypeVar | Type | str
+    type_hint: TypeVar | type | str
     """
     The original type hint.
     """
 
 
 def get_and_resolve_generic_type_hints_of_object_using_substitutions(
-    object_: Any, substitution: Dict[TypeVar, Type]
+    object_: Any, substitution: Dict[TypeVar, type]
 ) -> Dict[str, TypeHintResolutionResult]:
     """
     Resolve generic type hints of an object using a substitution dictionary.

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import List, Optional
+from typing_extensions import List
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.query.operations import GroupedBy
@@ -80,7 +80,7 @@ class GroupedByPlanner(Planner[Query, GroupPlan]):
             weaves_aggregated=not isinstance(self.node, SetOf),
         )
 
-    def _grouped_by(self) -> Optional[GroupedBy]:
+    def _grouped_by(self) -> GroupedBy | None:
         """:return: The query's grouped-by expression (``None`` when the query is ungrouped).
 
         >>> GroupedByPlanner(an(entity(variable(Employee, []))))._grouped_by() is None

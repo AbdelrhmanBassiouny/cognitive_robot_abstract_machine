@@ -15,7 +15,7 @@ import time
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 
-from typing_extensions import Dict, List, Optional
+from typing_extensions import Dict, List
 
 from cramera.live.bridge import ChartSnapshot, WorldStateSnapshot
 from cramera.live.frame_range import FrameRange, InvalidFrameRange
@@ -66,7 +66,7 @@ class RecordedFrame:
     Movable connection position by prefixed name.
     """
 
-    base: Optional[List[float]]
+    base: List[float] | None
     """
     Robot base pose as ``[x, y, z, qx, qy, qz, qw]``, or None without a robot.
     """
@@ -76,7 +76,7 @@ class RecordedFrame:
     Loose-object pose by mesh key, in the same 7-element form as :attr:`base`.
     """
 
-    step: Optional[str] = None
+    step: str | None = None
     """
     Label of the action the plan was performing on this tick, or None between actions.
 
@@ -84,7 +84,7 @@ class RecordedFrame:
     :mod:`cramera.live.recording_segments`).
     """
 
-    statechart: Optional[ChartSnapshot] = None
+    statechart: ChartSnapshot | None = None
     """
     The motion statechart executing on this tick, or None while no motion runs.
 
@@ -109,7 +109,7 @@ class Recording:
     The recording's current lifecycle state.
     """
 
-    scene_name: Optional[str] = None
+    scene_name: str | None = None
     """
     Name of the scene bundle the finalized recording was written to, filled in by
     whoever bundles it (see :mod:`cramera.live.recording_bundle`); None until then.
@@ -143,8 +143,8 @@ class Recording:
     def append(
         self,
         snapshot: WorldStateSnapshot,
-        step: Optional[str] = None,
-        statechart: Optional[ChartSnapshot] = None,
+        step: str | None = None,
+        statechart: ChartSnapshot | None = None,
     ) -> None:
         """
         Buffer one tick, or do nothing while not actively recording.
@@ -170,8 +170,8 @@ class Recording:
             self._tick_times.append(time.time())
 
     def _held_statechart(
-        self, statechart: Optional[ChartSnapshot]
-    ) -> Optional[ChartSnapshot]:
+        self, statechart: ChartSnapshot | None
+    ) -> ChartSnapshot | None:
         """
         The snapshot to store for a tick: the one the previous tick already holds when
         the statechart has not changed since, so an unchanged stretch costs one object.
@@ -183,7 +183,7 @@ class Recording:
         held = self._frames[-1].statechart
         return held if held == statechart else statechart
 
-    def update_statechart(self, statechart: Optional[ChartSnapshot]) -> None:
+    def update_statechart(self, statechart: ChartSnapshot | None) -> None:
         """Complete the latest world frame with a plan's final chart observation.
 
         A plan boundary can follow chart changes without another world update.

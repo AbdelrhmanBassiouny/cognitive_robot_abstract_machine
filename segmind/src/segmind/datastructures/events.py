@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from functools import cached_property
 
-from typing_extensions import Optional, List
+from typing_extensions import List
 
 from segmind.datastructures.object_tracker import (
     ObjectEventTracker,
@@ -52,7 +52,7 @@ class EventWithTrackedObjects(DetectionEvent, ABC):
     tracked_object: Body
     """The primary object involved in this event."""
 
-    with_object: Optional[Body] = None
+    with_object: Body | None = None
     """The secondary object involved in this event, if any."""
 
     @property
@@ -74,7 +74,7 @@ class EventWithTrackedObjects(DetectionEvent, ABC):
         return ObjectTrackerFactory.get_tracker(self.tracked_object)
 
     @cached_property
-    def with_object_tracker(self) -> Optional[ObjectEventTracker]:
+    def with_object_tracker(self) -> ObjectEventTracker | None:
         """
         :return: the event tracker for :attr:`with_object`, or ``None`` if absent.
         """
@@ -203,14 +203,14 @@ class AbstractContactEvent(EventWithTrackedObjects, ABC):
     Pose of the object, in the world frame.
     """
 
-    with_object_bounding_box: Optional[VolumetricBoundingBox] = field(
+    with_object_bounding_box: VolumetricBoundingBox | None = field(
         init=False, default=None
     )
     """
     Bounding box of the second object in contact.
     """
 
-    world_T_with_object: Optional[Pose] = field(init=False, default=None)
+    world_T_with_object: Pose | None = field(init=False, default=None)
     """
     Pose of the second object in contact, in the world frame.
     """

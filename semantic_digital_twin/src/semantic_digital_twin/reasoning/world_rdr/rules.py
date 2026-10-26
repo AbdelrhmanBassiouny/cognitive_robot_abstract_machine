@@ -44,7 +44,7 @@ from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech impor
     clause,
     predicate_clause,
 )
-from typing_extensions import Iterable, List, Optional, Sequence, Tuple, Type, Union
+from typing_extensions import Iterable, List, Sequence, Tuple, Union
 
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.semantic_annotations.mixins import (
@@ -193,7 +193,7 @@ class NameMatch:
     """
 
 
-def _match_name(words: Sequence[str], kind: AnnotationKind) -> Optional[NameMatch]:
+def _match_name(words: Sequence[str], kind: AnnotationKind) -> NameMatch | None:
     """
     What ``words`` say about ``kind``, or ``None`` when they do not mention it.
 
@@ -215,7 +215,7 @@ def _match_name(words: Sequence[str], kind: AnnotationKind) -> Optional[NameMatc
 
 def asserted_kind(
     words: Sequence[str], candidates: Iterable[AnnotationKind]
-) -> Optional[AnnotationKind]:
+) -> AnnotationKind | None:
     """
     The kind a name settles on, or ``None`` when it mentions none of ``candidates``.
 
@@ -256,7 +256,7 @@ class IsNamedAfter(Predicate):
     The body whose name is read.
     """
 
-    annotation_type: Type[SemanticAnnotation]
+    annotation_type: type[SemanticAnnotation]
     """
     The type the name has to settle on.
     """
@@ -341,7 +341,7 @@ class NamedContainerKind(SymbolicFunction):
     The body whose branch is read.
     """
 
-    def __call__(self) -> Optional[ContainerKind]:
+    def __call__(self) -> ContainerKind | None:
         for part in self.body._world.get_kinematic_structure_entities_of_branch(
             self.body
         ):
@@ -448,7 +448,7 @@ class HasAnotherAnnotation(Predicate):
     The body whose identity is looked up.
     """
 
-    annotation_type: Type[SemanticAnnotation]
+    annotation_type: type[SemanticAnnotation]
     """
     The type being inferred, which therefore does not count as another one.
     """
@@ -485,7 +485,7 @@ class HasAnotherAnnotation(Predicate):
 # %% the parts a container holds
 
 
-def _holder_of(body: Body) -> Optional[Body]:
+def _holder_of(body: Body) -> Body | None:
     """
     The nearest body above this one that is a real part of the furniture.
 
@@ -506,7 +506,7 @@ def _holder_of(body: Body) -> Optional[Body]:
 def _parts_held_by(
     body: Body,
     annotations: Sequence[SemanticAnnotation],
-    part_type: Type[SemanticAnnotation],
+    part_type: type[SemanticAnnotation],
 ) -> List:
     """
     The annotations of ``part_type`` whose body opens out of ``body``.
@@ -726,7 +726,7 @@ def doors_without_a_handle(
 # %% containers
 
 
-def _containers_of_kind(world: World, kind: Optional[ContainerKind]) -> List[Cabinet]:
+def _containers_of_kind(world: World, kind: ContainerKind | None) -> List[Cabinet]:
     """
     :param world: The world to read.
     :param kind: The kind the body must resolve to, or ``None`` for a container that
@@ -792,7 +792,7 @@ def fridges(world: World) -> List[Fridge]:
 
 
 def _furniture_named_after(
-    world: World, annotation_type: Type[SemanticAnnotation]
+    world: World, annotation_type: type[SemanticAnnotation]
 ) -> List:
     """
     :param world: The world to read.

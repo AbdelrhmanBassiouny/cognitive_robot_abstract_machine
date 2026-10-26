@@ -4,7 +4,7 @@ import enum
 import itertools
 from dataclasses import fields, is_dataclass
 
-from typing_extensions import Any, List, Optional
+from typing_extensions import Any, List
 
 from krrood.entity_query_language.core.mapped_variable import FlatVariable
 from krrood.entity_query_language.core.variable import (
@@ -97,7 +97,7 @@ class VariableRule(PhraseRule):
     @staticmethod
     def _domain_choice(
         node: Variable, context: RuleContext
-    ) -> Optional[VerbalizationFragment]:
+    ) -> VerbalizationFragment | None:
         """In value position, a domain-constrained value-type variable says its candidate set —
         *"one of OPTION_A, OPTION_B, or OPTION_C"* (an enum) / *"one of 1, or 2"* (a primitive), or
         just the value for a singleton domain. ``None`` (use the type-name noun) unless the type is

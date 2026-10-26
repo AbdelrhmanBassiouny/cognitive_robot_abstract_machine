@@ -22,7 +22,7 @@ import operator
 import uuid
 from dataclasses import dataclass
 
-from typing_extensions import Dict, List, Optional, Set, Tuple, Union
+from typing_extensions import Dict, List, Set, Tuple, Union
 
 from krrood.entity_query_language.core.expression_structure import walk_chain
 from krrood.entity_query_language.core.mapped_variable import Attribute, MappedVariable
@@ -147,7 +147,7 @@ def _subtree_indices(
 
 def _relational_binding(
     item: BoundConjunct,
-) -> Optional[Tuple[Attribute, Variable, Variable]]:
+) -> Tuple[Attribute, Variable, Variable] | None:
     """:return: ``(relation_hop, owner, entity)`` when *item* is ``owner.<relational_attr> == entity``
     (either operand order, *entity* a bare variable distinct from *owner*), else ``None``. A
     plain-attribute equality or an ``== None`` absence is not a binding."""
@@ -169,7 +169,7 @@ def _relational_binding(
     return None
 
 
-def _single_relational_hop(expression: object) -> Optional[Attribute]:
+def _single_relational_hop(expression: object) -> Attribute | None:
     """:return: the single relational-attribute hop when *expression* is ``<variable>.<relational_attr>``
     (one hop whose name is a relation verb), else ``None``."""
     if not isinstance(expression, MappedVariable):
@@ -182,7 +182,7 @@ def _single_relational_hop(expression: object) -> Optional[Attribute]:
     return chain[0]
 
 
-def _item_root(item: BoundConjunct) -> Optional[uuid.UUID]:
+def _item_root(item: BoundConjunct) -> uuid.UUID | None:
     """:return: the id of the variable *item* restricts — the owner of a binding, else the root of a
     comparator's/range-fold's chain, else ``None``."""
     binding = _relational_binding(item)

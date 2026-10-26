@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import Any, ClassVar, Dict, Optional, TYPE_CHECKING
+from typing_extensions import Any, ClassVar, Dict, TYPE_CHECKING
 
 from cramera.knowledge.recorded_statecharts import RecordedStatecharts
 from cramera.knowledge.subgraph import GraphPanelPayload
@@ -27,7 +27,7 @@ class ChartViewPayload(GraphPanelPayload):
     show.
     """
 
-    TAB: ClassVar[Optional[str]] = "chart"
+    TAB: ClassVar[str | None] = "chart"
 
     breadcrumb: str = "motion statechart"
     """

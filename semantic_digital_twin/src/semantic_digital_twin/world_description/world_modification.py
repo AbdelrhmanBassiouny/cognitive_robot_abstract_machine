@@ -2,14 +2,7 @@ from __future__ import annotations
 
 from functools import wraps
 
-from typing_extensions import (
-    List,
-    Dict,
-    Any,
-    Self,
-    Optional,
-    TYPE_CHECKING,
-)
+from typing_extensions import List, Dict, Any, Self, TYPE_CHECKING
 
 from krrood.adapters.json_serializer import (
     SubclassJSONSerializer,
@@ -122,7 +115,7 @@ class AddKinematicStructureEntityModification(
     The body that was added.
     """
 
-    original_kinematic_structure_entity_id: Optional[UUID] = field(default=None)
+    original_kinematic_structure_entity_id: UUID | None = field(default=None)
     """
     The ID of the body when this block was created.
 
@@ -168,7 +161,7 @@ class RemoveKinematicStructureEntityModification(WorldModification):
     The UUID of the body that was removed.
     """
 
-    kinematic_structure_entity: Optional[KinematicStructureEntity] = field(
+    kinematic_structure_entity: KinematicStructureEntity | None = field(
         default=None, repr=False
     )
     """
@@ -200,8 +193,8 @@ class AddConnectionModification(WorldModificationWithWorldEntityReference):
     The connection that was added.
     """
 
-    original_child_id: Optional[UUID] = field(default=None)
-    original_parent_id: Optional[UUID] = field(default=None)
+    original_child_id: UUID | None = field(default=None)
+    original_parent_id: UUID | None = field(default=None)
 
     def __post_init__(self):
         self.original_child_id = self.connection.child.id
@@ -246,7 +239,7 @@ class RemoveConnectionModification(WorldModification):
     The UUIDs of the entities connected by the removed connection.
     """
 
-    connection: Optional[Connection] = field(default=None, repr=False)
+    connection: Connection | None = field(default=None, repr=False)
     """
     The connection that was removed, kept so this modification can be reverted.
     """
@@ -276,7 +269,7 @@ class AddDegreeOfFreedomModification(WorldModificationWithWorldEntityReference):
     The degree of freedom that was added.
     """
 
-    original_degree_of_freedom_id: Optional[UUID] = field(default=None)
+    original_degree_of_freedom_id: UUID | None = field(default=None)
 
     def __post_init__(self):
         self.original_degree_of_freedom_id = self.degree_of_freedom.id
@@ -306,7 +299,7 @@ class RemoveDegreeOfFreedomModification(WorldModification):
 
     degree_of_freedom_id: UUID
 
-    degree_of_freedom: Optional[DegreeOfFreedom] = field(default=None, repr=False)
+    degree_of_freedom: DegreeOfFreedom | None = field(default=None, repr=False)
     """
     The degree of freedom that was removed, kept so this modification can be reverted.
     """
@@ -329,7 +322,7 @@ class RemoveDegreeOfFreedomModification(WorldModification):
 class AddSemanticAnnotationModification(WorldModification, SubclassJSONSerializer):
     semantic_annotation_json: JSONData
 
-    semantic_annotation_id: Optional[UUID] = field(default=None)
+    semantic_annotation_id: UUID | None = field(default=None)
     """
     The ID of the semantic annotation that was added, kept so this modification can be
     reverted.
@@ -385,7 +378,7 @@ class RemoveSemanticAnnotationModification(WorldModification, SubclassJSONSerial
 
     semantic_annotation_id: UUID
 
-    semantic_annotation_json: Optional[JSONData] = field(default=None)
+    semantic_annotation_json: JSONData | None = field(default=None)
     """
     The semantic annotation that was removed, kept so this modification can be reverted.
     """
@@ -429,7 +422,7 @@ class RemoveSemanticAnnotationModification(WorldModification, SubclassJSONSerial
 class AddActuatorModification(WorldModificationWithWorldEntityReference):
     actuator: Actuator
 
-    original_actuator_id: Optional[UUID] = field(default=None)
+    original_actuator_id: UUID | None = field(default=None)
 
     def __post_init__(self):
         self.original_actuator_id = self.actuator.id
@@ -459,7 +452,7 @@ class AddActuatorModification(WorldModificationWithWorldEntityReference):
 class RemoveActuatorModification(WorldModification):
     actuator_id: UUID
 
-    actuator: Optional[Actuator] = field(default=None, repr=False)
+    actuator: Actuator | None = field(default=None, repr=False)
     """
     The actuator that was removed, kept so this modification can be reverted.
     """

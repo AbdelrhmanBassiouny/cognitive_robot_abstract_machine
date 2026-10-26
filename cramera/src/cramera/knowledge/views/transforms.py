@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import Any, ClassVar, Dict, Optional, TYPE_CHECKING
+from typing_extensions import Any, ClassVar, Dict, TYPE_CHECKING
 
 from cramera.knowledge.subgraph import GraphPanelPayload
 
@@ -25,7 +25,7 @@ class TransformViewPayload(GraphPanelPayload):
     from the bridge's ``/transforms`` while attached.
     """
 
-    TAB: ClassVar[Optional[str]] = "transforms"
+    TAB: ClassVar[str | None] = "transforms"
 
     breadcrumb: str = "transform graph"
     """

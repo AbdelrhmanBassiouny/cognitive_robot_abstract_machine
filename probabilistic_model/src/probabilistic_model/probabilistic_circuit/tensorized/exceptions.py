@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-from typing_extensions import TYPE_CHECKING, Tuple, Type
+from typing_extensions import TYPE_CHECKING, Tuple
 
 from krrood.exceptions import DataclassException
 
@@ -20,7 +20,7 @@ class UndefinedCumulativeDistributionError(DataclassException, TypeError):
     unordered variable is queried.
     """
 
-    layer_type: Type
+    layer_type: type
     """
     The type of the layer.
     """

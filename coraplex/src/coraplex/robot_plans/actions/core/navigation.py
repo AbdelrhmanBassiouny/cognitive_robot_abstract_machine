@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import Optional, Any, Dict
+from typing_extensions import Any, Dict
 
 from coraplex.datastructures.dataclasses import Context
 from coraplex.exceptions import NoFloorBelowRobot, NotOnASingleLevelException
@@ -95,7 +95,7 @@ class LookAtAction(ActionDescription):
     Position at which the robot should look, given as 6D pose.
     """
 
-    camera: Optional[Camera] = None
+    camera: Camera | None = None
     """
     Camera that should be looking at the target.
     """

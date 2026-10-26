@@ -27,7 +27,7 @@ from typing_extensions import Iterable
 import numpy as np
 from geometry_msgs.msg import Pose
 from scipy.spatial.transform import Rotation
-from typing_extensions import TYPE_CHECKING, Tuple, List, Union
+from typing_extensions import TYPE_CHECKING, Tuple, List
 
 if TYPE_CHECKING:
     import numpy.typing as npt
@@ -143,8 +143,8 @@ def get_transform_matrix_for_rotation_around_axis(
 
 
 def get_transform_matrix_from_q(
-    quaternion: Union[npt.NDArray, List[float], Tuple[float, float, float, float]],
-    translation: Union[npt.NDArray, List[float], Tuple[float, float, float]],
+    quaternion: npt.NDArray | List[float] | Tuple[float, float, float, float],
+    translation: npt.NDArray | List[float] | Tuple[float, float, float],
 ) -> npt.NDArray:
     """
     Create a 4x4 transformation matrix from quaternion and translation.

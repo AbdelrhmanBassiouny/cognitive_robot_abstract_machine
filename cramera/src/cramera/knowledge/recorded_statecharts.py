@@ -13,14 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import (
-    Any,
-    Dict,
-    Iterable,
-    List,
-    Optional,
-    TYPE_CHECKING,
-)
+from typing_extensions import Any, Dict, Iterable, List, TYPE_CHECKING
 
 from cramera.generated_json import GeneratedJson
 from cramera.knowledge.scene_bundle import SceneBundle
@@ -60,7 +53,7 @@ class RecordedChartNode:
     Name of the giskardpy class the node was compiled from.
     """
 
-    parent: Optional[str]
+    parent: str | None
     """
     Id of the node containing this one, or None at the top level.
     """
@@ -300,7 +293,7 @@ class RecordedStatecharts:
 
     @classmethod
     def of_snapshots(
-        cls, snapshots: Iterable[Optional[ChartSnapshot]]
+        cls, snapshots: Iterable[ChartSnapshot | None]
     ) -> RecordedStatecharts:
         """
         The statecharts a run's ticks were in, structures and moments deduplicated.
@@ -363,7 +356,7 @@ class RecordedStatecharts:
         )
 
     @classmethod
-    def of_scene(cls, scene: Optional[str] = None) -> RecordedStatecharts:
+    def of_scene(cls, scene: str | None = None) -> RecordedStatecharts:
         """
         The statecharts recorded beside one scene's trajectory, or none.
 

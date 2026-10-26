@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from typing_extensions import List, Optional, Tuple
+from typing_extensions import List, Tuple
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.expression_structure import walk_chain
@@ -238,7 +238,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
 
     def _ranked_aggregate_column(
         self, node: SetOf, ranking
-    ) -> Optional[SymbolicExpression]:
+    ) -> SymbolicExpression | None:
         """:return: the selected aggregate column the query is ranked by (matched to the order key
         structurally), or ``None`` when the order key is not an aggregate or names no column.
         """
@@ -263,7 +263,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         )
 
     def _is_order_key(
-        self, selection: SymbolicExpression, order_key: Optional[SymbolicExpression]
+        self, selection: SymbolicExpression, order_key: SymbolicExpression | None
     ) -> bool:
         """:return: whether *selection* is the column the query is ordered by — matched
         structurally, not by identity, so a re-stated aggregate (``ordered_by(sum(x))`` for a
@@ -392,7 +392,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
             find_header=header,
         )
 
-    def _tuple_subject(self, node: SetOf, plan: QueryPlan) -> Optional[Variable]:
+    def _tuple_subject(self, node: SetOf, plan: QueryPlan) -> Variable | None:
         """:return: the single root variable every selected column navigates from (the entity the
         ranking reframes onto), or ``None`` when the columns share no single root.
 
@@ -414,7 +414,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         return None
 
     def _key_relation_to(
-        self, subject: Variable, order_key: Optional[SymbolicExpression]
+        self, subject: Variable, order_key: SymbolicExpression | None
     ) -> RankingKeyRelation:
         """:return: how *order_key* relates to *subject* — ``SELF`` (it is the subject), ``ATTRIBUTE``
         (a chain on it, so the ranking reads *"by <attribute>"*), or ``OTHER`` (a different root, e.g.
@@ -746,7 +746,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
 
     def _apply_subject_restrictions(
         self, plan: QueryPlan, selected: VerbalizationFragment
-    ) -> Tuple[VerbalizationFragment, List[Optional[VerbalizationFragment]]]:
+    ) -> Tuple[VerbalizationFragment, List[VerbalizationFragment | None]]:
         """:return: The selection with its inline superlative modifiers attached, and the WHERE's
         clause items — the *"whose"* group (a sub-list of points in hierarchical) then a separate
         *"such that <residual>"* clause (each ``None`` when absent).
@@ -814,8 +814,8 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         node: Query,
         plan: QueryPlan,
         selection: VerbalizationFragment,
-        where_items: List[Optional[VerbalizationFragment]],
-        find_header: Optional[VerbalizationFragment] = None,
+        where_items: List[VerbalizationFragment | None],
+        find_header: VerbalizationFragment | None = None,
     ) -> VerbalizationFragment:
         """:return: *"Find <selection>"* + the present clauses (the subject restriction's *"whose"*
         / *"such that"*, then *grouped by … having … ordered by …*) as block items — absent
@@ -836,7 +836,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
 
     def _trailing_clauses(
         self, node: Query, plan: QueryPlan
-    ) -> List[Optional[VerbalizationFragment]]:
+    ) -> List[VerbalizationFragment | None]:
         """:return: The post-selection clauses, in canonical reading order (``None`` when absent).
 
         The standalone *"ordered by …"* clause is suppressed when a ranking selection already
@@ -863,7 +863,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
             None if ranked else composer.ordered_by(node),
         ]
 
-    def _where_clause(self, plan: QueryPlan) -> Optional[VerbalizationFragment]:
+    def _where_clause(self, plan: QueryPlan) -> VerbalizationFragment | None:
         """:return: *"such that <condition>"*, or ``None`` when the query has no WHERE.
 
         It emits only the trailing *"such that the battery of the Robot is greater than 50"* span; the

@@ -6,16 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from functools import partial, wraps
 
-from typing_extensions import (
-    Any,
-    Callable,
-    ClassVar,
-    Dict,
-    FrozenSet,
-    Optional,
-    Tuple,
-    TypeVar,
-)
+from typing_extensions import Any, Callable, ClassVar, Dict, FrozenSet, Tuple, TypeVar
 
 from krrood.patterns.exceptions import UnmemoizableOwnerError
 
@@ -50,7 +41,7 @@ def weak_key_cache(
     :param function: A one-argument function keyed on a weak-referenceable value.
     :return: The memoized function, with a ``cache_clear`` attribute.
     """
-    cache: "weakref.WeakKeyDictionary[_Key, _Value]" = weakref.WeakKeyDictionary()
+    cache: weakref.WeakKeyDictionary[_Key, _Value] = weakref.WeakKeyDictionary()
 
     @wraps(function)
     def wrapper(key: _Key) -> _Value:
@@ -200,7 +191,7 @@ class MemoizationCache:
             return cache
 
     @classmethod
-    def existing_for(cls, owner: Any) -> Optional[MemoizationCache]:
+    def existing_for(cls, owner: Any) -> MemoizationCache | None:
         """
         Looks up an owner's own cache, ignoring the cache of its class or of any class
         it inherits from.

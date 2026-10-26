@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from typing_extensions import List, Optional, TYPE_CHECKING
+from typing_extensions import List, TYPE_CHECKING
 
 from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.navigation_path import PathStep
@@ -96,7 +96,7 @@ def _ordinal_genitive_step(
     )
 
 
-def _genitive_article(step: PathStep) -> Optional[VerbalizationFragment]:
+def _genitive_article(step: PathStep) -> VerbalizationFragment | None:
     """:return: the article introducing a genitive hop — none for a mass noun (*"the amount of
     money"*, never *"the amount of the money"*), else the definite *"the"*.
 

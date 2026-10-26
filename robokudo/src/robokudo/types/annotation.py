@@ -23,7 +23,7 @@ from semantic_digital_twin.world_description.geometry import (
 from semantic_digital_twin.world_description.geometry import (
     Sphere as SemDTSphere,
 )
-from typing_extensions import TYPE_CHECKING, Any, List, Optional, Sequence
+from typing_extensions import TYPE_CHECKING, Any, List, Sequence
 
 from robokudo.types.core import Annotation
 from robokudo.types.cv import BoundingBox3D, KeyPoint, Points3D
@@ -196,7 +196,7 @@ class ColorHistogram(Annotation):
     saturation information.
     """
 
-    hist: Optional[npt.NDArray] = None
+    hist: npt.NDArray | None = None
     """
     2D histogram array
     """
@@ -341,10 +341,10 @@ class SIFTAnnotation(Annotation):
 class TSDFAnnotation(Annotation):
     """A TSDF Volume annotation."""
 
-    volume: Optional[o3d.pipelines.integration.ScalableTSDFVolume] = None
+    volume: o3d.pipelines.integration.ScalableTSDFVolume | None = None
     """The Open3D TSDF Volume object."""
 
-    transform: Optional[npt.NDArray[np.float64]] = None
+    transform: npt.NDArray[np.float64] | None = None
     """The transform from the reference frame to the object frame."""
 
     def get_coordinate_frame(self) -> o3d.geometry.TriangleMesh:

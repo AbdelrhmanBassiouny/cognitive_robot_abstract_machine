@@ -22,7 +22,7 @@ from py_trees.behaviour import Behaviour
 from py_trees.blackboard import Blackboard
 from py_trees.common import Status
 from py_trees.composites import Sequence
-from typing_extensions import Any, List, Optional
+from typing_extensions import Any, List
 
 import robokudo.annotators.core
 import robokudo.annotators.outputs
@@ -43,7 +43,7 @@ class Pipeline(Sequence):
     def __init__(
         self,
         name: str = "Sequence",
-        children: Optional[List[Behaviour]] = None,
+        children: List[Behaviour] | None = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:

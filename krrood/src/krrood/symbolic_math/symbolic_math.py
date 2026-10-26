@@ -47,10 +47,8 @@ from typing_extensions import (
     Self,
     Callable,
     List,
-    Optional,
     Dict,
     TypeVar,
-    Type,
     Any,
 )
 
@@ -105,9 +103,9 @@ class CasadiLock:
 
     def __exit__(
         self,
-        exception_type: Optional[Type[BaseException]],
-        exception: Optional[BaseException],
-        traceback: Optional[TracebackType],
+        exception_type: type[BaseException] | None,
+        exception: BaseException | None,
+        traceback: TracebackType | None,
     ) -> None:
         """
         Lets the next thread into CasADi.
@@ -258,7 +256,7 @@ class CompiledFunction:
     The symbolic expression to compile.
     """
 
-    variable_parameters: Optional[VariableParameters] = None
+    variable_parameters: VariableParameters | None = None
     """
     The input parameters for the compiled symbolic expression.
     """
@@ -481,7 +479,7 @@ class CompiledFunctionWithViews:
     The input parameters for the compiled symbolic expression.
     """
 
-    additional_views: Optional[List[slice]] = field(default_factory=list)
+    additional_views: List[slice] | None = field(default_factory=list)
     """
     If additional views are required that don't correspond to the expressions directly.
     """
@@ -694,7 +692,7 @@ class SymbolicMathType(ABC):
     def safe_division(
         self,
         other: GenericSymbolicType,
-        if_nan: Optional[ScalarData] = None,
+        if_nan: ScalarData | None = None,
     ) -> GenericSymbolicType:
         """
         A version of division where no sub-expression is ever NaN.
@@ -713,7 +711,7 @@ class SymbolicMathType(ABC):
 
     def compile(
         self,
-        parameters: Optional[VariableParameters] = None,
+        parameters: VariableParameters | None = None,
         sparse: bool = False,
     ) -> CompiledFunction:
         """
@@ -1033,7 +1031,7 @@ class ExpressionGraph(SubclassJSONSerializer):
         return cls(free_variables=free_variables, casadi_function=casadi_function)
 
     def to_expression(
-        self, expression_type: Type[GenericSymbolicType]
+        self, expression_type: type[GenericSymbolicType]
     ) -> GenericSymbolicType:
         """
         :param expression_type: The type of the value this graph computes.
@@ -1390,7 +1388,7 @@ class FloatVariable(Scalar):
     Subclasses should set it to return the current float value for this variable.
     """
 
-    def __init__(self, name: str, id: Optional[UUID] = None):
+    def __init__(self, name: str, id: UUID | None = None):
         """
         :param name: The name of the variable.
         :param id: The id of the variable, a new one if None.
@@ -1483,7 +1481,7 @@ class Vector(SerializableSymbolicMathType):
 
     def __init__(
         self,
-        data: Optional[VectorData] = None,
+        data: VectorData | None = None,
     ):
         if data is None:
             data = []
@@ -1615,7 +1613,7 @@ class Matrix(SerializableSymbolicMathType):
 
     def __init__(
         self,
-        data: Optional[VectorData | MatrixData] = None,
+        data: VectorData | MatrixData | None = None,
     ):
         if data is None:
             data = []
@@ -1951,7 +1949,7 @@ class Matrix(SerializableSymbolicMathType):
         return Matrix(ca.kron(m1, m2))
 
 
-def _create_return_type(input_type: SymbolicMathType) -> Type[SymbolicMathType]:
+def _create_return_type(input_type: SymbolicMathType) -> type[SymbolicMathType]:
     """
     Determines the return type based on the given input type.
 
@@ -2170,7 +2168,7 @@ abs = _unary_function_wrapper(ca.OP_FABS, "fabs")
 
 
 def max(
-    arg1: GenericSymbolicType, arg2: Optional[GenericSymbolicType] = None
+    arg1: GenericSymbolicType, arg2: GenericSymbolicType | None = None
 ) -> GenericSymbolicType:
     """
     Returns the maximum element-wise value.
@@ -2190,7 +2188,7 @@ def max(
 
 
 def min(
-    arg1: GenericSymbolicType, arg2: Optional[GenericSymbolicType] = None
+    arg1: GenericSymbolicType, arg2: GenericSymbolicType | None = None
 ) -> GenericSymbolicType:
     """
     Returns the minimum element-wise value.

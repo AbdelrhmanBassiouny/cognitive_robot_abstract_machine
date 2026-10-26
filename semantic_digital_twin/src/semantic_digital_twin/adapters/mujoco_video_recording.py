@@ -7,7 +7,7 @@ from pathlib import Path
 import imageio.v2 as imageio
 import mujoco
 import numpy as np
-from typing_extensions import List, Optional
+from typing_extensions import List
 
 from semantic_digital_twin.adapters.multi_sim import (
     MujocoCamera,
@@ -145,7 +145,7 @@ class MujocoVideoRecorder:
     The pixel resolution of the captured frames.
     """
 
-    camera: Optional[MujocoCamera] = None
+    camera: MujocoCamera | None = None
     """
     An existing camera, already attached to :attr:`world`, to record from.
 
@@ -153,12 +153,12 @@ class MujocoVideoRecorder:
     automatically on construction, and this field is replaced with it.
     """
 
-    _multi_sim: Optional[MujocoSim] = field(init=False, default=None, repr=False)
+    _multi_sim: MujocoSim | None = field(init=False, default=None, repr=False)
     """
     The live MuJoCo mirror of :attr:`world`, present only while recording.
     """
 
-    _frame_capture_callback: Optional[_FrameCaptureCallback] = field(
+    _frame_capture_callback: _FrameCaptureCallback | None = field(
         init=False, default=None, repr=False
     )
     """
@@ -175,7 +175,7 @@ class MujocoVideoRecorder:
     Frames captured since the last :meth:`start`.
     """
 
-    _auto_attached_camera: Optional[MujocoCamera] = field(
+    _auto_attached_camera: MujocoCamera | None = field(
         init=False, default=None, repr=False
     )
     """

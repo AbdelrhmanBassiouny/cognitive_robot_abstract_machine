@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing_extensions import Optional, Tuple, List, TYPE_CHECKING
+from typing_extensions import Tuple, List, TYPE_CHECKING
 
 import numpy as np
 import trimesh
@@ -176,7 +176,7 @@ class RayTracer:
         resolution: CameraResolution | None = None,
         min_distance: float = 0,
         max_distance: float = np.inf,
-        field_of_view: Optional[FieldOfView] = None,
+        field_of_view: FieldOfView | None = None,
     ) -> np.ndarray:
         """
         Creates a depth map for the ray tracer scene from the camera position to the
@@ -234,8 +234,8 @@ class RayTracer:
     def create_camera_rays(
         self,
         camera_pose: GenericSpatialType,
-        resolution: Optional[CameraResolution] = None,
-        field_of_view: Optional[FieldOfView] = None,
+        resolution: CameraResolution | None = None,
+        field_of_view: FieldOfView | None = None,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Creates camera rays for the ray tracer scene from the camera position to the

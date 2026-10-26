@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import torch
-from typing_extensions import Any, Dict, List, Optional
+from typing_extensions import Any, Dict, List
 from ultralytics.engine.results import Results
 
 from robokudo.types.human import BodyKeypoint
@@ -132,12 +132,12 @@ class MockDetectionModel:
     The detections reported on every image.
     """
 
-    received_confidence: Optional[float] = None
+    received_confidence: float | None = None
     """
     The confidence threshold of the last prediction.
     """
 
-    received_image_shape: Optional[tuple] = None
+    received_image_shape: tuple | None = None
     """
     Shape of the image of the last prediction.
     """

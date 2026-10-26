@@ -7,9 +7,8 @@ from __future__ import annotations
 import re
 import inspect
 from dataclasses import dataclass, replace
-from typing import Tuple
+from typing_extensions import TYPE_CHECKING, List, get_origin
 
-from typing_extensions import TYPE_CHECKING, List, Optional, get_origin
 
 from krrood.class_diagrams.attribute_introspector import DataclassOnlyIntrospector
 from krrood.class_diagrams.utils import get_type_hints_of_object
@@ -66,7 +65,7 @@ class Preset:
     it is offered under.
     """
 
-    verbalization: Optional[QueryVerbalization] = None
+    verbalization: QueryVerbalization | None = None
     """
     The question read back as English, or None while nothing that knows the query's
     variables has worded it (see :meth:`worded`).
@@ -131,7 +130,7 @@ class Preset:
         ]
 
     @classmethod
-    def of_scene(cls, scene: Optional[str] = None) -> List[Preset]:
+    def of_scene(cls, scene: str | None = None) -> List[Preset]:
         """
         The ready-made queries the EQL panel offers, worded by the scene's runner.
 
@@ -145,9 +144,7 @@ class Preset:
         return cls._worded_by_scene(list(SCENE_PRESETS), scene)
 
     @classmethod
-    def _worded_by_scene(
-        cls, presets: List[Preset], scene: Optional[str]
-    ) -> List[Preset]:
+    def _worded_by_scene(cls, presets: List[Preset], scene: str | None) -> List[Preset]:
         """
         The presets with their questions read back as English by the scene's runner.
 
@@ -178,7 +175,7 @@ class PresetsPerType:
     The word every one of these types' class names ends in, e.g. ``"Event"``.
     """
 
-    class_names: Tuple[str, ...]
+    class_names: tuple[str, ...]
     """
     The class name of every type a question may name.
     """
@@ -232,7 +229,7 @@ class DetectedEventQuestions:
     with.
     """
 
-    event_types: Tuple[str, ...]
+    event_types: tuple[str, ...]
     """
     The class name of every event type a question may name.
     """
@@ -275,7 +272,7 @@ class DetectedEventQuestions:
         ).questions()
 
 
-SCENE_PRESETS: Tuple[Preset, ...] = (
+SCENE_PRESETS: tuple[Preset, ...] = (
     Preset("which robot is this?", "the(entity(robot))"),
     Preset("which arm does it have?", "an(entity(arm))"),
 )

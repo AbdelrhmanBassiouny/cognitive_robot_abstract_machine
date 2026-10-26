@@ -11,7 +11,7 @@ import importlib
 from dataclasses import dataclass, field
 from enum import Enum
 
-from typing_extensions import Any, ClassVar, Dict, List, Optional, Tuple
+from typing_extensions import Any, ClassVar, Dict, List, Tuple
 
 from cramera.knowledge.architecture_entities import PythonClass
 from cramera.knowledge.architecture_scan import ArchitectureScanner
@@ -52,7 +52,7 @@ class WorkspacePackage(Enum):
     ROBOKUDO = "robokudo"
 
     @classmethod
-    def named(cls, package: str) -> Optional[WorkspacePackage]:
+    def named(cls, package: str) -> WorkspacePackage | None:
         """
         The package of this name, or None for one no query names classes from.
 
@@ -98,7 +98,7 @@ class ClassLocation:
     """
 
     @classmethod
-    def of_scanned_class(cls, scanned: PythonClass) -> Optional[ClassLocation]:
+    def of_scanned_class(cls, scanned: PythonClass) -> ClassLocation | None:
         """
         Where a scanned class can be named from, or None when it cannot be named.
 
@@ -211,7 +211,7 @@ class WorkspaceClassIndex:
         """
         return sorted(self.locations)
 
-    def resolve(self, name: str) -> Optional[Any]:
+    def resolve(self, name: str) -> Any | None:
         """
         The class a query means by this name, or None when no class has it.
 

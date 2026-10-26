@@ -9,7 +9,7 @@ from pathlib import Path, PurePosixPath
 from urllib.parse import quote
 
 import requests
-from typing_extensions import Any, Dict, List, Optional, Self
+from typing_extensions import Any, Dict, List, Self
 
 from semantic_digital_twin.adapters.package_resolver import PathResolver
 from semantic_digital_twin.exceptions import DatasetServerError, PathResolutionError
@@ -118,7 +118,7 @@ class DatasetServer(PathResolver):
     """
 
     @classmethod
-    def from_environment(cls) -> Optional[Self]:
+    def from_environment(cls) -> Self | None:
         """
         Build the server the environment describes.
 

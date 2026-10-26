@@ -17,7 +17,7 @@ from timeit import default_timer
 from py_trees.common import Status
 from py_trees.behaviour import Behaviour
 from py_trees.blackboard import Blackboard
-from typing_extensions import Dict, List, Optional, Type
+from typing_extensions import Dict, List
 
 from robokudo.defs import PACKAGE_NAME
 from robokudo.pipeline import Pipeline
@@ -46,9 +46,7 @@ class VisualizationManager(Behaviour):
         3. Post-tick: Cleanup and synchronization
     """
 
-    def __init__(
-        self, name: str, visualizer_types: Optional[List[Type]] = None
-    ) -> None:
+    def __init__(self, name: str, visualizer_types: List[type] | None = None) -> None:
         """Initialize the visualization manager.
 
         :param name: Name of the behavior tree node
@@ -63,7 +61,7 @@ class VisualizationManager(Behaviour):
         self.rk_logger: logging.Logger = logging.getLogger(PACKAGE_NAME)
         """Logger instance for this class"""
 
-        self.visualizer_types: List[Type] = visualizer_types or [
+        self.visualizer_types: List[type] = visualizer_types or [
             CVVisualizer,
             O3DVisualizer,
             SharedROSVisualizer,

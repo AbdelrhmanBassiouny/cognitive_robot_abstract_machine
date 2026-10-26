@@ -31,7 +31,7 @@ from krrood.entity_query_language.verbalization.rendering.source_link_resolver i
     AutoAPIResolver,
 )
 from krrood.entity_query_language.verbalization.verbalizer import EQLVerbalizer
-from typing_extensions import Any, Dict, FrozenSet, Optional
+from typing_extensions import Any, Dict, FrozenSet
 
 from cramera import paths
 
@@ -92,7 +92,7 @@ class PublishedDocumentationResolver:
     Root URL of the aggregate documentation site.
     """
 
-    def resolve(self, reference: SourceReference) -> Optional[str]:
+    def resolve(self, reference: SourceReference) -> str | None:
         """
         The AutoAPI page URL a reference documents itself at, or None when its package
         publishes no documentation.
@@ -141,7 +141,7 @@ class RepositorySourceResolver:
     The checkout the running classes are read from, whose paths the links are of.
     """
 
-    def resolve(self, reference: SourceReference) -> Optional[str]:
+    def resolve(self, reference: SourceReference) -> str | None:
         """
         The URL the class a word names is written at, or None when it is not written in
         this repository.
@@ -160,7 +160,7 @@ class RepositorySourceResolver:
         line = declaration_line(source, reference.owner_type.__name__)
         return page if line is None else "%s#L%d" % (page, line)
 
-    def source_file(self, owner_type: type) -> Optional[Path]:
+    def source_file(self, owner_type: type) -> Path | None:
         """
         The Python file a class is written in inside this repository, or None when it is
         written elsewhere or has no source at all.
@@ -202,7 +202,7 @@ def source_site(root: Path) -> str:
 
 
 @lru_cache(maxsize=None)
-def checked_out_commit(root: Path) -> Optional[str]:
+def checked_out_commit(root: Path) -> str | None:
     """
     The commit a checkout is on, or None when it is not one git can read.
 
@@ -219,7 +219,7 @@ def checked_out_commit(root: Path) -> Optional[str]:
     return read.stdout.strip() if read.returncode == 0 else None
 
 
-def declaration_line(source: Path, class_name: str) -> Optional[int]:
+def declaration_line(source: Path, class_name: str) -> int | None:
     """
     The line a class is declared on in a source file, or None when the file declares no
     such class of its own.
@@ -255,7 +255,7 @@ class WordLinkResolver:
     Where every other word goes.
     """
 
-    def resolve(self, reference: SourceReference) -> Optional[str]:
+    def resolve(self, reference: SourceReference) -> str | None:
         """
         The URL a word links to, or None when neither knows the class it names.
 
@@ -310,7 +310,7 @@ class QueryVerbalization:
     """
 
     @classmethod
-    def of_expression(cls, expression: Any) -> Optional[QueryVerbalization]:
+    def of_expression(cls, expression: Any) -> QueryVerbalization | None:
         """
         Read one entity query language expression back as English.
 

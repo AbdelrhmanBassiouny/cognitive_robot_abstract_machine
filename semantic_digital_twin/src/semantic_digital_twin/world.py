@@ -22,9 +22,7 @@ from rustworkx.visualization import graphviz_draw
 from typing_extensions import (
     Dict,
     Tuple,
-    Optional,
     TypeVar,
-    Union,
     Callable,
     Any,
     Iterable,
@@ -33,7 +31,7 @@ from typing_extensions import (
     get_args,
 )
 from typing_extensions import List
-from typing_extensions import Type, Set
+from typing_extensions import Set
 
 from krrood.adapters.json_serializer import list_like_classes
 from krrood.class_diagrams.attribute_introspector import DataclassOnlyIntrospector
@@ -156,9 +154,9 @@ class ResetStateContextManager:
 
     def __exit__(
         self,
-        exc_type: Optional[type],
-        exc_val: Optional[Exception],
-        exc_tb: Optional[type],
+        exc_type: type | None,
+        exc_val: Exception | None,
+        exc_tb: type | None,
     ) -> None:
         self.world.state._data[:] = self.state
         self.world.notify_state_change()
@@ -201,9 +199,9 @@ class WorldStateBatchContextManager:
 
     def __exit__(
         self,
-        exc_type: Optional[type],
-        exc_val: Optional[Exception],
-        exc_tb: Optional[type],
+        exc_type: type | None,
+        exc_val: Exception | None,
+        exc_tb: type | None,
     ) -> None:
         self.world._state_change_batch_depth -= 1
         if self.world._state_change_batch_depth > 0:
@@ -332,7 +330,7 @@ class WorldModelUpdateContextManager:
                     self.world._model_manager.flush_pending_publications()
 
 
-def atomic_world_modification(func=None, modification: Type[WorldModification] = None):
+def atomic_world_modification(func=None, modification: type[WorldModification] = None):
     """
     Decorator for ensuring atomicity in world modification operations.
 
@@ -462,7 +460,7 @@ class WorldModelManager:
     List of active world model managers currently modifying this world.
     """
 
-    _current_modifications_will_be_published: Optional[bool] = field(
+    _current_modifications_will_be_published: bool | None = field(
         init=False, default=None
     )
     """
@@ -607,7 +605,7 @@ class World(HasSimulatorProperties):
     The ``publish_changes`` the currently open batch was entered with.
     """
 
-    name: Optional[str] = None
+    name: str | None = None
     """
     Name of the world.
 
@@ -620,7 +618,7 @@ class World(HasSimulatorProperties):
     Class that manages collision detection related stuff for this world.
     """
 
-    mesh_decomposer: Optional[MeshDecomposer] = field(
+    mesh_decomposer: MeshDecomposer | None = field(
         default_factory=VHACDMeshDecomposer, kw_only=True
     )
     """
@@ -631,7 +629,7 @@ class World(HasSimulatorProperties):
     be treated as their convex hulls).
     """
 
-    _current_active_atomic_world_modification: Optional[Callable] = field(
+    _current_active_atomic_world_modification: Callable | None = field(
         init=False, default=None
     )
     """
@@ -685,7 +683,7 @@ class World(HasSimulatorProperties):
 
     @classmethod
     def create_with_root_body(
-        cls, root_body_name: str = "map", prefix: Optional[str] = None
+        cls, root_body_name: str = "map", prefix: str | None = None
     ) -> World:
         """
         Creates a new instance of the World class with a root body.
@@ -742,7 +740,7 @@ class World(HasSimulatorProperties):
     # %% Properties
     @property
     @memoize
-    def root(self) -> Optional[KinematicStructureEntity]:
+    def root(self) -> KinematicStructureEntity | None:
         """
         The root of the world is the unique node with in-degree 0.
 
@@ -1346,7 +1344,7 @@ class World(HasSimulatorProperties):
 
     @memoize
     def get_connections_by_type(
-        self, connection_type: Type[GenericConnection]
+        self, connection_type: type[GenericConnection]
     ) -> List[GenericConnection]:
         """
         Retrieves the connections of a given type.
@@ -1360,7 +1358,7 @@ class World(HasSimulatorProperties):
 
     @memoize
     def get_semantic_annotations_by_type(
-        self, semantic_annotation_type: Type[GenericSemanticAnnotation]
+        self, semantic_annotation_type: type[GenericSemanticAnnotation]
     ) -> List[GenericSemanticAnnotation]:
         """
         Retrieves all semantic annotations of a specific type from the world.
@@ -1375,7 +1373,7 @@ class World(HasSimulatorProperties):
 
     @memoize
     def get_kinematic_structure_entity_by_type(
-        self, entity_type: Type[GenericKinematicStructureEntity]
+        self, entity_type: type[GenericKinematicStructureEntity]
     ) -> List[GenericKinematicStructureEntity]:
         """
         Retrieves all kinematic structure entities of a specific type from the world.
@@ -1390,7 +1388,7 @@ class World(HasSimulatorProperties):
 
     @staticmethod
     def _get_world_entity_by_type_from_iterable(
-        world_entity_type: Type[GenericWorldEntity], iterable: Iterable[WorldEntity]
+        world_entity_type: type[GenericWorldEntity], iterable: Iterable[WorldEntity]
     ) -> List[GenericWorldEntity]:
         """
         Helper function to retrieve all world entities of a specific type from an
@@ -1405,7 +1403,7 @@ class World(HasSimulatorProperties):
 
     @memoize
     def get_semantic_annotation_by_name(
-        self, name: Union[str, PrefixedName]
+        self, name: str | PrefixedName
     ) -> SemanticAnnotation:
         semantic_annotation: SemanticAnnotation = (
             self._get_world_entity_by_name_from_iterable(
@@ -1416,7 +1414,7 @@ class World(HasSimulatorProperties):
 
     @memoize
     def get_kinematic_structure_entity_by_name(
-        self, name: Union[str, PrefixedName]
+        self, name: str | PrefixedName
     ) -> KinematicStructureEntity:
         return self._get_world_entity_by_name_from_iterable(
             name, self.kinematic_structure_entities
@@ -1424,7 +1422,7 @@ class World(HasSimulatorProperties):
 
     @memoize
     def get_kinematic_structure_entity_in_branch_by_name(
-        self, branch_root: KinematicStructureEntity, name: Union[str, PrefixedName]
+        self, branch_root: KinematicStructureEntity, name: str | PrefixedName
     ) -> KinematicStructureEntity:
         kinematic_structure_entities = self.get_kinematic_structure_entities_of_branch(
             branch_root
@@ -1434,7 +1432,7 @@ class World(HasSimulatorProperties):
         )
 
     @memoize
-    def get_body_by_name(self, name: Union[str, PrefixedName]) -> Body:
+    def get_body_by_name(self, name: str | PrefixedName) -> Body:
         return self._get_world_entity_by_name_from_iterable(name, self.bodies)
 
     def get_bodies_by_global_position(
@@ -1449,7 +1447,7 @@ class World(HasSimulatorProperties):
 
     @memoize
     def get_body_in_branch_by_name(
-        self, branch_root: KinematicStructureEntity, name: Union[str, PrefixedName]
+        self, branch_root: KinematicStructureEntity, name: str | PrefixedName
     ) -> Body:
         bodies = [
             kse
@@ -1460,19 +1458,19 @@ class World(HasSimulatorProperties):
 
     @memoize
     def get_degree_of_freedom_by_name(
-        self, name: Union[str, PrefixedName]
+        self, name: str | PrefixedName
     ) -> DegreeOfFreedom:
         return self._get_world_entity_by_name_from_iterable(
             name, self.degrees_of_freedom
         )
 
     @memoize
-    def get_connection_by_name(self, name: Union[str, PrefixedName]) -> Connection:
+    def get_connection_by_name(self, name: str | PrefixedName) -> Connection:
         return self._get_world_entity_by_name_from_iterable(name, self.connections)
 
     def _get_world_entity_by_name_from_iterable(
         self,
-        name: Union[str, PrefixedName],
+        name: str | PrefixedName,
         world_entity_iterable: list[GenericWorldEntity],
     ) -> GenericWorldEntity:
         """
@@ -1505,7 +1503,7 @@ class World(HasSimulatorProperties):
 
     @memoize
     def get_semantic_annotations_by_name(
-        self, name: Union[str, PrefixedName]
+        self, name: str | PrefixedName
     ) -> List[SemanticAnnotation]:
         return self._get_world_entities_by_name_from_iterable(
             name, self.semantic_annotations
@@ -1513,33 +1511,31 @@ class World(HasSimulatorProperties):
 
     @memoize
     def get_kinematic_structure_entities_by_name(
-        self, name: Union[str, PrefixedName]
+        self, name: str | PrefixedName
     ) -> List[KinematicStructureEntity]:
         return self._get_world_entities_by_name_from_iterable(
             name, self.kinematic_structure_entities
         )
 
     @memoize
-    def get_bodies_by_name(self, name: Union[str, PrefixedName]) -> List[Body]:
+    def get_bodies_by_name(self, name: str | PrefixedName) -> List[Body]:
         return self._get_world_entities_by_name_from_iterable(name, self.bodies)
 
     @memoize
     def get_degrees_of_freedom_by_name(
-        self, name: Union[str, PrefixedName]
+        self, name: str | PrefixedName
     ) -> List[DegreeOfFreedom]:
         return self._get_world_entities_by_name_from_iterable(
             name, self.degrees_of_freedom
         )
 
     @memoize
-    def get_connections_by_name(
-        self, name: Union[str, PrefixedName]
-    ) -> List[Connection]:
+    def get_connections_by_name(self, name: str | PrefixedName) -> List[Connection]:
         return self._get_world_entities_by_name_from_iterable(name, self.connections)
 
     @staticmethod
     def _suggest_world_entity_names(
-        name: Union[str, PrefixedName],
+        name: str | PrefixedName,
         world_entity_iterable: Iterable[GenericWorldEntity],
         max_suggestions: int = 3,
     ) -> List[PrefixedName]:
@@ -1573,7 +1569,7 @@ class World(HasSimulatorProperties):
 
     @staticmethod
     def _get_world_entities_by_name_from_iterable(
-        name: Union[str, PrefixedName],
+        name: str | PrefixedName,
         world_entity_iterable: Iterable[GenericWorldEntity],
     ) -> List[GenericWorldEntity]:
         """
@@ -1620,7 +1616,7 @@ class World(HasSimulatorProperties):
             raise WorldEntityWithIDNotFoundError(id)
         return entity
 
-    def find_world_entity_with_id(self, entity_id: UUID) -> Optional[WorldEntityWithID]:
+    def find_world_entity_with_id(self, entity_id: UUID) -> WorldEntityWithID | None:
         """
         Find this world's entity with the given id, if it holds one.
 
@@ -1716,7 +1712,7 @@ class World(HasSimulatorProperties):
 
     def get_semantic_annotation_equal_to(
         self, semantic_annotation: SemanticAnnotation
-    ) -> Optional[SemanticAnnotation]:
+    ) -> SemanticAnnotation | None:
         """
         The annotation this world holds that describes the same thing, if it holds one.
 
@@ -2173,7 +2169,7 @@ class World(HasSimulatorProperties):
 
     def compute_parent_connection(
         self, kinematic_structure_entity: KinematicStructureEntity
-    ) -> Optional[Connection]:
+    ) -> Connection | None:
         """
         Computes the parent connection of a given KinematicStructureEntity in the world.
 
@@ -2194,7 +2190,7 @@ class World(HasSimulatorProperties):
 
     def compute_parent_kinematic_structure_entity(
         self, kinematic_structure_entity: KinematicStructureEntity
-    ) -> Optional[KinematicStructureEntity]:
+    ) -> KinematicStructureEntity | None:
         """
         Computes the parent KinematicStructureEntity of a given KinematicStructureEntity
         in the world.

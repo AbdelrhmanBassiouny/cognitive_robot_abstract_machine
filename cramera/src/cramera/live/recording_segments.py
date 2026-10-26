@@ -5,15 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from typing_extensions import (
-    Any,
-    ClassVar,
-    Dict,
-    List,
-    Optional,
-    Sequence,
-    TYPE_CHECKING,
-)
+from typing_extensions import Any, ClassVar, Dict, List, Sequence, TYPE_CHECKING
 
 from cramera.live.frame_range import FrameRange
 
@@ -81,7 +73,7 @@ class RecordedSegment:
     Index of the frame the stretch ends at.
     """
 
-    window: Optional[ObjectWindow] = None
+    window: ObjectWindow | None = None
     """
     The object carried during this stretch, if one was.
     """
@@ -208,7 +200,7 @@ def _carry_step(window: ObjectWindow) -> str:
     return "move_" + window.object_key.split(".")[0]
 
 
-def _step_at(frames: List[RecordedFrame], index: int) -> Optional[str]:
+def _step_at(frames: List[RecordedFrame], index: int) -> str | None:
     """
     The action reported at one frame, or the last one reported before it.
 

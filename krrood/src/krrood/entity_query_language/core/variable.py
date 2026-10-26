@@ -14,13 +14,10 @@ from dataclasses import dataclass, field
 from functools import cached_property
 
 from typing_extensions import (
-    Type,
     Any,
     Dict,
-    Optional,
     Iterable,
     Union as TypingUnion,
-    Union,
     Callable,
     Iterator,
     List,
@@ -61,14 +58,14 @@ class CanHaveDomainSource(CanBehaveLikeAVariable[T], ABC):
     A superclass for variables that can have a domain source.
     """
 
-    _type_: Union[Type[T], Callable] = field(kw_only=True, default=None)
+    _type_: type[T] | Callable = field(kw_only=True, default=None)
     """
     The values type of the variable.
 
     (The value of `T`)
     """
 
-    _domain_source_: Optional[DomainSource] = field(default=None, kw_only=True)
+    _domain_source_: DomainSource | None = field(default=None, kw_only=True)
     """
     The source type of the domain (e.g., EXPLICIT, DEDUCED, ...etc.).
     """
@@ -170,7 +167,7 @@ class Literal(Variable[T]):
     iterable.
     """
 
-    _name__: Optional[str] = field(default=None, kw_only=True)
+    _name__: str | None = field(default=None, kw_only=True)
     """
     The name to use for the variable.
     """
@@ -203,7 +200,7 @@ class InstantiatedVariable(
     Predicates and symbolic functions.
     """
 
-    _type_: Union[Type[T], Callable] = field(kw_only=True)
+    _type_: type[T] | Callable = field(kw_only=True)
     """
     The result type of the variable.
 

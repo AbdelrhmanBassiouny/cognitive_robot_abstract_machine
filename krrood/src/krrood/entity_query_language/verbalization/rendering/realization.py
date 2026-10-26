@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from typing_extensions import Iterable, List, Optional
+from typing_extensions import Iterable, List
 
 from krrood.entity_query_language.verbalization.fragments.base import (
     flatten_fragment_to_plain_text,
@@ -40,9 +40,9 @@ _LOWERING_PASSES: List[RealizationPass] = [
 
 def realize_tree(
     fragment: VerbalizationFragment,
-    previously_introduced_referents: Optional[Iterable[uuid.UUID]] = None,
+    previously_introduced_referents: Iterable[uuid.UUID] | None = None,
     discourse: DiscourseView = EMPTY_DISCOURSE,
-    distinguisher_index: Optional[DistinguisherIndex] = None,
+    distinguisher_index: DistinguisherIndex | None = None,
 ) -> VerbalizationFragment:
     """
     Run the ordered realisation passes over *fragment* — the one place the lowering passes and

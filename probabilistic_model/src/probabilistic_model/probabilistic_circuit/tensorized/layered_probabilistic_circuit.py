@@ -7,7 +7,7 @@ import numpy as np
 from random_events.product_algebra import Event, SimpleEvent, VariableMap
 from random_events.variable import Symbolic, Variable
 from sortedcontainers import SortedSet
-from typing_extensions import Any, Dict, Iterable, List, Optional, Self, Tuple, Type
+from typing_extensions import Any, Dict, Iterable, List, Self, Tuple
 
 from krrood.patterns.dataclass_deep_copy import DataclassDeepcopyMixin
 from probabilistic_model.distributions.distributions import (
@@ -250,7 +250,7 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode], DataclassDeepcop
         }
 
     def store_discrete_probabilities_as(
-        self, table_type: Type[ProbabilityTable]
+        self, table_type: type[ProbabilityTable]
     ) -> Self:
         """
         Store the probabilities of every discrete layer in a table of the given type, in
@@ -604,13 +604,13 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode], DataclassDeepcop
         self.root.remap_variables(remap)
         self.variables = variables
 
-    def marginal(self, variables: Iterable[Variable]) -> Optional[Self]:
+    def marginal(self, variables: Iterable[Variable]) -> Self | None:
         result = copy.deepcopy(self)
         if result.marginal_in_place(variables) is None:
             return None
         return result
 
-    def marginal_in_place(self, variables: Iterable[Variable]) -> Optional[Self]:
+    def marginal_in_place(self, variables: Iterable[Variable]) -> Self | None:
         """
         Restrict this circuit to a subset of its variables in place.
 
@@ -621,13 +621,13 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode], DataclassDeepcop
             return None
         return self.simplify()
 
-    def restrict_to_variables(self, variables: Iterable[Variable]) -> Optional[Self]:
+    def restrict_to_variables(self, variables: Iterable[Variable]) -> Self | None:
         result = copy.deepcopy(self)
         return result.restrict_to_variables_in_place(variables)
 
     def restrict_to_variables_in_place(
         self, variables: Iterable[Variable]
-    ) -> Optional[Self]:
+    ) -> Self | None:
         """
         Restrict this circuit to a subset of its variables in place, without
         :meth:`simplify`'s removal of the identity layers.
@@ -892,7 +892,7 @@ class LayeredProbabilisticCircuit(GroundableCircuit[LayerNode], DataclassDeepcop
         self,
         nodes: List[LayerNode],
         products: ProductsOfCopies,
-        log_weights: Optional[DenseEdgeValues],
+        log_weights: DenseEdgeValues | None,
     ):
         layered_products = LayeredProducts(products)
         variables = SortedSet(self.variables) | layered_products.variables

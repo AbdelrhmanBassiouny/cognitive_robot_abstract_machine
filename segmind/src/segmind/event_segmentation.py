@@ -10,7 +10,7 @@ import time
 from dataclasses import dataclass, field
 
 from giskardpy.motion_statechart.context import MotionStatechartContext
-from typing_extensions import List, Optional, Self, Sequence, Type
+from typing_extensions import List, Self, Sequence
 
 from segmind.detector_selection import DetectorSelection
 from segmind.detectors.atomic_event_detectors_nodes import MotionDetector
@@ -77,7 +77,7 @@ class Segmind:
     Set when the detectors are to stop being ticked.
     """
 
-    thread: Optional[threading.Thread] = field(init=False, default=None)
+    thread: threading.Thread | None = field(init=False, default=None)
     """
     The thread the detectors are ticked on, once started.
     """
@@ -93,7 +93,7 @@ class Segmind:
         cls,
         world: World,
         bodies: Sequence[Body],
-        detector_types: Sequence[Type[AbstractDetector]] = (),
+        detector_types: Sequence[type[AbstractDetector]] = (),
     ) -> Self:
         """
         SegMind detecting what happens to ``bodies``.
@@ -123,8 +123,8 @@ class Segmind:
     def create_for_semantic_annotation_types(
         cls,
         world: World,
-        semantic_annotation_types: Sequence[Type[SemanticAnnotation]],
-        detector_types: Sequence[Type[AbstractDetector]] = (),
+        semantic_annotation_types: Sequence[type[SemanticAnnotation]],
+        detector_types: Sequence[type[AbstractDetector]] = (),
     ) -> Self:
         """
         SegMind watching the bodies of every semantic annotation of the types a run

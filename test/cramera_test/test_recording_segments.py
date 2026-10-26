@@ -9,7 +9,7 @@ their carry windows begin and end, and which action names the stretch around the
 
 from __future__ import annotations
 
-from typing_extensions import Dict, List, Optional, Sequence
+from typing_extensions import Dict, List, Sequence
 
 from cramera.live.recording_segments import (
     MOTION_TOLERANCE,
@@ -39,7 +39,7 @@ def at(x: float) -> List[float]:
 
 def recording(
     poses: Sequence[Dict[str, List[float]]],
-    steps: Optional[Sequence[Optional[str]]] = None,
+    steps: Sequence[str | None] | None = None,
 ) -> List[RecordedFrame]:
     """
     A recording of ``poses``, one tick per entry, with the actions reported alongside.

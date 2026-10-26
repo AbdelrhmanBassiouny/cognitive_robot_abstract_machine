@@ -18,10 +18,8 @@ from typing_extensions import (
     Dict,
     FrozenSet,
     List,
-    Optional,
     Protocol,
     Tuple,
-    Type,
     runtime_checkable,
 )
 
@@ -105,7 +103,7 @@ class RenderResult(CrameraPayload):
     Ids of the graph nodes this result should highlight, sorted and deduplicated.
     """
 
-    replay: List[Optional[ReplayWindow]] = field(default_factory=list)
+    replay: List[ReplayWindow | None] = field(default_factory=list)
     """
     The window worth replaying around each row's moment, one entry per row and None for
     a row naming no moment.
@@ -115,7 +113,7 @@ class RenderResult(CrameraPayload):
     the window as a column.
     """
 
-    verbalization: Optional[QueryVerbalization] = None
+    verbalization: QueryVerbalization | None = None
     """
     The query read back as English, or None when there was no expression to word.
     """
@@ -154,7 +152,7 @@ class AnswerRow:
     The row's own columns, keyed as the panel shows them.
     """
 
-    replay: Optional[ReplayWindow] = None
+    replay: ReplayWindow | None = None
     """
     The window of the demo recording worth replaying around this row's moment, or None
     when the row names no moment.
@@ -197,7 +195,7 @@ class RowRenderer:
     Maximum number of answer rows to render.
     """
 
-    entity_types: Tuple[Type[Any], ...] = ()
+    entity_types: Tuple[type[Any], ...] = ()
     """
     Types whose instances are titled and highlighted as entities.
 
@@ -257,7 +255,7 @@ class RowRenderer:
         if isinstance(item, Mapping):  # a unification row from set_of()
             columns = self._column_names([str(key) for key in item])
             values = {}
-            window: Optional[ReplayWindow] = None
+            window: ReplayWindow | None = None
             for column, value in zip(columns, item.values()):
                 name = self._row_title(value)
                 if name:
@@ -343,7 +341,7 @@ class RowRenderer:
             return value
         return repr(value)
 
-    def _row_title(self, value: Any) -> Optional[str]:
+    def _row_title(self, value: Any) -> str | None:
         """
         The name a row for this value is titled and highlighted by, or None.
 
@@ -354,7 +352,7 @@ class RowRenderer:
         return self._entity_name(value)
 
     @staticmethod
-    def _entity_name(value: Any) -> Optional[str]:
+    def _entity_name(value: Any) -> str | None:
         """
         The entity's name, or None for a value that is not one of our entities.
 
@@ -399,7 +397,7 @@ class EqlQueryRunner:
     """
 
     @property
-    def entity_types(self) -> Tuple[Type[Any], ...]:
+    def entity_types(self) -> Tuple[type[Any], ...]:
         """
         The types this runner's answers are rendered as entities.
         """
@@ -452,7 +450,7 @@ class EqlQueryRunner:
         exec(compile(tree, "<eql>", "exec"), namespace)
         return namespace.get("result")
 
-    def verbalize(self, code: str) -> Optional[QueryVerbalization]:
+    def verbalize(self, code: str) -> QueryVerbalization | None:
         """
         Read an EQL query string back as English without evaluating it.
 

@@ -18,7 +18,7 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from typing_extensions import Optional, Tuple, Type
+from typing_extensions import Tuple
 
 from coraplex.datastructures.dataclasses import Context
 from coraplex.datastructures.enums import ExecutionType
@@ -105,7 +105,7 @@ class PlaceSettingObject:
     One object of the place setting: what it is, where it starts, and where it is laid.
     """
 
-    semantic_annotation_type: Type[HasRootKinematicStructureEntity]
+    semantic_annotation_type: type[HasRootKinematicStructureEntity]
     """
     What the object is.
 
@@ -133,7 +133,7 @@ class PlaceSettingObject:
     (z=0.723).
     """
 
-    starts_on: Optional[ApartmentBody] = None
+    starts_on: ApartmentBody | None = None
     """
     The apartment body the object starts on.
 

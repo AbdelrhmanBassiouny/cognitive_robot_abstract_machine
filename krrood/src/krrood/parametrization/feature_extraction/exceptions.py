@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import Type, Any
+from typing_extensions import Any
 
 from krrood.exceptions import DataclassException, InputError
 
@@ -90,7 +90,7 @@ class UnsupportedFeatureTypeError(DataclassException):
     :class:`~probabilistic_model.learning.jpt.jpt.JointProbabilityTree`.
     """
 
-    feature_type: Type
+    feature_type: type
     """
     The unsupported type encountered during preprocessing.
     """

@@ -20,15 +20,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from typing_extensions import (
-    Callable,
-    Generic,
-    List,
-    Optional,
-    Tuple,
-    Type,
-    TypeVar,
-)
+from typing_extensions import Callable, Generic, List, Tuple, TypeVar
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.rdr.exceptions import AmbiguousBranchSemanticsError
@@ -94,7 +86,7 @@ class SelectorBranchSemantics(Generic[SelectorType], SubClassSafeGeneric, ABC):
     """
 
     @classmethod
-    def selector_type(cls) -> Type[ConclusionSelector]:
+    def selector_type(cls) -> type[ConclusionSelector]:
         """:return: The conclusion-selector class this semantics handles."""
         return cls.get_generic_type_parameters()[0]
 
@@ -102,7 +94,7 @@ class SelectorBranchSemantics(Generic[SelectorType], SubClassSafeGeneric, ABC):
     def most_specific_for(
         cls,
         expression: SymbolicExpression,
-    ) -> Optional[Type[SelectorBranchSemantics]]:
+    ) -> type[SelectorBranchSemantics] | None:
         """
         Find the semantics governing *expression*.
 

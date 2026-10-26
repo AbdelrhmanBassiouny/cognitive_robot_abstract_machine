@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-from typing_extensions import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Tuple
+from typing_extensions import TYPE_CHECKING, Any, ClassVar, Dict, List, Tuple
 
 if TYPE_CHECKING:
     import numpy
@@ -267,7 +267,7 @@ class RoboCasaDatasetLoader:
         self,
         layout_id: LayoutType,
         style_id: StyleType,
-        random_number_generator: Optional[numpy.random.Generator] = None,
+        random_number_generator: numpy.random.Generator | None = None,
     ) -> World:
         """
         Compose a full RoboCasa kitchen scene and parse it into a World.
@@ -528,7 +528,7 @@ class RoboCasaDatasetLoader:
     def load_kitchen_appliance(
         self,
         category: RoboCasaKitchenApplianceCategory,
-        style_id: Optional[StyleType] = None,
+        style_id: StyleType | None = None,
     ) -> World:
         """
         Load a single RoboCasa kitchen appliance (for example a cabinet or a microwave)
@@ -554,7 +554,7 @@ class RoboCasaDatasetLoader:
     def _find_configured_appliance(
         self,
         category: RoboCasaKitchenApplianceCategory,
-        style_id: Optional[StyleType],
+        style_id: StyleType | None,
     ) -> Any:
         """
         Search the RoboCasa kitchen layouts for the first fully configured fixture whose
@@ -759,7 +759,7 @@ class RoboCasaDatasetLoader:
             self._attach_sub_part_annotations(world, child_annotation, child_body)
 
     @staticmethod
-    def _find_body(world: World, name: str) -> Optional[Body]:
+    def _find_body(world: World, name: str) -> Body | None:
         """
         Look up a body by name, returning None instead of raising if it is not present.
 

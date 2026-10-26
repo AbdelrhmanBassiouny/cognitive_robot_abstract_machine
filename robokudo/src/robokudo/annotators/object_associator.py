@@ -1,5 +1,5 @@
 from py_trees.common import Status
-from typing_extensions import List, Set, Optional
+from typing_extensions import List, Set
 
 from robokudo.annotators.core import BaseAnnotator
 from robokudo.types.annotation import (
@@ -47,7 +47,7 @@ class ObjectAssociator(BaseAnnotator):
         matched_new_ids: Set[int] = set()
 
         for new_oh in new_ohs:
-            best_match_id: Optional[int] = None
+            best_match_id: int | None = None
             best_similarity = 0.0
 
             for oh_id, prev_oh in enumerate(self.tracked_objects):

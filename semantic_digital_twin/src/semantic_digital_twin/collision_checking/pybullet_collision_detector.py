@@ -4,8 +4,7 @@ import os
 from dataclasses import dataclass, field
 from importlib.resources import files
 from pathlib import Path
-from typing import Dict, Any
-from typing import List, Tuple, Optional
+from typing_extensions import Any
 from uuid import UUID
 
 import giskardpy_bullet_bindings as bullet
@@ -38,7 +37,7 @@ logger = logging.getLogger(__name__)
 CACHE_DIR = create_cache_dir("convex_decompositions")
 LOG_DIR = create_cache_dir("log")
 
-_shape_cache: Dict[Any, bullet.CollisionShape] = {}
+_shape_cache: dict[Any, bullet.CollisionShape] = {}
 """
 Process-wide cache of built Bullet collision shapes, keyed by geometry content (see
 :func:`_geometry_cache_key`).
@@ -113,7 +112,7 @@ def trimesh_quantized_hash(
     return h.hexdigest()
 
 
-def create_cube_shape(extents: Tuple[float, float, float]) -> bullet.BoxShape:
+def create_cube_shape(extents: tuple[float, float, float]) -> bullet.BoxShape:
     """
     Creates a bullet box shape.
 
@@ -167,7 +166,7 @@ def create_sphere_shape(diameter: float) -> bullet.SphereShape:
 
 def create_shape_from_geometry(
     geometry: Shape,
-    mesh_decomposer: Optional[MeshDecomposer] = None,
+    mesh_decomposer: MeshDecomposer | None = None,
 ) -> bullet.CollisionShape:
     """
     Creates a bullet collision shape from a geometry.
@@ -212,7 +211,7 @@ def create_shape_from_geometry(
 
 def create_shape_from_body(
     body: Body,
-    mesh_decomposer: Optional[MeshDecomposer] = None,
+    mesh_decomposer: MeshDecomposer | None = None,
 ) -> bullet.CollisionObject:
     """
     Creates a bullet collision object from a body.
@@ -233,7 +232,7 @@ def create_shape_from_body(
 
 
 def create_compound_shape(
-    shapes_poses: List[Tuple[bullet.Transform, bullet.CollisionShape]] = None,
+    shapes_poses: list[tuple[bullet.Transform, bullet.CollisionShape]] = None,
 ) -> bullet.CompoundShape:
     """
     Creates a bullet compound shape.
@@ -251,7 +250,7 @@ def load_convex_mesh_shape(
     mesh: Mesh,
     single_shape: bool,
     scale: Scale,
-    mesh_decomposer: Optional[MeshDecomposer] = None,
+    mesh_decomposer: MeshDecomposer | None = None,
 ) -> bullet.ConvexShape:
     """
     Loads a convex mesh shape from a mesh.
@@ -287,7 +286,7 @@ def clear_cache(cache_dir: Path = CACHE_DIR):
 
 def convert_to_decomposed_obj_and_save_in_tmp(
     mesh: Mesh,
-    mesh_decomposer: Optional[MeshDecomposer] = None,
+    mesh_decomposer: MeshDecomposer | None = None,
     cache_dir: Path = CACHE_DIR,
     log_path: Path = LOG_DIR,
 ) -> str:
@@ -322,7 +321,7 @@ def convert_to_decomposed_obj_and_save_in_tmp(
 def create_object(
     name: UUID,
     shape: bullet.CollisionShape,
-    transform: Optional[bullet.Transform] = None,
+    transform: bullet.Transform | None = None,
 ) -> bullet.CollisionObject:
     """
     Creates a bullet collision object.
@@ -354,14 +353,14 @@ class BulletCollisionDetector(CollisionDetector):
     Reference to the bullet world.
     """
 
-    body_to_bullet_object: Dict[Body, bullet.CollisionObject] = field(
+    body_to_bullet_object: dict[Body, bullet.CollisionObject] = field(
         default_factory=dict, init=False
     )
     """
     Maps semdt world bodies to their bullet collision objects.
     """
 
-    _ordered_bullet_objects: List[bullet.CollisionObject] = field(
+    _ordered_bullet_objects: list[bullet.CollisionObject] = field(
         default_factory=list, init=False
     )
     """
@@ -370,9 +369,7 @@ class BulletCollisionDetector(CollisionDetector):
     This is only a cache for performance reasons.
     """
 
-    mesh_decomposer: Optional[MeshDecomposer] = field(
-        default_factory=VHACDMeshDecomposer
-    )
+    mesh_decomposer: MeshDecomposer | None = field(default_factory=VHACDMeshDecomposer)
     """
     Decomposer used to split non-convex meshes into convex parts before handing them to
     Bullet.
@@ -415,7 +412,7 @@ class BulletCollisionDetector(CollisionDetector):
     @memoize
     def collision_matrix_to_bullet_query(
         self, collision_matrix: CollisionMatrix
-    ) -> Optional[Dict[Tuple[bullet.CollisionObject, bullet.CollisionObject], float]]:
+    ) -> dict[tuple[bullet.CollisionObject, bullet.CollisionObject], float] | None:
         return {
             (
                 self.body_to_bullet_object[check.body_a],
@@ -429,7 +426,7 @@ class BulletCollisionDetector(CollisionDetector):
     ) -> CollisionCheckingResult:
 
         query = self.collision_matrix_to_bullet_query(collision_matrix)
-        result: List[bullet.Collision] = (
+        result: list[bullet.Collision] = (
             self.kineverse_world.get_closest_filtered_map_batch(query)
         )
         return CollisionCheckingResult(

@@ -6,7 +6,7 @@ from abc import abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum, auto
 
-from typing_extensions import ClassVar, List, Optional, Union
+from typing_extensions import ClassVar, List
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.variable import Variable
@@ -84,7 +84,7 @@ class SurfacePosition(Enum):
 class Placement:
     """The request a :class:`ConditionForm` reads: one condition to say relative to a subject."""
 
-    item: Union[SymbolicExpression, RangeFold, RelationalBindingFold]
+    item: SymbolicExpression | RangeFold | RelationalBindingFold
     """The grouped ``WHERE`` conjunct — a raw expression, a range fold, or a relational binding."""
 
     subject: Variable
@@ -479,12 +479,12 @@ class RestrictionFragments:
     """Subject-relative clauses on the selection noun — one per relational binding (*"that is
     assigned to a Robot …"*). Empty when the subject binds no related entity."""
 
-    whose: Optional[VerbalizationFragment] = None
+    whose: VerbalizationFragment | None = None
     """The *"whose"* group as a coordinated block (header *"whose"*, one bare predicate per item,
     Oxford-joined) — a sub-list of points in hierarchical rendering, *"whose a, and b"* inline / in
     paragraph. ``None`` when nothing folds into a *"whose"*."""
 
-    residual: Optional[VerbalizationFragment] = None
+    residual: VerbalizationFragment | None = None
     """The residual condition for a separate *"such that …"* / *"where …"* clause; the caller picks
     the keyword and position. ``None`` when the WHERE folds entirely into the other pieces."""
 
@@ -574,7 +574,7 @@ def as_subject_restrictions(
 
 def _join_residual(
     fragments: List[VerbalizationFragment],
-) -> Optional[VerbalizationFragment]:
+) -> VerbalizationFragment | None:
     """:return: The standalone conjuncts joined into one residual condition, or ``None``.
 
     It supplies the comma-and join that knits the two absence clauses of the example into the single

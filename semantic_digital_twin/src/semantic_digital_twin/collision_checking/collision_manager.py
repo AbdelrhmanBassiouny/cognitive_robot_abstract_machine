@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Dict, Any, Self
+from typing_extensions import List, TYPE_CHECKING, Any, Self
 
-from typing_extensions import List, TYPE_CHECKING
 
 from krrood.adapters.json_serializer import to_json, from_json
 from krrood.patterns.caching import memoize, clear_memoization_cache
@@ -320,7 +319,7 @@ class CollisionManager(ModelChangeCallback):
         """
         return self.default_rules + self.temporary_rules + self.ignore_collision_rules
 
-    def to_json(self, **kwargs) -> Dict[str, Any]:
+    def to_json(self, **kwargs) -> dict[str, Any]:
         return {
             **super().to_json(**kwargs),
             "id": to_json(self.id, **kwargs),
@@ -333,7 +332,7 @@ class CollisionManager(ModelChangeCallback):
         }
 
     @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+    def _from_json(cls, data: dict[str, Any], **kwargs) -> Self:
         return cls(
             collision_detector=BulletCollisionDetector(),
             default_rules=from_json(data["default_rules"], **kwargs),

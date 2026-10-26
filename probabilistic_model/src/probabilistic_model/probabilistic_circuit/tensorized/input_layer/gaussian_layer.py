@@ -9,7 +9,7 @@ from random_events.interval import SimpleInterval, reals
 from random_events.variable import Variable
 from scipy.stats import norm, truncnorm
 from sortedcontainers import SortedSet
-from typing_extensions import Any, List, Self, Type
+from typing_extensions import Any, List, Self
 
 from probabilistic_model.distributions.gaussian import (
     GaussianDistribution,
@@ -181,7 +181,7 @@ class GaussianLayer(HasLocationAndScale, ContinuousLayerWithDensity):
 
     def type_of_layer_truncated_to_interval(
         self, interval: SimpleInterval
-    ) -> Type[Layer]:
+    ) -> type[Layer]:
         if interval.as_composite_set() == reals():
             return GaussianLayer
         return TruncatedGaussianLayer

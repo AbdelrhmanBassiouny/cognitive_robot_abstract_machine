@@ -9,7 +9,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 
-from typing_extensions import Any, Callable, List, Optional, Tuple
+from typing_extensions import Any, Callable, List, Tuple
 
 from krrood.patterns.caching import MemoizationCache, copy_memoize, memoize
 
@@ -162,7 +162,7 @@ class _NestingOwner:
     before either descends into the other owner.
     """
 
-    nested_owner: Optional[_NestingOwner] = None
+    nested_owner: _NestingOwner | None = None
     """
     The owner whose :meth:`inner` the outer call descends into.
     """

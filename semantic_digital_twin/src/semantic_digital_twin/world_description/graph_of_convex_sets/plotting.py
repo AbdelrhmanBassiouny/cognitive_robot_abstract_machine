@@ -37,7 +37,7 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 from matplotlib.patches import Rectangle
-from typing_extensions import Iterable, List, Optional, Sequence, Self
+from typing_extensions import Iterable, List, Sequence, Self
 
 from semantic_digital_twin.spatial_types import Point, Point3
 from semantic_digital_twin.world_description.geometry import (
@@ -431,7 +431,7 @@ class NavigationScene:
     The path to draw, from its start to its goal.
     """
 
-    obstacles: Optional[BoundingBoxCollection] = None
+    obstacles: BoundingBoxCollection | None = None
     """
     The environment's true collision geometry, unbloated.
 

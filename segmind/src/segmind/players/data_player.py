@@ -7,7 +7,7 @@ import os
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing_extensions import Callable, Optional, Dict, Generator, List
+from typing_extensions import Callable, Dict, Generator, List
 
 from segmind.datastructures.enums import PlayerStatus
 from segmind.episode_player import EpisodePlayer
@@ -159,12 +159,12 @@ class FilePlayer(DataPlayer, ABC):
     The path to the file.
     """
 
-    models_dir: Optional[str] = None
+    models_dir: str | None = None
     """
     The directory containing the models.
     """
 
-    position_shift: Optional[Vector3] = None
+    position_shift: Vector3 | None = None
     """
     Position shift that needs to be applied to the objects.
     """

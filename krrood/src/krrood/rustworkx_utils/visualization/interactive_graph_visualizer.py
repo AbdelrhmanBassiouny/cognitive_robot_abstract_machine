@@ -5,7 +5,7 @@ import webbrowser
 from dataclasses import dataclass, field
 
 import rustworkx as rx
-from typing_extensions import Any, ClassVar, Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing_extensions import Any, ClassVar, Dict, List, Tuple, TYPE_CHECKING
 
 from krrood.rustworkx_utils.graph_visualizer_base import (
     GraphLayout,
@@ -123,8 +123,8 @@ class InteractiveGraphVisualizer(GraphVisualizerBase):
         """The line trace connecting adjacent nodes."""
         import plotly.graph_objects as go
 
-        x_coordinates: List[Optional[float]] = []
-        y_coordinates: List[Optional[float]] = []
+        x_coordinates: List[float | None] = []
+        y_coordinates: List[float | None] = []
         for source, target in self.graph.edge_list():
             if source not in positions or target not in positions:
                 continue

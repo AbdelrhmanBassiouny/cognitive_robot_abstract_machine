@@ -6,16 +6,7 @@ from dataclasses import dataclass, field
 from random_events.product_algebra import VariableMap
 from random_events.variable import Variable
 from sortedcontainers import SortedSet
-from typing_extensions import (
-    Any,
-    Dict,
-    Generic,
-    Iterable,
-    List,
-    Optional,
-    Self,
-    TypeVar,
-)
+from typing_extensions import Any, Dict, Generic, Iterable, List, Self, TypeVar
 
 from probabilistic_model.probabilistic_circuit.tensorized.array_types import (
     DenseEdgeValues,
@@ -106,7 +97,7 @@ class GroundableCircuit(ProbabilisticCircuitRepresentation[NodeType], ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def marginal_in_place(self, variables: Iterable[Variable]) -> Optional[Self]:
+    def marginal_in_place(self, variables: Iterable[Variable]) -> Self | None:
         """
         Marginalize the circuit to the variables in place.
 
@@ -183,7 +174,7 @@ class GroundableCircuit(ProbabilisticCircuitRepresentation[NodeType], ABC):
         self,
         nodes: List[NodeType],
         products: ProductsOfCopies,
-        log_weights: Optional[DenseEdgeValues],
+        log_weights: DenseEdgeValues | None,
     ):
         """
         Make product nodes of the circuit multiply mixtures of products, in place.

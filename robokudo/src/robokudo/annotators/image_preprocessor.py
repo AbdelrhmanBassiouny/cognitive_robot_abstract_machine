@@ -22,7 +22,7 @@ import cv2
 import numpy
 import open3d as o3d
 from py_trees.common import Status
-from typing_extensions import TYPE_CHECKING, Optional
+from typing_extensions import TYPE_CHECKING
 
 from robokudo.annotators.core import BaseAnnotator
 from robokudo.cas import CASViews
@@ -94,7 +94,7 @@ class ImagePreprocessorAnnotator(BaseAnnotator):
         Optional color image currently being worked with
         """
 
-        self.depth: Optional[npt.NDArray] = None
+        self.depth: npt.NDArray | None = None
         """Optional depth image currently being worked with"""
 
         self.display_mode: ImagePreprocessorAnnotator.ViewMode = self.ViewMode.COLOR

@@ -4,7 +4,7 @@ import logging
 from dataclasses import dataclass, field
 
 import numpy as np
-from typing_extensions import TYPE_CHECKING, List, Optional, Sequence, Tuple
+from typing_extensions import TYPE_CHECKING, List, Sequence, Tuple
 
 from krrood.class_diagrams.mocking import MockedClass
 from semantic_digital_twin.exceptions import PointOccupiedError
@@ -326,13 +326,13 @@ class GraphOfConvexPolygons(
     while a query is in flight, its source/target point subgraphs.
     """
 
-    _region_subgraph: Optional[Subgraph] = None
+    _region_subgraph: Subgraph | None = None
     """
     The subgraph spanning ``regions``, built once in :meth:`from_world` and reused by
     every :meth:`path_from_to` query.
     """
 
-    _query_subgraphs: Optional[Tuple[Subgraph, Subgraph]] = None
+    _query_subgraphs: Tuple[Subgraph, Subgraph] | None = None
     """
     The current query's ``(source, target)`` point subgraphs, or None between queries.
     """
@@ -350,7 +350,7 @@ class GraphOfConvexPolygons(
         world: World,
         search_space: BoundingBoxCollection[VolumetricBoundingBox, Point3],
         bloat_obstacles: float = 0.0,
-        seeding_settings: Optional[IrisSeedingSettings] = None,
+        seeding_settings: IrisSeedingSettings | None = None,
         extra_seed_points: Sequence[Point3] = (),
     ) -> GraphOfConvexPolygons:
         """
@@ -406,7 +406,7 @@ class GraphOfConvexPolygons(
         result._trajectory_optimization.AddPathLengthCost()
         return result
 
-    def path_from_to(self, start: Point3, goal: Point3) -> Optional[List[Point3]]:
+    def path_from_to(self, start: Point3, goal: Point3) -> List[Point3] | None:
         """
         Calculate a connected path from a start pose to a goal pose.
 

@@ -13,14 +13,7 @@ from dataclasses import dataclass, field
 from functools import cached_property
 
 from ordered_set import OrderedSet
-from typing_extensions import (
-    Tuple,
-    List,
-    Type,
-    Optional,
-    Callable,
-    TYPE_CHECKING,
-)
+from typing_extensions import Tuple, List, Callable, TYPE_CHECKING
 
 from krrood.entity_query_language.core.base_expressions import (
     SymbolicExpression,
@@ -53,6 +46,7 @@ from krrood.entity_query_language.core.variable import (
 )
 from krrood.entity_query_language.core.mapped_variable import MappedVariable
 from krrood.patterns.caching import memoize
+import builtins
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.factories import ConditionType
@@ -71,7 +65,7 @@ class ExpressionBuilder(ABC):
     """
     The query that the expression is being built for.
     """
-    _built_expression: Optional[SymbolicExpression] = field(init=False, default=None)
+    _built_expression: SymbolicExpression | None = field(init=False, default=None)
     """
     The expression that is built from the metadata.
     """
@@ -384,12 +378,12 @@ class QuantifierBuilder(ExpressionBuilder):
     the query's quantification pipeline stage enforces.
     """
 
-    type: Type[ResultQuantifier] = An
+    type: builtins.type[ResultQuantifier] = An
     """
     The kind of quantifier requested.
     """
 
-    quantification_constraint: Optional[ResultQuantificationConstraint] = None
+    quantification_constraint: ResultQuantificationConstraint | None = None
     """
     The quantification constraint that must be satisfied, if any.
     """
@@ -412,7 +406,7 @@ class OrderedByBuilder(ExpressionBuilder):
     Whether to order the results in descending order.
     """
 
-    key: Optional[Callable] = None
+    key: Callable | None = None
     """
     A function to extract the key from the variable value.
     """

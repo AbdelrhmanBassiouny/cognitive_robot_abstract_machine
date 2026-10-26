@@ -13,7 +13,7 @@ from dataclasses import asdict, dataclass
 from functools import cached_property
 
 from rapidfuzz import utils
-from typing_extensions import Any, Dict, FrozenSet, List, Optional, Tuple
+from typing_extensions import Any, Dict, FrozenSet, List, Tuple
 
 from cramera.knowledge.presets import Preset
 from cramera.payload import CrameraPayload
@@ -64,7 +64,7 @@ class QuestionMatchResult(CrameraPayload):
     question, or the reply that nothing on offer answers it.
     """
 
-    preset: Optional[Preset]
+    preset: Preset | None
     """
     The ready-made query recognized as the asked question, or None when none was similar
     enough.
@@ -140,7 +140,7 @@ class QuestionMatcher:
                     preset=preset if similarity >= self.minimum_similarity else None,
                     similarity=similarity,
                 )
-        best: Optional[Preset] = None
+        best: Preset | None = None
         best_pair = (0.0, -1.0)
         for preset in self.presets:
             if not self._wordings_of(preset):

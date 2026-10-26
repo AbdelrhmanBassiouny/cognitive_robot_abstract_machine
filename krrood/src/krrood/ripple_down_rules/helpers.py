@@ -7,16 +7,7 @@ from functools import wraps
 from types import ModuleType
 
 from typing_extensions import Tuple, Sequence, get_type_hints, Set
-from typing_extensions import (
-    Type,
-    Optional,
-    Callable,
-    Any,
-    Dict,
-    TYPE_CHECKING,
-    Union,
-    Iterable,
-)
+from typing_extensions import Callable, Any, Dict, TYPE_CHECKING, Union, Iterable
 
 from krrood.ripple_down_rules.datastructures.case import create_case, Case
 from krrood.ripple_down_rules.datastructures.dataclasses import CaseQuery
@@ -36,10 +27,10 @@ if TYPE_CHECKING:
 
 
 def general_rdr_classify(
-    classifiers_dict: Dict[str, Union[ModuleType, RippleDownRules]],
+    classifiers_dict: Dict[str, ModuleType | RippleDownRules],
     case: Any,
     modify_original_case: bool = False,
-    case_query: Optional[CaseQuery] = None,
+    case_query: CaseQuery | None = None,
 ) -> Dict[str, Any]:
     """
     Classify a case by going through all classifiers and adding the categories that are classified,
@@ -93,7 +84,7 @@ def general_rdr_classify(
 def is_matching(
     classifier: Callable[[Any], Any],
     case_query: CaseQuery,
-    pred_cat: Optional[Dict[str, Any]] = None,
+    pred_cat: Dict[str, Any] | None = None,
 ) -> bool:
     """
     :param classifier: The RDR classifier to check the prediction of.
@@ -113,7 +104,7 @@ def is_matching(
 
 
 def load_or_create_func_rdr_model(
-    func, model_dir: str, rdr_type: Type[RippleDownRules], **rdr_kwargs
+    func, model_dir: str, rdr_type: type[RippleDownRules], **rdr_kwargs
 ) -> RippleDownRules:
     """
     Load the RDR model of the function if it exists, otherwise create a new one.
@@ -137,7 +128,7 @@ def update_case_and_conclusions_with_rule_output(
     conclusions: Set[Any],
     output: Any,
     attribute_name: str,
-    conclusion_type: Tuple[Type, ...],
+    conclusion_type: Tuple[type, ...],
     mutually_exclusive: bool,
 ):
     """
@@ -162,7 +153,7 @@ def update_case_with_conclusion_output(
     case: Case,
     output: Iterable[Any],
     attribute_name: str,
-    conclusion_type: Tuple[Type, ...],
+    conclusion_type: Tuple[type, ...],
     mutually_exclusive: bool,
 ) -> Set[Any]:
     """
@@ -189,7 +180,7 @@ def get_an_updated_case_copy(
     case: Case,
     conclusion: Callable,
     attribute_name: str,
-    conclusion_type: Tuple[Type, ...],
+    conclusion_type: Tuple[type, ...],
     mutually_exclusive: bool,
 ) -> Case:
     """
@@ -235,7 +226,7 @@ class MockRDRDecorator:
 
     def decorator(self, func: Callable) -> Callable:
         @wraps(func)
-        def wrapper(*args, **kwargs) -> Optional[Any]:
+        def wrapper(*args, **kwargs) -> Any | None:
             model_dir = get_func_rdr_model_name(func, include_file_name=True)
             model_name = get_func_rdr_model_name(func, include_file_name=False)
             rdr = importlib.import_module(
@@ -253,12 +244,12 @@ class MockRDRDecorator:
 def create_case_query_from_method(
     func: Callable,
     func_output: Dict[str, Any],
-    output_type: Sequence[Type],
+    output_type: Sequence[type],
     mutual_exclusive: bool,
     func_args: Tuple[Any, ...],
     func_kwargs: Dict[str, Any],
-    case: Optional[Case] = None,
-    case_dict: Optional[Dict[str, Any]] = None,
+    case: Case | None = None,
+    case_dict: Dict[str, Any] | None = None,
 ) -> CaseQuery:
     """
     Create a CaseQuery from the function and its arguments.

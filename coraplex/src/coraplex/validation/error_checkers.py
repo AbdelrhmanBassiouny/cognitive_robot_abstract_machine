@@ -8,8 +8,6 @@ from coraplex.datastructures.enums import JointType
 from coraplex.tf_transformations import quaternion_multiply, quaternion_inverse
 from typing_extensions import (
     List,
-    Union,
-    Optional,
     Any,
     Sized,
     Iterable as T_Iterable,
@@ -31,8 +29,8 @@ class ErrorChecker(ABC):
 
     def __init__(
         self,
-        acceptable_error: Union[float, T_Iterable[float]],
-        is_iterable: Optional[bool] = False,
+        acceptable_error: float | T_Iterable[float],
+        is_iterable: bool | None = False,
     ):
         """
         Initialize the error checker.
@@ -41,7 +39,7 @@ class ErrorChecker(ABC):
         :param is_iterable: Whether the error is iterable (i.e. list of errors).
         """
         self._acceptable_error: np.ndarray = np.array(acceptable_error)
-        self.tiled_acceptable_error: Optional[np.ndarray] = None
+        self.tiled_acceptable_error: np.ndarray | None = None
         self.is_iterable = is_iterable
 
     def reset(self) -> None:
@@ -55,15 +53,13 @@ class ErrorChecker(ABC):
         return self._acceptable_error
 
     @acceptable_error.setter
-    def acceptable_error(
-        self, new_acceptable_error: Union[float, T_Iterable[float]]
-    ) -> None:
+    def acceptable_error(self, new_acceptable_error: float | T_Iterable[float]) -> None:
         self._acceptable_error = np.array(new_acceptable_error)
 
     def update_acceptable_error(
         self,
-        new_acceptable_error: Optional[T_Iterable[float]] = None,
-        tile_to_match: Optional[Sized] = None,
+        new_acceptable_error: T_Iterable[float] | None = None,
+        tile_to_match: Sized | None = None,
     ) -> None:
         """
         Update the acceptable error with a new value, and tile it to match the length of
@@ -90,7 +86,7 @@ class ErrorChecker(ABC):
         )
 
     @abstractmethod
-    def _calculate_error(self, value_1: Any, value_2: Any) -> Union[float, List[float]]:
+    def _calculate_error(self, value_1: Any, value_2: Any) -> float | List[float]:
         """
         Calculate the error between two values.
 
@@ -100,7 +96,7 @@ class ErrorChecker(ABC):
         """
         pass
 
-    def calculate_error(self, value_1: Any, value_2: Any) -> Union[float, List[float]]:
+    def calculate_error(self, value_1: Any, value_2: Any) -> float | List[float]:
         """
         Calculate the error between two values.
 
@@ -137,11 +133,11 @@ class PoseErrorChecker(ErrorChecker):
 
     def __init__(
         self,
-        acceptable_error: Union[Tuple[float], T_Iterable[Tuple[float]]] = (
+        acceptable_error: Tuple[float] | T_Iterable[Tuple[float]] = (
             1e-3,
             np.pi / 180,
         ),
-        is_iterable: Optional[bool] = False,
+        is_iterable: bool | None = False,
     ):
         """
         Initialize the pose error checker.
@@ -166,8 +162,8 @@ class PositionErrorChecker(ErrorChecker):
 
     def __init__(
         self,
-        acceptable_error: Optional[float] = 1e-3,
-        is_iterable: Optional[bool] = False,
+        acceptable_error: float | None = 1e-3,
+        is_iterable: bool | None = False,
     ):
         """
         Initialize the position error checker.
@@ -192,8 +188,8 @@ class OrientationErrorChecker(ErrorChecker):
 
     def __init__(
         self,
-        acceptable_error: Optional[float] = np.pi / 180,
-        is_iterable: Optional[bool] = False,
+        acceptable_error: float | None = np.pi / 180,
+        is_iterable: bool | None = False,
     ):
         """
         Initialize the orientation error checker.
@@ -218,8 +214,8 @@ class SingleValueErrorChecker(ErrorChecker):
 
     def __init__(
         self,
-        acceptable_error: Optional[float] = 1e-3,
-        is_iterable: Optional[bool] = False,
+        acceptable_error: float | None = 1e-3,
+        is_iterable: bool | None = False,
     ):
         """
         Initialize the single value error checker.
@@ -244,8 +240,8 @@ class RevoluteJointPositionErrorChecker(SingleValueErrorChecker):
 
     def __init__(
         self,
-        acceptable_error: Optional[float] = np.pi / 180,
-        is_iterable: Optional[bool] = False,
+        acceptable_error: float | None = np.pi / 180,
+        is_iterable: bool | None = False,
     ):
         """
         Initialize the revolute joint position error checker.
@@ -260,8 +256,8 @@ class PrismaticJointPositionErrorChecker(SingleValueErrorChecker):
 
     def __init__(
         self,
-        acceptable_error: Optional[float] = 1e-3,
-        is_iterable: Optional[bool] = False,
+        acceptable_error: float | None = 1e-3,
+        is_iterable: bool | None = False,
     ):
         """
         Initialize the prismatic joint position error checker.
@@ -274,7 +270,7 @@ class PrismaticJointPositionErrorChecker(SingleValueErrorChecker):
 
 class IterableErrorChecker(ErrorChecker):
 
-    def __init__(self, acceptable_error: Optional[T_Iterable[float]] = None):
+    def __init__(self, acceptable_error: T_Iterable[float] | None = None):
         """
         Initialize the iterable error checker.
 
@@ -298,7 +294,7 @@ class MultiJointPositionErrorChecker(IterableErrorChecker):
     def __init__(
         self,
         joint_types: List[JointType],
-        acceptable_error: Optional[T_Iterable[float]] = None,
+        acceptable_error: T_Iterable[float] | None = None,
     ):
         """
         Initialize the multi-joint position error checker.
@@ -376,8 +372,8 @@ def calculate_joint_position_error(
 
 
 def is_error_acceptable(
-    error: Union[float, T_Iterable[float]],
-    acceptable_error: Union[float, T_Iterable[float]],
+    error: float | T_Iterable[float],
+    acceptable_error: float | T_Iterable[float],
 ) -> bool:
     """
     Check if the error is acceptable.

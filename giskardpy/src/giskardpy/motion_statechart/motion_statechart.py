@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import rustworkx as rx
-from typing_extensions import Any, Dict, List, MutableMapping, ClassVar, Self, Type
+from typing_extensions import Any, Dict, List, MutableMapping, ClassVar, Self
 
 import krrood.symbolic_math.symbolic_math as sm
 from giskardpy.motion_statechart.plotters.gantt_chart_plotter import (
@@ -1170,7 +1170,7 @@ class MotionStatechart(SubclassJSONSerializer):
             self._raise_if_cancel_motion()
 
     def get_nodes_by_type(
-        self, node_type: Type[GenericMotionStatechartNode]
+        self, node_type: type[GenericMotionStatechartNode]
     ) -> List[GenericMotionStatechartNode]:
         """
         :param node_type: The node type to filter for.

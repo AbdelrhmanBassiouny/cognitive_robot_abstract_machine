@@ -10,15 +10,7 @@ from krrood.adapters import json_serializer
 from krrood.adapters.json_serializer import SubclassJSONSerializer
 from random_events.product_algebra import Event, SimpleEvent
 from sortedcontainers import SortedSet
-from typing_extensions import (
-    Any,
-    Dict,
-    Iterator,
-    List,
-    Optional,
-    Self,
-    Tuple,
-)
+from typing_extensions import Any, Dict, Iterator, List, Self, Tuple
 
 from probabilistic_model.probabilistic_model import PartialPointType
 from probabilistic_model.probabilistic_circuit.tensorized.array_types import (
@@ -186,7 +178,7 @@ class Layer(SubclassJSONSerializer, DataclassDeepcopyMixin, ABC):
         return np.zeros(self.number_of_nodes, dtype=bool)
 
     def component_supports(
-        self, variables: SortedSet, cache: Optional[QueryCache] = None
+        self, variables: SortedSet, cache: QueryCache | None = None
     ) -> List[NodeComponentSupports]:
         """
         :param variables: The variables of the circuit.
@@ -199,7 +191,7 @@ class Layer(SubclassJSONSerializer, DataclassDeepcopyMixin, ABC):
 
     @abstractmethod
     def log_likelihood_of_nodes(
-        self, events: SampleArray, cache: Optional[QueryCache] = None
+        self, events: SampleArray, cache: QueryCache | None = None
     ) -> SampleNodeValues:
         """
         Calculate the log-likelihood of every node of this layer.
@@ -212,7 +204,7 @@ class Layer(SubclassJSONSerializer, DataclassDeepcopyMixin, ABC):
 
     @abstractmethod
     def cumulative_distribution_of_nodes(
-        self, events: SampleArray, cache: Optional[QueryCache] = None
+        self, events: SampleArray, cache: QueryCache | None = None
     ) -> SampleNodeValues:
         """
         Calculate the cumulative distribution function of every node of this layer.
@@ -228,7 +220,7 @@ class Layer(SubclassJSONSerializer, DataclassDeepcopyMixin, ABC):
         self,
         event: SimpleEvent,
         variables: SortedSet,
-        cache: Optional[QueryCache] = None,
+        cache: QueryCache | None = None,
     ) -> NodeValues:
         """
         Calculate the probability of a simple event for every node of this layer.
@@ -242,7 +234,7 @@ class Layer(SubclassJSONSerializer, DataclassDeepcopyMixin, ABC):
 
     @abstractmethod
     def support_of_nodes(
-        self, variables: SortedSet, cache: Optional[QueryCache] = None
+        self, variables: SortedSet, cache: QueryCache | None = None
     ) -> List[Event]:
         """
         Calculate the support of every node of this layer.
@@ -255,7 +247,7 @@ class Layer(SubclassJSONSerializer, DataclassDeepcopyMixin, ABC):
 
     @abstractmethod
     def log_mode_of_nodes(
-        self, variables: SortedSet, cache: Optional[QueryCache] = None
+        self, variables: SortedSet, cache: QueryCache | None = None
     ) -> Tuple[List[Event], NodeValues]:
         """
         Calculate the mode of every node of this layer.
@@ -271,7 +263,7 @@ class Layer(SubclassJSONSerializer, DataclassDeepcopyMixin, ABC):
         self,
         query: MomentQuery,
         variables: SortedSet,
-        cache: Optional[QueryCache] = None,
+        cache: QueryCache | None = None,
     ) -> NodeVariableValues:
         """
         Calculate the moment of every node of this layer.
@@ -347,7 +339,7 @@ class Layer(SubclassJSONSerializer, DataclassDeepcopyMixin, ABC):
         self,
         event: SimpleEvent,
         query: StructuralQuery,
-        cache: Optional[QueryCache] = None,
+        cache: QueryCache | None = None,
     ) -> LayerWithLogProbabilities:
         """
         Truncate every node of this layer to a simple event.
@@ -384,7 +376,7 @@ class Layer(SubclassJSONSerializer, DataclassDeepcopyMixin, ABC):
         self,
         events: List[SimpleEvent],
         query: StructuralQuery,
-        cache: Optional[QueryCache] = None,
+        cache: QueryCache | None = None,
     ) -> LayerWithLogProbabilities:
         """
         Truncate this layer to several simple events at once.
@@ -411,7 +403,7 @@ class Layer(SubclassJSONSerializer, DataclassDeepcopyMixin, ABC):
         self,
         point: PartialPointType,
         query: StructuralQuery,
-        cache: Optional[QueryCache] = None,
+        cache: QueryCache | None = None,
     ) -> LayerWithLogProbabilities:
         """
         Condition every node of this layer on a partial point.
@@ -442,8 +434,8 @@ class Layer(SubclassJSONSerializer, DataclassDeepcopyMixin, ABC):
     def rebuild(
         self,
         needed: Dict[int, NodeMask],
-        rebuilt: Dict[int, Optional[Layer]],
-    ) -> Optional[Layer]:
+        rebuilt: Dict[int, Layer | None],
+    ) -> Layer | None:
         """
         Create the pruned version of this layer.
 
@@ -454,7 +446,7 @@ class Layer(SubclassJSONSerializer, DataclassDeepcopyMixin, ABC):
         """
         raise NotImplementedError
 
-    def prune(self, log_probabilities: LogProbabilitiesOfLayers) -> Optional[Layer]:
+    def prune(self, log_probabilities: LogProbabilitiesOfLayers) -> Layer | None:
         """
         Remove every impossible and every unreachable node of the circuit rooted here.
 
@@ -484,7 +476,7 @@ class Layer(SubclassJSONSerializer, DataclassDeepcopyMixin, ABC):
                 else:
                     needed[id(child_layer)] = mask
 
-        rebuilt: Dict[int, Optional[Layer]] = {}
+        rebuilt: Dict[int, Layer | None] = {}
         for layer in reversed(order):
             rebuilt[id(layer)] = layer.rebuild(needed, rebuilt)
 
@@ -492,8 +484,8 @@ class Layer(SubclassJSONSerializer, DataclassDeepcopyMixin, ABC):
 
     @abstractmethod
     def marginal(
-        self, kept: VariableMask, cache: Optional[QueryCache] = None
-    ) -> Optional[Layer]:
+        self, kept: VariableMask, cache: QueryCache | None = None
+    ) -> Layer | None:
         """
         Restrict this layer to a subset of the variables.
 
@@ -505,9 +497,7 @@ class Layer(SubclassJSONSerializer, DataclassDeepcopyMixin, ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def remap_variables(
-        self, remap: VariableIndices, cache: Optional[QueryCache] = None
-    ):
+    def remap_variables(self, remap: VariableIndices, cache: QueryCache | None = None):
         """
         Rewrite the variable indices of this layer in-place.
 
@@ -516,7 +506,7 @@ class Layer(SubclassJSONSerializer, DataclassDeepcopyMixin, ABC):
         """
         raise NotImplementedError
 
-    def simplify(self, cache: Optional[QueryCache] = None) -> Layer:
+    def simplify(self, cache: QueryCache | None = None) -> Layer:
         """
         Remove layers that have no effect on the represented distribution.
 
@@ -673,7 +663,7 @@ class InnerLayer(Layer, ABC):
     The list is not copied.
     """
 
-    _variables_cache: Optional[VariableIndices] = field(
+    _variables_cache: VariableIndices | None = field(
         default=None, init=False, repr=False
     )
     """
@@ -684,9 +674,7 @@ class InnerLayer(Layer, ABC):
         self._variables_cache = None
 
     @memoized
-    def remap_variables(
-        self, remap: VariableIndices, cache: Optional[QueryCache] = None
-    ):
+    def remap_variables(self, remap: VariableIndices, cache: QueryCache | None = None):
         for child_layer in self.child_layers:
             child_layer.remap_variables(remap, cache=cache)
         self.reset_variables()

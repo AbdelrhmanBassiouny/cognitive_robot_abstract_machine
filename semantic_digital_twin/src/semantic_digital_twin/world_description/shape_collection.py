@@ -13,12 +13,10 @@ from typing_extensions import (
     Dict,
     Any,
     Self,
-    Optional,
     List,
     Iterable,
     Iterator,
     Generic,
-    Type,
     TypeVar,
 )
 from typing_extensions import TYPE_CHECKING
@@ -65,13 +63,13 @@ class ShapeCollection(SubclassJSONSerializer):
     The shapes contained in this collection.
     """
 
-    reference_frame: Optional[KinematicStructureEntity] = None
+    reference_frame: KinematicStructureEntity | None = None
     """
     Backreference to the kinematic structure entity this collection belongs to.
     """
 
     @property
-    def world(self) -> Optional[World]:
+    def world(self) -> World | None:
         """
         The world this collection belongs to.
         """
@@ -352,7 +350,7 @@ class BoundingBoxCollection(Generic[BoxT, PointT], ShapeCollection):
     @classmethod
     def from_simple_event(
         cls,
-        box_type: Type[BoxT],
+        box_type: type[BoxT],
         reference_frame: KinematicStructureEntity,
         simple_event: SimpleEvent,
         keep_surface: bool = False,
@@ -398,7 +396,7 @@ class BoundingBoxCollection(Generic[BoxT, PointT], ShapeCollection):
     @classmethod
     def from_event(
         cls,
-        box_type: Type[BoxT],
+        box_type: type[BoxT],
         reference_frame: KinematicStructureEntity,
         event: Event,
     ) -> Self:

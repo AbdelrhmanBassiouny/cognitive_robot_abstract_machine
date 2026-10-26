@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from coraplex.datastructures.enums import JointType
-from typing_extensions import Any, Dict, List, Optional
+from typing_extensions import Any, Dict, List
 from urdf_parser_py.urdf import URDF
 
 from cramera import paths
@@ -37,7 +37,7 @@ class SceneBundle:
     """
 
     @classmethod
-    def active_name(cls) -> Optional[str]:
+    def active_name(cls) -> str | None:
         """
         The active scene: ``CRAMERA_SCENE``, else the scenes-index default.
         """
@@ -53,7 +53,7 @@ class SceneBundle:
         return cls.default_of_index(index)
 
     @classmethod
-    def default_of_index(cls, index: Dict[str, Any]) -> Optional[str]:
+    def default_of_index(cls, index: Dict[str, Any]) -> str | None:
         """
         The scene a scenes index opens on: the default it declares, or its first scene
         when that default is not one of the scenes it declares.
@@ -84,7 +84,7 @@ class SceneBundle:
         return declared[0]
 
     @classmethod
-    def directory_of(cls, scene: Optional[str] = None) -> Optional[Path]:
+    def directory_of(cls, scene: str | None = None) -> Path | None:
         """
         Directory of a scene bundle, or None when no scene is named, active, or found in
         any scenes root (see :func:`cramera.paths.resolve_scene_directory`).
@@ -102,7 +102,7 @@ class SceneBundle:
         return cls.of_scene(None)
 
     @classmethod
-    def of_scene(cls, scene: Optional[str]) -> SceneBundle:
+    def of_scene(cls, scene: str | None) -> SceneBundle:
         """
         One scene's scene/trajectory bundle, or an empty one when it has none.
 
@@ -120,7 +120,7 @@ class SceneBundle:
         return cls(scene, trajectory if isinstance(trajectory, dict) else {})
 
     @classmethod
-    def declared_presets(cls, scene: Optional[str] = None) -> List[Dict[str, Any]]:
+    def declared_presets(cls, scene: str | None = None) -> List[Dict[str, Any]]:
         """
         The ready-made queries a bundle ships for itself, or none.
 
@@ -183,7 +183,7 @@ class ParsedUrdf:
     """
 
     @classmethod
-    def of_scene(cls, scene_name: Optional[str] = None) -> ParsedUrdf:
+    def of_scene(cls, scene_name: str | None = None) -> ParsedUrdf:
         """
         Parse a scene's robot URDF into its kinematic tree.
 

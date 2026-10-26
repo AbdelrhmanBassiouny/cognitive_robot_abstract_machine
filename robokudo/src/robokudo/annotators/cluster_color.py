@@ -20,7 +20,7 @@ import numba
 import numpy as np
 import numpy.ma
 from py_trees.common import Status
-from typing_extensions import TYPE_CHECKING, Dict, List, Tuple, Type
+from typing_extensions import TYPE_CHECKING, Dict, List, Tuple
 
 from robokudo.annotators.core import BaseAnnotator
 from robokudo.cas import CASViews
@@ -98,7 +98,7 @@ class ClusterColorAnnotator(BaseAnnotator):
                 self.max_value_black: int = 60
                 self.min_value_white: int = 120
                 self.ratio_annotation_threshold: float = 0.2
-                self.analysis_scope: Type = AnalyzableAnnotation
+                self.analysis_scope: type = AnalyzableAnnotation
 
         # Overwrite the parameters explicitly to enable auto-completion
         parameters = Parameters()

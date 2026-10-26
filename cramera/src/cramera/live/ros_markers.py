@@ -14,7 +14,7 @@ import os
 import threading
 from dataclasses import dataclass, field
 
-from typing_extensions import Callable, List, Optional, TYPE_CHECKING
+from typing_extensions import Callable, List, TYPE_CHECKING
 
 from cramera.logging_setup import get_logger
 
@@ -77,7 +77,7 @@ class RosMarkerListener:
     The topics being watched.
     """
 
-    _node: Optional[Node] = field(init=False, default=None)
+    _node: Node | None = field(init=False, default=None)
     """
     The listener's own ROS node, while started.
     """
@@ -87,18 +87,18 @@ class RosMarkerListener:
     The live subscriptions by topic, so the viewer can add and remove them.
     """
 
-    _executor: Optional[SingleThreadedExecutor] = field(init=False, default=None)
+    _executor: SingleThreadedExecutor | None = field(init=False, default=None)
     """
     The executor spinning the node on a daemon thread, while started.
     """
 
-    _thread: Optional[threading.Thread] = field(init=False, default=None)
+    _thread: threading.Thread | None = field(init=False, default=None)
     """
     The listener thread, joined when the session stops.
     """
 
     @classmethod
-    def start_if_available(cls, bridge: Bridge) -> Optional[RosMarkerListener]:
+    def start_if_available(cls, bridge: Bridge) -> RosMarkerListener | None:
         """
         Start a listener when ROS is importable, or report why not.
 

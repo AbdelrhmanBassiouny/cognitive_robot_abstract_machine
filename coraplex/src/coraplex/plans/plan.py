@@ -6,16 +6,7 @@ from dataclasses import field, dataclass
 
 import rustworkx as rx
 import rustworkx.visualization
-from typing_extensions import (
-    Optional,
-    Any,
-    List,
-    Iterable,
-    TYPE_CHECKING,
-    Tuple,
-    TypeVar,
-    Type,
-)
+from typing_extensions import Any, List, Iterable, TYPE_CHECKING, Tuple, TypeVar
 
 from coraplex.exceptions import CannotInsertBesideRoot, ContextIsUnavailable
 from coraplex.plans.plan_entity import PlanEntity
@@ -62,12 +53,12 @@ class Plan:
     perform each PlanNode
     """
 
-    context: Optional[Context] = None
+    context: Context | None = None
     """
     The context where the plan can extract information from.
     """
 
-    initial_world: Optional[World] = field(repr=False, kw_only=True, default=None)
+    initial_world: World | None = field(repr=False, kw_only=True, default=None)
     """
     A deepcopy of the world before the first perform was called.
     """
@@ -77,7 +68,7 @@ class Plan:
     A list of callbacks that are called when a node is started or ended.
     """
 
-    action_trial: Optional[ActionTrial] = field(default=None, init=False, repr=False)
+    action_trial: ActionTrial | None = field(default=None, init=False, repr=False)
     """
     The trial the underspecified nodes of this plan try their candidates in, shared so
     that they use one copy of the world, and released once the plan has run.
@@ -190,7 +181,7 @@ class Plan:
             node.layer_index = 0
 
     def add_edge(
-        self, source: PlanNode, target: PlanNode, target_index: Optional[int] = None
+        self, source: PlanNode, target: PlanNode, target_index: int | None = None
     ):
         """
         Adds an edge to the plan.
@@ -405,7 +396,7 @@ class Plan:
 
         return root_ref
 
-    def get_nodes_by_designator_type(self, *args: Type[Designator]):
+    def get_nodes_by_designator_type(self, *args: type[Designator]):
         return [
             node
             for node in self.nodes

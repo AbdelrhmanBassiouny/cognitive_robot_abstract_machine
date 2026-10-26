@@ -22,8 +22,7 @@ from krrood.entity_query_language.verbalization.boolean_predicate import (
     AdjectivalPredicate,
 )
 from krrood.entity_query_language.verbalization.grammar_metadata import GrammarMetadata
-from typing import Any
-from typing_extensions import List
+from typing_extensions import List, Any
 
 import pytest
 

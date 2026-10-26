@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import TYPE_CHECKING, Any, List, Type
+from typing_extensions import TYPE_CHECKING, Any, List
 
 from krrood.exceptions import DataclassException
 
@@ -32,7 +32,7 @@ class ClassCircuitGroundingFailedError(DataclassException):
     no nodes at all.
     """
 
-    class_: Type
+    class_: type
     """The domain class whose class circuit failed to ground."""
 
     def error_message(self) -> str:
@@ -55,7 +55,7 @@ class MixedCircuitTypesError(DataclassException):
     type than the class circuit, which grounding cannot combine.
     """
 
-    class_: Type
+    class_: type
     """
     The domain class whose relational circuit was fitted.
     """
@@ -65,12 +65,12 @@ class MixedCircuitTypesError(DataclassException):
     Field name of the exchangeable relation.
     """
 
-    class_circuit_type: Type
+    class_circuit_type: type
     """
     The type of the class circuit.
     """
 
-    part_circuit_type: Type
+    part_circuit_type: type
     """
     The type of the class circuit of the template.
     """
@@ -96,7 +96,7 @@ class UnknownExchangeablePartsError(DataclassException):
     the class.
     """
 
-    class_: Type
+    class_: type
     """
     The domain class whose relational circuit is fitted.
     """
@@ -167,7 +167,7 @@ class PartCircuitGroundingFailedError(DataclassException):
     Raised when grounding one exchangeable part leaves its circuit with no nodes at all.
     """
 
-    class_: Type
+    class_: type
     """The domain class of the exchangeable part that failed to ground."""
 
     def error_message(self) -> str:
@@ -326,7 +326,7 @@ class NoCommonSuperclassError(DataclassException):
     but ``object``.
     """
 
-    classes: List[Type]
+    classes: List[type]
     """
     The classes of the instances.
     """
@@ -348,12 +348,12 @@ class InstanceNotOfClassError(DataclassException):
     class.
     """
 
-    class_: Type
+    class_: type
     """
     The class the circuit is fitted for.
     """
 
-    instance_class: Type
+    instance_class: type
     """
     The class of the instance.
     """

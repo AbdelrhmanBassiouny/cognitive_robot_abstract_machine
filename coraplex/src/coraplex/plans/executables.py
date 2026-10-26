@@ -4,7 +4,7 @@ from contextlib import AbstractContextManager, ExitStack, nullcontext
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 
-from typing_extensions import Callable, List, Dict, ClassVar, Optional, TYPE_CHECKING
+from typing_extensions import Callable, List, Dict, ClassVar, TYPE_CHECKING
 
 from coraplex.datastructures.enums import ExecutionType
 from coraplex.exceptions import (
@@ -218,7 +218,7 @@ class GiskardExecutable(Executable):
     order.
     """
 
-    pre_condition_node: Optional[ConditionNode] = field(default=None, kw_only=True)
+    pre_condition_node: ConditionNode | None = field(default=None, kw_only=True)
     """
     Optional pre-condition of the action this executable belongs to.
 
@@ -226,7 +226,7 @@ class GiskardExecutable(Executable):
     :meth:`_add_condition_monitors`.
     """
 
-    post_condition_node: Optional[ConditionNode] = field(default=None, kw_only=True)
+    post_condition_node: ConditionNode | None = field(default=None, kw_only=True)
     """
     Optional post-condition of the action this executable belongs to.
 
@@ -234,7 +234,7 @@ class GiskardExecutable(Executable):
     :meth:`_add_condition_monitors`.
     """
 
-    execution_type: ClassVar[Optional[ExecutionType]] = None
+    execution_type: ClassVar[ExecutionType | None] = None
     """
     The execution type used for all giskard executables, managed by
     :py:class:`pycram.motion_executor.ExecutionEnvironment`.
@@ -242,7 +242,7 @@ class GiskardExecutable(Executable):
 
     collision_avoidance: ClassVar[bool] = False
 
-    simulation: ClassVar[Optional[MujocoSim]] = None
+    simulation: ClassVar[MujocoSim | None] = None
     """
     The physically simulated world a plan is performed in, when the execution type is
     :attr:`~coraplex.datastructures.enums.ExecutionType.PHYSICALLY_SIMULATED`.

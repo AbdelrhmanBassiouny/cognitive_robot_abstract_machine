@@ -11,16 +11,7 @@ from random_events.product_algebra import Event, SimpleEvent, VariableMap
 from random_events.variable import Continuous, Variable
 from scipy.stats import multivariate_normal, norm
 from scipy.stats._multivariate import multivariate_normal_frozen
-from typing_extensions import (
-    Any,
-    Dict,
-    Iterable,
-    Iterator,
-    List,
-    Optional,
-    Self,
-    Tuple,
-)
+from typing_extensions import Any, Dict, Iterable, Iterator, List, Self, Tuple
 
 from krrood.patterns.dataclass_deep_copy import DataclassDeepcopyMixin
 from probabilistic_model.distributions.truncated_multivariate_gaussian import (
@@ -296,7 +287,7 @@ class MultivariateGaussianDistribution(ProbabilisticModel, DataclassDeepcopyMixi
 
     # %% reading fewer variables
 
-    def marginal(self, variables: Iterable[Variable]) -> Optional[Self]:
+    def marginal(self, variables: Iterable[Variable]) -> Self | None:
         """
         :param variables: The variables to keep. They are kept in this distribution's
             own order, whatever order they are asked for in, and those it is not over

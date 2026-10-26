@@ -4,14 +4,7 @@ import re
 from dataclasses import dataclass, field
 
 import pydot
-from typing_extensions import (
-    List,
-    Dict,
-    Optional,
-    Tuple,
-    Union,
-    TYPE_CHECKING,
-)
+from typing_extensions import List, Dict, Tuple, TYPE_CHECKING
 
 from giskardpy.motion_statechart.data_types import ObservationStateValues
 from giskardpy.motion_statechart.graph_node import (
@@ -352,8 +345,8 @@ class MotionStatechartGraphviz:
         return f'"{name}"'
 
     def _get_cluster_of_node(
-        self, node_name: str, graph: Union[pydot.Graph, pydot.Cluster]
-    ) -> Optional[pydot.Cluster]:
+        self, node_name: str, graph: pydot.Graph | pydot.Cluster
+    ) -> pydot.Cluster | None:
         """
         :param node_name: The name of the node to look for.
         :param graph: The graph whose direct subgraphs are searched.
@@ -471,7 +464,7 @@ class MotionStatechartGraphviz:
 
     def _add_nodes(
         self,
-        parent_cluster: Union[pydot.Graph, pydot.Cluster],
+        parent_cluster: pydot.Graph | pydot.Cluster,
         nodes: List[MotionStatechartNode],
     ):
         """
@@ -507,7 +500,7 @@ class MotionStatechartGraphviz:
     def _add_cluster(
         self,
         node: MotionStatechartNode,
-        parent_cluster: Union[pydot.Graph, pydot.Cluster],
+        parent_cluster: pydot.Graph | pydot.Cluster,
     ):
         """
         Opens the cluster that a goal and its children are drawn in.
@@ -585,7 +578,7 @@ class MotionStatechartGraphviz:
 
     def _edge_clusters_kwargs(
         self,
-        graph: Union[pydot.Graph, pydot.Cluster],
+        graph: pydot.Graph | pydot.Cluster,
         src_name: str,
         dst_name: str,
     ) -> Dict[str, object]:

@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 from segmind.datastructures.events import DetectionEvent, EventWithTrackedObjects
 from segmind.event_logger import EventLogger
-from typing_extensions import List, Optional, Tuple, Type
+from typing_extensions import List, Tuple
 
 from cramera.knowledge.detected_events import EVENT_VARIABLE, DetectedEventRecord
 from cramera.knowledge.presets import DetectedEventQuestions, Preset
@@ -57,19 +57,19 @@ def detectable_event_types() -> Tuple[str, ...]:
     return tuple(sorted(event_type.__name__ for event_type in _leaf_event_types()))
 
 
-def _leaf_event_types() -> List[Type[DetectionEvent]]:
+def _leaf_event_types() -> List[type[DetectionEvent]]:
     """
     Every event type a detector can produce: the leaves of segmind's event tree.
     """
 
-    def leaves(base: Type[DetectionEvent]) -> List[Type[DetectionEvent]]:
+    def leaves(base: type[DetectionEvent]) -> List[type[DetectionEvent]]:
         """
         Collect the concrete event types below one event class.
 
         :param base: The event class whose descendants are inspected.
         :return: Event classes with no subclasses.
         """
-        found: List[Type[DetectionEvent]] = []
+        found: List[type[DetectionEvent]] = []
         for subclass in base.__subclasses__():
             found.extend(leaves(subclass) if subclass.__subclasses__() else [subclass])
         return found
@@ -77,7 +77,7 @@ def _leaf_event_types() -> List[Type[DetectionEvent]]:
     return leaves(DetectionEvent)
 
 
-def _involved_names(event: DetectionEvent) -> Tuple[Optional[str], Optional[str]]:
+def _involved_names(event: DetectionEvent) -> Tuple[str | None, str | None]:
     """
     The names of the bodies an event happened to, the primary one first.
 

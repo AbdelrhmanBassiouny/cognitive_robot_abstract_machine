@@ -5,7 +5,7 @@ import uuid
 from dataclasses import dataclass, field
 from enum import Enum, auto
 
-from typing_extensions import Dict, FrozenSet, List, Optional, Tuple, Union
+from typing_extensions import Dict, FrozenSet, List, Tuple
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.variable import InstantiatedVariable, Variable
@@ -51,12 +51,12 @@ class AntecedentInformation:
     Descriptor for one antecedent variable in the IF clause.
     """
 
-    root: Union[Variable, Entity]
+    root: Variable | Entity
     """
     The underlying Variable/Entity (unwrapped from any ResultQuantifier).
     """
 
-    variable: Optional[Variable]
+    variable: Variable | None
     """
     The antecedent's restriction subject — the variable its conditions attach
     to (``root`` for a Variable root, the selected variable for an Entity
@@ -336,7 +336,7 @@ class InferencePlanner(Planner[Entity, RuleStructure]):
         return list(antecedents_by_root_id.values())
 
     @staticmethod
-    def _root_variable(root: Union[Variable, Entity]) -> Optional[Variable]:
+    def _root_variable(root: Variable | Entity) -> Variable | None:
         """:return: The restriction subject of an antecedent root — the selected variable for an
         Entity root, the root itself for a Variable root.
 
@@ -394,7 +394,7 @@ class InferencePlanner(Planner[Entity, RuleStructure]):
 
     def _antecedent_variable_id(
         self, antecedent: AntecedentInformation
-    ) -> Optional[uuid.UUID]:
+    ) -> uuid.UUID | None:
         """:return: The stable ``_id_`` of the underlying variable for an antecedent."""
         root = antecedent.root
         if isinstance(root, Entity):
@@ -405,7 +405,7 @@ class InferencePlanner(Planner[Entity, RuleStructure]):
 
     def _condition_left_owner_id(
         self, condition: SymbolicExpression
-    ) -> Optional[uuid.UUID]:
+    ) -> uuid.UUID | None:
         """:return: The ``_id_`` of the root variable on the left-hand side of an equality condition, else
         ``None``.
 
@@ -421,9 +421,7 @@ class InferencePlanner(Planner[Entity, RuleStructure]):
         current = unwrap_result_quantifiers(chain_root(condition.left))
         return current._id_
 
-    def _find_root(
-        self, expression: SymbolicExpression
-    ) -> Optional[Union[Variable, Entity]]:
+    def _find_root(self, expression: SymbolicExpression) -> Variable | Entity | None:
         """:return: The :class:`Variable`/:class:`Entity` at the root of *expression*'s chain, else
         ``None``.
 
@@ -438,7 +436,7 @@ class InferencePlanner(Planner[Entity, RuleStructure]):
         return None
 
     def _extract_root_info(
-        self, root: Union[Variable, Entity]
+        self, root: Variable | Entity
     ) -> Tuple[str, List[SymbolicExpression]]:
         """:return: ``(type_name, own_conditions)`` for a root variable or entity.
 

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import Any, Dict, List, Optional
+from typing_extensions import Any, Dict, List
 
 from cramera.robot_parts import ArmSide
 from semantic_digital_twin.spatial_types import Point3
@@ -45,14 +45,14 @@ class EqlSession:
     """
 
     @classmethod
-    def of_active_scene(cls) -> "EqlSession":
+    def of_active_scene(cls) -> EqlSession:
         """
         A session against the scene bundle the server currently serves.
         """
         return cls.of_scene(None)
 
     @classmethod
-    def of_scene(cls, scene: Optional[str]) -> "EqlSession":
+    def of_scene(cls, scene: str | None) -> EqlSession:
         """
         A session against one named scene bundle.
 

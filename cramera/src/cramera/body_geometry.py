@@ -10,14 +10,7 @@ import numpy
 from scipy.spatial.transform import Rotation
 from semantic_digital_twin.spatial_types import Point3, Pose
 from semantic_digital_twin.world_description.geometry import Scale
-from typing_extensions import (
-    List,
-    Optional,
-    Protocol,
-    runtime_checkable,
-    Tuple,
-    TYPE_CHECKING,
-)
+from typing_extensions import List, Protocol, runtime_checkable, Tuple, TYPE_CHECKING
 
 POSE_PRECISION = 5
 """
@@ -161,7 +154,7 @@ def shape_collections_of(
     return ()
 
 
-def mesh_file_of(entity: KinematicStructureEntity) -> Optional[str]:
+def mesh_file_of(entity: KinematicStructureEntity) -> str | None:
     """
     The file an entity's own geometry lives in, or None for one built from primitives.
 
@@ -174,7 +167,7 @@ def mesh_file_of(entity: KinematicStructureEntity) -> Optional[str]:
     return None
 
 
-def measure_body(entity: KinematicStructureEntity) -> Optional[Scale]:
+def measure_body(entity: KinematicStructureEntity) -> Scale | None:
     """
     Measure an entity from the first of its shape collections that has any shapes.
 

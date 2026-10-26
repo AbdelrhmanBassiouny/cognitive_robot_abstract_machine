@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 from random_events.variable import Continuous, Integer, Symbolic
-from typing_extensions import Any, Dict, List, Optional, Union
+from typing_extensions import Any, Dict, List
 
 from probabilistic_model.learning.gaussian_mixture.covariance_type import (
     CovarianceType,
@@ -93,7 +93,7 @@ class CategoricalBlock(MeasurementBlock):
     component.
     """
 
-    variable: Union[Symbolic, Integer]
+    variable: Symbolic | Integer
     """
     The variable, whose column holds the code of each row's outcome.
     """
@@ -117,7 +117,7 @@ class Measurement:
     All columns of the data, as StepMix's ``measurement`` parameter describes them.
     """
 
-    gaussian: Optional[GaussianBlock]
+    gaussian: GaussianBlock | None
     """
     The block of the continuous columns, which lead the data, if there are any.
     """

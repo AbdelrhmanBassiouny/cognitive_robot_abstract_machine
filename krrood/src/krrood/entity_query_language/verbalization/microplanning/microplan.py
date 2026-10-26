@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import Dict, Tuple, Type
+from typing_extensions import Dict, Tuple
 
 from krrood.entity_query_language.verbalization.grammar.framework.planner import (
     Planner,
@@ -35,7 +35,7 @@ class Microplan:
     def plan_for(
         self,
         node: TSymbolicExpression,
-        planner: Type[Planner[TSymbolicExpression, TPlan]],
+        planner: type[Planner[TSymbolicExpression, TPlan]],
     ) -> TPlan:
         """
         :param node: The EQL node to plan.

@@ -4,7 +4,7 @@ Tests for reading a world's sem_dt robot-part annotations and publishing them.
 
 from dataclasses import dataclass, field
 
-from typing_extensions import Any, List, Optional
+from typing_extensions import Any, List
 
 from cramera.robot_parts import (
     ArmSide,
@@ -46,7 +46,7 @@ class ArmPart(PartWithBodies):
     An arm, optionally carrying an end effector.
     """
 
-    end_effector: Optional[EndEffectorPart] = None
+    end_effector: EndEffectorPart | None = None
 
 
 @dataclass

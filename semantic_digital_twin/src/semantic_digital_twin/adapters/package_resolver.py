@@ -5,7 +5,7 @@ import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
-from typing_extensions import List, Optional
+from typing_extensions import List
 
 from semantic_digital_twin.exceptions import (
     ParsingError,
@@ -193,7 +193,7 @@ class FileUriResolver(PathResolver):
     Resolves file:// URIs and plain filesystem paths.
     """
 
-    base_directory: Optional[str] = None
+    base_directory: str | None = None
     """
     The base directory to resolve relative paths from.
     """

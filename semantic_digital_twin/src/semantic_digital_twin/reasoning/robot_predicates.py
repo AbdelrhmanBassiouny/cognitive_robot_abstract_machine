@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Optional, List
 
 import numpy as np
 import trimesh.sample
@@ -63,7 +62,7 @@ from semantic_digital_twin.world_description.world_entity import (
 @symbolic_function
 def robot_in_collision(
     robot: AbstractRobot,
-    ignore_collision_with: Optional[List[Body]] = None,
+    ignore_collision_with: list[Body] | None = None,
     threshold: float = 0.001,
 ) -> list[ClosestPoints]:
     """

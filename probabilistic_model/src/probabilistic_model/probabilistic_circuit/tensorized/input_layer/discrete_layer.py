@@ -10,7 +10,7 @@ from random_events.set import Set
 from random_events.sigma_algebra import AbstractCompositeSet
 from random_events.variable import Variable
 from sortedcontainers import SortedSet
-from typing_extensions import Any, Dict, List, Optional, Self, Tuple, Type
+from typing_extensions import Any, Dict, List, Self, Tuple
 
 from probabilistic_model.distributions.distributions import (
     DiscreteDistribution,
@@ -122,7 +122,7 @@ class DiscreteLayer(UnivariateInputLayer, ABC):
 
     @memoized
     def log_likelihood_of_nodes(
-        self, events: SampleArray, cache: Optional[QueryCache] = None
+        self, events: SampleArray, cache: QueryCache | None = None
     ) -> SampleNodeValues:
         return self.table.log_probabilities_of_states(
             self.state_indices_of(self.column_of(events))
@@ -130,7 +130,7 @@ class DiscreteLayer(UnivariateInputLayer, ABC):
 
     @memoized
     def cumulative_distribution_of_nodes(
-        self, events: SampleArray, cache: Optional[QueryCache] = None
+        self, events: SampleArray, cache: QueryCache | None = None
     ) -> SampleNodeValues:
         raise UndefinedCumulativeDistributionError(self.__class__)
 
@@ -139,7 +139,7 @@ class DiscreteLayer(UnivariateInputLayer, ABC):
         self,
         event: SimpleEvent,
         variables: SortedSet,
-        cache: Optional[QueryCache] = None,
+        cache: QueryCache | None = None,
     ) -> NodeValues:
         return self.table.probability_of_states(
             self.selected_states(event[variables[self.variable]])
@@ -147,7 +147,7 @@ class DiscreteLayer(UnivariateInputLayer, ABC):
 
     def type_of_truncated_layer(
         self, assignment: AbstractCompositeSet, singleton_allowed: bool
-    ) -> Type[Layer]:
+    ) -> type[Layer]:
         return self.__class__
 
     def log_truncated_of_assignment(
@@ -204,7 +204,7 @@ class DiscreteLayer(UnivariateInputLayer, ABC):
         """
         return self.__class__(self.variable, self.states.copy(), table)
 
-    def stored_as(self, table_type: Type[ProbabilityTable]) -> Self:
+    def stored_as(self, table_type: type[ProbabilityTable]) -> Self:
         """
         :param table_type: The type of table to store the probabilities in.
         :return: This layer with its probabilities stored in a table of that type.
@@ -216,7 +216,7 @@ class DiscreteLayer(UnivariateInputLayer, ABC):
         cls,
         variable_index: int,
         distributions: List[DiscreteDistribution],
-        table_type: Type[ProbabilityTable] = DenseProbabilityTable,
+        table_type: type[ProbabilityTable] = DenseProbabilityTable,
     ) -> Self:
         """
         :param table_type: The type of table to store the probabilities in.
@@ -227,7 +227,7 @@ class DiscreteLayer(UnivariateInputLayer, ABC):
     def parameters_of(
         cls,
         distributions: List[DiscreteDistribution],
-        table_type: Type[ProbabilityTable],
+        table_type: type[ProbabilityTable],
     ) -> Tuple[States, ProbabilityTable]:
         """
         :param distributions: Distributions over the variable of this layer.
@@ -345,7 +345,7 @@ class SymbolicLayer(DiscreteLayer):
         cls,
         variable_index: int,
         distributions: List[SymbolicDistribution],
-        table_type: Type[ProbabilityTable] = DenseProbabilityTable,
+        table_type: type[ProbabilityTable] = DenseProbabilityTable,
     ) -> Self:
         return cls(
             variable_index,
@@ -401,7 +401,7 @@ class IntegerLayer(DiscreteLayer):
 
     @memoized
     def cumulative_distribution_of_nodes(
-        self, events: SampleArray, cache: Optional[QueryCache] = None
+        self, events: SampleArray, cache: QueryCache | None = None
     ) -> SampleNodeValues:
         column = np.asarray(self.column_of(events), dtype=float).reshape(-1, 1)
         reached = column >= self.states.reshape(1, -1)

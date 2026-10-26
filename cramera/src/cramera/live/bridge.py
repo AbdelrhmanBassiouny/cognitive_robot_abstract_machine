@@ -12,15 +12,7 @@ from enum import StrEnum
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
-from typing_extensions import (
-    Any,
-    ClassVar,
-    Dict,
-    FrozenSet,
-    List,
-    Optional,
-    TYPE_CHECKING,
-)
+from typing_extensions import Any, ClassVar, Dict, FrozenSet, List, TYPE_CHECKING
 from coraplex.plans.plan_node import DesignatorNode
 from giskardpy.motion_statechart.data_types import LifeCycleValues
 from krrood.entity_query_language.evaluable import Evaluable
@@ -136,7 +128,7 @@ class PlanNodeEntry:
     Identity-based id of this node (``plan_node_`` + ``id(node)``).
     """
 
-    parent: Optional[str]
+    parent: str | None
     """
     Id of this node's parent entry, or None for the root.
     """
@@ -166,12 +158,12 @@ class PlanNodeEntry:
     Whether the published status was derived; native plan states are reported directly.
     """
 
-    description: Optional[str] = None
+    description: str | None = None
     """
     Native verbalization of the designator and its parameters, if present.
     """
 
-    target: Optional[str] = None
+    target: str | None = None
     """
     Published object the node's designator refers to, if any.
     """
@@ -268,7 +260,7 @@ class WorldStateSnapshot:
     Movable connection position by prefixed name.
     """
 
-    base: Optional[List[float]] = None
+    base: List[float] | None = None
     """
     Robot base pose as ``[x, y, z, qx, qy, qz, qw]``, or None without a robot.
     """
@@ -288,7 +280,7 @@ class WorldStateSnapshot:
     Version of the debug-marker overlay; the viewer refetches ``/markers`` on change.
     """
 
-    def orientation_of(self, object_key: str) -> Optional[List[float]]:
+    def orientation_of(self, object_key: str) -> List[float] | None:
         """
         The orientation one object stands at, or None if this snapshot has no pose for it.
 
@@ -325,7 +317,7 @@ class BridgeStatus:
     running: bool
     """Whether a world is attached."""
 
-    robot: Optional[str]
+    robot: str | None
     """Name of the bound robot model."""
 
     objects: List[str]
@@ -392,12 +384,12 @@ class Bridge:
     configuration: CrameraConfig = field(default_factory=CrameraConfig, kw_only=True)
     """Publication keys, discovery timing and fallback geometry for this session."""
 
-    world: Optional[World] = None
+    world: World | None = None
     """
     The world explicitly attached to this visualization session.
     """
 
-    robot: Optional[AbstractRobot] = None
+    robot: AbstractRobot | None = None
     """
     The robot annotation of :attr:`world`, re-discovered on every bind.
     """
@@ -510,7 +502,7 @@ class Bridge:
     Native mesh sources allowed through the ``/mesh`` endpoint, keyed by filename.
     """
 
-    _plan: Optional[Plan] = None
+    _plan: Plan | None = None
     """
     The plan observed through its native execution callbacks.
     """
@@ -541,7 +533,7 @@ class Bridge:
     _marker_revision: int = 0
     """Monotonic revision of the marker contents across all topics."""
 
-    marker_listener: Optional[RosMarkerListener] = None
+    marker_listener: RosMarkerListener | None = None
     """
     The ROS subscription feeding the marker overlay, while one runs — the viewer's
     marker settings manage its topics through the bridge.
@@ -569,12 +561,12 @@ class Bridge:
     Cached digest of the bundled scene content, recomputed on attach and model change.
     """
 
-    live_server: Optional[ThreadingHTTPServer] = None
+    live_server: ThreadingHTTPServer | None = None
     """
     The bridge's HTTP server once it is listening, so a second start reuses it.
     """
 
-    recording: Optional[Recording] = None
+    recording: Recording | None = None
     """
     The current live run's capture buffer, started alongside :meth:`attach` (see
     :mod:`cramera.live.visualization`); None before anything has ever attached.
@@ -730,7 +722,7 @@ class Bridge:
         world_T_marker = frame_body.global_pose.homogeneous_matrix @ frame_T_marker
         return NumericPose.of_matrix(world_T_marker.to_np()).rounded()
 
-    def _marker_frame_body(self, frame: str) -> Optional[Body]:
+    def _marker_frame_body(self, frame: str) -> Body | None:
         """
         The world body a marker frame names, or None for the world root and frames
         the world does not know.
@@ -844,7 +836,7 @@ class Bridge:
             )
         return sorted({identifiers.get(name, name) for name in names})
 
-    def mesh_path(self, key: str) -> Optional[str]:
+    def mesh_path(self, key: str) -> str | None:
         """
         Resolved local file of a registered mesh source, or None if it is not served.
 
@@ -855,7 +847,7 @@ class Bridge:
             mesh = self._mesh_serve.get(key)
         return served_mesh_file(mesh) if mesh is not None else None
 
-    def object_body(self, key: str) -> Optional[Body]:
+    def object_body(self, key: str) -> Body | None:
         """
         The published body behind an object-catalog key, or None if it is not published.
 
@@ -1294,7 +1286,7 @@ class Bridge:
             str(connection.name): round(float(connection.position), POSE_PRECISION)
             for connection in self._connections
         }
-        base_pose: Optional[List[float]] = None
+        base_pose: List[float] | None = None
         object_poses: Dict[str, List[float]] = {}
         for name, body in self._bodies.items():
             if name == self.configuration.robot_base_key:
@@ -1354,7 +1346,7 @@ class Bridge:
     def _serialize_plan_node(
         self,
         node: PlanNode,
-        parent_id: Optional[str],
+        parent_id: str | None,
         nodes: List[PlanNodeEntry],
         order: List[str],
     ) -> None:
@@ -1407,7 +1399,7 @@ class Bridge:
         if target:
             entry.target = target
 
-    def _designator_target(self, designator: Designator) -> Optional[str]:
+    def _designator_target(self, designator: Designator) -> str | None:
         """
         Published key of the object a designator refers to, if any.
 
@@ -1425,7 +1417,7 @@ class Bridge:
                 return keys_by_basename[basename]
         return None
 
-    def running_step(self) -> Optional[str]:
+    def running_step(self) -> str | None:
         """
         Label of the action the plan is performing right now, or None between actions.
 
@@ -1450,7 +1442,7 @@ class Bridge:
             return self.plan_state.to_payload()
 
     # %% motion statechart
-    def observe_chart(self, chart: Optional[MotionStatechart]) -> None:
+    def observe_chart(self, chart: MotionStatechart | None) -> None:
         """
         Publish the executing statechart's structure and node states.
 
@@ -1465,7 +1457,7 @@ class Bridge:
         with self._lock:
             self.chart_state = snapshot
 
-    def executing_statechart(self) -> Optional[ChartSnapshot]:
+    def executing_statechart(self) -> ChartSnapshot | None:
         """
         The statechart the executor is currently ticking, or None while no motion runs.
         """

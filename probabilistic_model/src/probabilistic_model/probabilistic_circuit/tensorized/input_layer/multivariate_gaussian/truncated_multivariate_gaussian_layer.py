@@ -7,7 +7,7 @@ import numpy as np
 from random_events.product_algebra import Event, SimpleEvent
 from scipy.stats import multivariate_normal, truncnorm
 from sortedcontainers import SortedSet
-from typing_extensions import Any, List, Optional, Self, Tuple, Type
+from typing_extensions import Any, List, Self, Tuple
 
 from probabilistic_model.distributions.truncated_multivariate_gaussian import (
     MomentIntegration,
@@ -206,7 +206,7 @@ class TruncatedMultivariateGaussianLayer(AbstractMultivariateGaussianLayer):
 
     @memoized
     def log_likelihood_of_nodes(
-        self, events: SampleArray, cache: Optional[QueryCache] = None
+        self, events: SampleArray, cache: QueryCache | None = None
     ) -> SampleNodeValues:
         values = self.values_of_scope(events)
         return np.where(
@@ -218,7 +218,7 @@ class TruncatedMultivariateGaussianLayer(AbstractMultivariateGaussianLayer):
 
     @memoized
     def cumulative_distribution_of_nodes(
-        self, events: SampleArray, cache: Optional[QueryCache] = None
+        self, events: SampleArray, cache: QueryCache | None = None
     ) -> SampleNodeValues:
         # the probability of the part of the hyperrectangle below the point
         values = self.values_of_scope(events)
@@ -242,7 +242,7 @@ class TruncatedMultivariateGaussianLayer(AbstractMultivariateGaussianLayer):
         self,
         event: SimpleEvent,
         variables: SortedSet,
-        cache: Optional[QueryCache] = None,
+        cache: QueryCache | None = None,
     ) -> NodeValues:
         untruncated = sum(
             (
@@ -257,7 +257,7 @@ class TruncatedMultivariateGaussianLayer(AbstractMultivariateGaussianLayer):
 
     @memoized
     def log_mode_of_nodes(
-        self, variables: SortedSet, cache: Optional[QueryCache] = None
+        self, variables: SortedSet, cache: QueryCache | None = None
     ) -> Tuple[List[Event], NodeValues]:
         modes = [
             distribution.log_mode()
@@ -272,7 +272,7 @@ class TruncatedMultivariateGaussianLayer(AbstractMultivariateGaussianLayer):
         self,
         query: MomentQuery,
         variables: SortedSet,
-        cache: Optional[QueryCache] = None,
+        cache: QueryCache | None = None,
     ) -> NodeVariableValues:
         result = np.zeros((self.number_of_nodes, query.number_of_variables))
         requested = self.scope[query.requested[self.scope]]
@@ -325,7 +325,7 @@ class TruncatedMultivariateGaussianLayer(AbstractMultivariateGaussianLayer):
 
     def type_of_layer_truncated_to_hyperrectangle(
         self, hyperrectangle: HyperrectangleArray
-    ) -> Type[Layer]:
+    ) -> type[Layer]:
         return TruncatedMultivariateGaussianLayer
 
     def log_truncated_of_hyperrectangle(

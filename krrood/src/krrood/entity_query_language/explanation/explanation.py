@@ -7,16 +7,7 @@ import weakref
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import ModuleType
-from typing_extensions import (
-    Any,
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Self,
-    Type,
-    TYPE_CHECKING,
-)
+from typing_extensions import Any, Callable, Dict, List, Self, TYPE_CHECKING
 
 from ordered_set import OrderedSet
 
@@ -65,7 +56,7 @@ if TYPE_CHECKING:
 
 
 def _build_type_existence_condition(
-    node_variable: SymbolicExpression, type_: Type
+    node_variable: SymbolicExpression, type_: type
 ) -> SymbolicExpression:
     """
     Build an exists-condition that checks whether *node_variable* (or one of its
@@ -112,7 +103,7 @@ def _is_krrood_internal_frame(frame: StackFrame) -> bool:
     return False
 
 
-def _get_query_source(frame: StackFrame) -> Optional[str]:
+def _get_query_source(frame: StackFrame) -> str | None:
     """
     Extract the full source statement that contains ``frame.lineno``.
 
@@ -154,7 +145,7 @@ def _get_query_source(frame: StackFrame) -> Optional[str]:
 
 def _select_source_frame(
     filtered_frames: List[StackFrame],
-) -> Optional[StackFrame]:
+) -> StackFrame | None:
     """
     Select the best user-facing frame from *filtered_frames*.
 
@@ -193,7 +184,7 @@ def _format_source_context(source_frame: StackFrame) -> str:
     return f"({source_frame.function_name}, {basename}:{source_frame.lineno})"
 
 
-def _format_indented_source(source_frame: Optional[StackFrame]) -> str:
+def _format_indented_source(source_frame: StackFrame | None) -> str:
     """
     Return the source statement at *source_frame*, indented by two spaces per line.
 
@@ -207,7 +198,7 @@ def _format_indented_source(source_frame: Optional[StackFrame]) -> str:
     return "  (unavailable)"
 
 
-def _format_stack_trace(stack: CallStack, focus_package: Optional[str]) -> str:
+def _format_stack_trace(stack: CallStack, focus_package: str | None) -> str:
     """
     Render up to ten frames of *stack* as a formatted call-stack string.
 
@@ -281,12 +272,12 @@ class InferenceExplanation(Symbol):
     The root of the query that was used to create the instance.
     """
 
-    satisfied_condition_ids: Optional[OrderedSet[UUID]] = None
+    satisfied_condition_ids: OrderedSet[UUID] | None = None
     """
     An ordered set of UUIDs of condition expressions that were satisfied (truth value = True)
     during the evaluation that produced this instance. None if no condition information is available.
     """
-    operation_result: Optional[OperationResult] = None
+    operation_result: OperationResult | None = None
     """
     The full :class:`OperationResult` from the evaluation iteration that produced this
     instance.
@@ -297,7 +288,7 @@ class InferenceExplanation(Symbol):
 
     # Internal weak reference to the inferred instance.  Not part of the public
     # constructor — populated by __post_init__.
-    _instance_ref: Optional[weakref.ref] = field(
+    _instance_ref: weakref.ref | None = field(
         default=None, init=False, repr=False, compare=False
     )
 
@@ -355,7 +346,7 @@ class InferenceExplanation(Symbol):
             )
         return satisfied_conditions
 
-    def condition_graph(self) -> Optional[QueryGraph]:
+    def condition_graph(self) -> QueryGraph | None:
         """
         Build a QueryGraph of the full query tree with satisfaction data overlaid.
 
@@ -374,7 +365,7 @@ class InferenceExplanation(Symbol):
         )
 
     def as_string(
-        self, focus_package: Optional[str | ModuleType] = None, show_trace: bool = False
+        self, focus_package: str | ModuleType | None = None, show_trace: bool = False
     ) -> str:
         """
         Convert an InferenceExplanation into a human-readable string.
@@ -454,7 +445,7 @@ class InferenceExplanation(Symbol):
         """
         return self.stack.functions()
 
-    def root_frame_in(self, package: str) -> Optional[StackFrame]:
+    def root_frame_in(self, package: str) -> StackFrame | None:
         """
         Find the outermost :class:`~krrood.entity_query_language._stack.StackFrame`
         whose ``module_name`` contains *package*.
@@ -486,7 +477,7 @@ class InferenceExplanation(Symbol):
         )
 
     def get_values_of_variable_nodes_of_given_type(
-        self, type_: Type
+        self, type_: type
     ) -> Entity[SymbolicExpression]:
         """
         :param type_: The type of the variable nodes to retrieve.
@@ -505,7 +496,7 @@ class InferenceExplanation(Symbol):
         )
 
     def get_variable_nodes_of_given_type(
-        self, type_: Type, node_variable: Optional[SymbolicExpression] = None
+        self, type_: type, node_variable: SymbolicExpression | None = None
     ) -> Entity[SymbolicExpression] | SymbolicExpression:
         """
         :return: An entity containing instances that participated in the inference of this instance.
@@ -554,7 +545,7 @@ class InferenceExplanation(Symbol):
         )
 
     def get_conditions_that_relate_the_variables_of_type(
-        self, type_: Type
+        self, type_: type
     ) -> Entity[SymbolicExpression]:
         """
         :return: An entity containing condition expressions that relate the participating instances in the inference of this instance.
@@ -586,7 +577,7 @@ class InferenceExplanation(Symbol):
         )
 
     def get_conditions_that_relate_variables_of_types(
-        self, type_a: Type, type_b: Type
+        self, type_a: type, type_b: type
     ) -> Entity[SymbolicExpression]:
         """
         Generalisation of :meth:`get_conditions_that_relate_the_variables_of_type` for
@@ -644,7 +635,7 @@ class InferenceExplanation(Symbol):
 def register_inference(
     instance: Any,
     variable_node: SymbolicExpression,
-    result: Optional[OperationResult] = None,
+    result: OperationResult | None = None,
 ) -> None:
     """
     Register an instance created via inference by attaching an
@@ -683,7 +674,7 @@ def register_inference(
     instance._inference_explanation_ = explanation
 
 
-def explain_inference(instance: Any) -> Optional[InferenceExplanation]:
+def explain_inference(instance: Any) -> InferenceExplanation | None:
     """
     Retrieve the explanation of how the given instance was created through inference.
 

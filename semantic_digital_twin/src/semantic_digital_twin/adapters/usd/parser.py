@@ -11,7 +11,7 @@ from types import NoneType
 import numpy as np
 import trimesh
 from numpy.typing import NDArray
-from typing_extensions import Dict, List, Optional, Sequence, Tuple, Type
+from typing_extensions import Dict, List, Sequence, Tuple
 
 from krrood.class_diagrams.mocking import MockedClass, MockedModule
 
@@ -96,8 +96,8 @@ class _MockedUsdModule(MockedModule):
     Mocked module for pxr.Usd.
     """
 
-    Prim: Type[_MockedUsdPrim] = _MockedUsdPrim
-    Stage: Type[_MockedUsdStage] = _MockedUsdStage
+    Prim: type[_MockedUsdPrim] = _MockedUsdPrim
+    Stage: type[_MockedUsdStage] = _MockedUsdStage
 
 
 @dataclass
@@ -113,7 +113,7 @@ class _MockedGfModule(MockedModule):
     Mocked module for pxr.Gf.
     """
 
-    Matrix4d: Type[_MockedGfMatrix4d] = _MockedGfMatrix4d
+    Matrix4d: type[_MockedGfMatrix4d] = _MockedGfMatrix4d
 
 
 try:
@@ -201,7 +201,7 @@ class UsdGeomPrimType(StrEnum):
         :param link_to_world: The enclosing link's local-to-world transform.
         :return: The created shape.
         """
-        builders: Dict[UsdGeomPrimType, Type[UsdShapeBuilder]] = {
+        builders: Dict[UsdGeomPrimType, type[UsdShapeBuilder]] = {
             UsdGeomPrimType.MESH: UsdMeshShapeBuilder,
             UsdGeomPrimType.CUBE: UsdCubeShapeBuilder,
             UsdGeomPrimType.SPHERE: UsdSphereShapeBuilder,
@@ -220,7 +220,7 @@ class UsdPhysicsJointType(StrEnum):
     PRISMATIC = "PhysicsPrismaticJoint"
 
     @property
-    def connection_type(self) -> Type[Connection]:
+    def connection_type(self) -> type[Connection]:
         """
         :return: The Connection class this joint type becomes.
         """
@@ -400,7 +400,7 @@ class UsdMeshShapeBuilder(UsdShapeBuilder):
         return (points_homogeneous @ np.array(matrix))[:, :3]
 
     @staticmethod
-    def _diffuse_texture_path(mesh_prim: Usd.Prim) -> Optional[str]:
+    def _diffuse_texture_path(mesh_prim: Usd.Prim) -> str | None:
         """
         Resolves the file path of the diffuse texture bound to a mesh prim's material.
 
@@ -431,7 +431,7 @@ class UsdMeshShapeBuilder(UsdShapeBuilder):
         return asset_path.resolvedPath
 
     @staticmethod
-    def _uv_coordinates(mesh_prim: Usd.Prim) -> Optional[NDArray[np.float64]]:
+    def _uv_coordinates(mesh_prim: Usd.Prim) -> NDArray[np.float64] | None:
         """
         Reads a mesh prim's per-point UV coordinates from its ``st`` primvar.
 
@@ -515,7 +515,7 @@ class USDParser(WorldModelParser):
     a file path - is the parser's payload field; :meth:`from_file` opens the file first.
     """
 
-    prefix: Optional[str] = None
+    prefix: str | None = None
     """
     The prefix for every name used in this world.
     """
@@ -535,8 +535,8 @@ class USDParser(WorldModelParser):
     def from_file(
         cls,
         file_path: str,
-        prefix: Optional[str] = None,
-        path_resolver: Optional[PathResolver] = None,
+        prefix: str | None = None,
+        path_resolver: PathResolver | None = None,
     ) -> USDParser:
         """
         Creates a parser for a USD stage file.
@@ -663,7 +663,7 @@ class USDParser(WorldModelParser):
                 )
         return world
 
-    def _root_prim(self) -> Optional[Usd.Prim]:
+    def _root_prim(self) -> Usd.Prim | None:
         """
         :return: The stage's default prim, or its single top-level prim if it has no
             default prim and exactly one top-level prim, or ``None`` if neither
@@ -885,9 +885,7 @@ class USDParser(WorldModelParser):
                 shapes.append(shape)
         return shapes
 
-    def _create_shape(
-        self, prim: Usd.Prim, link_to_world: Gf.Matrix4d
-    ) -> Optional[Shape]:
+    def _create_shape(self, prim: Usd.Prim, link_to_world: Gf.Matrix4d) -> Shape | None:
         """
         Creates the Shape a mesh/primitive prim describes.
 
@@ -921,7 +919,7 @@ class USDParser(WorldModelParser):
     # %% inertials
 
     @staticmethod
-    def _parse_inertial(link_prim: Usd.Prim, body: Body) -> Optional[Inertial]:
+    def _parse_inertial(link_prim: Usd.Prim, body: Body) -> Inertial | None:
         """
         Parses a link prim's :class:`~pxr.UsdPhysics.MassAPI` inertial properties.
 

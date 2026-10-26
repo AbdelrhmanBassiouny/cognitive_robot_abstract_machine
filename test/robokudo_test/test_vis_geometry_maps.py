@@ -1,7 +1,7 @@
 import numpy as np
 import open3d as o3d
 import pytest
-from typing_extensions import Type, List, Dict, Union
+from typing_extensions import List, Dict
 from robokudo.vis.multiprocessed_o3d_visualizer import (
     Geometry3DMemoryMapFactory,
     SharedMemoryManager,
@@ -12,8 +12,8 @@ RANDOM_SEED = 42
 
 
 def get_random_mesh(
-    mesh_type: Type, rng: np.random.Generator
-) -> Union[o3d.geometry.TriangleMesh, o3d.geometry.TetraMesh]:
+    mesh_type: type, rng: np.random.Generator
+) -> o3d.geometry.TriangleMesh | o3d.geometry.TetraMesh:
     """
     Get a random open3d mesh of the given type.
 

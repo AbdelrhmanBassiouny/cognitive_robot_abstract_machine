@@ -5,7 +5,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
-from typing import List, Self
+from typing_extensions import Self
 
 from krrood.ormatic.utils import classproperty
 from semantic_digital_twin.collision_checking.collision_rules import (
@@ -655,7 +655,7 @@ class GarmiMobileBase(MobileBase[OmniDrive], HasTorso[GarmiTorso]):
         for joint_name in GarmiJoint.wheels():
             self._world.get_connection_by_name(joint_name).has_hardware_interface = True
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         """
         No default joint states for the mobile base.
         """

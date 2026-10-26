@@ -20,7 +20,7 @@ from __future__ import annotations
 import os
 
 from pymongo import MongoClient
-from typing_extensions import Any, Dict, List, Optional, TYPE_CHECKING, Tuple
+from typing_extensions import Any, Dict, List, TYPE_CHECKING, Tuple
 from robokudo import world
 
 from robokudo.cas import CAS
@@ -210,7 +210,7 @@ class Storage:
     def load_views_from_mongo_in_cas(
         self,
         cas_document: Dict[str, Any],
-        excluded_view_names: Optional[set[str]] = None,
+        excluded_view_names: set[str] | None = None,
     ) -> None:
         """
         Load views from MongoDB into a CAS document.

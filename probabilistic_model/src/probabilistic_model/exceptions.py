@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Any, Callable, List, Type, TYPE_CHECKING
+from typing_extensions import Any, Callable, TYPE_CHECKING
 
 from krrood.exceptions import DataclassException
 from random_events.variable import Variable
@@ -151,7 +151,7 @@ class VariableNotInDistributionError(DataclassException):
     The variable that was named.
     """
 
-    variables: List[Variable]
+    variables: list[Variable]
     """
     The variables the distribution is over.
     """
@@ -172,7 +172,7 @@ class NonContinuousVariableError(DataclassException, ValueError):
     Exception raised when a model that only fits continuous variables is given others.
     """
 
-    variables: List[Variable]
+    variables: list[Variable]
     """
     The variables that are not continuous.
     """
@@ -194,7 +194,7 @@ class NoClosedFormError(DataclassException, NotImplementedError):
     can represent in closed form.
     """
 
-    asked_type: Type
+    asked_type: type
     """
     The type of the model or layer that was asked.
     """
@@ -265,7 +265,7 @@ class MixtureOverDifferentVariablesError(DataclassException, ValueError):
     over a mixture of differing components has no well-defined answer.
     """
 
-    variables_per_component: List[List[Variable]]
+    variables_per_component: list[list[Variable]]
     """
     The variables of every component, in the order the components were given.
     """
@@ -289,7 +289,7 @@ class ProductOverSharedVariablesError(DataclassException, ValueError):
     shared variable would be counted twice.
     """
 
-    shared_variables: List[Variable]
+    shared_variables: list[Variable]
     """
     The variables that more than one factor is over.
     """

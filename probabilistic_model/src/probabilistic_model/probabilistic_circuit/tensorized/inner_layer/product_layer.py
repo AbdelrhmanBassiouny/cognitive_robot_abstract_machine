@@ -9,14 +9,7 @@ import numpy as np
 from random_events.product_algebra import Event, SimpleEvent
 from scipy.sparse import coo_array
 from sortedcontainers import SortedSet
-from typing_extensions import (
-    Any,
-    Dict,
-    List,
-    Optional,
-    Self,
-    Tuple,
-)
+from typing_extensions import Any, Dict, List, Self, Tuple
 
 from probabilistic_model.exceptions import ShapeMismatchError
 from probabilistic_model.probabilistic_model import PartialPointType
@@ -282,7 +275,7 @@ class ProductLayer(InnerLayer):
 
     @memoized
     def log_likelihood_of_nodes(
-        self, events: SampleArray, cache: Optional[QueryCache] = None
+        self, events: SampleArray, cache: QueryCache | None = None
     ) -> SampleNodeValues:
         child_results = [
             child_layer.log_likelihood_of_nodes(events, cache=cache)
@@ -292,7 +285,7 @@ class ProductLayer(InnerLayer):
 
     @memoized
     def cumulative_distribution_of_nodes(
-        self, events: SampleArray, cache: Optional[QueryCache] = None
+        self, events: SampleArray, cache: QueryCache | None = None
     ) -> SampleNodeValues:
         child_results = [
             child_layer.cumulative_distribution_of_nodes(events, cache=cache)
@@ -320,7 +313,7 @@ class ProductLayer(InnerLayer):
         self,
         event: SimpleEvent,
         variables: SortedSet,
-        cache: Optional[QueryCache] = None,
+        cache: QueryCache | None = None,
     ) -> NodeValues:
         child_results = [
             child_layer.probability_of_simple_event_of_nodes(
@@ -332,7 +325,7 @@ class ProductLayer(InnerLayer):
 
     @memoized
     def support_of_nodes(
-        self, variables: SortedSet, cache: Optional[QueryCache] = None
+        self, variables: SortedSet, cache: QueryCache | None = None
     ) -> List[Event]:
         child_supports = [
             child_layer.support_of_nodes(variables, cache=cache)
@@ -340,7 +333,7 @@ class ProductLayer(InnerLayer):
         ]
 
         own_variables = {variables[index] for index in self.variables}
-        result: List[Optional[Event]] = [None] * self.number_of_nodes
+        result: List[Event | None] = [None] * self.number_of_nodes
 
         for edge in self.iterate_edges():
             support = child_supports[edge.child_layer_index][edge.child_node]
@@ -353,7 +346,7 @@ class ProductLayer(InnerLayer):
 
     @memoized
     def log_mode_of_nodes(
-        self, variables: SortedSet, cache: Optional[QueryCache] = None
+        self, variables: SortedSet, cache: QueryCache | None = None
     ) -> Tuple[List[Event], NodeValues]:
         child_modes = [
             child_layer.log_mode_of_nodes(variables, cache=cache)
@@ -361,7 +354,7 @@ class ProductLayer(InnerLayer):
         ]
 
         own_variables = {variables[index] for index in self.variables}
-        events: List[Optional[Event]] = [None] * self.number_of_nodes
+        events: List[Event | None] = [None] * self.number_of_nodes
         values = np.zeros(self.number_of_nodes)
 
         for edge in self.iterate_edges():
@@ -381,7 +374,7 @@ class ProductLayer(InnerLayer):
         self,
         query: MomentQuery,
         variables: SortedSet,
-        cache: Optional[QueryCache] = None,
+        cache: QueryCache | None = None,
     ) -> NodeVariableValues:
         child_results = [
             child_layer.moment_of_nodes(query, variables, cache=cache)
@@ -454,7 +447,7 @@ class ProductLayer(InnerLayer):
         self,
         event: SimpleEvent,
         query: StructuralQuery,
-        cache: Optional[QueryCache] = None,
+        cache: QueryCache | None = None,
     ) -> LayerWithLogProbabilities:
         child_results = [
             child_layer.log_truncated_of_simple_event(event, query, cache=cache)
@@ -467,7 +460,7 @@ class ProductLayer(InnerLayer):
         self,
         events: List[SimpleEvent],
         query: StructuralQuery,
-        cache: Optional[QueryCache] = None,
+        cache: QueryCache | None = None,
     ) -> LayerWithLogProbabilities:
         number_of_events = len(events)
         number_of_nodes = self.number_of_nodes
@@ -516,7 +509,7 @@ class ProductLayer(InnerLayer):
         self,
         point: PartialPointType,
         query: StructuralQuery,
-        cache: Optional[QueryCache] = None,
+        cache: QueryCache | None = None,
     ) -> LayerWithLogProbabilities:
         child_results = [
             child_layer.log_conditional_of_point(point, query, cache=cache)
@@ -539,8 +532,8 @@ class ProductLayer(InnerLayer):
     def rebuild(
         self,
         needed: Dict[int, NodeMask],
-        rebuilt: Dict[int, Optional[Layer]],
-    ) -> Optional[Layer]:
+        rebuilt: Dict[int, Layer | None],
+    ) -> Layer | None:
         alive = needed[id(self)]
         if not alive.any():
             return None
@@ -582,8 +575,8 @@ class ProductLayer(InnerLayer):
 
     @memoized
     def marginal(
-        self, kept: VariableMask, cache: Optional[QueryCache] = None
-    ) -> Optional[Layer]:
+        self, kept: VariableMask, cache: QueryCache | None = None
+    ) -> Layer | None:
         new_child_layers = []
         new_edges = []
 
@@ -610,7 +603,7 @@ class ProductLayer(InnerLayer):
         return self.__class__(new_child_layers, edges)
 
     @memoized
-    def simplify(self, cache: Optional[QueryCache] = None) -> Layer:
+    def simplify(self, cache: QueryCache | None = None) -> Layer:
         simplified_children = [
             child_layer.simplify(cache=cache) for child_layer in self.child_layers
         ]

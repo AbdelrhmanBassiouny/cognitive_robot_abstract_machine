@@ -12,7 +12,7 @@ from jax.tree_util import tree_flatten
 from jaxtyping import Int, Array
 from krrood.adapters.json_serializer import SubclassJSONSerializer
 from probabilistic_model.exceptions import ShapeMismatchError
-from typing_extensions import List, Iterator, Tuple, Union, Dict, Any, Self, Optional
+from typing_extensions import List, Iterator, Tuple, Dict, Any, Self
 
 from probabilistic_model.probabilistic_circuit.jax.utils import copy_bcoo
 
@@ -24,7 +24,7 @@ class DifferentiableLayer(eqx.Module, SubclassJSONSerializer, ABC):
     Layers have the same scope (set of variables) for every node in them.
     """
 
-    _variables: Optional[Array] = eqx.field(static=False, default=None)
+    _variables: Array | None = eqx.field(static=False, default=None)
     """
     The variable indices of the layer.
     """
@@ -208,15 +208,13 @@ class DifferentiableInputLayer(DifferentiableLayer, ABC):
 
 
 class DifferentiableSumLayer(DifferentiableInnerLayer, ABC):
-    log_weights: List[Union[jax.Array, BCOO]]
-    child_layers: Union[
-        List[DifferentiableProductLayer], List[DifferentiableInputLayer]
-    ]
+    log_weights: List[jax.Array | BCOO]
+    child_layers: List[DifferentiableProductLayer] | List[DifferentiableInputLayer]
 
     def __init__(
         self,
         child_layers: List[DifferentiableLayer],
-        log_weights: List[Union[jax.Array, BCOO]],
+        log_weights: List[jax.Array | BCOO],
     ):
         super().__init__(child_layers)
         self.log_weights = log_weights
@@ -350,9 +348,7 @@ class DifferentiableSparseSumLayer(DifferentiableSumLayer):
 
 class DifferentiableDenseSumLayer(DifferentiableSumLayer):
     log_weights: List[jax.Array]
-    child_layers: Union[
-        List[DifferentiableProductLayer], List[DifferentiableInputLayer]
-    ]
+    child_layers: List[DifferentiableProductLayer] | List[DifferentiableInputLayer]
 
     @property
     def number_of_components(self) -> float:
@@ -433,13 +429,13 @@ class DifferentiableProductLayer(DifferentiableInnerLayer):
     A layer that represents the product of multiple other units.
     """
 
-    child_layers: List[Union[DifferentiableSparseSumLayer, DifferentiableInputLayer]]
+    child_layers: List[DifferentiableSparseSumLayer | DifferentiableInputLayer]
     """
     The child of a product layer is a list that contains groups sum units with the same
     scope or groups of input units with the same scope.
     """
 
-    edges: Int[BCOO, "len(child_layers), number_of_nodes"] = eqx.field(static=True)
+    edges: Int[BCOO, len(child_layers), number_of_nodes] = eqx.field(static=True)
     """
     The edges consist of a sparse matrix containing integers.
 

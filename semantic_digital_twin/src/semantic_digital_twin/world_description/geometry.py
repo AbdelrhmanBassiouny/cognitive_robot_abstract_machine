@@ -20,16 +20,7 @@ import trimesh.exchange.stl
 from PIL import Image
 from plyfile import PlyData
 from trimesh.visual.texture import TextureVisuals, SimpleMaterial
-from typing_extensions import (
-    Optional,
-    List,
-    Dict,
-    Any,
-    Self,
-    Tuple,
-    TYPE_CHECKING,
-    TypeVar,
-)
+from typing_extensions import List, Dict, Any, Self, Tuple, TYPE_CHECKING, TypeVar
 
 from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json, from_json
 from krrood.bounds import Bounds, BoundsInterface
@@ -361,7 +352,7 @@ class Scale:
 
     def to_simple_event(
         self,
-        extend_result_in_direction: Optional[Vector3] = None,
+        extend_result_in_direction: Vector3 | None = None,
         amount: float = 0.0,
     ) -> SimpleEvent:
         simple_event = SimpleEvent.from_data(
@@ -441,7 +432,7 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
 
     color: Color = field(default_factory=Color)
 
-    texture: Optional[Texture] = None
+    texture: Texture | None = None
     """
     A texture applied to this shape's surface, or ``None`` for a flat ``color``.
 
@@ -450,7 +441,7 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
     trimesh visual instead.
     """
 
-    finish: Optional[SurfaceFinish] = None
+    finish: SurfaceFinish | None = None
     """
     How this shape's surface takes light, or ``None`` where nobody has stated it.
 
@@ -803,7 +794,7 @@ class Mesh(Shape):
 
     @classmethod
     def from_file(
-        cls, file_path: str, texture_file_path: Optional[str] = None, **kwargs
+        cls, file_path: str, texture_file_path: str | None = None, **kwargs
     ) -> Mesh:
         """
         Create a Mesh from a file path.
@@ -823,9 +814,9 @@ class Mesh(Shape):
     def from_ply_file(
         cls,
         ply_file_path: str,
-        texture_file_path: Optional[str] = None,
-        origin: Optional[HomogeneousTransformationMatrix] = None,
-        scale: Optional[Scale] = None,
+        texture_file_path: str | None = None,
+        origin: HomogeneousTransformationMatrix | None = None,
+        scale: Scale | None = None,
     ) -> Mesh:
         """
         Create a Mesh from a PLY file path and an optional texture file path.
@@ -876,14 +867,14 @@ class Mesh(Shape):
     def from_trimesh(
         cls,
         mesh: trimesh.Trimesh,
-        origin: Optional[HomogeneousTransformationMatrix] = None,
-        scale: Optional[Scale] = None,
-        uv: Optional[np.ndarray] = None,
-        texture_file_path: Optional[str] = None,
-        directory: Optional[Path] = None,
+        origin: HomogeneousTransformationMatrix | None = None,
+        scale: Scale | None = None,
+        uv: np.ndarray | None = None,
+        texture_file_path: str | None = None,
+        directory: Path | None = None,
         file_type: str = "obj",
-        finish: Optional[SurfaceFinish] = None,
-    ) -> "Mesh":
+        finish: SurfaceFinish | None = None,
+    ) -> Mesh:
         """
         Create a Mesh by exporting a trimesh to a file.
 
@@ -938,9 +929,9 @@ class Mesh(Shape):
     def box(
         cls,
         extents: Tuple[float, float, float] = (1.0, 1.0, 1.0),
-        origin: Optional[HomogeneousTransformationMatrix] = None,
-        scale: Optional[Scale] = None,
-    ) -> "Mesh":
+        origin: HomogeneousTransformationMatrix | None = None,
+        scale: Scale | None = None,
+    ) -> Mesh:
         """
         Create a box-shaped Mesh.
 
@@ -960,8 +951,8 @@ class Mesh(Shape):
         cls,
         side: float,
         height: float,
-        origin: Optional[HomogeneousTransformationMatrix] = None,
-    ) -> "Mesh":
+        origin: HomogeneousTransformationMatrix | None = None,
+    ) -> Mesh:
         """
         Create an upright prism of equilateral cross-section, its apex pointing along +x.
 
@@ -991,8 +982,8 @@ class Mesh(Shape):
         faces: np.ndarray,
         origin: np.ndarray,
         scale: np.ndarray,
-        uv: Optional[np.ndarray] = None,
-        texture_file_path: Optional[str] = None,
+        uv: np.ndarray | None = None,
+        texture_file_path: str | None = None,
     ) -> Mesh:
         """
         Create a mesh from vertices, faces, origin, and scale.
@@ -1017,7 +1008,7 @@ class Mesh(Shape):
     def from_3d_points(
         cls,
         points_3d: List[Point3],
-        reference_frame: Optional[KinematicStructureEntity] = None,
+        reference_frame: KinematicStructureEntity | None = None,
         minimum_thickness: float = 0.005,
         singular_value_ratio_tolerance: float = 1e-7,
     ) -> Self:
@@ -1272,7 +1263,7 @@ class CoordinateBounds(Bounds[npt.NDArray[np.float64]]):
 
     def clip_segment(
         self, start: npt.NDArray[np.float64], direction: npt.NDArray[np.float64]
-    ) -> Optional[SimpleInterval]:
+    ) -> SimpleInterval | None:
         """
         Clip the parametrized segment ``start + t * direction`` (``t`` in ``[0, 1]``)
         against this region, using the slab method.
@@ -1513,7 +1504,7 @@ class AxisAlignedBox(BoundsInterface[PointT], ABC):
             min_corner, max_corner, reference_T_new_origin
         )
 
-    def intersection_with(self, other: Self) -> Optional[Self]:
+    def intersection_with(self, other: Self) -> Self | None:
         """
         Compute the intersection of two bounding boxes.
 

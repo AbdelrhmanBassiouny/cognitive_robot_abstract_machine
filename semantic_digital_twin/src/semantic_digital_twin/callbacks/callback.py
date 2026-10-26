@@ -3,10 +3,9 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Self, TYPE_CHECKING
+from typing_extensions import Dict, List, Any, Self, TYPE_CHECKING
 
 import numpy as np
-from typing_extensions import Dict, List
 
 from krrood.adapters.json_serializer import SubclassJSONSerializer
 from semantic_digital_twin.world_description.world_entity import (

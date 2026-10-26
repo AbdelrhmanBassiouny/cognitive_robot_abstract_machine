@@ -11,16 +11,7 @@ from __future__ import annotations
 import itertools
 from dataclasses import asdict, dataclass
 
-from typing_extensions import (
-    Any,
-    ClassVar,
-    Dict,
-    Iterator,
-    List,
-    Optional,
-    Tuple,
-    TYPE_CHECKING,
-)
+from typing_extensions import Any, ClassVar, Dict, Iterator, List, Tuple, TYPE_CHECKING
 
 from cramera import paths
 from cramera.knowledge.enums import EdgeKind, PlanNodeGroup
@@ -54,7 +45,7 @@ class PlanViewPayload(GraphPanelPayload):
     The executed plan as a tree, one node per plan node the demo ran.
     """
 
-    TAB: ClassVar[Optional[str]] = "plan"
+    TAB: ClassVar[str | None] = "plan"
 
     breadcrumb: str = "executed plan"
     """
@@ -115,7 +106,7 @@ class PlanViewPayload(GraphPanelPayload):
         view: SubgraphAccumulator,
         node_ids: Iterator[int],
         tree: Dict[str, Any],
-        parent: Optional[str],
+        parent: str | None,
     ) -> None:
         """
         Add one plan node, with a freshly assigned id, and recurse into its children.

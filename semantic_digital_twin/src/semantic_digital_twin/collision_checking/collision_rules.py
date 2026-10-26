@@ -5,17 +5,10 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from itertools import combinations
 from itertools import product
-from typing import Dict, Any
+from typing_extensions import List, TYPE_CHECKING, Self, Callable, ClassVar, Any
 
 import numpy as np
 from lxml import etree
-from typing_extensions import (
-    List,
-    TYPE_CHECKING,
-    Self,
-    Callable,
-    ClassVar,
-)
 
 from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json, from_json
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
@@ -207,7 +200,7 @@ class AvoidExternalCollisions(AvoidCollisionRule, SubclassJSONSerializer):
             for body_a, body_b in product(robot_bodies, external_bodies)
         }
 
-    def to_json(self, **kwargs) -> Dict[str, Any]:
+    def to_json(self, **kwargs) -> dict[str, Any]:
         return {
             **super().to_json(**kwargs),
             "robot": to_json(self.robot.id, **kwargs),
@@ -224,7 +217,7 @@ class AvoidExternalCollisions(AvoidCollisionRule, SubclassJSONSerializer):
         }
 
     @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+    def _from_json(cls, data: dict[str, Any], **kwargs) -> Self:
         tracker = WorldEntityWithIDKwargsTracker.from_kwargs(kwargs)
         robot = tracker.get(from_json(data["robot"], **kwargs))
         body_subset_ids = from_json(data["body_subset"], **kwargs)
@@ -760,7 +753,7 @@ class SelfCollisionMatrixRule(AllowCollisionRule, SubclassJSONSerializer):
             )
         return self
 
-    def to_json(self, **kwargs) -> Dict[str, Any]:
+    def to_json(self, **kwargs) -> dict[str, Any]:
         return {
             **super().to_json(**kwargs),
             "allowed_body_ids": to_json(
@@ -770,7 +763,7 @@ class SelfCollisionMatrixRule(AllowCollisionRule, SubclassJSONSerializer):
         }
 
     @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+    def _from_json(cls, data: dict[str, Any], **kwargs) -> Self:
         tracker = WorldEntityWithIDKwargsTracker.from_kwargs(kwargs)
         allowed_body_ids = from_json(data["allowed_body_ids"], **kwargs)
         allowed_bodies = {tracker.get(_id) for _id in allowed_body_ids}

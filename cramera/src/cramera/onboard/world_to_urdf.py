@@ -38,7 +38,7 @@ from semantic_digital_twin.world_description.geometry import (
     Sphere,
 )
 from semantic_digital_twin.world_description.world_entity import Body
-from typing_extensions import ClassVar, Dict, Iterable, List, Optional, Type
+from typing_extensions import ClassVar, Dict, Iterable, List
 
 from cramera.onboard.bundle_urdf import BundledAssets, BundleReport
 
@@ -71,7 +71,7 @@ class UrdfDocument:
     A URDF document being assembled from a world's kinematic tree.
     """
 
-    CONNECTION_JOINT_TYPES: ClassVar[Dict[Type[Connection], JointType]] = {
+    CONNECTION_JOINT_TYPES: ClassVar[Dict[type[Connection], JointType]] = {
         FixedConnection: JointType.FIXED,
         RevoluteConnection: JointType.REVOLUTE,
         PrismaticConnection: JointType.PRISMATIC,
@@ -175,7 +175,7 @@ class UrdfDocument:
         name: str,
         output_directory: str,
         mesh_subdirectory: str,
-        identity_root: Optional[Body] = None,
+        identity_root: Body | None = None,
     ) -> BundleReport:
         """
         Serialize part of a world -- the bodies no parsed source describes -- as a URDF.
@@ -221,7 +221,7 @@ class UrdfDocument:
         return document.write(name, bodies)
 
     def graft_onto_root(
-        self, body: Body, pose: Optional[HomogeneousTransformationMatrix] = None
+        self, body: Body, pose: HomogeneousTransformationMatrix | None = None
     ) -> None:
         """
         Fix a body to :attr:`SYNTHESIZED_ROOT_LINK`.

@@ -9,7 +9,7 @@ import numpy as np
 from random_events.product_algebra import Event, SimpleEvent
 from random_events.variable import Variable
 from sortedcontainers import SortedSet
-from typing_extensions import Any, Dict, List, Optional, Self, Type
+from typing_extensions import Any, Dict, List, Self
 
 from probabilistic_model.distributions.multivariate_gaussian import (
     MultivariateGaussianDistribution,
@@ -223,7 +223,7 @@ class AbstractMultivariateGaussianLayer(LeafLayer, ABC):
 
     @memoized
     def support_of_nodes(
-        self, variables: SortedSet, cache: Optional[QueryCache] = None
+        self, variables: SortedSet, cache: QueryCache | None = None
     ) -> List[Event]:
         return [
             distribution.support for distribution in self.node_distributions(variables)
@@ -261,7 +261,7 @@ class AbstractMultivariateGaussianLayer(LeafLayer, ABC):
     @abstractmethod
     def type_of_layer_truncated_to_hyperrectangle(
         self, hyperrectangle: HyperrectangleArray
-    ) -> Type[Layer]:
+    ) -> type[Layer]:
         """
         :param hyperrectangle: A single hyperrectangle.
         :return: The type of the layer :meth:`log_truncated_of_hyperrectangle` returns
@@ -306,7 +306,7 @@ class AbstractMultivariateGaussianLayer(LeafLayer, ABC):
 
     def type_of_truncated_layer(
         self, event: SimpleEvent, variables: SortedSet
-    ) -> Type[Layer]:
+    ) -> type[Layer]:
         """
         :param event: A simple event.
         :param variables: The variables of the circuit.
@@ -324,7 +324,7 @@ class AbstractMultivariateGaussianLayer(LeafLayer, ABC):
         self,
         event: SimpleEvent,
         query: StructuralQuery,
-        cache: Optional[QueryCache] = None,
+        cache: QueryCache | None = None,
     ) -> LayerWithLogProbabilities:
         # a Gaussian gives every single point probability zero, so a singleton makes a
         # node impossible whether singletons are allowed or not
@@ -351,7 +351,7 @@ class AbstractMultivariateGaussianLayer(LeafLayer, ABC):
         self,
         events: List[SimpleEvent],
         query: StructuralQuery,
-        cache: Optional[QueryCache] = None,
+        cache: QueryCache | None = None,
     ) -> LayerWithLogProbabilities:
         truncated = [
             self.log_truncated_of_hyperrectangles(
@@ -372,7 +372,7 @@ class AbstractMultivariateGaussianLayer(LeafLayer, ABC):
         self,
         point: PartialPointType,
         query: StructuralQuery,
-        cache: Optional[QueryCache] = None,
+        cache: QueryCache | None = None,
     ) -> LayerWithLogProbabilities:
         # the fixed variables become Dirac deltas next to the Gaussians of the others,
         # conditioned on them
@@ -429,16 +429,16 @@ class AbstractMultivariateGaussianLayer(LeafLayer, ABC):
     def rebuild(
         self,
         needed: Dict[int, NodeMask],
-        rebuilt: Dict[int, Optional[Layer]],
-    ) -> Optional[Layer]:
+        rebuilt: Dict[int, Layer | None],
+    ) -> Layer | None:
         alive = needed[id(self)]
         if not alive.any():
             return None
         return self.select_nodes(alive)
 
     def marginal(
-        self, kept: VariableMask, cache: Optional[QueryCache] = None
-    ) -> Optional[Layer]:
+        self, kept: VariableMask, cache: QueryCache | None = None
+    ) -> Layer | None:
         positions = np.flatnonzero(kept[self.scope])
         if len(positions) == 0:
             return None
@@ -455,9 +455,7 @@ class AbstractMultivariateGaussianLayer(LeafLayer, ABC):
         raise NotImplementedError
 
     @memoized
-    def remap_variables(
-        self, remap: VariableIndices, cache: Optional[QueryCache] = None
-    ):
+    def remap_variables(self, remap: VariableIndices, cache: QueryCache | None = None):
         remapped = remap[self.scope]
         order = np.argsort(remapped)
         self.scope = remapped[order]

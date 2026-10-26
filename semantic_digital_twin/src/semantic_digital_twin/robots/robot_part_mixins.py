@@ -6,18 +6,18 @@ from dataclasses import dataclass, field
 from functools import cached_property
 from itertools import product
 from types import NoneType
-from typing import Union, get_args, get_origin
-
 from typing_extensions import (
-    Optional,
     TYPE_CHECKING,
     Tuple,
-    Type,
     TypeVar,
     Generic,
     TypeVarTuple,
     Unpack,
+    Union,
+    get_args,
+    get_origin,
 )
+
 
 from krrood.ormatic.utils import classproperty
 from krrood.patterns.subclass_safe_generic import (
@@ -107,7 +107,7 @@ class HasFingers(
     Mixin class for robots or robot parts that have fingers as their direct children.
     """
 
-    fingers: list[Union[TGenericThumb, Unpack[TGenericFingers]]] = field(
+    fingers: list[TGenericThumb | Unpack[TGenericFingers]] = field(
         default_factory=list, kw_only=True
     )
     """
@@ -334,7 +334,7 @@ class HasTwoFingers(
         super().validate()
 
     @property
-    def finger(self) -> Union[TGenericLeftFinger, TGenericRightFinger]:
+    def finger(self) -> TGenericLeftFinger | TGenericRightFinger:
         concrete_thumb_class = get_generic_type_parameters(self, HasFingers)[0]
 
         [finger] = [
@@ -440,9 +440,7 @@ class HasSensors(
     Mixin class for robots or robot parts that have sensors.
     """
 
-    sensors: list[Union[Unpack[TGenericSensors]]] = field(
-        default_factory=list, kw_only=True
-    )
+    sensors: list[Unpack[TGenericSensors]] = field(default_factory=list, kw_only=True)
     """
     The list of sensors associated with the robot part.
     """
@@ -485,7 +483,7 @@ class HasArms(Generic[Unpack[TGenericArms]], SubClassSafeGeneric, RobotPartMixin
     Mixin class for robots or robot parts that have arms as their direct children.
     """
 
-    arms: list[Union[Unpack[TGenericArms]]] = field(default_factory=list, kw_only=True)
+    arms: list[Unpack[TGenericArms]] = field(default_factory=list, kw_only=True)
     """
     The list of arms attached to the robot part.
     """
@@ -573,8 +571,8 @@ class HasLeftRightArm(
         return self._assign_left_right_arms(RightOf)
 
     def _assign_left_right_arms(
-        self, relation: Type[Union[LeftOf, RightOf]]
-    ) -> Union[TGenericLeftArm, TGenericRightArm]:
+        self, relation: type[LeftOf | RightOf]
+    ) -> TGenericLeftArm | TGenericRightArm:
         """
         Assigns the left and right arms based on their position relative to the robot's
         root body.
@@ -723,7 +721,7 @@ class HasInputSource(
     part cannot be handed a source meant for another kind of part.
     """
 
-    source: Optional[TGenericInputSource] = field(default=None, kw_only=True)
+    source: TGenericInputSource | None = field(default=None, kw_only=True)
     """
     Where this part is read from.
 
@@ -732,7 +730,7 @@ class HasInputSource(
     """
 
     @classproperty
-    def topic_name(cls) -> Optional[str]:
+    def topic_name(cls) -> str | None:
         """
         The topic the real robot publishes this part's state on, if its description
         names one.
@@ -748,7 +746,7 @@ class HasInputSource(
         super().validate()
 
     @classmethod
-    def source_family(cls) -> Type[TGenericInputSource]:
+    def source_family(cls) -> type[TGenericInputSource]:
         """
         :return: The kind of source this part can be read from.
 

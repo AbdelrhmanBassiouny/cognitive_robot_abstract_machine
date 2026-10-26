@@ -17,9 +17,8 @@ from __future__ import annotations
 
 from dataclasses import replace
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing_extensions import List, TYPE_CHECKING
 
-from typing_extensions import List, Optional, Type
 
 from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.boolean_predicate import (
@@ -66,7 +65,7 @@ class SpelledOutHead(StrEnum):
     ARE = "are"
 
     @classmethod
-    def opening(cls, words: List[str]) -> Optional[SpelledOutHead]:
+    def opening(cls, words: List[str]) -> SpelledOutHead | None:
         """:param words: The words of an attribute's name, in order.
 
         :return: The head *words* opens with and also says something about, or ``None`` when it
@@ -77,7 +76,7 @@ class SpelledOutHead(StrEnum):
         return next((head for head in cls if head == words[0]), None)
 
     @property
-    def predicate_type(self) -> Type[BooleanPredicate]:
+    def predicate_type(self) -> type[BooleanPredicate]:
         """
         The predicate whose head this word spells.
         """

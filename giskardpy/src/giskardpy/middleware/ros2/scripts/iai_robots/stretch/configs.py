@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-from typing_extensions import List, Union
+from typing_extensions import List
 
 from giskardpy.middleware.ros2.robot_interface_config import (
     StandAloneRobotInterfaceConfig,
@@ -47,7 +47,7 @@ class StretchStandaloneInterface(StandAloneRobotInterfaceConfig):
             StretchJoint.HEAD_TILT,
         ]
 
-    def controlled_joint_names(self, world: World) -> List[Union[str, PrefixedName]]:
+    def controlled_joint_names(self, world: World) -> List[str | PrefixedName]:
         """
         The joints to control, with the base drive resolved from ``world``.
 

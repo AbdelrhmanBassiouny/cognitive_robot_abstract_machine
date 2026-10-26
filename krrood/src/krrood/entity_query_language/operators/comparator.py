@@ -11,15 +11,7 @@ import operator
 from copy import copy
 from dataclasses import dataclass
 
-from typing_extensions import (
-    Callable,
-    Any,
-    ClassVar,
-    Dict,
-    Optional,
-    Tuple,
-    Iterable,
-)
+from typing_extensions import Callable, Any, ClassVar, Dict, Tuple, Iterable
 
 from krrood.entity_query_language.core.base_expressions import (
     OperationResult,
@@ -101,7 +93,7 @@ class Comparator(BinaryExpression, PerformsCartesianProduct):
         )
 
     def _optimize_operands_order_(
-        self, sources: Optional[OperationResult]
+        self, sources: OperationResult | None
     ) -> Tuple[SymbolicExpression, SymbolicExpression]:
         left_is_definite = self._operand_contains_definite_query_(self.left)
         right_is_definite = self._operand_contains_definite_query_(self.right)

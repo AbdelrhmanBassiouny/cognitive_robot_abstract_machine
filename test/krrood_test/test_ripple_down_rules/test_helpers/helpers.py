@@ -4,7 +4,7 @@ import shutil
 import tempfile
 from contextlib import contextmanager
 
-from typing_extensions import Iterator, List, Any, Tuple, Type
+from typing_extensions import Iterator, List, Any, Tuple
 
 from ..datasets import (
     Species,
@@ -45,7 +45,7 @@ def get_fit_scrdr(
     cases: List[Any],
     targets: List[Any],
     attribute_name: str = "species",
-    attribute_type: Type = Species,
+    attribute_type: type = Species,
     expert_answers_dir: str = "test_expert_answers",
     expert_answers_file: str = "scrdr_expert_answers_fit",
     draw_tree: bool = False,
@@ -95,7 +95,7 @@ def get_fit_mcrdr(
     cases: List[Any],
     targets: List[Any],
     attribute_name: str = "species",
-    attribute_type: Type = Species,
+    attribute_type: type = Species,
     mutually_exclusive: bool = True,
     expert_answers_dir: str = "test_expert_answers",
     expert_answers_file: str = "mcrdr_expert_answers_stop_only_fit",

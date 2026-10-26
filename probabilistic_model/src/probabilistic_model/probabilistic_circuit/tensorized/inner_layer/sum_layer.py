@@ -7,16 +7,7 @@ import numpy as np
 import numpy.typing as npt
 from random_events.product_algebra import Event, SimpleEvent
 from sortedcontainers import SortedSet
-from typing_extensions import (
-    Any,
-    Dict,
-    Iterable,
-    List,
-    Optional,
-    Self,
-    Tuple,
-    Type,
-)
+from typing_extensions import Any, Dict, Iterable, List, Self, Tuple
 
 from probabilistic_model.exceptions import ShapeMismatchError
 from probabilistic_model.probabilistic_model import PartialPointType
@@ -169,7 +160,7 @@ class SumLayer(InnerLayer):
         :return: The mixture and the log-probabilities of its nodes.
         """
         number_of_nodes = pieces[0].layer.number_of_nodes
-        pieces_by_type: Dict[Type[Layer], List[LayerWithLogProbabilities]] = {}
+        pieces_by_type: Dict[type[Layer], List[LayerWithLogProbabilities]] = {}
         for piece in pieces:
             pieces_by_type.setdefault(type(piece.layer), []).append(piece)
 
@@ -257,7 +248,7 @@ class SumLayer(InnerLayer):
         return result
 
     def component_supports(
-        self, variables: SortedSet, cache: Optional[QueryCache] = None
+        self, variables: SortedSet, cache: QueryCache | None = None
     ) -> List[NodeComponentSupports]:
         child_supports = [
             child_layer.support_of_nodes(variables, cache=cache)
@@ -395,7 +386,7 @@ class SumLayer(InnerLayer):
 
     @memoized
     def log_likelihood_of_nodes(
-        self, events: SampleArray, cache: Optional[QueryCache] = None
+        self, events: SampleArray, cache: QueryCache | None = None
     ) -> SampleNodeValues:
         child_results = [
             child_layer.log_likelihood_of_nodes(events, cache=cache)
@@ -405,7 +396,7 @@ class SumLayer(InnerLayer):
 
     @memoized
     def cumulative_distribution_of_nodes(
-        self, events: SampleArray, cache: Optional[QueryCache] = None
+        self, events: SampleArray, cache: QueryCache | None = None
     ) -> SampleNodeValues:
         child_results = [
             child_layer.cumulative_distribution_of_nodes(events, cache=cache)
@@ -418,7 +409,7 @@ class SumLayer(InnerLayer):
         self,
         event: SimpleEvent,
         variables: SortedSet,
-        cache: Optional[QueryCache] = None,
+        cache: QueryCache | None = None,
     ) -> NodeValues:
         child_results = [
             child_layer.probability_of_simple_event_of_nodes(
@@ -430,14 +421,14 @@ class SumLayer(InnerLayer):
 
     @memoized
     def support_of_nodes(
-        self, variables: SortedSet, cache: Optional[QueryCache] = None
+        self, variables: SortedSet, cache: QueryCache | None = None
     ) -> List[Event]:
         child_supports = [
             child_layer.support_of_nodes(variables, cache=cache)
             for child_layer in self.child_layers
         ]
 
-        result: List[Optional[Event]] = [None] * self.number_of_nodes
+        result: List[Event | None] = [None] * self.number_of_nodes
         for edge in self.iterate_edges():
             support = child_supports[edge.child_layer_index][edge.child_node]
             if result[edge.node] is None:
@@ -449,7 +440,7 @@ class SumLayer(InnerLayer):
 
     @memoized
     def log_mode_of_nodes(
-        self, variables: SortedSet, cache: Optional[QueryCache] = None
+        self, variables: SortedSet, cache: QueryCache | None = None
     ) -> Tuple[List[Event], NodeValues]:
         child_modes = [
             child_layer.log_mode_of_nodes(variables, cache=cache)
@@ -488,7 +479,7 @@ class SumLayer(InnerLayer):
         self,
         query: MomentQuery,
         variables: SortedSet,
-        cache: Optional[QueryCache] = None,
+        cache: QueryCache | None = None,
     ) -> NodeVariableValues:
         child_results = [
             child_layer.moment_of_nodes(query, variables, cache=cache)
@@ -620,7 +611,7 @@ class SumLayer(InnerLayer):
         self,
         event: SimpleEvent,
         query: StructuralQuery,
-        cache: Optional[QueryCache] = None,
+        cache: QueryCache | None = None,
     ) -> LayerWithLogProbabilities:
         child_results = [
             child_layer.log_truncated_of_simple_event(event, query, cache=cache)
@@ -633,7 +624,7 @@ class SumLayer(InnerLayer):
         self,
         events: List[SimpleEvent],
         query: StructuralQuery,
-        cache: Optional[QueryCache] = None,
+        cache: QueryCache | None = None,
     ) -> LayerWithLogProbabilities:
         child_results = [
             child_layer.log_truncated_of_simple_events(events, query, cache=cache)
@@ -688,7 +679,7 @@ class SumLayer(InnerLayer):
         self,
         point: PartialPointType,
         query: StructuralQuery,
-        cache: Optional[QueryCache] = None,
+        cache: QueryCache | None = None,
     ) -> LayerWithLogProbabilities:
         child_results = [
             child_layer.log_conditional_of_point(point, query, cache=cache)
@@ -735,8 +726,8 @@ class SumLayer(InnerLayer):
     def rebuild(
         self,
         needed: Dict[int, NodeMask],
-        rebuilt: Dict[int, Optional[Layer]],
-    ) -> Optional[Layer]:
+        rebuilt: Dict[int, Layer | None],
+    ) -> Layer | None:
         alive = needed[id(self)]
         if not alive.any():
             return None
@@ -782,8 +773,8 @@ class SumLayer(InnerLayer):
 
     @memoized
     def marginal(
-        self, kept: VariableMask, cache: Optional[QueryCache] = None
-    ) -> Optional[Layer]:
+        self, kept: VariableMask, cache: QueryCache | None = None
+    ) -> Layer | None:
         edges = self.inner_layer_edges
 
         new_child_layers = []
@@ -817,7 +808,7 @@ class SumLayer(InnerLayer):
         )
 
     @memoized
-    def simplify(self, cache: Optional[QueryCache] = None) -> Layer:
+    def simplify(self, cache: QueryCache | None = None) -> Layer:
         simplified_children = [
             child_layer.simplify(cache=cache) for child_layer in self.child_layers
         ]

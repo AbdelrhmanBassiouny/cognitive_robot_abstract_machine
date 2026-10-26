@@ -9,7 +9,7 @@ This module provides caching datastructures and utilities.
 """
 from dataclasses import dataclass, field
 from itertools import islice
-from typing_extensions import Dict, Generic, Iterable, Iterator, List, Optional
+from typing_extensions import Dict, Generic, Iterable, Iterator, List
 
 
 @dataclass
@@ -131,7 +131,7 @@ class ReEnterableLazyIterable(Generic[T]):
     materializing values as they are iterated over.
     """
 
-    iterable: Optional[Iterator[T]] = field(default=None)
+    iterable: Iterator[T] | None = field(default=None)
     """
     The live source iterator currently feeding new values, or ``None`` when it has been
     released.
@@ -145,7 +145,7 @@ class ReEnterableLazyIterable(Generic[T]):
     The materialized values of the iterable.
     """
 
-    _source: Optional[Iterable[T]] = field(default=None, init=False, repr=False)
+    _source: Iterable[T] | None = field(default=None, init=False, repr=False)
     """
     The original iterable, kept so a released source iterator can be recreated for a
     later iteration.
