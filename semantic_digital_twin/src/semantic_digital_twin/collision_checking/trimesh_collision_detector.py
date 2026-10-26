@@ -93,6 +93,7 @@ class FCLCollisionDetector(CollisionDetector):
             collisions. If None is provided, all collisions are checked.
         :return: A list of Collision objects representing the detected collisions.
         """
+        self.world_model_updater.ensure_synchronized()
         result = []
         for collision_check in collision_matrix.collision_checks:
             body_a = collision_check.body_a

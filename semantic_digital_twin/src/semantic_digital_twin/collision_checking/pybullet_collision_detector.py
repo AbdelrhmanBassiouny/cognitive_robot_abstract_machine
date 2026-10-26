@@ -427,7 +427,7 @@ class BulletCollisionDetector(CollisionDetector):
     def check_collisions(
         self, collision_matrix: CollisionMatrix
     ) -> CollisionCheckingResult:
-
+        self.world_model_updater.ensure_synchronized()
         query = self.collision_matrix_to_bullet_query(collision_matrix)
         result: List[bullet.Collision] = (
             self.kineverse_world.get_closest_filtered_map_batch(query)
