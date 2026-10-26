@@ -73,8 +73,9 @@ items:
   title: RoboCasa task goals as EQL conditions, read from the tasks' success checks
   track: cram-robocasa
   status: not_started
-  notes: Builds on Jonas's RoboCasa condition survey and the semantic_digital_twin RoboCasa
-    loader.
+  notes: 'Builds on Tom Schierenbeck''s RoboCasa condition survey (#523, on main) and the
+    semantic_digital_twin RoboCasa loader; its predicates are also the transfer-domain estimators
+    of concept-theory/robocasa-transfer.'
 - id: robocasa-slice
   branch: eql-planning-robots/robocasa-slice
   title: '5-10 RoboCasa tasks end to end on the #261 scenario harness'
