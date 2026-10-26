@@ -32,6 +32,7 @@ from krrood.class_diagrams.attribute_introspector import (
 )
 from krrood.entity_query_language.factories import variable, contains, a, entity
 from krrood.ormatic.utils import classproperty
+from krrood.patterns.caching import clear_memoization_cache
 from krrood.utils import get_generic_type_parameters
 from semantic_digital_twin.adapters.package_resolver import CompositePathResolver
 from semantic_digital_twin.adapters.urdf import URDFParser
@@ -118,6 +119,9 @@ from semantic_digital_twin.world_description.world_modification import (
 if TYPE_CHECKING:
     from rclpy.node import Node
 
+    from semantic_digital_twin.robots.description_corrections import (
+        DescriptionCorrection,
+    )
     from semantic_digital_twin.world import World
     from semantic_digital_twin.specifications.connections import ConnectionSpecification
     from semantic_digital_twin.specifications.kinematic_structure_entities import (
@@ -1118,6 +1122,15 @@ class AbstractRobot(Agent, HasRobotParts, ABC):
         """
         return False
 
+    @classproperty
+    def description_corrections(cls) -> tuple[DescriptionCorrection, ...]:
+        """
+        :return: The changes made to this robot's kinematic structure, in order, before
+            the robot is set up on it, for what its description gets wrong or cannot
+            express. None by default.
+        """
+        return ()
+
     @classmethod
     def from_description(cls) -> Self:
         """
@@ -1175,12 +1188,21 @@ class AbstractRobot(Agent, HasRobotParts, ABC):
 
         This is useful when you have multiple of the same robots in the same world,
         which would normally cause naming conflicts.
+
+        The :attr:`description_corrections` are made first, so everything set up here
+        sees the corrected structure.
         """
         world = branch_root._world
-        robot_root = world.get_body_in_branch_by_name(
-            branch_root=branch_root, name=cls._get_root_body_name()
-        )
         with world.modify_world():
+            for correction in cls.description_corrections:
+                correction.apply(world, branch_root)
+            # Lookups are forgotten only once the outermost modification block ends, so
+            # without this the setup below could find what a correction replaced.
+            clear_memoization_cache(world)
+            # A correction may have replaced the root body itself.
+            robot_root = world.get_body_in_branch_by_name(
+                branch_root=branch_root, name=cls._get_root_body_name()
+            )
             self = cls(
                 root=robot_root,
             )

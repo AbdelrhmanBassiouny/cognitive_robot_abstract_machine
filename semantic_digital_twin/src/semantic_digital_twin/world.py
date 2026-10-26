@@ -1458,6 +1458,21 @@ class World(HasSimulatorProperties):
         ]
         return self._get_world_entity_by_name_from_iterable(name, bodies)
 
+    def get_connection_in_branch_by_name(
+        self, branch_root: KinematicStructureEntity, name: Union[str, PrefixedName]
+    ) -> Connection:
+        """
+        :param branch_root: The root of the branch to search.
+        :param name: The name of the connection, matched without its prefix if a plain
+            string.
+        :return: The connection below `branch_root` with that name.
+        :raises WorldEntityNotFoundError: If no connection of the branch has that name.
+        :raises DuplicateWorldEntityError: If several connections of the branch have it.
+        """
+        return self._get_world_entity_by_name_from_iterable(
+            name, self.get_connections_of_branch(branch_root)
+        )
+
     @memoize
     def get_degree_of_freedom_by_name(
         self, name: Union[str, PrefixedName]

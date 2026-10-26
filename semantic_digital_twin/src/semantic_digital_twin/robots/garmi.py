@@ -254,7 +254,7 @@ class GarmiLeftGripperLeftFinger(Finger):
                 robot_root, "left_fr3_hand"
             ),
             tip=robot_root._world.get_body_in_branch_by_name(
-                robot_root, "left_fr3_leftfinger"
+                robot_root, "left_fr3_leftfinger_tip"
             ),
         )
 
@@ -288,7 +288,7 @@ class GarmiLeftGripperRightFinger(Finger):
                 robot_root, "left_fr3_hand"
             ),
             tip=robot_root._world.get_body_in_branch_by_name(
-                robot_root, "left_fr3_rightfinger"
+                robot_root, "left_fr3_rightfinger_tip"
             ),
         )
 
@@ -322,7 +322,7 @@ class GarmiRightGripperLeftFinger(Finger):
                 robot_root, "right_fr3_hand"
             ),
             tip=robot_root._world.get_body_in_branch_by_name(
-                robot_root, "right_fr3_leftfinger"
+                robot_root, "right_fr3_leftfinger_tip"
             ),
         )
 
@@ -356,7 +356,7 @@ class GarmiRightGripperRightFinger(Finger):
                 robot_root, "right_fr3_hand"
             ),
             tip=robot_root._world.get_body_in_branch_by_name(
-                robot_root, "right_fr3_rightfinger"
+                robot_root, "right_fr3_rightfinger_tip"
             ),
         )
 
@@ -410,7 +410,7 @@ class GarmiLeftGripper(
         """
         return cls(
             root=robot_root._world.get_body_in_branch_by_name(
-                robot_root, "left_fr3_hand"
+                robot_root, "left_fr3_link8"
             ),
             tool_frame=robot_root._world.get_body_in_branch_by_name(
                 robot_root, "left_fr3_hand_tcp"
@@ -468,7 +468,7 @@ class GarmiRightGripper(
         """
         return cls(
             root=robot_root._world.get_body_in_branch_by_name(
-                robot_root, "right_fr3_hand"
+                robot_root, "right_fr3_link8"
             ),
             tool_frame=robot_root._world.get_body_in_branch_by_name(
                 robot_root, "right_fr3_hand_tcp"
