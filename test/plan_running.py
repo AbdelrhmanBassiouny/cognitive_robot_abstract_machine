@@ -10,6 +10,7 @@ from dataclasses import replace
 
 from coraplex.plans.context_extensions import RobotAccess, StatementGrounding
 from coraplex.plans.executors import (
+    PhysicallySimulatedPlanExecutor,
     PlanExecutor,
     RealRobotPlanExecutor,
     KinematicallySimulatedPlanExecutor,
@@ -18,6 +19,7 @@ from cramph.context import ContextExtension, StatechartContext
 from cramph.executor import SimulationPacer
 from cramph.node import StatechartNode
 from cramph.statechart import Statechart
+from semantic_digital_twin.adapters.multi_sim import MujocoSim
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.world import World
 from .sampling import SAMPLING_SEED
@@ -159,3 +161,19 @@ def run_plan(
     executor.compile(statechart_of(executor, plan))
     executor.execute()
     return executor
+
+
+def perform_in_physics(
+    plan: StatechartNode, extensions: list[ContextExtension], simulation: MujocoSim
+) -> None:
+    """
+    :param plan: The plan to perform.
+    :param extensions: The context extensions of the plan.
+    :param simulation: The running physics to perform it in.
+    """
+    executor = PhysicallySimulatedPlanExecutor(
+        StatechartContext.with_extensions(world_of(extensions), extensions),
+        simulation=simulation,
+    )
+    executor.compile(statechart_of(executor, plan))
+    executor.execute()

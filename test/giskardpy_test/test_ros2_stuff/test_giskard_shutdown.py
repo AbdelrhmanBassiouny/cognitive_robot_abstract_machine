@@ -12,6 +12,7 @@ from giskardpy.middleware.ros2.robot_interface_config import (
 from giskardpy.middleware.ros2.server_config import GiskardServerConfig
 from giskardpy.model.world_config import WorldConfig
 from giskardpy.qp.qp_controller_config import QPControllerConfig
+from krrood.exceptions import DataclassException
 from semantic_digital_twin.input_synchronization import InputSynchronizer
 from semantic_digital_twin.robots.minimal_robot import MinimalRobot
 from semantic_digital_twin.world import World
@@ -68,16 +69,30 @@ def test_an_interrupt_while_waiting_for_goals_shuts_ros_down(
 # %% failing while starting
 
 
-class RobotUnreachableError(Exception):
+@dataclass
+class RobotUnreachableError(DataclassException):
     """
     Raised by an interface that cannot connect to its robot.
     """
 
+    def error_message(self) -> str:
+        return "The robot cannot be reached."
 
-class WorldUnbuildableError(Exception):
+    def suggest_correction(self) -> str:
+        return "Start the robot before Giskard."
+
+
+@dataclass
+class WorldUnbuildableError(DataclassException):
     """
     Raised by a world config that cannot build its world.
     """
+
+    def error_message(self) -> str:
+        return "The world cannot be built."
+
+    def suggest_correction(self) -> str:
+        return "Check the robot description the world config loads."
 
 
 @dataclass

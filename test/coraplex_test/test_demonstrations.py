@@ -29,11 +29,13 @@ from ..plan_running import robot_extensions
 from cramph.context import ContextExtension, StatechartContext
 from coraplex.plans.executors import (
     KinematicallySimulatedPlanExecutor,
+    PhysicallySimulatedPlanExecutor,
     PlanExecutor,
     RealRobotPlanExecutor,
 )
 from coraplex.plans.failures import MotionExceededSimulationTimeLimit
 from cramph.statechart import Statechart
+from ..pytest_environment import runs_in_continuous_integration
 
 
 class PlanDeliberatelyFailed(Exception):
@@ -113,6 +115,11 @@ class RecordingDemonstration(RobotDemonstration):
     Whether the events of the run were being segmented while the plan ran.
     """
 
+    simulation_running_during_the_plan: bool | None = field(default=None)
+    """
+    Whether :attr:`simulation` was running while the plan ran.
+    """
+
     def scene_specification(self) -> WorldSpecification:
         return WorldSpecification()
 
@@ -153,6 +160,9 @@ class RecordingDemonstration(RobotDemonstration):
         if self.fail_the_plan:
             raise PlanDeliberatelyFailed()
         self.observed_segmenting_events = self.segmenting_events
+        self.simulation_running_during_the_plan = (
+            self.simulation is not None and self.simulation.is_running()
+        )
 
     def create_executor(self, world: World) -> PlanExecutor:
         """
@@ -299,6 +309,47 @@ def test_a_simulated_plan_is_given_up_on_at_the_time_limit_of_its_demonstration(
         demonstration.run()
 
     assert error.value.time_limit == demonstration.simulation_time_per_action
+
+
+# %% physical simulation
+
+
+@pytest.mark.skipif(
+    not runs_in_continuous_integration(), reason="MuJoCo tests only run in CI"
+)
+def test_a_physically_simulated_run_performs_its_plan_in_running_physics(
+    cylinder_bot_world,
+) -> None:
+    demonstration = RecordingDemonstration(
+        world=cylinder_bot_world,
+        used_robot=MinimalRobot,
+        executor_type=PhysicallySimulatedPlanExecutor,
+        headless=True,
+    )
+
+    demonstration.run()
+
+    assert type(demonstration.observed_executor) is PhysicallySimulatedPlanExecutor
+    assert demonstration.observed_executor.simulation.world is cylinder_bot_world
+    assert demonstration.simulation_running_during_the_plan is True
+
+
+@pytest.mark.skipif(
+    not runs_in_continuous_integration(), reason="MuJoCo tests only run in CI"
+)
+def test_the_physics_of_a_run_stops_when_its_plan_fails(cylinder_bot_world) -> None:
+    demonstration = RecordingDemonstration(
+        world=cylinder_bot_world,
+        used_robot=MinimalRobot,
+        executor_type=PhysicallySimulatedPlanExecutor,
+        headless=True,
+        fail_the_plan=True,
+    )
+
+    with pytest.raises(PlanDeliberatelyFailed):
+        demonstration.run()
+
+    assert demonstration.simulation is None
 
 
 # %% event segmentation

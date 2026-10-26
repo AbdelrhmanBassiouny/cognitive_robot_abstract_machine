@@ -14,7 +14,7 @@ class WorldWithPR2Config(WorldWithMobileRobot):
     A world containing only the PR2, which drives on an omnidirectional base.
     """
 
-    odom_body_name: PrefixedName = PrefixedName("odom_combined")
+    odometry_body_name: PrefixedName = PrefixedName("odom_combined")
     """
     Name of the body the robot drives relative to.
     """

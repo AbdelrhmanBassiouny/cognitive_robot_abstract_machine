@@ -10,7 +10,6 @@ import signal
 import subprocess
 from dataclasses import dataclass
 from datetime import timedelta
-from enum import StrEnum
 from time import sleep, time
 from typing_extensions import Iterator
 
@@ -24,6 +23,9 @@ from giskardpy.middleware.ros2.command_publishing import (
 )
 from giskardpy.middleware.ros2.controller_manager import ControllerState
 from giskardpy.middleware.ros2.giskard import Giskard
+from giskardpy.middleware.ros2.scripts.tutorial.joint_goal_client import (
+    UniversalRobotJoint,
+)
 from giskardpy.middleware.ros2.scripts.tutorial.universal_robot_velocity import (
     create_giskard,
 )
@@ -35,19 +37,6 @@ ament_index_packages = pytest.importorskip("ament_index_python.packages")
 controller_manager_services = pytest.importorskip("controller_manager_msgs.srv")
 
 # %% the mock robot
-
-
-class UniversalRobotJoint(StrEnum):
-    """
-    The joints of the arm, in the order the velocity controller expects its commands.
-    """
-
-    SHOULDER_PAN = "shoulder_pan_joint"
-    SHOULDER_LIFT = "shoulder_lift_joint"
-    ELBOW = "elbow_joint"
-    WRIST_1 = "wrist_1_joint"
-    WRIST_2 = "wrist_2_joint"
-    WRIST_3 = "wrist_3_joint"
 
 
 @dataclass

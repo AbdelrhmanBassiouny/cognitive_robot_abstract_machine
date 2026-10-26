@@ -108,7 +108,8 @@ high_ice_cream = SimpleEvent.from_data({ice_cream_sales: closed(9, 10).simple_se
 high_drowning = SimpleEvent.from_data({drowning_incidents: Set.from_iterable([DrowningLevel.HIGH])}).as_composite_set()
 
 # Conditioning: observe high ice cream sales, ask about drowning incidents.
-conditioned, _ = circuit.truncated(high_ice_cream.fill_missing_variables_pure(circuit.variables))
+conditioned = circuit.truncated(high_ice_cream.fill_missing_variables_pure(circuit.variables)).distribution
+
 conditioned.probability(high_drowning.fill_missing_variables_pure(conditioned.variables))
 # 0.7 -- conditioning picks up the confound: high sales lean warm, which leans toward
 # high drowning incidents.

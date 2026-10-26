@@ -15,6 +15,7 @@ from abc import ABC, abstractmethod
 from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, field
 from datetime import timedelta
+from functools import partial
 
 import rclpy
 from rclpy.executors import MultiThreadedExecutor
@@ -23,12 +24,14 @@ from typing_extensions import Type
 
 from coraplex.plans.executors import (
     KinematicallySimulatedPlanExecutor,
+    PhysicallySimulatedPlanExecutor,
     PlanExecutor,
     SimulatedPlanExecutor,
 )
 from cramph.visualization import RvizVisualization, WorldVisualization
 from cramph.context import ContextExtension, StatechartContext
 from cramph.statechart import Statechart
+from semantic_digital_twin.adapters.multi_sim import MujocoSim
 from semantic_digital_twin.adapters.ros.world_fetcher import fetch_world_from_service
 from semantic_digital_twin.adapters.ros.world_synchronizer import WorldSynchronizer
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
@@ -150,7 +153,8 @@ class RobotDemonstration(ABC):
     synchronized, and merges the scene into it unless the controller already holds it,
     so the scene reaches the controller before the plan needs it. A simulated run puts
     the robot into the scene instead, and publishes it to Rviz, so its progress can be
-    watched the same way a real run's can.
+    watched the same way a real run's can. A physically simulated run performs its plan
+    in the physics of :meth:`build_simulation`.
     """
 
     used_robot: Type[AbstractRobot]
@@ -200,6 +204,17 @@ class RobotDemonstration(ABC):
     ``None`` keeps the budget of the executor.
     """
 
+    headless: bool = False
+    """
+    Whether the physics of a physically simulated run steps without a viewer.
+    """
+
+    settling_duration: timedelta = timedelta(seconds=1)
+    """
+    How long the physics of a physically simulated run steps before the plan starts, for
+    the scene to come to rest.
+    """
+
     visualization: WorldVisualization | None = None
     """
     Shows every simulated run of this demonstration. Left ``None``, a simulated run is
@@ -209,6 +224,12 @@ class RobotDemonstration(ABC):
     ros_session: RobotDemonstrationRosSession | None = field(init=False, default=None)
     """
     Session held for the duration of a real run, and ``None`` in simulation.
+    """
+
+    simulation: MujocoSim | None = field(init=False, default=None)
+    """
+    The physics a physically simulated run performs its plan in while it runs, and
+    ``None`` otherwise.
     """
 
     @abstractmethod
@@ -343,13 +364,38 @@ class RobotDemonstration(ABC):
             return self.build_simulated_world()
         return self.fetch_real_world()
 
+    def build_simulation(self, world: World) -> MujocoSim:
+        """
+        :param world: The world the plan is performed in.
+        :return: The physics of a physically simulated run, not started yet.
+        """
+        return MujocoSim(world=world, headless=self.headless)
+
+    def start_simulation(self, world: World) -> None:
+        """
+        Start the physics of a run of a
+        :class:`~coraplex.plans.executors.PhysicallySimulatedPlanExecutor`, and let it
+        step for :attr:`settling_duration`. Starts nothing for any other run.
+
+        :param world: The world the plan is performed in.
+        """
+        if not issubclass(self.executor_type, PhysicallySimulatedPlanExecutor):
+            return
+        self.simulation = self.build_simulation(world)
+        self.simulation.start_stepped_simulation()
+        self.simulation.step_simulation(self.settling_duration)
+
     def create_executor(self, world: World) -> PlanExecutor:
         """
         :param world: The world the plan is performed in.
         :return: An executor of :attr:`executor_type`, set up the way this demonstration
-            performs its plan, showing its runs with :attr:`visualization`.
+            performs its plan in :attr:`simulation`, if there is one, showing its runs
+            with :attr:`visualization`.
         """
-        executor = self.executor_type(
+        executor_type = self.executor_type
+        if self.simulation is not None:
+            executor_type = partial(executor_type, simulation=self.simulation)
+        executor = executor_type(
             StatechartContext.with_extensions(
                 world, self.build_context_extensions(world)
             ),
@@ -372,6 +418,7 @@ class RobotDemonstration(ABC):
         """
         try:
             world = self.acquire_world()
+            self.start_simulation(world)
             for _ in range(self.repetitions):
                 executor = self.create_executor(world)
                 statechart = self.build_statechart(executor.context)
@@ -390,8 +437,12 @@ class RobotDemonstration(ABC):
 
     def tear_down(self) -> None:
         """
-        Release the ROS session if this demonstration started the ROS context.
+        Stop the physics, and release the ROS session if this demonstration started the
+        ROS context.
         """
+        if self.simulation is not None:
+            self.simulation.stop_simulation()
+            self.simulation = None
         if self.ros_session is None or not self.ros_session.owns_context:
             return
         self.ros_session.stop()

@@ -19,6 +19,7 @@ from semantic_digital_twin.collision_checking.collision_rules import (
     SelfCollisionMatrixRule,
 )
 from semantic_digital_twin.datastructures.definitions import (
+    JointName,
     GripperState,
     StaticJointState,
     TorsoState,
@@ -45,8 +46,15 @@ from semantic_digital_twin.robots.robot_parts import (
     Torso,
     MobileBase,
     EndEffector,
+    ServoedRobotPart,
 )
 from semantic_digital_twin.spatial_types import Vector3
+from semantic_digital_twin.world_description.connection_properties import (
+    DriveServos,
+    JointDrive,
+    ServoGains,
+    VelocityServoGains,
+)
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection1DOF,
     OmniDrive,
@@ -68,7 +76,7 @@ class HSRBTopic(StrEnum):
     """
 
 
-class HSRBJoint(StrEnum):
+class HSRBJoint(JointName):
     """
     Names of the HSRB's commandable connections, as spelled in its URDF.
 
@@ -144,7 +152,27 @@ class HSRBRightFinger(Finger):
 
 
 @dataclass(eq=False)
-class HSRBGripper(EndEffector, HasTwoFingers[HSRBLeftFinger, HSRBRightFinger]):
+class HSRBGripper(
+    EndEffector, HasTwoFingers[HSRBLeftFinger, HSRBRightFinger], ServoedRobotPart
+):
+
+    @property
+    def drive_of_each_joint(self) -> dict[JointName, JointDrive]:
+        """
+        The hand's motor, which opens and closes both fingers, and the spring of each
+        finger, which holds its fingertip straight until what the hand grips presses it
+        back.
+        """
+        spring = JointDrive(
+            gains=ServoGains(stiffness=10.0, damping=1.0, torque_limit=10.0)
+        )
+        return {
+            HSRBJoint.HAND_MOTOR: JointDrive(
+                gains=ServoGains(stiffness=50.0, damping=5.0, torque_limit=100.0)
+            ),
+            HSRBJoint.HAND_LEFT_SPRING_PROXIMAL: spring,
+            HSRBJoint.HAND_RIGHT_SPRING_PROXIMAL: spring,
+        }
 
     def setup_hardware_interfaces(self):
         return
@@ -231,7 +259,23 @@ class HSRBHandCamera(Camera):
 
 
 @dataclass(eq=False)
-class HSRBArm(Arm[HSRBGripper], HasSensors[HSRBHandCamera]):
+class HSRBArm(Arm[HSRBGripper], HasSensors[HSRBHandCamera], ServoedRobotPart):
+
+    @property
+    def drive_of_each_joint(self) -> dict[JointName, JointDrive]:
+        wrist = JointDrive(
+            gains=ServoGains(stiffness=500.0, damping=50.0, torque_limit=100.0),
+            armature=0.1,
+        )
+        return {
+            HSRBJoint.ARM_FLEX: JointDrive(
+                gains=ServoGains(stiffness=2000.0, damping=200.0, torque_limit=100.0),
+                armature=0.1,
+            ),
+            HSRBJoint.ARM_ROLL: wrist,
+            HSRBJoint.WRIST_FLEX: wrist,
+            HSRBJoint.WRIST_ROLL: wrist,
+        }
 
     def setup_hardware_interfaces(self):
         controlled_joints = [
@@ -391,7 +435,16 @@ class HSRBNeck(
         HSRBHeadRightCamera,
         HSRBHeadRGBDCamera,
     ],
+    ServoedRobotPart,
 ):
+
+    @property
+    def drive_of_each_joint(self) -> dict[JointName, JointDrive]:
+        head = JointDrive(
+            gains=ServoGains(stiffness=300.0, damping=30.0, torque_limit=100.0),
+            armature=0.1,
+        )
+        return {HSRBJoint.HEAD_PAN: head, HSRBJoint.HEAD_TILT: head}
 
     def setup_hardware_interfaces(self):
         controlled_joints = [HSRBJoint.HEAD_PAN, HSRBJoint.HEAD_TILT]
@@ -417,7 +470,19 @@ class HSRBNeck(
 
 
 @dataclass(eq=False)
-class HSRBTorso(Torso, HasOneArm[HSRBArm], HasNeck[HSRBNeck]):
+class HSRBTorso(Torso, HasOneArm[HSRBArm], HasNeck[HSRBNeck], ServoedRobotPart):
+
+    @property
+    def drive_of_each_joint(self) -> dict[JointName, JointDrive]:
+        """
+        The arm lift, which the torso lift follows at half its travel.
+        """
+        return {
+            HSRBJoint.ARM_LIFT: JointDrive(
+                gains=ServoGains(stiffness=10000.0, damping=1000.0, torque_limit=300.0),
+                armature=0.1,
+            )
+        }
 
     def setup_hardware_interfaces(self):
         return
@@ -505,6 +570,25 @@ class HSRBMobileBase(
     def setup_joint_states(self) -> List[JointState]:
         return []
 
+    @property
+    def drive_servos(self) -> DriveServos:
+        """
+        Servos tuned for the base, which carries the whole robot, to follow its
+        commanded velocity; they are not taken from the real robot.
+        """
+        return DriveServos(
+            translation_gains=VelocityServoGains(damping=4000.0, torque_limit=2000.0),
+            rotation_gains=VelocityServoGains(damping=1000.0, torque_limit=1000.0),
+        )
+
+    def _setup_servos(self) -> None:
+        """
+        Declare the drive's servos, see :meth:`MobileBase._setup_servos`, and let a
+        physical simulation carry the weight of every body standing on the base.
+        """
+        super()._setup_servos()
+        self._compensate_gravity()
+
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(
         cls, robot_root: KinematicStructureEntity
@@ -520,6 +604,11 @@ class HSRB(AbstractRobot, HasMobileBase[HSRBMobileBase]):
     The HSRB Robot built by Toyota.
 
     https://robotsguide.com/robots/hsr
+
+    .. note:: The torque limits of its joint drives are the effort limits of its
+        description; their stiffness, damping and armature are not taken from the real
+        robot, they are tuned for the simulated joints to follow their commanded
+        positions.
     """
 
     @classmethod

@@ -17,7 +17,7 @@ class DAiSyVelocityInterface(ClosedLoopRobotInterfaceConfig):
 
     def setup(self):
         self.sync_robot_parts()
-        self.add_velocity_controllers_from_controller_manager(
+        self.discover_interfaces_from_controller_manager(
             whitelist=[
                 DAiSyController.LEFT_FORWARD_VELOCITY,
                 DAiSyController.RIGHT_FORWARD_VELOCITY,

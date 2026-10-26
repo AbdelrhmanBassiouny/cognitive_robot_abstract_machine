@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import copy
 import dataclasses
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import numpy as np
 from random_events.interval import Bound, Interval, SimpleInterval
-from typing_extensions import List, Self, Type
+from typing_extensions import Any, List, Self, Type
 
 from probabilistic_model.exceptions import ShapeMismatchError
 from probabilistic_model.probabilistic_circuit.tensorized.array_types import (
@@ -87,7 +88,7 @@ class ContinuousLayerWithDensity(AbstractContinuousLayer, ABC):
         ]
         if not pieces:
             return LayerWithLogProbabilities(
-                self.__deepcopy__(), np.full(self.number_of_nodes, -np.inf)
+                copy.deepcopy(self), np.full(self.number_of_nodes, -np.inf)
             )
         if len(pieces) == 1:
             return pieces[0]
@@ -127,9 +128,10 @@ class ContinuousLayerWithDensity(AbstractContinuousLayer, ABC):
 
 
 @dataclass(eq=False, repr=False)
-class ContinuousLayerWithFiniteSupport(ContinuousLayerWithDensity, ABC):
+class ContinuousLayerWithConstrainedSupport(ContinuousLayerWithDensity, ABC):
     """
-    Abstract base class for continuous input layers whose nodes have a finite support.
+    Abstract base class for continuous input layers whose nodes have a constrained
+    support.
     """
 
     interval: NodeIntervals
@@ -309,12 +311,3 @@ class ContinuousLayerWithFiniteSupport(ContinuousLayerWithDensity, ABC):
 
     def apply_scaling_own(self, scaling: VariableValues):
         self.interval = self.interval * scaling[self.variable]
-
-    def __deepcopy__(self, memo=None) -> Self:
-        if memo is None:
-            memo = {}
-        if id(self) in memo:
-            return memo[id(self)]
-        result = self.__class__(self.variable, self.interval.copy(), self.bounds.copy())
-        memo[id(self)] = result
-        return result

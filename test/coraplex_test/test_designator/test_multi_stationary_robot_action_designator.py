@@ -3,7 +3,6 @@ import numpy as np
 import pytest
 from rustworkx import NoEdgeBetweenNodes
 
-from cramph.context import ContextExtension, StatechartContext
 
 from giskardpy.utils.utils_for_tests import compare_axis_angle, compare_orientations
 from coraplex.datastructures.trajectory import PoseTrajectory
@@ -21,7 +20,6 @@ from coraplex.robot_plans.actions.core.robot_body import (
     SetGripperAction,
     FollowToolCenterPointPathAction,
 )
-from coraplex.plans.executors import PhysicallySimulatedPlanExecutor
 from coraplex.testing import _make_sine_scan_poses
 from krrood.entity_query_language.factories import an, entity, variable
 
@@ -47,7 +45,7 @@ from ...conftest import SAMPLING_SEED
 from ...pytest_environment import runs_in_continuous_integration
 from ..conftest import grasp_point_of, left_or_only_arm, right_or_only_arm
 from ..world_snapshot import WorldSnapshot
-from ...plan_running import run_plan, robot_extensions, statechart_of, world_of
+from ...plan_running import perform_in_physics, run_plan, robot_extensions
 
 
 @pytest.fixture(
@@ -403,22 +401,6 @@ def physically_simulated_block_context(stationary_block_context):
     simulation.start_stepped_simulation()
     yield world, view, extensions, simulation, narrow_box
     simulation.stop_simulation()
-
-
-def perform_in_physics(
-    plan: Sequence, extensions: list[ContextExtension], simulation: MujocoSim
-) -> None:
-    """
-    :param plan: The plan to perform.
-    :param extensions: The context extensions of the plan.
-    :param simulation: The running physics to perform it in.
-    """
-    executor = PhysicallySimulatedPlanExecutor(
-        StatechartContext.with_extensions(world_of(extensions), extensions),
-        simulation=simulation,
-    )
-    executor.compile(statechart_of(executor, plan))
-    executor.execute()
 
 
 def grasp_near_the_top(

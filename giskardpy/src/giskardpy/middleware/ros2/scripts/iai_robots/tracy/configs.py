@@ -21,7 +21,7 @@ class TracyVelocityInterface(ClosedLoopRobotInterfaceConfig):
     def setup(self):
         self.sync_robot_parts()
         for controller_manager in TracyControllerManager:
-            self.add_velocity_controllers_from_controller_manager(
+            self.discover_interfaces_from_controller_manager(
                 controller_manager, whitelist=[TracyController.FORWARD_VELOCITY]
             )
 
@@ -41,9 +41,3 @@ class WorldWithTracyConfig(WorldWithFixedRobot):
     """
     The robot class that is applied to the parsed description.
     """
-
-
-# class TracyCollisionAvoidanceConfig(LoadSelfCollisionMatrixConfig):
-#     def __init__(self, collision_checker: CollisionCheckerLib = CollisionCheckerLib.bpb):
-#         super().__init__('package://giskardpy_ros/self_collision_matrices/iai/tracy.srdf',
-#                          collision_checker)

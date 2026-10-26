@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import itertools
 import math
 import textwrap
@@ -151,9 +152,10 @@ class SimpleEvent(AbstractSimpleSet, VariableMap):
 
     def __setitem__(self, key: VariableMapKey, value: Any):
         """
-        Set the value of a variable in the event. Also allows for assigning variables to
-        values outside the classes of this package. If this is the case, this tries to
-        convert the value to a CompositeSet.
+        Set the value of a variable in the event.
+
+        Also allows for assigning variables to values outside the classes of this
+        package. If this is the case, this tries to convert the value to a CompositeSet.
 
         :param key: The variable (or its name) to set the value for
         :param value: The value to set
@@ -277,10 +279,10 @@ class SimpleEvent(AbstractSimpleSet, VariableMap):
             {variable: self.get(variable, variable.domain) for variable in variables}
         )
 
-    def __deepcopy__(self):
+    def __deepcopy__(self, memo: dict[int, Any] | None = None) -> Self:
         return SimpleEvent.from_data(
             {
-                variable: assignment.__deepcopy__()
+                variable: copy.deepcopy(assignment, memo)
                 for variable, assignment in self.items()
             }
         )
@@ -487,9 +489,10 @@ class Event(AbstractCompositeSet):
 
     def bounding_box(self) -> SimpleEvent:
         """
-        Compute the bounding box of the event. The bounding box is the smallest simple
-        event that contains this event. It is computed by taking the union of all simple
-        events variable wise.
+        Compute the bounding box of the event.
+
+        The bounding box is the smallest simple event that contains this event. It is
+        computed by taking the union of all simple events variable wise.
 
         :return: The bounding box as a simple event
         """

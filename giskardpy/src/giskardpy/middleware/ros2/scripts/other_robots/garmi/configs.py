@@ -36,7 +36,7 @@ class WorldWithGarmiConfig(WorldWithMobileRobot):
     Builds a map -> odom_combined -> GARMI kinematic tree using an omni-drive base.
     """
 
-    odom_body_name: PrefixedName = field(
+    odometry_body_name: PrefixedName = field(
         default_factory=lambda: PrefixedName("odom_combined")
     )
     robot_class: type[Garmi] = field(kw_only=True, default=Garmi, init=False)
