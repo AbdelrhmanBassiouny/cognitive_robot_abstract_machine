@@ -28,7 +28,8 @@ from semantic_digital_twin.datastructures.camera_rendering import (
     DepthMode,
     OpticalAxisDepthMode,
     RayDistanceDepthMode,
-    ColorRenderingMode,
+    BodyColorRenderingMode,
+    TexturedColorRenderingMode,
 )
 from semantic_digital_twin.robots.robot_parts import Camera
 from semantic_digital_twin.spatial_computations.raytracer import RayTracer
@@ -213,7 +214,8 @@ def test_body_color_map_preserves_bodies_sharing_a_color(
 
     assert frame.object_color_map == {
         ",".join(
-            str(channel) for channel in fixture.ray_tracer.get_body_color(first_body)
+            str(channel)
+            for channel in BodyColorRenderingMode.get_body_color(first_body)
         ): [
             body.name.name
             for body in sorted([first_body, second_body], key=lambda body: body.index)
@@ -229,9 +231,7 @@ def test_body_color_rgbd_render_preserves_encodings(
     """
     fixture = camera_intersections
     fixture.body.collision[0].color = Color.from_rgba(red=1.0, green=0.0, blue=0.0)
-    frame = fixture.ray_tracer.render(
-        fixture.camera, rgb_mode=ColorRenderingMode.BODY_COLOR
-    )
+    frame = fixture.ray_tracer.render(fixture.camera, rgb_mode=BodyColorRenderingMode())
     expected_color = np.zeros(
         (fixture.resolution.width, fixture.resolution.height, 3), dtype=np.uint8
     )
@@ -297,7 +297,7 @@ def test_mesh_render_preserves_rgb_channels(
         Mock(return_value=image_bytes.getvalue()),
     )
     frame = fixture.ray_tracer.render(
-        fixture.camera, rgb_mode=ColorRenderingMode.TEXTURED
+        fixture.camera, rgb_mode=TexturedColorRenderingMode()
     )
     expected = np.zeros(
         (fixture.resolution.width, fixture.resolution.height, 3), dtype=np.uint8
@@ -329,7 +329,7 @@ def test_textured_render_propagates_backend_errors(
         fixture.ray_tracer.scene, "save_image", Mock(side_effect=rendering_error)
     )
     with pytest.raises(rendering_error):
-        fixture.ray_tracer.render(fixture.camera, rgb_mode=ColorRenderingMode.TEXTURED)
+        fixture.ray_tracer.render(fixture.camera, rgb_mode=TexturedColorRenderingMode())
 
 
 # %% Shared hit selection
@@ -345,7 +345,7 @@ def test_textured_render_generates_camera_rays_once(
         fixture.ray_tracer.scene, "save_image", Mock(side_effect=OSError)
     )
     with pytest.raises(OSError):
-        fixture.ray_tracer.render(fixture.camera, rgb_mode=ColorRenderingMode.TEXTURED)
+        fixture.ray_tracer.render(fixture.camera, rgb_mode=TexturedColorRenderingMode())
     fixture.ray_tracer.create_camera_rays.assert_called_once()
     fixture.query.assert_called_once()
 
@@ -411,9 +411,7 @@ def test_rgbd_render_supports_explicit_depth_mode(
 
 
 # %% Body colors
-def test_body_color_uses_collision_geometry(
-    camera_intersections: CameraIntersections,
-) -> None:
+def test_body_color_uses_collision_geometry() -> None:
     """
     Collision geometry supplies the unsigned-byte body color.
     """
@@ -422,7 +420,7 @@ def test_body_color_uses_collision_geometry(
     geometry.color = Color.from_rgba(red=1.0, green=0.5, blue=0.0)
     body.collision = [geometry]
     np.testing.assert_array_equal(
-        camera_intersections.ray_tracer.get_body_color(body),
+        BodyColorRenderingMode.get_body_color(body),
         np.array([255, 128, 0], dtype=np.uint8),
     )
 
@@ -514,8 +512,8 @@ def test_textured_render_rejects_incompatible_projection(
     fixture = camera_intersections
     original = fixture.camera.camera_model
     monkeypatch.setattr(
-        fixture.ray_tracer,
-        "_render_textured_color",
+        fixture.ray_tracer.scene,
+        "save_image",
         Mock(
             return_value=np.zeros(
                 (fixture.resolution.width, fixture.resolution.height, 3), dtype=np.uint8
@@ -533,5 +531,5 @@ def test_textured_render_rejects_incompatible_projection(
         ),
     )
     with pytest.raises(UnsupportedCameraProjection):
-        fixture.ray_tracer.render(fixture.camera, rgb_mode=ColorRenderingMode.TEXTURED)
+        fixture.ray_tracer.render(fixture.camera, rgb_mode=TexturedColorRenderingMode())
     fixture.query.assert_not_called()

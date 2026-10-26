@@ -2,10 +2,7 @@ from __future__ import annotations
 
 # %% Imports
 from dataclasses import dataclass, field
-import io
-import math
 from typing_extensions import TYPE_CHECKING
-from PIL import Image
 
 import numpy as np
 import trimesh
@@ -24,13 +21,12 @@ from semantic_digital_twin.datastructures.camera_model import (
 from semantic_digital_twin.datastructures.camera_rendering import (
     CameraRays,
     RayIntersections,
-    RenderedColorFrame,
     DepthMode,
     OpticalAxisDepthMode,
     RayDistanceDepthMode,
     RenderedRGBDFrame,
     SegmentationDepthFrame,
-    ColorRenderingMode,
+    BodyColorRenderingMode,
 )
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.spatial_types.spatial_types import (
@@ -40,6 +36,8 @@ from semantic_digital_twin.spatial_types.spatial_types import (
 from semantic_digital_twin.world_description.world_entity import Body
 
 if TYPE_CHECKING:
+    from semantic_digital_twin.datastructures.camera_rendering import ColorRenderingMode
+
     from semantic_digital_twin.world import World
     from semantic_digital_twin.robots.robot_parts import Camera
 
@@ -420,7 +418,7 @@ class RayTracer:
     def render(
         self,
         camera: Camera,
-        rgb_mode: ColorRenderingMode = ColorRenderingMode.BODY_COLOR,
+        rgb_mode: ColorRenderingMode = BodyColorRenderingMode(),
         depth_mode: DepthMode = OpticalAxisDepthMode(),
     ) -> RenderedRGBDFrame:
         """
@@ -448,16 +446,7 @@ class RayTracer:
                 reason="distorted rendering is not supported"
             )
         resolution = camera_model.resolution
-        if rgb_mode == ColorRenderingMode.TEXTURED and not (
-            math.isclose(float(camera_model.principal_point.x), resolution.width / 2)
-            and math.isclose(
-                float(camera_model.principal_point.y), resolution.height / 2
-            )
-            and math.isclose(camera_model.focal_length_x, camera_model.focal_length_y)
-        ):
-            raise UnsupportedCameraProjection(
-                reason="textured rendering requires a centered camera with equal focal lengths"
-            )
+        rgb_mode.validate_camera_model(camera_model)
         world_T_optical = camera.root.global_transform
         world_T_forward_view = HomogeneousTransformationMatrix(
             data=world_T_optical.to_np() @ camera.optical_R_forward_view.to_np(),
@@ -471,7 +460,12 @@ class RayTracer:
             max_distance=camera.camera_range.maximum_distance,
             depth_mode=depth_mode,
         )
-        color_frame = self._render_color_image(frame.segmentation, resolution, rgb_mode)
+        color_frame = rgb_mode.render(
+            segmentation=frame.segmentation,
+            camera_model=camera_model,
+            scene=self.scene,
+            world=self.world,
+        )
         return RenderedRGBDFrame(
             color_bgr=color_frame.color_image,
             depth_in_millimeters=self.convert_depth_to_millimeters(frame.depth),
@@ -479,66 +473,6 @@ class RayTracer:
             object_color_map=color_frame.object_color_map,
             camera_model=camera_model,
         )
-
-    def _render_color_image(
-        self,
-        segmentation: np.ndarray,
-        resolution: CameraResolution,
-        rgb_mode: ColorRenderingMode,
-    ) -> RenderedColorFrame:
-        """
-        Return BGR colors and visible body names grouped by color.
-
-        :param segmentation: Body indices identifying visible geometry at each pixel.
-        :param resolution: Pixel dimensions of the rendered image.
-        :param rgb_mode: Source of the rendered color values.
-        :return: Width-first BGR colors and the RGB color-to-body-names mapping.
-        """
-        if rgb_mode == ColorRenderingMode.TEXTURED:
-            return RenderedColorFrame(
-                color_image=self._render_textured_color(resolution),
-                object_color_map={},
-            )
-        color_rgb = np.zeros((*segmentation.shape, 3), dtype=np.uint8)
-        object_color_map: dict[str, list[str]] = {}
-        for body_index in np.unique(segmentation[segmentation >= 0]):
-            body = self.world.kinematic_structure[int(body_index)]
-            body_rgb = self.get_body_color(body)
-            color_rgb[segmentation == body_index] = body_rgb
-            color_key = ",".join(str(channel) for channel in body_rgb)
-            object_color_map.setdefault(color_key, []).append(body.name.name)
-        return RenderedColorFrame(
-            color_image=color_rgb[:, :, ::-1].copy(), object_color_map=object_color_map
-        )
-
-    def _render_textured_color(
-        self,
-        resolution: CameraResolution,
-    ) -> np.ndarray:
-        """
-        Return width-first textured colors in BGR channel order.
-
-        :param resolution: Pixel dimensions of the rendered image.
-        :return: Width-first BGR colors representing surface textures and materials.
-        """
-        image_bytes = self.scene.save_image(
-            resolution=(resolution.width, resolution.height), visible=False
-        )
-        image = np.array(Image.open(io.BytesIO(image_bytes)).convert("RGB"))
-        return image.transpose(1, 0, 2)[:, :, ::-1].copy()
-
-    def get_body_color(self, body: Body) -> np.ndarray:
-        """
-        Return the first collision geometry's unsigned-byte RGB color.
-
-        :param body: Body with collision geometry supplying the color.
-        :return: Unsigned-byte RGB channels for the selected body color.
-        """
-        color = body.collision[0].color
-        channel_maximum = np.iinfo(np.uint8).max
-        return np.clip(
-            np.round(np.asarray(color.to_rgb()) * channel_maximum), 0, channel_maximum
-        ).astype(np.uint8)
 
     @staticmethod
     def convert_depth_to_millimeters(depth_in_meters: np.ndarray) -> np.ndarray:

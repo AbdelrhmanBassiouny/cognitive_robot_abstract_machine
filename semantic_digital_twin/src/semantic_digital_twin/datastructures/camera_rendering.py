@@ -7,9 +7,15 @@ from __future__ import annotations
 # %% Imports
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import StrEnum
+import io
+import math
 import numpy as np
 import trimesh
+from PIL import Image
+
+from semantic_digital_twin.spatial_computations.exceptions import (
+    UnsupportedCameraProjection,
+)
 from typing_extensions import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -17,23 +23,124 @@ if TYPE_CHECKING:
 
     from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
     from semantic_digital_twin.world_description.world_entity import Body
+    from semantic_digital_twin.world import World
 
 
-# %% Rendering conventions
-class ColorRenderingMode(StrEnum):
+# %% Color rendering conventions
+@dataclass(frozen=True)
+class ColorRenderingMode(ABC):
     """
-    Select how the ray tracer produces the color image.
+    Produce aligned BGR images and visible body names grouped by color.
     """
 
-    BODY_COLOR = "body_color"
+    @abstractmethod
+    def validate_camera_model(self, camera_model: PinholeCameraModel) -> None:
+        """
+        Reject projection models that this color renderer cannot represent.
+
+        :param camera_model: Effective projection model of the rendered frame.
+        :raises UnsupportedCameraProjection: If the projection cannot be represented.
+        """
+        ...
+
+    @abstractmethod
+    def render(
+        self,
+        segmentation: npt.NDArray[np.int32],
+        camera_model: PinholeCameraModel,
+        scene: trimesh.Scene,
+        world: World,
+    ) -> RenderedColorFrame:
+        """
+        Render width-first BGR colors aligned with body-index segmentation.
+
+        :param segmentation: Visible body indices, with negative values for background.
+        :param camera_model: Validated effective projection model.
+        :param scene: World geometry with the rendering camera already positioned.
+        :param world: World supplying the bodies identified by the segmentation.
+        :return: BGR colors and visible body names grouped by RGB color keys.
+        """
+        ...
+
+
+@dataclass(frozen=True)
+class BodyColorRenderingMode(ColorRenderingMode):
     """
     Color each visible body uniformly with its first collision geometry color.
     """
 
-    TEXTURED = "textured"
+    def validate_camera_model(self, camera_model: PinholeCameraModel) -> None:
+        pass
+
+    def render(
+        self,
+        segmentation: npt.NDArray[np.int32],
+        camera_model: PinholeCameraModel,
+        scene: trimesh.Scene,
+        world: World,
+    ) -> RenderedColorFrame:
+        color_rgb = np.zeros((*segmentation.shape, 3), dtype=np.uint8)
+        object_color_map: dict[str, list[str]] = {}
+        for body_index in np.unique(segmentation[segmentation >= 0]):
+            body = world.kinematic_structure[int(body_index)]
+            body_rgb = self.get_body_color(body)
+            color_rgb[segmentation == body_index] = body_rgb
+            color_key = ",".join(str(channel) for channel in body_rgb)
+            object_color_map.setdefault(color_key, []).append(body.name.name)
+        return RenderedColorFrame(
+            color_image=color_rgb[:, :, ::-1].copy(), object_color_map=object_color_map
+        )
+
+    @staticmethod
+    def get_body_color(body: Body) -> npt.NDArray[np.uint8]:
+        """
+        Return the first collision geometry's unsigned-byte RGB color.
+
+        :param body: Body with collision geometry supplying the color.
+        :return: Unsigned-byte RGB channels for the selected body color.
+        """
+        color = body.collision[0].color
+        channel_maximum = np.iinfo(np.uint8).max
+        return np.clip(
+            np.round(np.asarray(color.to_rgb()) * channel_maximum), 0, channel_maximum
+        ).astype(np.uint8)
+
+
+@dataclass(frozen=True)
+class TexturedColorRenderingMode(ColorRenderingMode):
     """
-    Render surface textures and materials.
+    Render surface textures and materials with a centered, equal-focal-length camera.
     """
+
+    def validate_camera_model(self, camera_model: PinholeCameraModel) -> None:
+        resolution = camera_model.resolution
+        if not (
+            math.isclose(float(camera_model.principal_point.x), resolution.width / 2)
+            and math.isclose(
+                float(camera_model.principal_point.y), resolution.height / 2
+            )
+            and math.isclose(camera_model.focal_length_x, camera_model.focal_length_y)
+        ):
+            raise UnsupportedCameraProjection(
+                reason="textured rendering requires a centered camera with equal focal lengths"
+            )
+
+    def render(
+        self,
+        segmentation: npt.NDArray[np.int32],
+        camera_model: PinholeCameraModel,
+        scene: trimesh.Scene,
+        world: World,
+    ) -> RenderedColorFrame:
+        resolution = camera_model.resolution
+        image_bytes = scene.save_image(
+            resolution=(resolution.width, resolution.height), visible=False
+        )
+        image = np.array(Image.open(io.BytesIO(image_bytes)).convert("RGB"))
+        return RenderedColorFrame(
+            color_image=image.transpose(1, 0, 2)[:, :, ::-1].copy(),
+            object_color_map={},
+        )
 
 
 # %% Depth conventions
