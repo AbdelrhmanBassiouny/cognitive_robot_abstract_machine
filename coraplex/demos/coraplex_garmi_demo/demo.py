@@ -2,9 +2,11 @@
 GARMI transports a bowl and a spoon across the apartment.
 
 The bowl starts on the kitchen counter and the spoon inside a drawer, and both are carried
-to the table. Running with :class:`~coraplex.plans.executors.RealRobotPlanExecutor` drives
-the actual robot and takes the world from the running world server, merging the apartment
-into it unless the server holds it already. The default runs the whole plan in simulation
+to the table. Running with
+:class:`~coraplex.robot_plans.garmi_franka_grippers.RealGarmiPlanExecutor` drives the
+actual robot, its grippers through their Franka gripper driver, and takes the world from
+the running world server, merging the apartment into it unless the server holds it
+already. The default runs the whole plan in simulation
 against a world built from the apartment's MuJoCo scene and GARMI's URDF, so nothing on
 the network is needed.
 
