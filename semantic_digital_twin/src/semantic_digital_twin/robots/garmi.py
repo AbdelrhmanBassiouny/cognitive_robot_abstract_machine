@@ -672,7 +672,7 @@ class GarmiMobileBase(MobileBase[OmniDrive], HasTorso[GarmiTorso]):
             root=robot_root._world.get_body_in_branch_by_name(
                 robot_root, "chassis_link"
             ),
-            full_body_controlled=False,
+            full_body_controlled=True,
         )
 
 
