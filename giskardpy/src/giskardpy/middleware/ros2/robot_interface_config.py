@@ -15,6 +15,8 @@ from giskardpy.data_types.exceptions import (
 from giskardpy.middleware.ros2 import rospy
 from giskardpy.middleware.ros2.command_publishing import (
     DriveVelocityCommandPublisher,
+    Float64MultiArrayFormat,
+    GroupCommandFormat,
     JointGroupVelocityCommandPublisher,
     JointMinimumVelocities,
     JointVelocityCommandPublisher,
@@ -22,7 +24,6 @@ from giskardpy.middleware.ros2.command_publishing import (
 )
 from giskardpy.middleware.ros2.control_loop import ControlLoop
 from semantic_digital_twin.adapters.ros.input_synchronization import (
-    LatestJointStateSynchronizer,
     PendingJointStateSynchronizer,
     OdometrySynchronizer,
     TfFrameSynchronizer,
@@ -188,7 +189,7 @@ class RobotInterfaceConfig(ABC):
         if not self.server_config.is_closed_loop or group_name != self.robot.name:
             return
         self.control_loop.inputs.synchronizers.append(
-            LatestJointStateSynchronizer(
+            PendingJointStateSynchronizer(
                 world=self.world, node=rospy.get_node(), topic_name=topic_name
             )
         )
@@ -261,6 +262,7 @@ class RobotInterfaceConfig(ABC):
         connections: List[str],
         minimum_valid_velocity: float = 0.0,
         minimum_velocity_overrides: Dict[str, float] | None = None,
+        command_format: GroupCommandFormat | None = None,
     ):
         """
         For closed loop mode.
@@ -270,6 +272,8 @@ class RobotInterfaceConfig(ABC):
             raised to so the hardware moves. ``0.0`` disables raising.
         :param minimum_velocity_overrides: minimum magnitude per joint name, overriding
             ``minimum_valid_velocity``; ``0.0`` exempts a joint.
+        :param command_format: message format the controller consumes; defaults to
+            :class:`~giskardpy.middleware.ros2.command_publishing.Float64MultiArrayFormat`.
         """
         controlled_connections: List[ActiveConnection1DOF] = [
             self.world.get_connection_by_name(connection_name)
@@ -283,6 +287,7 @@ class RobotInterfaceConfig(ABC):
                 minimum_velocities=JointMinimumVelocities.from_magnitudes(
                     minimum_valid_velocity, minimum_velocity_overrides
                 ),
+                command_format=command_format or Float64MultiArrayFormat(),
             )
         )
 
