@@ -571,16 +571,14 @@ class KinematicChain(AbstractRobotPart, HasInputSource[JointPositionSource], ABC
 
 
 @dataclass(eq=False)
-class Sensor(AbstractRobotPart, ABC):
+class Sensor(HasRootBody, ABC):
     """
-    Abstract base class for all sensors.
-
-    A sensor is a robot part that can perceive the environment.
+    A sensor rooted at the body from which it perceives the environment.
     """
 
 
 @dataclass(eq=False)
-class Camera(HasRootBody):
+class Camera(Sensor):
     """
     An image sensor rooted at its optical frame.
 
@@ -652,7 +650,7 @@ A kind of camera.
 
 
 @dataclass(eq=False)
-class RobotCamera(Camera, Sensor, ABC):
+class RobotCamera(Camera, AbstractRobotPart, ABC):
     """
     An optical-frame-rooted camera that participates in robot-part lifecycle handling.
     """

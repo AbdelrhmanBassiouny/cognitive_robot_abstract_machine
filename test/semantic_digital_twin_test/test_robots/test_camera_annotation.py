@@ -179,3 +179,21 @@ def test_default_stretch_camera_uses_optical_positive_z(
         camera.viewing_direction, Vector3.Z(reference_frame=table_world.root)
     )
     assert camera.viewing_direction.reference_frame is table_world.root
+
+
+# %% Sensor classification
+
+
+def test_standalone_camera_is_a_sensor(table_world: World) -> None:
+    """
+    A camera remains a sensor without belonging to a robot.
+    """
+    camera = Camera(
+        root=table_world.root,
+        camera_model=PinholeCameraModel.from_field_of_view(
+            resolution=CameraResolution(), field_of_view=FieldOfView()
+        ),
+    )
+
+    assert isinstance(camera, Sensor)
+    assert not isinstance(camera, AbstractRobotPart)

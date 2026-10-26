@@ -17,7 +17,7 @@ from semantic_digital_twin.robots.robot_part_mixins import (
     HasInputSource,
     TGenericInputSource,
 )
-from semantic_digital_twin.robots.robot_parts import Sensor
+from semantic_digital_twin.robots.robot_parts import AbstractRobotPart, Sensor
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
@@ -105,7 +105,7 @@ class SimulatedLidarSource(LidarSource):
 
 
 @dataclass(eq=False)
-class Lidar(Sensor, HasInputSource[LidarSource], ABC):
+class Lidar(Sensor, AbstractRobotPart, HasInputSource[LidarSource], ABC):
     """
     A lidar is a sensor that measures the distance to the surfaces around it along a fan
     of beams.
