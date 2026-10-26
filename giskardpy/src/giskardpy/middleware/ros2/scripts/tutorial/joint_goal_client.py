@@ -1,14 +1,13 @@
 #!/usr/bin/env python
-from enum import StrEnum
-
 from giskardpy.middleware.ros2 import rospy
 from giskardpy.middleware.ros2.python_interface import GiskardWrapper
 from giskardpy.motion_statechart.graph_node import EndMotion
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList, JointState
+from semantic_digital_twin.datastructures.definitions import JointName
 
 
-class UniversalRobotJoint(StrEnum):
+class UniversalRobotJoint(JointName):
     """
     The joints of a Universal Robots arm, in the order its velocity controller expects
     its commands.

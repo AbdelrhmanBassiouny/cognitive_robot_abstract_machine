@@ -13,6 +13,7 @@ from semantic_digital_twin.collision_checking.collision_rules import (
     AvoidSelfCollisions,
 )
 from semantic_digital_twin.datastructures.definitions import (
+    JointName,
     StaticJointState,
     GripperState,
 )
@@ -53,7 +54,7 @@ class DAiSyController(StrEnum):
     """
 
 
-class DAiSyJoint(StrEnum):
+class DAiSyJoint(JointName):
     """
     Names of the DAiSy's commandable connections, as spelled in its URDF.
 

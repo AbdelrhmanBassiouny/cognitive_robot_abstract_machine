@@ -17,6 +17,7 @@ from semantic_digital_twin.collision_checking.collision_rules import (
     SelfCollisionMatrixRule,
 )
 from semantic_digital_twin.datastructures.definitions import (
+    JointName,
     GripperState,
     StaticJointState,
 )
@@ -78,7 +79,7 @@ class TracyController(StrEnum):
     """
 
 
-class TracyJoint(StrEnum):
+class TracyJoint(JointName):
     """
     Names of the Tracy's commandable connections, as spelled in its URDF.
 
