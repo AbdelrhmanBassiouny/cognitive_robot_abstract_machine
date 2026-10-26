@@ -54,6 +54,7 @@ from probabilistic_model.probabilistic_model import (
     CenterType,
     MomentType,
 )
+from probabilistic_model.query_results import LogConditioning, LogMode, LogTruncation
 from probabilistic_model.utils import MissingDict, logsumexp
 from random_events.interval import SimpleInterval, Interval
 from random_events.product_algebra import VariableMap, SimpleEvent, Event
@@ -253,11 +254,11 @@ class Unit(SubclassJSONSerializer, ABC):
         )
 
     @property
-    def impossible_condition_result(self) -> Tuple[Optional[Unit], float]:
+    def impossible_condition_result(self) -> LogTruncation[Unit]:
         """
         :return: The result of an impossible truncated query.
         """
-        return None, -np.inf
+        return LogTruncation.impossible()
 
     def log_mode(self):
         raise NotImplementedError
@@ -268,7 +269,12 @@ class Unit(SubclassJSONSerializer, ABC):
         else:
             return id(self)
 
-    def copy_without_graph(self):
+    def copy_without_graph(self, memo: dict[int, Any] | None = None) -> Self:
+        """
+        :param memo: The objects already copied during the deep copy this copy is part
+            of, by their id.
+        :return: A deep copy of this unit that belongs to no circuit.
+        """
         result = self.empty_copy()
         result.result_of_current_query = self.result_of_current_query
         return result
@@ -364,7 +370,7 @@ class LeafUnit(Unit):
         )
 
     def support(self):
-        self.result_of_current_query = self.distribution.support  # .__deepcopy__()
+        self.result_of_current_query = self.distribution.support
 
     def simplify(self):
         if self.distribution is None:
@@ -373,9 +379,29 @@ class LeafUnit(Unit):
     def log_truncated_of_simple_event_in_place(
         self, event: SimpleEvent, singleton_allowed: bool = False
     ):
-        self.distribution, self.result_of_current_query = (
+        self.adopt_truncation(
             self.distribution.log_truncated(event.as_composite_set(), singleton_allowed)
         )
+
+    def adopt_truncation(self, truncation: LogTruncation) -> None:
+        """
+        Replace the distribution of this leaf by its truncation, whose log-probability
+        becomes the result of the current query.
+
+        :param truncation: The truncation of the distribution of this leaf.
+        """
+        self.distribution = truncation.distribution
+        self.result_of_current_query = truncation.log_probability
+
+    def adopt_conditioning(self, conditioning: LogConditioning) -> None:
+        """
+        Replace the distribution of this leaf by its conditioning, whose log-likelihood
+        becomes the result of the current query.
+
+        :param conditioning: The conditioning of the distribution of this leaf.
+        """
+        self.distribution = conditioning.distribution
+        self.result_of_current_query = conditioning.log_likelihood
 
     def moment(self, order, center, variable_to_index_map):
         result = np.zeros(len(variable_to_index_map))
@@ -435,17 +461,15 @@ class LeafUnit(Unit):
 
     def log_conditional_in_place(self, point: Dict[Variable, Any]):
         if any(variable for variable in self.variables if variable in point):
-            self.distribution, self.result_of_current_query = (
-                self.distribution.log_conditional(point)
-            )
+            self.adopt_conditioning(self.distribution.log_conditional(point))
         else:
             self.result_of_current_query = 0.0
 
-    def copy_without_graph(self):
-        return self.__class__(distribution=self.distribution.__deepcopy__())
+    def copy_without_graph(self, memo: dict[int, Any] | None = None) -> Self:
+        return self.__class__(distribution=copy.deepcopy(self.distribution, memo))
 
     def replace_by_mixture(
-        self, truncations: Iterable[Tuple[Optional[ProbabilisticModel], float]]
+        self, truncations: Iterable[LogTruncation]
     ) -> Optional[SumUnit]:
         """
         Replace this leaf by the mixture of the given truncations of its distribution,
@@ -458,16 +482,16 @@ class LeafUnit(Unit):
         result = SumUnit(probabilistic_circuit=self.probabilistic_circuit)
         total_probability = 0.0
 
-        for truncated, log_probability in truncations:
-            probability = np.exp(log_probability)
+        for truncation in truncations:
+            probability = np.exp(truncation.log_probability)
             if probability == 0:
                 continue
             result.add_subcircuit(
                 self.__class__(
-                    distribution=truncated,
+                    distribution=truncation.distribution,
                     probabilistic_circuit=self.probabilistic_circuit,
                 ),
-                log_probability,
+                truncation.log_probability,
             )
             total_probability += probability
 
@@ -636,7 +660,7 @@ class SumUnit(InnerUnit):
     def support(self):
         support = self.subcircuits[0].result_of_current_query
         for subcircuit in self.subcircuits[1:]:
-            support |= subcircuit.result_of_current_query.__deepcopy__()
+            support |= copy.deepcopy(subcircuit.result_of_current_query)
         self.result_of_current_query = support
 
     @property
@@ -882,19 +906,19 @@ class SumUnit(InnerUnit):
 
     def log_mode(self):
         log_maxima = [
-            log_weight + subcircuit.result_of_current_query[1]
+            log_weight + subcircuit.result_of_current_query.log_likelihood
             for log_weight, subcircuit in self.log_weighted_subcircuits
         ]
         log_max = max(log_maxima)
         arg_log_maxima = [
-            subcircuit.result_of_current_query[0]
+            subcircuit.result_of_current_query.event
             for lm, subcircuit in zip(log_maxima, self.subcircuits)
             if lm == log_max
         ]
         arg_log_max = arg_log_maxima[0]
         for event in arg_log_maxima[1:]:
             arg_log_max |= event
-        self.result_of_current_query = (arg_log_max, log_max)
+        self.result_of_current_query = LogMode(arg_log_max, log_max)
 
     def subcircuit_index_of_samples(self, samples: npt.NDArray) -> npt.NDArray:
         """
@@ -974,17 +998,15 @@ class ProductUnit(InnerUnit):
         return True
 
     def log_mode(self):
-        arg_log_max, log_max = self.subcircuits[0].result_of_current_query
+        first_mode = self.subcircuits[0].result_of_current_query
+        arg_log_max, log_max = first_mode.event, first_mode.log_likelihood
         arg_log_max.fill_missing_variables(self.variables)
         for subcircuit in self.subcircuits[1:]:
             arg_log_max = arg_log_max.intersection_with(
-                subcircuit.result_of_current_query[0]
+                subcircuit.result_of_current_query.event
             )
-            log_max += subcircuit.result_of_current_query[1]
-        self.result_of_current_query = arg_log_max, log_max
-
-    def __copy__(self):
-        return self.empty_copy()
+            log_max += subcircuit.result_of_current_query.log_likelihood
+        self.result_of_current_query = LogMode(arg_log_max, log_max)
 
     def simplify(self):
 
@@ -1361,7 +1383,7 @@ class ProbabilisticCircuit(GroundableCircuit[Unit], SubclassJSONSerializer):
                     unit.forward()
         return self.root.result_of_current_query
 
-    def log_mode(self, check_determinism: bool = True) -> Tuple[Event, float]:
+    def log_mode(self, check_determinism: bool = True) -> LogMode:
         if check_determinism:
             if not self.is_deterministic():
                 raise IntractableError(self)
@@ -1378,7 +1400,7 @@ class ProbabilisticCircuit(GroundableCircuit[Unit], SubclassJSONSerializer):
 
     def log_truncated_of_simple_event_in_place(
         self, simple_event: SimpleEvent, singleton_allowed: bool = False
-    ) -> Tuple[Optional[Self], float]:
+    ) -> LogTruncation[Self]:
         """
         Construct the truncated circuit from a simple event.
 
@@ -1409,18 +1431,18 @@ class ProbabilisticCircuit(GroundableCircuit[Unit], SubclassJSONSerializer):
         ]
 
         if root not in set(self.graph.nodes()):
-            return None, -np.inf
+            return LogTruncation.impossible()
 
         # clean the circuit up
         self.remove_unreachable_nodes(root)
         self.simplify()
         self.normalize()
 
-        return self, root.result_of_current_query
+        return LogTruncation(self, root.result_of_current_query)
 
     def log_truncated_in_place(
         self, event: Event, singleton_allowed: bool = False
-    ) -> Tuple[Optional[Self], float]:
+    ) -> LogTruncation[Self]:
         """
         Truncate the circuit to an Event in place.
 
@@ -1437,7 +1459,7 @@ class ProbabilisticCircuit(GroundableCircuit[Unit], SubclassJSONSerializer):
         if event.is_empty():
             self.graph.remove_nodes_from(list(self.graph.node_indices()))
             self._invalidate_topology_cache()
-            return None, -np.inf
+            return LogTruncation.impossible()
 
         # if the event is easy, don't create a proxy node
         elif len(event.simple_sets) == 1:
@@ -1446,8 +1468,8 @@ class ProbabilisticCircuit(GroundableCircuit[Unit], SubclassJSONSerializer):
             )
 
         # truncate a deep copy of the circuit to each simple set
-        conditional_circuits = list(
-            self.__deepcopy__().log_truncated_of_simple_event_in_place(
+        truncations = list(
+            copy.deepcopy(self).log_truncated_of_simple_event_in_place(
                 simple_event, singleton_allowed
             )
             for simple_event in event.simple_sets
@@ -1456,38 +1478,38 @@ class ProbabilisticCircuit(GroundableCircuit[Unit], SubclassJSONSerializer):
         # clear this circuit
         self.remove_nodes_from(list(self.graph.nodes()))
 
-        # filter out impossible conditionals
-        conditional_circuits = [
-            (conditional, log_probability)
-            for conditional, log_probability in conditional_circuits
-            if log_probability > -np.inf
+        # filter out impossible truncations
+        truncations = [
+            truncation
+            for truncation in truncations
+            if truncation.log_probability > -np.inf
         ]
 
-        # if all conditionals are impossible
-        if len(conditional_circuits) == 0:
-            return None, -np.inf
+        # if all truncations are impossible
+        if len(truncations) == 0:
+            return LogTruncation.impossible()
 
         # create a new sum unit
         result = SumUnit(probabilistic_circuit=self)
 
-        # add the conditionals to the sum unit
-        for conditional, log_probability in conditional_circuits:
-            root = conditional.root
+        # add the truncations to the sum unit
+        for truncation in truncations:
+            root = truncation.distribution.root
             new_nodes = result.probabilistic_circuit.add_from_subgraph(
-                conditional.graph
+                truncation.distribution.graph
             )
-            result.add_subcircuit(new_nodes[root.index], log_probability)
+            result.add_subcircuit(new_nodes[root.index], truncation.log_probability)
 
         # the simple sets of an event are disjoint, so P(E) = sum_k P(E_k)
         total_log_probability = logsumexp(
-            np.array([log_probability for _, log_probability in conditional_circuits])
+            np.array([truncation.log_probability for truncation in truncations])
         )
         result.normalize()
-        return self, total_log_probability
+        return LogTruncation(self, total_log_probability)
 
     def log_truncated(
         self, event: Event, singleton_allowed: bool = False
-    ) -> Tuple[Optional[Self], float]:
+    ) -> LogTruncation[Self]:
         result = copy.deepcopy(self)
         return result.log_truncated_in_place(event, singleton_allowed)
 
@@ -1562,7 +1584,7 @@ class ProbabilisticCircuit(GroundableCircuit[Unit], SubclassJSONSerializer):
 
     def log_conditional_in_place(
         self, point: Dict[Variable, Any], preserve_structure: bool = False
-    ) -> Tuple[Optional[Self], float]:
+    ) -> LogConditioning[Self]:
         """
         Condition the circuit on a point, in place.
 
@@ -1577,13 +1599,13 @@ class ProbabilisticCircuit(GroundableCircuit[Unit], SubclassJSONSerializer):
         """
         root = self._condition_leaves_in_place(point)
         if root is None:
-            return None, -np.inf
+            return LogConditioning.impossible()
         # read before marginalizing, which may simplify the root away
         log_probability = root.result_of_current_query
 
         if preserve_structure:
             self.normalize()
-            return self, log_probability
+            return LogConditioning(self, log_probability)
 
         # simplify dirac parts
         remaining_variables = [v for v in self.variables if v not in point]
@@ -1607,12 +1629,10 @@ class ProbabilisticCircuit(GroundableCircuit[Unit], SubclassJSONSerializer):
         self.simplify()
         self.normalize()
 
-        return self, log_probability
+        return LogConditioning(self, log_probability)
 
-    def log_conditional(
-        self, point: Dict[Variable, Any]
-    ) -> Tuple[Optional[Self], float]:
-        result = self.__deepcopy__()
+    def log_conditional(self, point: Dict[Variable, Any]) -> LogConditioning[Self]:
+        result = copy.deepcopy(self)
         return result.log_conditional_in_place(point)
 
     # %% operations on nodes
@@ -1625,7 +1645,7 @@ class ProbabilisticCircuit(GroundableCircuit[Unit], SubclassJSONSerializer):
         }
         if not point:
             return True
-        conditioned, _ = self.marginal(point).log_conditional_in_place(point)
+        conditioned = self.marginal(point).log_conditional_in_place(point).distribution
         if conditioned is None:
             return False
         self.log_conditional_in_place(point, preserve_structure=True)
@@ -1694,11 +1714,11 @@ class ProbabilisticCircuit(GroundableCircuit[Unit], SubclassJSONSerializer):
         """
         root = ProductUnit(probabilistic_circuit=self)
         for copies in products.conditioned_copies:
-            copy = copies.circuit.__deepcopy__()
-            copy.condition_on_point_in_place(products.points[index])
-            copy.restrict_to_variables_in_place(copies.variables)
-            copy.update_variables(copies.renaming)
-            root.add_subcircuit(self.mount(copy.root)[copy.root.index])
+            conditioned = copy.deepcopy(copies.circuit)
+            conditioned.condition_on_point_in_place(products.points[index])
+            conditioned.restrict_to_variables_in_place(copies.variables)
+            conditioned.update_variables(copies.renaming)
+            root.add_subcircuit(self.mount(conditioned.root)[conditioned.root.index])
         for variable, values in products.point_masses.items():
             root.add_subcircuit(leaf(make_dirac(variable, values[index]), self))
         if products.components:
@@ -1780,8 +1800,8 @@ class ProbabilisticCircuit(GroundableCircuit[Unit], SubclassJSONSerializer):
         :param other: A circuit to copy into this one.
         :return: The root of the copy, a unit of this circuit.
         """
-        copy = other.__deepcopy__()
-        return self.mount(copy.root)[copy.root.index]
+        copied = copy.deepcopy(other)
+        return self.mount(copied.root)[copied.root.index]
 
     def marginal(self, variables: Iterable[Variable]) -> Optional[Self]:
         result = self.restrict_to_variables(variables)
@@ -1798,7 +1818,7 @@ class ProbabilisticCircuit(GroundableCircuit[Unit], SubclassJSONSerializer):
         :param variables: The variables to keep.
         :return: The restricted copy, or ``None`` if none of ``variables`` are modeled.
         """
-        result = self.__deepcopy__()
+        result = copy.deepcopy(self)
         return result.restrict_to_variables_in_place(variables)
 
     def sample(self, amount: int) -> npt.NDArray:
@@ -1882,27 +1902,12 @@ class ProbabilisticCircuit(GroundableCircuit[Unit], SubclassJSONSerializer):
         """
         return self.__class__()
 
-    def __deepcopy__(self, memo=None) -> Self:
-        """
-        Deep copy of the circuit.
-
-        :param memo: A dictionary that is used to keep track of objects that have
-            already been copied.
-        :return: A deep copy of the circuit.
-        """
-        if memo is None:
-            memo = {}
-        id_self = id(self)
-        if id_self in memo:
-            return memo[id_self]
-
-        # Create a new empty circuit
+    def __deepcopy__(self, memo: dict[int, Any] | None = None) -> Self:
         result = self.empty_copy()
-        memo[id_self] = result
 
         # remap nodes to new copies
         remapped_indices = {
-            node.index: node.copy_without_graph() for node in self.nodes()
+            node.index: node.copy_without_graph(memo) for node in self.nodes()
         }
 
         # add copied nodes
@@ -2288,8 +2293,8 @@ class ShallowProbabilisticCircuit(ProbabilisticCircuit):
 
     def event_of_higher_density(self, other: Self, tolerance: float = 10e-8) -> Event:
         """
-        Construct the event where this shallow circuit has a higher density than
-        another one.
+        Construct the event where this shallow circuit has a higher density than another
+        one.
 
         .. note::
 
@@ -2369,7 +2374,7 @@ class UnivariateContinuousLeaf(UnivariateLeaf):
         """
         # if it is a simple truncation
         if len(event.simple_sets) == 1:
-            self.distribution, self.result_of_current_query = (
+            self.adopt_truncation(
                 self.distribution.log_conditional_from_simple_interval(
                     event.simple_sets[0], singleton_allowed
                 )
@@ -2466,9 +2471,7 @@ class MultivariateLeaf(LeafUnit):
         if len(own_point) == len(self.distribution.variables):
             self.replace_by_dirac_product(own_point)
             return
-        self.distribution, self.result_of_current_query = (
-            self.distribution.log_conditional(own_point)
-        )
+        self.adopt_conditioning(self.distribution.log_conditional(own_point))
 
     def moment(self, order, center, variable_to_index_map):
         result = np.zeros(len(variable_to_index_map))
@@ -2528,10 +2531,11 @@ class MultivariateLeaf(LeafUnit):
             )
         ]
         if len(boxes) == 1:
-            self.distribution, self.result_of_current_query = (
+            self.adopt_truncation(
                 self.distribution.log_truncated(boxes[0], singleton_allowed)
             )
             return self
+
         return self.replace_by_mixture(
             self.distribution.log_truncated(box, singleton_allowed) for box in boxes
         )

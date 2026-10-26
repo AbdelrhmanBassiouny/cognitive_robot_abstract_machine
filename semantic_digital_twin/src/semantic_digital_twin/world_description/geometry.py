@@ -1931,10 +1931,10 @@ class PlanarBoundingBox(AxisAlignedBox[Point2]):
         """
         Check if the bounding box contains a point.
         """
-        point_in_bb = point.reference_frame._world.transform(
-            point.to_point3(), self.origin.reference_frame
+        point_in_box_frame = point.reference_frame._world.transform(
+            point, self.origin.reference_frame
         )
-        x, y = float(point_in_bb.x), float(point_in_bb.y)
+        x, y = float(point_in_box_frame.x), float(point_in_box_frame.y)
         return self.simple_event.contains((x, y))
 
     def extrude(self, half_height: float) -> VolumetricBoundingBox:

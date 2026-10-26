@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from unittest.mock import PropertyMock, patch
 
 import pytest
 from random_events.interval import closed
@@ -197,7 +196,9 @@ def values_of(regions: List[SupportRegion], cause: Continuous) -> List[Any]:
 
 
 def test_the_regions_come_in_the_order_of_their_values(
-    two_equally_weighted_regions: CausalCircuit, cause: Continuous
+    two_equally_weighted_regions: CausalCircuit,
+    cause: Continuous,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """
     The order a support happens to list its branches in must not reach the regions: a
@@ -206,13 +207,8 @@ def test_the_regions_come_in_the_order_of_their_values(
     """
     circuit = two_equally_weighted_regions.probabilistic_circuit
     reversed_support = SupportListedInReverse(circuit.support)
-    with patch.object(
-        type(circuit), "support", new_callable=PropertyMock
-    ) as support_of_circuit:
-        support_of_circuit.return_value = reversed_support
-        regions = two_equally_weighted_regions._extract_disjoint_regions_for_variable(
-            cause
-        )
+    monkeypatch.setattr(type(circuit), "support", property(lambda _: reversed_support))
+    regions = two_equally_weighted_regions._extract_disjoint_regions_for_variable(cause)
     values = values_of(regions, cause)
     assert values == sorted(values)
 

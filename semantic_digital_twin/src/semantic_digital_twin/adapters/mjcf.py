@@ -3,6 +3,7 @@ import os
 import tempfile
 from dataclasses import dataclass, field
 from datetime import timedelta
+from functools import cached_property
 
 import mujoco
 import numpy
@@ -107,14 +108,24 @@ class MJCFParser(WorldModelParser):
     the URDF limit.
     """
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         package_uri_resolver = PackageUriResolver()
         if package_uri_resolver.supports(self.file_path):
             self.file_path = package_uri_resolver.resolve(self.file_path)
         if self.prefix is None:
             self.prefix = os.path.basename(self.file_path).split(".")[0]
         self.spec: mujoco.MjSpec = mujoco.MjSpec.from_file(self.file_path)
-        self.tree = ET.fromstring(self.spec.to_xml())
+
+    @cached_property
+    def resolved_document(self) -> ET.Element:
+        """
+        The scene's XML document with its includes and defaults resolved, as MuJoCo
+        writes it back out.
+
+        .. warning:: Building it compiles the whole scene, loading every mesh and
+            texture the scene refers to.
+        """
+        return ET.fromstring(self.spec.to_xml())
 
     @classmethod
     def from_file(
@@ -869,17 +880,19 @@ class MJCFParser(WorldModelParser):
                         f"Equality of type {equality.type} not supported yet. Skipping."
                     )
 
-    def parse_tendons(self):
+    def parse_tendons(self) -> None:
+        """
+        Add a degree of freedom for every tendon of the scene, carrying the tendon's
+        MuJoCo properties and the coefficient of every joint a fixed tendon couples.
+        """
         tendon: mujoco.MjsTendon
         for tendon in self.spec.tendons:
-            joints = {}
-            for joint in self.tree.findall(
-                f".//tendon/fixed[@name='{tendon.name}']/joint"
-            ):
-                name = joint.get("joint")
-                coef = float(joint.get("coef"))
-                assert coef is not None and coef is not None
-                joints[name] = coef
+            joints = {
+                joint.get("joint"): float(joint.get("coef"))
+                for joint in self.resolved_document.findall(
+                    f".//tendon/fixed[@name='{tendon.name}']/joint"
+                )
+            }
             dof = DegreeOfFreedom(
                 name=PrefixedName(tendon.name),
             )
