@@ -11,7 +11,6 @@ import numpy as np
 import trimesh
 from trimesh import Scene
 from krrood.ormatic.utils import classproperty
-from semantic_digital_twin.world_description.geometry import Color
 from semantic_digital_twin.spatial_computations.exceptions import (
     RayPointShapeMismatch,
     UnsupportedCameraProjection,
@@ -73,13 +72,6 @@ class RayTracer:
     scene_to_index: dict[str, int] = field(default_factory=dict, init=False)
     """
     Maps the index in the trimesh scene to the index of the body in the world.
-    """
-
-    default_body_color: Color = field(
-        default_factory=lambda: Color.from_rgba(red=0.5, green=0.5, blue=0.5)
-    )
-    """
-    Color for a body without collision or visual geometry.
     """
 
     scene: Scene = field(default_factory=Scene, init=False)
@@ -538,18 +530,12 @@ class RayTracer:
 
     def get_body_color(self, body: Body) -> np.ndarray:
         """
-        Return the first collision or visual geometry's unsigned-byte RGB color.
+        Return the first collision geometry's unsigned-byte RGB color.
 
-        :param body: Body whose geometry supplies the color, or the default when
-            geometry is absent.
+        :param body: Body with collision geometry supplying the color.
         :return: Unsigned-byte RGB channels for the selected body color.
         """
-        if len(body.collision) > 0:
-            color = body.collision[0].color
-        elif len(body.visual) > 0:
-            color = body.visual[0].color
-        else:
-            color = self.default_body_color
+        color = body.collision[0].color
         channel_maximum = np.iinfo(np.uint8).max
         return np.clip(
             np.round(np.asarray(color.to_rgb()) * channel_maximum), 0, channel_maximum

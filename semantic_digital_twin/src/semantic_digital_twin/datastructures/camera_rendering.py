@@ -23,8 +23,7 @@ class ColorRenderingMode(StrEnum):
 
     BODY_COLOR = "body_color"
     """
-    Color each visible body uniformly with its first collision geometry color,
-    falling back to its first visual geometry color or the default body color.
+    Color each visible body uniformly with its first collision geometry color.
     """
 
     TEXTURED = "textured"

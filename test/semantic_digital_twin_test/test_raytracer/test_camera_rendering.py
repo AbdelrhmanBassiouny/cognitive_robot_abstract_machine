@@ -409,39 +409,19 @@ def test_rgbd_render_supports_explicit_depth_mode(
 
 
 # %% Body colors
-@pytest.mark.parametrize("collision_color", [True, False])
-def test_body_color_uses_available_geometry(
-    camera_intersections: CameraIntersections, collision_color: bool
+def test_body_color_uses_collision_geometry(
+    camera_intersections: CameraIntersections,
 ) -> None:
     """
-    Collision or visual geometry supplies the same unsigned-byte body color.
+    Collision geometry supplies the unsigned-byte body color.
     """
     body = Mock(spec=Body)
     geometry = Mock()
     geometry.color = Color.from_rgba(red=1.0, green=0.5, blue=0.0)
-    body.collision = [geometry] if collision_color else []
-    body.visual = [] if collision_color else [geometry]
+    body.collision = [geometry]
     np.testing.assert_array_equal(
         camera_intersections.ray_tracer.get_body_color(body),
         np.array([255, 128, 0], dtype=np.uint8),
-    )
-
-
-def test_body_color_defaults_to_gray(
-    camera_intersections: CameraIntersections,
-) -> None:
-    """
-    A body without geometry retains the neutral fallback color.
-    """
-    body = Mock(spec=Body)
-    body.collision = []
-    body.visual = []
-    np.testing.assert_array_equal(
-        camera_intersections.ray_tracer.get_body_color(body),
-        np.round(
-            np.asarray(camera_intersections.ray_tracer.default_body_color.to_rgb())
-            * np.iinfo(np.uint8).max
-        ).astype(np.uint8),
     )
 
 
