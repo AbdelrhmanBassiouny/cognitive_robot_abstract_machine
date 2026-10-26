@@ -54,7 +54,7 @@ def test_the_palette_reads_the_current_native_color(
 
     :param monkeypatch: The active monkeypatch fixture.
     """
-    color = Color(0.2, 0.4, 0.6)
+    color = Color.from_rgba(red=0.2, green=0.4, blue=0.6)
     monkeypatch.setattr(LifeCycleValues.RUNNING, "color", color)
 
     payload = ChartViewPayload().to_payload()

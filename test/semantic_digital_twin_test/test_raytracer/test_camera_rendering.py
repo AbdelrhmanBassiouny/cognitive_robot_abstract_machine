@@ -200,7 +200,7 @@ def test_semantic_rgbd_render_preserves_encodings(
     Semantic colors, optical depth, and body labels share the same hit query.
     """
     fixture = camera_intersections
-    fixture.body.collision[0].color = Color(R=1.0, G=0.0, B=0.0)
+    fixture.body.collision[0].color = Color.from_rgba(red=1.0, green=0.0, blue=0.0)
     frame = fixture.ray_tracer.render(
         fixture.camera, rgb_mode=ColorRenderingMode.SEMANTIC
     )
@@ -392,7 +392,7 @@ def test_semantic_body_color_uses_available_geometry(
     """
     body = Mock(spec=Body)
     geometry = Mock()
-    geometry.color = Color(R=1.0, G=0.5, B=0.0)
+    geometry.color = Color.from_rgba(red=1.0, green=0.5, blue=0.0)
     body.collision = [geometry] if collision_color else []
     body.visual = [] if collision_color else [geometry]
     np.testing.assert_array_equal(

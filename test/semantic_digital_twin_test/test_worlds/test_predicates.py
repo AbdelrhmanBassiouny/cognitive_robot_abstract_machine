@@ -151,7 +151,7 @@ def test_in_contact() -> None:
             0,
             reference_frame=b1,
         ),
-        color=Color(1.0, 0.0, 0.0),
+        color=Color.from_rgba(red=1.0, green=0.0, blue=0.0),
     )
     b1.collision = ShapeCollection([collision1])
 
@@ -161,7 +161,7 @@ def test_in_contact() -> None:
         origin=HomogeneousTransformationMatrix.from_xyz_rpy(
             0.9, 0, 0.0, 0, 0, 0, reference_frame=b2
         ),
-        color=Color(0.0, 1.0, 0.0),
+        color=Color.from_rgba(red=0.0, green=1.0, blue=0.0),
     )
     b2.collision = ShapeCollection([collision2])
 
@@ -171,7 +171,7 @@ def test_in_contact() -> None:
         origin=HomogeneousTransformationMatrix.from_xyz_rpy(
             1.8, 0, 0.0, 0, 0, 0, reference_frame=b3
         ),
-        color=Color(0.0, 0.0, 1.0),
+        color=Color.from_rgba(red=0.0, green=0.0, blue=1.0),
     )
     b3.collision = ShapeCollection([collision3])
 
@@ -195,7 +195,7 @@ def test_robot_in_contact(pr2_world_copy: World) -> None:
             z=0.5,
             reference_frame=body,
         ),
-        color=Color(1.0, 0.0, 0.0),
+        color=Color.from_rgba(red=1.0, green=0.0, blue=0.0),
     )
     body.collision = ShapeCollection([collision1])
 
@@ -226,7 +226,7 @@ def test_get_visible_objects(pr2_world_copy: World) -> None:
             z=1.0,
             reference_frame=body,
         ),
-        color=Color(1.0, 0.0, 0.0),
+        color=Color.from_rgba(red=1.0, green=0.0, blue=0.0),
     )
     body.collision = ShapeCollection([collision1])
 
@@ -486,7 +486,7 @@ def test_is_body_in_gripper(pr2_world_copy) -> None:
     box_collision = Box(
         scale=Scale(0.05, 0.01, 0.05),
         origin=HomogeneousTransformationMatrix.from_xyz_rpy(reference_frame=test_box),
-        color=Color(1.0, 0.0, 0.0),
+        color=Color.from_rgba(red=1.0, green=0.0, blue=0.0),
     )
     test_box.collision = ShapeCollection([box_collision])
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 # %% Imports
 
 import numpy as np
-from semantic_digital_twin.world_description.geometry import HueSaturationValue
+from semantic_digital_twin.world_description.geometry import Color
 
 from robokudo.annotators.image_cluster_extractor import (
     ColorRangeBound,
@@ -24,8 +24,8 @@ def test_threshold_accepts_normalized_hue_saturation_value() -> None:
     )
 
     mask = annotator._threshold_color_image(
-        HueSaturationValue(hue=150 / 255, saturation=130 / 255, value=85 / 255),
-        HueSaturationValue(hue=200 / 255, saturation=1.0, value=1.0),
+        Color(hue=150 / 255, saturation=130 / 255, value=85 / 255),
+        Color(hue=200 / 255, saturation=1.0, value=1.0),
     )
 
     assert mask.tolist() == [[0, 255, 255, 0]]
@@ -38,11 +38,11 @@ def test_presets_use_normalized_hue_saturation_value() -> None:
     """
     parameters = ImageClusterExtractor.Descriptor.Parameters()
 
-    assert type(parameters.minimum_hue_saturation_value) is HueSaturationValue
-    assert type(parameters.maximum_hue_saturation_value) is HueSaturationValue
+    assert type(parameters.minimum_hue_saturation_value) is Color
+    assert type(parameters.maximum_hue_saturation_value) is Color
     for bounds in parameters.color_ranges.values():
         for bound in bounds.values():
-            assert type(bound) is HueSaturationValue
+            assert type(bound) is Color
 
 
 def test_preset_bounds_use_enum_keys() -> None:

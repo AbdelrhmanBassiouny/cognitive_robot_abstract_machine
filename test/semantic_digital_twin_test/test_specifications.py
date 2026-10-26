@@ -1877,7 +1877,9 @@ def test_entry_way_is_coextensive_with_the_door_leaf(empty_world):
 def test_entry_way_geometry_is_translucent_white(empty_world):
     with empty_world.modify_world():
         door = Door.create_with_new_body_in_world(name="door", world=empty_world)
-    assert door.entry_way.root.area[0].color == Color(R=1.0, G=1.0, B=1.0, A=0.2)
+    assert door.entry_way.root.area[0].color == Color.from_rgba(
+        red=1.0, green=1.0, blue=1.0, opacity=0.2
+    )
 
 
 def test_entry_way_is_named_after_the_door(empty_world):

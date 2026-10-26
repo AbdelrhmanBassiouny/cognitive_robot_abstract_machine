@@ -18,7 +18,7 @@ from robokudo.cas import CASViews
 from robokudo.exceptions import ImageContourMissing
 from robokudo.io.camera_model_adapters import Open3DCameraModelAdapter
 from robokudo.io.color_adapters import OpenCVHueSaturationValueAdapter
-from semantic_digital_twin.world_description.geometry import HueSaturationValue
+from semantic_digital_twin.world_description.geometry import Color
 from robokudo.types.scene import ObjectHypothesis
 from robokudo.utils.cv_helper import get_scaled_color_image_for_depth_image
 from robokudo.utils.error_handling import catch_and_raise_to_blackboard
@@ -111,13 +111,13 @@ class ImageClusterExtractor(BaseAnnotator):
                 """
                 Initialize default parameter values.
                 """
-                self.minimum_hue_saturation_value: HueSaturationValue = (
+                self.minimum_hue_saturation_value: Color = (
                     OpenCVHueSaturationValueAdapter.from_channels(
                         hue=150, saturation=130, value=85
                     )
                 )
                 """Lower normalized hue, saturation, and value bound for color segmentation."""
-                self.maximum_hue_saturation_value: HueSaturationValue = (
+                self.maximum_hue_saturation_value: Color = (
                     OpenCVHueSaturationValueAdapter.from_channels(
                         hue=200, saturation=255, value=255
                     )
@@ -129,9 +129,7 @@ class ImageClusterExtractor(BaseAnnotator):
                 # It is used to avoid very small contours when calculating 3d points etc.
                 self.contour_min_size: int = 1000
 
-                self.color_ranges: dict[
-                    str, dict[ColorRangeBound, HueSaturationValue]
-                ] = dict()
+                self.color_ranges: dict[str, dict[ColorRangeBound, Color]] = dict()
                 self.color_ranges["blue"] = {
                     ColorRangeBound.LOWER: self.minimum_hue_saturation_value,
                     ColorRangeBound.UPPER: self.maximum_hue_saturation_value,
@@ -197,8 +195,8 @@ class ImageClusterExtractor(BaseAnnotator):
 
     def _threshold_color_image(
         self,
-        minimum_hue_saturation_value: HueSaturationValue,
-        maximum_hue_saturation_value: HueSaturationValue,
+        minimum_hue_saturation_value: Color,
+        maximum_hue_saturation_value: Color,
     ) -> npt.NDArray:
         """Select pixels within normalized hue, saturation, and value bounds, including hue wraparound.
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from robokudo.io.color_adapters import OpenCVHueSaturationValueAdapter
-from semantic_digital_twin.world_description.geometry import HueSaturationValue
+from semantic_digital_twin.world_description.geometry import Color
 
 # %% OpenCV channel conversion
 
@@ -41,6 +41,6 @@ def test_half_saturation_rounds_to_nearest_channel_value() -> None:
     """
     Normalized thresholds are rounded to the nearest representable byte.
     """
-    color = HueSaturationValue(hue=0.5, saturation=0.5, value=0.5)
+    color = Color(hue=0.5, saturation=0.5, value=0.5)
 
     assert OpenCVHueSaturationValueAdapter.to_channels(color) == (128, 128, 128)

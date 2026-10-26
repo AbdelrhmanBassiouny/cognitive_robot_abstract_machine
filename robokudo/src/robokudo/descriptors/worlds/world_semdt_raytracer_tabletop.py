@@ -51,7 +51,7 @@ class WorldDescriptor(BaseWorldDescriptor):
             ObjectSpec(
                 name="table",
                 box_scale=Scale(1.20, 0.80, table_thickness),
-                color=Color(0.65, 0.58, 0.48, 1.0),
+                color=Color.from_rgba(red=0.65, green=0.58, blue=0.48, opacity=1.0),
                 pose=HomogeneousTransformationMatrix.from_xyz_rpy(
                     x=-1.10,
                     y=1.25,
@@ -62,7 +62,7 @@ class WorldDescriptor(BaseWorldDescriptor):
             ObjectSpec(
                 name="box_red",
                 box_scale=Scale(0.10, 0.08, 0.10),
-                color=Color(0.83, 0.20, 0.20, 1.0),
+                color=Color.from_rgba(red=0.83, green=0.20, blue=0.20, opacity=1.0),
                 pose=HomogeneousTransformationMatrix.from_xyz_rpy(
                     x=-1.20,
                     y=1.20,
@@ -73,7 +73,7 @@ class WorldDescriptor(BaseWorldDescriptor):
             ObjectSpec(
                 name="box_blue",
                 box_scale=Scale(0.08, 0.08, 0.14),
-                color=Color(0.22, 0.37, 0.82, 1.0),
+                color=Color.from_rgba(red=0.22, green=0.37, blue=0.82, opacity=1.0),
                 pose=HomogeneousTransformationMatrix.from_xyz_rpy(
                     x=-1.00,
                     y=1.32,
@@ -88,7 +88,7 @@ class WorldDescriptor(BaseWorldDescriptor):
             RegionSpec(
                 name="table_surface_region",
                 box_scale=Scale(1.00, 0.60, 0.03),
-                color=Color(0.10, 0.70, 0.30, 0.20),
+                color=Color.from_rgba(red=0.10, green=0.70, blue=0.30, opacity=0.20),
                 pose=HomogeneousTransformationMatrix.from_xyz_rpy(
                     x=-1.10,
                     y=1.25,
@@ -100,8 +100,8 @@ class WorldDescriptor(BaseWorldDescriptor):
 
         self.build_objects(root, object_specs)
 
-        cup_color = Color(0.18, 0.78, 0.28, 1.0)
-        milk_color = Color(0.95, 0.85, 0.10, 1.0)
+        cup_color = Color.from_rgba(red=0.18, green=0.78, blue=0.28, opacity=1.0)
+        milk_color = Color.from_rgba(red=0.95, green=0.85, blue=0.10, opacity=1.0)
         with self.world.modify_world():
             cup_visual_mesh = Mesh(
                 origin=HomogeneousTransformationMatrix(),

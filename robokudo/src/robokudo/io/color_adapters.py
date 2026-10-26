@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from krrood.ormatic.utils import classproperty
-from semantic_digital_twin.world_description.geometry import HueSaturationValue
+from semantic_digital_twin.world_description.geometry import Color
 
 # %% OpenCV color channels
 
@@ -33,18 +33,18 @@ class OpenCVHueSaturationValueAdapter:
         return cls.maximum_channel_value + 1
 
     @classmethod
-    def from_channels(cls, hue: int, saturation: int, value: int) -> HueSaturationValue:
+    def from_channels(cls, hue: int, saturation: int, value: int) -> Color:
         """
         Normalize OpenCV HSV_FULL channel values.
         """
-        return HueSaturationValue(
+        return Color(
             hue=hue / cls.hue_channel_count,
             saturation=saturation / cls.maximum_channel_value,
             value=value / cls.maximum_channel_value,
         )
 
     @classmethod
-    def to_channels(cls, color: HueSaturationValue) -> tuple[int, int, int]:
+    def to_channels(cls, color: Color) -> tuple[int, int, int]:
         """
         Convert normalized HSV values to OpenCV HSV_FULL channel values.
         """

@@ -688,7 +688,7 @@ class GazeboParser(WorldModelParser):
         if diffuse is None:
             return Color()
 
-        return Color(*(float(value) for value in diffuse.split()))
+        return Color.from_rgba(*(float(value) for value in diffuse.split()))
 
     # %% joints
 

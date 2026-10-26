@@ -585,12 +585,16 @@ class TestShapeCatalogEntries:
                 shapes=[
                     Box(
                         scale=Scale(0.2, 0.3, 0.4),
-                        color=Color(0.8, 0.2, 0.2),
+                        color=Color.from_rgba(red=0.8, green=0.2, blue=0.2),
                         origin=HomogeneousTransformationMatrix.from_xyz_rpy(
                             0.1, 0.0, 0.05
                         ),
                     ),
-                    Cylinder(width=0.1, height=0.3, color=Color(0.0, 0.5, 1.0)),
+                    Cylinder(
+                        width=0.1,
+                        height=0.3,
+                        color=Color.from_rgba(red=0.0, green=0.5, blue=1.0),
+                    ),
                     Sphere(radius=0.05),
                 ]
             ),

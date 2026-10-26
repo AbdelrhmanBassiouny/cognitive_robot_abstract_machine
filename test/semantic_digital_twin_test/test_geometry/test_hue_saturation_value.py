@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from krrood.adapters.json_serializer import from_json, to_json
-from semantic_digital_twin.world_description.geometry import HueSaturationValue
+from semantic_digital_twin.world_description.geometry import Color
 
 # %% Coordinate preservation
 
@@ -17,6 +17,10 @@ def test_serialization_preserves_achromatic_coordinates(
     """
     Gray and black bounds retain their specified hue and saturation.
     """
-    coordinates = HueSaturationValue(hue=0.75, saturation=saturation, value=value)
+    coordinates = Color(hue=0.75, saturation=saturation, value=value)
 
-    assert from_json(to_json(coordinates)) == coordinates
+    restored = from_json(to_json(coordinates))
+
+    assert restored.hue == coordinates.hue
+    assert restored.saturation == coordinates.saturation
+    assert restored.value == coordinates.value

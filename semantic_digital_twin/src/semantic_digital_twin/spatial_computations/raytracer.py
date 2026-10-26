@@ -76,7 +76,7 @@ class RayTracer:
     """
 
     default_body_color: Color = field(
-        default_factory=lambda: Color(R=0.5, G=0.5, B=0.5)
+        default_factory=lambda: Color.from_rgba(red=0.5, green=0.5, blue=0.5)
     )
     """
     Semantic color for a body without collision or visual geometry.

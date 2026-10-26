@@ -151,7 +151,10 @@ def test_catalog_serializes_native_meshes_without_an_external_file_map(
     assert shape["mesh"].split("?")[0] == "/mesh"
 
 
-@pytest.mark.parametrize("color", [Color(), Color.WHITE(), Color(1, 1, 1, 0.4)])
+@pytest.mark.parametrize(
+    "color",
+    [Color(), Color.WHITE(), Color.from_rgba(red=1, green=1, blue=1, opacity=0.4)],
+)
 def test_white_geometry_keeps_its_native_color(color: Color) -> None:
     """
     Keep white and translucent white instead of assigning a palette color.
@@ -174,7 +177,13 @@ def test_white_geometry_keeps_its_native_color(color: Color) -> None:
     assert shape["opacity"] == color.A
 
 
-@pytest.mark.parametrize("color", [Color(0.8, 0.2, 0.7), Color(0.1, 0.6, 0.9, 0.4)])
+@pytest.mark.parametrize(
+    "color",
+    [
+        Color.from_rgba(red=0.8, green=0.2, blue=0.7),
+        Color.from_rgba(red=0.1, green=0.6, blue=0.9, opacity=0.4),
+    ],
+)
 def test_catalog_uses_native_color_conversion(color: Color) -> None:
     """
     Publish native RGB conversion while retaining opacity separately.

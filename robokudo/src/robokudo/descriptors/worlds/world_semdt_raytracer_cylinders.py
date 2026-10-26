@@ -43,7 +43,7 @@ class WorldDescriptor(BaseWorldDescriptor):
             ObjectSpec(
                 name="table",
                 box_scale=Scale(1.20, 0.80, table_thickness),
-                color=Color(0.65, 0.58, 0.48, 1.0),
+                color=Color.from_rgba(red=0.65, green=0.58, blue=0.48, opacity=1.0),
                 pose=HomogeneousTransformationMatrix.from_xyz_rpy(
                     x=-1.10,
                     y=1.25,
@@ -55,7 +55,7 @@ class WorldDescriptor(BaseWorldDescriptor):
                 name="cylinder_red",
                 cylinder_width=red_cylinder_width,
                 cylinder_height=red_cylinder_height,
-                color=Color(0.83, 0.20, 0.20, 1.0),
+                color=Color.from_rgba(red=0.83, green=0.20, blue=0.20, opacity=1.0),
                 pose=HomogeneousTransformationMatrix.from_xyz_rpy(
                     x=-1.20,
                     y=1.20,
@@ -67,7 +67,7 @@ class WorldDescriptor(BaseWorldDescriptor):
                 name="cylinder_blue",
                 cylinder_width=blue_cylinder_width,
                 cylinder_height=blue_cylinder_height,
-                color=Color(0.22, 0.37, 0.82, 1.0),
+                color=Color.from_rgba(red=0.22, green=0.37, blue=0.82, opacity=1.0),
                 pose=HomogeneousTransformationMatrix.from_xyz_rpy(
                     x=-1.00,
                     y=1.32,
@@ -83,7 +83,7 @@ class WorldDescriptor(BaseWorldDescriptor):
                 name="table_surface_region",
                 box_scale=Scale(1.00, 0.60, table_surface_region_thickness),
                 parent_name="table",
-                color=Color(0.10, 0.70, 0.30, 0.20),
+                color=Color.from_rgba(red=0.10, green=0.70, blue=0.30, opacity=0.20),
                 pose=HomogeneousTransformationMatrix.from_xyz_rpy(
                     x=0.0,
                     y=0.0,

@@ -1441,7 +1441,7 @@ class HasSupportingSurface(IsStorageSpace):
         if name is None:
             name = PrefixedName("region")
         if color is None:
-            color = Color(0.5, 1.0, 0.5, 0.5)
+            color = Color.from_rgba(red=0.5, green=1.0, blue=0.5, opacity=0.5)
 
         shapes = boxes.as_shapes()
         shapes.dye_shapes(color)

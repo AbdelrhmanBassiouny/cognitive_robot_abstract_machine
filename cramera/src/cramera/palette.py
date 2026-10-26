@@ -66,7 +66,7 @@ class ObjectPalette:
         red, green, blue = (
             int(hex_value[channel : channel + 2], 16) / 255 for channel in (0, 2, 4)
         )
-        return Color(R=red, G=green, B=blue)
+        return Color.from_rgba(red=red, green=green, blue=blue)
 
     @staticmethod
     def css_color(color: Color) -> str:

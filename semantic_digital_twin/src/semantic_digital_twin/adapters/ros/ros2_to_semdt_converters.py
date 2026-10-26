@@ -167,7 +167,7 @@ class ColorToSemDTConverter(Ros2ToSemDTConverter[ColorRGBA, Color]):
 
     @classmethod
     def convert(cls, data: OutputType, world: World) -> InputType:
-        return Color(data.r, data.g, data.b, data.a)
+        return Color.from_rgba(red=data.r, green=data.g, blue=data.b, opacity=data.a)
 
 
 @dataclass

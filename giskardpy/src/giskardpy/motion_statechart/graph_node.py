@@ -575,7 +575,9 @@ class DebugExpression:
     )
     """The tracked expression; spatial types are additionally rendered as RViz markers."""
 
-    color: Color = field(default_factory=lambda: Color(1, 0, 0, 1))
+    color: Color = field(
+        default_factory=lambda: Color.from_rgba(red=1, green=0, blue=0, opacity=1)
+    )
     """
     The color used when this expression is rendered in visualization tools.
     """

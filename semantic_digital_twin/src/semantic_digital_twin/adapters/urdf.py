@@ -402,9 +402,11 @@ class URDFParser(WorldModelParser):
             )
             if isinstance(geom.geometry, urdfpy.Box):
                 color = (
-                    Color(*material_dict.get(geom.material.name, (1, 1, 1, 1)))
+                    Color.from_rgba(
+                        *material_dict.get(geom.material.name, (1, 1, 1, 1))
+                    )
                     if hasattr(geom, "material") and geom.material
-                    else Color(1, 1, 1, 1)
+                    else Color.from_rgba(red=1, green=1, blue=1, opacity=1)
                 )
                 res.append(
                     Box(
@@ -415,9 +417,11 @@ class URDFParser(WorldModelParser):
                 )
             elif isinstance(geom.geometry, urdfpy.Sphere):
                 color = (
-                    Color(*material_dict.get(geom.material.name, (1, 1, 1, 1)))
+                    Color.from_rgba(
+                        *material_dict.get(geom.material.name, (1, 1, 1, 1))
+                    )
                     if hasattr(geom, "material") and geom.material
-                    else Color(1, 1, 1, 1)
+                    else Color.from_rgba(red=1, green=1, blue=1, opacity=1)
                 )
                 res.append(
                     Sphere(
@@ -428,9 +432,11 @@ class URDFParser(WorldModelParser):
                 )
             elif isinstance(geom.geometry, urdfpy.Cylinder):
                 color = (
-                    Color(*material_dict.get(geom.material.name, (1, 1, 1, 1)))
+                    Color.from_rgba(
+                        *material_dict.get(geom.material.name, (1, 1, 1, 1))
+                    )
                     if hasattr(geom, "material") and geom.material
-                    else Color(1, 1, 1, 1)
+                    else Color.from_rgba(red=1, green=1, blue=1, opacity=1)
                 )
                 res.append(
                     Cylinder(

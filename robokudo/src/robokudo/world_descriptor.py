@@ -52,7 +52,11 @@ class ObjectSpec:
     cylinder_width: float | None = None
     cylinder_height: float | None = None
     center_mesh: bool = True
-    color: Color = field(default_factory=lambda: Color(0.1, 0.2, 0.8, 1.0))
+    color: Color = field(
+        default_factory=lambda: Color.from_rgba(
+            red=0.1, green=0.2, blue=0.8, opacity=1.0
+        )
+    )
 
 
 @dataclass

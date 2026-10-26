@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from krrood.ormatic.data_access_objects.helper import to_dao
-from semantic_digital_twin.world_description.geometry import Color, HueSaturationValue
+from semantic_digital_twin.world_description.geometry import Color
 
 # %% Color persistence
 
@@ -21,11 +21,9 @@ def test_color_retains_hue_saturation_value_after_database_roundtrip(
     Database persistence retains stored hue, saturation, value, and opacity.
     """
     color = (
-        Color.from_hue_saturation_value(
-            HueSaturationValue(hue=0.75, saturation=0.0, value=0.5), opacity=0.25
-        )
+        Color(hue=0.75, saturation=0.0, value=0.5, opacity=0.25)
         if constructed_from_hue_saturation_value
-        else Color(0.25, 0.5, 0.75, 0.25)
+        else Color.from_rgba(red=0.25, green=0.5, blue=0.75, opacity=0.25)
     )
     stored_color = to_dao(color)
     with in_memory_session_maker() as session:
@@ -34,5 +32,7 @@ def test_color_retains_hue_saturation_value_after_database_roundtrip(
         session.expunge_all()
         restored = session.scalar(select(type(stored_color))).from_dao()
 
-    assert restored.hue_saturation_value == color.hue_saturation_value
-    assert restored.A == color.A
+    assert restored.hue == color.hue
+    assert restored.saturation == color.saturation
+    assert restored.value == color.value
+    assert restored.opacity == color.opacity
