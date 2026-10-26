@@ -22,6 +22,7 @@ from robokudo.analysis_engine import AnalysisEngineInterface
 from robokudo.annotators.cluster_pose_bb import ClusterPoseBBAnnotator
 from robokudo.annotators.collection_reader import CollectionReaderAnnotator
 from robokudo.annotators.image_cluster_extractor import (
+    ColorName,
     ColorRangeBound,
     ImageClusterExtractor,
 )
@@ -128,10 +129,14 @@ class AnalysisEngine(AnalysisEngineInterface):
         # object this pipeline currently targets.
         cluster_descriptor = ImageClusterExtractor.Descriptor()
         cluster_descriptor.parameters.minimum_hue_saturation_value = (
-            cluster_descriptor.parameters.color_ranges["red"][ColorRangeBound.LOWER]
+            cluster_descriptor.parameters.color_ranges[ColorName.RED][
+                ColorRangeBound.LOWER
+            ]
         )
         cluster_descriptor.parameters.maximum_hue_saturation_value = (
-            cluster_descriptor.parameters.color_ranges["red"][ColorRangeBound.UPPER]
+            cluster_descriptor.parameters.color_ranges[ColorName.RED][
+                ColorRangeBound.UPPER
+            ]
         )
         # The depth hole leaves few valid 3D points under the color mask. Lowered to
         # ClusterPoseBBAnnotator's own floor (it needs more than 10 points to compute a

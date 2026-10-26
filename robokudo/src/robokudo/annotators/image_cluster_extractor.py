@@ -30,6 +30,22 @@ if TYPE_CHECKING:
 # %% Color range bounds
 
 
+class ColorName(StrEnum):
+    """
+    Names identifying configured color segmentation ranges.
+    """
+
+    BLUE = "blue"
+    """
+    Blue segmentation range.
+    """
+
+    RED = "red"
+    """
+    Red segmentation range.
+    """
+
+
 class ColorRangeBound(StrEnum):
     """Identify the lower and upper channel bounds of a color range."""
 
@@ -129,13 +145,15 @@ class ImageClusterExtractor(BaseAnnotator):
                 # It is used to avoid very small contours when calculating 3d points etc.
                 self.contour_min_size: int = 1000
 
-                self.color_ranges: dict[str, dict[ColorRangeBound, Color]] = dict()
-                self.color_ranges["blue"] = {
+                self.color_ranges: dict[ColorName, dict[ColorRangeBound, Color]] = (
+                    dict()
+                )
+                self.color_ranges[ColorName.BLUE] = {
                     ColorRangeBound.LOWER: self.minimum_hue_saturation_value,
                     ColorRangeBound.UPPER: self.maximum_hue_saturation_value,
                 }
                 # A lower hue above the upper hue selects both sides of the hue seam.
-                self.color_ranges["red"] = {
+                self.color_ranges[ColorName.RED] = {
                     ColorRangeBound.LOWER: OpenCVHueSaturationValueAdapter.from_channels(
                         hue=245, saturation=150, value=95
                     ),

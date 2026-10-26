@@ -6,6 +6,7 @@ import numpy as np
 from semantic_digital_twin.world_description.geometry import Color
 
 from robokudo.annotators.image_cluster_extractor import (
+    ColorName,
     ColorRangeBound,
     ImageClusterExtractor,
 )
@@ -92,7 +93,7 @@ class TestHueThresholds:
             [100, 150, 170, 210]
         )
 
-        bounds = annotator.descriptor.parameters.color_ranges["blue"]
+        bounds = annotator.descriptor.parameters.color_ranges[ColorName.BLUE]
         mask = annotator._threshold_color_image(
             bounds[ColorRangeBound.LOWER],
             bounds[ColorRangeBound.UPPER],
@@ -110,7 +111,7 @@ class TestHueThresholds:
             [0, 10, 15, 16, 200, 244, 245, 255]
         )
 
-        bounds = annotator.descriptor.parameters.color_ranges["red"]
+        bounds = annotator.descriptor.parameters.color_ranges[ColorName.RED]
         mask = annotator._threshold_color_image(
             bounds[ColorRangeBound.LOWER],
             bounds[ColorRangeBound.UPPER],
@@ -133,7 +134,7 @@ class TestHueThresholds:
             [[low_saturation_pixel, high_saturation_pixel]], dtype=np.uint8
         )
 
-        bounds = annotator.descriptor.parameters.color_ranges["red"]
+        bounds = annotator.descriptor.parameters.color_ranges[ColorName.RED]
         mask = annotator._threshold_color_image(
             bounds[ColorRangeBound.LOWER],
             bounds[ColorRangeBound.UPPER],

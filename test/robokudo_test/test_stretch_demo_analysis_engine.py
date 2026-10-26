@@ -5,6 +5,7 @@ Tests for the Stretch apartment demo's perception pipeline configuration.
 import numpy as np
 
 from robokudo.annotators.image_cluster_extractor import (
+    ColorName,
     ColorRangeBound,
     ImageClusterExtractor,
 )
@@ -72,7 +73,7 @@ def test_pipeline_extracts_objects_by_color_not_depth_clustering(monkeypatch):
         node for node in pipeline.children if isinstance(node, ImageClusterExtractor)
     )
     parameters = cluster_annotator.descriptor.parameters
-    red_color_range = parameters.color_ranges["red"]
+    red_color_range = parameters.color_ranges[ColorName.RED]
 
     assert (
         parameters.minimum_hue_saturation_value
