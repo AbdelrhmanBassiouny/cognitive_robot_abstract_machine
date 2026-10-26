@@ -44,6 +44,6 @@ class SectionWithoutParent(DataclassException):
 
     def suggest_correction(self) -> str:
         return (
-            "Subclass `Subsection[...]` instead of `Section`, naming the section or rule "
-            "set it is nested under."
+            "Override `parent` with a `classproperty` returning the section or rule set "
+            "it is nested under."
         )

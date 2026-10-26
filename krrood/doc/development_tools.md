@@ -23,9 +23,8 @@ of `AGENTS.md`. A section is an enum subclassing `Section`, whose members are it
 each member's value is the rule's statement, or a tuple of the statement and the details
 that spell it out. Every member is an `AgentRule`, so `Errors.NEVER_TRY_EXCEPT.statement`
 is one of the Python rules on errors. A section names the section or rule set it is
-nested under by subclassing `Subsection` with it as the type parameter:
-`class Errors(Subsection[DesignPrinciples])`, where `DesignPrinciples` is in turn a
-`Subsection[PythonRules]`. A section's heading is its class name in words, in
+nested under by overriding the `parent` classproperty to return it: `Errors` returns
+`DesignPrinciples`, which in turn returns `PythonRules`. A section's heading is its class name in words, in
 sentence case (`ExternalServicesAndCI` becomes "External services and CI"). A rule that
 names code builds that name from the imported object with `CodeReference`, so the rule
 follows a rename.
@@ -92,10 +91,15 @@ agents-md` imports that module, and every section nested in `ProjectRules` becom
 section under "Project rules":
 
 ```python
-from krrood.development_tools.agent_rule import ProjectRules, Subsection
+from krrood.development_tools.agent_rule import ProjectRules, Section
+from krrood.ormatic.utils import classproperty
 
 
-class Deployment(Subsection[ProjectRules]):
+class Deployment(Section):
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return ProjectRules
+
     DEPLOY_FROM_TAGS = "Deploy only tagged commits"
     TAG_RELEASES = "Tag every release", ("Use semantic versions", "Sign the tag")
 ```

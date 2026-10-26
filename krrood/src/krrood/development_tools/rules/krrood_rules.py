@@ -17,20 +17,22 @@ from krrood.adapters.json_serializer import (
 from krrood.development_tools.agent_rule import (
     CodeReference,
     KrroodRules,
-    Subsection,
+    Section,
 )
 from krrood.exceptions import DataclassException
 from krrood.ormatic.utils import classproperty
-from krrood.patterns.generic_enumeration import GenericEnumeration
 from krrood.patterns.path_enumeration import PathEnumeration
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
-from krrood.utils import get_generic_type_parameters
 
 
-class Errors(Subsection[KrroodRules]):
+class Errors(Section):
     """
     The krrood rules on errors.
     """
+
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return KrroodRules
 
     SUBCLASS_DATACLASS_EXCEPTION = (
         f"Custom exceptions subclass {CodeReference(DataclassException).path}, "
@@ -39,10 +41,14 @@ class Errors(Subsection[KrroodRules]):
     )
 
 
-class ConstantsAndClassLevelValues(Subsection[KrroodRules]):
+class ConstantsAndClassLevelValues(Section):
     """
     The krrood rules on constants and class-level values.
     """
+
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return KrroodRules
 
     USE_KRROOD_CLASSPROPERTY = (
         f"Use the {CodeReference(classproperty).name} {CodeReference(krrood).name} "
@@ -50,10 +56,14 @@ class ConstantsAndClassLevelValues(Subsection[KrroodRules]):
     )
 
 
-class StructuredData(Subsection[KrroodRules]):
+class StructuredData(Section):
     """
     The krrood rules on structured data.
     """
+
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return KrroodRules
 
     PATH_ENUMS_SUBCLASS_PATH_ENUMERATION = (
         f"A path enum subclasses {CodeReference(PathEnumeration).path}, so every "
@@ -76,10 +86,14 @@ class StructuredData(Subsection[KrroodRules]):
     )
 
 
-class TypeHints(Subsection[KrroodRules]):
+class TypeHints(Section):
     """
     The krrood rules on type hints.
     """
+
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return KrroodRules
 
     SUBCLASS_SAFE_GENERICS = (
         f"Generic classes inherit {CodeReference(Generic).name} and then "
@@ -88,14 +102,4 @@ class TypeHints(Subsection[KrroodRules]):
         f"{CodeReference(SubClassSafeGeneric.get_type_of_generic_parameter).name}, "
         "never via `__orig_bases__`. Such "
         "classes cannot be frozen dataclasses"
-    )
-
-    GENERIC_ENUMERATIONS = (
-        f"A generic enum inherits {CodeReference(Generic).name} and then "
-        f"{CodeReference(GenericEnumeration).path} instead of "
-        f"{CodeReference(SubClassSafeGeneric).name}, whose metaclass conflicts with "
-        "the enum's, so a subclass binds the parameter by subscripting it "
-        "(`class MemberOfFamily(Family[ConcreteType])`) while subscripting with a "
-        "member's name still looks the member up. Read a bound type with "
-        f"{CodeReference(get_generic_type_parameters).path}"
     )

@@ -9,16 +9,15 @@ import importlib.util
 import re
 import sys
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from types import ModuleType
 
-from typing_extensions import Any, Callable, Generic, TypeVar
+from typing_extensions import Any, Callable
 
 from krrood.development_tools.exceptions import SectionWithoutParent
 from krrood.development_tools.repository_files import RepositoryInstructionsFile
 from krrood.ormatic.utils import classproperty
-from krrood.patterns.generic_enumeration import GenericEnumeration
-from krrood.utils import get_generic_type_parameters
 
 # %% code named by rules
 
@@ -84,11 +83,11 @@ class AgentRule:
 # %% sections
 
 
-class Section(AgentRule, GenericEnumeration):
+class Section(AgentRule, Enum):
     """
     A section of ``AGENTS.md``, whose members are the rules it lists. A member's value
     is the rule's statement, or its statement and details. A section nested under
-    another is a :class:`Subsection`.
+    another overrides :attr:`parent` to return it.
     """
 
     @classproperty
@@ -130,7 +129,7 @@ class Section(AgentRule, GenericEnumeration):
         The sections nested directly under this one, in definition order.
         """
         return [
-            section for section in Subsection.__subclasses__() if section.parent is cls
+            section for section in Section.__subclasses__() if section.parent is cls
         ]
 
     @classproperty
@@ -163,23 +162,6 @@ class Section(AgentRule, GenericEnumeration):
         top-level package or module lies in.
         """
         return Path(*cls.__module__.split(".")).with_suffix(".py")
-
-
-ParentSection = TypeVar("ParentSection", bound=Section)
-"""
-The section or rule set a section is nested under.
-"""
-
-
-class Subsection(Generic[ParentSection], Section):
-    """
-    A section nested under the section or rule set its type parameter names, as in
-    ``class Errors(Subsection[DesignPrinciples])``.
-    """
-
-    @classproperty
-    def parent(cls) -> type[Section]:
-        return get_generic_type_parameters(cls, Subsection)[0]
 
 
 # %% rule sets

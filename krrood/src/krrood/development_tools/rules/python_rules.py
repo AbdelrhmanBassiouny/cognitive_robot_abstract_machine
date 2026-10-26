@@ -15,15 +15,19 @@ from typing_extensions import Any, ClassVar, Protocol
 from krrood.development_tools.agent_rule import (
     CodeReference,
     PythonRules,
-    Subsection,
+    Section,
 )
 from krrood.ormatic.utils import classproperty
 
 
-class ApplyingTheseRules(Subsection[PythonRules]):
+class ApplyingTheseRules(Section):
     """
     The rules on when and how far the other rules apply.
     """
+
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return PythonRules
 
     LEAVE_UNTOUCHED_CODE_ALONE = (
         "Existing code that breaks these rules stays as it is unless a change "
@@ -42,10 +46,14 @@ class ApplyingTheseRules(Subsection[PythonRules]):
     )
 
 
-class AskTheDeveloper(Subsection[PythonRules]):
+class AskTheDeveloper(Section):
     """
     The rules on what to ask the developer instead of deciding.
     """
+
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return PythonRules
 
     ASK_INSTEAD_OF_INVENTING_REASONS = (
         "When you are unsure why something was done or why a specific number was "
@@ -59,16 +67,24 @@ class AskTheDeveloper(Subsection[PythonRules]):
     ASK_BEFORE_ADDING_DEPENDENCIES = "Before adding a new dependency, ask"
 
 
-class Testing(Subsection[PythonRules]):
+class Testing(Section):
     """
     The rules on tests.
     """
 
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return PythonRules
 
-class WritingTests(Subsection[Testing]):
+
+class WritingTests(Section):
     """
     The rules on writing tests.
     """
+
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return Testing
 
     WRITE_TESTS_WITH_PYTEST = (
         "Write tests with pytest: plain test functions or classes, pytest "
@@ -99,10 +115,14 @@ class WritingTests(Subsection[Testing]):
     )
 
 
-class Assertions(Subsection[Testing]):
+class Assertions(Section):
     """
     The rules on what a test asserts.
     """
+
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return Testing
 
     ASSERT_EXACT_EXPECTED_VALUES = (
         "Assert equality to the expected value whenever it can be determined, "
@@ -127,10 +147,14 @@ class Assertions(Subsection[Testing]):
     )
 
 
-class ExternalServicesAndCI(Subsection[Testing]):
+class ExternalServicesAndCI(Section):
     """
     The rules on tests that reach external services, and on tests in CI.
     """
+
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return Testing
 
     EVERY_TEST_RUNS_IN_CI = (
         "Every added test is part of the CI suite. A test that needs live external "
@@ -154,10 +178,14 @@ class ExternalServicesAndCI(Subsection[Testing]):
     )
 
 
-class RunningTests(Subsection[Testing]):
+class RunningTests(Section):
     """
     The rules on running tests.
     """
+
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return Testing
 
     RUN_TESTS_WITH_PYTEST = "Run tests with pytest"
 
@@ -175,10 +203,14 @@ class RunningTests(Subsection[Testing]):
     )
 
 
-class CodeStyle(Subsection[PythonRules]):
+class CodeStyle(Section):
     """
     The rules on the shape of code.
     """
+
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return PythonRules
 
     USE_DATACLASSES = "Always use dataclasses"
 
@@ -213,10 +245,14 @@ class CodeStyle(Subsection[PythonRules]):
     )
 
 
-class Naming(Subsection[CodeStyle]):
+class Naming(Section):
     """
     The rules on naming.
     """
+
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return CodeStyle
 
     CORRECT_SIMPLE_DESCRIPTIVE_NAMES = (
         "Names are technically correct, simple and descriptive, in that order. An "
@@ -301,10 +337,14 @@ class Naming(Subsection[CodeStyle]):
     )
 
 
-class Imports(Subsection[PythonRules]):
+class Imports(Section):
     """
     The rules on imports.
     """
+
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return PythonRules
 
     ABSOLUTE_IMPORTS = (
         "Imports are absolute. Exception: a test imports another test module (a "
@@ -319,10 +359,14 @@ class Imports(Subsection[PythonRules]):
     GUARD_TYPE_ONLY_IMPORTS = "Guard type-only imports with `TYPE_CHECKING`"
 
 
-class DesignPrinciples(Subsection[PythonRules]):
+class DesignPrinciples(Section):
     """
     The rules on the design of classes and modules.
     """
+
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return PythonRules
 
     OBJECT_ORIENTED_AND_SOLID = (
         "Use strictly object-oriented design and always apply the SOLID principles:",
@@ -355,10 +399,14 @@ class DesignPrinciples(Subsection[PythonRules]):
     HARD_TO_MISUSE_INTERFACES = "Make interfaces hard to misuse"
 
 
-class Methods(Subsection[DesignPrinciples]):
+class Methods(Section):
     """
     The rules on methods.
     """
+
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return DesignPrinciples
 
     EXTRACT_METHODS_THAT_EARN_THEIR_ABSTRACTION = (
         "Every method hides what actually runs from the reader, so extract one "
@@ -392,10 +440,14 @@ class Methods(Subsection[DesignPrinciples]):
     )
 
 
-class Errors(Subsection[DesignPrinciples]):
+class Errors(Section):
     """
     The rules on raising and declaring exceptions.
     """
+
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return DesignPrinciples
 
     NEVER_TRY_EXCEPT = (
         "Never use try-except; a program in an illegal state raises an appropriate "
@@ -425,10 +477,14 @@ class Errors(Subsection[DesignPrinciples]):
     )
 
 
-class ConstantsAndClassLevelValues(Subsection[DesignPrinciples]):
+class ConstantsAndClassLevelValues(Section):
     """
     The rules on constants and values shared by a class.
     """
+
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return DesignPrinciples
 
     NO_GLOBAL_OR_CLASS_VARIABLES = (
         "Never use global variables, module-level constants or "
@@ -452,10 +508,14 @@ class ConstantsAndClassLevelValues(Subsection[DesignPrinciples]):
     )
 
 
-class StructuredData(Subsection[DesignPrinciples]):
+class StructuredData(Section):
     """
     The rules on representing data with structure instead of bare literals.
     """
+
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return DesignPrinciples
 
     PREFER_STRUCTURED_DATA = (
         "Structured data is the default over bare strings, hardcoded values and "
@@ -500,10 +560,14 @@ class StructuredData(Subsection[DesignPrinciples]):
     )
 
 
-class TypeHints(Subsection[PythonRules]):
+class TypeHints(Section):
     """
     The rules on type hints.
     """
+
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return PythonRules
 
     ANNOTATE_EVERYTHING = (
         "Every parameter and return value has an accurate type hint, "
@@ -529,10 +593,14 @@ class TypeHints(Subsection[PythonRules]):
     )
 
 
-class Documentation(Subsection[PythonRules]):
+class Documentation(Section):
     """
     The rules on docstrings and comments.
     """
+
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return PythonRules
 
     DOCUMENT_EVERYTHING = (
         "Every class and method has meaningful, non-trivial documentation in "
@@ -590,10 +658,14 @@ class Documentation(Subsection[PythonRules]):
     )
 
 
-class VersionControl(Subsection[PythonRules]):
+class VersionControl(Section):
     """
     The rules on commits, pushes and pull requests.
     """
+
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return PythonRules
 
     AUTHOR_AS_THE_HUMAN = (
         "Author commits as the human user running the tool, with their own "
@@ -626,10 +698,14 @@ class VersionControl(Subsection[PythonRules]):
     )
 
 
-class Miscellaneous(Subsection[PythonRules]):
+class Miscellaneous(Section):
     """
     The rules that fit no other section.
     """
+
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return PythonRules
 
     USE_THE_PROJECT_INTERPRETER = (
         "Always use the project's configured Python interpreter for tests and commands"

@@ -176,7 +176,6 @@
 ## Type hints
 <!-- from TypeHints in krrood/development_tools/rules/krrood_rules.py -->
 - Generic classes inherit `Generic` and then `krrood.patterns.subclass_safe_generic.SubClassSafeGeneric`, which narrows field types when a subclass binds a parameter. Read a bound type with `get_type_of_generic_parameter`, never via `__orig_bases__`. Such classes cannot be frozen dataclasses
-- A generic enum inherits `Generic` and then `krrood.patterns.generic_enumeration.GenericEnumeration` instead of `SubClassSafeGeneric`, whose metaclass conflicts with the enum's, so a subclass binds the parameter by subscripting it (`class MemberOfFamily(Family[ConcreteType])`) while subscripting with a member's name still looks the member up. Read a bound type with `krrood.utils.get_generic_type_parameters`
 
 # Project rules
 

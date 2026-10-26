@@ -190,33 +190,3 @@ class InterfaceInstantiationError(DataclassException, TypeError):
 
     def suggest_correction(self) -> str:
         return f"Instantiate a subclass that implements {self.interface.__name__}."
-
-
-@dataclass
-class InvalidEnumerationKey(DataclassException, KeyError, TypeError):
-    """
-    Raised when a generic enumeration is subscripted with a key that neither names one
-    of its members nor binds a type parameter it leaves unbound.
-    """
-
-    enumeration: type
-    """
-    The enumeration subscripted.
-    """
-
-    key: Any
-    """
-    The key it was subscripted with.
-    """
-
-    def error_message(self) -> str:
-        return (
-            f"{self.key!r} names no member of {self.enumeration.__qualname__}, which has "
-            "no unbound type parameter to bind it to."
-        )
-
-    def suggest_correction(self) -> str:
-        return (
-            "Subscript the enumeration with the name of one of its members, or a generic "
-            "enumeration with the types its parameters are bound to."
-        )

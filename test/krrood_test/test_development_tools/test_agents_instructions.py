@@ -45,7 +45,7 @@ def test_a_rule_set_lists_its_sections_and_their_rules(repository_root: Path) ->
     )
 
 
-def test_a_section_is_nested_in_the_section_its_base_names() -> None:
+def test_a_section_is_nested_in_the_section_its_parent_returns() -> None:
     assert Errors.parent is DesignPrinciples
 
 

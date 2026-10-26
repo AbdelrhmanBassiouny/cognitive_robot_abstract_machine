@@ -5,13 +5,18 @@ after the shared rule sets.
 
 from __future__ import annotations
 
-from krrood.development_tools.agent_rule import ProjectRules, Subsection
+from krrood.development_tools.agent_rule import ProjectRules, Section
+from krrood.ormatic.utils import classproperty
 
 
-class RunningTests(Subsection[ProjectRules]):
+class RunningTests(Section):
     """
     The rules on running this repository's tests.
     """
+
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return ProjectRules
 
     NEVER_BUILD_ORM_INTERFACES_IN_TEST_RUNS = (
         "Pass `--orm-build never`, and regenerate the ORM interfaces explicitly "
@@ -19,10 +24,14 @@ class RunningTests(Subsection[ProjectRules]):
     )
 
 
-class GeneratedORMInterfaces(Subsection[ProjectRules]):
+class GeneratedORMInterfaces(Section):
     """
     The rules on the generated ORM interfaces.
     """
+
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return ProjectRules
 
     NEVER_EDIT_ORM_INTERFACES = (
         "`ormatic_interface.py` files are generated, never written, and "
@@ -52,10 +61,14 @@ class GeneratedORMInterfaces(Subsection[ProjectRules]):
     )
 
 
-class KrroodIsolation(Subsection[ProjectRules]):
+class KrroodIsolation(Section):
     """
     The rules keeping krrood independent of the other workspace packages.
     """
+
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return ProjectRules
 
     KRROOD_IMPORTS_NO_WORKSPACE_PACKAGE = (
         "`krrood`, including its tests under `test/krrood_test`, never imports "
@@ -78,10 +91,14 @@ class KrroodIsolation(Subsection[ProjectRules]):
     )
 
 
-class DomainSpecificConventions(Subsection[ProjectRules]):
+class DomainSpecificConventions(Section):
     """
     The rules pointing to the conventions of one domain.
     """
+
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return ProjectRules
 
     FOLLOW_THE_SPATIAL_STYLE_GUIDE = (
         "For spatial types and connections, follow "
