@@ -19,6 +19,7 @@ from timeit import default_timer
 import cv2
 import numpy as np
 from py_trees.common import Status
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world_description.world_entity import Body
 from typing_extensions import TYPE_CHECKING
 
@@ -40,9 +41,6 @@ from robokudo.types.annotation import (
 from robokudo.types.cv import ImageROI, Point2D, Rect
 from robokudo.types.scene import ObjectHypothesis
 from robokudo.types.tf import Pose
-from robokudo.utils.annotator_helper import (
-    get_world_to_camera_transform_matrix,
-)
 from robokudo.utils.cv_helper import (
     clamp_bounding_rect,
     get_scaled_color_image_for_depth_image,
@@ -56,10 +54,7 @@ from robokudo.utils.o3d_helper import (
 )
 from robokudo.utils.transform import (
     get_quaternion_from_rotation_matrix,
-    get_quaternion_from_transform_matrix,
     get_rotation_matrix_from_euler_angles,
-    get_transform_matrix_from_translation,
-    get_translation_from_transform_matrix,
 )
 from robokudo.world_descriptor import PredefinedObject
 
@@ -220,76 +215,52 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
             return body.visual
         return None
 
-    def _get_body_bb_size_and_center(
-        self, body: Body
-    ) -> tuple[np.ndarray, np.ndarray] | None:
-        shape_collection = self._select_body_shape_collection(body)
-        if shape_collection is None or len(shape_collection) == 0:
-            self.rk_logger.warning(
-                "Body %s has no collision or visual shapes; skipping.",
-                self._body_name(body),
-            )
-            return None
-
-        bounding_box = shape_collection.as_bounding_box_collection_in_frame(
-            body
-        ).bounding_box()
-        size = np.array(
-            [
-                bounding_box.max_x - bounding_box.min_x,
-                bounding_box.max_y - bounding_box.min_y,
-                bounding_box.max_z - bounding_box.min_z,
-            ],
-            dtype=float,
-        )
-        center = np.array(
-            [
-                (bounding_box.min_x + bounding_box.max_x) / 2.0,
-                (bounding_box.min_y + bounding_box.max_y) / 2.0,
-                (bounding_box.min_z + bounding_box.max_z) / 2.0,
-            ],
-            dtype=float,
-        )
-        return size, center
-
     def detect_from_body(
         self,
         body: Body,
         object_id: int = 0,
-        world_to_camera_transform_matrix: np.ndarray | None = None,
+        camera_T_world: HomogeneousTransformationMatrix | None = None,
     ) -> ObjectHypothesis | None:
         """
-        Detect an object represented by a :class:`~semantic_digital_twin.world_description.world_entity.Body`.
+        Create a camera-relative hypothesis from the body's collision or visual bounds.
+
+        :param body: Body whose geometry supplies the bounding box.
+        :param object_id: Identifier assigned to the hypothesis.
+        :param camera_T_world: Sampled transform from world into optical coordinates.
+        :return: Hypothesis, or ``None`` when geometry is absent or outside the image.
+        :raises CameraObservationMissing: If no transform or camera observation is available.
+        :raises CameraPoseMissing: If the observation has no sampled camera pose.
         """
         object_hypothesis = ObjectHypothesis()
         object_hypothesis.id = str(object_id)
         object_hypothesis.source = self.name
         object_hypothesis.object_knowledge = body
 
-        if world_to_camera_transform_matrix is None:
-            world_to_camera_transform_matrix = get_world_to_camera_transform_matrix(
-                self.get_cas()
+        if camera_T_world is None:
+            camera_T_world = self.get_cas().require_camera_observation().camera_T_world
+
+        shape_collection = self._select_body_shape_collection(body)
+        if shape_collection is None:
+            self.rk_logger.warning(
+                "Body %s has no collision or visual shapes; skipping.",
+                self._body_name(body),
             )
-
-        body_bounding_box = self._get_body_bb_size_and_center(body)
-        if body_bounding_box is None:
             return None
-        bounding_box_size, bounding_box_center_body = body_bounding_box
+        bounding_box = shape_collection.as_bounding_box_collection_in_frame(
+            body
+        ).bounding_box()
+        bounding_box_scale = bounding_box.scale
+        body_T_bounding_box = (
+            HomogeneousTransformationMatrix.from_point_rotation_matrix(
+                point=bounding_box.center,
+                reference_frame=body,
+            )
+        )
+        world_T_body = body.global_transform
+        camera_T_bounding_box = camera_T_world @ world_T_body @ body_T_bounding_box
 
-        body_to_world_transform = body.global_pose.to_np()
-        bounding_box_center_to_body_transform = get_transform_matrix_from_translation(
-            bounding_box_center_body
-        )
-        bounding_box_to_world_transform = (
-            body_to_world_transform @ bounding_box_center_to_body_transform
-        )
-        bounding_box_transform_in_camera = (
-            world_to_camera_transform_matrix @ bounding_box_to_world_transform
-        )
-
-        # Calculate Bounding Box and resulting 2D Image Corner points based on pose in camera coordinates
         oriented_bounding_box = create_oriented_bounding_box(
-            bounding_box_size, bounding_box_transform_in_camera
+            bounding_box_scale.to_np(), camera_T_bounding_box.to_np()
         )
         corner_points = get_2d_bounding_rect_from_3d_bb(
             self.get_cas(), oriented_bounding_box
@@ -316,12 +287,10 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
         object_hypothesis.roi = roi
         object_hypothesis.points = self.cloud.crop(oriented_bounding_box)
 
-        object_translation_in_camera = list(
-            get_translation_from_transform_matrix(bounding_box_transform_in_camera)
-        )
-        object_rotation_in_camera = list(
-            get_quaternion_from_transform_matrix(bounding_box_transform_in_camera)
-        )
+        object_translation_in_camera = camera_T_bounding_box.position.to_np()[
+            :3
+        ].tolist()
+        object_rotation_in_camera = camera_T_bounding_box.quaternion.to_np().tolist()
 
         if self.descriptor.parameters.create_pose_annotation:
             pose_annotation = PoseAnnotation()
@@ -338,9 +307,9 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
             bounding_box_annotation.pose.translation = object_translation_in_camera
             bounding_box_annotation.pose.rotation = object_rotation_in_camera
 
-            bounding_box_annotation.x_length = float(bounding_box_size[0])
-            bounding_box_annotation.y_length = float(bounding_box_size[1])
-            bounding_box_annotation.z_length = float(bounding_box_size[2])
+            bounding_box_annotation.x_length = bounding_box_scale.x
+            bounding_box_annotation.y_length = bounding_box_scale.y
+            bounding_box_annotation.z_length = bounding_box_scale.z
 
             object_hypothesis.annotations.append(bounding_box_annotation)
 
@@ -351,12 +320,13 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
         return object_hypothesis
 
     def detect_from_body_base(
-        self, world_to_camera_transform_matrix: npt.NDArray | None = None
+        self, camera_T_world: HomogeneousTransformationMatrix | None = None
     ) -> list[ObjectHypothesis]:
         """
-        Detect from a completed world descriptor
+        Detect configured bodies using their world-descriptor geometry.
 
-        :return: A list of ObjectHypothesis objects
+        :param camera_T_world: Sampled transform from world into optical coordinates.
+        :return: Hypotheses for visible configured bodies.
         """
         object_hypotheses = []
         for class_name in self.descriptor.parameters.class_names:
@@ -364,7 +334,7 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
             if body is None:
                 continue
             object_hypothesis = self.detect_from_body(
-                body, world_to_camera_transform_matrix=world_to_camera_transform_matrix
+                body, camera_T_world=camera_T_world
             )
             if object_hypothesis is not None:
                 object_hypotheses.append(object_hypothesis)
@@ -399,7 +369,7 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
         self.cloud = self.get_cas().get(CASViews.CLOUD)
 
         world_frame_required = False
-        world_to_camera_transform_matrix = None
+        camera_T_world = None
         if self.descriptor.parameters.mode == StaticObjectMode.WORLD_DESCRIPTOR:
             predefined_object_annotations = (
                 rk_world.world_instance().get_semantic_annotations_by_type(
@@ -436,9 +406,7 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
                     "Could not find world-to-camera transform in the CAS"
                 )
                 return Status.FAILURE
-            world_to_camera_transform_matrix = get_world_to_camera_transform_matrix(
-                self.get_cas()
-            )
+            camera_T_world = observation.camera_T_world
 
         # Scale the image down so that it matches the depth image size
         resized_color = get_scaled_color_image_for_depth_image(
@@ -466,7 +434,7 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
             object_hypotheses.append(object_hypothesis)
         elif self.descriptor.parameters.mode == StaticObjectMode.WORLD_DESCRIPTOR:
             object_hypotheses = self.detect_from_body_base(
-                world_to_camera_transform_matrix=world_to_camera_transform_matrix
+                camera_T_world=camera_T_world
             )
             if len(object_hypotheses) == 0:
                 # Simply return early but don't die
