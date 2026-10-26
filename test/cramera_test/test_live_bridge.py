@@ -43,7 +43,7 @@ from semantic_digital_twin.world_description.geometry import (
 )
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
-from typing_extensions import Any, Dict, List, Tuple
+from typing_extensions import Any
 
 from cramera.knowledge.enums import PlanNodeGroup
 from cramera.live.chart_structure import ChartEdgeEntry
@@ -81,7 +81,7 @@ def plan_bridge(
     return bridge, root, action, condition, motion
 
 
-def nodes_by_kind(bridge: Bridge) -> Dict[str, Dict[str, Any]]:
+def nodes_by_kind(bridge: Bridge) -> dict[str, dict[str, Any]]:
     """
     The published plan nodes, indexed by the class name they were built from.
     """
@@ -295,7 +295,7 @@ class TestRunningStep:
         assert bridge.running_step() is None
 
 
-def make_hinged_door() -> Tuple[World, RevoluteConnection]:
+def make_hinged_door() -> tuple[World, RevoluteConnection]:
     """
     A world with a fridge door on a hinge that swings between closed and a quarter turn.
     """
@@ -332,7 +332,7 @@ def bridge_attached_to(world: World) -> Bridge:
     return bridge
 
 
-def make_free_floating_object() -> Tuple[World, Connection6DoF, Body]:
+def make_free_floating_object() -> tuple[World, Connection6DoF, Body]:
     """
     A world with one free-floating body, connected to the root by a Connection6DoF.
     """
@@ -700,10 +700,10 @@ class TransitionGraph:
     The rustworkx-shaped graph interface the chart serializer walks.
     """
 
-    nodes: List[ChartNode]
-    edges: List[tuple]
+    nodes: list[ChartNode]
+    edges: list[tuple]
 
-    def edge_index_map(self) -> Dict[int, tuple]:
+    def edge_index_map(self) -> dict[int, tuple]:
         return dict(enumerate(self.edges))
 
     def get_node_data(self, index: int) -> ChartNode:
@@ -716,7 +716,7 @@ class NodeStateVector:
     A per-node state vector, indexed by node index.
     """
 
-    data: List[float]
+    data: list[float]
 
 
 @dataclass
@@ -725,7 +725,7 @@ class ObservedStatechart:
     A compiled motion statechart with its live life-cycle and observation vectors.
     """
 
-    nodes: List[ChartNode]
+    nodes: list[ChartNode]
     rx_graph: TransitionGraph
     life_cycle_state: NodeStateVector
     observation_state: NodeStateVector

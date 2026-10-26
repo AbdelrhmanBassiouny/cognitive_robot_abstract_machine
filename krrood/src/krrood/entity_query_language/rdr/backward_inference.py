@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, field
 
-from typing_extensions import TYPE_CHECKING, Any, Dict, Iterator, List, Set, Tuple
+from typing_extensions import TYPE_CHECKING, Any, Iterator
 
 from krrood.entity_query_language.operators.core_logical_operators import Not
 from krrood.entity_query_language.rdr.branch_semantics import SelectorBranchSemantics
@@ -44,7 +44,7 @@ class SufficientConditionSet:
     original rule tree.
     """
 
-    conditions: Tuple[GuardCondition, ...]
+    conditions: tuple[GuardCondition, ...]
     """
     The conditions that all must hold to conclude a specific conclusion value.
     """
@@ -76,7 +76,7 @@ class ConclusionSufficientConditionSets:
 
     conclusion_value: Any
     """The queried conclusion value (e.g. ``Species.molusc``)."""
-    sufficient_condition_sets: Tuple[SufficientConditionSet, ...]
+    sufficient_condition_sets: tuple[SufficientConditionSet, ...]
     """Every rule path that can produce this conclusion, as sufficient condition sets."""
 
     def is_satisfiable(self) -> bool:
@@ -92,16 +92,16 @@ class ConclusionSufficientConditionSets:
 class _RulePath:
     """An internal value object for one discovered rule path during traversal."""
 
-    conditions: Tuple[GuardCondition, ...]
+    conditions: tuple[GuardCondition, ...]
     """Guard conditions accumulated along the path to these add nodes."""
-    add_nodes: Tuple[Add, ...]
+    add_nodes: tuple[Add, ...]
     """Conclusion nodes at the leaf of this rule path."""
 
 
 def _leaf_guards(
         expression: SymbolicExpression,
         negated: bool,
-) -> List[GuardCondition]:
+) -> list[GuardCondition]:
     """Decompose an expression into leaf-level branch-choice predicates.
 
     This is not tree traversal — it is predicate decomposition. It answers the question:
@@ -130,7 +130,7 @@ def _leaf_guards(
 
 def _collect_rule_paths(
         node: SymbolicExpression,
-        guard: List[GuardCondition],
+        guard: list[GuardCondition],
 ) -> Iterator[_RulePath]:
     """Recursively walk the selector DAG, yielding a path for every leaf rule.
 
@@ -164,16 +164,16 @@ def _collect_rule_paths(
 
 def _index_conclusions_by_value(
         conditions_root: SymbolicExpression,
-) -> Dict[Any, ConclusionSufficientConditionSets]:
+) -> dict[Any, ConclusionSufficientConditionSets]:
     """One full traversal of the rule tree; buckets every conclusion value once.
 
     :param conditions_root: The root of the rule tree's condition DAG.
     :return: A dict mapping each conclusion value to its
         :class:`ConclusionSufficientConditionSets`.
     """
-    buckets: Dict[Any, List[SufficientConditionSet]] = defaultdict(list)
+    buckets: dict[Any, list[SufficientConditionSet]] = defaultdict(list)
     for path in _collect_rule_paths(conditions_root, []):
-        seen: Set[Any] = set()
+        seen: set[Any] = set()
         for add_node in path.add_nodes:
             value = add_node.unwrapped_value
             if value not in seen:
@@ -191,7 +191,7 @@ class BackwardInferenceIndex:
     Subsequent queries for any value are O(1) dict lookups.
     """
 
-    _cache: Dict[Any, ConclusionSufficientConditionSets] | None = field(default=None, init=False)
+    _cache: dict[Any, ConclusionSufficientConditionSets] | None = field(default=None, init=False)
     """
     The full index of all conclusion values, or ``None`` if the index is not built.
     """

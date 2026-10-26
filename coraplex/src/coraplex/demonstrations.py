@@ -19,7 +19,6 @@ from datetime import timedelta
 import rclpy
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
-from typing_extensions import List
 
 from coraplex.alternative_motion_mapping import AlternativeMotion
 from coraplex.datastructures.dataclasses import Context
@@ -296,7 +295,7 @@ class RobotDemonstration(ABC):
         return self.ros_session.node
 
     @property
-    def alternative_motion_mappings(self) -> List[type[AlternativeMotion]]:
+    def alternative_motion_mappings(self) -> list[type[AlternativeMotion]]:
         """
         Every alternative motion mapping known to coraplex, for every robot.
 

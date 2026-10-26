@@ -6,7 +6,7 @@ import operator
 from enum import Enum
 from threading import Condition, Lock
 from uuid import uuid4
-from typing_extensions import Any, List, Callable
+from typing_extensions import Any, Callable
 
 
 class Behavior(Enum):
@@ -59,7 +59,7 @@ class Fluent:
         self._cv: Condition = Condition()
         self._mutex: Lock = Lock()
         self._pulses: int = 0
-        self._children: List[Fluent] = []
+        self._children: list[Fluent] = []
         self._handle_missed = Behavior.NEVER
         self._value: Any = value
         self._whenever_cbs = []

@@ -4,7 +4,7 @@ import threading
 from dataclasses import dataclass, field
 
 import trimesh
-from typing_extensions import Any, ClassVar, Dict, Tuple, TYPE_CHECKING, Callable
+from typing_extensions import Any, ClassVar, TYPE_CHECKING, Callable
 
 from krrood.rustworkx_utils.visualization.three_graph_visualizer import (
     ThreeGraphVisualizer,
@@ -34,10 +34,10 @@ class MeshThreeGraphVisualizer(ThreeGraphVisualizer):
         needs one: overlapping polls must not export the same mesh redundantly.
     """
 
-    required_modules: ClassVar[Tuple[str, ...]] = ("flask", "trimesh")
+    required_modules: ClassVar[tuple[str, ...]] = ("flask", "trimesh")
     """The libraries needed to serve the application and export meshes to glTF."""
 
-    _mesh_glb_cache: Dict[int, bytes | None] = field(
+    _mesh_glb_cache: dict[int, bytes | None] = field(
         default_factory=dict, init=False, repr=False
     )
     """Exported glTF-binary (GLB) bytes for each node index, cached after the first export; ``None``
@@ -80,7 +80,7 @@ class MeshThreeGraphVisualizer(ThreeGraphVisualizer):
     graph's node spacing.
     """
 
-    def node_extra_data(self, node_index: int) -> Dict[str, Any]:
+    def node_extra_data(self, node_index: int) -> dict[str, Any]:
         """
         :param node_index: The rustworkx index of the node.
         :return: A ``meshUrl`` field when the node's

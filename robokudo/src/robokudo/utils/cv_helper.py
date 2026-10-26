@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import cv2
 import numpy as np
-from typing_extensions import TYPE_CHECKING, Tuple
+from typing_extensions import TYPE_CHECKING
 
 from robokudo.cas import CASViews
 from robokudo.exceptions import ColorToDepthRatioMissing
@@ -231,8 +231,8 @@ def sanity_checks_bounding_rects(
 
 
 def adjust_roi(
-    image: npt.NDArray, roi: Tuple[int, int, int, int], offset: int
-) -> Tuple[int, int, int, int]:
+    image: npt.NDArray, roi: tuple[int, int, int, int], offset: int
+) -> tuple[int, int, int, int]:
     """
     Adjusts the ROI by a given offset while respecting image boundaries, keeping the
     same center point.

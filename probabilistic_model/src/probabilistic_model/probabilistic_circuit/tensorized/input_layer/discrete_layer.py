@@ -10,7 +10,7 @@ from random_events.set import Set
 from random_events.sigma_algebra import AbstractCompositeSet
 from random_events.variable import Variable
 from sortedcontainers import SortedSet
-from typing_extensions import Any, Dict, List, Self, Tuple
+from typing_extensions import Any, Self
 
 from probabilistic_model.distributions.distributions import (
     DiscreteDistribution,
@@ -215,7 +215,7 @@ class DiscreteLayer(UnivariateInputLayer, ABC):
     def from_distributions(
         cls,
         variable_index: int,
-        distributions: List[DiscreteDistribution],
+        distributions: list[DiscreteDistribution],
         table_type: type[ProbabilityTable] = DenseProbabilityTable,
     ) -> Self:
         """
@@ -226,9 +226,9 @@ class DiscreteLayer(UnivariateInputLayer, ABC):
     @classmethod
     def parameters_of(
         cls,
-        distributions: List[DiscreteDistribution],
+        distributions: list[DiscreteDistribution],
         table_type: type[ProbabilityTable],
-    ) -> Tuple[States, ProbabilityTable]:
+    ) -> tuple[States, ProbabilityTable]:
         """
         :param distributions: Distributions over the variable of this layer.
         :param table_type: The type of table to store the probabilities in.
@@ -281,7 +281,7 @@ class DiscreteLayer(UnivariateInputLayer, ABC):
     @classmethod
     def probabilities_by_state_of(
         cls, distribution: DiscreteDistribution
-    ) -> Dict[int, float]:
+    ) -> dict[int, float]:
         """
         :param distribution: A distribution over the variable of this layer.
         :return: The probability of every state of the distribution, keyed by the state
@@ -293,7 +293,7 @@ class DiscreteLayer(UnivariateInputLayer, ABC):
         return self.with_table(self.table.select_nodes(mask))
 
     @classmethod
-    def concatenate(cls, layers: List[Self]) -> Self:
+    def concatenate(cls, layers: list[Self]) -> Self:
         # truncating a discrete layer never changes its states, so the tables line up;
         # the result is stored like the table of the first layer
         table_type = type(layers[0].table)
@@ -344,7 +344,7 @@ class SymbolicLayer(DiscreteLayer):
     def from_distributions(
         cls,
         variable_index: int,
-        distributions: List[SymbolicDistribution],
+        distributions: list[SymbolicDistribution],
         table_type: type[ProbabilityTable] = DenseProbabilityTable,
     ) -> Self:
         return cls(
@@ -356,7 +356,7 @@ class SymbolicLayer(DiscreteLayer):
     @classmethod
     def probabilities_by_state_of(
         cls, distribution: SymbolicDistribution
-    ) -> Dict[int, float]:
+    ) -> dict[int, float]:
         encoding = SymbolicEncoding(distribution.variable)
         return {
             encoding.index_of_hash(hash_value): probability

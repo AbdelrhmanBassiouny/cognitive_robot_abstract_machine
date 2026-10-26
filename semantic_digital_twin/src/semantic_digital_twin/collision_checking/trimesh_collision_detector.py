@@ -3,7 +3,6 @@ from dataclasses import dataclass, field
 import fcl
 import numpy as np
 from trimesh.collision import CollisionManager, mesh_to_BVH
-from typing_extensions import Dict
 
 from semantic_digital_twin.collision_checking.collision_detector import (
     CollisionDetector,
@@ -33,7 +32,7 @@ class FCLCollisionDetector(CollisionDetector):
     Last synced model version of the world.
     """
 
-    _collision_objects: Dict[Body, fcl.CollisionObject] = field(
+    _collision_objects: dict[Body, fcl.CollisionObject] = field(
         default_factory=dict, init=False
     )
     """

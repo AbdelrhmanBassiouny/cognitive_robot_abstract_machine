@@ -10,7 +10,7 @@ from random_events.product_algebra import Event, SimpleEvent, VariableMap
 from random_events.sigma_algebra import AbstractCompositeSet
 from random_events.variable import Variable
 from sortedcontainers import SortedSet
-from typing_extensions import Any, Dict, List, Self, Tuple
+from typing_extensions import Any, Self
 
 from probabilistic_model.distributions.distributions import UnivariateDistribution
 from probabilistic_model.probabilistic_model import PartialPointType
@@ -95,7 +95,7 @@ class UnivariateInputLayer(LeafLayer, ABC):
     @classmethod
     @abstractmethod
     def from_distributions(
-        cls, variable_index: int, distributions: List[UnivariateDistribution]
+        cls, variable_index: int, distributions: list[UnivariateDistribution]
     ) -> Self:
         """
         Create a layer from a list of distributions of the type of this layer.
@@ -116,7 +116,7 @@ class UnivariateInputLayer(LeafLayer, ABC):
         """
         raise NotImplementedError
 
-    def node_distributions(self, variable: Variable) -> List[UnivariateDistribution]:
+    def node_distributions(self, variable: Variable) -> list[UnivariateDistribution]:
         """
         :param variable: The variable of this layer.
         :return: Every node of this layer as a univariate distribution.
@@ -131,7 +131,7 @@ class UnivariateInputLayer(LeafLayer, ABC):
     @memoized
     def support_of_nodes(
         self, variables: SortedSet, cache: QueryCache | None = None
-    ) -> List[Event]:
+    ) -> list[Event]:
         variable = variables[self.variable]
         return [
             distribution.support for distribution in self.node_distributions(variable)
@@ -140,7 +140,7 @@ class UnivariateInputLayer(LeafLayer, ABC):
     @memoized
     def log_mode_of_nodes(
         self, variables: SortedSet, cache: QueryCache | None = None
-    ) -> Tuple[List[Event], NodeValues]:
+    ) -> tuple[list[Event], NodeValues]:
         variable = variables[self.variable]
         modes = [
             distribution.log_mode()
@@ -286,7 +286,7 @@ class UnivariateInputLayer(LeafLayer, ABC):
         )
 
     def can_truncate_in_one_batch(
-        self, events: List[SimpleEvent], query: StructuralQuery
+        self, events: list[SimpleEvent], query: StructuralQuery
     ) -> bool:
         """
         The truncations to the events are joined with :meth:`concatenate`, which needs
@@ -302,7 +302,7 @@ class UnivariateInputLayer(LeafLayer, ABC):
     @memoized
     def log_truncated_of_simple_events(
         self,
-        events: List[SimpleEvent],
+        events: list[SimpleEvent],
         query: StructuralQuery,
         cache: QueryCache | None = None,
     ) -> LayerWithLogProbabilities:
@@ -348,8 +348,8 @@ class UnivariateInputLayer(LeafLayer, ABC):
 
     def rebuild(
         self,
-        needed: Dict[int, NodeMask],
-        rebuilt: Dict[int, Layer | None],
+        needed: dict[int, NodeMask],
+        rebuilt: dict[int, Layer | None],
     ) -> Layer | None:
         alive = needed[id(self)]
         if not alive.any():

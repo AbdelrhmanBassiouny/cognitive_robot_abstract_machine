@@ -7,7 +7,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 
-from typing_extensions import Any, ClassVar, Dict, List, Tuple
+from typing_extensions import Any, ClassVar
 
 from cramera.robot_parts import ArmSide
 from semantic_digital_twin.spatial_types import Point3
@@ -38,7 +38,7 @@ class EpisodeKnowledgeBase:
     over.
     """
 
-    _instances: ClassVar[Dict[str | None, EpisodeKnowledgeBase]] = {}
+    _instances: ClassVar[dict[str | None, EpisodeKnowledgeBase]] = {}
     """
     One built knowledge base per scene name, keyed by :meth:`of_scene`'s argument, so
     the viewer can hold several onboarded scenes open at once.
@@ -102,23 +102,23 @@ class EpisodeKnowledgeBase:
     Modification stamp of the bundle this instance was built from, compared by
     :meth:`of_scene` to serve a rewritten bundle fresh.
     """
-    detected_events: List[DetectedEventRecord]
+    detected_events: list[DetectedEventRecord]
     """
     What the run's detectors saw, or nothing for a scene recorded without them.
     """
-    objects: List[BenchObject]
+    objects: list[BenchObject]
     """
     Objects and placement regions in the recorded scene.
     """
-    grippers: List[Gripper]
+    grippers: list[Gripper]
     """
     Grippers identified by the robot annotations.
     """
-    arms: List[RecordedArm]
+    arms: list[RecordedArm]
     """
     Arms available on the recorded robot.
     """
-    part_annotations: List[RobotPartAnnotation]
+    part_annotations: list[RobotPartAnnotation]
     """
     Typed robot-part facts recorded with the scene.
     """
@@ -126,27 +126,27 @@ class EpisodeKnowledgeBase:
     """
     Robot described by the recording.
     """
-    episodes: List[ActionEpisode]
+    episodes: list[ActionEpisode]
     """
     Action intervals in the recorded plan.
     """
-    joints: List[JointMotion]
+    joints: list[JointMotion]
     """
     Joint motion ranges measured across the trajectory.
     """
-    packages: List[Package]
+    packages: list[Package]
     """
     Packages found in the configured CRAM workspace.
     """
-    classes: List[PythonClass]
+    classes: list[PythonClass]
     """
     Classes declared by the scanned workspace.
     """
-    package_dependencies: List[PackageDependency]
+    package_dependencies: list[PackageDependency]
     """
     Import dependencies between workspace packages.
     """
-    subpackages: List[SubPackage]
+    subpackages: list[SubPackage]
     """
     Module groups containing the scanned classes.
     """
@@ -201,7 +201,7 @@ class EpisodeKnowledgeBase:
         self.subpackages = self._build_subpackages(self.classes)
 
     @staticmethod
-    def _build_objects(scene: Dict[str, Any]) -> List[BenchObject]:
+    def _build_objects(scene: dict[str, Any]) -> list[BenchObject]:
         """
         Scene objects (spawn poses recorded at frame 0) plus the place area.
 
@@ -237,8 +237,8 @@ class EpisodeKnowledgeBase:
 
     @classmethod
     def _build_annotated_arms(
-        cls, part_annotations: List[RobotPartAnnotation], robot_name: str
-    ) -> Tuple[List[Gripper], List[RecordedArm]]:
+        cls, part_annotations: list[RobotPartAnnotation], robot_name: str
+    ) -> tuple[list[Gripper], list[RecordedArm]]:
         """
         Arms and grippers read straight off the recorded sem_dt annotations.
 
@@ -266,11 +266,11 @@ class EpisodeKnowledgeBase:
 
     def _build_episodes(
         self,
-        scene: Dict[str, Any],
+        scene: dict[str, Any],
         frames_per_second: int,
-        objects_by_reference: Dict[str, BenchObject],
+        objects_by_reference: dict[str, BenchObject],
         place_area: BenchObject | None,
-    ) -> List[ActionEpisode]:
+    ) -> list[ActionEpisode]:
         """
         Action episodes from the recorded plan segments.
 
@@ -300,7 +300,7 @@ class EpisodeKnowledgeBase:
             )
         return episodes
 
-    def _arm_of_segment(self, segment: Dict[str, Any]) -> RecordedArm | None:
+    def _arm_of_segment(self, segment: dict[str, Any]) -> RecordedArm | None:
         """
         The arm matching a recorded plan segment's side hint, falling back to the first
         arm if the segment picks something but names no side.
@@ -315,7 +315,7 @@ class EpisodeKnowledgeBase:
 
     @classmethod
     def _region_of_joint(
-        cls, key: str, robot_prefix: str, link_to_part: Dict[str, str]
+        cls, key: str, robot_prefix: str, link_to_part: dict[str, str]
     ) -> JointRegion:
         """
         Which region a prefixed joint key belongs to: ``LEFT``/``RIGHT`` for an arm
@@ -343,8 +343,8 @@ class EpisodeKnowledgeBase:
 
     @classmethod
     def _build_joint_motions(
-        cls, trajectory: Dict[str, Any], parts: Dict[str, Any], robot_prefix: str
-    ) -> List[JointMotion]:
+        cls, trajectory: dict[str, Any], parts: dict[str, Any], robot_prefix: str
+    ) -> list[JointMotion]:
         """
         Per-joint motion statistics over the whole recorded trajectory.
 
@@ -353,8 +353,8 @@ class EpisodeKnowledgeBase:
             annotation.
         :param robot_prefix: World-name prefix of the recorded robot's own joints.
         """
-        minimum: Dict[str, float] = {}
-        maximum: Dict[str, float] = {}
+        minimum: dict[str, float] = {}
+        maximum: dict[str, float] = {}
         for frame in trajectory.get("frames") or []:
             for joint, value in frame.items():
                 if joint not in minimum or value < minimum[joint]:
@@ -376,7 +376,7 @@ class EpisodeKnowledgeBase:
         ]
 
     @staticmethod
-    def _build_subpackages(classes: List[PythonClass]) -> List[SubPackage]:
+    def _build_subpackages(classes: list[PythonClass]) -> list[SubPackage]:
         """
         Subpackage entities aggregated from the scanned classes.
 

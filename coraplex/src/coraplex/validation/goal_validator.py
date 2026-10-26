@@ -4,7 +4,7 @@ from time import sleep, time
 
 import numpy as np
 import logging
-from typing_extensions import Any, Callable, Union, Iterable, Dict, TYPE_CHECKING, Tuple
+from typing_extensions import Any, Callable, Union, Iterable, TYPE_CHECKING
 
 from coraplex.validation.error_checkers import (
     ErrorChecker,
@@ -327,7 +327,7 @@ class PoseGoalValidator(GoalValidator):
     def __init__(
         self,
         current_pose_getter: OptionalArgCallable = None,
-        acceptable_error: Tuple[float] | Iterable[Tuple[float]] = (
+        acceptable_error: tuple[float] | Iterable[tuple[float]] = (
             1e-3,
             np.pi / 180,
         ),
@@ -358,7 +358,7 @@ class MultiPoseGoalValidator(PoseGoalValidator):
     def __init__(
         self,
         current_poses_getter: OptionalArgCallable = None,
-        acceptable_error: Tuple[float] | Iterable[Tuple[float]] = (
+        acceptable_error: tuple[float] | Iterable[tuple[float]] = (
             1e-2,
             5 * np.pi / 180,
         ),
@@ -656,7 +656,7 @@ def validate_multiple_object_poses(pose_setter_func):
     :param pose_setter_func: The function to set multiple poses of the objects.
     """
 
-    def wrapper(world: World, object_poses: Dict[Object, PoseStamped]):
+    def wrapper(world: World, object_poses: dict[Object, PoseStamped]):
 
         if not world.current_world.conf.validate_goals:
             return pose_setter_func(world, object_poses)
@@ -721,7 +721,7 @@ def validate_multiple_joint_positions(position_setter_func):
     :param position_setter_func: The function to set the joint positions.
     """
 
-    def wrapper(world: World, joint_positions: Dict[Joint, float]):
+    def wrapper(world: World, joint_positions: dict[Joint, float]):
         if not world.current_world.conf.validate_goals:
             return position_setter_func(world, joint_positions)
         joint_positions_to_validate = {
@@ -747,7 +747,7 @@ def validate_multiple_joint_positions(position_setter_func):
 
 
 def create_multiple_joint_goal_validator(
-    robot: Object, joint_positions: Dict[Joint, float] | Dict[str, float]
+    robot: Object, joint_positions: dict[Joint, float] | dict[str, float]
 ) -> MultiJointPositionGoalValidator:
     """
     Validate the multiple joint goals, and wait until the goal is achieved.

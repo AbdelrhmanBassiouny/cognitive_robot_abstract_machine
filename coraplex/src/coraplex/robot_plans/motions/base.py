@@ -4,7 +4,7 @@ import logging
 from abc import abstractmethod
 from dataclasses import dataclass
 from inspect import signature
-from typing_extensions import List, TypeVar
+from typing_extensions import TypeVar
 
 from giskardpy.motion_statechart.goals.collision_avoidance import (
     UpdateTemporaryCollisionRules,
@@ -71,7 +71,7 @@ class BaseMotion(Designator):
             self.context.alternative_motion_mappings, self.robot, self.__class__
         )
 
-    def keep_base_still(self) -> List[MotionStatechartNode]:
+    def keep_base_still(self) -> list[MotionStatechartNode]:
         """
         :return: The task holding the robot's base where it stands, empty when the robot
             may move its whole body.

@@ -6,7 +6,7 @@ from abc import abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum, auto
 
-from typing_extensions import ClassVar, List
+from typing_extensions import ClassVar
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.variable import Variable
@@ -470,12 +470,12 @@ class RestrictionFragments:
     """The placed pieces of a subject's WHERE, for the caller to position — each goes to a different
     sentence position, so they are kept apart rather than pre-joined."""
 
-    inline_modifiers: List[VerbalizationFragment] = field(default_factory=list)
+    inline_modifiers: list[VerbalizationFragment] = field(default_factory=list)
     """Post-nominal prepositional phrases that attach inline, right after the selection noun — a
     superlative (*"with the maximum amount"*) or a compact attribute restriction (*"with battery
     greater than 50"*)."""
 
-    relative_clauses: List[VerbalizationFragment] = field(default_factory=list)
+    relative_clauses: list[VerbalizationFragment] = field(default_factory=list)
     """Subject-relative clauses on the selection noun — one per relational binding (*"that is
     assigned to a Robot …"*). Empty when the subject binds no related entity."""
 
@@ -490,7 +490,7 @@ class RestrictionFragments:
 
 
 def as_subject_restrictions(
-    conditions: List[SymbolicExpression],
+    conditions: list[SymbolicExpression],
     subject: Variable,
     context: RuleContext,
     number: GrammaticalNumber = GrammaticalNumber.SINGULAR,
@@ -573,7 +573,7 @@ def as_subject_restrictions(
 
 
 def _join_residual(
-    fragments: List[VerbalizationFragment],
+    fragments: list[VerbalizationFragment],
 ) -> VerbalizationFragment | None:
     """:return: The standalone conjuncts joined into one residual condition, or ``None``.
 

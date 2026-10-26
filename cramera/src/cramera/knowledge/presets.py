@@ -7,7 +7,7 @@ from __future__ import annotations
 import re
 import inspect
 from dataclasses import dataclass, replace
-from typing_extensions import TYPE_CHECKING, List, get_origin
+from typing_extensions import TYPE_CHECKING, get_origin
 
 
 from krrood.class_diagrams.attribute_introspector import DataclassOnlyIntrospector
@@ -91,7 +91,7 @@ class Preset:
         )
 
     @classmethod
-    def of_world(cls, world: World, name: str) -> List[Preset]:
+    def of_world(cls, world: World, name: str) -> list[Preset]:
         """
         Offer queries for the world's public list fields and properties.
 
@@ -130,7 +130,7 @@ class Preset:
         ]
 
     @classmethod
-    def of_scene(cls, scene: str | None = None) -> List[Preset]:
+    def of_scene(cls, scene: str | None = None) -> list[Preset]:
         """
         The ready-made queries the EQL panel offers, worded by the scene's runner.
 
@@ -144,7 +144,7 @@ class Preset:
         return cls._worded_by_scene(list(SCENE_PRESETS), scene)
 
     @classmethod
-    def _worded_by_scene(cls, presets: List[Preset], scene: str | None) -> List[Preset]:
+    def _worded_by_scene(cls, presets: list[Preset], scene: str | None) -> list[Preset]:
         """
         The presets with their questions read back as English by the scene's runner.
 
@@ -190,7 +190,7 @@ class PresetsPerType:
     Which body of knowledge these questions are about.
     """
 
-    def questions(self) -> List[Preset]:
+    def questions(self) -> list[Preset]:
         """
         One question per type, worded the way it is asked out loud.
         """
@@ -235,7 +235,7 @@ class DetectedEventQuestions:
     """
 
     @classmethod
-    def of_records(cls, events: List[DetectedEventRecord]) -> DetectedEventQuestions:
+    def of_records(cls, events: list[DetectedEventRecord]) -> DetectedEventQuestions:
         """
         The questions a set of detections can answer, one per type among them.
 
@@ -243,7 +243,7 @@ class DetectedEventQuestions:
         """
         return cls(tuple(sorted({record.event_type for record in events})))
 
-    def listed(self) -> List[Preset]:
+    def listed(self) -> list[Preset]:
         """
         The questions the panel offers as buttons, or none when nothing was detected.
         """
@@ -258,7 +258,7 @@ class DetectedEventQuestions:
             )
         ]
 
-    def unlisted(self) -> List[Preset]:
+    def unlisted(self) -> list[Preset]:
         """
         "Give me all pick up events", written out once per type -- more questions than a
         panel has room to show as buttons.

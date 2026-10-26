@@ -13,7 +13,6 @@ from dataclasses import asdict, dataclass, field, replace
 from enum import StrEnum
 
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
-from typing_extensions import Dict, List
 
 
 @dataclass(frozen=True)
@@ -38,7 +37,7 @@ class ChartEdgeEntry:
     target: str
     kind: str
 
-    def to_payload(self) -> Dict[str, str]:
+    def to_payload(self) -> dict[str, str]:
         """
         This edge as the wire shape the frontend reads.
 
@@ -54,9 +53,9 @@ class ChartStructure:
     A statechart's cached structure, rebuilt only when the executor compiles a new one.
     """
 
-    nodes: List[ChartNodeStructure] = field(default_factory=list)
-    edges: List[ChartEdgeEntry] = field(default_factory=list)
-    node_state_indices: List[int] = field(default_factory=list)
+    nodes: list[ChartNodeStructure] = field(default_factory=list)
+    edges: list[ChartEdgeEntry] = field(default_factory=list)
+    node_state_indices: list[int] = field(default_factory=list)
     """
     Each node's index into the chart's life-cycle/observation state vectors.
     """
@@ -110,8 +109,8 @@ class ChartSnapshot:
     Name of the action whose motion group this statechart belongs to.
     """
 
-    nodes: List[ChartNodeEntry] = field(default_factory=list)
-    edges: List[ChartEdgeEntry] = field(default_factory=list)
+    nodes: list[ChartNodeEntry] = field(default_factory=list)
+    edges: list[ChartEdgeEntry] = field(default_factory=list)
 
 
 def structure_of(chart: MotionStatechart) -> ChartStructure:
@@ -120,8 +119,8 @@ def structure_of(chart: MotionStatechart) -> ChartStructure:
 
     :param chart: The statechart to serialize.
     """
-    nodes: List[ChartNodeStructure] = []
-    node_state_indices: List[int] = []
+    nodes: list[ChartNodeStructure] = []
+    node_state_indices: list[int] = []
     for node in chart.nodes:
         parent_index = node.parent_node_index
         nodes.append(

@@ -3,7 +3,6 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from enum import StrEnum
 from time import sleep
-from typing_extensions import Dict, Set
 from uuid import UUID
 
 from geometry_msgs.msg import TransformStamped
@@ -69,12 +68,12 @@ class TfFrameNames:
     body ``copy/milk``, while ``"copy"`` would name it ``copymilk``.
     """
 
-    _frame_name_per_entity: Dict[UUID, str] = field(init=False, default_factory=dict)
+    _frame_name_per_entity: dict[UUID, str] = field(init=False, default_factory=dict)
     """
     The frame name each entity has been published under so far.
     """
 
-    _assigned_frame_names: Set[str] = field(init=False, default_factory=set)
+    _assigned_frame_names: set[str] = field(init=False, default_factory=set)
     """
     Every frame name handed out so far, kept even after the entity holding it is gone so
     that no later entity can take over a name someone may still be following.

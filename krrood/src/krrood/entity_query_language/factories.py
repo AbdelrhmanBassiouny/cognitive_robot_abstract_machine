@@ -127,7 +127,7 @@ def set_of(*selected_variables: Union[Selectable[T], Any]) -> SetOf:
 
 
 def distribution_of(
-    match: Match, *, marginalize_for: Tuple[Attribute, ...] = ()
+    match: Match, *, marginalize_for: tuple[Attribute, ...] = ()
 ) -> Distribution:
     """
     Request the distribution a match's conditions describe -- the probabilistic
@@ -887,7 +887,7 @@ def distinct(
             raise UnsupportedExpressionTypeForDistinct(type(expression))
 
 
-def get_false_statements(statement: SymbolicExpression) -> List[SymbolicExpression]:
+def get_false_statements(statement: SymbolicExpression) -> list[SymbolicExpression]:
     """
     :param statement: The condition whose statements are checked.
     :return: The statements of the condition that held for none of the values they were
@@ -904,7 +904,7 @@ def get_false_statements(statement: SymbolicExpression) -> List[SymbolicExpressi
     return list(never_held.values())
 
 
-def get_true_statements(statement: SymbolicExpression) -> List[SymbolicExpression]:
+def get_true_statements(statement: SymbolicExpression) -> list[SymbolicExpression]:
     """
     :param statement: The condition whose statements are checked.
     :return: The statements of the condition that held for at least one of the values
@@ -1097,7 +1097,7 @@ class IsSubclass(Predicate):
     The candidate subclass.
     """
 
-    parent_or_parents: type | Tuple[type, ...]
+    parent_or_parents: type | tuple[type, ...]
     """
     The class or tuple of classes checked against.
     """

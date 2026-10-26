@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 import dataclasses
 import math
 from dataclasses import dataclass, field
-from typing_extensions import TYPE_CHECKING, Generic, List, Self, Set, TypeVar
+from typing_extensions import TYPE_CHECKING, Generic, Self, TypeVar
 
 import numpy as np
 import trimesh
@@ -315,7 +315,7 @@ class HasRootKinematicStructureEntity(
         return self._world.get_connections_of_branch(self.root)
 
     def _kinematic_structure_entities(
-        self, visited: Set[int]
+        self, visited: set[int]
     ) -> list[KinematicStructureEntity]:
         if id(self) in visited:
             return []
@@ -413,7 +413,7 @@ class HasGraspCandidates(HasRootBody):
         self,
         model_registry: ModelRegistry | None = None,
         require_lifting: bool = False,
-    ) -> List[GraspCandidate]:
+    ) -> list[GraspCandidate]:
         """
         The grasps this annotation offers, in no particular order: those of its
         :meth:`grasped_part` when it is grasped at one of its parts; otherwise grasps
@@ -430,7 +430,7 @@ class HasGraspCandidates(HasRootBody):
             return self.default_grasp_candidates()
         return self.drawn_grasp_candidates(model_registry, require_lifting)
 
-    def default_grasp_candidates(self) -> List[GraspCandidate]:
+    def default_grasp_candidates(self) -> list[GraspCandidate]:
         """
         :return: The grasps offered while no model is given: the object at its own
             origin, approached from evenly spaced directions around its z-axis, which
@@ -453,7 +453,7 @@ class HasGraspCandidates(HasRootBody):
         self,
         model_registry: ModelRegistry | None = None,
         require_lifting: bool = False,
-    ) -> List[GraspCandidate]:
+    ) -> list[GraspCandidate]:
         """
         :param model_registry: Answers :meth:`surface_grasp_statement`; ``None`` draws
             uniformly from what it allows.
@@ -667,7 +667,7 @@ class PartWholeRelationship(HasRootKinematicStructureEntity):
             setattr(self, match.field.name, part)
 
     @property
-    def parts(self) -> List[HasRootKinematicStructureEntity]:
+    def parts(self) -> list[HasRootKinematicStructureEntity]:
         """
         :return: The structural parts of this annotation, from all of its part-whole
             relationship fields.
@@ -693,7 +693,7 @@ class HasApertures(HasRootBody, PartWholeRelationship):
     removes its volume from the annotation's collision and visual geometry.
     """
 
-    apertures: List[Aperture] = field(
+    apertures: list[Aperture] = field(
         default_factory=list,
         hash=False,
         kw_only=True,
@@ -768,7 +768,7 @@ class HasDrawers(PartWholeRelationship):
     A mixin class for semantic annotations that have drawers.
     """
 
-    drawers: List[Drawer] = field(
+    drawers: list[Drawer] = field(
         default_factory=list,
         hash=False,
         kw_only=True,
@@ -785,7 +785,7 @@ class HasShelfLayers(PartWholeRelationship):
     A mixin class for semantic annotations that have shelf layers.
     """
 
-    shelf_layers: List[ShelfLayer] = field(
+    shelf_layers: list[ShelfLayer] = field(
         default_factory=list,
         hash=False,
         kw_only=True,
@@ -802,7 +802,7 @@ class HasDoors(PartWholeRelationship):
     A mixin class for semantic annotations that have doors.
     """
 
-    doors: List[Door] = field(
+    doors: list[Door] = field(
         default_factory=list,
         hash=False,
         kw_only=True,
@@ -951,7 +951,7 @@ class HasRim(HasPinchableWall, PartWholeRelationship):
             return super().grasped_part()
         return self.rim
 
-    def default_grasp_candidates(self) -> List[GraspCandidate]:
+    def default_grasp_candidates(self) -> list[GraspCandidate]:
         """
         :return: Grasps drawn uniformly from :meth:`surface_grasp_statement`.
         """
@@ -991,7 +991,7 @@ class HasHandles(HasRootBody, PartWholeRelationship):
     A mixin class for semantic annotations that may have more than one handle.
     """
 
-    handles: List[Handle] = field(
+    handles: list[Handle] = field(
         default_factory=list,
         hash=False,
         kw_only=True,
@@ -1014,7 +1014,7 @@ class HasLegs(PartWholeRelationship):
     A mixin class for semantic annotations that have legs.
     """
 
-    legs: List[Leg] = field(
+    legs: list[Leg] = field(
         default_factory=list,
         hash=False,
         kw_only=True,
@@ -1049,7 +1049,7 @@ class IsStorageSpace(HasRootBody, Generic[THasRootBody], SubClassSafeGeneric):
     with the table when it is moved.
     """
 
-    objects: List[THasRootBody] = field(default_factory=list, hash=False, kw_only=True)
+    objects: list[THasRootBody] = field(default_factory=list, hash=False, kw_only=True)
     """
     The occupants currently contained in/on this annotation.
     """
@@ -1063,7 +1063,7 @@ class IsStorageSpace(HasRootBody, Generic[THasRootBody], SubClassSafeGeneric):
 
     def get_objects_of_type(
         self, object_type: type[SemanticAnnotation]
-    ) -> List[HasRootBody]:
+    ) -> list[HasRootBody]:
         """
         Returns all objects of a given type in the semantic annotation.
 
@@ -1229,7 +1229,7 @@ class HasSupportingSurface(IsStorageSpace):
         body_to_sample_for: HasRootBody | None = None,
         category_of_interest: type[SemanticAnnotation] | None = None,
         amount: int = 100,
-    ) -> List[Point3]:
+    ) -> list[Point3]:
         """
         Samples points from a surface around the semantic annotation.
 
@@ -1339,7 +1339,7 @@ class HasSupportingSurface(IsStorageSpace):
 
     def _2d_gaussian_sampler_from_2d_sample_space(
         self,
-        objects_of_interest: List[HasRootBody],
+        objects_of_interest: list[HasRootBody],
         variance: float,
         sample_space: Event,
     ) -> ProbabilisticCircuit | None:
@@ -1365,7 +1365,7 @@ class HasSupportingSurface(IsStorageSpace):
 
     def _untruncated_2d_gaussian_sampler(
         self,
-        objects_of_interest: List[HasRootBody],
+        objects_of_interest: list[HasRootBody],
         variance: float,
     ) -> ProbabilisticCircuit:
         """

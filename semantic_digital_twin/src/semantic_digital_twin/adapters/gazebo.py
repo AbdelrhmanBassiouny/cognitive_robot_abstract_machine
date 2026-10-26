@@ -4,7 +4,7 @@ import logging
 import os
 import xml.etree.ElementTree as ElementTree
 from dataclasses import dataclass, field
-from typing_extensions import ClassVar, Dict, List, Tuple
+from typing_extensions import ClassVar
 
 
 from semantic_digital_twin.adapters.package_resolver import (
@@ -76,7 +76,7 @@ class GazeboParser(WorldModelParser):
         movable.
     """
 
-    connection_type_map: ClassVar[Dict[str, type[Connection]]] = {
+    connection_type_map: ClassVar[dict[str, type[Connection]]] = {
         "revolute": RevoluteConnection,
         "continuous": RevoluteConnection,
         "prismatic": PrismaticConnection,
@@ -91,12 +91,12 @@ class GazeboParser(WorldModelParser):
     The reserved link name that refers to the simulation world rather than a model link.
     """
 
-    truthy_values: ClassVar[Tuple[str, ...]] = ("1", "true")
+    truthy_values: ClassVar[tuple[str, ...]] = ("1", "true")
     """
     The texts that SDF accepts for a boolean element that is set.
     """
 
-    interpreted_elements: ClassVar[Tuple[str, ...]] = (
+    interpreted_elements: ClassVar[tuple[str, ...]] = (
         "model",
         "include",
         "link",
@@ -402,7 +402,7 @@ class GazeboParser(WorldModelParser):
         return os.path.join(model_directory, max(candidates)[2])
 
     @staticmethod
-    def version_of(version: str) -> Tuple[int, ...]:
+    def version_of(version: str) -> tuple[int, ...]:
         """
         :param version: A dotted version such as ``1.6``.
         :return: The version as a tuple that orders like the version does.
@@ -472,7 +472,7 @@ class GazeboParser(WorldModelParser):
 
     @staticmethod
     def root_body_of(
-        bodies: Dict[str, Body], child_link_names: set, instance_name: str
+        bodies: dict[str, Body], child_link_names: set, instance_name: str
     ) -> Body:
         """
         Determines the root link of a model, which is the first link no joint moves.
@@ -601,7 +601,7 @@ class GazeboParser(WorldModelParser):
     # %% shapes
 
     def parse_shapes(
-        self, elements: List[ElementTree.Element], body: Body
+        self, elements: list[ElementTree.Element], body: Body
     ) -> ShapeCollection:
         """
         Parses the ``visual`` or ``collision`` elements of a link.
@@ -694,8 +694,8 @@ class GazeboParser(WorldModelParser):
     def parse_joint(
         self,
         element: ElementTree.Element,
-        bodies: Dict[str, Body],
-        model_T_link: Dict[str, HomogeneousTransformationMatrix],
+        bodies: dict[str, Body],
+        model_T_link: dict[str, HomogeneousTransformationMatrix],
         prefix: str,
     ) -> JointDescription:
         """
@@ -909,7 +909,7 @@ class GazeboParser(WorldModelParser):
         )
 
     @staticmethod
-    def parse_vector(text: str | None) -> List[float]:
+    def parse_vector(text: str | None) -> list[float]:
         """
         :param text: Whitespace separated numbers.
         :return: The numbers the text holds.
@@ -958,7 +958,7 @@ class MissingRootElement(ParsingError):
     Raised when a description file contains none of the expected root elements.
     """
 
-    expected_elements: List[str] = field(kw_only=True, default_factory=list)
+    expected_elements: list[str] = field(kw_only=True, default_factory=list)
     """
     The element names that were searched for.
     """
@@ -1004,7 +1004,7 @@ class UnsupportedJointType(ParsingError):
     The joint type that is not supported.
     """
 
-    supported_types: List[str] = field(kw_only=True, default_factory=list)
+    supported_types: list[str] = field(kw_only=True, default_factory=list)
     """
     The joint types that can be mapped to connections.
     """
@@ -1029,7 +1029,7 @@ class UnsupportedGeometryType(ParsingError):
     The geometry type that is not supported.
     """
 
-    supported_types: List[str] = field(kw_only=True, default_factory=list)
+    supported_types: list[str] = field(kw_only=True, default_factory=list)
     """
     The geometry types that can be mapped to shapes.
     """

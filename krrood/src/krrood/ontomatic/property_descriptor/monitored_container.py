@@ -5,7 +5,7 @@ from _weakref import ref as weakref_ref
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from typing_extensions import Dict, Generic, TYPE_CHECKING, TypeVar
+from typing_extensions import Generic, TYPE_CHECKING, TypeVar
 
 from krrood.symbol_graph.symbol_graph import Symbol
 
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     )
 
 
-monitored_type_map: Dict[type, type[MonitoredContainer]] = {}
+monitored_type_map: dict[type, type[MonitoredContainer]] = {}
 """
 A mapping of container types to their monitored container types.
 """

@@ -14,17 +14,9 @@ from inspect import isclass
 from os import PathLike
 from os.path import dirname
 from pathlib import Path
-from typing_extensions import (
-    Dict,
-    Iterator,
-    get_origin,
-    get_args,
-    Generic,
-    Hashable,
-    Any,
-)
+from typing_extensions import Iterator, get_origin, get_args, Generic, Hashable, Any
 
-from typing_extensions import TypeVar, List, Callable, TypeVarTuple, _SpecialForm
+from typing_extensions import TypeVar, Callable, TypeVarTuple, _SpecialForm
 
 from krrood import logger
 from krrood.exceptions import (
@@ -38,7 +30,7 @@ from krrood.exceptions import (
 T = TypeVar("T")
 
 
-def recursive_subclasses(cls: type[T]) -> List[type[T]]:
+def recursive_subclasses(cls: type[T]) -> list[type[T]]:
     """
     :param cls: The class.
     :return: A list of the classes subclasses without the class itself.
@@ -131,7 +123,7 @@ def get_default_values_for_dataclass(dataclass_type):
 
 
 @lru_cache
-def own_dataclass_fields(cls) -> List[Field]:
+def own_dataclass_fields(cls) -> list[Field]:
     """
     :return: The fields of the dataclass that are not inherited from a base class.
     """
@@ -337,7 +329,7 @@ def get_relative_import(
 
 
 def get_path_starting_from_latest_encounter_of(
-    path: str, package_name: str, should_contain: List[str]
+    path: str, package_name: str, should_contain: list[str]
 ) -> str:
     """
     Get the path starting from the package name.
@@ -374,7 +366,7 @@ def get_generic_type_parameters(
     generic_base: type,
     include_root_generic_base: bool = True,
     include_specialized_generic_base: bool = True,
-) -> List[type[T]]:
+) -> list[type[T]]:
     """
     Given a subclass and its generic base, return the concrete type parameter(s).
 
@@ -460,7 +452,7 @@ def get_scope_from_imports(
     tree: ast.AST | None = None,
     package_name: str | None = None,
     source: str | None = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Create a scope dictionary from imports in a Python file or an AST tree.
 
@@ -485,7 +477,7 @@ def get_scope_from_imports(
         else ast.parse(source, filename=file_path)
     )
 
-    scope: Dict[str, Any] = {}
+    scope: dict[str, Any] = {}
 
     for node in module_level_imports(parsed_tree):
         if isinstance(node, ast.Import):
@@ -617,7 +609,7 @@ def _resolve_relative_import(
 
 
 def _handle_import_node(
-    node: ast.Import, scope: Dict[str, Any], package_name: str | None
+    node: ast.Import, scope: dict[str, Any], package_name: str | None
 ) -> None:
     """
     Process a standard import node and update the provided scope mapping.
@@ -664,7 +656,7 @@ def _log_unresolvable_import_once(
 
 def _handle_import_from_node(
     node: ast.ImportFrom,
-    scope: Dict[str, Any],
+    scope: dict[str, Any],
     file_path: str | None,
     package_name: str | None,
 ) -> str | None:

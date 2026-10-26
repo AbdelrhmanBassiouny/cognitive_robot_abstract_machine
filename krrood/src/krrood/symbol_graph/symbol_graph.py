@@ -13,10 +13,8 @@ from typing_extensions import (
     Any,
     Callable,
     ClassVar,
-    Dict,
     Iterable,
     Iterator,
-    List,
     TypeVar,
 )
 
@@ -229,7 +227,7 @@ class SymbolGraph(metaclass=SingletonMeta):
     A directed graph that stores all instances of included classes and how they relate to each other.
     """
 
-    _instance_index: Dict[int, WrappedInstance] = field(
+    _instance_index: dict[int, WrappedInstance] = field(
         default_factory=dict, init=False, repr=False
     )
     """
@@ -237,7 +235,7 @@ class SymbolGraph(metaclass=SingletonMeta):
     Used for faster access when only the WrappedInstance.instance is available.
     """
 
-    _class_to_wrapped_instances: defaultdict[type, List[WrappedInstance]] = field(
+    _class_to_wrapped_instances: defaultdict[type, list[WrappedInstance]] = field(
         init=False, default_factory=lambda: defaultdict(list)
     )
     """
@@ -245,7 +243,7 @@ class SymbolGraph(metaclass=SingletonMeta):
     This enables quick behavior similar to selecting everything from an entire table in SQL.
     """
 
-    _relation_index: Dict[WrappedField, set[tuple[int, int]]] = field(
+    _relation_index: dict[WrappedField, set[tuple[int, int]]] = field(
         default_factory=dict, init=False, repr=False
     )
 
@@ -258,7 +256,7 @@ class SymbolGraph(metaclass=SingletonMeta):
         if self._class_diagram is None:
             self._class_diagram = self._build_class_diagram()
 
-    def _collect_symbol_classes(self) -> List[type]:
+    def _collect_symbol_classes(self) -> list[type]:
         """Collect the ``Symbol`` subclasses that belong in the class diagram, honouring the
         configured package filter."""
         return [
@@ -388,18 +386,18 @@ class SymbolGraph(metaclass=SingletonMeta):
         yield from self._instance_graph.edges()
 
     @property
-    def wrapped_instances(self) -> List[WrappedInstance]:
+    def wrapped_instances(self) -> list[WrappedInstance]:
         return self._instance_graph.nodes()
 
     @property
-    def instances(self) -> List[WrappedInstance]:
+    def instances(self) -> list[WrappedInstance]:
         """
         :return: All wrapped instances tracked by this graph.
         """
         return self.wrapped_instances
 
     @property
-    def predicate_relations(self) -> List[PredicateClassRelation]:
+    def predicate_relations(self) -> list[PredicateClassRelation]:
         """
         :return: All relations between the instances tracked by this graph.
         """

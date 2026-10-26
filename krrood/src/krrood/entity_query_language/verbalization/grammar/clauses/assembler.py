@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing_extensions import List
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.query.builders import OrderedByBuilder
@@ -112,7 +111,7 @@ class GroupedByAssembler(Assembler[Query, GroupPlan]):
         return self.realize(node, plan) if plan.has_keys else None
 
     def _keys_phrase(
-        self, variables: List[SymbolicExpression]
+        self, variables: list[SymbolicExpression]
     ) -> VerbalizationFragment:
         """
         :param variables: The group-by key expressions.

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from uuid import UUID
 
-from typing_extensions import Any, Dict, TYPE_CHECKING, Self
+from typing_extensions import Any, TYPE_CHECKING, Self
 
 from krrood.adapters.deserialized_object_tracker import DeserializedObjectTracker
 from krrood.adapters.json_serializer import from_json, to_json
@@ -46,7 +46,7 @@ class WorldEntityReference:
         """
         return f"{self.subject}_name"
 
-    def write(self, data: Dict[str, Any], entity: WorldEntityWithID) -> None:
+    def write(self, data: dict[str, Any], entity: WorldEntityWithID) -> None:
         """
         Put the reference to an entity into a serialized object.
 
@@ -56,7 +56,7 @@ class WorldEntityReference:
         data[self.id_key] = to_json(entity.id)
         data[self.name_key] = to_json(entity.name)
 
-    def resolve(self, data: Dict[str, Any], **kwargs) -> WorldEntityWithID:
+    def resolve(self, data: dict[str, Any], **kwargs) -> WorldEntityWithID:
         """
         The entity a serialized object refers to.
 

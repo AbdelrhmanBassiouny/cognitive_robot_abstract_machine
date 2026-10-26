@@ -4,14 +4,7 @@ import uuid
 from abc import abstractmethod
 from dataclasses import dataclass
 
-from typing_extensions import (
-    TYPE_CHECKING,
-    ClassVar,
-    Dict,
-    FrozenSet,
-    Protocol,
-    runtime_checkable,
-)
+from typing_extensions import TYPE_CHECKING, ClassVar, Protocol, runtime_checkable
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.operators.logical_quantifiers import (
@@ -165,13 +158,13 @@ class DiscourseModel:
     model, so neither the rules nor the coreference pass re-derive it.
     """
 
-    _focus_by_scope: Dict[uuid.UUID, uuid.UUID | None]
+    _focus_by_scope: dict[uuid.UUID, uuid.UUID | None]
     """
     The focus referent id of each scope, keyed by the scope node's id (``None`` when the
     scope has no single subject, e.g. a set-of).
     """
 
-    _selected_quantities: FrozenSet[uuid.UUID] = frozenset()
+    _selected_quantities: frozenset[uuid.UUID] = frozenset()
     """
     Node ids of the quantities a query *selects* — an aggregation's measured attribute
     (the ``battery`` behind ``average(m.assigned_to.battery)``).
@@ -210,7 +203,7 @@ class DiscourseModel:
         >>> model.focus_of(existential) == robot._id_
         True
         """
-        focus: Dict[uuid.UUID, uuid.UUID | None] = {}
+        focus: dict[uuid.UUID, uuid.UUID | None] = {}
         selected_quantities: set[uuid.UUID] = set()
         for node in expression._all_expressions_:
             scope_rule = DiscourseScopeRule.most_applicable(node, microplan)

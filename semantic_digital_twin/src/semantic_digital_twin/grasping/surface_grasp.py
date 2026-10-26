@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation
-from typing_extensions import TYPE_CHECKING, List
+from typing_extensions import TYPE_CHECKING
 
 from krrood.entity_query_language.backends import ProbabilisticBackend
 from krrood.entity_query_language.factories import ConditionType, a
@@ -275,7 +275,7 @@ def from_any_side(
     grasp: Match[SurfaceGrasp],
     largest_pitch: float = 1.2,
     largest_roll: float = math.pi / 4,
-) -> List[ConditionType]:
+) -> list[ConditionType]:
     """
     :param grasp: A statement's grasp.
     :param largest_pitch: How far the approach may tilt off vertical, in radians.
@@ -298,7 +298,7 @@ def draw_surface_grasps(
     statement: Match[SurfaceGrasp],
     number_of_grasps: int,
     model_registry: ModelRegistry | None = None,
-) -> List[SurfaceGrasp]:
+) -> list[SurfaceGrasp]:
     """
     :param statement: A statement of where an object may be grasped.
     :param number_of_grasps: How many grasps to draw, as the statement's limit.

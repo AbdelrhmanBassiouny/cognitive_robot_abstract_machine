@@ -28,7 +28,7 @@ from py_trees.behaviour import Behaviour
 from py_trees.blackboard import Blackboard
 from py_trees.common import Status
 from sensor_msgs.msg import JointState
-from typing_extensions import Any, Callable, Dict, List, Tuple
+from typing_extensions import Any, Callable
 
 import robokudo.pipeline  # Work around circular import
 from robokudo.annotator_parameters import AnnotatorPredefinedParameters
@@ -306,8 +306,8 @@ class BaseAnnotator(Behaviour):
         return type(self).__name__
 
     def get_data_from_analysis_scope(
-        self, analysis_scope: List[str | type]
-    ) -> Dict[str | type, Any]:
+        self, analysis_scope: list[str | type]
+    ) -> dict[str | type, Any]:
         """
         Look up data to analyze based on a list of Types or String constants.
 
@@ -480,7 +480,7 @@ class Worker(object):
         """
         self.future: Future = Future()
         self._fn: Callable = fn
-        self._args: Tuple = args
+        self._args: tuple = args
 
     def start(self, callback: Callable | None = None) -> threading.Thread:
         """

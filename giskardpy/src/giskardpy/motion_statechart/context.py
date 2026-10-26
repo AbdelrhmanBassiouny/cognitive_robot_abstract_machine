@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import Self, Dict, List, TypeVar, TYPE_CHECKING
+from typing_extensions import Self, TypeVar, TYPE_CHECKING
 
 from krrood.symbolic_math.float_variable_data import FloatVariableData
 from krrood.symbolic_math.symbolic_math import FloatVariable
@@ -64,7 +64,7 @@ class MotionStatechartContext:
     Is only needed when constraints are present in the motion statechart.
     """
 
-    extensions: Dict[type[ContextExtension], ContextExtension] = field(
+    extensions: dict[type[ContextExtension], ContextExtension] = field(
         default_factory=dict, repr=False, init=False
     )
     """
@@ -123,7 +123,7 @@ class MotionStatechartContext:
     @property
     def _registered_collision_variable_managers(
         self,
-    ) -> List[BaseCollisionVariableManager]:
+    ) -> list[BaseCollisionVariableManager]:
         """
         :return: The collision variable managers that nodes have requested so far.
         """

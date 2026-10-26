@@ -7,7 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import cv2
-from typing_extensions import TYPE_CHECKING, Dict, Any, ClassVar
+from typing_extensions import TYPE_CHECKING, Any, ClassVar
 
 from robokudo.descriptors.camera_configs.base_camera_config import BaseCameraConfig
 from robokudo.types.cv import ColorToDepthRatio
@@ -83,7 +83,7 @@ class OpenCVCameraConfig(BaseCameraConfig):
     Flag to update global depth parameters.
     """
 
-    camera_info: Dict[str, Any] = None
+    camera_info: dict[str, Any] = None
     """
     Camera config as dict.
     """

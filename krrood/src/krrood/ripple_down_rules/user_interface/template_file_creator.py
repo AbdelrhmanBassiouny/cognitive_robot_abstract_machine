@@ -84,7 +84,7 @@ class TemplateFileCreator:
     The process of the code-server.
     """
 
-    all_code_lines: List[str] | None = None
+    all_code_lines: list[str] | None = None
     """
     The list of all code lines in the function in the temporary file.
     """
@@ -112,7 +112,7 @@ class TemplateFileCreator:
         )
         self.temp_file_path: str = os.path.join(self.workspace, "edit_code_here.py")
 
-    def get_output_type(self) -> List[type]:
+    def get_output_type(self) -> list[type]:
         """
         :return: The output type of the function as a list of types.
         """
@@ -285,7 +285,7 @@ class TemplateFileCreator:
         return "\n".join(imports)
 
     @staticmethod
-    def get_core_attribute_types(case_query: CaseQuery) -> List[type]:
+    def get_core_attribute_types(case_query: CaseQuery) -> list[type]:
         """
         Get the core attribute types of the case query.
 

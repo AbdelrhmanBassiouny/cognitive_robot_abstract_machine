@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC
 from dataclasses import dataclass
-from typing_extensions import List, TYPE_CHECKING, Iterable, Any
+from typing_extensions import TYPE_CHECKING, Iterable, Any
 
 import numpy as np
 import trimesh.boolean
@@ -722,7 +722,7 @@ class PlaceIsOccupied(Predicate):
     The world whose collidable bodies are tested against it.
     """
 
-    allowed_bodies: List[Body] | None = None
+    allowed_bodies: list[Body] | None = None
     """
     Bodies that may stand there without the place counting as occupied.
     """

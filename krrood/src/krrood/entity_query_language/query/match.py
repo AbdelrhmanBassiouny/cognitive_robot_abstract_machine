@@ -21,7 +21,6 @@ from functools import cached_property, lru_cache
 from inspect import ismethod, isfunction, isclass
 from typing_extensions import (
     Callable,
-    List,
     Generic,
     TYPE_CHECKING,
     Self,
@@ -97,7 +96,7 @@ class AbstractMatchExpression(MatchAssignedValue, Generic[T], ABC):
     The created variable from the type and keyword arguments.
     """
 
-    _conditions_: List[ConditionType] = field(init=False, default_factory=list)
+    _conditions_: list[ConditionType] = field(init=False, default_factory=list)
     """
     The conditions that define the match.
     """
@@ -117,7 +116,7 @@ class AbstractMatchExpression(MatchAssignedValue, Generic[T], ABC):
     The unique identifier of the match expression.
     """
 
-    _children_: List[AttributeMatch] = field(init=False, default_factory=list)
+    _children_: list[AttributeMatch] = field(init=False, default_factory=list)
     """
     The child matches of this match expression.
     """
@@ -255,7 +254,7 @@ class Match(
     This is needed to apply where conditions directly to the match instance.
     """
 
-    _where_conditions_: List[ConditionType] = field(init=False, default_factory=list)
+    _where_conditions_: list[ConditionType] = field(init=False, default_factory=list)
     """
     A list of all conditions that have been applied to this instance using the
     `where` method.

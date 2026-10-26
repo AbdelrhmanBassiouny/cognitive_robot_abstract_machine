@@ -10,7 +10,6 @@ missing annotation.
 from enum import StrEnum
 
 import pytest
-from typing_extensions import List, Set
 
 from semantic_digital_twin.reasoning.world_reasoner import WorldReasoner
 from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
@@ -252,7 +251,7 @@ class ApartmentWardrobe(StrEnum):
 
 # %% pairing each annotation type with what it is expected on
 
-EXPECTED_BODIES: List[tuple] = [
+EXPECTED_BODIES: list[tuple] = [
     (Handle, ApartmentHandle),
     (Drawer, ApartmentDrawer),
     (Door, ApartmentDoor),
@@ -276,14 +275,14 @@ Each annotation type together with the bodies the reasoner must infer it on.
 """
 
 
-def expected_body_names(expected: type[StrEnum]) -> Set[str]:
+def expected_body_names(expected: type[StrEnum]) -> set[str]:
     """
     The body names one of the expectations above holds.
     """
     return {member.value for member in expected}
 
 
-def inferred_body_names(world: World, annotation_type: type[HasRootBody]) -> Set[str]:
+def inferred_body_names(world: World, annotation_type: type[HasRootBody]) -> set[str]:
     """
     The names of the bodies the world's annotations of ``annotation_type`` sit on.
 

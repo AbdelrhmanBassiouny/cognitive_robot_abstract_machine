@@ -7,7 +7,7 @@ import numpy as np
 from random_events.product_algebra import Event, SimpleEvent
 from scipy.stats import multivariate_normal, truncnorm
 from sortedcontainers import SortedSet
-from typing_extensions import Any, List, Self, Tuple
+from typing_extensions import Any, Self
 
 from probabilistic_model.distributions.truncated_multivariate_gaussian import (
     MomentIntegration,
@@ -121,7 +121,7 @@ class TruncatedMultivariateGaussianLayer(AbstractMultivariateGaussianLayer):
     def from_distributions(
         cls,
         variables: SortedSet,
-        distributions: List[TruncatedMultivariateGaussianDistribution],
+        distributions: list[TruncatedMultivariateGaussianDistribution],
     ) -> Self:
         """
         :param variables: The variables of the circuit.
@@ -172,7 +172,7 @@ class TruncatedMultivariateGaussianLayer(AbstractMultivariateGaussianLayer):
         return self.with_nodes(mask)
 
     @classmethod
-    def concatenate(cls, layers: List[Self]) -> Self:
+    def concatenate(cls, layers: list[Self]) -> Self:
         return dataclasses.replace(
             layers[0],
             scope=layers[0].scope.copy(),
@@ -258,7 +258,7 @@ class TruncatedMultivariateGaussianLayer(AbstractMultivariateGaussianLayer):
     @memoized
     def log_mode_of_nodes(
         self, variables: SortedSet, cache: QueryCache | None = None
-    ) -> Tuple[List[Event], NodeValues]:
+    ) -> tuple[list[Event], NodeValues]:
         modes = [
             distribution.log_mode()
             for distribution in self.node_distributions(variables)

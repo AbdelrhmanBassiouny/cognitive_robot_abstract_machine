@@ -4,7 +4,7 @@ from dataclasses import dataclass, field, Field
 from datetime import timedelta
 from http import HTTPStatus
 from pathlib import Path
-from typing_extensions import List, TYPE_CHECKING, Callable, Any
+from typing_extensions import TYPE_CHECKING, Callable, Any
 from uuid import UUID
 
 import mujoco
@@ -777,7 +777,7 @@ class NoSinglePartWholeRelationshipField(UsageError):
     The type of the part.
     """
 
-    matching_fields: List[str]
+    matching_fields: list[str]
     """
     The names of the annotation's part-whole relationship fields that hold parts of that
     type.
@@ -1477,7 +1477,7 @@ class DatasetServerError(ParsingError):
 class WorldEntityNotFoundError(UsageError):
     name_or_hash: str | PrefixedName | int
 
-    suggestions: List[str | PrefixedName] = field(default_factory=list)
+    suggestions: list[str | PrefixedName] = field(default_factory=list)
     """
     Names of existing world entities that closely match the searched name.
     """

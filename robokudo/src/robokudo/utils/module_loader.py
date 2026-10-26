@@ -32,7 +32,7 @@ import warnings
 from importlib.resources import as_file
 from pathlib import Path
 
-from typing_extensions import TYPE_CHECKING, List, Any
+from typing_extensions import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from types import ModuleType
@@ -278,7 +278,7 @@ class ModuleLoader:
         module_type: RobokudoModuleType,
         dir_name: str,
         file_extension: str | None = None,
-    ) -> List[str]:  # pragma: no cover
+    ) -> list[str]:  # pragma: no cover
         """
         Get paths to files in module directory.
 

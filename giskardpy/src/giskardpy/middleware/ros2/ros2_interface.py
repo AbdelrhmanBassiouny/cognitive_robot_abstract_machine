@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import threading
 from typing_extensions import Any
@@ -36,7 +38,7 @@ def msg_type_as_str(msg_type) -> str:
 
 def wait_for_message(
     msg_type,
-    node: "Node",
+    node: Node,
     topic: str,
     *,
     qos_profile: QoSProfile | int = QoSProfile(depth=10),

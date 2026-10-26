@@ -13,18 +13,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from functools import cached_property
 from inspect import isclass
-from typing_extensions import (
-    TYPE_CHECKING,
-    Generic,
-    Iterable,
-    Any,
-    Set,
-    Tuple,
-    Dict,
-    List,
-    get_args,
-    Self,
-)
+from typing_extensions import TYPE_CHECKING, Generic, Iterable, Any, get_args, Self
 
 
 from random_events.variable import (
@@ -70,7 +59,7 @@ if TYPE_CHECKING:
     )
 
 
-def attribute_names_for_completion(type_: Any) -> Set[str]:
+def attribute_names_for_completion(type_: Any) -> set[str]:
     """
     Collect the non-dunder attribute and annotation names of a type, for interactive
     completion on expressions that stand for a value of that type.
@@ -79,7 +68,7 @@ def attribute_names_for_completion(type_: Any) -> Set[str]:
         a class yields no names.
     :return: The collected names.
     """
-    names: Set[str] = set()
+    names: set[str] = set()
     if not isinstance(type_, type):
         return names
     names.update(
@@ -159,7 +148,7 @@ class HasSymbolicOperations(Operand, Generic[T], ABC):
             raise AttributeError(name)
         return self._symbolic_expression_._get_mapped_variable_(Attribute, name)
 
-    def __dir__(self) -> List[str]:
+    def __dir__(self) -> list[str]:
         """
         Surface the value type's attributes for interactive completion.
 
@@ -299,7 +288,7 @@ class CanBehaveLikeAVariable(Selectable[T], HasSymbolicOperations[T], ABC):
     former alone and reports one of these as :attr:`_symbolic_expression_`.
     """
 
-    _known_mapped_variables_: Dict[MappedVariableCacheItem, MappedVariable] = field(
+    _known_mapped_variables_: dict[MappedVariableCacheItem, MappedVariable] = field(
         init=False, default_factory=dict
     )
     """
@@ -359,7 +348,7 @@ class MappedVariable(UnaryExpression, CanBehaveLikeAVariable[T], ABC):
     The child expression to apply the mapping to.
     """
 
-    _rerooted_chains_: Dict[uuid.UUID, MappedVariable] = field(
+    _rerooted_chains_: dict[uuid.UUID, MappedVariable] = field(
         init=False, default_factory=dict
     )
     """
@@ -454,7 +443,7 @@ class MappedVariable(UnaryExpression, CanBehaveLikeAVariable[T], ABC):
         return self._rerooted_chains_[root._id_]
 
     @property
-    def _access_path_(self) -> List[Self]:
+    def _access_path_(self) -> list[Self]:
         """
         :return: The access path of the variable as a list of operations.
         """
@@ -779,12 +768,12 @@ class Call(SingleValueMapping[T]):
     A variable created through a function call operation on its child variable.
     """
 
-    _args_: Tuple[Any, ...] = field(default_factory=tuple)
+    _args_: tuple[Any, ...] = field(default_factory=tuple)
     """
     The arguments to call the method with.
     """
 
-    _kwargs_: Dict[str, Any] = field(default_factory=dict)
+    _kwargs_: dict[str, Any] = field(default_factory=dict)
     """
     The keyword arguments to call the method with.
     """
@@ -886,12 +875,12 @@ class MappedVariableCacheItem:
     applied).
     """
 
-    args: Tuple[Any, ...] = field(default_factory=tuple)
+    args: tuple[Any, ...] = field(default_factory=tuple)
     """
     Positional arguments to pass to the mapping constructor.
     """
 
-    kwargs: Dict[str, Any] = field(default_factory=dict)
+    kwargs: dict[str, Any] = field(default_factory=dict)
     """
     Keyword arguments to pass to the mapping constructor.
     """

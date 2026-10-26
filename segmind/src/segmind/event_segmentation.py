@@ -10,7 +10,7 @@ import time
 from dataclasses import dataclass, field
 
 from giskardpy.motion_statechart.context import MotionStatechartContext
-from typing_extensions import List, Self, Sequence
+from typing_extensions import Self, Sequence
 
 from segmind.detector_selection import DetectorSelection
 from segmind.detectors.atomic_event_detectors_nodes import MotionDetector
@@ -49,7 +49,7 @@ class Segmind:
     The world the run takes place in.
     """
 
-    detectors: List[AbstractDetector]
+    detectors: list[AbstractDetector]
     """
     The detectors ticked.
     """
@@ -110,7 +110,7 @@ class Segmind:
             if detector_types
             else DetectorSelection.of_every_kind()
         )
-        detectors: List[AbstractDetector] = [
+        detectors: list[AbstractDetector] = [
             detector
             for detector_type in selection.detector_types
             for detector in detector_type.create_for_run(
@@ -150,7 +150,7 @@ class Segmind:
         return cls.create_for_bodies(world, list(dict.fromkeys(bodies)), detector_types)
 
     @property
-    def watched_bodies(self) -> List[Body]:
+    def watched_bodies(self) -> list[Body]:
         """
         The bodies the detectors watch, each named once, in the order they are ticked.
         """
@@ -163,7 +163,7 @@ class Segmind:
         )
 
     @property
-    def detector_names(self) -> List[str]:
+    def detector_names(self) -> list[str]:
         """
         The kinds of detector ticked, each named once, in the order they are ticked.
         """

@@ -8,7 +8,7 @@ from enum import Enum
 from pandas import DataFrame
 from sqlalchemy import MetaData
 from sqlalchemy.orm import DeclarativeBase as SQLTable, registry
-from typing_extensions import Any, Dict, Set, Hashable, Union, List, TYPE_CHECKING
+from typing_extensions import Any, Set, Hashable, Union, TYPE_CHECKING
 
 from krrood.ripple_down_rules.utils import (
     make_set,
@@ -98,7 +98,7 @@ class Case(UserDict):
     def __hash__(self):
         return self._id
 
-    def __deepcopy__(self, memo: Dict[Hashable, Any]) -> Case:
+    def __deepcopy__(self, memo: dict[Hashable, Any]) -> Case:
         """
         Create a deep copy of the case.
 
@@ -167,11 +167,11 @@ class CaseAttribute(list):
     """
 
     @classmethod
-    def from_obj(cls, values: List[Any]) -> CaseAttribute:
+    def from_obj(cls, values: list[Any]) -> CaseAttribute:
         return cls(make_list(values))
 
     @property
-    def as_dict(self) -> Dict[str, Any]:
+    def as_dict(self) -> dict[str, Any]:
         """
         Get the case attribute as a dictionary.
 
@@ -202,7 +202,7 @@ class CaseAttribute(list):
         return str([v for v in self]) if len(self) > 1 else str(next(iter(self)))
 
 
-def create_cases_from_dataframe(df: DataFrame, name: str | None = None) -> List[Case]:
+def create_cases_from_dataframe(df: DataFrame, name: str | None = None) -> list[Case]:
     """
     Create cases from a pandas DataFrame.
 
@@ -383,8 +383,8 @@ def create_case_attribute_from_iterable_attribute(
 
 def show_current_and_corner_cases(
     case: Any,
-    targets: Dict[str, Any] | None = None,
-    current_conclusions: Dict[str, Any] | None = None,
+    targets: dict[str, Any] | None = None,
+    current_conclusions: dict[str, Any] | None = None,
     last_evaluated_rule: Rule | None = None,
 ) -> str:
     """

@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood.utils import recursive_subclasses
 from sortedcontainers import SortedSet
-from typing_extensions import Any, Dict, Generic, TypeVar
+from typing_extensions import Any, Generic, TypeVar
 
 from probabilistic_model.adapters.exceptions import (
     CannotConvertError,
@@ -101,7 +101,7 @@ class LayerConversion(Generic[InputType, OutputType]):
     The variables of the circuit, in the order the layers index them.
     """
 
-    converted_layers: Dict[int, OutputType] = field(default_factory=dict)
+    converted_layers: dict[int, OutputType] = field(default_factory=dict)
     """
     The result of every layer converted so far, keyed by the id of the layer.
     """

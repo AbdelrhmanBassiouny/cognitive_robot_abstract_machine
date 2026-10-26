@@ -20,7 +20,7 @@ import trimesh.exchange.stl
 from PIL import Image
 from plyfile import PlyData
 from trimesh.visual.texture import TextureVisuals, SimpleMaterial
-from typing_extensions import List, Dict, Any, Self, Tuple, TYPE_CHECKING, TypeVar
+from typing_extensions import Any, Self, TYPE_CHECKING, TypeVar
 
 from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json, from_json
 from krrood.bounds import Bounds, BoundsInterface
@@ -95,10 +95,10 @@ class Color:
     def __hash__(self):
         return hash((self.R, self.G, self.B, self.A))
 
-    def to_rgba(self) -> Tuple[float, float, float, float]:
+    def to_rgba(self) -> tuple[float, float, float, float]:
         return (self.R, self.G, self.B, self.A)
 
-    def to_rgb(self) -> Tuple[float, float, float]:
+    def to_rgb(self) -> tuple[float, float, float]:
         return (self.R, self.G, self.B)
 
     def to_hex(self, prefix: str = "#") -> str:
@@ -158,7 +158,7 @@ class Color:
         return Color(1, 0.647, 0)
 
     @classmethod
-    def from_list(cls, color: List[float]):
+    def from_list(cls, color: list[float]):
         """
         Set the rgba_color from a list of RGBA values.
 
@@ -172,7 +172,7 @@ class Color:
             raise ValueError("Color list must have 3 or 4 elements")
 
     @classmethod
-    def from_rgb(cls, rgb: List[float]):
+    def from_rgb(cls, rgb: list[float]):
         """
         Set the rgba_color from a list of RGB values.
 
@@ -181,7 +181,7 @@ class Color:
         return cls(*rgb, 1)
 
     @classmethod
-    def from_rgba(cls, rgba: List[float]):
+    def from_rgba(cls, rgba: list[float]):
         """
         Set the rgba_color from a list of RGBA values.
 
@@ -275,7 +275,7 @@ class Texture:
     The texture image's file path.
     """
 
-    repeat: Tuple[float, float] = (1.0, 1.0)
+    repeat: tuple[float, float] = (1.0, 1.0)
     """
     How many times the texture tiles across the surface, along each of its two axes.
     """
@@ -490,13 +490,13 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
         return world_mesh
 
     @classmethod
-    def _serialized_fields(cls) -> List[Field]:
+    def _serialized_fields(cls) -> list[Field]:
         """
         The fields a shape carries in its json: everything its constructor takes.
         """
         return [field_ for field_ in fields(cls) if field_.init]
 
-    def to_json(self, **kwargs) -> Dict[str, Any]:
+    def to_json(self, **kwargs) -> dict[str, Any]:
         return {
             **super().to_json(**kwargs),
             **{
@@ -506,7 +506,7 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
         }
 
     @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+    def _from_json(cls, data: dict[str, Any], **kwargs) -> Self:
         return cls(
             **{
                 field_.name: from_json(data[field_.name], **kwargs)
@@ -641,7 +641,7 @@ class Mesh(Shape):
         return mesh
 
     @classmethod
-    def _serialized_fields(cls) -> List[Field]:
+    def _serialized_fields(cls) -> list[Field]:
         """
         A mesh carries its geometry rather than the file it was read from, which the
         process reading the json may not have.
@@ -652,7 +652,7 @@ class Mesh(Shape):
             if field_.name != "filename"
         ]
 
-    def to_json(self, **kwargs) -> Dict[str, Any]:
+    def to_json(self, **kwargs) -> dict[str, Any]:
         # Serialize the unscaled geometry and the scale separately. This is the same
         # mesh :attr:`mesh` exposes, so a deserialized mesh reproduces the original
         # rather than a differently tessellated version of the same file.
@@ -675,7 +675,7 @@ class Mesh(Shape):
         }
 
     @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Mesh:
+    def _from_json(cls, data: dict[str, Any], **kwargs) -> Mesh:
         # Recreate the trimesh without processing to preserve exact topology
         vertex_colors = data["mesh"].get("vertex_colors")
         mesh = trimesh.Trimesh(
@@ -928,7 +928,7 @@ class Mesh(Shape):
     @classmethod
     def box(
         cls,
-        extents: Tuple[float, float, float] = (1.0, 1.0, 1.0),
+        extents: tuple[float, float, float] = (1.0, 1.0, 1.0),
         origin: HomogeneousTransformationMatrix | None = None,
         scale: Scale | None = None,
     ) -> Mesh:
@@ -1007,7 +1007,7 @@ class Mesh(Shape):
     @classmethod
     def from_3d_points(
         cls,
-        points_3d: List[Point3],
+        points_3d: list[Point3],
         reference_frame: KinematicStructureEntity | None = None,
         minimum_thickness: float = 0.005,
         singular_value_ratio_tolerance: float = 1e-7,
@@ -1339,7 +1339,7 @@ class AxisAlignedBox(BoundsInterface[PointT], ABC):
 
     @classmethod
     @abstractmethod
-    def axes(cls) -> Tuple[SpatialVariables, ...]:
+    def axes(cls) -> tuple[SpatialVariables, ...]:
         """
         :return: The spatial axes this box type is expressed over, in a fixed order
             matching :attr:`_ordered_intervals`.
@@ -1348,7 +1348,7 @@ class AxisAlignedBox(BoundsInterface[PointT], ABC):
 
     @property
     @abstractmethod
-    def _ordered_intervals(self) -> Tuple[SimpleInterval, ...]:
+    def _ordered_intervals(self) -> tuple[SimpleInterval, ...]:
         """
         :return: This box's interval along each of :meth:`axes`, in the same order.
         """
@@ -1372,7 +1372,7 @@ class AxisAlignedBox(BoundsInterface[PointT], ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_points(self) -> List[PointT]:
+    def get_points(self) -> list[PointT]:
         """
         :return: This box's corners, in its own local frame.
         """
@@ -1382,7 +1382,7 @@ class AxisAlignedBox(BoundsInterface[PointT], ABC):
     @abstractmethod
     def from_simple_event(
         cls, simple_event: SimpleEvent, origin: HomogeneousTransformationMatrix
-    ) -> List[Self]:
+    ) -> list[Self]:
         """
         Create a list of bounding boxes from a simple random event.
 
@@ -1412,7 +1412,7 @@ class AxisAlignedBox(BoundsInterface[PointT], ABC):
     def upper(self) -> PointT:
         return self._corner_at([interval.upper for interval in self._ordered_intervals])
 
-    def _corner_at(self, coordinates: List[float]) -> PointT:
+    def _corner_at(self, coordinates: list[float]) -> PointT:
         """
         :param coordinates: The corner's coordinate along each of :meth:`axes`.
         :return: The corner, in the reference frame of the box's origin.
@@ -1567,11 +1567,11 @@ class VolumetricBoundingBox(AxisAlignedBox[Point3]):
         )
 
     @classmethod
-    def axes(cls) -> Tuple[SpatialVariables, ...]:
+    def axes(cls) -> tuple[SpatialVariables, ...]:
         return (SpatialVariables.x, SpatialVariables.y, SpatialVariables.z)
 
     @property
-    def _ordered_intervals(self) -> Tuple[SimpleInterval, ...]:
+    def _ordered_intervals(self) -> tuple[SimpleInterval, ...]:
         return (self.x_interval, self.y_interval, self.z_interval)
 
     @property
@@ -1622,7 +1622,7 @@ class VolumetricBoundingBox(AxisAlignedBox[Point3]):
         return self.depth * self.width * self.height
 
     @property
-    def dimensions(self) -> List[float]:
+    def dimensions(self) -> list[float]:
         """
         :return: The dimensions of the bounding box as a list [width, depth, height].
         """
@@ -1674,7 +1674,7 @@ class VolumetricBoundingBox(AxisAlignedBox[Point3]):
     @classmethod
     def from_simple_event(
         cls, simple_event: SimpleEvent, origin: HomogeneousTransformationMatrix
-    ) -> List[Self]:
+    ) -> list[Self]:
         """
         Create a list of bounding boxes from a simple random event.
 
@@ -1752,7 +1752,7 @@ class VolumetricBoundingBox(AxisAlignedBox[Point3]):
             origin=origin,
         )
 
-    def get_points(self) -> List[Point3]:
+    def get_points(self) -> list[Point3]:
         """
         Get the 8 corners of the bounding box as Point3 objects.
 
@@ -1848,11 +1848,11 @@ class PlanarBoundingBox(AxisAlignedBox[Point2]):
         return hash((self.min_x, self.min_y, self.max_x, self.max_y))
 
     @classmethod
-    def axes(cls) -> Tuple[SpatialVariables, ...]:
+    def axes(cls) -> tuple[SpatialVariables, ...]:
         return (SpatialVariables.x, SpatialVariables.y)
 
     @property
-    def _ordered_intervals(self) -> Tuple[SimpleInterval, ...]:
+    def _ordered_intervals(self) -> tuple[SimpleInterval, ...]:
         return (self.x_interval, self.y_interval)
 
     @property
@@ -1878,7 +1878,7 @@ class PlanarBoundingBox(AxisAlignedBox[Point2]):
         return self.max_y - self.min_y
 
     @property
-    def dimensions(self) -> List[float]:
+    def dimensions(self) -> list[float]:
         """
         :return: The dimensions of the bounding box as a list [depth, width].
         """
@@ -1949,7 +1949,7 @@ class PlanarBoundingBox(AxisAlignedBox[Point2]):
     @classmethod
     def from_simple_event(
         cls, simple_event: SimpleEvent, origin: HomogeneousTransformationMatrix
-    ) -> List[Self]:
+    ) -> list[Self]:
         """
         Create a list of bounding boxes from a simple random event.
 
@@ -1965,7 +1965,7 @@ class PlanarBoundingBox(AxisAlignedBox[Point2]):
             result.append(cls(x.lower, y.lower, x.upper, y.upper, origin))
         return result
 
-    def get_points(self) -> List[Point2]:
+    def get_points(self) -> list[Point2]:
         """
         Get the 4 corners of the bounding box as ``Point2`` objects, in the box's own
         local frame.

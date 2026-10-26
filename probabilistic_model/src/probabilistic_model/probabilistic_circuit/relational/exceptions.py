@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import TYPE_CHECKING, Any, List
+from typing_extensions import TYPE_CHECKING, Any
 
 from krrood.exceptions import DataclassException
 
@@ -101,7 +101,7 @@ class UnknownExchangeablePartsError(DataclassException):
     The domain class whose relational circuit is fitted.
     """
 
-    parts: List[str]
+    parts: list[str]
     """
     The field names that name no exchangeable part of the class.
     """
@@ -212,7 +212,7 @@ class UndeterminedLatentsNotModeledError(DataclassException):
     aggregation statistics, so they cannot be sampled and integrated out.
     """
 
-    undetermined_latents: List[Variable]
+    undetermined_latents: list[Variable]
     """
     The undetermined latent variables that the conditioned circuit fails to model.
     """
@@ -244,7 +244,7 @@ class UndeterminedLatentsNotPartitionedError(DataclassException):
     represents.
     """
 
-    undetermined_latents: List[Variable]
+    undetermined_latents: list[Variable]
     """
     The undetermined latent variables whose marginal support is not a genuine, disjoint
     partition.
@@ -276,7 +276,7 @@ class VariableNotFoundError(DataclassException):
     The access path that failed to resolve.
     """
 
-    available_variables: List[Variable]
+    available_variables: list[Variable]
     """
     The variables the grounded circuit actually has, for diagnosis.
     """
@@ -306,7 +306,7 @@ class AmbiguousVariablePathError(DataclassException):
     The access path that matched more than one variable.
     """
 
-    matches: List[Variable]
+    matches: list[Variable]
     """
     The variables that matched.
     """
@@ -326,7 +326,7 @@ class NoCommonSuperclassError(DataclassException):
     but ``object``.
     """
 
-    classes: List[type]
+    classes: list[type]
     """
     The classes of the instances.
     """

@@ -13,15 +13,7 @@ from abc import ABC
 from dataclasses import dataclass, field
 from functools import cached_property
 
-from typing_extensions import (
-    Any,
-    Dict,
-    Iterable,
-    Union as TypingUnion,
-    Callable,
-    Iterator,
-    List,
-)
+from typing_extensions import Any, Iterable, Union as TypingUnion, Callable, Iterator
 
 from krrood.entity_query_language.core.base_expressions import (
     Bindings,
@@ -159,7 +151,7 @@ class Literal(Variable[T]):
     The value of the literal.
     """
 
-    _domain_: List[T] = field(init=False, repr=False)
+    _domain_: list[T] = field(init=False, repr=False)
     """
     The domain of the literal.
 
@@ -207,12 +199,12 @@ class InstantiatedVariable(
     (The value of `T`)
     """
 
-    _kwargs_: Dict[str, Any] = field(default_factory=dict)
+    _kwargs_: dict[str, Any] = field(default_factory=dict)
     """
     The properties of the variable as keyword arguments.
     """
 
-    _child_variables_: Dict[str, SymbolicExpression] = field(
+    _child_variables_: dict[str, SymbolicExpression] = field(
         default_factory=dict, init=False, repr=False
     )
     """
@@ -289,7 +281,7 @@ class InstantiatedVariable(
     def _name_(self):
         return self._type_.__name__
 
-    def apply_mapping_on_external_root(self, *args, **kwargs: Dict[str, Any]) -> Any:
+    def apply_mapping_on_external_root(self, *args, **kwargs: dict[str, Any]) -> Any:
         """
         Build an instance of this variable's type from the given arguments.
 

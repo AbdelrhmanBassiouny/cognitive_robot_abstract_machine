@@ -6,7 +6,7 @@ from dataclasses import field, dataclass
 
 import rustworkx as rx
 import rustworkx.visualization
-from typing_extensions import Any, List, Iterable, TYPE_CHECKING, Tuple, TypeVar
+from typing_extensions import Any, Iterable, TYPE_CHECKING, TypeVar
 
 from coraplex.exceptions import CannotInsertBesideRoot, ContextIsUnavailable
 from coraplex.plans.plan_entity import PlanEntity
@@ -63,7 +63,7 @@ class Plan:
     A deepcopy of the world before the first perform was called.
     """
 
-    node_callbacks: List[PlanCallback] = field(default_factory=list)
+    node_callbacks: list[PlanCallback] = field(default_factory=list)
     """
     A list of callbacks that are called when a node is started or ended.
     """
@@ -111,7 +111,7 @@ class Plan:
         return self.context.robot
 
     @property
-    def nodes(self) -> List[PlanNode]:
+    def nodes(self) -> list[PlanNode]:
         """
         All nodes of the plan in depth first order.
 
@@ -124,7 +124,7 @@ class Plan:
         return [self.root] + self.root.descendants
 
     @property
-    def all_nodes(self) -> List[PlanNode]:
+    def all_nodes(self) -> list[PlanNode]:
         """
         All nodes that are part of this plan.
         """
@@ -222,7 +222,7 @@ class Plan:
 
     def add_edges_from(
         self,
-        edges: Iterable[Tuple[PlanNode, PlanNode]],
+        edges: Iterable[tuple[PlanNode, PlanNode]],
     ):
         """
         Adds edges to the plan from an iterable of tuples.
@@ -286,7 +286,7 @@ class Plan:
         self.add_edge(reference_node.parent, node, layer_index)
 
     @property
-    def plan_transformations(self) -> List[PlanTransformation]:
+    def plan_transformations(self) -> list[PlanTransformation]:
         """
         The transformations that rewrite this plan while it is expanded.
 
@@ -297,7 +297,7 @@ class Plan:
             raise ContextIsUnavailable()
         return self.context.plan_transformations
 
-    def applicable_transformations(self, node: PlanNode) -> List[PlanTransformation]:
+    def applicable_transformations(self, node: PlanNode) -> list[PlanTransformation]:
         """
         :param node: The node that was just expanded
         :return: The transformations that rewrite the plan around the given node.
@@ -366,11 +366,11 @@ class Plan:
                 child.perform()
 
     @property
-    def actions(self) -> List[ActionNode]:
+    def actions(self) -> list[ActionNode]:
         return [node for node in self.nodes if isinstance(node, ActionNode)]
 
     @property
-    def layers(self) -> List[List[PlanNode]]:
+    def layers(self) -> list[list[PlanNode]]:
         """
         Returns the nodes of the plan layer by layer starting from the root node.
 

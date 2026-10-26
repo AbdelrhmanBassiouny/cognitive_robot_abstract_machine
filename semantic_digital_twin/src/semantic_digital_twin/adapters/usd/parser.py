@@ -11,7 +11,7 @@ from types import NoneType
 import numpy as np
 import trimesh
 from numpy.typing import NDArray
-from typing_extensions import Dict, List, Sequence, Tuple
+from typing_extensions import Sequence
 
 from krrood.class_diagrams.mocking import MockedClass, MockedModule
 
@@ -161,7 +161,7 @@ def _usd_pose_to_transform(
 
 def _decompose_local_transform(
     prim: Usd.Prim, link_to_world: Gf.Matrix4d
-) -> Tuple[HomogeneousTransformationMatrix, Gf.Vec3d]:
+) -> tuple[HomogeneousTransformationMatrix, Gf.Vec3d]:
     """
     Decompose a prim's pose relative to its enclosing link into a rigid transform and a
     scale, regardless of how the prim's ``xformOpOrder`` was authored.
@@ -201,7 +201,7 @@ class UsdGeomPrimType(StrEnum):
         :param link_to_world: The enclosing link's local-to-world transform.
         :return: The created shape.
         """
-        builders: Dict[UsdGeomPrimType, type[UsdShapeBuilder]] = {
+        builders: dict[UsdGeomPrimType, type[UsdShapeBuilder]] = {
             UsdGeomPrimType.MESH: UsdMeshShapeBuilder,
             UsdGeomPrimType.CUBE: UsdCubeShapeBuilder,
             UsdGeomPrimType.SPHERE: UsdSphereShapeBuilder,
@@ -582,7 +582,7 @@ class USDParser(WorldModelParser):
             return self._parse_jointless_stage()
         return self._parse_joint_graph(joint_prims)
 
-    def _parse_joint_graph(self, joint_prims: List[Usd.Prim]) -> World:
+    def _parse_joint_graph(self, joint_prims: list[Usd.Prim]) -> World:
         """
         Builds the world for a stage with physics joints.
 
@@ -603,7 +603,7 @@ class USDParser(WorldModelParser):
         # Every joint is described (and so validated) before the world is touched
         # further: a World left partway through a failed modification is unusable, so
         # anything that can raise must run before entering another modify_world block.
-        link_bodies: Dict[str, Body] = {}
+        link_bodies: dict[str, Body] = {}
         descriptions = [
             self._describe_joint(joint_prim, root_body, link_bodies)
             for joint_prim in joint_prims
@@ -678,7 +678,7 @@ class USDParser(WorldModelParser):
             return None
         return top_level_prims[0]
 
-    def _top_level_prims(self) -> List[Usd.Prim]:
+    def _top_level_prims(self) -> list[Usd.Prim]:
         """
         :return: Every top-level prim of the stage (the pseudo-root's direct children).
         """
@@ -690,7 +690,7 @@ class USDParser(WorldModelParser):
         self,
         joint_prim: Usd.Prim,
         root_body: Body,
-        link_bodies: Dict[str, Body],
+        link_bodies: dict[str, Body],
     ) -> JointDescription:
         """
         Validates and describes the Connection one physics joint prim becomes, without
@@ -788,7 +788,7 @@ class USDParser(WorldModelParser):
         )
 
     def _resolve_link_body(
-        self, link_bodies: Dict[str, Body], prim_path: Sdf.Path
+        self, link_bodies: dict[str, Body], prim_path: Sdf.Path
     ) -> Body:
         """
         Resolves a USD prim path to its link Body, creating (and caching in
@@ -867,7 +867,7 @@ class USDParser(WorldModelParser):
             body.inertial = inertial
         return body
 
-    def _shapes_in_subtree(self, link_prim: Usd.Prim) -> List[Shape]:
+    def _shapes_in_subtree(self, link_prim: Usd.Prim) -> list[Shape]:
         """
         Creates the Shape for every mesh/primitive prim in a link's subtree.
 
@@ -981,7 +981,7 @@ class USDParser(WorldModelParser):
             )
 
     @staticmethod
-    def _read_semantic_labels(prim: Usd.Prim) -> Dict[str, List[str]]:
+    def _read_semantic_labels(prim: Usd.Prim) -> dict[str, list[str]]:
         """
         Reads every ``UsdSemantics.LabelsAPI`` taxonomy directly authored on a prim.
 

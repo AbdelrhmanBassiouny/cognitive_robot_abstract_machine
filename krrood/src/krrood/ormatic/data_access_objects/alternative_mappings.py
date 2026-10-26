@@ -76,7 +76,7 @@ class AlternativeMapping(HasGeneric[T], abc.ABC):
         """
 
     @classmethod
-    def required_pre_build_classes(cls) -> List[type]:
+    def required_pre_build_classes(cls) -> list[type]:
         """
         A list of other classes that have to be built before this one in the `from_dao`
         algorithm.

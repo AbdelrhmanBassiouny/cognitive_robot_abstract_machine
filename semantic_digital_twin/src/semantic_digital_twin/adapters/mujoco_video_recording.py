@@ -7,7 +7,6 @@ from pathlib import Path
 import imageio.v2 as imageio
 import mujoco
 import numpy as np
-from typing_extensions import List
 
 from semantic_digital_twin.adapters.multi_sim import (
     MujocoCamera,
@@ -47,7 +46,7 @@ class RecordedVideo:
     The raw result of a :class:`MujocoVideoRecorder` session, before encoding.
     """
 
-    frames: List[np.ndarray]
+    frames: list[np.ndarray]
     """The captured RGB frames, in playback order."""
 
     frames_per_second: int
@@ -56,7 +55,7 @@ class RecordedVideo:
     """
 
     @property
-    def frame_timestamps(self) -> List[float]:
+    def frame_timestamps(self) -> list[float]:
         """
         Each frame's position, in seconds, on the *encoded video's own timeline*
         (``index / frames_per_second``) - not a real-world or simulated-world clock. Whatever
@@ -170,7 +169,7 @@ class MujocoVideoRecorder:
     Number of world state changes observed since :meth:`start`.
     """
 
-    _frames: List[np.ndarray] = field(init=False, default_factory=list, repr=False)
+    _frames: list[np.ndarray] = field(init=False, default_factory=list, repr=False)
     """
     Frames captured since the last :meth:`start`.
     """

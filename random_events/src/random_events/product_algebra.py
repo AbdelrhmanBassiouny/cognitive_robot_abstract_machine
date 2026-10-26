@@ -6,7 +6,6 @@ import math
 import textwrap
 from dataclasses import field, dataclass
 from typing_extensions import (
-    List,
     TYPE_CHECKING,
     Union,
     Set as teSet,
@@ -202,10 +201,10 @@ class SimpleEvent(AbstractSimpleSet, VariableMap):
             + "\n}"
         )
 
-    def variables_to_json(self) -> List:
+    def variables_to_json(self) -> list:
         return [to_json(variable) for variable in self.keys()]
 
-    def assignments_to_json(self) -> List:
+    def assignments_to_json(self) -> list:
         return [assignment.to_json() for assignment in self.values()]
 
     def to_json(self) -> dict[str, Any]:
@@ -234,7 +233,7 @@ class SimpleEvent(AbstractSimpleSet, VariableMap):
 
     @classmethod
     def from_json_given_variables(
-        cls, data: dict[str, Any], variables: List[Variable]
+        cls, data: dict[str, Any], variables: list[Variable]
     ) -> Self:
         assignments = [
             AbstractCompositeSet.from_json(assignment)

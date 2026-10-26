@@ -19,7 +19,7 @@ import cv2
 import numpy as np
 from py_trees.common import Status
 from semantic_digital_twin.world_description.world_entity import Body
-from typing_extensions import TYPE_CHECKING, Dict, List
+from typing_extensions import TYPE_CHECKING
 
 import robokudo.world as rk_world
 from robokudo.annotators.core import BaseAnnotator
@@ -164,7 +164,7 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
         self.cloud: o3d.geometry.PointCloud | None = None
         self.camera_intrinsics = None
         self.object_body: Body | None = None
-        self.object_bodies_by_name: Dict[str, Body] = {}
+        self.object_bodies_by_name: dict[str, Body] = {}
 
     def detect_from_bb_descriptor(self, color_rgb: npt.NDArray) -> ObjectHypothesis:
         """
@@ -506,7 +506,7 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
 
     def get_rotation_list_based_on_parameters(
         self, rotation_x: float, rotation_y: float, rotation_z: float, rotation_w: float
-    ) -> List[float]:
+    ) -> list[float]:
         """Return a quaternion based on the parametrization of the Annotator.
 
         :param rotation_x: rotation about x-axis

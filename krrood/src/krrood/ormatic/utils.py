@@ -10,15 +10,7 @@ import types
 from contextlib import suppress
 from enum import Enum
 from functools import lru_cache
-from typing_extensions import (
-    TypeVar,
-    List,
-    Iterable,
-    Any,
-    Callable,
-    Generic,
-    get_type_hints,
-)
+from typing_extensions import TypeVar, Iterable, Any, Callable, Generic, get_type_hints
 
 import sqlalchemy
 from sqlalchemy import (
@@ -58,7 +50,7 @@ class classproperty(Generic[T]):
         return self.fget(owner)
 
 
-def classes_of_module(module: types.ModuleType) -> List[type]:
+def classes_of_module(module: types.ModuleType) -> list[type]:
     """
     Get all classes of a given module.
 
@@ -72,7 +64,7 @@ def classes_of_module(module: types.ModuleType) -> List[type]:
     return result
 
 
-def classes_of_package(package: types.ModuleType, recursive=True) -> List[type]:
+def classes_of_package(package: types.ModuleType, recursive=True) -> list[type]:
     """
     Get all classes that are defined in a given python package.
 

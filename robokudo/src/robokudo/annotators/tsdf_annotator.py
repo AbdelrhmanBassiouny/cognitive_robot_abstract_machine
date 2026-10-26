@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 import open3d as o3d
 from py_trees.common import Status
-from typing_extensions import TYPE_CHECKING, Any, Dict, List, Tuple
+from typing_extensions import TYPE_CHECKING, Any
 
 from robokudo.annotators.core import BaseAnnotator, ThreadedAnnotator
 from robokudo.cas import CASViews
@@ -114,7 +114,7 @@ class TSDFAnnotator(ThreadedAnnotator):
         :return: The most similar tracked object or none if no similar object was found.
         """
         best_sim: float = 0.0
-        best_object: Dict[str, Any] | None = None
+        best_object: dict[str, Any] | None = None
         for tracked_object in self.tracked_objects:
             sim = self.translation_comparator.compute_similarity(
                 pose.translation, tracked_object["pose"].translation
@@ -133,20 +133,20 @@ class TSDFAnnotator(ThreadedAnnotator):
         if cas is None:
             return Status.FAILURE
 
-        ohs: List[ObjectHypothesis] = cas.filter_annotations_by_type(ObjectHypothesis)
+        ohs: list[ObjectHypothesis] = cas.filter_annotations_by_type(ObjectHypothesis)
         if len(ohs) == 0:
             return Status.FAILURE
 
         color_to_depth_ratio: ColorToDepthRatio = cas.get(CASViews.COLOR_TO_DEPTH_RATIO)
 
         # Only process ohs with pose
-        oh_data: List[
-            Tuple[ObjectHypothesis, PoseAnnotation, Tuple[int, int, int, int]]
+        oh_data: list[
+            tuple[ObjectHypothesis, PoseAnnotation, tuple[int, int, int, int]]
         ] = []
         for oh in ohs:
             poses = cas.filter_by_type(PoseAnnotation, oh.annotations)
             if len(poses) > 0:
-                roi: Tuple[int, int, int, int] = color_to_depth_ratio.depth_region(
+                roi: tuple[int, int, int, int] = color_to_depth_ratio.depth_region(
                     oh.roi.roi
                 ).get_corner_points()
                 oh_data.append((oh, poses[0], roi))
@@ -170,8 +170,8 @@ class TSDFAnnotator(ThreadedAnnotator):
             self.get_cas().get(CASViews.DEPTH_IMAGE)
         )
 
-        geometries: List[o3d.geometry.Geometry] = []
-        masks: List[npt.NDArray[np.uint8]] = []
+        geometries: list[o3d.geometry.Geometry] = []
+        masks: list[npt.NDArray[np.uint8]] = []
         for i, (oh, pose, roi) in enumerate(oh_data):
             mask: npt.NDArray[np.uint8] = oh.roi.mask
             if mask is None:
@@ -268,10 +268,10 @@ class TSDFAnnotator(ThreadedAnnotator):
     def get_visualization_image(
         self,
         image: npt.NDArray[np.uint8],
-        oh_data: List[
-            Tuple[ObjectHypothesis, PoseAnnotation, Tuple[int, int, int, int]]
+        oh_data: list[
+            tuple[ObjectHypothesis, PoseAnnotation, tuple[int, int, int, int]]
         ],
-        masks: List[npt.NDArray[np.uint8]],
+        masks: list[npt.NDArray[np.uint8]],
     ) -> npt.NDArray[np.uint8]:
         """Get an image containing the bounding boxes and masks of objects.
 
@@ -303,7 +303,7 @@ class TSDFAnnotator(ThreadedAnnotator):
 
     def get_visualization_geometries(
         self, volume: TSDFAnnotation
-    ) -> List[o3d.geometry.Geometry]:
+    ) -> list[o3d.geometry.Geometry]:
         """Get visualization geometries for the TSDF volume depending on the visualization mode.
 
         :param volume: The TSDF volume annotation to visualize.

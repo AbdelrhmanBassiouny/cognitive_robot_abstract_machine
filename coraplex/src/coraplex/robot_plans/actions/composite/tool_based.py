@@ -7,7 +7,7 @@ from functools import cached_property
 
 import numpy as np
 from scipy.spatial.transform import Rotation
-from typing_extensions import Any, List, Tuple
+from typing_extensions import Any
 
 from semantic_digital_twin.datastructures.alignment import AlignmentPair
 from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
@@ -140,7 +140,7 @@ class ToolMotionAction(FullBodyControlledAction, ABC, HasTcpGoalThresholds):
         """
 
     @cached_property
-    def _waypoints(self) -> List[Point3]:
+    def _waypoints(self) -> list[Point3]:
         """
         :return: The sampled waypoints of the tool path in the world frame.
         """
@@ -155,7 +155,7 @@ class ToolMotionAction(FullBodyControlledAction, ABC, HasTcpGoalThresholds):
         return waypoints
 
     @property
-    def _alignment_pairs(self) -> List[AlignmentPair]:
+    def _alignment_pairs(self) -> list[AlignmentPair]:
         """
         :return: The normal pairs that keep the tool aligned with its target during
             the motion, or an empty list if there is no alignment target.
@@ -478,7 +478,7 @@ class PouringAction(FullBodyControlledAction, HasTcpGoalThresholds):
 
     def _approach_direction(
         self, target_pose: Pose, robot_pose: Pose
-    ) -> Tuple[float, float]:
+    ) -> tuple[float, float]:
         """
         :return: The XY unit vector from the robot toward the target container,
             snapped to the target's nearest local axis so the pour never aims at a
@@ -507,7 +507,7 @@ class PouringAction(FullBodyControlledAction, HasTcpGoalThresholds):
             return approach_x, approach_y
         return float(best[0]) / snapped_norm, float(best[1]) / snapped_norm
 
-    def _pour_poses(self) -> Tuple[Pose, Pose]:
+    def _pour_poses(self) -> tuple[Pose, Pose]:
         """
         :return: The pre-pour pose next to the target container's rim and the tilted
             pouring pose.

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field, replace
-from typing_extensions import TYPE_CHECKING, Any, Callable, List, TypeVar
+from typing_extensions import TYPE_CHECKING, Any, Callable, TypeVar
 
 from krrood.entity_query_language.core.base_expressions import (
     Selectable,
@@ -308,7 +308,7 @@ class NounPhrase(HasNumber, VerbalizationFragment):
     head: VerbalizationFragment
     """The noun leaf or sub-phrase the determiner attaches to."""
 
-    additional_heads: List[VerbalizationFragment] = field(default_factory=list)
+    additional_heads: list[VerbalizationFragment] = field(default_factory=list)
     """Further disjunctive alternatives to :attr:`head`, each joined with *"or"* and given its
     own indefinite article from its own phonology (*"a Body or a Region"*). Empty for an
     ordinary single-headed noun phrase."""
@@ -316,7 +316,7 @@ class NounPhrase(HasNumber, VerbalizationFragment):
     definiteness: Definiteness = Definiteness.INDEFINITE
     """Determiner-system feature — selects *"a/an"* / *"the"* / no determiner."""
 
-    modifiers: List[VerbalizationFragment] = field(default_factory=list)
+    modifiers: list[VerbalizationFragment] = field(default_factory=list)
     """Post-modifiers following the head (e.g. *"of the Root"*, *"where … such that …"*)."""
 
     modifier_separator: Separator = Separator.SPACE
@@ -367,7 +367,7 @@ class PossessiveChain(VerbalizationFragment):
     BankTransaction"*).
     """
 
-    parts: List[PathStep]
+    parts: list[PathStep]
     """The chain's navigation path (:class:`PathStep` hops), innermost-last."""
 
     root_fragment: VerbalizationFragment
@@ -433,7 +433,7 @@ def fold_fragment(
     *,
     word: Callable[[str], _T],
     role: Callable[[str, SemanticRole, SourceReference | None], _T],
-    phrase: Callable[[List[_T], str], _T],
+    phrase: Callable[[list[_T], str], _T],
     block: Callable[[BlockFragment], _T],
 ) -> _T:
     """

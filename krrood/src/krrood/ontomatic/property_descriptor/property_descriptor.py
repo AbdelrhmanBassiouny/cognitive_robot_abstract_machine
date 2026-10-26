@@ -4,7 +4,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field, fields
 from functools import cached_property, lru_cache
 
-from typing_extensions import ClassVar, Set, Any, Iterable, Dict, Tuple, List
+from typing_extensions import ClassVar, Any, Iterable, Dict, List
 
 from krrood.ontomatic.property_descriptor.monitored_container import (
     MonitoredContainer,
@@ -98,13 +98,13 @@ class PropertyDescriptor(Symbol):
     """
     A mapping from descriptor class to the mapping from domain types to range types for that descriptor class.
     """
-    all_domains: ClassVar[Dict[type[PropertyDescriptor], Set[SymbolType]]] = (
+    all_domains: ClassVar[dict[type[PropertyDescriptor], set[SymbolType]]] = (
         defaultdict(set)
     )
     """
     A set of all domain types for this descriptor class.
     """
-    all_ranges: ClassVar[Dict[type[PropertyDescriptor], Set[SymbolType]]] = defaultdict(
+    all_ranges: ClassVar[dict[type[PropertyDescriptor], set[SymbolType]]] = defaultdict(
         set
     )
     """
@@ -310,7 +310,7 @@ class PropertyDescriptor(Symbol):
     def get_superproperties_associations(
         cls,
         domain_type: SymbolType | WrappedClass,
-    ) -> Tuple[Association, ...]:
+    ) -> tuple[Association, ...]:
         """
         :param domain_type: The domain type that has the required association(s).
         :return: The associations that have the given domain type as a source and have a descriptor type that

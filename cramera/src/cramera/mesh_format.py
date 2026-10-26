@@ -6,8 +6,6 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from typing_extensions import Tuple
-
 
 class MeshFormat(StrEnum):
     """
@@ -35,7 +33,7 @@ class MeshFormat(StrEnum):
     """
 
     @classmethod
-    def suffixes(cls) -> Tuple[str, ...]:
+    def suffixes(cls) -> tuple[str, ...]:
         """
         Every known mesh suffix, in the order the members are declared.
         """

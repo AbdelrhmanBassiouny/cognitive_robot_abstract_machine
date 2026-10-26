@@ -25,7 +25,7 @@ from semantic_digital_twin.world_description.world_entity import (
     SemanticAnnotation,
     Body,
 )
-from typing_extensions import Any, Dict, Self, List, TYPE_CHECKING
+from typing_extensions import Any, Self, TYPE_CHECKING
 
 from coraplex.datastructures.enums import ExecutionType
 from coraplex.exceptions import (
@@ -86,7 +86,7 @@ class PerceptionQuery(SubclassJSONSerializer):
     existing orientation is kept. See :meth:`Detection.apply_to`.
     """
 
-    def from_world(self) -> List[Body]:
+    def from_world(self) -> list[Body]:
         """
         Answer this query from the world model alone.
 
@@ -114,7 +114,7 @@ class PerceptionQuery(SubclassJSONSerializer):
             if VisibleTo(entity=body, camera=robot_camera)()
         ]
 
-    def to_json(self, **kwargs) -> Dict[str, Any]:
+    def to_json(self, **kwargs) -> dict[str, Any]:
         result = super().to_json(**kwargs)
         result["semantic_annotation"] = to_json(self.semantic_annotation, **kwargs)
         result["region"] = to_json(self.region, **kwargs)
@@ -123,7 +123,7 @@ class PerceptionQuery(SubclassJSONSerializer):
         return result
 
     @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+    def _from_json(cls, data: dict[str, Any], **kwargs) -> Self:
         tracker = WorldEntityWithIDKwargsTracker.from_kwargs(kwargs)
         return cls(
             semantic_annotation=from_json(data["semantic_annotation"], **kwargs),
@@ -155,7 +155,7 @@ class Detection:
 
     def apply_to(
         self, world: World, trust_orientation: bool = True
-    ) -> List[IsPerceivable]:
+    ) -> list[IsPerceivable]:
         """
         Write this detection into ``world``, moving the perceived body to where it was
         seen.
@@ -222,7 +222,7 @@ class Detection:
             yaw=np.pi if flip_x and not flip_z else 0,
         )
 
-    def resolve_annotations(self, world: World) -> List[IsPerceivable]:
+    def resolve_annotations(self, world: World) -> list[IsPerceivable]:
         """
         Find the annotations in ``world`` that this detection identified.
 
@@ -272,7 +272,7 @@ class PerceptionInterface(ABC):
 
     @staticmethod
     def narrow_to_single_detection(
-        detections: List[Detection],
+        detections: list[Detection],
         query: PerceptionQuery,
         accept_first_if_multiple: bool,
     ) -> Detection:

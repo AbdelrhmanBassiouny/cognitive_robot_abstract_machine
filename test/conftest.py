@@ -49,7 +49,7 @@ from semantic_digital_twin.adapters.package_resolver import PathResolver
 from semantic_digital_twin.collision_checking.collision_matrix import (
     MaxAvoidedCollisionsOverride,
 )
-from typing_extensions import Iterator, List, TypeVar
+from typing_extensions import Iterator, TypeVar
 
 CallbackT = TypeVar("CallbackT", bound=Callback)
 """
@@ -1110,7 +1110,7 @@ class RosPublishers:
     on a world outliving the test publishes on a node that is already destroyed.
     """
 
-    started: List[Callback] = field(default_factory=list)
+    started: list[Callback] = field(default_factory=list)
     """
     The publishers started so far, in the order they were started.
     """

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 import numpy as np
 from random_events.interval import Bound, Interval, SimpleInterval
-from typing_extensions import Any, List, Self
+from typing_extensions import Any, Self
 
 from probabilistic_model.exceptions import ShapeMismatchError
 from probabilistic_model.probabilistic_circuit.tensorized.array_types import (
@@ -294,7 +294,7 @@ class ContinuousLayerWithConstrainedSupport(ContinuousLayerWithDensity, ABC):
         return self.__class__(self.variable, self.interval[mask], self.bounds[mask])
 
     @classmethod
-    def concatenate(cls, layers: List[Self]) -> Self:
+    def concatenate(cls, layers: list[Self]) -> Self:
         return cls(
             layers[0].variable,
             np.concatenate([layer.interval for layer in layers]),

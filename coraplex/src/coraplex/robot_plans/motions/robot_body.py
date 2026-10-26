@@ -2,7 +2,7 @@ from __future__ import annotations
 
 # %% Imports
 from dataclasses import dataclass
-from typing_extensions import Optional
+from typing_extensions import List, Optional
 
 
 from giskardpy.motion_statechart.goals.templates import Parallel

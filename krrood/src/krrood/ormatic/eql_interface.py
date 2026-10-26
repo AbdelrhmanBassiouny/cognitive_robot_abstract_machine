@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing_extensions import Callable, List, Any
+from typing_extensions import Callable, Any
 import operator
 
 import sqlalchemy.inspection
@@ -160,13 +160,13 @@ class DAOAttributeResolutionError(AttributeResolutionError):
     The attribute name that could not be resolved on the DAO class.
     """
 
-    def mapped_column_names(self) -> List[str]:
+    def mapped_column_names(self) -> list[str]:
         """
         :return: The names of all columns mapped on the DAO class.
         """
         return sorted(sqlalchemy.inspection.inspect(self.dao_class).columns.keys())
 
-    def mapped_relationship_names(self) -> List[str]:
+    def mapped_relationship_names(self) -> list[str]:
         """
         :return: The names of all relationships mapped on the DAO class.
         """
@@ -241,7 +241,7 @@ class EmptyAttributeChainError(AttributeResolutionError):
     The DAO class the empty chain started from.
     """
 
-    attribute_names: List[str]
+    attribute_names: list[str]
     """
     The (empty) list of attribute names collected from the chain.
     """
@@ -820,7 +820,7 @@ class EQLTranslator:
         if self.eql_query._distinct_on:
             self.sql_query = self.sql_query.distinct()
 
-    def evaluate(self) -> List[Any]:
+    def evaluate(self) -> list[Any]:
         """
         Evaluate the translated SQL query.
 
@@ -843,7 +843,7 @@ class EQLTranslator:
 
         raise UnsupportedQuantifierError(self.quantifier_type)
 
-    def _evaluate_set_of(self) -> List[Any]:
+    def _evaluate_set_of(self) -> list[Any]:
         """
         Evaluate a set_of() query.
 
@@ -944,7 +944,7 @@ class EQLTranslator:
         parts = self._collect_logical_parts(query)
         return self._combine_logical_parts(parts, or_)
 
-    def _collect_logical_parts(self, query: Any) -> List[Any]:
+    def _collect_logical_parts(self, query: Any) -> list[Any]:
         """
         Collect parts from a binary logical expression.
 
@@ -969,7 +969,7 @@ class EQLTranslator:
 
         return parts
 
-    def _combine_logical_parts(self, parts: List[Any], combiner: Any) -> Any | None:
+    def _combine_logical_parts(self, parts: list[Any], combiner: Any) -> Any | None:
         """
         Combine logical parts using a combiner function.
 
@@ -1261,7 +1261,7 @@ class EQLTranslator:
 
         return self._walk_attribute_chain(current_dao, attribute_names)
 
-    def _collect_attribute_chain(self, query: Attribute) -> List[str]:
+    def _collect_attribute_chain(self, query: Attribute) -> list[str]:
         """
         Collect attribute names from the chain.
 
@@ -1295,7 +1295,7 @@ class EQLTranslator:
 
         return base_class
 
-    def _walk_attribute_chain(self, current_dao: type, names: List[str]) -> Any:
+    def _walk_attribute_chain(self, current_dao: type, names: list[str]) -> Any:
         """
         Walk the attribute chain and return the final column.
 
@@ -1427,7 +1427,7 @@ class EQLTranslator:
             return sa_not(inner) if inner is not None else None
         return None
 
-    def _extract_logical_children(self, node: Any) -> List[Any]:
+    def _extract_logical_children(self, node: Any) -> list[Any]:
         """
         Extract child conditions from an AND/OR node.
 

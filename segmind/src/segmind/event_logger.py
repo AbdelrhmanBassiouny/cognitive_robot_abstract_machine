@@ -13,7 +13,7 @@ from threading import RLock
 from segmind.datastructures.event_plotter import EventPlotter
 from segmind.datastructures.events import DetectionEvent, EventWithTrackedObjects
 from segmind.datastructures.object_tracker import ObjectTrackerFactory
-from typing_extensions import List, Callable, Tuple
+from typing_extensions import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ class EventCallbacks(UserDict):
     def __setitem__(
         self,
         key: type[DetectionEvent],
-        value: List[Tuple[ConditionFunction, CallbackFunction]],
+        value: list[tuple[ConditionFunction, CallbackFunction]],
     ):
         if key not in self:
             super().__setitem__(key, value)
@@ -51,7 +51,7 @@ class EventLogger:
     """
     A boolean indicating whether events should be annotated.
     """
-    events_to_annotate: List[type[DetectionEvent]] = field(default=None)
+    events_to_annotate: list[type[DetectionEvent]] = field(default=None)
     """
     A list of event types that should be annotated if annotation is enabled.
     """
@@ -59,7 +59,7 @@ class EventLogger:
     """
     A dictionary that maps event types to a list of callbacks that should be called when the event occurs.
     """
-    timeline: List[DetectionEvent] = field(default_factory=list, init=False)
+    timeline: list[DetectionEvent] = field(default_factory=list, init=False)
     """
     A list of all events.
     """
@@ -185,7 +185,7 @@ class EventLogger:
         logger.debug("Events:")
         logger.debug(self.__str__())
 
-    def get_events(self) -> List[DetectionEvent]:
+    def get_events(self) -> list[DetectionEvent]:
         """
         Get all events that have been logged.
         """

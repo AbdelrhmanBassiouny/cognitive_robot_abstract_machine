@@ -10,8 +10,7 @@ from dataclasses import is_dataclass
 from textwrap import dedent, indent
 from sqlalchemy.orm import DeclarativeBase as SQLTable
 
-from typing_extensions import Any, TYPE_CHECKING, List
-from typing_extensions import Tuple, Dict
+from typing_extensions import Any, TYPE_CHECKING
 
 from krrood.ripple_down_rules.datastructures.callable_expression import (
     CallableExpression,
@@ -59,7 +58,7 @@ class Expert(ABC):
     case.
     """
 
-    all_expert_answers: List | None = None
+    all_expert_answers: list | None = None
     """
     A list of all expert answers, used for testing purposes.
     """
@@ -142,7 +141,7 @@ class Expert(ABC):
     def save_answers(
         self,
         path: str | None = None,
-        expert_answers: List[Tuple[Dict, str]] | None = None,
+        expert_answers: list[tuple[dict, str]] | None = None,
     ):
         """
         Save the expert answers to a file.
@@ -175,7 +174,7 @@ class Expert(ABC):
             json.dump(all_answers, f)
 
     def _save_to_python(
-        self, path: str, expert_answers: List[Tuple[Dict, str]] | None = None
+        self, path: str, expert_answers: list[tuple[dict, str]] | None = None
     ):
         """
         Save the expert answers to a Python file.
@@ -521,7 +520,7 @@ class Oracle(Expert):
     differs.
     """
 
-    simple_attribute_value_types: Tuple[type, ...] = (bool, int, float, str, type(None))
+    simple_attribute_value_types: tuple[type, ...] = (bool, int, float, str, type(None))
     """
     The attribute value types the oracle is willing to build a differentiating condition
     from.
@@ -568,7 +567,7 @@ class Oracle(Expert):
 
     def _first_distinguishing_attribute(
         self, case: Any, corner_case: Any, exclude: set
-    ) -> Tuple[str, Any]:
+    ) -> tuple[str, Any]:
         """
         Find the first simple attribute that differs between a case and its corner case.
 
@@ -592,7 +591,7 @@ class Oracle(Expert):
         raise NoDistinguishingAttributeFound(case, corner_case)
 
     @staticmethod
-    def _attribute_dict(obj: Any) -> Dict[str, Any]:
+    def _attribute_dict(obj: Any) -> dict[str, Any]:
         """
         Get a name-to-value mapping of an object's attributes, regardless of whether it
         is a SQLAlchemy mapped instance, a dataclass, or any other object.

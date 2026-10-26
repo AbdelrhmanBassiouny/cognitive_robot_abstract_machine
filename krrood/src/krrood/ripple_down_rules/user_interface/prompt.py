@@ -8,7 +8,6 @@ from colorama import Fore, Style
 from pygments import highlight
 from pygments.formatters.terminal import TerminalFormatter
 from pygments.lexers.python import PythonLexer
-from typing_extensions import Tuple
 
 from krrood.ripple_down_rules.datastructures.callable_expression import (
     CallableExpression,
@@ -41,7 +40,7 @@ class UserPrompt:
         case_query: CaseQuery,
         prompt_for: PromptFor,
         prompt_str: str | None = None,
-    ) -> Tuple[str | None, CallableExpression | None]:
+    ) -> tuple[str | None, CallableExpression | None]:
         """
         Prompt the user for an executable python expression to the given case query.
 
@@ -111,7 +110,7 @@ class UserPrompt:
         prompt_for: PromptFor,
         prompt_str: str | None = None,
         code_to_modify: str | None = None,
-    ) -> Tuple[str | None, AST | None]:
+    ) -> tuple[str | None, AST | None]:
         """
         Prompt the user for input.
 
@@ -195,7 +194,7 @@ class UserPrompt:
 
     def prompt_user_input_and_parse_to_expression(
         self, shell: IPythonShell | None = None, user_input: str | None = None
-    ) -> Tuple[str | None, ast.AST | None]:
+    ) -> tuple[str | None, ast.AST | None]:
         """
         Prompt the user for input.
 

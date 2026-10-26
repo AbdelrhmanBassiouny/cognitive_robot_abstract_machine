@@ -8,16 +8,7 @@ from functools import cached_property
 from types import UnionType, EllipsisType
 
 import numpy as np
-from typing_extensions import (
-    Any,
-    Dict,
-    Hashable,
-    Iterable,
-    Iterator,
-    List,
-    TYPE_CHECKING,
-    get_args,
-)
+from typing_extensions import Any, Hashable, Iterable, Iterator, TYPE_CHECKING, get_args
 from krrood.parametrization.exceptions import (
     AmbiguousVariableName,
     AttributeNotParameterized,
@@ -146,7 +137,7 @@ class SampleColumn:
     The variable of the attribute the column sets.
     """
 
-    values_by_sample_value: Dict[float, Hashable] | None = None
+    values_by_sample_value: dict[float, Hashable] | None = None
     """
     The value of the attribute for every value of a symbolic column, or ``None`` if the
     samples are the values themselves.
@@ -758,7 +749,7 @@ class UnderspecifiedParameters(ModelQueryParameters):
 
     def _sample_columns_of(
         self, variables: Iterable[random_events.variable.Variable]
-    ) -> List[SampleColumn]:
+    ) -> list[SampleColumn]:
         """
         :param variables: The variables of a model, in the order of the columns of its
             samples.
@@ -767,7 +758,7 @@ class UnderspecifiedParameters(ModelQueryParameters):
         :raises AmbiguousVariableName: If several attributes of the statement have the
             name of a variable.
         """
-        attribute_matches_by_name: Dict[str, List[AttributeMatch]] = {}
+        attribute_matches_by_name: dict[str, list[AttributeMatch]] = {}
         for attribute_match in self.statement._matches_with_variables_:
             attribute_matches_by_name.setdefault(
                 attribute_match.name_from_variable_access_path, []
@@ -800,7 +791,7 @@ class UnderspecifiedParameters(ModelQueryParameters):
     @staticmethod
     def _values_by_sample_value(
         variable_: random_events.variable.Variable, attribute_match: AttributeMatch
-    ) -> Dict[float, Hashable] | None:
+    ) -> dict[float, Hashable] | None:
         """
         :param variable_: A variable of a model.
         :param attribute_match: The attribute the variable belongs to.
@@ -839,8 +830,8 @@ class UnderspecifiedParameters(ModelQueryParameters):
     @staticmethod
     def _by_sample_value(
         variable_: random_events.variable.Variable,
-        values_by_hash: Dict[int, Hashable],
-    ) -> Dict[float, Hashable]:
+        values_by_hash: dict[int, Hashable],
+    ) -> dict[float, Hashable]:
         """
         :param variable_: A symbolic variable of a model.
         :param values_by_hash: The value of the attribute for the hash of every element
@@ -850,7 +841,7 @@ class UnderspecifiedParameters(ModelQueryParameters):
         :raises DomainElementsIndistinguishableInSamples: If two hashes round to the
             same float.
         """
-        result: Dict[float, Hashable] = {}
+        result: dict[float, Hashable] = {}
         for hash_, value in values_by_hash.items():
             sample_value = float(hash_)
             if sample_value in result:

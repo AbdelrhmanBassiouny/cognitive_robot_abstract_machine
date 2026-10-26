@@ -55,7 +55,7 @@ class UnivariateDistribution(ProbabilisticModel, DataclassDeepcopyMixin):
     variable: Variable
 
     @property
-    def variables(self) -> Tuple[Variable, ...]:
+    def variables(self) -> tuple[Variable, ...]:
         return (self.variable,)
 
     @property
@@ -153,7 +153,7 @@ class ContinuousDistribution(UnivariateDistribution):
             raise UndefinedOperationError(self)
 
     def log_conditional(
-        self, point: Dict[Variable, Any]
+        self, point: dict[Variable, Any]
     ) -> LogConditioning[DiracDeltaDistribution]:
         value = point[self.variable]
         log_pdf_value = self.log_likelihood(np.array([[value]]))[0]
@@ -288,7 +288,7 @@ class ContinuousDistributionWithConstrainedSupport(ContinuousDistribution):
         """
         raise NotImplementedError
 
-    def apply_translation(self, translation: Dict[Variable, float]):
+    def apply_translation(self, translation: dict[Variable, float]):
         new_interval = SimpleInterval.from_data(
             self.interval.lower + translation[self.variable],
             self.interval.upper + translation[self.variable],
@@ -297,7 +297,7 @@ class ContinuousDistributionWithConstrainedSupport(ContinuousDistribution):
         )
         self.interval = new_interval
 
-    def apply_scaling(self, scaling: Dict[Variable, float]):
+    def apply_scaling(self, scaling: dict[Variable, float]):
         new_interval = SimpleInterval.from_data(
             self.interval.lower * scaling[self.variable],
             self.interval.upper * scaling[self.variable],
@@ -354,13 +354,13 @@ class DiscreteDistribution(UnivariateDistribution):
         return self
 
     @abstractmethod
-    def probabilities_for_plotting(self) -> Dict[int | str, float]:
+    def probabilities_for_plotting(self) -> dict[int | str, float]:
         """
         :return: The probabilities as dict that can be plotted.
         """
         raise NotImplementedError
 
-    def plot(self, **kwargs) -> List[go.Bar]:
+    def plot(self, **kwargs) -> list[go.Bar]:
         """
         Plot the distribution.
         """
@@ -394,7 +394,7 @@ class DiscreteDistribution(UnivariateDistribution):
         condition = self.composite_set_from_event(event)
         return self.log_conditional_of_composite_set(condition)
 
-    def log_conditional(self, point: Dict[Variable, Any]) -> LogConditioning[Self]:
+    def log_conditional(self, point: dict[Variable, Any]) -> LogConditioning[Self]:
         truncation = self.log_truncated(
             SimpleEvent.from_data(
                 {self.variable: point[self.variable]}
@@ -472,7 +472,7 @@ class SymbolicDistribution(DiscreteDistribution):
         result.normalize()
         return LogTruncation(result, np.log(probability))
 
-    def probabilities_for_plotting(self) -> Dict[int | str, float]:
+    def probabilities_for_plotting(self) -> dict[int | str, float]:
         return {
             str(element): self.probabilities[hash(element)]
             for element in self.variable.domain.simple_sets
@@ -547,7 +547,7 @@ class IntegerDistribution(ContinuousDistribution, DiscreteDistribution):
                 mode |= singleton(key)
         return UnivariateLogMode(mode, np.log(max_likelihood))
 
-    def probabilities_for_plotting(self) -> Dict[int | str, float]:
+    def probabilities_for_plotting(self) -> dict[int | str, float]:
         return {x: p_x for x, p_x in self.probabilities.items() if p_x > 0}
 
     def log_conditional_from_simple_interval_if_not_singleton(
@@ -596,19 +596,19 @@ class IntegerDistribution(ContinuousDistribution, DiscreteDistribution):
         )
         return VariableMap({self.variable: result})
 
-    def plot(self, **kwargs) -> List[go.Bar]:
+    def plot(self, **kwargs) -> list[go.Bar]:
         height = (
             max(self.probabilities.values()) * SCALING_FACTOR_FOR_EXPECTATION_IN_PLOT
         )
         return super().plot() + [self.univariate_expectation_trace(height)]
 
-    def apply_translation(self, translation: Dict[Variable, int]):
+    def apply_translation(self, translation: dict[Variable, int]):
         new_probabilities = MissingDict(float)
         for key, value in self.probabilities.items():
             new_probabilities[key + translation[self.variable]] = value
         self.probabilities = new_probabilities
 
-    def apply_scaling(self, scaling: Dict[Variable, int]):
+    def apply_scaling(self, scaling: dict[Variable, int]):
         new_probabilities = MissingDict(float)
         for key, value in self.probabilities.items():
             new_probabilities[key * scaling[self.variable]] = value
@@ -713,7 +713,7 @@ class DiracDeltaDistribution(ContinuousDistribution):
     def __repr__(self):
         return f"δ({self.variable.name})"
 
-    def plot(self, **kwargs) -> List:
+    def plot(self, **kwargs) -> list:
         lower_border = self.location - 1
         upper_border = self.location + 1
         pdf_trace = go.Scatter(

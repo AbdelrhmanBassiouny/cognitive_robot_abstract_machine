@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from typing_extensions import Tuple, Union
+from typing_extensions import Union
 
 
 # %% viewer entity identifiers
@@ -83,7 +83,7 @@ class LabelledGroup(StrEnum):
         return member
 
     @classmethod
-    def legend(cls) -> Tuple[LabelledGroup, ...]:
+    def legend(cls) -> tuple[LabelledGroup, ...]:
         """
         Every group of this kind, in declaration order, for a view's legend.
         """

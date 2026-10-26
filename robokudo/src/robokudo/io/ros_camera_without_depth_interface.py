@@ -27,7 +27,7 @@ import numpy as np
 import open3d as o3d
 from message_filters import Subscriber
 from sensor_msgs.msg import CameraInfo, Image
-from typing_extensions import Any, Tuple, TYPE_CHECKING, List
+from typing_extensions import Any, TYPE_CHECKING
 
 from robokudo.cas import CASViews
 from robokudo.io.camera_interface import ROSCameraInterface
@@ -83,7 +83,7 @@ class ROSCameraWithoutDepthInterface(ROSCameraInterface):
         self.rk_logger.info(f"  {camera_config.topic_color}")
         self.rk_logger.info(f"  {camera_config.topic_camera_info}")
 
-        self.color: Tuple[npt.NDArray] | None = None
+        self.color: tuple[npt.NDArray] | None = None
         """Latest RGB image data"""
 
         self.camera_info: CameraInfo | None = None
@@ -97,10 +97,10 @@ class ROSCameraWithoutDepthInterface(ROSCameraInterface):
         The identity, since there is no depth image.
         """
 
-        self.camera_translation: List[float] | None = None
+        self.camera_translation: list[float] | None = None
         """Camera translation from TF"""
 
-        self.camera_quaternion: List[float] | None = None
+        self.camera_quaternion: list[float] | None = None
         """Camera rotation as quaternion from TF"""
 
         self.timestamp: builtin_interfaces.msg.Time | None = None
@@ -116,8 +116,8 @@ class ROSCameraWithoutDepthInterface(ROSCameraInterface):
         print("ROSCameraWithoutDepthInterface initialized")
 
     def rotate_camera_intrinsics(
-        self, K: npt.NDArray, image_size: Tuple[int, int], rotation: str = "90_ccw"
-    ) -> Tuple[npt.NDArray, Tuple[int, int]]:
+        self, K: npt.NDArray, image_size: tuple[int, int], rotation: str = "90_ccw"
+    ) -> tuple[npt.NDArray, tuple[int, int]]:
         """
         Adjust camera intrinsics matrix for image rotation.
 
@@ -158,7 +158,7 @@ class ROSCameraWithoutDepthInterface(ROSCameraInterface):
 
     def rotate_image_and_intrinsics(
         self, img: npt.NDArray, K: npt.NDArray, rotation: str = "90_ccw"
-    ) -> Tuple[npt.NDArray, npt.NDArray, Tuple[int, int]]:
+    ) -> tuple[npt.NDArray, npt.NDArray, tuple[int, int]]:
         """
         Rotate an image and adjust its camera intrinsics accordingly.
 

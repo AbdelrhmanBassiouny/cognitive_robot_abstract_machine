@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing_extensions import Tuple, assert_never, Any, Self
+from typing_extensions import assert_never, Any, Self
 
 import numpy as np
 
@@ -123,7 +123,7 @@ class Sage10kRotation(HasXYZ):
     The format is roll(x), pitch (y), and yaw (z). They are given in degrees.
     """
 
-    def as_roll_pitch_yaw_in_radians(self) -> Tuple[float, float, float]:
+    def as_roll_pitch_yaw_in_radians(self) -> tuple[float, float, float]:
         conversion_factor = math.pi / 180
         return (
             self.x * conversion_factor,
@@ -272,7 +272,7 @@ class Sage10kWall(Sage10kWithID):
         )
 
     @property
-    def wall_length_and_yaw(self) -> Tuple[float, float]:
+    def wall_length_and_yaw(self) -> tuple[float, float]:
         """
         :return: The length of the wall and the yaw that can be used for creating it with
         `Wall.create_with_new_body_in_world`.

@@ -8,7 +8,7 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass, field
 
-from typing_extensions import Any, Dict, List, TypeVar
+from typing_extensions import Any, TypeVar
 
 from probabilistic_model.adapters.converter import Converter
 from probabilistic_model.adapters.exceptions import NoConversionPathError
@@ -38,7 +38,7 @@ class CircuitRepresentations:
     layered circuit.
     """
 
-    converters: List[type[Converter]] = field(
+    converters: list[type[Converter]] = field(
         default_factory=lambda: [
             RustworkxCircuitToLayeredCircuitConverter,
             LayeredCircuitToRustworkxCircuitConverter,
@@ -52,7 +52,7 @@ class CircuitRepresentations:
 
     def converters_between(
         self, circuit_type: type, representation: type
-    ) -> List[type[Converter]]:
+    ) -> list[type[Converter]]:
         """
         :param circuit_type: The representation to convert from. A subclass of a
             representation, such as a learned rustworkx circuit, converts like it.
@@ -61,7 +61,7 @@ class CircuitRepresentations:
             other, empty if the circuit already has the representation.
         :raises NoConversionPathError: If no chain of converters connects them.
         """
-        chains: Dict[type, List[type[Converter]]] = {circuit_type: []}
+        chains: dict[type, list[type[Converter]]] = {circuit_type: []}
         unvisited = deque([circuit_type])
         while unvisited:
             current = unvisited.popleft()

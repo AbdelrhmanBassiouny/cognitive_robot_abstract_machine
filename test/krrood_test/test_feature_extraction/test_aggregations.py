@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing_extensions import List, Self
+from typing_extensions import Self
 
 import pytest
 
@@ -112,7 +112,7 @@ def test_aggregation_count_values(example_scenario):
 def test_only_marked_methods_are_statistics():
     @dataclass
     class Owner:
-        items: List[SceneObject]
+        items: list[SceneObject]
 
     @dataclass(eq=False)
     class PartiallyMarkedAggregations(AggregationStatistic[Owner]):
@@ -133,11 +133,11 @@ def test_only_marked_methods_are_statistics():
 def test_registry_is_isolated_between_unrelated_subclasses():
     @dataclass
     class OwnerA:
-        items: List[SceneObject]
+        items: list[SceneObject]
 
     @dataclass
     class OwnerB:
-        items: List[SceneObject]
+        items: list[SceneObject]
 
     @dataclass(eq=False)
     class AggregationsA(AggregationStatistic[OwnerA]):
@@ -163,7 +163,7 @@ def test_registry_is_isolated_between_unrelated_subclasses():
 def test_inherited_statistics_are_visible_in_subclass():
     @dataclass
     class Owner:
-        items: List[SceneObject]
+        items: list[SceneObject]
 
     @dataclass(eq=False)
     class BaseAggregations(AggregationStatistic[Owner]):
@@ -182,7 +182,7 @@ def test_inherited_statistics_are_visible_in_subclass():
 def test_own_registry_contains_only_directly_defined_methods():
     @dataclass
     class Owner:
-        items: List[SceneObject]
+        items: list[SceneObject]
 
     @dataclass(eq=False)
     class BaseAggregations(AggregationStatistic[Owner]):
@@ -433,8 +433,8 @@ def test_aggregation_statistic_role_taker_type_is_the_bound_domain_type():
 def test_statistics_are_registered_under_the_field_of_the_given_variable():
     @dataclass
     class Owner:
-        items: List[SceneObject]
-        rooms: List[SceneRoom]
+        items: list[SceneObject]
+        rooms: list[SceneRoom]
 
     @dataclass(eq=False)
     class TwoFieldAggregations(AggregationStatistic[Owner]):
@@ -464,7 +464,7 @@ def test_aggregation_statistic_rejects_a_field_name_string():
 def test_aggregation_statistic_rejects_a_variable_that_is_not_an_attribute():
     @dataclass
     class Owner:
-        items: List[SceneObject]
+        items: list[SceneObject]
 
     with pytest.raises(InvalidAggregatedFieldError):
         aggregation_statistic(variable(Owner))
@@ -473,7 +473,7 @@ def test_aggregation_statistic_rejects_a_variable_that_is_not_an_attribute():
 def test_aggregation_statistic_rejects_an_attribute_of_an_attribute():
     @dataclass
     class Owner:
-        items: List[SceneObject]
+        items: list[SceneObject]
 
     with pytest.raises(InvalidAggregatedFieldError):
         aggregation_statistic(variable(Owner).items[0].type)

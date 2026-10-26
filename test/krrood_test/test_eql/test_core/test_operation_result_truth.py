@@ -9,7 +9,6 @@ on how the value is stored.
 
 from dataclasses import dataclass
 
-from typing_extensions import List
 
 from krrood.entity_query_language.core.base_expressions import (
     OperationResult,
@@ -31,7 +30,7 @@ from krrood.entity_query_language.operators.set_operations import Union
 
 def truth_values(
     expression: SymbolicExpression, sources: OperationResult | None = None
-) -> List[bool]:
+) -> list[bool]:
     """
     :param expression: The expression to evaluate.
     :param sources: The incoming result to evaluate against, if any.

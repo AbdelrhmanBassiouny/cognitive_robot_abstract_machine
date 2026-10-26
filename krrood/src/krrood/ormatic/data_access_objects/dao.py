@@ -17,7 +17,7 @@ from sqlalchemy.orm import (
     RelationshipProperty,
     selectinload,
 )
-from typing_extensions import get_origin, Any, TypeVar, List, Tuple
+from typing_extensions import get_origin, Any, TypeVar
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import Attribute, IndexByValue
@@ -131,22 +131,22 @@ class DataAccessObjectSchema:
     introspection, relationship classification and MRO walks per converted instance.
     """
 
-    data_column_names: Tuple[str, ...]
+    data_column_names: tuple[str, ...]
     """
     Names of all data columns (no primary keys, foreign keys or polymorphic markers).
     """
 
-    single_relationships: Tuple[SingleRelationship, ...]
+    single_relationships: tuple[SingleRelationship, ...]
     """
     Single-valued relationships of this DAO class.
     """
 
-    collection_relationships: Tuple[CollectionRelationship, ...]
+    collection_relationships: tuple[CollectionRelationship, ...]
     """
     Collection-valued relationships of this DAO class.
     """
 
-    relationship_keys: Tuple[str, ...]
+    relationship_keys: tuple[str, ...]
     """
     The keys of all relationships of the DAO class.
     """
@@ -262,38 +262,38 @@ class AlternativePartitionPlan:
     alternatively mapped base class.
     """
 
-    parent_data_column_names: Tuple[str, ...]
+    parent_data_column_names: tuple[str, ...]
     """
     Data column names that belong to the alternatively mapped base.
     """
 
-    own_data_column_names: Tuple[str, ...]
+    own_data_column_names: tuple[str, ...]
     """
     Data column names that belong to this DAO's own tables.
     """
 
-    intermediate_attribute_keys: Tuple[str, ...]
+    intermediate_attribute_keys: tuple[str, ...]
     """
     Column attribute keys of intermediate ancestors not covered by the parent.
     """
 
-    parent_single_relationships: Tuple[SingleRelationship, ...]
+    parent_single_relationships: tuple[SingleRelationship, ...]
     """
     Single-valued relationships that belong to the alternatively mapped base.
     """
 
-    parent_collection_relationships: Tuple[CollectionRelationship, ...]
+    parent_collection_relationships: tuple[CollectionRelationship, ...]
     """
     Collection relationships that belong to the alternatively mapped base.
     """
 
-    own_single_relationships: Tuple[SingleRelationship, ...]
+    own_single_relationships: tuple[SingleRelationship, ...]
     """
     Single-valued relationships that belong to this DAO's own tables,
     i.e. those not covered by the alternatively mapped base.
     """
 
-    own_collection_relationships: Tuple[CollectionRelationship, ...]
+    own_collection_relationships: tuple[CollectionRelationship, ...]
     """
     Collection relationships that belong to this DAO's own tables,
     i.e. those not covered by the alternatively mapped base.
@@ -448,7 +448,7 @@ def _read_single_relationship(
 
 
 @lru_cache(maxsize=None)
-def _get_set_field_names(clazz: type) -> Tuple[str, ...]:
+def _get_set_field_names(clazz: type) -> tuple[str, ...]:
     """
     :param clazz: The domain class to inspect.
     :return: The names of all fields annotated as sets.
@@ -461,7 +461,7 @@ def _get_set_field_names(clazz: type) -> Tuple[str, ...]:
 
 
 @lru_cache(maxsize=None)
-def _get_tuple_field_names(clazz: type) -> Tuple[str, ...]:
+def _get_tuple_field_names(clazz: type) -> tuple[str, ...]:
     """
     :param clazz: The domain class to inspect.
     :return: The names of all fields annotated as tuples.
@@ -706,8 +706,8 @@ class DataAccessObject(HasGeneric[T]):
     def _fill_relationships_from_plan(
         self,
         source_object: Any,
-        single_relationships: Tuple[SingleRelationship, ...],
-        collection_relationships: Tuple[CollectionRelationship, ...],
+        single_relationships: tuple[SingleRelationship, ...],
+        collection_relationships: tuple[CollectionRelationship, ...],
         state: ToDataAccessObjectState,
     ) -> None:
         """
@@ -896,7 +896,7 @@ class DataAccessObject(HasGeneric[T]):
     def _discover_dependencies(
         self,
         state: FromDataAccessObjectState,
-        discovery_order: List[FromDataAccessObjectWorkItem],
+        discovery_order: list[FromDataAccessObjectWorkItem],
     ) -> None:
         """
         Phase 1: Discovery (DFS) to identify all reachable DAOs.
@@ -921,7 +921,7 @@ class DataAccessObject(HasGeneric[T]):
     def _fill_domain_objects(
         self,
         state: FromDataAccessObjectState,
-        discovery_order: List[FromDataAccessObjectWorkItem],
+        discovery_order: list[FromDataAccessObjectWorkItem],
     ):
         """
         Phase 2: Filling (Bottom-Up) to initialize domain objects.
@@ -972,7 +972,7 @@ class DataAccessObject(HasGeneric[T]):
     def _finalize_containers(
         self,
         state: FromDataAccessObjectState,
-        discovery_order: List[FromDataAccessObjectWorkItem],
+        discovery_order: list[FromDataAccessObjectWorkItem],
     ) -> None:
         """
         Convert temporary lists to their final container types.
@@ -1003,7 +1003,7 @@ class DataAccessObject(HasGeneric[T]):
     def _call_post_inits(
         self,
         state: FromDataAccessObjectState,
-        discovery_order: List[FromDataAccessObjectWorkItem],
+        discovery_order: list[FromDataAccessObjectWorkItem],
     ) -> None:
         """
         Phase 4: Call post_init or __post_init__ on all objects.

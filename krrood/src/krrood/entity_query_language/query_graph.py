@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from uuid import UUID
 
 from ordered_set import OrderedSet
-from typing_extensions import ClassVar, Dict, Any
+from typing_extensions import ClassVar, Any
 
 from krrood.entity_query_language.rules.conclusion import Conclusion
 from krrood.entity_query_language.rules.conclusion_selector import ConclusionSelector
@@ -84,7 +84,7 @@ class QueryGraph:
     The graph representation of the query, used for visualization and introspection.
     """
 
-    expression_node_map: Dict[SymbolicExpression, QueryNode] = field(
+    expression_node_map: dict[SymbolicExpression, QueryNode] = field(
         init=False, default_factory=dict
     )
     """

@@ -10,16 +10,12 @@ import re
 from functools import lru_cache
 
 from typing_extensions import (
-    Set,
     Any,
     TypeVar,
-    List,
-    Dict,
     Callable,
     Iterator,
     Union,
     Type,
-    Tuple,
     TYPE_CHECKING,
     Hashable,
     Iterable,
@@ -55,8 +51,8 @@ class IDGenerator:
 
 
 def generate_combinations(
-    generators_dict: Dict[str, Iterable[Any]],
-) -> Iterator[Dict[str, Any]]:
+    generators_dict: dict[str, Iterable[Any]],
+) -> Iterator[dict[str, Any]]:
     """
     Yield all combinations of generator values as keyword-argument dictionaries.
 
@@ -68,7 +64,7 @@ def generate_combinations(
         yield dict(zip(generators_dict.keys(), combination))
 
 
-def make_list(value: Any) -> List:
+def make_list(value: Any) -> list:
     """
     Make a list from a value.
 
@@ -101,7 +97,7 @@ def make_tuple(value: Any) -> Any:
     return tuple(value) if is_iterable(value) else (value,)
 
 
-def make_set(value: Any) -> Set:
+def make_set(value: Any) -> set:
     """
     Make a set from a value.
 
@@ -159,7 +155,7 @@ T = TypeVar("T")
 
 
 def chain_stages(
-    stages: List[Callable[[OperationResult | None], Iterator[OperationResult]]],
+    stages: list[Callable[[OperationResult | None], Iterator[OperationResult]]],
     initial: OperationResult | None,
 ) -> Iterator[OperationResult]:
     """
@@ -196,7 +192,7 @@ def chain_stages(
 
 
 @lru_cache
-def get_function_argument_names(function: Callable) -> List[str]:
+def get_function_argument_names(function: Callable) -> list[str]:
     """
     :param function: A function to inspect
     :return: The argument names of the function
@@ -206,10 +202,10 @@ def get_function_argument_names(function: Callable) -> List[str]:
 
 def merge_args_and_kwargs(
     function_or_class: Callable,
-    args: Tuple[Any, ...],
-    kwargs: Dict[str, Any],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
     ignore_first: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Merge the arguments and keyword-arguments of a function/class into a dict of
     keyword-arguments. If a class is passed, the arguments are assumed to be the
@@ -240,8 +236,8 @@ def merge_args_and_kwargs(
 
 
 def convert_args_and_kwargs_into_hashable_key(
-    dictionary: Dict[str, Any],
-) -> Tuple[Any, ...]:
+    dictionary: dict[str, Any],
+) -> tuple[Any, ...]:
     """
     Generates a hashable key from the dictionary.
 

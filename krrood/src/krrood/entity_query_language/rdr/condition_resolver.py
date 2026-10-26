@@ -22,7 +22,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from typing_extensions import TYPE_CHECKING, Any, List
+from typing_extensions import TYPE_CHECKING, Any
 
 from krrood.entity_query_language.rdr.backward_inference import ConclusionSufficientConditionSets
 
@@ -191,7 +191,7 @@ class CornerCaseKnowledgeResolver(ConditionResolver):
 class ChainConditionResolver(ConditionResolver):
     """A Chain-of-Responsibility that tries each resolver in order, returning the first match."""
 
-    resolvers: List[ConditionResolver] = field(default_factory=list)
+    resolvers: list[ConditionResolver] = field(default_factory=list)
     """Ordered list of :class:`ConditionResolver` strategies to try, in priority order."""
 
     def resolve(

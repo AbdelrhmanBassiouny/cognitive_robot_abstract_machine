@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 import pytest
 from uuid import UUID, uuid4
 
-from typing_extensions import Callable, Dict, Iterator, List
+from typing_extensions import Callable, Iterator
 
 from krrood.entity_query_language.backends import (
     EntityQueryLanguageGenerativeBackend,
@@ -68,10 +68,10 @@ class TrialProbe:
     """
 
     def __init__(self):
-        self.calls: List[TrialCall] = []
+        self.calls: list[TrialCall] = []
 
 
-_registered_probes: Dict[UUID, TrialProbe] = {}
+_registered_probes: dict[UUID, TrialProbe] = {}
 """
 `TrialProbe` instances, keyed by the id a `RecordingAction` carries as `probe_key`.
 

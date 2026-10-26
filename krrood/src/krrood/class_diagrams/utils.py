@@ -12,16 +12,7 @@ from functools import lru_cache
 from uuid import UUID
 
 import typing_extensions
-from typing_extensions import (
-    Any,
-    Callable,
-    Dict,
-    List,
-    Tuple,
-    TypeVar,
-    TypeVarTuple,
-    get_origin,
-)
+from typing_extensions import Any, Callable, TypeVar, TypeVarTuple, get_origin
 
 from krrood import logger
 from krrood.class_diagrams.exceptions import CouldNotResolveType
@@ -33,7 +24,7 @@ from krrood.utils import (
 )
 
 
-def classes_of_module(module) -> List[type]:
+def classes_of_module(module) -> list[type]:
     """
     Get all classes of a given module.
 
@@ -100,7 +91,7 @@ def behaves_like_a_built_in_type(
     )
 
 
-def common_base_class(types: List[type]) -> type | None:
+def common_base_class(types: list[type]) -> type | None:
     """
     Return the lowest common ancestor of *types*, or ``None`` if the only common
     ancestor is :class:`object`.
@@ -232,8 +223,8 @@ class TypeHintResolutionResult:
 
 
 def get_and_resolve_generic_type_hints_of_object_using_substitutions(
-    object_: Any, substitution: Dict[TypeVar, type]
-) -> Dict[str, TypeHintResolutionResult]:
+    object_: Any, substitution: dict[TypeVar, type]
+) -> dict[str, TypeHintResolutionResult]:
     """
     Resolve generic type hints of an object using a substitution dictionary.
 
@@ -249,7 +240,7 @@ def get_and_resolve_generic_type_hints_of_object_using_substitutions(
 
 def resolve_type(
     type_to_resolve: Any,
-    substitution: Dict[TypeVar, Any],
+    substitution: dict[TypeVar, Any],
 ) -> TypeHintResolutionResult:
     """
     Resolve type variables in a type.
@@ -297,8 +288,8 @@ def resolve_type(
 
 @lru_cache
 def get_type_hints_of_object(
-    object_: Any, namespace: Tuple[Tuple[str, Any], ...] = ()
-) -> Dict[str, Any]:
+    object_: Any, namespace: tuple[tuple[str, Any], ...] = ()
+) -> dict[str, Any]:
     """
     Get the type hints of an object.
 
@@ -337,7 +328,7 @@ def get_type_hints_of_object(
 
 
 @lru_cache(maxsize=None)
-def _scope_from_imports_by_mtime(source_path: str, mtime: float) -> Dict[str, Any]:
+def _scope_from_imports_by_mtime(source_path: str, mtime: float) -> dict[str, Any]:
     """
     Import scope for *source_path*, cached per ``(source_path, mtime)``.
 
@@ -352,7 +343,7 @@ def _scope_from_imports_by_mtime(source_path: str, mtime: float) -> Dict[str, An
     return get_scope_from_imports(file_path=source_path)
 
 
-def _cached_scope_from_imports(source_path: str) -> Dict[str, Any]:
+def _cached_scope_from_imports(source_path: str) -> dict[str, Any]:
     """
     Return the import scope of *source_path*, reusing a per-file cache.
 
@@ -397,7 +388,7 @@ def _count_of_modules_that_finished_initializing() -> int:
 @lru_cache(maxsize=None)
 def _fallback_scope_for_import_generation(
     source_path: str, generation: int
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Recompute *source_path*'s import scope from scratch, memoized per import-system
     generation.

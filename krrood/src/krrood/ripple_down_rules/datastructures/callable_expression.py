@@ -8,7 +8,7 @@ from copy import copy
 from enum import Enum
 from types import GeneratorType
 
-from typing_extensions import Any, List, Tuple, Dict, Set, get_origin
+from typing_extensions import Any, get_origin
 
 from krrood.code_generation.source_extraction_utils import extract_function_source
 from krrood.ripple_down_rules.datastructures.case import create_case, Case
@@ -28,13 +28,13 @@ class VariableVisitor(ast.NodeVisitor):
     A visitor to extract all variables and comparisons from a python expression represented as an AST tree.
     """
 
-    compares: List[Tuple[ast.Name | ast.Call, ast.cmpop, ast.Name | ast.Call]]
-    variables: Set[str]
-    all: List[ast.BoolOp]
+    compares: list[tuple[ast.Name | ast.Call, ast.cmpop, ast.Name | ast.Call]]
+    variables: set[str]
+    all: list[ast.BoolOp]
 
     def __init__(self):
         self.variables = set()
-        self.attributes: Dict[ast.Name, ast.Attribute] = {}
+        self.attributes: dict[ast.Name, ast.Attribute] = {}
         self.types = set()
         self.callables = set()
         self.compares = list()
@@ -110,9 +110,9 @@ class CallableExpression:
     def __init__(
         self,
         user_input: str | None = None,
-        conclusion_type: Tuple[type, ...] | None = None,
+        conclusion_type: tuple[type, ...] | None = None,
         expression_tree: AST | None = None,
-        scope: Dict[str, Any] | None = None,
+        scope: dict[str, Any] | None = None,
         conclusion: Any | None = None,
         mutually_exclusive: bool = True,
     ):
@@ -147,14 +147,14 @@ class CallableExpression:
             else:
                 conclusion_type = (conclusion_type,)
         self.conclusion_type = conclusion_type
-        self.expected_types: Set[type] = (
+        self.expected_types: set[type] = (
             set(conclusion_type) if conclusion_type is not None else set()
         )
         if list in self.expected_types:
             self.expected_types.remove(list)
         if set in self.expected_types:
             self.expected_types.add(set)
-        self.scope: Dict[str, Any] | None = scope if scope is not None else {}
+        self.scope: dict[str, Any] | None = scope if scope is not None else {}
         self.scope = get_used_scope(self.user_input, self.scope)
         self.expression_tree: AST = (
             expression_tree

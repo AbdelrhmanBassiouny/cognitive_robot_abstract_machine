@@ -53,7 +53,7 @@ class CaseQuery:
     """
     The name of the attribute.
     """
-    _attribute_types: Tuple[type, ...]
+    _attribute_types: tuple[type, ...]
     """
     The type(s) of the attribute.
     """
@@ -70,7 +70,7 @@ class CaseQuery:
     """
     The default value of the attribute. This is used when the target value is not provided.
     """
-    scope: Dict[str, Any] | None = field(
+    scope: dict[str, Any] | None = field(
         default_factory=lambda: inspect.currentframe().f_back.f_back.f_globals
     )
     """
@@ -95,7 +95,7 @@ class CaseQuery:
     Whether the case is a dict representing the arguments of an actual function or not,
     most likely means it came from RDRDecorator, the the rdr takes function arguments and outputs the function output.
     """
-    function_args_type_hints: Dict[str, type] | None = None
+    function_args_type_hints: dict[str, type] | None = None
     """
     The type hints of the function arguments. This is used to recreate the function signature.
     """
@@ -211,14 +211,14 @@ class CaseQuery:
         return ",".join([t.__name__ for t in self.core_attribute_type])
 
     @property
-    def core_attribute_type(self) -> Tuple[type, ...]:
+    def core_attribute_type(self) -> tuple[type, ...]:
         """
         :return: The core type of the attribute.
         """
         return tuple(t for t in self.attribute_type if t not in (set, list))
 
     @property
-    def attribute_type(self) -> Tuple[type, ...]:
+    def attribute_type(self) -> tuple[type, ...]:
         """
         :return: The type of the attribute.
         """

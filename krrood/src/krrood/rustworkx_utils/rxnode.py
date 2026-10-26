@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing_extensions import ClassVar, List
+from typing_extensions import ClassVar
 
 from krrood.rustworkx_utils.graph_visualizer import GraphVisualizer
 from krrood.rustworkx_utils.utils import ColorLegend
@@ -60,12 +60,12 @@ class RWXNode:
         self.graph.remove_edge(parent.id, self.id)
 
     @property
-    def ancestors(self) -> List[RWXNode]:
+    def ancestors(self) -> list[RWXNode]:
         node_ids = rx.ancestors(self.graph, self.id)
         return [self.graph[n_id] for n_id in node_ids]
 
     @property
-    def parents(self) -> List[RWXNode]:
+    def parents(self) -> list[RWXNode]:
         # In this environment rustworkx returns node data objects directly
         return self.graph.predecessors(self.id)
 
@@ -87,17 +87,17 @@ class RWXNode:
         self._primary_parent_id = value.id
 
     @property
-    def children(self) -> List[RWXNode]:
+    def children(self) -> list[RWXNode]:
         # In this environment rustworkx returns node data objects directly
         return self.graph.successors(self.id)
 
     @property
-    def descendants(self) -> List[RWXNode]:
+    def descendants(self) -> list[RWXNode]:
         desc_ids = rx.descendants(self.graph, self.id)
         return [self.graph[nid] for nid in desc_ids]
 
     @property
-    def leaves(self) -> List[RWXNode]:
+    def leaves(self) -> list[RWXNode]:
         return [
             n for n in [self] + self.descendants if self.graph.out_degree(n.id) == 0
         ]

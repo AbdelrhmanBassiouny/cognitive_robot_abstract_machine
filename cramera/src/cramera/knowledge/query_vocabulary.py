@@ -12,7 +12,7 @@ from enum import Enum
 from krrood.class_diagrams.attribute_introspector import DataclassOnlyIntrospector
 from krrood.entity_query_language.scope import eql_factory_namespace
 from krrood.exceptions import DataclassException
-from typing_extensions import Any, Dict, List
+from typing_extensions import Any
 
 from cramera.knowledge.query_domain import QueryDomain
 from cramera.knowledge.workspace_classes import WorkspaceClassIndex
@@ -121,7 +121,7 @@ class VocabularyEntry:
     resolve to.
     """
 
-    def to_payload(self) -> Dict[str, Any]:
+    def to_payload(self) -> dict[str, Any]:
         """
         The JSON-serializable shape the query box reads.
         """
@@ -144,12 +144,12 @@ class QueryVocabulary:
     so what the box offers is what a query can actually name.
     """
 
-    domains: List[QueryDomain] = field(default_factory=list)
+    domains: list[QueryDomain] = field(default_factory=list)
     """
     The ready-made variables a query may range over.
     """
 
-    extra_names: Dict[str, Any] = field(default_factory=dict)
+    extra_names: dict[str, Any] = field(default_factory=dict)
     """
     Further names placed within a query's reach by hand.
     """
@@ -159,21 +159,21 @@ class QueryVocabulary:
     The workspace classes a query may name.
     """
 
-    def entries(self) -> List[VocabularyEntry]:
+    def entries(self) -> list[VocabularyEntry]:
         """
         Every name a query may use, the ones it was built for first.
 
         Ordered variables, entity types, hand-placed names, EQL keywords, then the
         workspace's classes alphabetically, and each name appears once.
         """
-        offered: Dict[str, VocabularyEntry] = {}
+        offered: dict[str, VocabularyEntry] = {}
         for entry in self._variables() + self._hand_placed() + self._factories():
             offered.setdefault(entry.name, entry)
         for entry in self._workspace_classes():
             offered.setdefault(entry.name, entry)
         return list(offered.values())
 
-    def members_of(self, name: str) -> List[VocabularyEntry]:
+    def members_of(self, name: str) -> list[VocabularyEntry]:
         """
         The members that follow this name's dot: fields first, then properties, then
         methods, each named once even when a base class also declares it.
@@ -184,7 +184,7 @@ class QueryVocabulary:
         owner = self._type_named(name)
         if owner is None:
             raise UnknownVocabularyName(name=name)
-        members: Dict[str, VocabularyEntry] = {}
+        members: dict[str, VocabularyEntry] = {}
         offered = (
             self._fields_of(owner)
             + self._declared_members(owner, VocabularyKind.PROPERTY)
@@ -194,7 +194,7 @@ class QueryVocabulary:
             members.setdefault(member.name, member)
         return list(members.values())
 
-    def to_payload(self) -> Dict[str, Any]:
+    def to_payload(self) -> dict[str, Any]:
         """
         The vocabulary as the query box is served it.
         """
@@ -203,7 +203,7 @@ class QueryVocabulary:
             "entries": [entry.to_payload() for entry in self.entries()],
         }
 
-    def members_payload(self, name: str) -> Dict[str, Any]:
+    def members_payload(self, name: str) -> dict[str, Any]:
         """
         One type's members as the query box is served them.
 
@@ -218,7 +218,7 @@ class QueryVocabulary:
 
     # %% where each kind of name comes from
 
-    def _variables(self) -> List[VocabularyEntry]:
+    def _variables(self) -> list[VocabularyEntry]:
         """
         The ready-made variables and the types they range over.
         """
@@ -238,7 +238,7 @@ class QueryVocabulary:
             offered.append(self._type_entry(domain.entity_type))
         return offered
 
-    def _hand_placed(self) -> List[VocabularyEntry]:
+    def _hand_placed(self) -> list[VocabularyEntry]:
         """
         The names placed within a query's reach beside its domains.
         """
@@ -257,7 +257,7 @@ class QueryVocabulary:
             for name, value in self.extra_names.items()
         ]
 
-    def _factories(self) -> List[VocabularyEntry]:
+    def _factories(self) -> list[VocabularyEntry]:
         """
         EQL's own keywords, as the language puts them in every namespace.
         """
@@ -270,7 +270,7 @@ class QueryVocabulary:
             for name, value in sorted(eql_factory_namespace().items())
         ]
 
-    def _workspace_classes(self) -> List[VocabularyEntry]:
+    def _workspace_classes(self) -> list[VocabularyEntry]:
         """
         Every class of the workspace, named by the module a bare name resolves to.
         """
@@ -320,7 +320,7 @@ class QueryVocabulary:
         resolved = self.class_index.resolve(name)
         return resolved if isinstance(resolved, type) else None
 
-    def _fields_of(self, owner: type) -> List[VocabularyEntry]:
+    def _fields_of(self, owner: type) -> list[VocabularyEntry]:
         """
         The dataclass fields of a type, described by what they hold.
 
@@ -343,7 +343,7 @@ class QueryVocabulary:
 
     def _declared_members(
         self, owner: type, kind: VocabularyKind
-    ) -> List[VocabularyEntry]:
+    ) -> list[VocabularyEntry]:
         """
         One kind of member declared on a type or inherited by it, the type's own first.
 

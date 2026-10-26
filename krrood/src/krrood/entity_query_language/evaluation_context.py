@@ -16,16 +16,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 
 from ordered_set import OrderedSet
-from typing_extensions import (
-    Any,
-    Callable,
-    Dict,
-    Iterator,
-    List,
-    Set,
-    Tuple,
-    TYPE_CHECKING,
-)
+from typing_extensions import Any, Callable, Iterator, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.core.base_expressions import (
@@ -150,7 +141,7 @@ class TruthValueOperatorChildren:
     the node's primary ``_parent_`` avoids that ambiguity.
     """
 
-    _ids: Set[uuid.UUID] = field(default_factory=set, init=False)
+    _ids: set[uuid.UUID] = field(default_factory=set, init=False)
     """
     Identifiers of the nodes evaluated as a direct child of a ``TruthValueOperator`` so
     far this pass.
@@ -181,7 +172,7 @@ class EvaluatedExpressionIds:
     The expression ids recorded as evaluated so far this pass.
     """
 
-    _snapshot: Tuple[int, OrderedSet] | None = field(default=None, init=False)
+    _snapshot: tuple[int, OrderedSet] | None = field(default=None, init=False)
     """
     Cached ``(length, snapshot)`` pair.
 
@@ -256,7 +247,7 @@ class SubqueryResultCache:
     replayed to each of them, instead of recomputing it on every outer row.
     """
 
-    _streams: Dict[uuid.UUID, Any] = field(default_factory=dict, init=False)
+    _streams: dict[uuid.UUID, Any] = field(default_factory=dict, init=False)
     """
     Cached result stream keyed by the compiled query node's identifier.
     """
@@ -282,13 +273,13 @@ class EvaluationContext:
     Carries observer state through the evaluation pipeline.
     """
 
-    observers: List[EvaluationObserver] = field(default_factory=list)
+    observers: list[EvaluationObserver] = field(default_factory=list)
     """
     List of observers to notify of evaluation events.
     """
 
-    subtree_containment_cache: Dict[
-        Tuple[uuid.UUID, type[SymbolicExpression]], bool
+    subtree_containment_cache: dict[
+        tuple[uuid.UUID, type[SymbolicExpression]], bool
     ] = field(default_factory=dict)
     """
     Memoizes, per ``(node id, expression type)``, whether a node's subtree contains a
@@ -297,7 +288,7 @@ class EvaluationContext:
     every step.
     """
 
-    expression_index_cache: Dict[
+    expression_index_cache: dict[
         uuid.UUID, weakref.WeakValueDictionary[uuid.UUID, SymbolicExpression]
     ] = field(default_factory=dict)
     """

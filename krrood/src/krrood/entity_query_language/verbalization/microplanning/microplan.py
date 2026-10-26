@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import Dict, Tuple
 
 from krrood.entity_query_language.verbalization.grammar.framework.planner import (
     Planner,
@@ -25,7 +24,7 @@ class Microplan:
     its ``build``) and gives later stages a single source of truth to consult.
     """
 
-    _cache: Dict[Tuple[int, type], object] = field(default_factory=dict)
+    _cache: dict[tuple[int, type], object] = field(default_factory=dict)
     """
     Memoised plans keyed by ``(id(node), planner)`` — node *identity* (not equality,
     which EQL overrides to build comparators) paired with the planner that produced the

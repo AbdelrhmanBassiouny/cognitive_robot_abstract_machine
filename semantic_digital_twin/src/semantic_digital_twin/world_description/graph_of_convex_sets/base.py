@@ -7,7 +7,7 @@ import numpy as np
 from random_events.interval import Interval, SimpleInterval
 from random_events.product_algebra import Event
 from random_events.product_algebra import SimpleEvent
-from typing_extensions import Generic, List, TypeVar
+from typing_extensions import Generic, TypeVar
 
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -66,7 +66,7 @@ class GraphOfConvexSets(Generic[PointT, SearchSpaceT], SubClassSafeGeneric, ABC)
             self.search_space = self._default_search_space()
 
     @abstractmethod
-    def path_from_to(self, start: PointT, goal: PointT) -> List[PointT] | None:
+    def path_from_to(self, start: PointT, goal: PointT) -> list[PointT] | None:
         """
         Calculate a connected path from a start pose to a goal pose.
 

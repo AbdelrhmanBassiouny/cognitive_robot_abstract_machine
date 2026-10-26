@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import zoneinfo
 from dataclasses import dataclass
-from typing_extensions import Any, List, TYPE_CHECKING
+from typing_extensions import Any, TYPE_CHECKING
 
 from sqlalchemy.orm import RelationshipProperty
 
@@ -212,7 +212,7 @@ class ConversionOrderCycle(DataclassException, ValueError):
     because the orders they ask for form a cycle.
     """
 
-    cycle: List[ConversionOrderConstraint]
+    cycle: list[ConversionOrderConstraint]
     """
     The constraints that close the cycle, each one putting its earlier mapping type
     before its later one.

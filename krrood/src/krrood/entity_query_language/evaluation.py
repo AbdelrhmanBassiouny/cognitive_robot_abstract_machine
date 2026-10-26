@@ -8,7 +8,7 @@ pipeline without polluting the core evaluation methods.
 from __future__ import annotations
 
 from ordered_set import OrderedSet
-from typing_extensions import Any, List
+from typing_extensions import Any
 
 from krrood.entity_query_language._monitoring import monitored
 from krrood.entity_query_language.core.base_expressions import (
@@ -199,7 +199,7 @@ class InferenceRecorder(EvaluationObserver):
         register_inference(result.bindings[expression._id_], expression, result)
 
 
-def evaluate_statements_of(condition: SymbolicExpression) -> List[OperationResult]:
+def evaluate_statements_of(condition: SymbolicExpression) -> list[OperationResult]:
     """
     Evaluate *condition* and collect the results of its statements: *condition* itself
     and every condition evaluated within it, except conjunctions, disjunctions and

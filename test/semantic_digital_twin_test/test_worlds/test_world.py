@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import gc
 import os
 import subprocess
@@ -10,7 +12,6 @@ from uuid import UUID, uuid4
 import numpy as np
 import pytest
 from numpy.testing import assert_raises
-from typing_extensions import Optional, Tuple
 
 from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.callbacks.callback import (
@@ -1482,7 +1483,7 @@ def test_rebind_a_cycle_keeps_its_shape(world_setup):
     @dataclass(eq=False)
     class Link:
         body: Body
-        partner: Optional["Link"] = None
+        partner: Link | None = None
 
     world, l1, l2, bf, r1, r2 = world_setup
     world_copy = deepcopy(world)
@@ -2272,7 +2273,7 @@ def test_move_branch_resets_free_connection_derivatives():
 
 def create_world_with_driven_child(
     drive_type: type[WheeledDrive],
-) -> Tuple[World, Body, Body]:
+) -> tuple[World, Body, Body]:
     """
     Builds a world where ``driven_child`` hangs off the root by ``drive_type`` and
     ``new_parent`` sits elsewhere under the root.
@@ -2727,7 +2728,7 @@ def test_is_kinematic_structure_entity_in_world_by_name(world_setup):
 # %% moving a branch keeps both worlds replayable
 
 
-def world_with_branch(branch_length: int) -> Tuple[World, Body]:
+def world_with_branch(branch_length: int) -> tuple[World, Body]:
     """
     Build a world whose root carries one branch of the requested length.
 

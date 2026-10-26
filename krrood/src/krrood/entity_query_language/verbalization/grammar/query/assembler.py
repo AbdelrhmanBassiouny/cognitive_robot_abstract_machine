@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from typing_extensions import List, Tuple
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.expression_structure import walk_chain
@@ -276,7 +275,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
             order_key
         )
 
-    def _expression_signature(self, expression: SymbolicExpression) -> Tuple:
+    def _expression_signature(self, expression: SymbolicExpression) -> tuple:
         """:return: a structural key for *expression* — its kind, root variable, and attribute path —
         so two distinct objects describing the same navigation/aggregate compare equal.
         """
@@ -435,7 +434,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
             return RankingKeyRelation.OTHER
         return RankingKeyRelation.ATTRIBUTE if chain else RankingKeyRelation.SELF
 
-    def _ranked_columns(self, node: SetOf, ranking) -> List[SymbolicExpression]:
+    def _ranked_columns(self, node: SetOf, ranking) -> list[SymbolicExpression]:
         """:return: the reported columns — the selected tuple, with the order key removed when the
         ranking already names it (*"by salary"*), so it is not listed twice.
 
@@ -524,7 +523,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
             find_header=self._for_each_header(report.group_keys, node),
         )
 
-    def _distinct_keys(self, keys: List[SymbolicExpression]) -> VerbalizationFragment:
+    def _distinct_keys(self, keys: list[SymbolicExpression]) -> VerbalizationFragment:
         """:return: *"the distinct <keys>"* — the group keys as a plural population listing, for a
         grouped query that reports nothing but its keys.
 
@@ -545,7 +544,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         )
 
     def _for_each_header(
-        self, keys: List[SymbolicExpression], node: Query
+        self, keys: list[SymbolicExpression], node: Query
     ) -> VerbalizationFragment:
         """:return: the fronted *"For each <key>, report"* frame — the grouping first (it is the row
         dimension of the result), the keys as bare singular labels, then the lowercase verb. A HAVING
@@ -746,7 +745,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
 
     def _apply_subject_restrictions(
         self, plan: QueryPlan, selected: VerbalizationFragment
-    ) -> Tuple[VerbalizationFragment, List[VerbalizationFragment | None]]:
+    ) -> tuple[VerbalizationFragment, list[VerbalizationFragment | None]]:
         """:return: The selection with its inline superlative modifiers attached, and the WHERE's
         clause items — the *"whose"* group (a sub-list of points in hierarchical) then a separate
         *"such that <residual>"* clause (each ``None`` when absent).
@@ -760,7 +759,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         )
         if rendered is None:
             return selected, []
-        post_noun: List[VerbalizationFragment] = list(rendered.inline_modifiers)
+        post_noun: list[VerbalizationFragment] = list(rendered.inline_modifiers)
         if rendered.relative_clauses:
             post_noun.append(
                 oxford_comma(rendered.relative_clauses, Conjunctions.AND.as_fragment())
@@ -814,7 +813,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         node: Query,
         plan: QueryPlan,
         selection: VerbalizationFragment,
-        where_items: List[VerbalizationFragment | None],
+        where_items: list[VerbalizationFragment | None],
         find_header: VerbalizationFragment | None = None,
     ) -> VerbalizationFragment:
         """:return: *"Find <selection>"* + the present clauses (the subject restriction's *"whose"*
@@ -836,7 +835,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
 
     def _trailing_clauses(
         self, node: Query, plan: QueryPlan
-    ) -> List[VerbalizationFragment | None]:
+    ) -> list[VerbalizationFragment | None]:
         """:return: The post-selection clauses, in canonical reading order (``None`` when absent).
 
         The standalone *"ordered by …"* clause is suppressed when a ranking selection already

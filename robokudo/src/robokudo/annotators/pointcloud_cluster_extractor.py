@@ -25,7 +25,7 @@ import open3d as o3d
 from matplotlib import pyplot as plt
 from py_trees.common import Status
 from scipy.spatial.transform import Rotation as R
-from typing_extensions import TYPE_CHECKING, List, Tuple
+from typing_extensions import TYPE_CHECKING
 
 from robokudo.annotators.core import BaseAnnotator, ThreadedAnnotator
 from robokudo.cas import CASViews
@@ -56,7 +56,7 @@ def generate_roi_with_mask_from_points(
     pointcloud_camera_intrinsics: o3d.camera.PinholeCameraIntrinsic,
     cloud: o3d.geometry.PointCloud,
     color_to_depth_ratio: ColorToDepthRatio,
-) -> Tuple[ImageROI, npt.NDArray]:
+) -> tuple[ImageROI, npt.NDArray]:
     """Generate ROI and mask from projected point cloud points.
 
     Projects 3D points to image plane and creates:
@@ -205,11 +205,11 @@ class PointCloudClusterExtractor(ThreadedAnnotator):
         self,
         plane_model: Plane,
         cloud: o3d.geometry.PointCloud,
-    ) -> Tuple[
+    ) -> tuple[
         o3d.geometry.OrientedBoundingBox,
         o3d.geometry.OrientedBoundingBox,
         o3d.geometry.PointCloud,
-        List[int],
+        list[int],
         o3d.geometry.PointCloud,
     ]:
         """Extract points above a detected plane.

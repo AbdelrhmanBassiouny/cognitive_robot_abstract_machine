@@ -3,7 +3,7 @@ from __future__ import annotations
 import cv2
 import numpy as np
 from scipy.spatial.distance import euclidean
-from typing_extensions import TYPE_CHECKING, Any, Iterable, List
+from typing_extensions import TYPE_CHECKING, Any, Iterable
 
 from robokudo.types.annotation import PositionAnnotation
 from robokudo.types.tf import Pose
@@ -120,7 +120,7 @@ class BboxComparator(FeatureComparator):
 class SizeComparator(FeatureComparator):
     """Extended FeatureComparator that computes similarity based on the sum difference between query and object values."""
 
-    def compute_similarity(self, query_value: List, obj_value: List) -> float:
+    def compute_similarity(self, query_value: list, obj_value: list) -> float:
         """Computes similarity of two lists based on their sum differences.
 
         :param query_value: The list to use as a baseline for comparison.

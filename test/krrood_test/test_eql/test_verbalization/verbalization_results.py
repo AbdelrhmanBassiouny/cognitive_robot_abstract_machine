@@ -34,7 +34,7 @@ results: tuple[VerbalizationResult, ...] = (
         AttributeOwnerClass, "the attribute owner class of an Attribute"
     ),
     VerbalizationResult(IsClass, "an object is a class"),
-    VerbalizationResult(IsSubclass, "a subclass is a subclass of a parent or parents"),
+    VerbalizationResult(IsSubclass, "a type is a subclass of a parent or parents"),
     VerbalizationResult(NodeChildren, "the node children of a CanBehaveLikeAVariable"),
     VerbalizationResult(
         NodeDescendants, "the node descendants of a SymbolicExpression"
@@ -51,7 +51,7 @@ results: tuple[VerbalizationResult, ...] = (
     VerbalizationResult(WorksIn, "an employee works in a department"),
     VerbalizationResult(
         InheritancePathLength,
-        "the inheritance path length between a child class and a parent class",
+        "the inheritance path length between a type and another type",
     ),
     VerbalizationResult(
         IsSameSemanticEntity,

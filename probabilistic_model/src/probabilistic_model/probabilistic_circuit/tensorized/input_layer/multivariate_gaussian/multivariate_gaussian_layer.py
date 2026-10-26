@@ -9,7 +9,7 @@ from random_events.interval import singleton
 from random_events.product_algebra import Event, SimpleEvent
 from scipy.stats import multivariate_normal
 from sortedcontainers import SortedSet
-from typing_extensions import Any, List, Self, Tuple
+from typing_extensions import Any, Self
 
 from probabilistic_model.distributions.multivariate_gaussian import (
     MultivariateGaussianDistribution,
@@ -70,7 +70,7 @@ class MultivariateGaussianLayer(AbstractMultivariateGaussianLayer):
     def from_distributions(
         cls,
         variables: SortedSet,
-        distributions: List[MultivariateGaussianDistribution],
+        distributions: list[MultivariateGaussianDistribution],
     ) -> Self:
         """
         :param variables: The variables of the circuit.
@@ -91,7 +91,7 @@ class MultivariateGaussianLayer(AbstractMultivariateGaussianLayer):
         )
 
     @classmethod
-    def concatenate(cls, layers: List[Self]) -> Self:
+    def concatenate(cls, layers: list[Self]) -> Self:
         return cls(
             scope=layers[0].scope.copy(),
             mean=np.concatenate([layer.mean for layer in layers]),
@@ -145,7 +145,7 @@ class MultivariateGaussianLayer(AbstractMultivariateGaussianLayer):
     @memoized
     def log_mode_of_nodes(
         self, variables: SortedSet, cache: QueryCache | None = None
-    ) -> Tuple[List[Event], NodeValues]:
+    ) -> tuple[list[Event], NodeValues]:
         # a Gaussian is most dense at its mean
         scope_variables = self.scope_variables(variables)
         modes = [

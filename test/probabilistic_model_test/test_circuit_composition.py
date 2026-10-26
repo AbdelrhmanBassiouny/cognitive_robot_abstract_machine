@@ -11,7 +11,6 @@ import pytest
 from random_events.interval import closed
 from random_events.product_algebra import Event, SimpleEvent
 from random_events.variable import Continuous, Variable
-from typing_extensions import List
 
 from probabilistic_model.adapters.rustworkx_tensorized.rustworkx_to_tensorized import (
     RustworkxCircuitToLayeredCircuitConverter,
@@ -90,7 +89,7 @@ def event_of(**ranges: tuple) -> Event:
     ).as_composite_set()
 
 
-def variables_of(circuit: ProbabilisticCircuitRepresentation) -> List[Variable]:
+def variables_of(circuit: ProbabilisticCircuitRepresentation) -> list[Variable]:
     """
     :param circuit: A circuit.
     :return: Its variables, as a list that can be compared and read in a report.

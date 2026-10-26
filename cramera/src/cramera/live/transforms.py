@@ -15,7 +15,7 @@ import json
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 
-from typing_extensions import Any, ClassVar, Dict, Iterable, List, Tuple, TYPE_CHECKING
+from typing_extensions import Any, ClassVar, Iterable, TYPE_CHECKING
 
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection1DOF,
@@ -117,7 +117,7 @@ class ConnectionActivity:
     How the connection holds its child frame.
     """
 
-    values: Tuple[float, ...]
+    values: tuple[float, ...]
     """
     The connection's degree-of-freedom positions as last observed; empty when it has
     none and therefore cannot move.
@@ -133,7 +133,7 @@ class ConnectionActivity:
     Who wrote the change :attr:`changed_at` records.
     """
 
-    def structure(self) -> Tuple[str, str, str, str]:
+    def structure(self) -> tuple[str, str, str, str]:
         """
         The part of this entry that a signature covers: everything but its activity.
         """
@@ -156,7 +156,7 @@ class ConnectionActivity:
             return TransformFreshness.SETTLED
         return TransformFreshness.STALE
 
-    def to_payload(self, now: float) -> Dict[str, Any]:
+    def to_payload(self, now: float) -> dict[str, Any]:
         """
         The entry in the JSON shape the viewer reads.
 
@@ -188,12 +188,12 @@ class TransformSnapshot:
     Digest of the graph's structure; the viewer rebuilds only when it changes.
     """
 
-    activities: Tuple[ConnectionActivity, ...] = ()
+    activities: tuple[ConnectionActivity, ...] = ()
     """
     Every connection of the world, in a stable order.
     """
 
-    def to_payload(self, now: float) -> Dict[str, Any]:
+    def to_payload(self, now: float) -> dict[str, Any]:
         """
         The snapshot in the JSON shape the viewer reads.
 
@@ -215,7 +215,7 @@ class TransformGraph:
     snapshot it returns is what the HTTP layer serves.
     """
 
-    activities: Dict[str, ConnectionActivity] = field(default_factory=dict)
+    activities: dict[str, ConnectionActivity] = field(default_factory=dict)
     """
     The newest entry per connection name.
     """
@@ -230,7 +230,7 @@ class TransformGraph:
         :param world: The world holding the degree-of-freedom state.
         :param now: The timestamp a change observed here is stamped with.
         """
-        observed: Dict[str, ConnectionActivity] = {}
+        observed: dict[str, ConnectionActivity] = {}
         for connection in connections:
             name = str(connection.name)
             parent = str(connection.parent.name)
@@ -265,7 +265,7 @@ class TransformGraph:
         return self._snapshot()
 
     @staticmethod
-    def _values(connection: Connection, world: World) -> Tuple[float, ...]:
+    def _values(connection: Connection, world: World) -> tuple[float, ...]:
         """
         A connection's degree-of-freedom positions, rounded to the precision the rest of
         the bridge publishes poses at, so numerical noise does not read as motion.
@@ -282,7 +282,7 @@ class TransformGraph:
         """
         The current entries as the frozen snapshot the HTTP layer serves.
         """
-        ordered: List[ConnectionActivity] = sorted(
+        ordered: list[ConnectionActivity] = sorted(
             self.activities.values(), key=lambda activity: activity.name
         )
         structure = json.dumps([activity.structure() for activity in ordered])

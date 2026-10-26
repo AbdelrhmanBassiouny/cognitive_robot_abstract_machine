@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import Any, Hashable, List, Set, TYPE_CHECKING
+from typing_extensions import Any, Hashable, TYPE_CHECKING
 
 import random_events.variable
 from krrood.entity_query_language.core.variable import Variable
@@ -125,7 +125,7 @@ class MultipleEffectVariablesNotSupported(DataclassException):
     that best explains the effect becomes the primary cause.
     """
 
-    variables: List[random_events.variable.Variable]
+    variables: list[random_events.variable.Variable]
     """
     The declared effect variables.
     """
@@ -159,7 +159,7 @@ class JointQueryAcrossClassesNotSupported(DataclassException):
     referencing zero, or more than one, classes' models yet.
     """
 
-    owner_classes: Set[type]
+    owner_classes: set[type]
     """
     The distinct owner classes found among the query's referenced attributes -- empty
     when it referenced none at all.
@@ -229,7 +229,7 @@ class AmbiguousVariableName(DataclassException):
     The variable of the model.
     """
 
-    attribute_matches: List[AttributeMatch]
+    attribute_matches: list[AttributeMatch]
     """
     The attributes of the match that have the name of the variable.
     """
@@ -263,7 +263,7 @@ class DomainElementsIndistinguishableInSamples(DataclassException):
     The symbolic variable.
     """
 
-    elements: List[Hashable]
+    elements: list[Hashable]
     """
     The elements of the domain whose hashes become the same value in a sample.
     """

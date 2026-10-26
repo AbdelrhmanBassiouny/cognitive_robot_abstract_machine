@@ -8,7 +8,6 @@ from itertools import product
 from types import NoneType
 from typing_extensions import (
     TYPE_CHECKING,
-    Tuple,
     TypeVar,
     Generic,
     TypeVarTuple,
@@ -171,7 +170,7 @@ class Fingertips:
     """
 
     @property
-    def both(self) -> Tuple[Body, Body]:
+    def both(self) -> tuple[Body, Body]:
         """
         The two tips, thumb first.
         """
@@ -282,7 +281,7 @@ class Fingertips:
             self.tool_frame
         ).bounding_box()
 
-    def _reach_along_closing_axis(self, tip: Body) -> Tuple[float, float]:
+    def _reach_along_closing_axis(self, tip: Body) -> tuple[float, float]:
         """
         :param tip: One of the two tips.
         :return: How far its bounding box reaches along :attr:`closing_axis`, as its

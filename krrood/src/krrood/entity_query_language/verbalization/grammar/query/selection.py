@@ -17,7 +17,6 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from typing_extensions import List, Tuple
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import Attribute
@@ -85,7 +84,7 @@ class SelectionAssembler:
 
     def prose(
         self,
-        variables: List[SymbolicExpression],
+        variables: list[SymbolicExpression],
         number: GrammaticalNumber = GrammaticalNumber.SINGULAR,
     ) -> VerbalizationFragment:
         """:return: the selections joined as natural prose *"a, b, and c"* (Oxford comma, no
@@ -129,7 +128,7 @@ class SelectionAssembler:
         return self.context.child(variable)
 
     def parenthesised(
-        self, variables: List[SymbolicExpression]
+        self, variables: list[SymbolicExpression]
     ) -> VerbalizationFragment:
         """:return: the selections as a parenthesised tuple *"(a, b)"* — for a ranked set-of, whose
         *"the top three"* pre-head needs the tuple grouped.
@@ -153,8 +152,8 @@ class SelectionAssembler:
         )
 
     def _folded(
-        self, variables: List[SymbolicExpression]
-    ) -> List[VerbalizationFragment]:
+        self, variables: list[SymbolicExpression]
+    ) -> list[VerbalizationFragment]:
         """:return: the rendered selections, with each maximal run of plain attributes sharing one
         owner folded into a single coordinated genitive, and every other selection rendered alone.
 
@@ -166,7 +165,7 @@ class SelectionAssembler:
         >>> verbalize_expression(the(set_of(employee.department, employee.salary)))
         'Find the department and salary of an Employee'
         """
-        fragments: List[VerbalizationFragment] = []
+        fragments: list[VerbalizationFragment] = []
         for item in group_consecutive_by_owner(variables, self._foldable_attribute):
             if isinstance(item, OwnerGroup):
                 fragments.append(
@@ -181,7 +180,7 @@ class SelectionAssembler:
 
     def _foldable_attribute(
         self, selection: SymbolicExpression
-    ) -> Tuple[SymbolicExpression, PathStep] | None:
+    ) -> tuple[SymbolicExpression, PathStep] | None:
         """:return: ``(owner, terminal_step)`` when *selection* is a plain genitive attribute that
         can share an owner with siblings, else ``None`` — a relational terminal (*"the Robot to
         which …"*) does not coordinate cleanly, so it is left alone.

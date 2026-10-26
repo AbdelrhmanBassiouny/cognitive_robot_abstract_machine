@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 from dataclasses import dataclass
 from typing_extensions import Any
@@ -26,7 +28,7 @@ class ResultMessageMimic:
     """
 
     @classmethod
-    def with_payload(cls, payload: dict) -> "ResultMessageMimic":
+    def with_payload(cls, payload: dict) -> ResultMessageMimic:
         """
         Build a result message around the given payload.
         """

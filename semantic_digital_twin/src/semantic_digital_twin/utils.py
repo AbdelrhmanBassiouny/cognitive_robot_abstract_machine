@@ -7,7 +7,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from functools import lru_cache, wraps
 from pathlib import Path
-from typing_extensions import Any, Tuple, ClassVar
+from typing_extensions import Any, ClassVar
 
 from krrood.class_diagrams.mocking import MockedModule, MockedClass
 from platformdirs import user_cache_dir
@@ -69,7 +69,7 @@ class suppress_stdout_stderr(object):
 
 
 def hacky_urdf_parser_fix(
-    urdf: str, blacklist: Tuple[str] = ("transmission", "gazebo")
+    urdf: str, blacklist: tuple[str] = ("transmission", "gazebo")
 ) -> str:
     # Parse input string
     root = ET.fromstring(urdf)

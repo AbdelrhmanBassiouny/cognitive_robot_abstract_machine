@@ -25,7 +25,7 @@ from semantic_digital_twin.world_description.world_entity import (
     Region,
     SemanticAnnotation,
 )
-from typing_extensions import Any, Dict, List
+from typing_extensions import Any
 
 
 @dataclass
@@ -177,7 +177,7 @@ class BaseWorldDescriptor:
         """
         Create regions and connections from region specs.
         """
-        connections: Dict[str, Connection6DoF] = {}
+        connections: dict[str, Connection6DoF] = {}
 
         with self.world.modify_world():
             for spec in specs:
@@ -210,7 +210,7 @@ class BaseWorldDescriptor:
 
         return connections
 
-    def get_predefined_object_bodies(self) -> List[Body]:
+    def get_predefined_object_bodies(self) -> list[Body]:
         """
         Get list of pre-defined objects.
         """

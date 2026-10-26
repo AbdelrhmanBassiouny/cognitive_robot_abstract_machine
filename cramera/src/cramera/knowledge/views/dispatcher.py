@@ -5,7 +5,7 @@ Dispatch a graph-panel tab name or a double-clicked node id to its view.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing_extensions import Any, Dict
+from typing_extensions import Any
 
 from cramera.knowledge.graph_payload import KnowledgeGraphPayload
 from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase
@@ -33,7 +33,7 @@ class UnknownViewPayload(GraphPanelPayload):
     Human-readable description of the unknown tab name.
     """
 
-    def panel_options(self) -> Dict[str, Any]:
+    def panel_options(self) -> dict[str, Any]:
         """
         The error message; there is no graph to describe.
         """

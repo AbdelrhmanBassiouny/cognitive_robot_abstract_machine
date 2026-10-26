@@ -4,7 +4,6 @@ import logging
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing_extensions import List
 
 from rclpy.publisher import Publisher
 from rclpy.qos import QoSProfile, DurabilityPolicy
@@ -202,7 +201,7 @@ class VizMarkerPublisher(ModelChangeCallback, HasROS2Node):
 
     def _add_markers_for_shapes(
         self,
-        shapes: List[Shape],
+        shapes: list[Shape],
         marker_ns: str,
         frame_names: TfFrameNames,
         force_alpha: float | None = None,

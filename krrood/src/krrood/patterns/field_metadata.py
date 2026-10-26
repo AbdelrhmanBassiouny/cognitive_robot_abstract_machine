@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, fields, is_dataclass
 
-from typing_extensions import Dict, Self, TYPE_CHECKING
+from typing_extensions import Self, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from krrood.class_diagrams.wrapped_field import WrappedField
@@ -18,7 +18,7 @@ class FieldMetadata:
     it back with :meth:`of_field`).
     """
 
-    def as_dict(self) -> Dict[type, Self]:
+    def as_dict(self) -> dict[type, Self]:
         """
         :return: a dataclass-field ``metadata`` mapping carrying this metadata under its own
             type, ready to pass to ``field(metadata=...)``.

@@ -25,7 +25,7 @@ import open3d as o3d
 import torch
 from krrood.ormatic.utils import classproperty
 from py_trees.common import Status
-from typing_extensions import TYPE_CHECKING, Any, Dict, List
+from typing_extensions import TYPE_CHECKING, Any
 from ultralytics import SAM, YOLO
 from ultralytics.utils.plotting import colors
 
@@ -152,7 +152,7 @@ class YoloAnnotator(ThreadedAnnotator):
                 """
                 Class name of the detections that become human hypotheses.
                 """
-                self.ignored_class_names: List[str] = []
+                self.ignored_class_names: list[str] = []
                 """
                 Classes whose detections are neither annotated nor visualized.
                 """
@@ -237,7 +237,7 @@ class YoloAnnotator(ThreadedAnnotator):
         """
         The YOLO detection model, loaded during setup.
         """
-        self.class_names: Dict[int, str] = {}
+        self.class_names: dict[int, str] = {}
         """
         Name of each class the model detects, by class id, loaded during setup.
         """
@@ -269,7 +269,7 @@ class YoloAnnotator(ThreadedAnnotator):
             )
         return super().setup(**kwargs)
 
-    def _load_class_names(self) -> Dict[int, str]:
+    def _load_class_names(self) -> dict[int, str]:
         """
         :return: Name of each class the model detects, by class id.
         """
@@ -323,7 +323,7 @@ class YoloAnnotator(ThreadedAnnotator):
             return color_image
         return get_scaled_color_image_for_depth_image(self.get_cas(), color_image)
 
-    def _detect(self, detection_image: npt.NDArray[np.uint8]) -> List[YoloDetection]:
+    def _detect(self, detection_image: npt.NDArray[np.uint8]) -> list[YoloDetection]:
         """
         :return: The objects the model detects in the image with sufficient confidence.
         """
@@ -367,7 +367,7 @@ class YoloAnnotator(ThreadedAnnotator):
         self,
         detection: YoloDetection,
         detection_image: npt.NDArray[np.uint8],
-        existing_hypotheses: List[ObjectHypothesis],
+        existing_hypotheses: list[ObjectHypothesis],
     ) -> AnnotatedDetection:
         """
         Classify the existing hypothesis the detection overlaps, or else a new one.
@@ -403,7 +403,7 @@ class YoloAnnotator(ThreadedAnnotator):
         )
 
     def _most_overlapped_hypothesis(
-        self, region: Rect, hypotheses: List[ObjectHypothesis]
+        self, region: Rect, hypotheses: list[ObjectHypothesis]
     ) -> ObjectHypothesis | None:
         """
         :return: The hypothesis overlapping the region the most, if it overlaps by more
@@ -498,7 +498,7 @@ class YoloAnnotator(ThreadedAnnotator):
             mask_true_value=self.mask_foreground,
         )
 
-    def _visualize(self, annotated_detections: List[AnnotatedDetection]) -> None:
+    def _visualize(self, annotated_detections: list[AnnotatedDetection]) -> None:
         """
         Draw the annotated hypotheses into the color image, together with their masks in
         precision mode, and output the point clouds of the new hypotheses.

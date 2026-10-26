@@ -11,7 +11,7 @@ import io
 from dataclasses import dataclass, field
 
 import numpy as np
-from typing_extensions import Any, Dict, Iterable, List
+from typing_extensions import Any, Iterable
 from robokudo import world
 from robokudo.io.cas_annotation_codecs import krrood_to_json, krrood_from_json
 from robokudo.io.open3d_codec_utils import (
@@ -410,7 +410,7 @@ class Open3DPinholeCameraIntrinsicCodec(ViewCodec):
         """
         Decode payload data to an Open3D pinhole intrinsic object.
         """
-        payload_data: Dict[str, Any] = payload.payload
+        payload_data: dict[str, Any] = payload.payload
         width = int(payload_data["width"])
         height = int(payload_data["height"])
         intrinsic_matrix = np.asarray(payload_data["intrinsic_matrix"], dtype=float)
@@ -611,7 +611,7 @@ class CASViewCodecRegistry:
 
     def encode_view(
         self, view_name: str, value: Any, strict: bool = True
-    ) -> Dict[str, Any] | None:
+    ) -> dict[str, Any] | None:
         """
         Encode a single CAS view into a storage document.
         """
@@ -639,7 +639,7 @@ class CASViewCodecRegistry:
         """
         Encode multiple CAS views into storage documents.
         """
-        documents: List[Dict[str, Any]] = []
+        documents: list[dict[str, Any]] = []
         for view_name, value in views.items():
             document = self.encode_view(view_name, value, strict=strict)
             if document is not None:

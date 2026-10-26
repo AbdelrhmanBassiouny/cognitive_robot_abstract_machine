@@ -3,7 +3,6 @@ from __future__ import annotations
 import abc
 from abc import ABC
 from dataclasses import field
-from typing_extensions import List
 
 from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.motion_statechart.data_types import ObservationStateValues
@@ -66,7 +65,7 @@ class LocalMinimumReached(MotionStatechartNode):
     Windows size for joint convergence check.
     """
 
-    degrees_of_freedom: List[DegreeOfFreedom] | None = None
+    degrees_of_freedom: list[DegreeOfFreedom] | None = None
     """
     Degrees of freedom to check for convergence.
 

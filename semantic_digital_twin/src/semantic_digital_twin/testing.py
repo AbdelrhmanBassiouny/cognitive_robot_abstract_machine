@@ -65,7 +65,7 @@ class StateChangeCounter(StateChangeCallback):
 
 
 @pytest.fixture
-def world_setup() -> Tuple[
+def world_setup() -> tuple[
     World,
     Body,
     Body,

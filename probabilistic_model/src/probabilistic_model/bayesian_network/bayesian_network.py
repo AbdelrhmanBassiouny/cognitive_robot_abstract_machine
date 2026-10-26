@@ -6,7 +6,7 @@ import numpy as np
 import rustworkx as rx
 from matplotlib import pyplot as plt
 from random_events.variable import Symbolic, Variable
-from typing_extensions import Any, Self, List, Tuple, Set, Iterable, Dict
+from typing_extensions import Any, Self, Iterable
 
 from probabilistic_model.distributions.distributions import SymbolicDistribution
 from probabilistic_model.distributions.helper import make_dirac
@@ -39,7 +39,7 @@ class Node:
     The index of the node in the graph of its circuit.
     """
 
-    product_units: Dict[Any, ProductUnit] = field(
+    product_units: dict[Any, ProductUnit] = field(
         init=False, default_factory=dict, repr=False
     )
     """
@@ -63,7 +63,7 @@ class Node:
         return self.bayesian_network.predecessors(self)[0]
 
     @property
-    def variables(self) -> Tuple[Variable, ...]:
+    def variables(self) -> tuple[Variable, ...]:
         raise NotImplementedError
 
     def as_probabilistic_circuit(self, result: ProbabilisticCircuit):
@@ -110,7 +110,7 @@ class BayesianNetwork:
         return iter(self.graph.nodes())
 
     @property
-    def leaves(self) -> List[Node]:
+    def leaves(self) -> list[Node]:
         return [node for node in self.nodes() if len(self.successors(node)) == 0]
 
     def is_valid(self) -> bool:
@@ -150,19 +150,19 @@ class BayesianNetwork:
         self.add_node(child)
         self.graph.add_edge(parent.index, child.index, None)
 
-    def add_edges_from(self, edges: Iterable[Tuple[Node, Node]]):
+    def add_edges_from(self, edges: Iterable[tuple[Node, Node]]):
         [self.add_edge(*edge) for edge in edges]
 
-    def successors(self, node: Node) -> List[Node]:
+    def successors(self, node: Node) -> list[Node]:
         return self.graph.successors(node.index)
 
-    def descendants(self, unit: Node) -> Set[Node]:
+    def descendants(self, unit: Node) -> set[Node]:
         return {self.graph[unit] for unit in rx.descendants(self.graph, unit.index)}
 
-    def predecessors(self, unit: Node) -> List[Node]:
+    def predecessors(self, unit: Node) -> list[Node]:
         return self.graph.predecessors(unit.index)
 
-    def in_edges(self, node: Node) -> List[Tuple[Node, Node, float | None]]:
+    def in_edges(self, node: Node) -> list[tuple[Node, Node, float | None]]:
         return [
             (
                 self.graph.get_node_data(parent_index),
@@ -172,7 +172,7 @@ class BayesianNetwork:
             for parent_index, _, edge_data in self.graph.in_edges(node.index)
         ]
 
-    def nodes(self) -> List[Node]:
+    def nodes(self) -> list[Node]:
         """
         Return an iterator over the nodes.
 
@@ -180,7 +180,7 @@ class BayesianNetwork:
         """
         return self.graph.nodes()
 
-    def edges(self) -> List[Tuple[Node, Node]]:
+    def edges(self) -> list[tuple[Node, Node]]:
         return [
             (self.graph[parent], self.graph[child])
             for parent, child in self.graph.edge_list()
@@ -263,7 +263,7 @@ class Root(Node):
         return self.distribution.variable
 
     @property
-    def variables(self) -> Tuple[Variable, ...]:
+    def variables(self) -> tuple[Variable, ...]:
         return self.distribution.variables
 
     def as_probabilistic_circuit(self, result: ProbabilisticCircuit):
@@ -293,7 +293,7 @@ class ConditionalProbabilityTable(Node):
     The parent in this case must be exactly one node.
     """
 
-    conditional_probability_distributions: Dict[Any, SymbolicDistribution] = field(
+    conditional_probability_distributions: dict[Any, SymbolicDistribution] = field(
         default_factory=dict
     )
     __hash__ = Node.__hash__
@@ -303,13 +303,13 @@ class ConditionalProbabilityTable(Node):
         return list(self.conditional_probability_distributions.values())[0].variable
 
     @property
-    def variables(self) -> Tuple[Variable, ...]:
+    def variables(self) -> tuple[Variable, ...]:
         return (self.variable,)
 
     def __repr__(self):
         return f"P({self.variable.name}|{self.parent.variable.name})"
 
-    def to_tabulate(self) -> List[List[str]]:
+    def to_tabulate(self) -> list[list[str]]:
         """
         Tabulate the truncated probability table.
 
@@ -368,7 +368,7 @@ class ConditionalProbabilisticCircuit(Node):
     nodes given their parents.
     """
 
-    conditional_probability_distributions: Dict[int, ProbabilisticCircuit] = field(
+    conditional_probability_distributions: dict[int, ProbabilisticCircuit] = field(
         default_factory=dict
     )
     __hash__ = Node.__hash__
@@ -378,7 +378,7 @@ class ConditionalProbabilisticCircuit(Node):
         return super().parent
 
     @property
-    def variables(self) -> Tuple[Variable, ...]:
+    def variables(self) -> tuple[Variable, ...]:
         return tuple(
             list(self.conditional_probability_distributions.values())[0].variables
         )

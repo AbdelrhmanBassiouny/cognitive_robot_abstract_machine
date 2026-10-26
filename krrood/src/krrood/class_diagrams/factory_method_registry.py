@@ -8,7 +8,7 @@ from typing_extensions import TYPE_CHECKING
 from krrood.singleton import SingletonMeta
 
 if TYPE_CHECKING:
-    from typing_extensions import Set
+    pass
 
 
 @dataclass
@@ -22,7 +22,7 @@ class FactoryMethodRegistry(metaclass=SingletonMeta):
     single owned store rather than scattered across foreign function objects.
     """
 
-    names_by_owner: WeakKeyDictionary[type, Set[str]] = field(
+    names_by_owner: WeakKeyDictionary[type, set[str]] = field(
         default_factory=WeakKeyDictionary
     )
     """
@@ -46,12 +46,12 @@ class FactoryMethodRegistry(metaclass=SingletonMeta):
         """
         return any(name in self.names_by_owner.get(klass, ()) for klass in cls.__mro__)
 
-    def names_for(self, cls: type) -> Set[str]:
+    def names_for(self, cls: type) -> set[str]:
         """
         :param cls: The class to inspect.
         :return: Every factory-method name marked on ``cls`` or any of its bases.
         """
-        names: Set[str] = set()
+        names: set[str] = set()
         for klass in cls.__mro__:
             names |= self.names_by_owner.get(klass, set())
         return names

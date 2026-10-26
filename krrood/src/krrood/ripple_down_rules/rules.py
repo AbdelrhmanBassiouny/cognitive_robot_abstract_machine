@@ -7,7 +7,7 @@ from types import NoneType
 from uuid import uuid4
 
 from anytree import Node
-from typing_extensions import List, Self, Dict, Any, Tuple, Set
+from typing_extensions import Self, Dict, Any, Set
 
 from krrood.ripple_down_rules.datastructures.callable_expression import (
     CallableExpression,
@@ -88,7 +88,7 @@ class Rule(ABC):
         self.node._rdr_rule = self
 
     @property
-    def descendants(self) -> List[Rule]:
+    def descendants(self) -> list[Rule]:
         """
         :return: the descendants of this rule, which are the rules that are children of this rule in the ripple down
          rules tree.
@@ -96,7 +96,7 @@ class Rule(ABC):
         return [child._rdr_rule for child in self.node.descendants]
 
     @property
-    def children(self) -> List[Rule]:
+    def children(self) -> list[Rule]:
         """
         :return: the children of this rule, which are the rules that are direct children of this rule in the ripple down
          rules tree.
@@ -249,7 +249,7 @@ class Rule(ABC):
 
     def get_conclusion_as_source_code(
         self, conclusion: Any, parent_indent: str = ""
-    ) -> Tuple[str | None, str]:
+    ) -> tuple[str | None, str]:
         """
         Convert the conclusion of a rule to source code.
 
@@ -427,11 +427,11 @@ class HasAlternativeRule:
     """
     The alternative rule of the rule, which is evaluated when the rule doesn't fire.
     """
-    furthest_alternative: List[Rule] | None = field(init=False, default=None)
+    furthest_alternative: list[Rule] | None = field(init=False, default=None)
     """
     The furthest alternative rule of the rule, which is the last alternative rule in the chain of alternative rules.
     """
-    all_alternatives: List[Rule] | None = field(init=False, default=None)
+    all_alternatives: list[Rule] | None = field(init=False, default=None)
     """
     All alternative rules of the rule, which is all the alternative rules in the chain of alternative rules.
     """
@@ -566,7 +566,7 @@ class MultiClassStopRule(MultiClassRefinementRule):
 
     def get_conclusion_as_source_code(
         self, conclusion: Any, parent_indent: str = ""
-    ) -> Tuple[None, str]:
+    ) -> tuple[None, str]:
         return None, f"{parent_indent}{' ' * 4}pass\n"
 
 
@@ -597,7 +597,7 @@ class MultiClassFilterRule(MultiClassRefinementRule, HasRefinementRule):
 
     def get_conclusion_as_source_code(
         self, conclusion: Any, parent_indent: str = ""
-    ) -> Tuple[None, str]:
+    ) -> tuple[None, str]:
         func, func_call = super().get_conclusion_as_source_code(
             str(conclusion), parent_indent=parent_indent
         )
@@ -671,7 +671,7 @@ class MultiClassTopRule(Rule, HasRefinementRule, HasAlternativeRule):
 
     def get_conclusion_as_source_code(
         self, conclusion: Any, parent_indent: str = ""
-    ) -> Tuple[str, str]:
+    ) -> tuple[str, str]:
         func, func_call = super().get_conclusion_as_source_code(
             str(conclusion), parent_indent=parent_indent
         )

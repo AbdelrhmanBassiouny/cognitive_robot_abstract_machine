@@ -16,7 +16,6 @@ from typing_extensions import (
     get_origin,
     get_args,
     ClassVar,
-    List,
     Type,
     TYPE_CHECKING,
     Optional,
@@ -81,7 +80,7 @@ class WrappedField:
     The property descriptor instance that manages the field.
     """
 
-    container_types: ClassVar[List[type]] = [list, set, tuple, type, Sequence]
+    container_types: ClassVar[list[type]] = [list, set, tuple, type, Sequence]
     """
     A list of container types that are supported by the parser.
     """
@@ -418,7 +417,7 @@ def manually_search_for_class_name(target_class_name: str) -> type:
     return resolved_class
 
 
-def search_class_in_globals(target_class_name: str) -> List[type]:
+def search_class_in_globals(target_class_name: str) -> list[type]:
     """
     Searches for a class with the given name in the current module's globals.
 
@@ -432,7 +431,7 @@ def search_class_in_globals(target_class_name: str) -> List[type]:
     ]
 
 
-def search_class_in_sys_modules(target_class_name: str) -> List[type]:
+def search_class_in_sys_modules(target_class_name: str) -> list[type]:
     """
     Searches for a class with the given name in all loaded modules (via sys.modules).
     """

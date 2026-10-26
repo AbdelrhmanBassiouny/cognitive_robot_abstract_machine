@@ -5,7 +5,7 @@ import logging
 import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing_extensions import Any, Callable, List
+from typing_extensions import Any, Callable
 
 from giskardpy.motion_statechart.data_types import LifeCycleValues
 from giskardpy.motion_statechart.goals.templates import (
@@ -107,7 +107,7 @@ class ExecutesInParallel(LanguageNode, ABC):
     """
 
     @classmethod
-    def _perform_parallel(cls, nodes: List[PlanNode]):
+    def _perform_parallel(cls, nodes: list[PlanNode]):
         """
         Open threads for all nodes and wait for them to finish.
 

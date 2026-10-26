@@ -26,7 +26,7 @@ from enum import StrEnum
 import numpy as np
 import open3d as o3d
 from sensor_msgs.msg import CameraInfo
-from typing_extensions import TYPE_CHECKING, Any, Dict, List, Tuple, TypeVar
+from typing_extensions import TYPE_CHECKING, Any, TypeVar
 
 from robokudo.types.tf import StampedTransform
 
@@ -152,14 +152,14 @@ class CAS:
     Human readable timestamp string.
     """
 
-    views: Dict[str, Any] = field(default_factory=dict)
+    views: dict[str, Any] = field(default_factory=dict)
     """
     Dictionary storing view data, each view stores data that is typically singular for a single CAS.
 
     Example: Sensor data, camera info and cloud which are read from the sensors.
     """
 
-    annotations: List[Annotation] = field(default_factory=list)
+    annotations: list[Annotation] = field(default_factory=list)
     """
     List of annotations, each annotation describes a certain part of the acquired sensor data. In contrast to views
     there can be multiple annotations for the same 'thing' in the data.
@@ -365,7 +365,7 @@ class CAS:
     T = TypeVar("T")
 
     @staticmethod
-    def filter_by_type(type_to_include: type[T], input_list: List[Any]) -> List[T]:
+    def filter_by_type(type_to_include: type[T], input_list: list[Any]) -> list[T]:
         """
         Filter a list to include only objects of a specific type.
 
@@ -377,7 +377,7 @@ class CAS:
             element for element in input_list if isinstance(element, type_to_include)
         ]
 
-    def filter_annotations_by_type(self, type_to_include: type[T]) -> List[T]:
+    def filter_annotations_by_type(self, type_to_include: type[T]) -> list[T]:
         """
         Filter annotations to include only those of a specific type.
 
@@ -388,8 +388,8 @@ class CAS:
 
     @staticmethod
     def _filter_objects(
-        objects: List[Any], criteria: Dict[str, Tuple[str, Any]]
-    ) -> List[Any]:
+        objects: list[Any], criteria: dict[str, tuple[str, Any]]
+    ) -> list[Any]:
         """
         Filters a list of objects based on specified criteria.
 
@@ -425,9 +425,9 @@ class CAS:
     def filter_by_type_and_criteria(
         self,
         type_to_include: type,
-        input_list: List[Any],
-        criteria: Dict[str, Tuple[str, Any]],
-    ) -> List[Any]:
+        input_list: list[Any],
+        criteria: dict[str, tuple[str, Any]],
+    ) -> list[Any]:
         """
         Filters a list of objects based on specified criteria. Objects must be of type 'type_to_include'
 

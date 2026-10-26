@@ -4,7 +4,7 @@ from contextlib import AbstractContextManager, ExitStack, nullcontext
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 
-from typing_extensions import Callable, List, Dict, ClassVar, TYPE_CHECKING
+from typing_extensions import Callable, ClassVar, TYPE_CHECKING
 
 from coraplex.datastructures.enums import ExecutionType
 from coraplex.exceptions import (
@@ -160,7 +160,7 @@ class Executable:
     Base class for executable units.
     """
 
-    execution_list: List[Executable] = field(default_factory=list)
+    execution_list: list[Executable] = field(default_factory=list)
     """
     List of executables that comprises this executable.
     """
@@ -171,7 +171,7 @@ class Executable:
     """
 
     @property
-    def giskard_executables(self) -> List[GiskardExecutable]:
+    def giskard_executables(self) -> list[GiskardExecutable]:
         """
         :return: The giskard executables this unit is made of, in execution order.
         """
@@ -212,7 +212,7 @@ class GiskardExecutable(Executable):
     binds its updaters to the state arrays that adding a node would replace.
     """
 
-    motion_mappings: Dict[MotionNode, Task] = field(default_factory=dict, kw_only=True)
+    motion_mappings: dict[MotionNode, Task] = field(default_factory=dict, kw_only=True)
     """
     Mapping from the motion nodes of the plan to their giskard tasks, in execution
     order.
@@ -271,7 +271,7 @@ class GiskardExecutable(Executable):
         return timedelta(minutes=2)
 
     @property
-    def giskard_executables(self) -> List[GiskardExecutable]:
+    def giskard_executables(self) -> list[GiskardExecutable]:
         """
         :return: This executable, which is the only giskard executable it is made of.
         """

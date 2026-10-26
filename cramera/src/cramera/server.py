@@ -44,7 +44,7 @@ import traceback
 import webbrowser
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing_extensions import Any, Callable, ClassVar, Dict, List
+from typing_extensions import Any, Callable, ClassVar
 from urllib.parse import parse_qs, urlparse
 
 from cramera import paths
@@ -170,7 +170,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _query_parameters(self) -> Dict[str, List[str]]:
+    def _query_parameters(self) -> dict[str, list[str]]:
         """
         The parsed query-string parameters of the current request.
         """
@@ -381,7 +381,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         except Exception as error:
             return self._send_exception(error)
 
-    def _request_body(self) -> Dict[str, Any]:
+    def _request_body(self) -> dict[str, Any]:
         """
         The request's JSON body, or an empty mapping without one.
         """
@@ -460,7 +460,7 @@ class ServerOptions:
     """
 
 
-def parse_arguments(arguments: List[str]) -> ServerOptions:
+def parse_arguments(arguments: list[str]) -> ServerOptions:
     """
     Read the ``cramera`` command line: an optional port and ``--no-browser``.
 
@@ -472,7 +472,7 @@ def parse_arguments(arguments: List[str]) -> ServerOptions:
     return ServerOptions(port=port, open_browser=open_browser)
 
 
-def main(arguments: List[str] | None = None) -> None:
+def main(arguments: list[str] | None = None) -> None:
     """
     ``cramera`` — serve the viewer, the scenes and the JSON API.
 

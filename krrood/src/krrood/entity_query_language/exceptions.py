@@ -9,7 +9,7 @@ import uuid
 from abc import ABC
 from dataclasses import dataclass, field
 
-from typing_extensions import TYPE_CHECKING, Any, List, Tuple
+from typing_extensions import TYPE_CHECKING, Any
 
 from krrood.exceptions import DataclassException
 
@@ -520,12 +520,12 @@ class NonAggregatedSelectedVariablesError(AggregationUsageError):
     The builder class for the GroupedDataSource operation.
     """
 
-    non_aggregated_variables: List[Selectable]
+    non_aggregated_variables: list[Selectable]
     """
     The non-aggregated selected variables.
     """
 
-    aggregated_variables: List[Selectable]
+    aggregated_variables: list[Selectable]
     """
     The aggregated variables.
     """
@@ -549,7 +549,7 @@ class NonAggregatorInHavingConditionsError(AggregationUsageError):
     For further details, see :doc:`/krrood/doc/eql/result_processors`.
     """
 
-    non_aggregators: Tuple[Selectable, ...]
+    non_aggregators: tuple[Selectable, ...]
 
     def error_message(self) -> str:
         return f"The having condition of the query {self.query} contains non-aggregators {self.non_aggregators}."
@@ -566,7 +566,7 @@ class AggregatorInWhereConditionsError(AggregationUsageError):
     For further details, see :doc:`/krrood/doc/eql/result_processors`.
     """
 
-    aggregators: Tuple[Aggregator, ...]
+    aggregators: tuple[Aggregator, ...]
     """
     The aggregators in the where condition.
     """
@@ -591,7 +591,7 @@ class WrongSelectableType(UsageError):
     """
 
     wrong_variable_type: type
-    expected_types: List[type]
+    expected_types: list[type]
 
     def error_message(self) -> str:
         return f"Select expects one of {self.expected_types}, instead {self.wrong_variable_type} was given."
@@ -622,7 +622,7 @@ class LiteralConditionError(UsageError):
     The query that contains the literal condition.
     """
 
-    literal_conditions: List[Any]
+    literal_conditions: list[Any]
     """
     The literal conditions that are given to the query.
     """
@@ -821,7 +821,7 @@ class InvalidChildType(UsageError):
     The invalid child type.
     """
 
-    correct_child_types: List[type]
+    correct_child_types: list[type]
     """
     The list of valid child types.
     """
@@ -1117,7 +1117,7 @@ class PositionalArgumentsInMatchPattern(DataclassException, TypeError):
     The match whose pattern was given positional arguments.
     """
 
-    arguments: Tuple[Any, ...]
+    arguments: tuple[Any, ...]
     """
     The positional arguments that were given.
     """

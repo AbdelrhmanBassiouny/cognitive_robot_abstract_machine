@@ -7,7 +7,6 @@ import numpy as np
 import pytest
 import trimesh
 from numpy.typing import NDArray
-from typing_extensions import List
 
 from krrood.adapters.json_serializer import from_json, to_json
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
@@ -314,7 +313,7 @@ class ConvexHullDecomposer(MeshDecomposer):
     Decomposes a mesh into its convex hull: a stand-in for a real decomposer.
     """
 
-    def apply_to_mesh(self, mesh: Mesh) -> List[Shape]:
+    def apply_to_mesh(self, mesh: Mesh) -> list[Shape]:
         return [Mesh.from_trimesh(mesh=mesh.mesh.convex_hull, origin=mesh.origin)]
 
     def apply_to_mesh_and_save(self, mesh: Mesh, output_path: str) -> str:

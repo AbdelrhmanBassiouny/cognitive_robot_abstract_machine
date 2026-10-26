@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from typing_extensions import Iterator, List, TYPE_CHECKING
+from typing_extensions import Iterator, TYPE_CHECKING
 
 from krrood.entity_query_language.utils import make_list
 
@@ -50,7 +50,7 @@ class Evaluable(ABC):
             backend = EntityQueryLanguageBackend()
         return backend.evaluate(self)
 
-    def tolist(self, backend: QueryBackend | None = None) -> List:
+    def tolist(self, backend: QueryBackend | None = None) -> list:
         """
         Evaluate and return the results as a list.
 

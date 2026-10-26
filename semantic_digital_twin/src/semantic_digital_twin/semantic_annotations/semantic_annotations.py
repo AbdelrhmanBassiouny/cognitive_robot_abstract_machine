@@ -112,7 +112,7 @@ class Handle(HasGraspCandidates):
     open or close an object.
     """
 
-    def default_grasp_candidates(self) -> List[GraspCandidate]:
+    def default_grasp_candidates(self) -> list[GraspCandidate]:
         """
         :return: Grasps drawn uniformly from :meth:`surface_grasp_statement`.
         """
@@ -684,7 +684,7 @@ class Floor(HasSupportingSurface):
         cls,
         name: str,
         world: World,
-        floor_polytope: List[Point3],
+        floor_polytope: list[Point3],
         world_root_T_self: HomogeneousTransformationMatrix | None = None,
     ) -> Self:
         """
@@ -1011,7 +1011,7 @@ class Rim(HasPinchableWall):
     The upper edge of an open container's wall, which a gripper pinches from above.
     """
 
-    def default_grasp_candidates(self) -> List[GraspCandidate]:
+    def default_grasp_candidates(self) -> list[GraspCandidate]:
         """
         :return: Grasps drawn uniformly from :meth:`surface_grasp_statement`.
         """
@@ -1406,7 +1406,7 @@ class Cutlery(HasHandle, Tableware):
     A piece of cutlery, lying flat, grasped from above and across its length.
     """
 
-    def default_grasp_candidates(self) -> List[GraspCandidate]:
+    def default_grasp_candidates(self) -> list[GraspCandidate]:
         """
         :return: The grasp from above that closes across the piece, which lies flat.
         :raises NoGraspGeometry: If the root body has no collision geometry to tell
@@ -1540,7 +1540,7 @@ class ShapeSortingPiece(HasGraspCandidates):
     point they are brought to.
     """
 
-    def default_grasp_candidates(self) -> List[GraspCandidate]:
+    def default_grasp_candidates(self) -> list[GraspCandidate]:
         """
         :return: The grasp from above, on the piece's vertical axis at
             :attr:`grasp_height`, closing along the piece's own x.
@@ -1637,7 +1637,7 @@ class SemanticEnvironmentAnnotation(HasRootBody):
 
     def obstacle_entities(
         self, search_space: BoundingBoxCollection[VolumetricBoundingBox, Point3]
-    ) -> List[Body]:
+    ) -> list[Body]:
         """
         Collect the obstacle bodies to consider within ``search_space``.
 
@@ -1724,12 +1724,12 @@ class RoomWithWallsAndDoors(Room):
     Description of the type of the room in natural language.
     """
 
-    walls: List[Wall] = field(kw_only=True, default_factory=list)
+    walls: list[Wall] = field(kw_only=True, default_factory=list)
     """
     The walls enclosing this room.
     """
 
-    doors: List[Door] = field(kw_only=True, default_factory=list)
+    doors: list[Door] = field(kw_only=True, default_factory=list)
     """
     The doors of the room.
     """
@@ -1796,7 +1796,7 @@ class Tool(HasGraspCandidates, ABC):
         return end_effector
 
     @abstractmethod
-    def tool_alignment(self, target: Body | Pose) -> List[AlignmentPair]:
+    def tool_alignment(self, target: Body | Pose) -> list[AlignmentPair]:
         """
         :param target: The body or pose the tool acts on.
         :return: The normal pairs that must stay aligned while the tool acts on the
@@ -1846,7 +1846,7 @@ class Whisk(ToolWithHandle):
     A whisk for mixing the contents of containers.
     """
 
-    def tool_alignment(self, target: Body | Pose) -> List[AlignmentPair]:
+    def tool_alignment(self, target: Body | Pose) -> list[AlignmentPair]:
         return [
             AlignmentPair(
                 tip_normal=Vector3(-1, 0, 0, reference_frame=self.root),
@@ -1861,7 +1861,7 @@ class CuttingKnife(ToolWithHandle):
     A knife for cutting food objects.
     """
 
-    def tool_alignment(self, target: Body | Pose) -> List[AlignmentPair]:
+    def tool_alignment(self, target: Body | Pose) -> list[AlignmentPair]:
         return [
             AlignmentPair(
                 tip_normal=Vector3(1, 0, 0, reference_frame=self.root),
@@ -1880,7 +1880,7 @@ class PouringCup(Tool, Container):
     A cup for pouring liquids into containers.
     """
 
-    def tool_alignment(self, target: Body | Pose) -> List[AlignmentPair]:
+    def tool_alignment(self, target: Body | Pose) -> list[AlignmentPair]:
         return [
             AlignmentPair(
                 tip_normal=Vector3(0, 0, 1, reference_frame=self.root),
@@ -1898,7 +1898,7 @@ class Sponge(Tool):
         which is why its alignments use negative Z normals unlike the other tools.
     """
 
-    def tool_alignment(self, target: Body | Pose) -> List[AlignmentPair]:
+    def tool_alignment(self, target: Body | Pose) -> list[AlignmentPair]:
         if isinstance(target, Body):
             return [
                 AlignmentPair(

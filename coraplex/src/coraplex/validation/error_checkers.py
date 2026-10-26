@@ -6,14 +6,7 @@ import numpy as np
 
 from coraplex.datastructures.enums import JointType
 from coraplex.tf_transformations import quaternion_multiply, quaternion_inverse
-from typing_extensions import (
-    List,
-    Any,
-    Sized,
-    Iterable as T_Iterable,
-    TYPE_CHECKING,
-    Tuple,
-)
+from typing_extensions import Any, Sized, Iterable as T_Iterable, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from semantic_digital_twin.spatial_types.spatial_types import Pose
@@ -86,7 +79,7 @@ class ErrorChecker(ABC):
         )
 
     @abstractmethod
-    def _calculate_error(self, value_1: Any, value_2: Any) -> float | List[float]:
+    def _calculate_error(self, value_1: Any, value_2: Any) -> float | list[float]:
         """
         Calculate the error between two values.
 
@@ -96,7 +89,7 @@ class ErrorChecker(ABC):
         """
         pass
 
-    def calculate_error(self, value_1: Any, value_2: Any) -> float | List[float]:
+    def calculate_error(self, value_1: Any, value_2: Any) -> float | list[float]:
         """
         Calculate the error between two values.
 
@@ -133,7 +126,7 @@ class PoseErrorChecker(ErrorChecker):
 
     def __init__(
         self,
-        acceptable_error: Tuple[float] | T_Iterable[Tuple[float]] = (
+        acceptable_error: tuple[float] | T_Iterable[tuple[float]] = (
             1e-3,
             np.pi / 180,
         ),
@@ -148,7 +141,7 @@ class PoseErrorChecker(ErrorChecker):
         """
         super().__init__(acceptable_error, is_iterable)
 
-    def _calculate_error(self, value_1: Any, value_2: Any) -> List[float]:
+    def _calculate_error(self, value_1: Any, value_2: Any) -> list[float]:
         """
         Calculate the error between two poses.
 
@@ -293,7 +286,7 @@ class MultiJointPositionErrorChecker(IterableErrorChecker):
 
     def __init__(
         self,
-        joint_types: List[JointType],
+        joint_types: list[JointType],
         acceptable_error: T_Iterable[float] | None = None,
     ):
         """
@@ -320,7 +313,7 @@ class MultiJointPositionErrorChecker(IterableErrorChecker):
         return calculate_joint_position_error(value_1, value_2)
 
 
-def calculate_pose_error(pose_1: Pose, pose_2: Pose) -> List[float]:
+def calculate_pose_error(pose_1: Pose, pose_2: Pose) -> list[float]:
     """
     Calculate the error between two poses.
 
@@ -336,7 +329,7 @@ def calculate_pose_error(pose_1: Pose, pose_2: Pose) -> List[float]:
     ]
 
 
-def calculate_position_error(position_1: List[float], position_2: List[float]) -> float:
+def calculate_position_error(position_1: list[float], position_2: list[float]) -> float:
     """
     Calculate the error between two positions.
 
@@ -347,7 +340,7 @@ def calculate_position_error(position_1: List[float], position_2: List[float]) -
     return np.linalg.norm(np.array(position_1) - np.array(position_2))
 
 
-def calculate_orientation_error(quat_1: List[float], quat_2: List[float]) -> float:
+def calculate_orientation_error(quat_1: list[float], quat_2: list[float]) -> float:
     """
     Calculate the error between two quaternions.
 
@@ -394,7 +387,7 @@ def is_error_acceptable(
 
 
 def calculate_angle_between_quaternions(
-    quat_1: List[float], quat_2: List[float]
+    quat_1: list[float], quat_2: list[float]
 ) -> float:
     """
     Calculates the angle between two quaternions.
@@ -411,8 +404,8 @@ def calculate_angle_between_quaternions(
 
 
 def calculate_quaternion_difference(
-    quat_1: List[float], quat_2: List[float]
-) -> List[float]:
+    quat_1: list[float], quat_2: list[float]
+) -> list[float]:
     """
     Calculates the quaternion difference.
 

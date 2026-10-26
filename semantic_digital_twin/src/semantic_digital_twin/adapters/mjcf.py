@@ -9,7 +9,7 @@ import mujoco
 import numpy
 import trimesh
 from scipy.spatial.transform import Rotation
-from typing_extensions import Dict, Self
+from typing_extensions import Self
 from xml.etree import ElementTree as ET
 
 from semantic_digital_twin.adapters.multi_sim import (
@@ -88,7 +88,7 @@ class MJCFParser(WorldModelParser):
     The file path of the scene.
     """
 
-    mimic_joints: Dict[str, str] = field(default_factory=dict)
+    mimic_joints: dict[str, str] = field(default_factory=dict)
     """
     A dictionary mapping joint names to the names of the joints they mimic.
     """
@@ -132,7 +132,7 @@ class MJCFParser(WorldModelParser):
         cls,
         file_path: str,
         prefix: str | None = None,
-        mimic_joints: Dict[str, str] | None = None,
+        mimic_joints: dict[str, str] | None = None,
         use_visual_as_collision_backup: bool = False,
     ) -> Self:
         """

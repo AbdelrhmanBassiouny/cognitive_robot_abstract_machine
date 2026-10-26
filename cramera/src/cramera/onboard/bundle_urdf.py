@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from urllib.parse import unquote
 
-from typing_extensions import Any, ClassVar, Dict, List, Pattern, Set
+from typing_extensions import Any, ClassVar, Pattern
 
 from semantic_digital_twin.adapters.package_resolver import PackageUriResolver
 from semantic_digital_twin.adapters.urdf import URDFParser
@@ -89,7 +89,7 @@ class MeshReference:
 
     def resolve(
         self,
-        hints: Dict[str, str] | None = None,
+        hints: dict[str, str] | None = None,
         base_directory: str | None = None,
     ) -> str | None:
         """
@@ -187,12 +187,12 @@ class BundledAssets:
 
     TEXTURE_MAP_PATTERN: ClassVar[Pattern[str]] = re.compile(r"map_\w+\s+(.+)")
 
-    copied: Dict[str, str] = field(default_factory=dict)
+    copied: dict[str, str] = field(default_factory=dict)
     """
     Source path to its first copied location inside the bundle.
     """
 
-    missing: List[str] = field(default_factory=list)
+    missing: list[str] = field(default_factory=list)
     """
     References that could not be resolved to any file.
     """
@@ -222,7 +222,7 @@ class BundledAssets:
             raise InvalidBundlePath(path)
 
     @property
-    def mesh_suffixes(self) -> List[str]:
+    def mesh_suffixes(self) -> list[str]:
         """
         Sorted, deduplicated file suffixes of everything copied.
         """
@@ -294,7 +294,7 @@ class BundledAssets:
 
     def _object_side_references(
         self, mesh_text: str, source_directory: str, bundled_directory: str
-    ) -> Set[str]:
+    ) -> set[str]:
         """
         The material libraries an ``.obj`` names, copied on the way, plus the textures
         those libraries name.
@@ -397,17 +397,17 @@ class BundleReport:
     Resolved path of the URDF/xacro the bundle was built from.
     """
 
-    links: List[str]
+    links: list[str]
     """
     Names of every ``<link>`` in the written URDF, in document order.
     """
 
-    joints: List[str]
+    joints: list[str]
     """
     Names of every ``<joint>`` in the written URDF, in document order.
     """
 
-    movable_joints: List[str]
+    movable_joints: list[str]
     """
     Names of the joints among :attr:`joints` whose type is not ``fixed``.
     """
@@ -417,7 +417,7 @@ class BundleReport:
     Count of distinct mesh files copied into the bundle.
     """
 
-    mesh_suffixes: List[str]
+    mesh_suffixes: list[str]
     """
     Sorted, deduplicated file extensions of the copied meshes.
     """
@@ -427,7 +427,7 @@ class BundleReport:
     Count of mesh references rewritten to their bundled, relative path.
     """
 
-    missing: List[str]
+    missing: list[str]
     """
     References that could not be resolved to any file.
     """
@@ -438,7 +438,7 @@ class BundleReport:
         source: str,
         name: str,
         output_directory: str,
-        hints: Dict[str, str] | None = None,
+        hints: dict[str, str] | None = None,
     ) -> BundleReport:
         """
         Bundle one URDF or xacro with every mesh it references.
@@ -467,7 +467,7 @@ class BundleReport:
         urdf_out = os.path.join(output_directory, "%s.urdf" % name)
         assets.require_destination(urdf_out)
         document = ElementTree.fromstring(urdf_text)
-        rewritten: Set[str] = set()
+        rewritten: set[str] = set()
         for mesh in document.iter("mesh"):
             reference = mesh.get("filename", "")
             if MeshFormat.of_path(reference) is None:
@@ -540,7 +540,7 @@ class BundledModel:
     What the bundler wrote for this model.
     """
 
-    def to_payload(self) -> Dict[str, Any]:
+    def to_payload(self) -> dict[str, Any]:
         """
         The JSON-serializable shape the viewer's model list expects.
         """

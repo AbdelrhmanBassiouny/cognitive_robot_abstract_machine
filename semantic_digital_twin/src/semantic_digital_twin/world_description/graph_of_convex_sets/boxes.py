@@ -14,7 +14,7 @@ from random_events.plotting import EventPlotter
 from random_events.product_algebra import Event
 from random_events.product_algebra import SimpleEvent
 from rtree import index
-from typing_extensions import Generic, List, Dict, Sequence, Self
+from typing_extensions import Generic, Sequence, Self
 
 from krrood.entity_query_language.core.mapped_variable import (
     CanBehaveLikeAVariable,
@@ -100,7 +100,7 @@ class GraphOfBoundingBoxes(
     The connectivity graph of the convex sets.
     """
 
-    box_to_index_map: Dict[BoxT, int] = field(default_factory=dict)
+    box_to_index_map: dict[BoxT, int] = field(default_factory=dict)
     """
     A mapping from bounding boxes to their indices in the graph.
     """
@@ -214,7 +214,7 @@ class GraphOfBoundingBoxes(
         rustworkx.visualization.mpl_draw(self.graph)
         plt.show()
 
-    def plot_free_space(self) -> List[go.BaseTraceType]:
+    def plot_free_space(self) -> list[go.BaseTraceType]:
         """
         Plot the free space of the environment in blue.
 
@@ -227,7 +227,7 @@ class GraphOfBoundingBoxes(
 
         go.Figure(self.plot_free_space()).show()
 
-    def plot_occupied_space(self) -> List[go.BaseTraceType]:
+    def plot_occupied_space(self) -> list[go.BaseTraceType]:
         """
         Plot the occupied space of the environment in red.
 
@@ -273,7 +273,7 @@ class GraphOfBoundingBoxes(
             raise PointOccupiedError(point)
         return node
 
-    def path_from_to(self, start: PointT, goal: PointT) -> List[PointT] | None:
+    def path_from_to(self, start: PointT, goal: PointT) -> list[PointT] | None:
         """
         Calculate a connected path from a start point to a goal point.
 
@@ -333,7 +333,7 @@ class GraphOfBoundingBoxes(
 
         return self._shortcut_waypoints(waypoints)
 
-    def _shortcut_waypoints(self, waypoints: List[PointT]) -> List[PointT]:
+    def _shortcut_waypoints(self, waypoints: list[PointT]) -> list[PointT]:
         """
         Drop waypoints that a straight line can bypass without leaving free space.
 
@@ -364,7 +364,7 @@ class GraphOfBoundingBoxes(
         return result
 
     def _segment_is_collision_free(
-        self, start: PointT, end: PointT, node_bounds: List[CoordinateBounds]
+        self, start: PointT, end: PointT, node_bounds: list[CoordinateBounds]
     ) -> bool:
         """
         Check whether a straight-line segment stays entirely within free space.

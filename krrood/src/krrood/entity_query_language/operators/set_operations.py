@@ -11,7 +11,7 @@ import itertools
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from typing_extensions import Iterable, Tuple, Iterator
+from typing_extensions import Iterable, Iterator
 
 from krrood.entity_query_language.core.base_expressions import (
     MultiArityExpression,
@@ -82,7 +82,7 @@ class PerformsCartesianProduct(SymbolicExpression, ABC):
 
     @property
     @abstractmethod
-    def _product_operands_(self) -> Tuple[SymbolicExpression, ...]:
+    def _product_operands_(self) -> tuple[SymbolicExpression, ...]:
         """
         :return: The operands of the cartesian product operation.
         """
@@ -105,7 +105,7 @@ class PerformsCartesianProduct(SymbolicExpression, ABC):
 
     def _optimize_operands_order_(
         self, sources: OperationResult | None
-    ) -> Tuple[SymbolicExpression, ...]:
+    ) -> tuple[SymbolicExpression, ...]:
         """
         Should be overridden by derived classes if they can optimize the operands order.
         """
@@ -122,5 +122,5 @@ class MultiArityExpressionThatPerformsACartesianProduct(
     """
 
     @property
-    def _product_operands_(self) -> Tuple[SymbolicExpression, ...]:
+    def _product_operands_(self) -> tuple[SymbolicExpression, ...]:
         return self._operation_children_

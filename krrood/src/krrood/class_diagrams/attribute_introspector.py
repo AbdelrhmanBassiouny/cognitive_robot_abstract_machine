@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, Field, is_dataclass
 from dataclasses import fields as dc_fields
 
-from typing_extensions import List, TYPE_CHECKING
+from typing_extensions import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from krrood.ontomatic.property_descriptor import PropertyDescriptor
@@ -48,7 +48,7 @@ class AttributeIntrospector(ABC):
     """
 
     @abstractmethod
-    def discover(self, owner_cls: type) -> List[DiscoveredAttribute]:
+    def discover(self, owner_cls: type) -> list[DiscoveredAttribute]:
         """
         Return discovered attributes for `owner_cls`.
 
@@ -64,7 +64,7 @@ class DataclassOnlyIntrospector(AttributeIntrospector):
     Discover only public dataclass fields (no leading underscore).
     """
 
-    def discover(self, owner_cls: type) -> List[DiscoveredAttribute]:
+    def discover(self, owner_cls: type) -> list[DiscoveredAttribute]:
         if is_dataclass(owner_cls):
             return [
                 DiscoveredAttribute(public_name=f.name, field=f)

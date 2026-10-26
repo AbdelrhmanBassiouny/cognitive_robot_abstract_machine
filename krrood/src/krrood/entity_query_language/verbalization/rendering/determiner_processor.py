@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from typing_extensions import List
 
 from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.fragments.base import (
@@ -117,7 +116,7 @@ class DeterminerProcessor(RewritePass):
         self,
         noun_phrase: NounPhrase,
         head: VerbalizationFragment,
-        pre_head: List[VerbalizationFragment],
+        pre_head: list[VerbalizationFragment],
         leading_fragment: VerbalizationFragment | None,
     ) -> VerbalizationFragment:
         """

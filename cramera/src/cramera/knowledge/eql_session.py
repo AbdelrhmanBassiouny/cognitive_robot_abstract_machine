@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import Any, Dict, List
+from typing_extensions import Any
 
 from cramera.robot_parts import ArmSide
 from semantic_digital_twin.spatial_types import Point3
@@ -60,7 +60,7 @@ class EqlSession:
         """
         return cls(knowledge_base=EpisodeKnowledgeBase.of_scene(scene))
 
-    def domains(self) -> List[QueryDomain]:
+    def domains(self) -> list[QueryDomain]:
         """
         One ready-made query variable per entity type of the recorded episode.
         """
@@ -103,7 +103,7 @@ class EqlSession:
             },
         )
 
-    def namespace(self) -> Dict[str, Any]:
+    def namespace(self) -> dict[str, Any]:
         """
         A namespace for evaluating one EQL query (fresh variables each time).
         """

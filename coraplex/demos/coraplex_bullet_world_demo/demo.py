@@ -18,7 +18,6 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from typing_extensions import Tuple
 
 from coraplex.datastructures.dataclasses import Context
 from coraplex.datastructures.enums import ExecutionType
@@ -268,7 +267,7 @@ class BulletWorldDemonstration(RobotDemonstration):
     """
 
     @property
-    def place_setting(self) -> Tuple[PlaceSettingObject, ...]:
+    def place_setting(self) -> tuple[PlaceSettingObject, ...]:
         """
         :return: The objects carried onto the table, in the order they are carried. They
             are laid 20 cm apart, so placing one keeps the gripper clear of the last.

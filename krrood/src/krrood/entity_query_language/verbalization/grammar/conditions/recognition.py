@@ -4,7 +4,6 @@ import dataclasses
 import operator
 from dataclasses import dataclass
 
-from typing_extensions import List
 
 from krrood.symbol_graph.symbol_graph import Symbol
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
@@ -34,7 +33,7 @@ from krrood.entity_query_language.verbalization.microplanning.coordination impor
 from krrood.entity_query_language.verbalization.vocabulary.english import Operators
 
 
-def attribute_names(left: SymbolicExpression) -> List[str]:
+def attribute_names(left: SymbolicExpression) -> list[str]:
     """
     :param left: A ``MappedVariable`` chain (or any expression).
     :return: The attribute names along the chain, outermost (last-accessed) first (``[]`` if none).
@@ -44,7 +43,7 @@ def attribute_names(left: SymbolicExpression) -> List[str]:
     >>> attribute_names(variable(Robot, []))
     []
     """
-    names: List[str] = []
+    names: list[str] = []
     current = left
     while isinstance(current, MappedVariable):
         if isinstance(current, Attribute):
@@ -176,7 +175,7 @@ def is_boolean_attribute_chain(expression: SymbolicExpression) -> bool:
 
 
 def fold_shared_subject_comparisons(
-    operands: List[SymbolicExpression],
+    operands: list[SymbolicExpression],
 ) -> SharedSubjectComparisons | None:
     """
     :param operands: The flattened operands of a coordination (e.g. an ``OR``'s disjuncts).
@@ -222,7 +221,7 @@ def fold_shared_subject_comparisons(
 
 
 def fold_shared_subject_conjunction(
-    operands: List[SymbolicExpression],
+    operands: list[SymbolicExpression],
 ) -> SharedSubjectConjunction | None:
     """
     :param operands: The flattened operands of an ``AND``.

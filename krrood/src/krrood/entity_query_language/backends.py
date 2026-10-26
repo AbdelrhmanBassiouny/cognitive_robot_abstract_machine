@@ -3,7 +3,7 @@ import enum
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
 from types import NoneType
-from typing_extensions import ClassVar, Dict, List, Iterable, TypeVar
+from typing_extensions import ClassVar, Iterable, TypeVar
 
 import random_events.variable
 from random_events.product_algebra import Event
@@ -212,7 +212,7 @@ class EntityQueryLanguageGenerativeBackend(GenerativeBackend):
 
     def _evaluate(self, expression: Match[T]) -> Iterable[T]:
         self._warn_or_raise_on_unresolved_cause_(expression)
-        variables: Dict[str, Variable] = {}
+        variables: dict[str, Variable] = {}
         for attribute_match in expression._matches_with_variables_:
             self._check_attribute_match_is_suitable_for_generation(attribute_match)
             variables[attribute_match.name_from_variable_access_path] = (
@@ -272,7 +272,7 @@ class EntityQueryLanguageGenerativeBackend(GenerativeBackend):
         )
 
     def _generate_raw_results(
-        self, expression: Match[T], variables: Dict[str, Variable]
+        self, expression: Match[T], variables: dict[str, Variable]
     ) -> Iterable[T]:
         """
         Construct instances from the given match and enumerable variables.
@@ -467,7 +467,7 @@ class ProbabilisticBackend(GenerativeBackend):
     def _resolve_primary_intervention(
         cls,
         model: CausalCircuit,
-        cause_variables: List[random_events.variable.Variable],
+        cause_variables: list[random_events.variable.Variable],
         effect_variable: random_events.variable.Variable,
         effect_truncation_event: Event | None,
         expression: Match[T],
@@ -512,11 +512,11 @@ class ProbabilisticBackend(GenerativeBackend):
     def _score_all_interventions(
         cls,
         model: CausalCircuit,
-        cause_variables: List[random_events.variable.Variable],
+        cause_variables: list[random_events.variable.Variable],
         effect_variable: random_events.variable.Variable,
         effect_truncation_event: Event | None,
         confounder_variables: Iterable[random_events.variable.Variable] = (),
-    ) -> List[ScoredIntervention]:
+    ) -> list[ScoredIntervention]:
         """
         Score every candidate cause variable independently for the region whose
         intervention best explains the effect.
@@ -558,7 +558,7 @@ class ProbabilisticBackend(GenerativeBackend):
         )
         return scored_interventions
 
-    def rank_causes(self, expression: Match[T]) -> List[ScoredIntervention]:
+    def rank_causes(self, expression: Match[T]) -> list[ScoredIntervention]:
         """
         Rank every ``cause`` candidate in *expression* by how well its intervention
         explains the declared effect.

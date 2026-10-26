@@ -7,7 +7,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from typing_extensions import Any, Dict, List
+from typing_extensions import Any
 
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world_description.geometry import Box, Mesh, Scale
@@ -42,11 +42,11 @@ class NothingToBundle(Exception):
 
 def write_recording_bundle(
     bridge: Bridge,
-    frames: List[RecordedFrame],
+    frames: list[RecordedFrame],
     frames_per_second: float,
     output_directory: Path,
     scene_name: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Write a finalized recording's geometry and trajectory to disk.
 
@@ -145,7 +145,7 @@ def finalize_recording(bridge: Bridge, recording: Recording) -> str | None:
 
 def _loose_object_entries(
     bridge: Bridge, first_frame: RecordedFrame, output_directory: Path
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     ``scene.json``'s ``objects`` entries for every catalog object present in the first
     recorded frame.
@@ -170,8 +170,8 @@ def _loose_object_entries(
 
 
 def _object_entry(
-    entry: ObjectCatalogEntry, spawn: List[float], output_directory: Path
-) -> Dict[str, Any]:
+    entry: ObjectCatalogEntry, spawn: list[float], output_directory: Path
+) -> dict[str, Any]:
     """
     One loose object's ``scene.json`` entry, including its geometry and material
     library.
@@ -183,7 +183,7 @@ def _object_entry(
     :param spawn: The object's pose in the recording's first frame.
     :param output_directory: Directory a mesh file is written into.
     """
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "id": entry.id,
         "key": entry.key,
         "spawn": spawn,

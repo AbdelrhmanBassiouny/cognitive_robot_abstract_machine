@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing_extensions import List, Any
+from typing_extensions import Any
 import pandas as pd
 
 from krrood.utils import get_default_value
@@ -73,7 +73,7 @@ def infer_variables_from_dataframe(
     min_likelihood_improvement: float = 0.1,
     min_samples_per_quantile: int = 10,
     min_impurity_improvement: float = 0,
-) -> List[AnnotatedVariable]:
+) -> list[AnnotatedVariable]:
     """
     Infer the variables from a dataframe.
 

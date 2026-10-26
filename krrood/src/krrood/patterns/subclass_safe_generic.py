@@ -7,7 +7,6 @@ from functools import lru_cache
 from inspect import isclass
 from typing_extensions import (
     TypeVar,
-    Dict,
     Any,
     get_origin,
     get_args,
@@ -157,7 +156,7 @@ class SubClassSafeGeneric(ABC):
 
     @staticmethod
     def _substitutions_bind_a_concrete_type(
-        substitutions: Dict[Any, ResolvableType],
+        substitutions: dict[Any, ResolvableType],
     ) -> bool:
         """
         Report whether the substitution map assigns at least one type parameter to a
@@ -178,7 +177,7 @@ class SubClassSafeGeneric(ABC):
 
     @classmethod
     def _update_field_kwargs(
-        cls, name: str, kwargs: Dict[str, Any], type_: type | None = None
+        cls, name: str, kwargs: dict[str, Any], type_: type | None = None
     ):
         """
         Update the field kwargs with the provided keyword arguments.
@@ -218,7 +217,7 @@ class SubClassSafeGeneric(ABC):
         cls.__annotations__[name] = resolved_type
 
     @classmethod
-    def _get_generic_type_substitutions(cls) -> Dict[Any, ResolvableType]:
+    def _get_generic_type_substitutions(cls) -> dict[Any, ResolvableType]:
         """
         Get the generic type substitutions for this class.
 
@@ -392,8 +391,8 @@ class SubClassSafeGeneric(ABC):
 
     @classmethod
     def _resolve_substitutions_transitively(
-        cls, substitutions: Dict[Any, ResolvableType]
-    ) -> Dict[Any, ResolvableType]:
+        cls, substitutions: dict[Any, ResolvableType]
+    ) -> dict[Any, ResolvableType]:
         """
         Recursively resolve TypeVars in the substitution map to their most concrete form
         using cycle detection to handle complex generic hierarchies safely.

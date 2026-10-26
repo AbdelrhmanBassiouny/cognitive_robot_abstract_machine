@@ -12,7 +12,6 @@ import os
 import re
 from pathlib import Path
 
-from typing_extensions import List
 
 WEB_ROOT = Path(__file__).resolve().parent / "web"
 """
@@ -95,7 +94,7 @@ def local_scenes_directory() -> Path:
     return data_directory() / "scenes"
 
 
-def scene_roots() -> List[Path]:
+def scene_roots() -> list[Path]:
     """
     Every directory a named scene may be bundled under, local root first.
 

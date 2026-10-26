@@ -5,7 +5,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from itertools import combinations
 from itertools import product
-from typing_extensions import List, TYPE_CHECKING, Self, Callable, ClassVar, Any
+from typing_extensions import TYPE_CHECKING, Self, Callable, ClassVar, Any
 
 import numpy as np
 from lxml import etree
@@ -120,11 +120,11 @@ class AvoidCollisionBetweenGroups(AvoidCollisionRule):
     Adds collision checks between all pairs of bodies in the given groups to the collision matrix.
     """
 
-    body_group_a: List[Body] = field(default_factory=list)
+    body_group_a: list[Body] = field(default_factory=list)
     """
     List of bodies that should not collide with bodies in `body_group_b`.
     """
-    body_group_b: List[Body] = field(default_factory=list)
+    body_group_b: list[Body] = field(default_factory=list)
     """
     List of bodies that should not collide with bodies in `body_group_a`.
     """
@@ -282,11 +282,11 @@ class AllowCollisionBetweenGroups(AllowCollisionRule):
     Allows collision checks between two groups of bodies.
     """
 
-    body_group_a: List[Body] = field(default_factory=list)
+    body_group_a: list[Body] = field(default_factory=list)
     """
     The first group of bodies.
     """
-    body_group_b: List[Body] = field(default_factory=list)
+    body_group_b: list[Body] = field(default_factory=list)
     """
     The second group of bodies.
     """

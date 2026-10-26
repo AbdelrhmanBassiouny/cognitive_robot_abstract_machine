@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing_extensions import List, TYPE_CHECKING, Dict, Callable
+from typing_extensions import TYPE_CHECKING, Callable
 
 
 
@@ -40,7 +40,7 @@ class ObjectEventTracker:
     """
 
     #Check with msc for the history
-    _event_history: List[DetectionEvent] | None
+    _event_history: list[DetectionEvent] | None
     """
     List of events associated with the object.
     """
@@ -69,7 +69,7 @@ class ObjectEventTracker:
         self._event_history.sort(key=lambda e: e.timestamp)
 
 
-    def get_event_history(self) -> List[DetectionEvent]:
+    def get_event_history(self) -> list[DetectionEvent]:
         """
         Retrieves the history of events for this instance.
 
@@ -218,7 +218,7 @@ class ObjectEventTracker:
         found_events = self.get_event_where(conditions, events=[e[0] for e in events])
         return found_events[0] if found_events else None
 
-    def get_events_sorted_by_nearest_to_event(self, event: DetectionEvent) -> List[tuple[DetectionEvent, float]]:
+    def get_events_sorted_by_nearest_to_event(self, event: DetectionEvent) -> list[tuple[DetectionEvent, float]]:
         """
         Sorts events by proximity to an event.
 
@@ -228,7 +228,7 @@ class ObjectEventTracker:
         """
         return self.get_events_sorted_by_nearest_to_timestamp(event.timestamp)
 
-    def get_events_sorted_by_nearest_to_timestamp(self, timestamp: float) -> List[tuple[DetectionEvent, float]]:
+    def get_events_sorted_by_nearest_to_timestamp(self, timestamp: float) -> list[tuple[DetectionEvent, float]]:
         """
         Sorts events by proximity to a timestamp.
 
@@ -322,7 +322,7 @@ class ObjectEventTracker:
         except IndexError:
             return None
 
-    def get_events_between_two_events(self, event1: DetectionEvent, event2: DetectionEvent) -> List[DetectionEvent]:
+    def get_events_between_two_events(self, event1: DetectionEvent, event2: DetectionEvent) -> list[DetectionEvent]:
         """
         Gets events between two events.
 
@@ -334,7 +334,7 @@ class ObjectEventTracker:
         return [e for e in self.get_events_between_timestamps(event1.timestamp, event2.timestamp)
                 if e not in [event1, event2]]
 
-    def get_events_between_timestamps(self, timestamp1: float, timestamp2: float) -> List[DetectionEvent]:
+    def get_events_between_timestamps(self, timestamp1: float, timestamp2: float) -> list[DetectionEvent]:
         """
         Gets events between timestamps.
 
@@ -354,7 +354,7 @@ class ObjectEventTracker:
             logger.debug(f"No events between timestamps {timestamp1}, {timestamp2}")
             return []
 
-    def get_event_where(self, conditions: Callable[[DetectionEvent], bool], events: List[DetectionEvent] | None = None) -> List[DetectionEvent]:
+    def get_event_where(self, conditions: Callable[[DetectionEvent], bool], events: list[DetectionEvent] | None = None) -> list[DetectionEvent]:
         """
         Filters events by condition.
 
@@ -376,7 +376,7 @@ class ObjectEventTracker:
         return np.array(self.time_stamps)
 
     @property
-    def time_stamps(self) -> List[float]:
+    def time_stamps(self) -> list[float]:
         """
         Gets the time stamps of the events.
 
@@ -397,7 +397,7 @@ class ObjectTrackerFactory:
     specific tracker for a given Body.
     """
 
-    _trackers: Dict[Body, ObjectEventTracker] = field(default_factory=dict)
+    _trackers: dict[Body, ObjectEventTracker] = field(default_factory=dict)
     """
     The dictionary mapping Body objects to their associated ObjectTracker instances.
     """
@@ -414,7 +414,7 @@ class ObjectTrackerFactory:
             self._trackers[obj] = ObjectEventTracker(body=obj, context=None, _event_history=[])
         return self._trackers[obj]
 
-    def get_all_trackers(self) -> List[ObjectEventTracker]:
+    def get_all_trackers(self) -> list[ObjectEventTracker]:
         """
         Retrieves all registered ObjectTracker instances.
 

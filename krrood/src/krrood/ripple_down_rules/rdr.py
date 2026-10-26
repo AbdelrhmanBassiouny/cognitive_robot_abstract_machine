@@ -24,17 +24,7 @@ except ImportError as e:
     plt = None
 
 from sqlalchemy.orm import DeclarativeBase as SQLTable
-from typing_extensions import (
-    List,
-    Optional,
-    Dict,
-    Union,
-    Any,
-    Self,
-    Tuple,
-    Callable,
-    Set,
-)
+from typing_extensions import List, Optional, Dict, Union, Any, Self, Callable, Set
 
 from krrood.ripple_down_rules.datastructures.callable_expression import (
     CallableExpression,
@@ -97,7 +87,7 @@ class RippleDownRules(ABC):
     """
     The figure to draw the tree on.
     """
-    expert_accepted_conclusions: List[CaseAttribute] | None = None
+    expert_accepted_conclusions: list[CaseAttribute] | None = None
     """
     The conclusions that the expert has accepted, such that they are not asked again.
     """
@@ -211,7 +201,7 @@ class RippleDownRules(ABC):
                     only_nodes=evaluated_rules,
                 )
 
-    def get_contributing_rules(self) -> List[Rule] | None:
+    def get_contributing_rules(self) -> list[Rule] | None:
         """
         Get the contributing rules of the classifier.
 
@@ -221,7 +211,7 @@ class RippleDownRules(ABC):
             return None
         return [r for r in self.get_fired_rule_tree() if r.contributed]
 
-    def get_fired_rule_tree(self) -> List[Rule] | None:
+    def get_fired_rule_tree(self) -> list[Rule] | None:
         """
         Get the fired rule tree of the classifier.
 
@@ -231,7 +221,7 @@ class RippleDownRules(ABC):
             return None
         return [r for r in self.get_evaluated_rule_tree() if r.fired]
 
-    def get_evaluated_rule_tree(self) -> List[Rule] | None:
+    def get_evaluated_rule_tree(self) -> list[Rule] | None:
         """
         Get the evaluated rule tree of the classifier.
 
@@ -342,7 +332,7 @@ class RippleDownRules(ABC):
 
     def fit(
         self,
-        case_queries: List[CaseQuery],
+        case_queries: list[CaseQuery],
         expert: Expert | None = None,
         n_iter: int = None,
         animate_tree: bool = False,
@@ -406,7 +396,7 @@ class RippleDownRules(ABC):
 
     def __call__(
         self, case: Case | SQLTable
-    ) -> CallableExpression | Dict[str, CallableExpression]:
+    ) -> CallableExpression | dict[str, CallableExpression]:
         return self.classify(case)
 
     def classify(
@@ -414,7 +404,7 @@ class RippleDownRules(ABC):
         case: Case | SQLTable,
         modify_case: bool = False,
         case_query: CaseQuery | None = None,
-    ) -> CallableExpression | Dict[str, CallableExpression] | None:
+    ) -> CallableExpression | dict[str, CallableExpression] | None:
         """
         Classify a case using the RDR classifier.
 
@@ -443,7 +433,7 @@ class RippleDownRules(ABC):
         case: Case | SQLTable,
         modify_case: bool = False,
         case_query: CaseQuery | None = None,
-    ) -> CallableExpression | Dict[str, CallableExpression] | None:
+    ) -> CallableExpression | dict[str, CallableExpression] | None:
         """
         Classify a case.
 
@@ -463,7 +453,7 @@ class RippleDownRules(ABC):
         clear_expert_answers: bool = True,
         ask_now_target: Any | None = None,
         **kwargs,
-    ) -> CallableExpression | Dict[str, CallableExpression]:
+    ) -> CallableExpression | dict[str, CallableExpression]:
         """
         Fit the classifier to a case and ask the expert for refinements or alternatives if the classification is
         incorrect by comparing the case with the target category.
@@ -528,7 +518,7 @@ class RippleDownRules(ABC):
 
     @staticmethod
     def should_i_ask_the_expert_for_a_target(
-        conclusions: Any | Dict[str, Any],
+        conclusions: Any | dict[str, Any],
         case_query: CaseQuery,
         update_existing: bool,
     ) -> bool:
@@ -562,7 +552,7 @@ class RippleDownRules(ABC):
     @abstractmethod
     def _fit_case(
         self, case_query: CaseQuery, expert: Expert | None = None, **kwargs
-    ) -> CallableExpression | Dict[str, CallableExpression]:
+    ) -> CallableExpression | dict[str, CallableExpression]:
         """
         Fit the RDR on a case, and ask the expert for refinements or alternatives if the classification is incorrect by
         comparing the case with the target category.
@@ -973,7 +963,7 @@ class RDRWithCodeWriter(RippleDownRules, ABC):
         pass
 
     @property
-    def all_rules(self) -> List[Rule]:
+    def all_rules(self) -> list[Rule]:
         """
         Get all rules in the classifier.
 
@@ -1094,7 +1084,7 @@ class RDRWithCodeWriter(RippleDownRules, ABC):
         model_dir: str,
         python_file_path: str | None = None,
         parent_package_name: str | None = None,
-    ) -> Tuple[ModuleType, ModuleType]:
+    ) -> tuple[ModuleType, ModuleType]:
         """
         Get and import the python modules that contain the RDR classifier function and definitions.
 
@@ -1208,7 +1198,7 @@ class RDRWithCodeWriter(RippleDownRules, ABC):
 
     def _get_types_to_import(
         self,
-    ) -> Tuple[Set[type | Callable], Set[type]]:
+    ) -> tuple[set[type | Callable], set[type]]:
         """
         :return: The types of the main and defs files of the RDR classifier that will be imported.
         """
@@ -1251,7 +1241,7 @@ class RDRWithCodeWriter(RippleDownRules, ABC):
         return f"{self.generated_python_file_name}_defs"
 
     @property
-    def conclusion_type(self) -> Tuple[type]:
+    def conclusion_type(self) -> tuple[type]:
         """
         :return: The type of the conclusion of the RDR classifier.
         """
@@ -1421,7 +1411,7 @@ class SingleClassRDR(RDRWithCodeWriter):
         type_names = [stringify_type_hint(t) for t in all_types]
         return f"Union[{', '.join(type_names)}]"
 
-    def _get_types_to_import(self) -> Tuple[Set[type], Set[type]]:
+    def _get_types_to_import(self) -> tuple[set[type], set[type]]:
         main_types, def_types = super()._get_types_to_import()
         main_types.add(type(self.default_conclusion))
         def_types.add(type(self.default_conclusion))
@@ -1431,7 +1421,7 @@ class SingleClassRDR(RDRWithCodeWriter):
         return main_types, def_types
 
     @property
-    def conclusion_type(self) -> Tuple[type]:
+    def conclusion_type(self) -> tuple[type]:
         if self.default_conclusion is not None:
             return (type(self.default_conclusion),)
         return super().conclusion_type
@@ -1451,11 +1441,11 @@ class MultiClassRDR(RDRWithCodeWriter):
     when wrong conclusions are made to stop these rules from firing again for similar cases.
     """
 
-    evaluated_rules: List[Rule] | None = None
+    evaluated_rules: list[Rule] | None = None
     """
     The evaluated rules in the classifier for one case.
     """
-    conclusions: List[CaseAttribute] | None = None
+    conclusions: list[CaseAttribute] | None = None
     """
     The conclusions that the case belongs to.
     """
@@ -1490,7 +1480,7 @@ class MultiClassRDR(RDRWithCodeWriter):
         case: Case | SQLTable,
         modify_case: bool = False,
         case_query: CaseQuery | None = None,
-    ) -> Set[Any]:
+    ) -> set[Any]:
         evaluated_rule = self.start_rule
         self.conclusions = []
         case_cp = copy_case(case) if not modify_case else case
@@ -1530,7 +1520,7 @@ class MultiClassRDR(RDRWithCodeWriter):
 
     def _fit_case(
         self, case_query: CaseQuery, expert: Expert | None = None, **kwargs
-    ) -> Set[CaseAttribute | CallableExpression | None]:
+    ) -> set[CaseAttribute | CallableExpression | None]:
         """
         Classify a case, and ask the user for stopping rules or classifying rules if the classification is incorrect
          or missing by comparing the case with the target category if provided.
@@ -1627,7 +1617,7 @@ class MultiClassRDR(RDRWithCodeWriter):
 
     def _get_types_to_import(
         self,
-    ) -> Tuple[Set[type | Callable], Set[type]]:
+    ) -> tuple[set[type | Callable], set[type]]:
         main_types, defs_types = super()._get_types_to_import()
         main_types.update(
             {get_an_updated_case_copy, update_case_and_conclusions_with_rule_output}
@@ -1729,7 +1719,7 @@ class MultiClassRDR(RDRWithCodeWriter):
             conditions = expert.ask_for_conditions(case_query)
         self.add_top_rule(case_query)
 
-    def add_conclusion(self, rule_conclusion: List[Any]) -> None:
+    def add_conclusion(self, rule_conclusion: list[Any]) -> None:
         """
         Add the conclusion of the evaluated rule to the list of conclusions.
 
@@ -1784,7 +1774,7 @@ class GeneralRDR(RippleDownRules):
 
     def __init__(
         self,
-        category_rdr_map: Dict[str, SingleClassRDR | MultiClassRDR] | None = None,
+        category_rdr_map: dict[str, SingleClassRDR | MultiClassRDR] | None = None,
         **kwargs,
     ):
         """
@@ -1796,11 +1786,11 @@ class GeneralRDR(RippleDownRules):
         values like Land, Water, Air, etc., which are not mutually exclusive due to some animals living more than one
         habitat.
         """
-        self.start_rules_dict: Dict[str, SingleClassRDR | MultiClassRDR] = (
+        self.start_rules_dict: dict[str, SingleClassRDR | MultiClassRDR] = (
             category_rdr_map if category_rdr_map else {}
         )
         super(GeneralRDR, self).__init__(**kwargs)
-        self.all_figs: List[Figure] = [sr.fig for sr in self.start_rules_dict.values()]
+        self.all_figs: list[Figure] = [sr.fig for sr in self.start_rules_dict.values()]
 
     @classmethod
     def from_python(
@@ -1869,7 +1859,7 @@ class GeneralRDR(RippleDownRules):
             self.start_rules_dict[value.attribute_name] = value
 
     @property
-    def start_rules(self) -> List[SingleClassRule | MultiClassTopRule]:
+    def start_rules(self) -> list[SingleClassRule | MultiClassTopRule]:
         return [rdr.start_rule for rdr in self.start_rules_dict.values()]
 
     def _classify(
@@ -1877,7 +1867,7 @@ class GeneralRDR(RippleDownRules):
         case: Any,
         modify_case: bool = False,
         case_query: CaseQuery | None = None,
-    ) -> Dict[str, Any] | None:
+    ) -> dict[str, Any] | None:
         """
         Classify a case by going through all RDRs and adding the categories that are classified, and then restarting
         the classification until no more categories can be added.
@@ -1896,7 +1886,7 @@ class GeneralRDR(RippleDownRules):
 
     def _fit_case(
         self, case_query: CaseQuery, expert: Expert | None = None, **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Fit the GRDR on a case, if the target is a new type of category, a new RDR is created for it,
         else the existing RDR of that type will be fitted on the case, and then classification is done and all

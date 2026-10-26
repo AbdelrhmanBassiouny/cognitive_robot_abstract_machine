@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from typing_extensions import TYPE_CHECKING, List, TypeVar
+from typing_extensions import TYPE_CHECKING, TypeVar
 
 from coraplex.plans.plan_entity import PlanEntity
 from krrood.entity_query_language.backends import (
@@ -81,7 +81,7 @@ class Context(PlanEntity):
     constructed (generated).
     """
 
-    alternative_motion_mappings: List[type[AlternativeMotion]] = field(
+    alternative_motion_mappings: list[type[AlternativeMotion]] = field(
         default_factory=list
     )
     """
@@ -92,7 +92,7 @@ class Context(PlanEntity):
     use their default motion chart.
     """
 
-    plan_transformations: List[PlanTransformation] = field(default_factory=list)
+    plan_transformations: list[PlanTransformation] = field(default_factory=list)
     """
     The transformations that rewrite the plans of this context while they are expanded.
 
@@ -168,7 +168,7 @@ class Context(PlanEntity):
         world: World,
         plan: Plan = None,
         query_backend: QueryBackend | None = None,
-        alternative_motion_mappings: List[type[AlternativeMotion]] | None = None,
+        alternative_motion_mappings: list[type[AlternativeMotion]] | None = None,
     ):
         """
         Create a context from a world by getting the first robot in the world.

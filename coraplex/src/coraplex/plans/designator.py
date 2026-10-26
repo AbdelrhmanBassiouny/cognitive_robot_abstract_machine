@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, Field
-from typing_extensions import List, Any, TYPE_CHECKING
+from typing_extensions import Any, TYPE_CHECKING
 
 
 from krrood.class_diagrams.attribute_introspector import (
@@ -56,7 +56,7 @@ class Designator:
         return self.plan.context
 
     @classproperty
-    def fields(cls) -> List[Field]:
+    def fields(cls) -> list[Field]:
         """
         The parameters of this designator: the fields a caller constructs it with.
 

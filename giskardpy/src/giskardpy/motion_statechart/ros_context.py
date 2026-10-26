@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import Dict
 
 try:
     from rclpy.action import ActionClient
@@ -20,7 +19,7 @@ from giskardpy.motion_statechart.exceptions import ActionClientTypeMismatchError
 class RosContextExtension(ContextExtension):
     ros_node: Node
 
-    _action_clients: Dict[str, ActionClient] = field(
+    _action_clients: dict[str, ActionClient] = field(
         default_factory=dict, init=False, repr=False
     )
     """

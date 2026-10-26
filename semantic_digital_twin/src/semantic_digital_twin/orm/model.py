@@ -6,7 +6,6 @@ import numpy as np
 import trimesh
 import trimesh.exchange.stl
 from sqlalchemy import TypeDecorator, types
-from typing_extensions import List
 
 from krrood.ormatic.data_access_objects.alternative_mappings import AlternativeMapping
 from semantic_digital_twin.mixin import HasSimulatorProperties
@@ -40,13 +39,13 @@ from semantic_digital_twin.world_description.world_state import WorldState
 
 @dataclass(eq=False)
 class WorldMapping(HasSimulatorProperties, AlternativeMapping[World]):
-    kinematic_structure_entities: List[KinematicStructureEntity]
-    connections: List[Connection]
-    semantic_annotations: List[SemanticAnnotation]
-    degrees_of_freedom: List[DegreeOfFreedom]
+    kinematic_structure_entities: list[KinematicStructureEntity]
+    connections: list[Connection]
+    semantic_annotations: list[SemanticAnnotation]
+    degrees_of_freedom: list[DegreeOfFreedom]
     state: WorldState
     name: str | None
-    modification_history: List[WorldModelModificationBlock]
+    modification_history: list[WorldModelModificationBlock]
 
     @classmethod
     def from_domain_object(cls, obj: World):
@@ -73,7 +72,7 @@ class WorldMapping(HasSimulatorProperties, AlternativeMapping[World]):
         return result
 
     @classmethod
-    def required_pre_build_classes(cls) -> List[type]:
+    def required_pre_build_classes(cls) -> list[type]:
         return [WorldState, SpatialType, WorldEntity]
 
     __hash__ = AlternativeMapping.__hash__
@@ -81,8 +80,8 @@ class WorldMapping(HasSimulatorProperties, AlternativeMapping[World]):
 
 @dataclass(eq=False)
 class WorldStateMapping(AlternativeMapping[WorldState]):
-    data: List[float]
-    ids: List[UUID]
+    data: list[float]
+    ids: list[UUID]
 
     @classmethod
     def from_domain_object(cls, obj: WorldState):
@@ -182,7 +181,7 @@ class AxisAngleMapping(AlternativeMapping[AxisAngle]):
         )
 
     @classmethod
-    def required_pre_build_classes(cls) -> List[type]:
+    def required_pre_build_classes(cls) -> list[type]:
         return [Vector3]
 
 
@@ -201,7 +200,7 @@ class RotationMatrixMapping(AlternativeMapping[RotationMatrix]):
         return rotation_matrix
 
     @classmethod
-    def required_pre_build_classes(cls) -> List[type]:
+    def required_pre_build_classes(cls) -> list[type]:
         return [AxisAngle]
 
 
@@ -233,7 +232,7 @@ class HomogeneousTransformationMatrixMapping(
         )
 
     @classmethod
-    def required_pre_build_classes(cls) -> List[type]:
+    def required_pre_build_classes(cls) -> list[type]:
         return [Point3, AxisAngle]
 
 
@@ -286,7 +285,7 @@ class PoseMapping(AlternativeMapping[Pose]):
         )
 
     @classmethod
-    def required_pre_build_classes(cls) -> List[type]:
+    def required_pre_build_classes(cls) -> list[type]:
         return [Point3, AxisAngle]
 
 
@@ -328,7 +327,7 @@ class Pose2DMapping(AlternativeMapping[Pose2D]):
         )
 
     @classmethod
-    def required_pre_build_classes(cls) -> List[type]:
+    def required_pre_build_classes(cls) -> list[type]:
         return [Point2]
 
 

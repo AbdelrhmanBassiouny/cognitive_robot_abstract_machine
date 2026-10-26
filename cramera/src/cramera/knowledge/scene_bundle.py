@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from coraplex.datastructures.enums import JointType
-from typing_extensions import Any, Dict, List
+from typing_extensions import Any
 from urdf_parser_py.urdf import URDF
 
 from cramera import paths
@@ -26,12 +26,12 @@ class SceneBundle:
     The active scene's parsed ``scene.json``/``trajectory.json``.
     """
 
-    scene: Dict[str, Any]
+    scene: dict[str, Any]
     """
     Parsed ``scene.json``, or ``{}`` when no scene is active or it is unreadable.
     """
 
-    trajectory: Dict[str, Any]
+    trajectory: dict[str, Any]
     """
     Parsed ``trajectory.json``, or ``{}`` when absent or unreadable.
     """
@@ -53,7 +53,7 @@ class SceneBundle:
         return cls.default_of_index(index)
 
     @classmethod
-    def default_of_index(cls, index: Dict[str, Any]) -> str | None:
+    def default_of_index(cls, index: dict[str, Any]) -> str | None:
         """
         The scene a scenes index opens on: the default it declares, or its first scene
         when that default is not one of the scenes it declares.
@@ -120,7 +120,7 @@ class SceneBundle:
         return cls(scene, trajectory if isinstance(trajectory, dict) else {})
 
     @classmethod
-    def declared_presets(cls, scene: str | None = None) -> List[Dict[str, Any]]:
+    def declared_presets(cls, scene: str | None = None) -> list[dict[str, Any]]:
         """
         The ready-made queries a bundle ships for itself, or none.
 
@@ -172,12 +172,12 @@ class ParsedUrdf:
     A scene robot's URDF, parsed into its kinematic-tree shape.
     """
 
-    links: List[str]
+    links: list[str]
     """
     Every link name found in the URDF.
     """
 
-    joints: List[UrdfJoint]
+    joints: list[UrdfJoint]
     """
     Every joint found in the URDF.
     """

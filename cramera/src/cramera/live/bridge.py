@@ -12,7 +12,7 @@ from enum import StrEnum
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
-from typing_extensions import Any, ClassVar, Dict, FrozenSet, List, TYPE_CHECKING
+from typing_extensions import Any, ClassVar, TYPE_CHECKING
 from coraplex.plans.plan_node import DesignatorNode
 from giskardpy.motion_statechart.data_types import LifeCycleValues
 from krrood.entity_query_language.evaluable import Evaluable
@@ -168,7 +168,7 @@ class PlanNodeEntry:
     Published object the node's designator refers to, if any.
     """
 
-    def to_payload(self) -> Dict[str, Any]:
+    def to_payload(self) -> dict[str, Any]:
         """Serialize the node with its native lifecycle name.
 
         :return: The node fields with the lifecycle represented as text.
@@ -205,12 +205,12 @@ class PlanSnapshot:
     Node-id signature of the tree's shape, stable across status-only changes.
     """
 
-    nodes: List[PlanNodeEntry] = field(default_factory=list)
+    nodes: list[PlanNodeEntry] = field(default_factory=list)
     """
     Every node in the tree, flattened with parent references.
     """
 
-    def to_payload(self) -> Dict[str, Any]:
+    def to_payload(self) -> dict[str, Any]:
         """
         The snapshot plus the legend its groups are drawn with, so the viewer does not
         keep its own copy of the plan-node colour table.
@@ -225,7 +225,7 @@ class PlanSnapshot:
         ]
         return payload
 
-    def recorded_trees(self) -> List[Dict[str, Any]]:
+    def recorded_trees(self) -> list[dict[str, Any]]:
         """Build the recorded hierarchy from each node's parent reference.
 
         :return: Plan roots containing their children and action metadata.
@@ -255,17 +255,17 @@ class WorldStateSnapshot:
     Monotonic snapshot counter so the viewer can skip unchanged states.
     """
 
-    frames: Dict[str, float] = field(default_factory=dict)
+    frames: dict[str, float] = field(default_factory=dict)
     """
     Movable connection position by prefixed name.
     """
 
-    base: List[float] | None = None
+    base: list[float] | None = None
     """
     Robot base pose as ``[x, y, z, qx, qy, qz, qw]``, or None without a robot.
     """
 
-    objects: Dict[str, List[float]] = field(default_factory=dict)
+    objects: dict[str, list[float]] = field(default_factory=dict)
     """
     Loose-object pose by mesh key, in the same 7-element form as :attr:`base`.
     """
@@ -280,7 +280,7 @@ class WorldStateSnapshot:
     Version of the debug-marker overlay; the viewer refetches ``/markers`` on change.
     """
 
-    def orientation_of(self, object_key: str) -> List[float] | None:
+    def orientation_of(self, object_key: str) -> list[float] | None:
         """
         The orientation one object stands at, or None if this snapshot has no pose for it.
 
@@ -291,13 +291,13 @@ class WorldStateSnapshot:
             return None
         return list(pose[self.ORIENTATION_START :])
 
-    model_bases: Dict[str, List[float]] = field(default_factory=dict)
+    model_bases: dict[str, list[float]] = field(default_factory=dict)
     """
     Every bundled model's root pose by world-instance prefix, in the same 7-element
     form as :attr:`base`, so a second robot or a moved environment model animates.
     """
 
-    def to_payload(self) -> Dict[str, Any]:
+    def to_payload(self) -> dict[str, Any]:
         """
         The snapshot in the camel-cased JSON shape the viewer reads.
         """
@@ -320,7 +320,7 @@ class BridgeStatus:
     robot: str | None
     """Name of the bound robot model."""
 
-    objects: List[str]
+    objects: list[str]
     """Published loose-object identifiers."""
 
     movable: bool
@@ -351,12 +351,12 @@ class BridgeStatus:
     Digest of the current geometry; a changed value requests a scene reload.
     """
 
-    robot_parts: List[RobotPartAnnotation] = field(default_factory=list)
+    robot_parts: list[RobotPartAnnotation] = field(default_factory=list)
     """
     The arms and end effectors of the live robot, as sem_dt annotates them.
     """
 
-    def to_payload(self) -> Dict[str, Any]:
+    def to_payload(self) -> dict[str, Any]:
         """
         The status in the JSON shape the viewer polls, with the robot parts in the same
         ``partAnnotations`` shape a recorded scene bundle carries.
@@ -404,7 +404,7 @@ class Bridge:
     The newest world snapshot in the trajectory-frame format.
     """
 
-    object_metadata: List[ObjectCatalogEntry] = field(default_factory=list)
+    object_metadata: list[ObjectCatalogEntry] = field(default_factory=list)
     """
     Geometry catalog for the viewer: one entry per loose object.
     """
@@ -419,7 +419,7 @@ class Bridge:
     The newest motion-statechart snapshot (see :meth:`observe_chart`).
     """
 
-    _connections: List[ActiveConnection1DOF] = field(default_factory=list)
+    _connections: list[ActiveConnection1DOF] = field(default_factory=list)
     """
     Actuated world connections whose positions are published as frames.
     """
@@ -474,12 +474,12 @@ class Bridge:
     Tracks when each world connection last changed, across ticks.
     """
 
-    _kinematic_connections: List[Connection] = field(default_factory=list)
+    _kinematic_connections: list[Connection] = field(default_factory=list)
     """
     Every world connection, of any kind, as the last bind discovered them.
     """
 
-    _bodies: Dict[str, Body] = field(default_factory=dict)
+    _bodies: dict[str, Body] = field(default_factory=dict)
     """
     Published bodies by mesh key, including the configured robot root key.
     """
@@ -497,7 +497,7 @@ class Bridge:
     bundle_lock: threading.RLock = field(default_factory=threading.RLock)
     """Serializes this session's geometry and recording exports."""
 
-    _mesh_serve: Dict[str, Mesh] = field(default_factory=dict)
+    _mesh_serve: dict[str, Mesh] = field(default_factory=dict)
     """
     Native mesh sources allowed through the ``/mesh`` endpoint, keyed by filename.
     """
@@ -522,7 +522,7 @@ class Bridge:
     Counts world attachments and model changes, reported as the status's model version.
     """
 
-    _marker_stores: Dict[str, MarkerStore] = field(default_factory=dict)
+    _marker_stores: dict[str, MarkerStore] = field(default_factory=dict)
     """
     The ROS debug markers per subscribed topic (see :mod:`cramera.live.ros_markers`).
     """
@@ -539,7 +539,7 @@ class Bridge:
     marker settings manage its topics through the bridge.
     """
 
-    marker_state: Dict[str, Any] = field(
+    marker_state: dict[str, Any] = field(
         default_factory=lambda: {"version": 0, "markers": []}
     )
     """
@@ -630,7 +630,7 @@ class Bridge:
         self.bind()
         self._refresh_bundle_signature()
 
-    def observe_ros_markers(self, topic: str, markers: List[Any]) -> None:
+    def observe_ros_markers(self, topic: str, markers: list[Any]) -> None:
         """
         Apply one received ``MarkerArray`` (called on the ROS subscriber thread).
 
@@ -681,7 +681,7 @@ class Bridge:
                 "markers": markers,
             }
 
-    def _marker_payload(self, topic: str, entry: MarkerEntry) -> Dict[str, Any]:
+    def _marker_payload(self, topic: str, entry: MarkerEntry) -> dict[str, Any]:
         """
         One marker as the viewer renders it, with its pose resolved into the world.
 
@@ -701,7 +701,7 @@ class Bridge:
             "text": entry.text,
         }
 
-    def _marker_world_pose(self, entry: MarkerEntry) -> List[float]:
+    def _marker_world_pose(self, entry: MarkerEntry) -> list[float]:
         """
         A marker's pose in world coordinates, as ``[x, y, z, qx, qy, qz, qw]``.
 
@@ -738,14 +738,14 @@ class Bridge:
                 return body
         return None
 
-    def get_markers(self) -> Dict[str, Any]:
+    def get_markers(self) -> dict[str, Any]:
         """
         The debug-marker overlay the viewer renders.
         """
         with self._lock:
             return self.marker_state
 
-    def marker_topics_payload(self) -> Dict[str, Any]:
+    def marker_topics_payload(self) -> dict[str, Any]:
         """
         The marker settings the viewer offers: what is watched and what the ROS graph
         advertises.
@@ -762,7 +762,7 @@ class Bridge:
             ),
         }
 
-    def set_marker_topic(self, topic: str, subscribed: bool) -> Dict[str, Any]:
+    def set_marker_topic(self, topic: str, subscribed: bool) -> dict[str, Any]:
         """
         Start or stop watching one marker topic, as the viewer's settings ask.
 
@@ -786,7 +786,7 @@ class Bridge:
                     self._marker_revision += 1
         return self.marker_topics_payload()
 
-    def publish_bodies(self, bodies: Dict[str, Body]) -> None:
+    def publish_bodies(self, bodies: dict[str, Body]) -> None:
         """
         Replace the published bodies and rebuild the viewer's geometry catalog.
 
@@ -796,14 +796,14 @@ class Bridge:
         self._build_object_metadata(bodies)
 
     # %% what the HTTP layer reads
-    def object_catalog(self) -> List[Dict[str, Any]]:
+    def object_catalog(self) -> list[dict[str, Any]]:
         """
         The geometry catalog the viewer spawns live objects from.
         """
         with self._lock:
             return [entry.to_payload() for entry in self.object_metadata]
 
-    def object_keys(self) -> List[str]:
+    def object_keys(self) -> list[str]:
         """
         Mesh keys of the published loose objects, excluding the robot root.
         """
@@ -875,7 +875,7 @@ class Bridge:
             self._bundle_signature = ""
             return
         robot_name = type(self.robot).__name__.lower() if self.robot else None
-        entries: List[str] = []
+        entries: list[str] = []
         try:
             overlay_bodies = set(self.overlay_bodies())
             for body in self.world.bodies:
@@ -899,7 +899,7 @@ class Bridge:
         digest = hashlib.sha1("|".join(sorted(entries)).encode()).hexdigest()[:16]
         self._bundle_signature = "world-%s-robot-%s" % (digest, robot_name)
 
-    def status(self) -> Dict[str, Any]:
+    def status(self) -> dict[str, Any]:
         """
         What the viewer polls to decide whether a live demo is reachable.
         """
@@ -1015,7 +1015,7 @@ class Bridge:
             world = knowledge[0].extra_names[World.__name__.lower()]
             return world.name or type(world).__name__
 
-    def query_presets(self) -> List[Preset]:
+    def query_presets(self) -> list[Preset]:
         """
         List the selected source's visible presets with their English wording.
 
@@ -1063,7 +1063,7 @@ class Bridge:
             presets = self._worded_presets(knowledge) + unlisted
             return QuestionMatcher(presets).match(text)
 
-    def query_scopes(self) -> List[QueryScope]:
+    def query_scopes(self) -> list[QueryScope]:
         """
         List the bodies of knowledge available from the selected source.
 
@@ -1075,7 +1075,7 @@ class Bridge:
 
     def query_variables(
         self, scope: QueryScope = QueryScope.CURRENT_STATE
-    ) -> List[str]:
+    ) -> list[str]:
         """
         List ready-made query variables or the scope's directly exposed values.
 
@@ -1122,7 +1122,7 @@ class Bridge:
                 return item
         raise UnknownQueryScope(name=scope.value)
 
-    def highlightable_ids(self) -> FrozenSet[str]:
+    def highlightable_ids(self) -> frozenset[str]:
         """
         Ids the viewer can light up: every published object, by key and by display id.
 
@@ -1191,7 +1191,7 @@ class Bridge:
         self.robot = robots[0] if robots else None
         self._kinematic_connections = list(world.connections)
         self._connections = self._actuated_connections(self._kinematic_connections)
-        bodies: Dict[str, Body] = {}
+        bodies: dict[str, Body] = {}
         if self.robot is not None:
             bodies[self.configuration.robot_base_key] = self.robot.root
         try:
@@ -1206,7 +1206,7 @@ class Bridge:
                 bodies.setdefault(key, body)
         self.publish_bodies(bodies)
 
-    def overlay_bodies(self) -> List[Body]:
+    def overlay_bodies(self) -> list[Body]:
         """Return the independent objects currently published by this session."""
         with self._lock:
             return [
@@ -1215,7 +1215,7 @@ class Bridge:
                 if key != self.configuration.robot_base_key
             ]
 
-    def _discover_overlay_bodies(self) -> Dict[str, Body]:
+    def _discover_overlay_bodies(self) -> dict[str, Body]:
         """Discover movable objects and retain their identity through attachments."""
         return {
             str(body.name).split("/")[-1]: body
@@ -1226,8 +1226,8 @@ class Bridge:
 
     @staticmethod
     def _actuated_connections(
-        connections: List[Connection],
-    ) -> List[ActiveConnection1DOF]:
+        connections: list[Connection],
+    ) -> list[ActiveConnection1DOF]:
         """
         All 1-DOF connections — the joints published as trajectory frames.
 
@@ -1239,7 +1239,7 @@ class Bridge:
             if isinstance(connection, ActiveConnection1DOF)
         ]
 
-    def _build_object_metadata(self, bodies: Dict[str, Body]) -> None:
+    def _build_object_metadata(self, bodies: dict[str, Body]) -> None:
         """
         Rebuild the geometry catalog the viewer spawns live objects from.
 
@@ -1248,8 +1248,8 @@ class Bridge:
 
         :param bodies: The current published bodies, keyed by their publication keys.
         """
-        catalog: List[ObjectCatalogEntry] = []
-        serve: Dict[str, Mesh] = {}
+        catalog: list[ObjectCatalogEntry] = []
+        serve: dict[str, Mesh] = {}
         for key, body in (
             item
             for item in bodies.items()
@@ -1286,8 +1286,8 @@ class Bridge:
             str(connection.name): round(float(connection.position), POSE_PRECISION)
             for connection in self._connections
         }
-        base_pose: List[float] | None = None
-        object_poses: Dict[str, List[float]] = {}
+        base_pose: list[float] | None = None
+        object_poses: dict[str, list[float]] = {}
         for name, body in self._bodies.items():
             if name == self.configuration.robot_base_key:
                 base_pose = rounded_pose(body)
@@ -1308,7 +1308,7 @@ class Bridge:
                 markers_version=self.marker_state["version"],
             )
 
-    def get_state(self) -> Dict[str, Any]:
+    def get_state(self) -> dict[str, Any]:
         """
         The newest world snapshot (safe to call from HTTP threads).
 
@@ -1317,7 +1317,7 @@ class Bridge:
             payload = self.state.to_payload()
         return payload
 
-    def get_transforms(self) -> Dict[str, Any]:
+    def get_transforms(self) -> dict[str, Any]:
         """
         The newest transform graph, aged as of now (safe to call from HTTP threads).
         """
@@ -1337,8 +1337,8 @@ class Bridge:
         except Exception:
             # the plan is mid-mutation and not a tree right now — next tick
             return
-        nodes: List[PlanNodeEntry] = []
-        order: List[str] = []
+        nodes: list[PlanNodeEntry] = []
+        order: list[str] = []
         self._serialize_plan_node(root, None, nodes, order)
         with self._lock:
             self.plan_state = PlanSnapshot(signature="|".join(order), nodes=nodes)
@@ -1347,8 +1347,8 @@ class Bridge:
         self,
         node: PlanNode,
         parent_id: str | None,
-        nodes: List[PlanNodeEntry],
-        order: List[str],
+        nodes: list[PlanNodeEntry],
+        order: list[str],
     ) -> None:
         """
         Serialize one plan node and its subtree.
@@ -1434,7 +1434,7 @@ class Bridge:
             ]
         return running[-1].label if running else None
 
-    def get_plan(self) -> Dict[str, Any]:
+    def get_plan(self) -> dict[str, Any]:
         """
         The newest plan snapshot (safe to call from HTTP threads).
         """
@@ -1465,7 +1465,7 @@ class Bridge:
             chart = self.chart_state
         return chart if chart.nodes else None
 
-    def get_chart(self) -> Dict[str, Any]:
+    def get_chart(self) -> dict[str, Any]:
         """
         The newest statechart snapshot (safe to call from HTTP threads).
         """

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing_extensions import List, assert_never, TYPE_CHECKING, TypeVar, Callable
+from typing_extensions import assert_never, TYPE_CHECKING, TypeVar, Callable
 
 
 from coraplex.datastructures.dataclasses import Context
@@ -41,7 +41,7 @@ def execute_single(
 
 
 def sequential(
-    children: List[ActionLike],
+    children: list[ActionLike],
     context: Context | None = None,
 ) -> SequentialNode:
     """
@@ -58,7 +58,7 @@ def sequential(
 
 
 def parallel(
-    children: List[ActionLike],
+    children: list[ActionLike],
     context: Context | None = None,
 ) -> ParallelNode:
     """
@@ -77,7 +77,7 @@ def parallel(
 
 
 def try_in_order(
-    children: List[ActionLike],
+    children: list[ActionLike],
     context: Context | None = None,
 ) -> TryInOrderNode:
     """
@@ -94,7 +94,7 @@ def try_in_order(
 
 
 def try_all(
-    children: List[ActionLike],
+    children: list[ActionLike],
     context: Context | None = None,
 ) -> TryAllNode:
     """
@@ -113,7 +113,7 @@ def try_all(
 
 
 def pause_while(
-    children: List[ActionLike],
+    children: list[ActionLike],
     monitor: MotionStatechartNode,
     context: Context | None = None,
 ) -> PauseMonitor:
@@ -133,7 +133,7 @@ def pause_while(
 
 
 def pause_until(
-    children: List[ActionLike],
+    children: list[ActionLike],
     monitor: MotionStatechartNode,
     context: Context | None = None,
 ) -> PauseUntilMonitor:
@@ -153,7 +153,7 @@ def pause_until(
 
 
 def cancel_when(
-    children: List[ActionLike],
+    children: list[ActionLike],
     monitor: MotionStatechartNode,
     context: Context | None = None,
 ) -> CancelMonitor:
@@ -173,7 +173,7 @@ def cancel_when(
 
 
 def repeat(
-    children: List[ActionLike],
+    children: list[ActionLike],
     maximum_repetitions: int,
     context: Context | None = None,
     **repeat_arguments,
@@ -205,7 +205,7 @@ T = TypeVar("T")
 
 
 def _make_plan_from_type_and_children(
-    root: T, children: List[ActionLike], context: Context | None
+    root: T, children: list[ActionLike], context: Context | None
 ) -> T:
     plan = Plan(context=context)
     plan.add_node(root)

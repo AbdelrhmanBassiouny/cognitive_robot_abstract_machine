@@ -14,7 +14,7 @@ It handles:
 import logging
 
 import open3d as o3d  # this import creates a SIGINT during unit test execution....
-from typing_extensions import Any, Dict, List
+from typing_extensions import Any
 
 from robokudo.annotators.core import BaseAnnotator
 from robokudo.defs import PACKAGE_NAME
@@ -169,7 +169,7 @@ class Viewer3D(object):
 
         app.add_window(self.main_vis)
 
-        self.visualized_geometries: List[str] = []
+        self.visualized_geometries: list[str] = []
         """
         List of the names of the currently visualized geometries.
         """
@@ -187,7 +187,7 @@ class Viewer3D(object):
         return tick_return
 
     def update_cloud(
-        self, geometries: o3d.geometry.Geometry | Dict | List | None
+        self, geometries: o3d.geometry.Geometry | dict | list | None
     ) -> None:
         """
         Update the displayed geometries.
@@ -206,7 +206,7 @@ class Viewer3D(object):
 
         # local method to add a single geometry. either based on the geometry being fully
         # defined with a dict or being a plain geometry object
-        def add(g: o3d.geometry.PointCloud | Dict | List, n: int) -> None:
+        def add(g: o3d.geometry.PointCloud | dict | list, n: int) -> None:
             # Skip empty point clouds as they generate errors during the update
             if isinstance(g, o3d.geometry.PointCloud) and len(g.points) == 0:
                 return
@@ -223,7 +223,7 @@ class Viewer3D(object):
         # Add all geometries from the given parameter.
         # It is safe to either input a plain geometry object or a list of objects.
         def add_all(
-            geometries_to_add: o3d.geometry.Geometry | Dict | List,
+            geometries_to_add: o3d.geometry.Geometry | dict | list,
         ) -> None:
             n = 1
             if isinstance(geometries_to_add, list):

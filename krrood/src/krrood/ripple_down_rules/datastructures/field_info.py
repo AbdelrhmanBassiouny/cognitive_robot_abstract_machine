@@ -11,7 +11,7 @@ from datetime import datetime
 from krrood.patterns.caching import memoize
 from types import NoneType
 
-from typing_extensions import Type, get_origin, get_type_hints, Tuple
+from typing_extensions import Type, get_origin, get_type_hints
 
 from krrood.ripple_down_rules.utils import make_tuple
 
@@ -43,7 +43,7 @@ class FieldInfo:
     The name of the field.
     """
 
-    type: Tuple[type, ...]
+    type: tuple[type, ...]
     """
     The type of the field or inner type of the container if it is a container.
     """

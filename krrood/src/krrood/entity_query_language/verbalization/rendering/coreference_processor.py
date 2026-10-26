@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing_extensions import Dict, Iterable, List, Set, Tuple
+from typing_extensions import Dict, Iterable
 import uuid
 
 from krrood.entity_query_language.verbalization.fragments.base import (
@@ -112,12 +112,12 @@ class CoreferenceProcessor(RealizationPass):
     *"the Robot"* — treated as already-mentioned before the walk begins.
     """
 
-    _seen: Set[uuid.UUID] = field(init=False, default_factory=set)
+    _seen: set[uuid.UUID] = field(init=False, default_factory=set)
     """
     Referent ids already mentioned at the current point of the walk.
     """
 
-    _subject_stack: List[SubjectFrame] = field(init=False, default_factory=list)
+    _subject_stack: list[SubjectFrame] = field(init=False, default_factory=list)
     """
     Stack of :class:`SubjectFrame` entries — the number selects
     *"its"*/*"their"*.
@@ -410,7 +410,7 @@ class CoreferenceProcessor(RealizationPass):
         )
 
     @staticmethod
-    def _outermost_relation(parts: List[PathStep]) -> Tuple[uuid.UUID, List] | None:
+    def _outermost_relation(parts: list[PathStep]) -> tuple[uuid.UUID, list] | None:
         """:return: ``(referent_id, tail)`` for the chain's outermost relational hop — the related
         entity it introduces and the attributes hanging off it — or ``None`` when the chain has no
         relational hop (or it carries no referent id).
@@ -431,7 +431,7 @@ class CoreferenceProcessor(RealizationPass):
                 )
         return None
 
-    def _chain_topic(self, parts: List[PathStep]) -> uuid.UUID | None:
+    def _chain_topic(self, parts: list[PathStep]) -> uuid.UUID | None:
         """:return: The referent the clause just said is grammatically *about* — the head of its
         subject noun phrase — to carry forward as the local centre for *"its …"*.
 
@@ -585,8 +585,8 @@ class CoreferenceProcessor(RealizationPass):
 
     @staticmethod
     def _comma_framed(
-        modifiers: List[VerbalizationFragment],
-    ) -> List[VerbalizationFragment]:
+        modifiers: list[VerbalizationFragment],
+    ) -> list[VerbalizationFragment]:
         """:return: *modifiers* set off by a leading and trailing comma, so a non-restrictive relative
         clause reads *"the other Robot, to which its secondary is assigned, is …"*. The comma's
         :attr:`Spacing.LEFT` lets the orthography pass hug it to the preceding token."""

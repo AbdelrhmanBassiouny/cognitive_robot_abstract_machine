@@ -4,7 +4,7 @@ import ast
 import inspect
 import textwrap
 
-from typing_extensions import Dict, Any
+from typing_extensions import Any
 
 from krrood.entity_query_language.verbalization.fragments.source_reference import (
     SourceReference,
@@ -50,7 +50,7 @@ def _string_expression_first_line(node: ast.AST) -> str | None:
 
 
 @weak_key_cache
-def _attribute_docstrings(cls: type) -> Dict[str, str]:
+def _attribute_docstrings(cls: type) -> dict[str, str]:
     """
     :param cls: The class whose own body to scan.
     :return: A mapping of field name to its first PEP 257 attribute docstring line, or an empty
@@ -65,7 +65,7 @@ def _attribute_docstrings(cls: type) -> Dict[str, str]:
     except (SyntaxError, IndexError):
         return {}
     body = getattr(class_definition, "body", [])
-    docstrings: Dict[str, str] = {}
+    docstrings: dict[str, str] = {}
     for current, following in zip(body, body[1:]):
         name = _annotated_target_name(current)
         if name is None:

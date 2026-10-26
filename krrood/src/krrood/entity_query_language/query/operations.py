@@ -12,16 +12,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from functools import cached_property, lru_cache
 
-from typing_extensions import (
-    Tuple,
-    Any,
-    Iterator,
-    Iterable,
-    Dict,
-    FrozenSet,
-    Hashable,
-    Set,
-)
+from typing_extensions import Tuple, Any, Iterator, Iterable, Dict, Hashable
 
 from krrood.entity_query_language.operators.aggregators import (
     Aggregator,
@@ -129,11 +120,11 @@ class GroupedBy(MultiArityExpressionThatPerformsACartesianProduct):
     separately for each group.
     """
 
-    aggregators: Tuple[Aggregator, ...] = field(default_factory=tuple)
+    aggregators: tuple[Aggregator, ...] = field(default_factory=tuple)
     """
     The aggregators to apply to the grouped results.
     """
-    variables_to_group_by: Tuple[Selectable, ...] = ()
+    variables_to_group_by: tuple[Selectable, ...] = ()
     """
     The variables to group the results by their values.
     """
@@ -168,7 +159,7 @@ class GroupedBy(MultiArityExpressionThatPerformsACartesianProduct):
 
     def get_groups_and_group_key_count(
         self, sources: OperationResult | None
-    ) -> Tuple[GroupBindings, Dict[GroupKey, int]]:
+    ) -> tuple[GroupBindings, dict[GroupKey, int]]:
         """
         Create a dictionary of groups and a dictionary of group keys to their corresponding counts starting from the
         initial bindings, then applying the constraints in the where expression then grouping by the variables in the
@@ -204,7 +195,7 @@ class GroupedBy(MultiArityExpressionThatPerformsACartesianProduct):
         return groups, group_key_count
 
     @lru_cache
-    def get_group_key(self, result_values: FrozenSet[uuid.UUID]) -> GroupKey:
+    def get_group_key(self, result_values: frozenset[uuid.UUID]) -> GroupKey:
         """
         :param result_values: The values of the variables to group by in the current result.
         :return: A tuple of the values of the variables to group by representing a group key.
@@ -252,7 +243,7 @@ class GroupedBy(MultiArityExpressionThatPerformsACartesianProduct):
         )
 
     @cached_property
-    def _aggregators_of_type_count_all_(self) -> Tuple[CountAll, ...]:
+    def _aggregators_of_type_count_all_(self) -> tuple[CountAll, ...]:
         """
         :return: The aggregators that count all rows per group.
         """
@@ -272,14 +263,14 @@ class GroupedBy(MultiArityExpressionThatPerformsACartesianProduct):
         ]
 
     @cached_property
-    def ids_of_variables_to_group_by(self) -> Tuple[uuid.UUID, ...]:
+    def ids_of_variables_to_group_by(self) -> tuple[uuid.UUID, ...]:
         """
         :return: A tuple of the binding IDs of the variables to group by.
         """
         return tuple(var._id_ for var in self.variables_to_group_by)
 
     @cached_property
-    def group_key_root_ids(self) -> Set[uuid.UUID]:
+    def group_key_root_ids(self) -> set[uuid.UUID]:
         """
         :return: The ids of the distinct ``Variable`` chain-roots of the group-by keys (e.g. for a
             key ``employee.department`` the root is the ``employee`` variable).

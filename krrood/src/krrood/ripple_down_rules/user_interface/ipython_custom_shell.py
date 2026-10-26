@@ -1,6 +1,5 @@
 import os
 import sys
-from typing_extensions import List
 
 from IPython.core.magic import magics_class, Magics, line_magic
 from IPython.terminal.embed import InteractiveShellEmbed
@@ -35,7 +34,7 @@ class MyMagics(Magics):
         self.rule_editor = TemplateFileCreator(
             case_query, prompt_for=prompt_for, code_to_modify=code_to_modify
         )
-        self.all_code_lines: List[str] | None = None
+        self.all_code_lines: list[str] | None = None
         self.edited: bool = False
         self.loaded: bool = False
 
@@ -171,7 +170,7 @@ class IPythonShell:
         self.code_to_modify: str | None = code_to_modify
         self.user_input: str | None = None
         self.shell: CustomInteractiveShell = self._init_shell()
-        self.all_code_lines: List[str] = []
+        self.all_code_lines: list[str] = []
 
     def _init_shell(self):
         """

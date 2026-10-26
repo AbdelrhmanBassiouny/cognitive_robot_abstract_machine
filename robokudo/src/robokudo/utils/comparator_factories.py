@@ -1,5 +1,3 @@
-from typing_extensions import Dict
-
 from robokudo.types.annotation import (
     BoundingBox3DAnnotation,
     Classification,
@@ -41,7 +39,7 @@ class FeatureComparatorFactory:
     A factory for creating feature comparators.
     """
 
-    annotator_comparators: Dict[type[Annotation], type[FeatureComparator]] = {
+    annotator_comparators: dict[type[Annotation], type[FeatureComparator]] = {
         BoundingBox3DAnnotation: BboxComparator,
         Classification: ClassificationComparator,
         ColorHistogram: HistogramComparator,
@@ -57,7 +55,7 @@ class FeatureComparatorFactory:
     Mapping of annotation types to feature comparators.
     """
 
-    type_comparators: Dict[type[RkType], type[FeatureComparator]] = {
+    type_comparators: dict[type[RkType], type[FeatureComparator]] = {
         Rect: RoiComparator,
         ImageROI: ImageROIComparator,
         Position: TranslationComparator,

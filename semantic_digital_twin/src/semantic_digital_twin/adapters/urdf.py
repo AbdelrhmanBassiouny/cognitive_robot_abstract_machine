@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import numpy as np
-from typing_extensions import Dict, List
 from urdf_parser_py import urdf as urdfpy
 from xacro import process_file
 
@@ -67,7 +66,7 @@ connection_type_map = {  # 'unknown': JointType.UNKNOWN,
 }
 
 
-def urdf_joint_axis(urdf_joint: urdfpy.Joint) -> List[float]:
+def urdf_joint_axis(urdf_joint: urdfpy.Joint) -> list[float]:
     """
     The axis a URDF joint moves along, as the unit vector the connections expect.
 
@@ -195,7 +194,7 @@ class URDFParser(WorldModelParser):
         cls,
         xacro_path: str,
         prefix: str | None = None,
-        mappings: Dict[str, str] | None = None,
+        mappings: dict[str, str] | None = None,
         use_visual_as_collision_backup: bool = False,
     ) -> URDFParser:
         """
@@ -417,7 +416,7 @@ class URDFParser(WorldModelParser):
 
     def parse_geometry(
         self,
-        geometry: List[urdfpy.Collision] | List[urdfpy.Visual],
+        geometry: list[urdfpy.Collision] | list[urdfpy.Visual],
         body: Body,
     ) -> ShapeCollection:
         """

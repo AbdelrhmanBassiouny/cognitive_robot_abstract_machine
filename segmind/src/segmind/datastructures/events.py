@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from functools import cached_property
 
-from typing_extensions import List
 
 from segmind.datastructures.object_tracker import (
     ObjectEventTracker,
@@ -56,7 +55,7 @@ class EventWithTrackedObjects(DetectionEvent, ABC):
     """The secondary object involved in this event, if any."""
 
     @property
-    def tracked_objects(self) -> List[Body]:
+    def tracked_objects(self) -> list[Body]:
         """
         :return: the primary object, plus the secondary object when present.
         """
@@ -289,7 +288,7 @@ class InsertionEvent(EventWithTrackedObjects):
     Represents an event where an object is inserted into another object.
     """
 
-    inserted_into_objects: List[Body] = field(default_factory=list)
+    inserted_into_objects: list[Body] = field(default_factory=list)
     """
     List of objects into which the object was inserted.
     """

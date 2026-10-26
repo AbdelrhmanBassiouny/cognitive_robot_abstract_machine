@@ -157,7 +157,7 @@ class SubclassJSONSerializer:
     that class during deserialization.
     """
 
-    def to_json(self, **kwargs) -> Dict[str, Any]:
+    def to_json(self, **kwargs) -> dict[str, Any]:
         """
         :param kwargs: Keyword arguments to hand on to the ``to_json`` calls for the
             values this object holds.
@@ -166,7 +166,7 @@ class SubclassJSONSerializer:
         return {JSONField.TYPE: get_full_class_name(self.__class__)}
 
     @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+    def _from_json(cls, data: dict[str, Any], **kwargs) -> Self:
         """
         Create an instance from a json dict.
 
@@ -181,7 +181,7 @@ class SubclassJSONSerializer:
         raise NotImplementedError()
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+    def from_json(cls, data: dict[str, Any], **kwargs) -> Self:
         """
         Create the correct instanceof the subclass from a json dict.
 
@@ -248,7 +248,7 @@ class SubclassJSONSerializer:
             )
 
 
-def from_json(data: Dict[str, Any], **kwargs) -> SubclassJSONSerializer | Any:
+def from_json(data: dict[str, Any], **kwargs) -> SubclassJSONSerializer | Any:
     """
     Deserialize a JSON dict to an object.
 
@@ -364,7 +364,7 @@ class JSONAttributeDiff(SubclassJSONSerializer):
                 del items[positions[-1]]
         items.extend(added_items)
 
-    def to_json(self, **kwargs) -> Dict[str, Any]:
+    def to_json(self, **kwargs) -> dict[str, Any]:
         return {
             JSONField.TYPE: get_full_class_name(self.__class__),
             AttributeDiffJSONKey.ATTRIBUTE_NAME: self.attribute_name,
@@ -373,7 +373,7 @@ class JSONAttributeDiff(SubclassJSONSerializer):
         }
 
     @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+    def _from_json(cls, data: dict[str, Any], **kwargs) -> Self:
         return cls(
             attribute_name=data[AttributeDiffJSONKey.ATTRIBUTE_NAME],
             removed_values=data[AttributeDiffJSONKey.REMOVED_VALUES],
@@ -382,7 +382,7 @@ class JSONAttributeDiff(SubclassJSONSerializer):
 
 
 def shallow_diff_json(
-    original_json: Dict[str, Any], new_json: Dict[str, Any], **kwargs
+    original_json: dict[str, Any], new_json: dict[str, Any], **kwargs
 ) -> list[JSONAttributeDiff]:
     """
     Create a shallow diff between two JSON dicts.
@@ -455,7 +455,7 @@ class ExternalClassJSONSerializer(HasGeneric[T], ABC):
     """
 
     @classmethod
-    def to_json(cls, obj: Any, **kwargs) -> Dict[str, Any]:
+    def to_json(cls, obj: Any, **kwargs) -> dict[str, Any]:
         """
         Convert an object to a JSON serializable dictionary.
 
@@ -466,7 +466,7 @@ class ExternalClassJSONSerializer(HasGeneric[T], ABC):
         """
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any], clazz: type[T], **kwargs) -> Any:
+    def from_json(cls, data: dict[str, Any], clazz: type[T], **kwargs) -> Any:
         """
         Create a class instance from a JSON serializable dictionary.
 
@@ -503,7 +503,7 @@ class ReferenceWriter(SerializationKeywordArgument, HasGeneric[ReferencedType], 
 
     @classmethod
     def find_for(
-        cls, obj: Any, to_json_kwargs: Dict[str, Any]
+        cls, obj: Any, to_json_kwargs: dict[str, Any]
     ) -> ReferenceWriter | None:
         """
         :param obj: The object about to be serialized.
@@ -519,7 +519,7 @@ class ReferenceWriter(SerializationKeywordArgument, HasGeneric[ReferencedType], 
         return None
 
     @abstractmethod
-    def write_reference(self, obj: ReferencedType) -> Dict[str, Any]:
+    def write_reference(self, obj: ReferencedType) -> dict[str, Any]:
         """
         :param obj: The object to refer to.
         :return: The JSON the document holds in place of the object.
@@ -541,7 +541,7 @@ class UUIDJSONKey(enum.StrEnum):
 class UUIDJSONSerializer(ExternalClassJSONSerializer[uuid.UUID]):
 
     @classmethod
-    def to_json(cls, obj: uuid.UUID, **kwargs) -> Dict[str, Any]:
+    def to_json(cls, obj: uuid.UUID, **kwargs) -> dict[str, Any]:
         return {
             JSONField.TYPE: get_full_class_name(type(obj)),
             UUIDJSONKey.VALUE: str(obj),
@@ -549,7 +549,7 @@ class UUIDJSONSerializer(ExternalClassJSONSerializer[uuid.UUID]):
 
     @classmethod
     def from_json(
-        cls, data: Dict[str, Any], clazz: type[uuid.UUID], **kwargs
+        cls, data: dict[str, Any], clazz: type[uuid.UUID], **kwargs
     ) -> uuid.UUID:
         return clazz(data[UUIDJSONKey.VALUE])
 
@@ -585,7 +585,7 @@ class TimedeltaJSONSerializer(ExternalClassJSONSerializer[timedelta]):
     """
 
     @classmethod
-    def to_json(cls, obj: timedelta, **kwargs) -> Dict[str, Any]:
+    def to_json(cls, obj: timedelta, **kwargs) -> dict[str, Any]:
         return {
             JSONField.TYPE: get_full_class_name(type(obj)),
             TimedeltaJSONKey.DAYS: obj.days,
@@ -595,7 +595,7 @@ class TimedeltaJSONSerializer(ExternalClassJSONSerializer[timedelta]):
 
     @classmethod
     def from_json(
-        cls, data: Dict[str, Any], clazz: type[timedelta], **kwargs
+        cls, data: dict[str, Any], clazz: type[timedelta], **kwargs
     ) -> timedelta:
         return clazz(
             days=data[TimedeltaJSONKey.DAYS],
@@ -628,7 +628,7 @@ class TimezoneJSONSerializer(ExternalClassJSONSerializer[timezone]):
     """
 
     @classmethod
-    def to_json(cls, obj: timezone, **kwargs) -> Dict[str, Any]:
+    def to_json(cls, obj: timezone, **kwargs) -> dict[str, Any]:
         offset, *name = obj.__getinitargs__()
         return {
             JSONField.TYPE: get_full_class_name(type(obj)),
@@ -638,7 +638,7 @@ class TimezoneJSONSerializer(ExternalClassJSONSerializer[timezone]):
 
     @classmethod
     def from_json(
-        cls, data: Dict[str, Any], clazz: type[timezone], **kwargs
+        cls, data: dict[str, Any], clazz: type[timezone], **kwargs
     ) -> timezone:
         offset = from_json(data[TimezoneJSONKey.OFFSET], **kwargs)
         name = data[TimezoneJSONKey.NAME]
@@ -665,7 +665,7 @@ class PurePathJSONSerializer(ExternalClassJSONSerializer[pathlib.PurePath]):
     """
 
     @classmethod
-    def to_json(cls, obj: pathlib.PurePath, **kwargs) -> Dict[str, Any]:
+    def to_json(cls, obj: pathlib.PurePath, **kwargs) -> dict[str, Any]:
         return {
             JSONField.TYPE: get_full_class_name(type(obj)),
             PurePathJSONKey.PATH: str(obj),
@@ -673,7 +673,7 @@ class PurePathJSONSerializer(ExternalClassJSONSerializer[pathlib.PurePath]):
 
     @classmethod
     def from_json(
-        cls, data: Dict[str, Any], clazz: type[pathlib.PurePath], **kwargs
+        cls, data: dict[str, Any], clazz: type[pathlib.PurePath], **kwargs
     ) -> pathlib.PurePath:
         return clazz(data[PurePathJSONKey.PATH])
 
@@ -706,7 +706,7 @@ class RangeJSONSerializer(ExternalClassJSONSerializer[range]):
     """
 
     @classmethod
-    def to_json(cls, obj: range, **kwargs) -> Dict[str, Any]:
+    def to_json(cls, obj: range, **kwargs) -> dict[str, Any]:
         return {
             JSONField.TYPE: get_full_class_name(type(obj)),
             RangeJSONKey.START: obj.start,
@@ -715,7 +715,7 @@ class RangeJSONSerializer(ExternalClassJSONSerializer[range]):
         }
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any], clazz: type[range], **kwargs) -> range:
+    def from_json(cls, data: dict[str, Any], clazz: type[range], **kwargs) -> range:
         return clazz(
             data[RangeJSONKey.START], data[RangeJSONKey.STOP], data[RangeJSONKey.STEP]
         )
@@ -729,7 +729,7 @@ class SliceJSONSerializer(ExternalClassJSONSerializer[slice]):
     """
 
     @classmethod
-    def to_json(cls, obj: slice, **kwargs) -> Dict[str, Any]:
+    def to_json(cls, obj: slice, **kwargs) -> dict[str, Any]:
         return {
             JSONField.TYPE: get_full_class_name(type(obj)),
             RangeJSONKey.START: to_json(obj.start, **kwargs),
@@ -738,7 +738,7 @@ class SliceJSONSerializer(ExternalClassJSONSerializer[slice]):
         }
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any], clazz: type[slice], **kwargs) -> slice:
+    def from_json(cls, data: dict[str, Any], clazz: type[slice], **kwargs) -> slice:
         return clazz(
             from_json(data[RangeJSONKey.START], **kwargs),
             from_json(data[RangeJSONKey.STOP], **kwargs),
@@ -769,7 +769,7 @@ class PatternJSONSerializer(ExternalClassJSONSerializer[re.Pattern]):
     """
 
     @classmethod
-    def to_json(cls, obj: re.Pattern, **kwargs) -> Dict[str, Any]:
+    def to_json(cls, obj: re.Pattern, **kwargs) -> dict[str, Any]:
         return {
             JSONField.TYPE: get_full_class_name(type(obj)),
             PatternJSONKey.PATTERN: obj.pattern,
@@ -778,7 +778,7 @@ class PatternJSONSerializer(ExternalClassJSONSerializer[re.Pattern]):
 
     @classmethod
     def from_json(
-        cls, data: Dict[str, Any], clazz: type[re.Pattern], **kwargs
+        cls, data: dict[str, Any], clazz: type[re.Pattern], **kwargs
     ) -> re.Pattern:
         return re.compile(data[PatternJSONKey.PATTERN], data[PatternJSONKey.FLAGS])
 
@@ -791,7 +791,7 @@ class ClassJSONSerializer(ExternalClassJSONSerializer[None]):
     """
 
     @classmethod
-    def to_json(cls, obj: type, **kwargs) -> Dict[str, Any]:
+    def to_json(cls, obj: type, **kwargs) -> dict[str, Any]:
         """
         This is a special case because we need to remember that the type of the class is
         a class, not a type.
@@ -804,7 +804,7 @@ class ClassJSONSerializer(ExternalClassJSONSerializer[None]):
         }
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any], clazz: type, **kwargs) -> type:
+    def from_json(cls, data: dict[str, Any], clazz: type, **kwargs) -> type:
         return clazz
 
 
@@ -823,7 +823,7 @@ class EnumJSONKey(enum.StrEnum):
 class EnumJSONSerializer(ExternalClassJSONSerializer[enum.Enum]):
 
     @classmethod
-    def to_json(cls, obj: enum.Enum, **kwargs) -> Dict[str, Any]:
+    def to_json(cls, obj: enum.Enum, **kwargs) -> dict[str, Any]:
         return {
             JSONField.TYPE: get_full_class_name(type(obj)),
             EnumJSONKey.MEMBER_NAME: obj.name,
@@ -831,7 +831,7 @@ class EnumJSONSerializer(ExternalClassJSONSerializer[enum.Enum]):
 
     @classmethod
     def from_json(
-        cls, data: Dict[str, Any], clazz: type[enum.Enum], **kwargs
+        cls, data: dict[str, Any], clazz: type[enum.Enum], **kwargs
     ) -> enum.Enum:
         return clazz[data[EnumJSONKey.MEMBER_NAME]]
 
@@ -850,7 +850,7 @@ class ExceptionJSONKey(enum.StrEnum):
 @dataclass
 class ExceptionJSONSerializer(ExternalClassJSONSerializer[Exception]):
     @classmethod
-    def to_json(cls, obj: Exception, **kwargs) -> Dict[str, Any]:
+    def to_json(cls, obj: Exception, **kwargs) -> dict[str, Any]:
         return {
             JSONField.TYPE: get_full_class_name(type(obj)),
             ExceptionJSONKey.MESSAGE: str(obj),
@@ -858,7 +858,7 @@ class ExceptionJSONSerializer(ExternalClassJSONSerializer[Exception]):
 
     @classmethod
     def from_json(
-        cls, data: Dict[str, Any], clazz: type[Exception], **kwargs
+        cls, data: dict[str, Any], clazz: type[Exception], **kwargs
     ) -> Exception:
         return clazz(data[ExceptionJSONKey.MESSAGE])
 
@@ -886,7 +886,7 @@ class NumpyNDarrayJSONSerializer(ExternalClassJSONSerializer[np.ndarray]):
     """
 
     @classmethod
-    def to_json(cls, obj: np.ndarray, **kwargs) -> Dict[str, Any]:
+    def to_json(cls, obj: np.ndarray, **kwargs) -> dict[str, Any]:
         return {
             JSONField.TYPE: get_full_class_name(type(obj)),
             NumpyArrayJSONKey.ELEMENT_TYPE: str(obj.dtype),
@@ -895,7 +895,7 @@ class NumpyNDarrayJSONSerializer(ExternalClassJSONSerializer[np.ndarray]):
 
     @classmethod
     def from_json(
-        cls, data: Dict[str, Any], clazz: type[np.ndarray], **kwargs
+        cls, data: dict[str, Any], clazz: type[np.ndarray], **kwargs
     ) -> np.ndarray:
         return np.array(
             data[NumpyArrayJSONKey.ELEMENTS], dtype=data[NumpyArrayJSONKey.ELEMENT_TYPE]
@@ -936,7 +936,7 @@ class CoordinateSparseArrayJSONSerializer(ExternalClassJSONSerializer[coo_array]
     """
 
     @classmethod
-    def to_json(cls, obj: coo_array, **kwargs) -> Dict[str, Any]:
+    def to_json(cls, obj: coo_array, **kwargs) -> dict[str, Any]:
         return {
             JSONField.TYPE: get_full_class_name(type(obj)),
             CoordinateSparseArrayJSONKey.DATA: to_json(obj.data, **kwargs),
@@ -947,7 +947,7 @@ class CoordinateSparseArrayJSONSerializer(ExternalClassJSONSerializer[coo_array]
 
     @classmethod
     def from_json(
-        cls, data: Dict[str, Any], clazz: type[coo_array], **kwargs
+        cls, data: dict[str, Any], clazz: type[coo_array], **kwargs
     ) -> coo_array:
         return coo_array(
             (
@@ -970,7 +970,7 @@ class CompressedSparseRowArrayJSONSerializer(ExternalClassJSONSerializer[csr_arr
     """
 
     @classmethod
-    def to_json(cls, obj: csr_array, **kwargs) -> Dict[str, Any]:
+    def to_json(cls, obj: csr_array, **kwargs) -> dict[str, Any]:
         return {
             **CoordinateSparseArrayJSONSerializer.to_json(obj.tocoo(), **kwargs),
             JSONField.TYPE: get_full_class_name(type(obj)),
@@ -978,7 +978,7 @@ class CompressedSparseRowArrayJSONSerializer(ExternalClassJSONSerializer[csr_arr
 
     @classmethod
     def from_json(
-        cls, data: Dict[str, Any], clazz: type[csr_array], **kwargs
+        cls, data: dict[str, Any], clazz: type[csr_array], **kwargs
     ) -> csr_array:
         return csr_array(
             CoordinateSparseArrayJSONSerializer.from_json(data, coo_array, **kwargs)
@@ -999,7 +999,7 @@ class DataclassJSONSerializer(ExternalClassJSONSerializer[None]):
     """
 
     @classmethod
-    def to_json(cls, obj, **kwargs) -> Dict[str, Any]:
+    def to_json(cls, obj, **kwargs) -> dict[str, Any]:
         result = {JSONField.TYPE: get_full_class_name(type(obj))}
         introspector = DataclassOnlyIntrospector()
         for field_ in introspector.discover(obj.__class__):
@@ -1024,7 +1024,7 @@ class DataclassJSONSerializer(ExternalClassJSONSerializer[None]):
         return is_dataclass(clazz)
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any], clazz: type, **kwargs) -> Self:
+    def from_json(cls, data: dict[str, Any], clazz: type, **kwargs) -> Self:
         introspector = DataclassOnlyIntrospector()
         discovered_attributes = {
             attr.field.name: attr.field for attr in introspector.discover(clazz)
@@ -1095,12 +1095,12 @@ class NumpyFloatJSONSerializer(ExternalClassJSONSerializer[np.float32]):
     """
 
     @classmethod
-    def to_json(cls, obj: np.float32, **kwargs) -> Dict[str, Any]:
+    def to_json(cls, obj: np.float32, **kwargs) -> dict[str, Any]:
         return {
             JSONField.TYPE: get_full_class_name(type(obj)),
             NumpyFloatJSONKey.VALUE: float(obj),
         }
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any], clazz: type, **kwargs) -> Self:
+    def from_json(cls, data: dict[str, Any], clazz: type, **kwargs) -> Self:
         return float(data[NumpyFloatJSONKey.VALUE])

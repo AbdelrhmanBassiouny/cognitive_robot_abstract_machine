@@ -3,7 +3,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from functools import lru_cache
 
-from typing_extensions import Callable, Dict, Any, Generic, Iterator, TypeVar
+from typing_extensions import Callable, Any, Generic, Iterator, TypeVar
 
 from krrood.adapters.json_serializer import list_like_classes
 from krrood.patterns.exceptions import KeywordNamesNoFactoryParameter
@@ -25,7 +25,7 @@ class HasFactoryAndKwargs(Generic[T]):
     The factory function to construct `T` with the keyword arguments.
     """
 
-    _kwargs_: Dict[str, Any] = field(default_factory=dict, kw_only=True)
+    _kwargs_: dict[str, Any] = field(default_factory=dict, kw_only=True)
     """
     The keyword arguments to pass to the factory.
     """

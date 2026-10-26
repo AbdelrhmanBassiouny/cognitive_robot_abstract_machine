@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import IntEnum
-from typing_extensions import Generic, TypeVar, List, Callable, Self
+from typing_extensions import Generic, TypeVar, Callable, Self
 
 
 T = TypeVar("T")
@@ -42,7 +42,7 @@ class DerivativeMap(Generic[T]):
     jerk: T | None = None
 
     @property
-    def data(self) -> List[T | None]:
+    def data(self) -> list[T | None]:
         """
         :return: A list of all derivative values.
         """

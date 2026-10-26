@@ -20,7 +20,6 @@ from typing_extensions import (
     Callable,
     Any,
     Collection,
-    Dict,
     TYPE_CHECKING,
 )
 
@@ -331,7 +330,7 @@ class Sum(EntityAggregator[numbers.Number]):
 
     def _apply_aggregation_function_and_get_bindings_(
         self, child_result: OperationResult
-    ) -> Iterator[Dict[uuid.UUID, IntOrFloat | None]]:
+    ) -> Iterator[dict[uuid.UUID, IntOrFloat | None]]:
         for aggregation_result in self.get_aggregation_result_from_child_result(
             child_result
         ):

@@ -15,7 +15,6 @@ import time
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 
-from typing_extensions import Dict, List
 
 from cramera.live.bridge import ChartSnapshot, WorldStateSnapshot
 from cramera.live.frame_range import FrameRange, InvalidFrameRange
@@ -61,17 +60,17 @@ class RecordedFrame:
     :class:`~cramera.live.bridge.WorldStateSnapshot` reports it.
     """
 
-    frames: Dict[str, float]
+    frames: dict[str, float]
     """
     Movable connection position by prefixed name.
     """
 
-    base: List[float] | None
+    base: list[float] | None
     """
     Robot base pose as ``[x, y, z, qx, qy, qz, qw]``, or None without a robot.
     """
 
-    objects: Dict[str, List[float]]
+    objects: dict[str, list[float]]
     """
     Loose-object pose by mesh key, in the same 7-element form as :attr:`base`.
     """
@@ -115,12 +114,12 @@ class Recording:
     whoever bundles it (see :mod:`cramera.live.recording_bundle`); None until then.
     """
 
-    _frames: List[RecordedFrame] = field(default_factory=list)
+    _frames: list[RecordedFrame] = field(default_factory=list)
     """
     Every tick captured so far, in recording order.
     """
 
-    _tick_times: List[float] = field(default_factory=list)
+    _tick_times: list[float] = field(default_factory=list)
     """
     Wall-clock time of each captured tick, used to estimate the frame rate.
     """
@@ -198,7 +197,7 @@ class Recording:
                 self._frames[-1], statechart=self._held_statechart(statechart)
             )
 
-    def stop(self) -> List[RecordedFrame]:
+    def stop(self) -> list[RecordedFrame]:
         """
         Finalize the recording and return its buffered frames.
 
@@ -224,7 +223,7 @@ class Recording:
             self._frames = []
             self._tick_times = []
 
-    def frames_in(self, frame_range: FrameRange) -> List[RecordedFrame]:
+    def frames_in(self, frame_range: FrameRange) -> list[RecordedFrame]:
         """
         The buffered frames a range selects, in recording order.
 
@@ -270,7 +269,7 @@ class Recording:
             return fallback
         return max(1.0, round(len(self._tick_times) / duration, 2))
 
-    def status_payload(self) -> Dict[str, object]:
+    def status_payload(self) -> dict[str, object]:
         """
         What the viewer polls to show recording/playback controls.
         """

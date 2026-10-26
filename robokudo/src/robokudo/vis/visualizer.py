@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 
 from py_trees.blackboard import Blackboard
-from typing_extensions import Any, List, Set
+from typing_extensions import Any
 
 from robokudo.annotators.outputs import AnnotatorOutputs
 from robokudo.defs import PACKAGE_NAME
@@ -47,7 +47,7 @@ class Visualizer(object):
 
         def __init__(self) -> None:
             """Initialize the observable object."""
-            self._observers: List[Visualizer.Observer] = []
+            self._observers: list[Visualizer.Observer] = []
 
         def register_observer(self, observer: Visualizer.Observer) -> None:
             """Register an observer to receive notifications.
@@ -102,7 +102,7 @@ class Visualizer(object):
             self.active_annotator_i: int = 0
             """ Index of currently active annotator """
 
-    instances: List[Visualizer] = []
+    instances: list[Visualizer] = []
     """List of all active visualizer instances"""
 
     def __init__(
@@ -234,7 +234,7 @@ class Visualizer(object):
         return self.indicate_termination_var
 
     @staticmethod
-    def get_unique_types_of_visualizer_instances() -> Set[type]:
+    def get_unique_types_of_visualizer_instances() -> set[type]:
         """Get set of unique visualizer types.
 
         :returns: Set of visualizer classes that have instances

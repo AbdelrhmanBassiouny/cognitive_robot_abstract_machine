@@ -14,18 +14,7 @@ from copy import copy
 from dataclasses import dataclass, field
 from functools import cached_property, wraps
 
-from typing_extensions import (
-    Iterable,
-    Any,
-    Dict,
-    TYPE_CHECKING,
-    List,
-    Set,
-    Tuple,
-    Callable,
-    Self,
-    Iterator,
-)
+from typing_extensions import Iterable, Any, TYPE_CHECKING, Callable, Self, Iterator
 
 from krrood.entity_query_language.core.mapped_variable import (
     CanBehaveLikeAVariable,
@@ -116,7 +105,7 @@ class CachedResultStream:
     """
     The underlying result iterator, advanced at most once per produced item.
     """
-    _buffer: List[OperationResult] = field(default_factory=list)
+    _buffer: list[OperationResult] = field(default_factory=list)
     """
     The results produced so far, replayed to every iterator.
     """
@@ -181,7 +170,7 @@ class Query(
     queried object(s).
     """
 
-    _selected_variables_: Tuple[Selectable, ...] = field(
+    _selected_variables_: tuple[Selectable, ...] = field(
         default_factory=tuple, kw_only=True
     )
     """
@@ -192,12 +181,12 @@ class Query(
     which nothing binds a row to.
     """
 
-    _distinct_on: Tuple[Selectable, ...] = field(default_factory=tuple, init=False)
+    _distinct_on: tuple[Selectable, ...] = field(default_factory=tuple, init=False)
     """
     Parameters for distinct results of the query.
     """
 
-    _results_mapping: List[ResultMapping] = field(init=False, default_factory=list)
+    _results_mapping: list[ResultMapping] = field(init=False, default_factory=list)
     """
     Mapping functions that map the results of the query to a new set of
     results.
@@ -303,7 +292,7 @@ class Query(
 
     def _reroot_conditions_(
         self, *conditions: ConditionType
-    ) -> Tuple[ConditionType, ...]:
+    ) -> tuple[ConditionType, ...]:
         """
         Re-root the attribute chains that this query's own conditions take from the query
         itself onto the variable it selects.
@@ -334,7 +323,7 @@ class Query(
             return condition
         if self._is_attribute_of_self_(condition):
             return self._rerooted_on_selection_(condition)
-        visited: Set[uuid.UUID] = set()
+        visited: set[uuid.UUID] = set()
         pending = [condition]
         while pending:
             expression = pending.pop()
@@ -715,12 +704,12 @@ class Query(
             self._seen_results.clear()
 
     @cached_property
-    def _result_transformers_(self) -> List[ResultTransformer]:
+    def _result_transformers_(self) -> list[ResultTransformer]:
         """
         :return: The ordered result-pipeline stages applied to this query's produced rows: ordering
             (when configured), then quantification. Inspectable as :attr:`_result_stages_`.
         """
-        transformers: List[ResultTransformer] = []
+        transformers: list[ResultTransformer] = []
         if self._ordered_by_builder_ is not None:
             ordering = self._ordered_by_builder_
             transformers.append(
@@ -743,7 +732,7 @@ class Query(
         return transformers
 
     @property
-    def _result_stages_(self) -> List[ResultTransformer]:
+    def _result_stages_(self) -> list[ResultTransformer]:
         """
         :return: The result-pipeline stages of this query's compiled product (ordering,
             quantification), so an inspector can identify how results are ordered and quantified
@@ -798,7 +787,7 @@ class Query(
         )
 
     @cached_property
-    def _distinct_on_ids_(self) -> Tuple[int, ...]:
+    def _distinct_on_ids_(self) -> tuple[int, ...]:
         """
         Get the IDs of variables used for distinctness.
         """
@@ -821,7 +810,7 @@ class Query(
             self._seen_results.add(bindings)
             yield result
 
-    def _update_res_with_distinct_on_variables_(self, res: Dict[int, Any]):
+    def _update_res_with_distinct_on_variables_(self, res: dict[int, Any]):
         """
         Update the result dictionary with values from distinct-on variables if
         not already present.
@@ -859,7 +848,7 @@ class Query(
     @cached_property
     def _aggregators_and_non_aggregators_in_selection_(
         self,
-    ) -> Tuple[List[Aggregator], List[Selectable]]:
+    ) -> tuple[list[Aggregator], list[Selectable]]:
         """
         :return: The aggregated and non-aggregated variables from the selected variables.
         """
@@ -893,8 +882,8 @@ class Query(
         return aggregated_variables, non_aggregated_variables
 
     def aggregated_selections(
-        self, group_key_root_ids: Set[uuid.UUID]
-    ) -> List[SymbolicExpression]:
+        self, group_key_root_ids: set[uuid.UUID]
+    ) -> list[SymbolicExpression]:
         """
         :param group_key_root_ids: The chain-root variable ids of the GROUP BY keys (see
             :attr:`~krrood.entity_query_language.query.operations.GroupedBy.group_key_root_ids`).
@@ -1139,8 +1128,8 @@ class Entity(Query[T]):
         return var if isinstance(var, Aggregator) else None
 
     def aggregated_selections(
-        self, group_key_root_ids: Set[uuid.UUID]
-    ) -> List[SymbolicExpression]:
+        self, group_key_root_ids: set[uuid.UUID]
+    ) -> list[SymbolicExpression]:
         """
         When the selection is an :class:`InstantiatedVariable`, its aggregated
         fields are the child variables not rooted in a group key; otherwise the

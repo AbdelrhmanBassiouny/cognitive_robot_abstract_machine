@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from typing_extensions import Iterable, List
+from typing_extensions import Iterable
 
 from krrood.entity_query_language.verbalization.fragments.base import (
     flatten_fragment_to_plain_text,
@@ -31,7 +31,7 @@ from krrood.entity_query_language.verbalization.rendering.passes import Realizat
 # The stateless lowering passes are shared module-level instances, in pipeline order. The
 # coreference pass is stateful per walk (parameterised by discourse and the prior-build referents),
 # so it is created fresh per call and prepended to the pipeline in realize_tree.
-_LOWERING_PASSES: List[RealizationPass] = [
+_LOWERING_PASSES: list[RealizationPass] = [
     DeterminerProcessor(),
     MorphologyProcessor(),
     OrthographyProcessor(),
@@ -69,7 +69,7 @@ def realize_tree(
     >>> flatten_fragment_to_plain_text(realize_tree(tree))
     'Find a Robot'
     """
-    pipeline: List[RealizationPass] = [
+    pipeline: list[RealizationPass] = [
         CoreferenceProcessor(
             discourse=discourse,
             distinguisher_index=distinguisher_index or DistinguisherIndex(),

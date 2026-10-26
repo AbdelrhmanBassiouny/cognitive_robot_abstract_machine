@@ -38,7 +38,7 @@ from semantic_digital_twin.world_description.geometry import (
     Sphere,
 )
 from semantic_digital_twin.world_description.world_entity import Body
-from typing_extensions import ClassVar, Dict, Iterable, List
+from typing_extensions import ClassVar, Iterable
 
 from cramera.onboard.bundle_urdf import BundledAssets, BundleReport
 
@@ -71,7 +71,7 @@ class UrdfDocument:
     A URDF document being assembled from a world's kinematic tree.
     """
 
-    CONNECTION_JOINT_TYPES: ClassVar[Dict[type[Connection], JointType]] = {
+    CONNECTION_JOINT_TYPES: ClassVar[dict[type[Connection], JointType]] = {
         FixedConnection: JointType.FIXED,
         RevoluteConnection: JointType.REVOLUTE,
         PrismaticConnection: JointType.PRISMATIC,
@@ -131,12 +131,12 @@ class UrdfDocument:
     Collects the files copied into the bundle.
     """
 
-    joint_names: List[str] = field(default_factory=list)
+    joint_names: list[str] = field(default_factory=list)
     """
     Names of the joints added so far, in document order.
     """
 
-    movable_joint_names: List[str] = field(default_factory=list)
+    movable_joint_names: list[str] = field(default_factory=list)
     """
     Names of the added joints that are not fixed.
     """
@@ -171,7 +171,7 @@ class UrdfDocument:
     @classmethod
     def of_bodies(
         cls,
-        bodies: List[Body],
+        bodies: list[Body],
         name: str,
         output_directory: str,
         mesh_subdirectory: str,

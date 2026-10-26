@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, fields
-from typing_extensions import Any, Dict, TypeVar
+from typing_extensions import Any, TypeVar
 
 from krrood.patterns.field_metadata import FieldMetadata
 
@@ -27,7 +27,7 @@ class SimulatorAdditionalProperty:
     Class representing an additional property for a simulator.
     """
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """
         :return: The fields as a dictionary, each under the simulator's own name for it
             if the field declares one (see :class:`SimulatorAttributeName`), else under

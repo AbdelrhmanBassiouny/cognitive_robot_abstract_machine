@@ -4,7 +4,6 @@ import uuid
 from dataclasses import dataclass, field
 from enum import Enum, auto
 
-from typing_extensions import List
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.expression_structure import (
@@ -110,7 +109,7 @@ class RestrictionPlan:
     only the flattened conjuncts, neither folded nor placed.
     """
 
-    conditions: List[SymbolicExpression] = field(default_factory=list)
+    conditions: list[SymbolicExpression] = field(default_factory=list)
     """The subject's WHERE conjuncts (an ``AND`` flattened to a list, not range-folded)."""
 
 
@@ -143,10 +142,10 @@ class ReportPlan:
     kind: ReportKind
     """Why the query is a report — it drives the body (aggregate columns vs. an ordered listing)."""
 
-    group_keys: List[SymbolicExpression] = field(default_factory=list)
+    group_keys: list[SymbolicExpression] = field(default_factory=list)
     """The GROUP BY keys, rendered as the *"for each <key>"* frame (``AGGREGATION`` only)."""
 
-    columns: List[SymbolicExpression] = field(default_factory=list)
+    columns: list[SymbolicExpression] = field(default_factory=list)
     """The reported aggregate selections, group keys removed (``AGGREGATION`` only)."""
 
     @property
@@ -261,7 +260,7 @@ class QueryPlanner(Planner[Query, QueryPlan]):
             return ReportPlan(kind=ReportKind.ORDERING)
         return None
 
-    def _selections(self) -> List[SymbolicExpression]:
+    def _selections(self) -> list[SymbolicExpression]:
         """:return: the query's selected expressions — the tuple members of a set-of, else the
         single selected variable (empty when there is none)."""
         if isinstance(self.node, SetOf):
@@ -269,14 +268,14 @@ class QueryPlanner(Planner[Query, QueryPlan]):
         selected = self._selected
         return [selected] if selected is not None else []
 
-    def _group_keys(self) -> List[SymbolicExpression]:
+    def _group_keys(self) -> list[SymbolicExpression]:
         """:return: the query's GROUP BY key expressions (empty when it is not grouped)."""
         grouped = self.node._grouped_by_expression_
         return list(grouped.variables_to_group_by) if grouped is not None else []
 
     def _columns_without_keys(
-        self, keys: List[SymbolicExpression]
-    ) -> List[SymbolicExpression]:
+        self, keys: list[SymbolicExpression]
+    ) -> list[SymbolicExpression]:
         """:return: the selected expressions with the group keys removed (so a key is named once, in
         the *"For each …"* frame, not restated as a reported column)."""
         key_ids = {key._id_ for key in keys}

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from typing_extensions import ClassVar, Dict
+from typing_extensions import ClassVar
 
 from semantic_digital_twin.semantic_annotations.mixins import HasRootBody, HasRootRegion
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
@@ -152,7 +152,7 @@ class RoboCasaCategoryResolver:
     for those.
     """
 
-    category_to_annotation_class: ClassVar[Dict[str, type[HasRootBody]]]
+    category_to_annotation_class: ClassVar[dict[str, type[HasRootBody]]]
     """
     Lookup table from registered RoboCasa category to the matching SemanticAnnotation
     subclass.
@@ -193,7 +193,7 @@ class RoboCasaKitchenApplianceResolver(RoboCasaCategoryResolver):
     """
 
     category_to_annotation_class: ClassVar[
-        Dict[RoboCasaKitchenApplianceCategory, type[HasRootBody]]
+        dict[RoboCasaKitchenApplianceCategory, type[HasRootBody]]
     ] = {
         RoboCasaKitchenApplianceCategory.CABINET: Cabinet,
         RoboCasaKitchenApplianceCategory.DRAWER: Drawer,
@@ -219,7 +219,7 @@ class RoboCasaObjectResolver(RoboCasaCategoryResolver):
     """
 
     category_to_annotation_class: ClassVar[
-        Dict[RoboCasaObjectCategory, type[HasRootBody]]
+        dict[RoboCasaObjectCategory, type[HasRootBody]]
     ] = {
         RoboCasaObjectCategory.APPLE: Apple,
         RoboCasaObjectCategory.BANANA: Banana,

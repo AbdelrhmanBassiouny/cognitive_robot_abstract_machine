@@ -4,7 +4,6 @@ import random
 from dataclasses import dataclass, field
 
 import numpy as np
-from typing_extensions import Tuple
 
 import krrood.symbolic_math.symbolic_math as symbolic_math
 from giskardpy.motion_statechart.context import MotionStatechartContext
@@ -340,7 +339,7 @@ class WiggleInsert(ConvergingTask):
     @staticmethod
     def _calculate_perpendicular_basis(
         normal: np.ndarray,
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """
         Return two orthonormal vectors spanning the plane perpendicular to ``normal``.
 

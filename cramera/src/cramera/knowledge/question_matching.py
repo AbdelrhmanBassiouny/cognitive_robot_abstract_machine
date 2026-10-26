@@ -13,7 +13,7 @@ from dataclasses import asdict, dataclass
 from functools import cached_property
 
 from rapidfuzz import utils
-from typing_extensions import Any, Dict, FrozenSet, List, Tuple
+from typing_extensions import Any
 
 from cramera.knowledge.presets import Preset
 from cramera.payload import CrameraPayload
@@ -34,7 +34,7 @@ The reply shown for a question no ready-made query matches.
 """
 
 
-def words_of(text: str) -> List[str]:
+def words_of(text: str) -> list[str]:
     """
     The words a question or a wording is read as, in the order they were said.
 
@@ -43,7 +43,7 @@ def words_of(text: str) -> List[str]:
     return utils.default_process(text).split()
 
 
-def spellings_of(text: str) -> FrozenSet[str]:
+def spellings_of(text: str) -> frozenset[str]:
     """
     Every word the text offers to be recognized by: what it says, plus each pair of
     adjacent words glued together, so a question may write as one word what a wording
@@ -82,7 +82,7 @@ class QuestionMatchResult(CrameraPayload):
         """
         return self.preset is not None
 
-    def to_payload(self) -> Dict[str, Any]:
+    def to_payload(self) -> dict[str, Any]:
         """
         The JSON-serializable shape the panel's voice consumer reads.
         """
@@ -107,7 +107,7 @@ class QuestionMatcher:
     Recognizes which of the presets on offer a natural-language question is asking.
     """
 
-    presets: List[Preset]
+    presets: list[Preset]
     """
     The ready-made queries on offer, each worded as well as its source knows how.
     """
@@ -154,7 +154,7 @@ class QuestionMatcher:
         return QuestionMatchResult(preset=best, similarity=best_similarity)
 
     @cached_property
-    def _weights(self) -> Dict[str, float]:
+    def _weights(self) -> dict[str, float]:
         """
         What each word is worth: one over the share of the wordings that use it, so a
         word half of them use is worth half as much as one only a quarter use.
@@ -163,7 +163,7 @@ class QuestionMatcher:
         thereby worth little, and the words only one of them uses are worth the most.
         """
         wordings = [set(words_of(wording)) for wording in self._wordings()]
-        weights: Dict[str, float] = {}
+        weights: dict[str, float] = {}
         for wording in wordings:
             for word in wording:
                 weights[word] = weights.get(word, 0.0) + 1.0
@@ -188,7 +188,7 @@ class QuestionMatcher:
         """
         return self._weights.get(word, self._unheard_weight)
 
-    def _wordings(self) -> List[str]:
+    def _wordings(self) -> list[str]:
         """
         Every way the presets on offer put their questions.
         """
@@ -197,7 +197,7 @@ class QuestionMatcher:
         ]
 
     @staticmethod
-    def _wordings_of(preset: Preset) -> List[str]:
+    def _wordings_of(preset: Preset) -> list[str]:
         """
         The ways one preset puts its question: the label on its button, and its query
         read back as English where the source worded it.
@@ -210,8 +210,8 @@ class QuestionMatcher:
         return wordings
 
     def _comparison(
-        self, asked: FrozenSet[str], text: str, preset: Preset
-    ) -> Tuple[float, float]:
+        self, asked: frozenset[str], text: str, preset: Preset
+    ) -> tuple[float, float]:
         """
         How well the asked question names one preset: its best score, and how many of
         the words scoring it were its own.
@@ -243,7 +243,7 @@ class QuestionMatcher:
                 best = pair
         return best
 
-    def _agreement(self, asked: FrozenSet[str], said: List[str], wording: str) -> float:
+    def _agreement(self, asked: frozenset[str], said: list[str], wording: str) -> float:
         """
         How far a question and one wording say the same thing, 0-100.
 
@@ -261,7 +261,7 @@ class QuestionMatcher:
             self._coverage(spellings_of(wording), said),
         )
 
-    def _coverage(self, asked: FrozenSet[str], wording: List[str]) -> float:
+    def _coverage(self, asked: frozenset[str], wording: list[str]) -> float:
         """
         How much of one side's words the other one said, 0-100, weighing each word by
         what it says about which wording is meant.
@@ -276,7 +276,7 @@ class QuestionMatcher:
         return 100.0 * sum(self._weight(word) for word in covered) / total
 
     @staticmethod
-    def _covered_words(asked: FrozenSet[str], wording: List[str]) -> FrozenSet[str]:
+    def _covered_words(asked: frozenset[str], wording: list[str]) -> frozenset[str]:
         """
         The words of a wording the question said, counting a pair the question wrote as
         one word as both of them.

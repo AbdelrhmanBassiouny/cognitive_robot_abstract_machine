@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from itertools import combinations, product
-from typing_extensions import Tuple, TYPE_CHECKING, Self, Any
+from typing_extensions import TYPE_CHECKING, Self, Any
 
 
 from krrood.adapters.json_serializer import (
@@ -114,7 +114,7 @@ class CollisionCheck(SubclassJSONSerializer):
     def __eq__(self, other: CollisionCheck):
         return self.body_a == other.body_a and self.body_b == other.body_b
 
-    def bodies(self) -> Tuple[Body, Body]:
+    def bodies(self) -> tuple[Body, Body]:
         return self.body_a, self.body_b
 
     def sort_bodies(self):

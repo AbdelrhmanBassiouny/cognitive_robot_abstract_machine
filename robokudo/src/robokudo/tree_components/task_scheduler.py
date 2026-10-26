@@ -18,7 +18,6 @@ from abc import ABC, abstractmethod
 from py_trees.behaviour import Behaviour
 from py_trees.common import Status
 from py_trees.composites import Sequence
-from typing_extensions import List
 
 from robokudo.defs import PACKAGE_NAME
 from robokudo.utils.error_handling import catch_and_raise_to_blackboard
@@ -136,7 +135,7 @@ class IterativeTaskScheduler(TaskSchedulerBase):
     def __init__(
         self,
         name: str = "IterativeTaskScheduler",
-        tree_list: List[Sequence] | None = None,
+        tree_list: list[Sequence] | None = None,
     ) -> None:
         """Initialize the iterative scheduler.
 
@@ -145,7 +144,7 @@ class IterativeTaskScheduler(TaskSchedulerBase):
         """
         super().__init__(name)
 
-        self.tree_list: List[Sequence] = [] if tree_list is None else list(tree_list)
+        self.tree_list: list[Sequence] = [] if tree_list is None else list(tree_list)
         """List of subtrees to cycle through"""
 
         # Save a reference to the initial job with all the possible sub-behaviours

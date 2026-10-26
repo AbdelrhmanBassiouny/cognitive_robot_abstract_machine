@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import Enum, auto
 
 import rustworkx as rx
-from typing_extensions import Any, Callable, ClassVar, List, Tuple, Union, Dict
+from typing_extensions import Any, Callable, ClassVar, Tuple, Union
 
 NodePosition = Union[Tuple[float, float], Tuple[float, float, float]]
 """An explicit 2D or 3D node position, in whatever coordinate space the caller intends (for
@@ -51,7 +51,7 @@ def label_by_string(payload: Any) -> str:
     return str(payload)
 
 
-def describe_by_repr(payload: Any) -> List[str]:
+def describe_by_repr(payload: Any) -> list[str]:
     """Describe a node by the repr of its payload as a single detail line."""
     return [repr(payload)]
 
@@ -62,15 +62,15 @@ class GraphLayoutOptions:
     Additional options that each visualization library needs to realise a specific layout.
     """
 
-    layout_options: Dict[GraphLayout, Dict[str, Any]]
+    layout_options: dict[GraphLayout, dict[str, Any]]
     """
     Additional options for each layout that are needed by the specific graph library.
     """
 
-    def get_options(self, layout: GraphLayout) -> Dict[str, Any]:
+    def get_options(self, layout: GraphLayout) -> dict[str, Any]:
         return self.layout_options.get(layout, {})
 
-    def add_new_options(self, layout: GraphLayout, options: Dict[str, Any]) -> None:
+    def add_new_options(self, layout: GraphLayout, options: dict[str, Any]) -> None:
         self.layout_options[layout] = options
 
 
@@ -84,13 +84,13 @@ class GraphVisualizerBase(ABC):
     detail behaviour.
     """
 
-    required_modules: ClassVar[Tuple[str, ...]] = ()
+    required_modules: ClassVar[tuple[str, ...]] = ()
     """The importable modules the backend needs to run."""
 
     graph: rx.PyDiGraph | rx.PyGraph
     """The live graph to display; re-read whenever the drawing is refreshed."""
 
-    information_getter: Callable[[Any], List[str]] = describe_by_repr
+    information_getter: Callable[[Any], list[str]] = describe_by_repr
     """Maps a node payload to the detail lines shown when the node is clicked."""
 
     label_getter: Callable[[Any], str] = label_by_string
@@ -161,7 +161,7 @@ class GraphVisualizerBase(ABC):
             return None
         return self.position_getter(self.graph[node_index])
 
-    def node_details(self, node_index: int) -> List[str]:
+    def node_details(self, node_index: int) -> list[str]:
         """
         :param node_index: The rustworkx index of the clicked node.
         :return: The detail lines describing the node's payload.

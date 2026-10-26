@@ -51,7 +51,7 @@ from pathlib import Path
 
 from dataclasses import asdict, dataclass
 
-from typing_extensions import Any, ClassVar, Dict, Tuple, Type
+from typing_extensions import Any, ClassVar, Type
 
 from cramera.knowledge.query_vocabulary import UnknownVocabularyName
 from cramera.knowledge.queryable_knowledge import QueryScope, UnknownQueryScope
@@ -103,7 +103,7 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
         self.bridge = bridge
         super().__init__(*args, **kwargs)
 
-    def _send_json(self, payload: Dict[str, Any], code: int = 200) -> None:
+    def _send_json(self, payload: dict[str, Any], code: int = 200) -> None:
         """
         Send a JSON payload with the CORS headers the viewer needs.
 
@@ -241,7 +241,7 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             self._query_value("scope") or QueryScope.CURRENT_STATE.value
         )
 
-    def _recording_status(self) -> Dict[str, Any]:
+    def _recording_status(self) -> dict[str, Any]:
         """
         What the viewer polls to show recording/playback controls.
         """
@@ -317,7 +317,7 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             return self._save_recording()
         self._send_json({"ok": False, "error": "unknown endpoint"}, 404)
 
-    def _posted_payload(self) -> Dict[str, Any] | None:
+    def _posted_payload(self) -> dict[str, Any] | None:
         """
         The request's JSON body as an object, or None when it is not one.
         """
@@ -485,7 +485,7 @@ class BridgeServer(ThreadingHTTPServer):
     found in.
     """
 
-    CLIENT_HUNG_UP: ClassVar[Tuple[type[BaseException], ...]] = (
+    CLIENT_HUNG_UP: ClassVar[tuple[type[BaseException], ...]] = (
         BrokenPipeError,
         ConnectionResetError,
     )

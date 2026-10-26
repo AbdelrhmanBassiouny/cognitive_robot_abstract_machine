@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import cached_property
 
-from typing_extensions import TYPE_CHECKING, Iterator, Tuple
+from typing_extensions import TYPE_CHECKING, Iterator
 
 from krrood.class_diagrams.class_diagram import Association, AssociationThroughRoleTaker
 from krrood.class_diagrams.wrapped_field import WrappedField
@@ -110,7 +110,7 @@ class PropertyDescriptorRelation(PredicateClassRelation):
             ).update_source_and_add_to_graph_and_apply_implications()
 
     @cached_property
-    def super_relations(self) -> Iterator[Tuple[WrappedInstance, WrappedField]]:
+    def super_relations(self) -> Iterator[tuple[WrappedInstance, WrappedField]]:
         """
         Find neighboring symbols connected by super edges.
 
@@ -134,7 +134,7 @@ class PropertyDescriptorRelation(PredicateClassRelation):
             yield source, association.wrapped_field
 
     @property
-    def inverse_domain_and_field(self) -> Tuple[WrappedInstance, WrappedField]:
+    def inverse_domain_and_field(self) -> tuple[WrappedInstance, WrappedField]:
         """
         Get the inverse of the property descriptor.
 

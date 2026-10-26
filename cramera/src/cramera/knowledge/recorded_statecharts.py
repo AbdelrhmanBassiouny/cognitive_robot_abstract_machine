@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import Any, Dict, Iterable, List, TYPE_CHECKING
+from typing_extensions import Any, Iterable, TYPE_CHECKING
 
 from cramera.generated_json import GeneratedJson
 from cramera.knowledge.scene_bundle import SceneBundle
@@ -58,7 +58,7 @@ class RecordedChartNode:
     Id of the node containing this one, or None at the top level.
     """
 
-    def to_payload(self) -> Dict[str, Any]:
+    def to_payload(self) -> dict[str, Any]:
         """
         This node in the shape the viewer reads.
         """
@@ -70,7 +70,7 @@ class RecordedChartNode:
         }
 
     @classmethod
-    def of_payload(cls, payload: Dict[str, Any]) -> RecordedChartNode:
+    def of_payload(cls, payload: dict[str, Any]) -> RecordedChartNode:
         """
         One node read back from a recorded bundle.
 
@@ -105,7 +105,7 @@ class RecordedChartEdge:
     The transition's kind, as giskardpy names it.
     """
 
-    def to_payload(self) -> Dict[str, str]:
+    def to_payload(self) -> dict[str, str]:
         """
         This edge in the shape the viewer reads.
 
@@ -115,7 +115,7 @@ class RecordedChartEdge:
         return {"from": self.source, "to": self.target, "kind": self.kind}
 
     @classmethod
-    def of_payload(cls, payload: Dict[str, str]) -> RecordedChartEdge:
+    def of_payload(cls, payload: dict[str, str]) -> RecordedChartEdge:
         """
         One edge read back from a recorded bundle.
 
@@ -140,12 +140,12 @@ class RecordedChart:
     Name of the action whose motion group this statechart belongs to.
     """
 
-    nodes: List[RecordedChartNode] = field(default_factory=list)
+    nodes: list[RecordedChartNode] = field(default_factory=list)
     """
     The chart's nodes, in the order its state vectors are indexed.
     """
 
-    edges: List[RecordedChartEdge] = field(default_factory=list)
+    edges: list[RecordedChartEdge] = field(default_factory=list)
     """
     The transitions between those nodes.
     """
@@ -177,7 +177,7 @@ class RecordedChart:
             ],
         )
 
-    def to_payload(self) -> Dict[str, Any]:
+    def to_payload(self) -> dict[str, Any]:
         """
         This chart in the shape the viewer reads.
         """
@@ -189,7 +189,7 @@ class RecordedChart:
         }
 
     @classmethod
-    def of_payload(cls, payload: Dict[str, Any]) -> RecordedChart:
+    def of_payload(cls, payload: dict[str, Any]) -> RecordedChart:
         """
         One chart read back from a recorded bundle.
 
@@ -214,12 +214,12 @@ class StatechartMoment:
     Index into :attr:`RecordedStatecharts.charts` of the chart this moment belongs to.
     """
 
-    life_cycles: List[str] = field(default_factory=list)
+    life_cycles: list[str] = field(default_factory=list)
     """
     Each node's ``LifeCycleValues`` name, ordered like the chart's nodes.
     """
 
-    observations: List[str] = field(default_factory=list)
+    observations: list[str] = field(default_factory=list)
     """
     Each node's trinary observation name, ordered like the chart's nodes.
     """
@@ -238,7 +238,7 @@ class StatechartMoment:
             observations=[str(entry.observation) for entry in snapshot.nodes],
         )
 
-    def to_payload(self) -> Dict[str, Any]:
+    def to_payload(self) -> dict[str, Any]:
         """
         This moment in the shape the viewer reads.
         """
@@ -249,7 +249,7 @@ class StatechartMoment:
         }
 
     @classmethod
-    def of_payload(cls, payload: Dict[str, Any]) -> StatechartMoment:
+    def of_payload(cls, payload: dict[str, Any]) -> StatechartMoment:
         """
         One moment read back from a recorded bundle.
 
@@ -275,17 +275,17 @@ class RecordedStatecharts:
     Every statechart a recording went through, and where in it each tick was.
     """
 
-    charts: List[RecordedChart] = field(default_factory=list)
+    charts: list[RecordedChart] = field(default_factory=list)
     """
     Each compiled structure the run ticked, in the order it was first seen.
     """
 
-    moments: List[StatechartMoment] = field(default_factory=list)
+    moments: list[StatechartMoment] = field(default_factory=list)
     """
     The distinct node-state moments the run passed through.
     """
 
-    moment_of_frame: List[int] = field(default_factory=list)
+    moment_of_frame: list[int] = field(default_factory=list)
     """
     Index into :attr:`moments` per recorded tick, or :data:`NO_STATECHART` for a tick
     that had no statechart executing.
@@ -301,11 +301,11 @@ class RecordedStatecharts:
         :param snapshots: The statechart snapshot of each recorded tick, in order, None
             for a tick with no statechart executing.
         """
-        charts: List[RecordedChart] = []
-        chart_of_structure: Dict[Any, int] = {}
-        moments: List[StatechartMoment] = []
-        moment_of_identity: Dict[Any, int] = {}
-        moment_of_frame: List[int] = []
+        charts: list[RecordedChart] = []
+        chart_of_structure: dict[Any, int] = {}
+        moments: list[StatechartMoment] = []
+        moment_of_identity: dict[Any, int] = {}
+        moment_of_frame: list[int] = []
         for snapshot in snapshots:
             if snapshot is None or not snapshot.nodes:
                 moment_of_frame.append(NO_STATECHART)
@@ -328,7 +328,7 @@ class RecordedStatecharts:
         """
         return not self.moments
 
-    def to_payload(self) -> Dict[str, Any]:
+    def to_payload(self) -> dict[str, Any]:
         """
         The recorded statecharts in the shape the viewer reads.
         """

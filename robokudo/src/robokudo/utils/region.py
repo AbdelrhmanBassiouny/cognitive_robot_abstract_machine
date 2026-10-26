@@ -9,7 +9,7 @@ This module provides utilities to:
 
 from __future__ import annotations
 
-from typing_extensions import Iterable, Tuple
+from typing_extensions import Iterable
 
 import numpy as np
 import open3d as o3d
@@ -117,8 +117,8 @@ def region_pose_annotation(region: Region) -> robokudo.types.annotation.PoseAnno
 def region_marker_array(
     regions: Iterable[Region],
     highlighted: Iterable[str] | None = None,
-    highlight_color: Tuple[float, float, float] = (0.0, 1.0, 0.0),
-    default_color: Tuple[float, float, float] = (0.0, 0.0, 0.7),
+    highlight_color: tuple[float, float, float] = (0.0, 1.0, 0.0),
+    default_color: tuple[float, float, float] = (0.0, 0.0, 0.7),
 ):
     """
     Optional helper for visualization markers.

@@ -9,7 +9,7 @@ import os.path
 from dataclasses import dataclass, field
 from functools import wraps
 
-from typing_extensions import Callable, Tuple, Dict, Any, List
+from typing_extensions import Callable, Any
 
 from krrood.ripple_down_rules.experts import Expert, Human
 from krrood.ripple_down_rules.rdr import GeneralRDR
@@ -32,7 +32,7 @@ class RDRDecorator:
     """
     The directory to save the RDR models in.
     """
-    output_type: Tuple[type, ...]
+    output_type: tuple[type, ...]
     """
     The type(s) of the output produced by the RDR model (The type(s) of the queried attribute).
     """
@@ -62,7 +62,7 @@ class RDRDecorator:
     Whether to use the generated classifier files of the rdr model instead of the RDR instance itself, this is useful
     when you want to debug inside the rules.
     """
-    ask_now: Callable[Dict[str, Any], bool] = field(default=lambda _: False)
+    ask_now: Callable[dict[str, Any], bool] = field(default=lambda _: False)
     """
     A user provided callable function that outputs a boolean indicating when to ask the expert for an answer. The input
     to the `ask_now` function is a dictionary with the original function arguments, while arguments like `self` and
@@ -97,7 +97,7 @@ class RDRDecorator:
     """
     The ripple down rules instance of the decorator class.
     """
-    parsed_output_type: List[type] = field(init=False, default_factory=list)
+    parsed_output_type: list[type] = field(init=False, default_factory=list)
     """
     The output of a post processing done on the output types, for example converting typing module types 
     (i.e. type hints) to python types.
@@ -217,7 +217,7 @@ class RDRDecorator:
         if self.regenerate_model:
             self.rdr.save(self.models_dir, self.model_name)
 
-    def parse_output_type(self, func: Callable, output_type: Any, *args) -> List[type]:
+    def parse_output_type(self, func: Callable, output_type: Any, *args) -> list[type]:
         parsed_output_type = []
         for ot in make_set(output_type):
             ot = get_arg_type_of_function_output(

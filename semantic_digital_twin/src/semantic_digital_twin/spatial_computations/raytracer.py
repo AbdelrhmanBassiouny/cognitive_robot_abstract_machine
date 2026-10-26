@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing_extensions import Tuple, List, TYPE_CHECKING
+from typing_extensions import TYPE_CHECKING
 
 import numpy as np
 import trimesh
@@ -236,7 +236,7 @@ class RayTracer:
         camera_pose: GenericSpatialType,
         resolution: CameraResolution | None = None,
         field_of_view: FieldOfView | None = None,
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Creates camera rays for the ray tracer scene from the camera position to the
         target position.
@@ -280,7 +280,7 @@ class RayTracer:
         multiple_hits=False,
         min_distance: float = 0,
         max_distance: float = np.inf,
-    ) -> Tuple[np.ndarray, np.ndarray, List[Body]]:
+    ) -> tuple[np.ndarray, np.ndarray, list[Body]]:
         """
         Performs a ray test from the origin point to the target point in the ray tracer
         scene.

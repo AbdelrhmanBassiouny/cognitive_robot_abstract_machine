@@ -10,7 +10,6 @@ import xml.etree.ElementTree as ElementTree
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from typing_extensions import List
 
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
@@ -280,8 +279,8 @@ class TestConcurrentBuilds:
         scenes = use_scratch_scenes_directory(monkeypatch, tmp_path)
         bridge = attached_bridge()
 
-        names: List[str | None] = []
-        failures: List[BaseException] = []
+        names: list[str | None] = []
+        failures: list[BaseException] = []
         start = threading.Barrier(self.VIEWERS_ASKING_AT_ONCE)
 
         def build() -> None:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing_extensions import List, TYPE_CHECKING, Any, Self
+from typing_extensions import TYPE_CHECKING, Any, Self
 
 
 from krrood.adapters.json_serializer import to_json, from_json
@@ -105,7 +105,7 @@ class CollisionManager(ModelChangeCallback):
     check for closest points.
     """
 
-    default_rules: List[CollisionRule] = field(default_factory=list)
+    default_rules: list[CollisionRule] = field(default_factory=list)
     """
     Rules that are applied to the collision matrix before temporary rules.
 
@@ -113,7 +113,7 @@ class CollisionManager(ModelChangeCallback):
     other rules will overwrite these. .. note: These rules ARE synced with other worlds.
     """
 
-    temporary_rules: List[CollisionRule] = field(default_factory=list)
+    temporary_rules: list[CollisionRule] = field(default_factory=list)
     """
     Rules that are applied to the collision matrix after default rules.
 
@@ -121,7 +121,7 @@ class CollisionManager(ModelChangeCallback):
     other worlds.
     """
 
-    ignore_collision_rules: List[AllowCollisionRule] = field(
+    ignore_collision_rules: list[AllowCollisionRule] = field(
         default_factory=lambda: [
             AllowCollisionForAdjacentPairs(),
             AllowNonRobotCollisions(),
@@ -141,7 +141,7 @@ class CollisionManager(ModelChangeCallback):
     .. note: These rules ARE synced with other worlds.
     """
 
-    max_avoided_bodies_rules: List[MaxAvoidedCollisionsRule] = field(
+    max_avoided_bodies_rules: list[MaxAvoidedCollisionsRule] = field(
         default_factory=lambda: [DefaultMaxAvoidedCollisions()]
     )
     """
@@ -174,7 +174,7 @@ class CollisionManager(ModelChangeCallback):
         self.default_rules.append(rule)
 
     @synchronized_attribute_modification
-    def extend_default_rules(self, rules: List[CollisionRule]):
+    def extend_default_rules(self, rules: list[CollisionRule]):
         self.default_rules.extend(rules)
 
     @synchronized_attribute_modification
@@ -200,7 +200,7 @@ class CollisionManager(ModelChangeCallback):
         self.temporary_rules.clear()
 
     @synchronized_attribute_modification
-    def extend_max_avoided_bodies_rules(self, rules: List[MaxAvoidedCollisionsRule]):
+    def extend_max_avoided_bodies_rules(self, rules: list[MaxAvoidedCollisionsRule]):
         self.max_avoided_bodies_rules.extend(rules)
 
     def add_collision_consumer(self, consumer: CollisionConsumer):
@@ -313,7 +313,7 @@ class CollisionManager(ModelChangeCallback):
         raise ValueError(f"No violated-distance rule found for {body_a, body_b}")
 
     @property
-    def rules(self) -> List[CollisionRule]:
+    def rules(self) -> list[CollisionRule]:
         """
         :return: all rules in the order they are applied.
         """

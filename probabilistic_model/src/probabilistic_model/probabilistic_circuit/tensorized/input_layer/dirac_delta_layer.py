@@ -8,7 +8,7 @@ from random_events.interval import Bound, Interval
 from random_events.product_algebra import SimpleEvent
 from random_events.variable import Variable
 from sortedcontainers import SortedSet
-from typing_extensions import Any, List, Self
+from typing_extensions import Any, Self
 
 from probabilistic_model.distributions.distributions import DiracDeltaDistribution
 from probabilistic_model.exceptions import ShapeMismatchError
@@ -78,7 +78,7 @@ class DiracDeltaLayer(AbstractContinuousLayer):
 
     @classmethod
     def from_distributions(
-        cls, variable_index: int, distributions: List[DiracDeltaDistribution]
+        cls, variable_index: int, distributions: list[DiracDeltaDistribution]
     ) -> Self:
         return cls(
             variable_index,
@@ -93,7 +93,7 @@ class DiracDeltaLayer(AbstractContinuousLayer):
         )
 
     @classmethod
-    def concatenate(cls, layers: List[Self]) -> Self:
+    def concatenate(cls, layers: list[Self]) -> Self:
         return cls(
             layers[0].variable,
             np.concatenate([layer.location for layer in layers]),

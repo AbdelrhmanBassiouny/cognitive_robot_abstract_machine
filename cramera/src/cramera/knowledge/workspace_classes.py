@@ -11,7 +11,7 @@ import importlib
 from dataclasses import dataclass, field
 from enum import Enum
 
-from typing_extensions import Any, ClassVar, Dict, List, Tuple
+from typing_extensions import Any, ClassVar, Dict
 
 from cramera.knowledge.architecture_entities import PythonClass
 from cramera.knowledge.architecture_scan import ArchitectureScanner
@@ -149,25 +149,25 @@ class WorkspaceClassIndex:
     Every class of the workspace a query may name, by name.
     """
 
-    locations: Dict[str, Tuple[ClassLocation, ...]] = field(default_factory=dict)
+    locations: dict[str, tuple[ClassLocation, ...]] = field(default_factory=dict)
     """
     Where each nameable class is defined, best candidate first.
     """
 
-    _of_root: ClassVar[Dict[str, WorkspaceClassIndex]] = {}
+    _of_root: ClassVar[dict[str, WorkspaceClassIndex]] = {}
     """
     One index per scanned repository root, kept because a scan costs seconds on a cold
     cache, and keyed by root so pointing cramera at another checkout rebuilds it.
     """
 
     @classmethod
-    def of_scanned_classes(cls, scanned: List[PythonClass]) -> WorkspaceClassIndex:
+    def of_scanned_classes(cls, scanned: list[PythonClass]) -> WorkspaceClassIndex:
         """
         An index over the nameable classes among those scanned.
 
         :param scanned: Classes as the architecture scan reports them.
         """
-        locations: Dict[str, List[ClassLocation]] = {}
+        locations: dict[str, list[ClassLocation]] = {}
         for scanned_class in scanned:
             location = ClassLocation.of_scanned_class(scanned_class)
             if location is not None:
@@ -197,7 +197,7 @@ class WorkspaceClassIndex:
         """
         cls._of_root = {}
 
-    def candidates(self, name: str) -> Tuple[ClassLocation, ...]:
+    def candidates(self, name: str) -> tuple[ClassLocation, ...]:
         """
         Every class of this name, the one a query gets first.
 
@@ -205,7 +205,7 @@ class WorkspaceClassIndex:
         """
         return self.locations.get(name, ())
 
-    def names(self) -> List[str]:
+    def names(self) -> list[str]:
         """
         Every class name a query may use, alphabetically.
         """

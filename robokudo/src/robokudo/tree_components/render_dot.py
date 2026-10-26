@@ -20,7 +20,6 @@ from timeit import default_timer
 from py_trees.behaviour import Behaviour
 from py_trees.common import Status
 from py_trees.decorators import Decorator
-from typing_extensions import List
 
 from robokudo.display import render_dot_tree
 from robokudo.utils.tree import find_root
@@ -108,7 +107,7 @@ class RenderTreeToDotDecorator(Decorator):
         child: Behaviour | None = None,
         path: str | None = None,
         suffix: str = "",
-        trigger_when_status_is: List[Status] | None = None,
+        trigger_when_status_is: list[Status] | None = None,
     ) -> None:
         """Initialize render decorator.
 
@@ -125,7 +124,7 @@ class RenderTreeToDotDecorator(Decorator):
                 Status.FAILURE,
             ]
 
-        self.trigger_when_status_is: List[Status] = trigger_when_status_is
+        self.trigger_when_status_is: list[Status] = trigger_when_status_is
         """List of status values that trigger rendering"""
 
         self.path: str = path

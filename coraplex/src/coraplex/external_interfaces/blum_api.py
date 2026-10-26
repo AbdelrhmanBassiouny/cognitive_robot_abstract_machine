@@ -3,7 +3,7 @@ from __future__ import print_function
 import sys
 import json
 import logging
-from typing_extensions import Dict, Callable
+from typing_extensions import Callable
 
 
 from coraplex.ros import (
@@ -108,7 +108,7 @@ def modules_show():
 
 
 @init_kitchen_interface
-def kitchen_state() -> Dict[str, Dict[str, str]]:
+def kitchen_state() -> dict[str, dict[str, str]]:
     """
     Returns the state of the whole kitchen as a dictionary.
 

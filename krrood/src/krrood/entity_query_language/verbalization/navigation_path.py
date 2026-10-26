@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, is_dataclass, replace
 
-from typing_extensions import TYPE_CHECKING, Callable, List
+from typing_extensions import TYPE_CHECKING, Callable
 
 from krrood.entity_query_language.core.mapped_variable import (
     Attribute,
@@ -109,9 +109,9 @@ class PathStep:
 
 
 def build_path_parts(
-    chain: List[MappedVariable],
+    chain: list[MappedVariable],
     relation_verb: Callable[[str], RelationVerb | None] | None = None,
-) -> List[PathStep]:
+) -> list[PathStep]:
     """
     Convert a walked chain into :class:`PathStep` hops.
 
@@ -139,7 +139,7 @@ def build_path_parts(
     >>> [step.name for step in build_path_parts(chain)]
     ['amount_details', 'amount']
     """
-    parts: List[PathStep] = []
+    parts: list[PathStep] = []
     for node in chain:
         if isinstance(node, Attribute):
             owner = node._owner_class_
@@ -188,7 +188,7 @@ def _is_scalar_value(value_type: type | None) -> bool:
     return value_type is not None and not is_dataclass(value_type)
 
 
-def _append_index(parts: List[PathStep], node: Index) -> None:
+def _append_index(parts: list[PathStep], node: Index) -> None:
     """Fold an integer index into the plain attribute hop it subscripts (*"the first task"*), else
     append it as a standalone hop.
 

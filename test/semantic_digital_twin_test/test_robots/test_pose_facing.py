@@ -3,7 +3,6 @@ import pkgutil
 
 import numpy as np
 import pytest
-from typing_extensions import List, Tuple
 
 import semantic_digital_twin.robots as robots_package
 from krrood.entity_query_language.factories import (
@@ -27,7 +26,7 @@ from semantic_digital_twin.world import World
 # %% the forward axes the declared robots use
 
 
-def axis_components(axis: Vector3) -> Tuple[float, float, float]:
+def axis_components(axis: Vector3) -> tuple[float, float, float]:
     """
     The three components of ``axis``.
 
@@ -49,7 +48,7 @@ def mobile_base_type(robot_type: type[AbstractRobot]) -> type[MobileBase]:
 @symbolic_function
 def forward_axis_components(
     robot_type: type[AbstractRobot],
-) -> Tuple[float, float, float]:
+) -> tuple[float, float, float]:
     """
     The direction the robot's base calls its front.
     """
@@ -81,7 +80,7 @@ def description_is_available(robot_type: type[AbstractRobot]) -> bool:
     return True
 
 
-def robot_types_with_a_mobile_base() -> List[type[AbstractRobot]]:
+def robot_types_with_a_mobile_base() -> list[type[AbstractRobot]]:
     """
     Every robot this repository declares that stands on a mobile base.
 

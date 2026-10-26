@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing_extensions import List, Iterator, Set
+from typing_extensions import Iterator
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -405,7 +405,7 @@ class OccupancyCostmap(Costmap):
         return np.flip(np.reshape(free_space_mask, (self.width, self.width)))
 
     @property
-    def _floor_bodies(self) -> Set[Body]:
+    def _floor_bodies(self) -> set[Body]:
         """
         The floor slabs of the world, which a robot drives on rather than around.
 
@@ -511,7 +511,7 @@ class VisibilityCostmap(Costmap):
         )
         self._generate_map()
 
-    def _create_images(self) -> List[np.ndarray]:
+    def _create_images(self) -> list[np.ndarray]:
         """
         Creates four depth images in every direction around the point
         for which the locations should be created. The depth images are converted

@@ -4,7 +4,7 @@ from abc import ABC
 from dataclasses import dataclass
 from inspect import isabstract
 
-from typing_extensions import TypeVar, ClassVar, TYPE_CHECKING, List, Iterable
+from typing_extensions import TypeVar, ClassVar, TYPE_CHECKING, Iterable
 
 from krrood.adapters.json_serializer import list_like_classes
 from krrood.ormatic.data_access_objects.base import HasGeneric
@@ -67,7 +67,7 @@ class AlternativeMotion(HasGeneric[AbstractRobotType], ABC):
         return None
 
     @classmethod
-    def discover_all(cls) -> List[type[AlternativeMotion]]:
+    def discover_all(cls) -> list[type[AlternativeMotion]]:
         """
         Discover every concrete :class:`AlternativeMotion` for every robot.
 

@@ -13,7 +13,7 @@ import linecache
 import sys
 from dataclasses import dataclass
 from types import FrameType
-from typing_extensions import Callable, List, Any, Dict
+from typing_extensions import Callable, Any
 
 
 @dataclass
@@ -53,13 +53,13 @@ class StackFrame:
     """
     Dotted module name (string, not ``ModuleType``) to avoid reference leaks.
     """
-    global_namespace: Dict[str, Any] | None = None
+    global_namespace: dict[str, Any] | None = None
     """
     Shallow snapshot of the frame's ``f_globals``, or ``None`` when scope was not
     captured.
     """
 
-    local_namespace: Dict[str, Any] | None = None
+    local_namespace: dict[str, Any] | None = None
     """
     Shallow snapshot of the frame's ``f_locals``, or ``None`` when scope was not
     captured.
@@ -73,13 +73,13 @@ class StackFrame:
         return self.class_object is not None
 
     @property
-    def scope(self) -> Dict[str, Any]:
+    def scope(self) -> dict[str, Any]:
         """
         Merged ``{**globals, **locals}`` snapshot (locals win).
 
         Empty if scope was not captured.
         """
-        merged: Dict[str, Any] = {}
+        merged: dict[str, Any] = {}
         if self.global_namespace:
             merged.update(self.global_namespace)
         if self.local_namespace:
@@ -205,7 +205,7 @@ class CallStack:
     An ordered sequence of :class:`StackFrame` objects, innermost frame first.
     """
 
-    frames: List[StackFrame]
+    frames: list[StackFrame]
     """
     The captured stack frames.
     """
@@ -237,7 +237,7 @@ class CallStack:
             frame: FrameType | None = sys._getframe(1 + skip)
         except ValueError:
             return cls([])
-        kept: List[StackFrame] = []
+        kept: list[StackFrame] = []
         while frame is not None:
             if not _is_external_filename(frame.f_code.co_filename):
                 kept.append(StackFrame.from_raw_frame(frame))
@@ -278,21 +278,21 @@ class CallStack:
         ]
         return matches[-1] if matches else None
 
-    def classes(self) -> List[type]:
+    def classes(self) -> list[type]:
         """
         Distinct class objects appearing in the stack, in order of first occurrence.
         """
-        seen: List[type] = []
+        seen: list[type] = []
         for frame in self.frames:
             if frame.class_object is not None and frame.class_object not in seen:
                 seen.append(frame.class_object)
         return seen
 
-    def functions(self) -> List[Callable]:
+    def functions(self) -> list[Callable]:
         """
         Distinct function objects appearing in the stack, in order of first occurrence.
         """
-        seen: List[Callable] = []
+        seen: list[Callable] = []
         for frame in self.frames:
             if frame.function_object is not None and frame.function_object not in seen:
                 seen.append(frame.function_object)

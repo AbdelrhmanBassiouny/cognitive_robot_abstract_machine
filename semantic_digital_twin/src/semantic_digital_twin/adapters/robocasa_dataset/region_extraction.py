@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import Any, List
+from typing_extensions import Any
 
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.adapters.robocasa_dataset.semantics import (
@@ -128,7 +128,7 @@ class PlacementSamplerRegionReader:
 
     def read_all(
         self, environment: Any, name_prefix: str
-    ) -> List[PlacementSamplerRegion]:
+    ) -> list[PlacementSamplerRegion]:
         """
         :param environment: A reset RoboCasa/robosuite task environment.
         :param name_prefix: Prefix the attached regions' names are given, so regions

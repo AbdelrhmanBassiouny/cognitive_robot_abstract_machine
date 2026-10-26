@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import List
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.query.operations import GroupedBy
@@ -16,12 +15,12 @@ class GroupPlan:
     The GROUP BY keys and the expressions aggregated over them.
     """
 
-    keys: List[SymbolicExpression]
+    keys: list[SymbolicExpression]
     """
     The group-by key expressions (empty ⇒ a bare *"grouped"* / no clause).
     """
 
-    aggregated: List[SymbolicExpression]
+    aggregated: list[SymbolicExpression]
     """
     Selected expressions aggregated (not group keys) — rendered plural; empty when the
     query selects no aggregations.

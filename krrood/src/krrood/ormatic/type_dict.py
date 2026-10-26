@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing_extensions import Dict, Any, Iterator
+from typing_extensions import Any, Iterator
 
 
 from krrood.inheritance_path_length import inheritance_path_length
@@ -12,12 +12,12 @@ class TypeDict:
     looking for direct matches.
     """
 
-    _dict: Dict[type, Any] = field(default_factory=dict)
+    _dict: dict[type, Any] = field(default_factory=dict)
     """
     The pure data dict.
     """
 
-    def _get_inheritance_path_length_of_keys(self, clazz: type) -> Dict[type, int]:
+    def _get_inheritance_path_length_of_keys(self, clazz: type) -> dict[type, int]:
         """
         Get the inheritance path length of all keys in the dictionary relative to the
         given class.

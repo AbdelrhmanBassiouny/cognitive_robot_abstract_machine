@@ -13,7 +13,6 @@ from dataclasses import dataclass
 
 from segmind.datastructures.events import DetectionEvent, EventWithTrackedObjects
 from segmind.event_logger import EventLogger
-from typing_extensions import List, Tuple
 
 from cramera.knowledge.detected_events import EVENT_VARIABLE, DetectedEventRecord
 from cramera.knowledge.presets import DetectedEventQuestions, Preset
@@ -37,7 +36,7 @@ def record_of(event: DetectionEvent) -> DetectedEventRecord:
     )
 
 
-def records_of(events: List[DetectionEvent]) -> List[DetectedEventRecord]:
+def records_of(events: list[DetectionEvent]) -> list[DetectedEventRecord]:
     """
     Every detected event as a record, in the order they were detected.
 
@@ -46,7 +45,7 @@ def records_of(events: List[DetectionEvent]) -> List[DetectedEventRecord]:
     return [record_of(event) for event in events]
 
 
-def detectable_event_types() -> Tuple[str, ...]:
+def detectable_event_types() -> tuple[str, ...]:
     """
     The type of every event a record can be written for, in alphabetical order.
 
@@ -57,19 +56,19 @@ def detectable_event_types() -> Tuple[str, ...]:
     return tuple(sorted(event_type.__name__ for event_type in _leaf_event_types()))
 
 
-def _leaf_event_types() -> List[type[DetectionEvent]]:
+def _leaf_event_types() -> list[type[DetectionEvent]]:
     """
     Every event type a detector can produce: the leaves of segmind's event tree.
     """
 
-    def leaves(base: type[DetectionEvent]) -> List[type[DetectionEvent]]:
+    def leaves(base: type[DetectionEvent]) -> list[type[DetectionEvent]]:
         """
         Collect the concrete event types below one event class.
 
         :param base: The event class whose descendants are inspected.
         :return: Event classes with no subclasses.
         """
-        found: List[type[DetectionEvent]] = []
+        found: list[type[DetectionEvent]] = []
         for subclass in base.__subclasses__():
             found.extend(leaves(subclass) if subclass.__subclasses__() else [subclass])
         return found
@@ -77,7 +76,7 @@ def _leaf_event_types() -> List[type[DetectionEvent]]:
     return leaves(DetectionEvent)
 
 
-def _involved_names(event: DetectionEvent) -> Tuple[str | None, str | None]:
+def _involved_names(event: DetectionEvent) -> tuple[str | None, str | None]:
     """
     The names of the bodies an event happened to, the primary one first.
 
@@ -135,13 +134,13 @@ class DetectedEvents:
         """
         return iter(records_of(self.logger.get_events()))
 
-    def presets(self) -> List[Preset]:
+    def presets(self) -> list[Preset]:
         """
         The ready-made questions the panel offers as buttons.
         """
         return self._questions().listed()
 
-    def unlisted_presets(self) -> List[Preset]:
+    def unlisted_presets(self) -> list[Preset]:
         """
         The questions recognized when one is asked, but not shown as buttons.
         """

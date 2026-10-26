@@ -13,7 +13,6 @@ from dataclasses import dataclass, field
 
 from giskardpy.motion_statechart.data_types import LifeCycleValues
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
-from typing_extensions import List, Tuple
 
 from cramera.live.chart_structure import (
     ChartNodeEntry,
@@ -48,7 +47,7 @@ class ChartObserver:
     Its nodes and transitions, which only change when the chart does.
     """
 
-    _sent_node_states: Tuple[List[str], List[ObservationName]] | None = field(
+    _sent_node_states: tuple[list[str], list[ObservationName]] | None = field(
         default=None, init=False
     )
     """

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import timedelta
-from typing_extensions import Dict, Any
+from typing_extensions import Any
 
 
 from coraplex.plans.plan_node import PlanNode
@@ -55,7 +55,7 @@ class MoveTorsoAction(ActionDescription):
 
     @staticmethod
     def post_condition(
-        variables: Dict[str, Variable], context: Context, kwargs: Dict[str, Any]
+        variables: dict[str, Variable], context: Context, kwargs: dict[str, Any]
     ) -> SymbolicExpression | bool:
         """
         The target joint state for the torso needs to be achieved.
@@ -199,7 +199,7 @@ class MoveManipulatorAction(ActionDescription, HasTcpGoalThresholds):
 
     @staticmethod
     def post_condition(
-        variables: Dict[str, Variable], context: Context, kwargs: Dict[str, Any]
+        variables: dict[str, Variable], context: Context, kwargs: dict[str, Any]
     ) -> SymbolicExpression:
         end_effector = variables["end_effector"]
         target_pose = variables["target_pose"]

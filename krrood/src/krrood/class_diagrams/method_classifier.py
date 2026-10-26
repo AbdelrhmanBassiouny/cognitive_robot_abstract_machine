@@ -20,7 +20,7 @@ import inspect
 from dataclasses import dataclass
 from functools import lru_cache
 
-from typing_extensions import Any, Callable, Self, Tuple
+from typing_extensions import Any, Callable, Self
 
 from krrood.class_diagrams.exceptions import FactoryMethodDecoratorError
 from krrood.class_diagrams.factory_method_registry import FactoryMethodRegistry
@@ -118,7 +118,7 @@ def is_factory_method(cls: type, name: str) -> bool:
     return _return_annotation_is_self_or_owner(attribute.__func__, cls)
 
 
-def factory_method_names(cls: type) -> Tuple[str, ...]:
+def factory_method_names(cls: type) -> tuple[str, ...]:
     """
     :param cls: The class to inspect.
     :return: The names of all factory classmethods reachable on ``cls`` (including inherited ones).

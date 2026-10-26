@@ -8,7 +8,7 @@ from functools import cached_property, lru_cache
 from inspect import isclass
 
 import sqlalchemy
-from typing_extensions import List, Dict, TYPE_CHECKING, Optional, Set, get_origin
+from typing_extensions import List, TYPE_CHECKING, Optional, Set, get_origin
 
 from krrood.ormatic.field_storage import FieldStorage
 from krrood.ormatic.data_access_objects.alternative_mappings import AlternativeMapping
@@ -140,7 +140,7 @@ class AssociationObject:
         )
 
     @property
-    def columns(self) -> List[ColumnConstructor]:
+    def columns(self) -> list[ColumnConstructor]:
         """
         :return: The foreign key column constructors for the left and right sides.
         """
@@ -158,7 +158,7 @@ class AssociationObject:
         ]
 
     @property
-    def relationships(self) -> List[ColumnConstructor]:
+    def relationships(self) -> list[ColumnConstructor]:
         """
         :return: The relationship constructors for this association table.
         """
@@ -239,7 +239,7 @@ class ExternalTable(TableLike):
         return f"{self.qualified_reference}.{self.primary_key_name}"
 
     @cached_property
-    def mapped_field_names(self) -> Set[str]:
+    def mapped_field_names(self) -> set[str]:
         """
         :return: Every ORM attribute name already mapped on ``dao_class``, including
             ones inherited from its own (possibly external) ancestors.
@@ -264,28 +264,28 @@ class WrappedTable(TableLike):
     Reference to the ORMatic instance that created this WrappedTable.
     """
 
-    builtin_columns: List[ColumnConstructor] = field(default_factory=list, init=False)
+    builtin_columns: list[ColumnConstructor] = field(default_factory=list, init=False)
     """
     List of columns that can be directly mapped using builtin types.
     """
 
-    custom_columns: List[ColumnConstructor] = field(default_factory=list, init=False)
+    custom_columns: list[ColumnConstructor] = field(default_factory=list, init=False)
     """
     List for custom columns that need to by fully qualified as triple of (name, type,
     constructor)
     """
 
-    foreign_keys: List[ColumnConstructor] = field(default_factory=list, init=False)
+    foreign_keys: list[ColumnConstructor] = field(default_factory=list, init=False)
     """
     List of columns that represent foreign keys as triple of (name, type, constructor)
     """
 
-    relationships: List[ColumnConstructor] = field(default_factory=list, init=False)
+    relationships: list[ColumnConstructor] = field(default_factory=list, init=False)
     """
     List of relationships that should be added to the table.
     """
 
-    mapper_args: Dict[str, str] = field(default_factory=dict, init=False)
+    mapper_args: dict[str, str] = field(default_factory=dict, init=False)
     """
     Keyword Arguments for the sqlalchemy mapper.
     """
@@ -301,7 +301,7 @@ class WrappedTable(TableLike):
     present.
     """
 
-    skip_fields: List[WrappedField] = field(default_factory=list)
+    skip_fields: list[WrappedField] = field(default_factory=list)
     """
     A list of fields that should be skipped when processing the dataclass.
     """
@@ -555,7 +555,7 @@ class WrappedTable(TableLike):
             return False
 
     @cached_property
-    def fields(self) -> List[WrappedField]:
+    def fields(self) -> list[WrappedField]:
         """
         :return: The list of fields specified only in this associated dataclass that should be mapped.
         """

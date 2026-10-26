@@ -7,7 +7,7 @@ import weakref
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import ModuleType
-from typing_extensions import Any, Callable, Dict, List, Self, TYPE_CHECKING
+from typing_extensions import Any, Callable, Self, TYPE_CHECKING
 
 from ordered_set import OrderedSet
 
@@ -144,7 +144,7 @@ def _get_query_source(frame: StackFrame) -> str | None:
 
 
 def _select_source_frame(
-    filtered_frames: List[StackFrame],
+    filtered_frames: list[StackFrame],
 ) -> StackFrame | None:
     """
     Select the best user-facing frame from *filtered_frames*.
@@ -292,7 +292,7 @@ class InferenceExplanation(Symbol):
         default=None, init=False, repr=False, compare=False
     )
 
-    def __deepcopy__(self, memo: Dict[int, Any]) -> Self:
+    def __deepcopy__(self, memo: dict[int, Any]) -> Self:
         """
         :return: This explanation itself, so a copy of an inferred instance shares the record
             of the query that inferred the original.
@@ -320,7 +320,7 @@ class InferenceExplanation(Symbol):
             str(c) for c in self.get_satisfied_conditions_and_their_bindings()
         )
 
-    def get_satisfied_conditions_and_their_bindings(self) -> List[ConditionAndBindings]:
+    def get_satisfied_conditions_and_their_bindings(self) -> list[ConditionAndBindings]:
         """
         Retrieve the list of satisfied non-logical condition expressions along with
         their bindings.
@@ -420,7 +420,7 @@ class InferenceExplanation(Symbol):
         """
         return self.stack.is_from_method()
 
-    def triggering_classes(self) -> List[type]:
+    def triggering_classes(self) -> list[type]:
         """
         Retrieve the distinct class objects that appear in the call stack, in order of
         first occurrence (innermost first).
@@ -432,7 +432,7 @@ class InferenceExplanation(Symbol):
         """
         return self.stack.classes()
 
-    def triggering_functions(self) -> List[Callable]:
+    def triggering_functions(self) -> list[Callable]:
         """
         Retrieve the distinct function objects that appear in the call stack, in order
         of first occurrence (innermost first).

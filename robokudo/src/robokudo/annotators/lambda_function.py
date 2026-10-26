@@ -20,7 +20,7 @@ The module is used for:
 from __future__ import annotations
 
 from py_trees.common import Status
-from typing_extensions import Callable, Dict, Tuple
+from typing_extensions import Callable
 
 from robokudo.annotators.core import BaseAnnotator
 
@@ -49,8 +49,8 @@ class LambdaFunctionAnnotator(BaseAnnotator):
 
             def __init__(self) -> None:
                 self.func: Callable | None = None
-                self.func_args: Tuple | None = None
-                self.func_kwargs: Dict | None = None
+                self.func_args: tuple | None = None
+                self.func_kwargs: dict | None = None
 
         # Overwrite the parameters explicitly to enable auto-completion
         parameters = Parameters()

@@ -21,7 +21,7 @@ from __future__ import annotations
 import uuid
 
 from py_trees.behaviour import Behaviour
-from typing_extensions import TYPE_CHECKING, Generator, List, TypeVar
+from typing_extensions import TYPE_CHECKING, Generator, TypeVar
 
 if TYPE_CHECKING:
     from py_trees.composites import Composite
@@ -106,7 +106,7 @@ def find_children_with_name(
 
 def get_scoped_list_of_names(
     behaviour: Behaviour, scoping_behaviour_type: type
-) -> List[str]:
+) -> list[str]:
     """This method can generate behaviour names which represent the structure of the tree.
     For that, we can prefix (or scope) the name of the input behaviour with a scoping behaviour parent.
     Imagine a tree like this:
@@ -239,7 +239,7 @@ def add_child_to_parent(parent: Composite, child: Behaviour) -> uuid.UUID:
     return child.id
 
 
-def add_children_to_parent(parent: Composite, children: List[Behaviour]) -> Behaviour:
+def add_children_to_parent(parent: Composite, children: list[Behaviour]) -> Behaviour:
     """
     Append a list of children to the current list.
 

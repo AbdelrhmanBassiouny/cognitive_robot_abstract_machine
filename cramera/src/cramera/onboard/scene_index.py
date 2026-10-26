@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from typing_extensions import Any, Dict, List
+from typing_extensions import Any
 
 from cramera import paths
 from cramera.recording_fields import SceneField
@@ -86,7 +86,7 @@ class SceneIndexEntry:
     """
 
     @classmethod
-    def of_directory(cls, scenes_directory: Path) -> List[SceneIndexEntry]:
+    def of_directory(cls, scenes_directory: Path) -> list[SceneIndexEntry]:
         """
         Every recorded bundle under a scenes directory, in name order.
 
@@ -110,7 +110,7 @@ class SceneIndexEntry:
         return entries
 
     @classmethod
-    def of_scene(cls, name: str, scene: Dict[str, Any]) -> SceneIndexEntry:
+    def of_scene(cls, name: str, scene: dict[str, Any]) -> SceneIndexEntry:
         """
         What one bundle is, read from its ``scene.json``.
 
@@ -132,7 +132,7 @@ class SceneIndexEntry:
         )
 
     @staticmethod
-    def _environment_of(models: List[Dict[str, Any]]) -> str | None:
+    def _environment_of(models: list[dict[str, Any]]) -> str | None:
         """
         The name of a scene's environment, or None for a bench-only scene.
 
@@ -150,7 +150,7 @@ class SceneIndexEntry:
             part for part in [self.robot, self.environment, self.task] if part
         )
 
-    def to_payload(self) -> Dict[str, Any]:
+    def to_payload(self) -> dict[str, Any]:
         """
         The JSON-serializable shape ``index.json`` carries.
         """
@@ -194,7 +194,7 @@ def write_scene_index(path: Path, name: str) -> None:
     write_json_atomically(path, index, indent=1)
 
 
-def merged_scene_index() -> Dict[str, Any]:
+def merged_scene_index() -> dict[str, Any]:
     """
     The ``index.json`` the frontend fetches: the shared scenes plus local recordings
     saved under :func:`cramera.paths.local_scenes_directory`, with a local scene
@@ -205,7 +205,7 @@ def merged_scene_index() -> Dict[str, Any]:
     """
     shared_directory = paths.scenes_directory()
     local_directory = paths.local_scenes_directory()
-    by_name: Dict[str, SceneIndexEntry] = {}
+    by_name: dict[str, SceneIndexEntry] = {}
     if shared_directory.is_dir():
         by_name.update(
             {

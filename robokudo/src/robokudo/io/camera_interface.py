@@ -39,7 +39,7 @@ from rclpy.node import Node
 from rclpy.time import Time
 from sensor_msgs.msg import CompressedImage, CameraInfo, Image
 from tf2_ros import Buffer
-from typing_extensions import List, Any, TYPE_CHECKING
+from typing_extensions import Any, TYPE_CHECKING
 
 from robokudo.cas import CASViews, CAS
 from robokudo.defs import PACKAGE_NAME
@@ -210,10 +210,10 @@ class ROSCameraInterface(CameraInterface):
             self.lookup_viewpoint: bool = False
             """Whether to look up camera transforms"""
 
-        self.camera_translation: List[float] = [0.0, 0.0, 0.0]
+        self.camera_translation: list[float] = [0.0, 0.0, 0.0]
         """Camera translation from TF"""
 
-        self.camera_quaternion: List[float] = [0.0, 0.0, 0.0, 1.0]
+        self.camera_quaternion: list[float] = [0.0, 0.0, 0.0, 1.0]
         """Camera rotation from TF"""
 
         if self.lookup_viewpoint:

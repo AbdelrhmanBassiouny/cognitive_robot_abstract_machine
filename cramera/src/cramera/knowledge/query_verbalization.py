@@ -31,7 +31,7 @@ from krrood.entity_query_language.verbalization.rendering.source_link_resolver i
     AutoAPIResolver,
 )
 from krrood.entity_query_language.verbalization.verbalizer import EQLVerbalizer
-from typing_extensions import Any, Dict, FrozenSet
+from typing_extensions import Any
 
 from cramera import paths
 
@@ -50,7 +50,7 @@ DEFAULT_SOURCE_REVISION = "main"
 The revision a file is read at when the checkout does not say which one it is on.
 """
 
-DOCUMENTED_PACKAGES: FrozenSet[str] = frozenset(
+DOCUMENTED_PACKAGES: frozenset[str] = frozenset(
     {
         "coraplex",
         "giskardpy",
@@ -333,7 +333,7 @@ class QueryVerbalization:
             ).render(fragment),
         )
 
-    def to_payload(self) -> Dict[str, Any]:
+    def to_payload(self) -> dict[str, Any]:
         """
         The JSON-serializable shape the answer panel reads.
         """

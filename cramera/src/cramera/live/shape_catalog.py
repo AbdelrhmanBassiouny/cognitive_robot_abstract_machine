@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from typing_extensions import List
 
 from semantic_digital_twin.world_description.geometry import (
     Box,
@@ -55,12 +54,12 @@ class ShapeEntry:
     The primitive or mesh this entry describes.
     """
 
-    position: List[float]
+    position: list[float]
     """
     The shape's position within its body, as ``[x, y, z]`` in metres.
     """
 
-    quaternion: List[float]
+    quaternion: list[float]
     """
     The shape's orientation within its body, as ``[qx, qy, qz, qw]``.
     """
@@ -75,7 +74,7 @@ class ShapeEntry:
     The shape's opacity between 0 and 1.
     """
 
-    size: List[float] | None = None
+    size: list[float] | None = None
     """
     Box extent in metres, set only when :attr:`kind` is ``BOX``.
     """
@@ -105,7 +104,7 @@ class ShapeEntry:
     Mesh file extension, set only when :attr:`kind` is ``MESH``.
     """
 
-    scale: List[float] | None = None
+    scale: list[float] | None = None
     """
     Mesh scale multiplier per axis, set only when :attr:`kind` is ``MESH``.
     """
@@ -208,7 +207,7 @@ def shape_entry(
     raise TypeError(f"Unsupported shape type: {type(shape).__name__}")
 
 
-def _rounded_axes(scale: Scale) -> List[float]:
+def _rounded_axes(scale: Scale) -> list[float]:
     """
     A scale's axes as a rounded ``[x, y, z]`` list.
 

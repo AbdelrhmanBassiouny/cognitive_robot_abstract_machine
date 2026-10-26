@@ -20,7 +20,7 @@ from __future__ import annotations
 import os
 
 from pymongo import MongoClient
-from typing_extensions import Any, Dict, List, TYPE_CHECKING, Tuple
+from typing_extensions import Any, TYPE_CHECKING
 from robokudo import world
 
 from robokudo.cas import CAS
@@ -44,7 +44,7 @@ class Storage:
     ROS messages, etc.) into a BSON‑encodable dictionary format.
     """
 
-    BLACKLISTED_TYPES: Tuple[type, ...] = (type(lambda x: x),)
+    BLACKLISTED_TYPES: tuple[type, ...] = (type(lambda x: x),)
     VIEW_COLLECTION_NAME: str = "cas_views"
     cas_view_codecs = CASViewCodecRegistry()
 
@@ -100,7 +100,7 @@ class Storage:
             """
             Current position in data list.
             """
-            self.data: List[Dict[Any, Any]] = []
+            self.data: list[dict[Any, Any]] = []
             """
             List of loaded documents.
             """
@@ -209,7 +209,7 @@ class Storage:
 
     def load_views_from_mongo_in_cas(
         self,
-        cas_document: Dict[str, Any],
+        cas_document: dict[str, Any],
         excluded_view_names: set[str] | None = None,
     ) -> None:
         """

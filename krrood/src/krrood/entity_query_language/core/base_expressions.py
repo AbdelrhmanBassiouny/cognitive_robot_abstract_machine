@@ -27,10 +27,7 @@ from typing_extensions import (
     Dict,
     Any,
     ClassVar,
-    List,
     Iterator,
-    Tuple,
-    Set,
     Self,
     TYPE_CHECKING,
     Generic,
@@ -143,26 +140,26 @@ class SymbolicExpression(
     Unique identifier of this node.
     """
 
-    _conclusions_: Set[Conclusion] = field(init=False, default_factory=set)
+    _conclusions_: set[Conclusion] = field(init=False, default_factory=set)
     """
     Set of conclusion expressions attached to this node, these are evaluated when the
     truth value of this node is true during evaluation.
     """
 
-    _symbolic_expression_stack_: ClassVar[List[RuleTreeContext]] = []
+    _symbolic_expression_stack_: ClassVar[list[RuleTreeContext]] = []
     """
     The current stack of symbolic expressions that has been entered using the ``with``
     statement, each paired with the parent edge its rule tree reaches it by.
     """
 
-    _children_: List[SymbolicExpression] = field(
+    _children_: list[SymbolicExpression] = field(
         init=False, repr=False, default_factory=list
     )
     """
     The children expressions of this symbolic expression.
     """
 
-    _parents_: List[SymbolicExpression] = field(
+    _parents_: list[SymbolicExpression] = field(
         init=False, repr=False, default_factory=list
     )
     """
@@ -295,7 +292,7 @@ class SymbolicExpression(
     def tolist(
         self,
         backend=None,
-    ) -> list[T | Dict[T | SymbolicExpression, T]]:
+    ) -> list[T | dict[T | SymbolicExpression, T]]:
         """
         Evaluate and return the results as a list.
 
@@ -303,7 +300,7 @@ class SymbolicExpression(
         """
         return make_list(self.evaluate(backend=backend))
 
-    def first(self, backend=None) -> T | Dict[T | SymbolicExpression, T]:
+    def first(self, backend=None) -> T | dict[T | SymbolicExpression, T]:
         """
         Evaluate and return the first result of the query object descriptor.
 
@@ -316,7 +313,7 @@ class SymbolicExpression(
     def evaluate(
         self,
         backend=None,
-    ) -> Iterator[T | Dict[T | SymbolicExpression, T]]:
+    ) -> Iterator[T | dict[T | SymbolicExpression, T]]:
         """
         Evaluate the query and map the results to the correct output data structure.
         This is the exposed evaluation method for users.
@@ -411,7 +408,7 @@ class SymbolicExpression(
 
     def _update_children_(
         self, *children: SymbolicExpression
-    ) -> Tuple[SymbolicExpression, ...]:
+    ) -> tuple[SymbolicExpression, ...]:
         """
         Update multiple children expressions of this symbolic expression.
 
@@ -680,7 +677,7 @@ class SymbolicExpression(
 
     def conclusions_of_type(
         self, conclusion_type: type[ConclusionType]
-    ) -> List[ConclusionType]:
+    ) -> list[ConclusionType]:
         """:return: The conclusions attached to this expression that are instances of *conclusion_type*."""
         return [
             conclusion
@@ -905,7 +902,7 @@ class SymbolicExpression(
 
     def _subtree_expressions_with_ids_(
         self, ids: Collection[uuid.UUID]
-    ) -> Set[SymbolicExpression]:
+    ) -> set[SymbolicExpression]:
         """
         :param ids: The identifiers to look for.
         :return: This expression and its descendants whose identifier is in *ids*.
@@ -917,7 +914,7 @@ class SymbolicExpression(
         }
 
     def _iter_descendants_(
-        self, visited_ids: Set[uuid.UUID]
+        self, visited_ids: set[uuid.UUID]
     ) -> Iterator[SymbolicExpression]:
         """
         Yield descendants once each, tracking already-seen ``_id_`` values across the
@@ -1023,14 +1020,14 @@ class SymbolicExpression(
         return RuleTreeContext(self, enclosing_parent)
 
     @property
-    def _unique_variables_(self) -> Set[Variable]:
+    def _unique_variables_(self) -> set[Variable]:
         """
         :return: Set of unique variables in this symbolic expression.
         """
         return make_set(self._all_variable_instances_)
 
     @property
-    def _all_variable_instances_(self) -> List[Variable]:
+    def _all_variable_instances_(self) -> list[Variable]:
         """
         Get the leaf instances of the symbolic expression.
 
@@ -1122,7 +1119,7 @@ class MultiArityExpression(SymbolicExpression, ABC):
     (i.e., has multiple child expressions).
     """
 
-    _operation_children_: Tuple[SymbolicExpression, ...] = field(default_factory=tuple)
+    _operation_children_: tuple[SymbolicExpression, ...] = field(default_factory=tuple)
     """
     The children expressions of this symbolic expression.
     """
@@ -1390,13 +1387,13 @@ class OperationResult:
     """
 
     @property
-    def result_chain(self) -> List[OperationResult]:
+    def result_chain(self) -> list[OperationResult]:
         """
         :return: The results this one was derived from, earliest first, ending with this
             one.
         """
-        chain: List[OperationResult] = []
-        seen: Set[int] = set()
+        chain: list[OperationResult] = []
+        seen: set[int] = set()
         result: OperationResult | None = self
         while result is not None and id(result) not in seen:
             seen.add(id(result))
@@ -1515,7 +1512,7 @@ class UnificationDict(UserDict):
         return super().__getitem__(key)
 
     @cached_property
-    def _id_expression_map_(self) -> Dict[uuid.UUID, Selectable[T]]:
+    def _id_expression_map_(self) -> dict[uuid.UUID, Selectable[T]]:
         return {key._id_: key for key in self.data.keys()}
 
 

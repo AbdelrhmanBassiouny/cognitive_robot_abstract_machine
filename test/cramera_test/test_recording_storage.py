@@ -15,7 +15,7 @@ from cramera.live.recording import FrameRange, InvalidFrameRange, Recording
 from cramera.live.recording_bundle import finalize_recording
 from cramera.knowledge.detected_events import SceneField
 from cramera.paths import RECORDING_SCENE_NAME
-from typing_extensions import Any, Dict
+from typing_extensions import Any
 from cramera.live.recording_storage import (
     NoSavedRecording,
     SceneDestination,
@@ -298,7 +298,7 @@ class TestNamingWhatWasRecorded:
     derived.
     """
 
-    def saved(self, tmp_path, monkeypatch, **given: str) -> Dict[str, Any]:
+    def saved(self, tmp_path, monkeypatch, **given: str) -> dict[str, Any]:
         """
         A finalized recording, saved under a name, read back.
 

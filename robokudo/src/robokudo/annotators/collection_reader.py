@@ -9,7 +9,7 @@ from timeit import default_timer as timer
 from py_trees.common import Status
 from py_trees.composites import Sequence
 from py_trees.display import unicode_tree
-from typing_extensions import TYPE_CHECKING, List
+from typing_extensions import TYPE_CHECKING
 
 from robokudo.annotators.core import BaseAnnotator
 from robokudo.descriptors.camera_configs.components import TfComponent
@@ -82,7 +82,7 @@ class CollectionReaderAnnotator(BaseAnnotator):
         super().__init__(name, descriptor)
         self.rk_logger.debug("%s.__init__()" % self.__class__.__name__)
 
-        self.collection_readers: List[CollectionReaderAnnotator.Descriptor] = [
+        self.collection_readers: list[CollectionReaderAnnotator.Descriptor] = [
             descriptor
         ]
         self.start_timer: float | None = None

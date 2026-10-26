@@ -3,7 +3,7 @@ from __future__ import annotations
 import inspect
 from dataclasses import dataclass
 
-from typing_extensions import Any, Callable, List
+from typing_extensions import Any, Callable
 
 from krrood.exceptions import DataclassException
 
@@ -158,7 +158,7 @@ class AmbiguousRuleError(DataclassException):
     What the rules were asked about when the collision occurred.
     """
 
-    candidates: List[type]
+    candidates: list[type]
     """
     The equally specific rule classes that collided.
     """

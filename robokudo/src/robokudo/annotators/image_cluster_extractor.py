@@ -24,7 +24,7 @@ import cv2
 import numpy as np
 import open3d as o3d
 from py_trees.common import Status
-from typing_extensions import TYPE_CHECKING, Dict, Tuple
+from typing_extensions import TYPE_CHECKING
 
 from robokudo.annotators.core import BaseAnnotator
 from robokudo.cas import CASViews
@@ -99,8 +99,8 @@ class ImageClusterExtractor(BaseAnnotator):
                 # It is used to avoid very small contours when calculating 3d points etc.
                 self.contour_min_size: int = 1000
 
-                self.color_name_to_hsv_range: Dict[
-                    str, Dict[str, Tuple[int, int, int]]
+                self.color_name_to_hsv_range: dict[
+                    str, dict[str, tuple[int, int, int]]
                 ] = dict()
                 self.color_name_to_hsv_range["blue"] = {
                     "hsv_min": (150, 130, 85),

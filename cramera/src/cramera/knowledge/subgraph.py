@@ -8,7 +8,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 
-from typing_extensions import Any, ClassVar, Dict, List, TYPE_CHECKING
+from typing_extensions import Any, ClassVar, TYPE_CHECKING
 
 from cramera.knowledge.enums import ColourGroup, EdgeKind
 from cramera.knowledge.life_cycle_style import LifeCycleStyle
@@ -83,7 +83,7 @@ class GraphNode:
     than as a graph.
     """
 
-    def to_payload(self) -> Dict[str, Any]:
+    def to_payload(self) -> dict[str, Any]:
         """
         The JSON-serializable shape the frontend's graph panel expects.
         """
@@ -117,7 +117,7 @@ class DetailEntry:
     Colour group, mirrors the node's own group.
     """
 
-    lines: List[str]
+    lines: list[str]
     """
     Tooltip/detail-panel lines describing the node.
     """
@@ -149,7 +149,7 @@ class GraphEdge:
     Edge label shown on hover.
     """
 
-    def to_payload(self) -> Dict[str, str]:
+    def to_payload(self) -> dict[str, str]:
         """
         The JSON-serializable shape the frontend's graph panel expects.
 
@@ -187,17 +187,17 @@ class SubgraphAccumulator:
     Accumulates the nodes/edges/details of one drill-down/graph-panel subgraph.
     """
 
-    nodes: List[GraphNode] = field(default_factory=list)
+    nodes: list[GraphNode] = field(default_factory=list)
     """
     Every node added to this subgraph so far.
     """
 
-    edges: List[GraphEdge] = field(default_factory=list)
+    edges: list[GraphEdge] = field(default_factory=list)
     """
     Every edge added to this subgraph so far.
     """
 
-    details: Dict[str, DetailEntry] = field(default_factory=dict)
+    details: dict[str, DetailEntry] = field(default_factory=dict)
     """
     Detail-panel entry per node id.
     """
@@ -207,7 +207,7 @@ class SubgraphAccumulator:
         node_id: str,
         label: str,
         group: ColourGroup,
-        lines: List[str],
+        lines: list[str],
         status: str | None = None,
         tree_position: TreePosition | None = None,
     ) -> None:
@@ -277,17 +277,17 @@ class GraphPanelPayload(CrameraPayload):
     :meth:`panel_options` adds the options specific to that view.
     """
 
-    nodes: List[GraphNode] = field(default_factory=list)
+    nodes: list[GraphNode] = field(default_factory=list)
     """
     Every node in this view.
     """
 
-    edges: List[GraphEdge] = field(default_factory=list)
+    edges: list[GraphEdge] = field(default_factory=list)
     """
     Every edge in this view.
     """
 
-    details: Dict[str, DetailEntry] = field(default_factory=dict)
+    details: dict[str, DetailEntry] = field(default_factory=dict)
     """
     Detail-panel entry per node id.
     """
@@ -310,12 +310,12 @@ class GraphPanelPayload(CrameraPayload):
         raise NotImplementedError("%s serves no graph-panel tab" % cls.__name__)
 
     @abstractmethod
-    def panel_options(self) -> Dict[str, Any]:
+    def panel_options(self) -> dict[str, Any]:
         """
         The payload keys only this view sends, such as its breadcrumb or legend.
         """
 
-    def to_payload(self) -> Dict[str, Any]:
+    def to_payload(self) -> dict[str, Any]:
         """
         The JSON-serializable shape the frontend's graph panel expects.
         """

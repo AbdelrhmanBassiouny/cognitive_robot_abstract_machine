@@ -9,16 +9,7 @@ import numpy as np
 import numpy.typing as npt
 from trimesh import Trimesh
 from trimesh.util import concatenate
-from typing_extensions import (
-    Dict,
-    Any,
-    Self,
-    List,
-    Iterable,
-    Iterator,
-    Generic,
-    TypeVar,
-)
+from typing_extensions import Any, Self, Iterable, Iterator, Generic, TypeVar
 from typing_extensions import TYPE_CHECKING
 
 from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json, from_json
@@ -58,7 +49,7 @@ class ShapeCollection(SubclassJSONSerializer):
     A collection of shapes.
     """
 
-    shapes: List[Shape] = field(default_factory=list)
+    shapes: list[Shape] = field(default_factory=list)
     """
     The shapes contained in this collection.
     """
@@ -207,14 +198,14 @@ class ShapeCollection(SubclassJSONSerializer):
             HomogeneousTransformationMatrix(reference_frame=reference_frame)
         )
 
-    def to_json(self, **kwargs) -> Dict[str, Any]:
+    def to_json(self, **kwargs) -> dict[str, Any]:
         return {
             **super().to_json(**kwargs),
             "shapes": [to_json(shape, **kwargs) for shape in self.shapes],
         }
 
     @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+    def _from_json(cls, data: dict[str, Any], **kwargs) -> Self:
         """
         The collection belongs to the frame all its shapes are expressed in, which is the
         entity it was written from, such as a body whose shapes are replaced.
@@ -278,7 +269,7 @@ class BoundingBoxCollection(Generic[BoxT, PointT], ShapeCollection):
     first, but Python cannot derive one type parameter from another, so both are spelled.
     """
 
-    shapes: List[BoxT] = field(default_factory=list)
+    shapes: list[BoxT] = field(default_factory=list)
 
     def __post_init__(self):
         if not self.reference_frame:
@@ -292,7 +283,7 @@ class BoundingBoxCollection(Generic[BoxT, PointT], ShapeCollection):
         return iter(self.bounding_boxes)
 
     @property
-    def bounding_boxes(self) -> List[BoxT]:
+    def bounding_boxes(self) -> list[BoxT]:
         return self.shapes
 
     @property

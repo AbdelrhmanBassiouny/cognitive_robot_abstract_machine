@@ -26,7 +26,7 @@ from pathlib import Path
 
 import ament_index_python.packages
 import cv2
-from typing_extensions import Any, Dict, List, TypeVar
+from typing_extensions import Any, TypeVar
 
 from robokudo.cas import CAS, CASViews
 from robokudo.io.camera_interface import CameraInterface
@@ -77,10 +77,10 @@ class FileReaderInterface(CameraInterface):
             self.index: int | None = None
             """Current position in the sequence"""
 
-            self.data: Dict[str, Dict[str, Any]] = data if data else dict()
+            self.data: dict[str, dict[str, Any]] = data if data else dict()
             """Dictionary containing the data"""
 
-            self.data_sequence: List[str] = data_sequence if data_sequence else list()
+            self.data_sequence: list[str] = data_sequence if data_sequence else list()
             """List defining iteration order"""
 
             assert len(self.data_sequence) == len(self.data)
@@ -188,10 +188,10 @@ class FileReaderInterface(CameraInterface):
             self.filename_prefix = "rk_"
             """Prefix for data files. Make sure that this matches the filename_prefix in the FileReader."""
 
-        self.loaded_paths: Dict[str, Dict[str, Path]] = dict()
+        self.loaded_paths: dict[str, dict[str, Path]] = dict()
         """Dictionary mapping timestamps to file paths"""
 
-        self.loaded_data: Dict[str, Dict[str, Any]] = dict()
+        self.loaded_data: dict[str, dict[str, Any]] = dict()
         """Dictionary mapping timestamps to loaded data"""
 
         # Matching all files with the set prefix and the timestamp

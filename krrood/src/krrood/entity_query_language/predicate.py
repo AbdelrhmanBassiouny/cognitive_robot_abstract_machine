@@ -276,7 +276,7 @@ class SymbolicCallable(Symbol, Verbalizable, HasBoundValue, ABC):
         """
 
     @classmethod
-    def _example_operand_values_(cls) -> Dict[str, Any]:
+    def _example_operand_values_(cls) -> dict[str, Any]:
         """
         A literal example value for each field that is never bound to a symbolic operand
         in real usage -- only ever a literal (e.g. ``HasType.types_``, since
@@ -499,7 +499,7 @@ class HasType(Triple[Any, Type]):
         )
 
     @classmethod
-    def _example_operand_values_(cls) -> Dict[str, Any]:
+    def _example_operand_values_(cls) -> dict[str, Any]:
         return {"types_": int}
 
 
@@ -515,13 +515,13 @@ class HasTypes(HasType):
     comparison explicitly disabled.
     """
 
-    types_: Tuple[type, ...]
+    types_: tuple[type, ...]
     """
     A tuple containing Type objects that are associated with this instance.
     """
 
     @classmethod
-    def _example_operand_values_(cls) -> Dict[str, Any]:
+    def _example_operand_values_(cls) -> dict[str, Any]:
         return {"types_": (int, str)}
 
 
@@ -558,7 +558,7 @@ call).
 """
 
 
-def _any_of_the_kwargs_is_a_variable(bindings: Dict[str, Any]) -> bool:
+def _any_of_the_kwargs_is_a_variable(bindings: dict[str, Any]) -> bool:
     """
     :param bindings: A kwarg like dict mapping strings to objects
     :return: ``True`` if any value in ``bindings`` is a :class:`~krrood.entity_query_language.core.base_expressions.SymbolicExpression`, ``False`` otherwise.
