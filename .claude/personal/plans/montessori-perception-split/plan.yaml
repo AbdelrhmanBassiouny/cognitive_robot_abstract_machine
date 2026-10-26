@@ -42,19 +42,22 @@ items:
   track: stack
   blockers:
     - >-
-      Upstream cram2#804 review (2026-10-26), 3 open threads on SemDT geometry.py: Hue's
-      FULL_TURN/DECIMAL_PLACES as classproperty; Polygon2D's ClassVars as fields with defaults.
-      Being fixed on #202 then re-cut here.
+      Waiting on re-review of cram2#804 at a0ed6304d. Its 3 threads (Hue classproperties, Polygon2D
+      fields) are fixed but unanswered there: replies on the upstream are the developer's. The
+      circle's corner count became a circle() parameter, not a field.
   depends_on: []
   status: in_progress
   pull_request_number: 488
   session: https://claude.ai/code/session_01GESraow875svtqq3zJ7JZ1
-  notes: 'montessori semantics, exceptions, hole_geometry (+ resources/board.stl), pieces;
-    SemDT geometry.py, shape_collection.py, exceptions.py; their tests - 14 files (list on
-    #488). Off main, cut from #202 at 136ea6888: KnownPiece is replaced by PieceSet worlds of
-    bodies, and hole_for finds a hole by fit alone. Open for the developer: review thread
-    pieces.py:203 - whether EQL matching of an observation against PieceSet instances is its
-    own item (#265 has none).'
+  notes: >
+    montessori semantics, exceptions, hole_geometry (+ resources/board.stl), pieces; SemDT
+    geometry.py, shape_collection.py, exceptions.py; their tests - 14 files (list on #488). Off
+    main, cut from #202 at 880368fd3 (geometry.py = main's file plus #202's additions). Promoted
+    upstream as cram2#804.
+
+    The pieces.py:203 thread's EQL observation matching is tracked as
+    observation-matched-against-the-piece-set (knowledge-directed-requests); the thread only awaits
+    the developer closing it.
 - id: simulated-world-on-main
   title: Land the simulated Montessori world
   branch: null
