@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+from enum import StrEnum
+
 from giskardpy.middleware.ros2 import rospy
 from giskardpy.middleware.ros2.python_interface import GiskardWrapper
 from giskardpy.motion_statechart.graph_node import EndMotion
@@ -6,10 +8,30 @@ from giskardpy.motion_statechart.motion_statechart import MotionStatechart
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList, JointState
 
 
-def main():
+class UniversalRobotJoint(StrEnum):
+    """
+    The joints of a Universal Robots arm, in the order its velocity controller expects
+    its commands.
+    """
+
+    SHOULDER_PAN = "shoulder_pan_joint"
+    SHOULDER_LIFT = "shoulder_lift_joint"
+    ELBOW = "elbow_joint"
+    WRIST_1 = "wrist_1_joint"
+    WRIST_2 = "wrist_2_joint"
+    WRIST_3 = "wrist_3_joint"
+
+
+def main() -> None:
+    """
+    Move two joints of the arm to a goal and wait until the motion ends.
+    """
     rospy.init_node("giskard_client")
     giskard = GiskardWrapper(node_handle=rospy.get_node())
-    goal_positions_in_radians = {"shoulder_pan_joint": 0.5, "elbow_joint": 1.0}
+    goal_positions_in_radians = {
+        UniversalRobotJoint.SHOULDER_PAN: 0.5,
+        UniversalRobotJoint.ELBOW: 1.0,
+    }
 
     motion_statechart = MotionStatechart()
     motion_statechart.add_node(

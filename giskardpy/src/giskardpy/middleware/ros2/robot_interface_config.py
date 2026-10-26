@@ -334,7 +334,7 @@ class ClosedLoopRobotInterfaceConfig(RobotInterfaceConfig, ABC):
     def discover_interfaces_from_controller_manager(
         self,
         controller_manager_name: str = "controller_manager",
-        whitelist: List[str] | None = None,
+        whitelist: list[str] | None = None,
     ) -> None:
         """
         Tell Giskard to read and command the robot through the active controllers of a
@@ -344,52 +344,17 @@ class ClosedLoopRobotInterfaceConfig(RobotInterfaceConfig, ABC):
             namespace it runs in.
         :param whitelist: The names of the controllers to consider, all if ``None``.
         """
-        self.sync_joint_states_from_controller_manager(
-            controller_manager_name, whitelist
-        )
-        self.add_velocity_controllers_from_controller_manager(
-            controller_manager_name, whitelist
-        )
-
-    def sync_joint_states_from_controller_manager(
-        self,
-        controller_manager_name: str = "controller_manager",
-        whitelist: List[str] | None = None,
-    ) -> None:
-        """
-        Tell Giskard to sync the world state with the active joint state broadcasters of
-        a controller manager.
-
-        :param controller_manager_name: The controller manager node, including the
-            namespace it runs in.
-        :param whitelist: The names of the controllers to consider, all if ``None``.
-        """
         controller_manager = ControllerManager(controller_manager_name)
         for controller in controller_manager.active_controllers(whitelist):
-            if controller.type == ControllerType.JOINT_STATE_BROADCASTER:
-                self.sync_joint_state_topic(
-                    controller_manager.joint_state_topic_of(controller.name)
-                )
-
-    def add_velocity_controllers_from_controller_manager(
-        self,
-        controller_manager_name: str = "controller_manager",
-        whitelist: List[str] | None = None,
-    ) -> None:
-        """
-        Tell Giskard to command the joints of the active velocity controllers of a
-        controller manager.
-
-        :param controller_manager_name: The controller manager node, including the
-            namespace it runs in.
-        :param whitelist: The names of the controllers to consider, all if ``None``.
-        """
-        controller_manager = ControllerManager(controller_manager_name)
-        for controller in controller_manager.active_controllers(whitelist):
-            if controller.type == ControllerType.JOINT_GROUP_VELOCITY:
-                self.add_joint_velocity_group_controller(
-                    cmd_topic=controller_manager.command_topic_of(controller.name),
-                    connections=controller_manager.joints_of(controller.name),
-                )
-            elif controller.type == ControllerType.DIFF_DRIVE:
-                self.add_base_cmd_velocity(controller.name)
+            match controller.type:
+                case ControllerType.JOINT_STATE_BROADCASTER:
+                    self.sync_joint_state_topic(
+                        controller_manager.joint_state_topic_of(controller.name)
+                    )
+                case ControllerType.JOINT_GROUP_VELOCITY:
+                    self.add_joint_velocity_group_controller(
+                        cmd_topic=controller_manager.command_topic_of(controller.name),
+                        connections=controller_manager.joints_of(controller.name),
+                    )
+                case ControllerType.DIFF_DRIVE:
+                    self.add_base_cmd_velocity(controller.name)

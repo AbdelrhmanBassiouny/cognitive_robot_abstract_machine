@@ -67,17 +67,13 @@ Tracy runs one per arm, each in its own namespace:
 ```
 
 - `sync_robot_parts()` reads the state from the topics the robot class declares.
-- `add_velocity_controllers_from_controller_manager()` connects only to the velocity
-  controllers, so the joint states are not read a second time. It takes the name of the
-  controller manager including its namespace, for example `left_arm/controller_manager`.
-- `whitelist` names the controllers Giskard may command. Without it Giskard commands
-  every active velocity controller of the manager, including one that belongs to a
-  gripper. With it, a listed controller that is not loaded or not active stops Giskard
-  at startup instead of leaving its joints uncontrolled.
-
-`discover_interfaces_from_controller_manager()`, used above, does both: it reads the
-joint state broadcaster and connects to the velocity controllers. It takes the same
-`whitelist`.
+- `discover_interfaces_from_controller_manager()` takes the name of the controller
+  manager including its namespace, for example `left_arm/controller_manager`.
+- `whitelist` names the controllers Giskard may use. Tracy lists only its velocity
+  controller, so the joint states are not read a second time. Without a whitelist
+  Giskard uses every active controller of the manager, including a velocity controller
+  that belongs to a gripper. A listed controller that is not loaded or not active stops
+  Giskard at startup instead of leaving its joints uncontrolled.
 
 The world config of such a robot only names the robot class:
 
@@ -97,7 +93,7 @@ an odometry body below the root of the world and connects the robot to it with a
 | Field | What it decides |
 |---|---|
 | `drive_class` | `OmniDrive` (the default) or `DifferentialDrive`. |
-| `root_name`, `odom_body_name` | The names of the root and the odometry body, `map` and `odom` by default. |
+| `root_name`, `odometry_body_name` | The names of the root and the odometry body, `map` and `odom` by default. |
 | `translation_velocity_limit`, `rotation_velocity_limit` | The velocity limits of the base. |
 
 The interface then says where the pose of the base is read from and where its velocity is
@@ -123,11 +119,11 @@ always applied first.
 
 ## Where the robot description comes from
 
-- A script that commands a robot reads the description from the `/robot_description`
-  topic with `get_robot_description()`. Giskard then uses the model the robot uses. It
-  waits until the description is published.
-- A script that simulates passes no `urdf` to its world config, which then loads the file
-  its robot class declares, so nothing has to publish the description.
+- On a real robot, Giskard reads the description from `/robot_description` with
+  `get_robot_description()`, so it uses the same model as the robot. It waits until the
+  description is published.
+- In standalone mode, leave out `urdf`. The world config then loads the file its robot
+  class declares.
 
 ## Running it
 

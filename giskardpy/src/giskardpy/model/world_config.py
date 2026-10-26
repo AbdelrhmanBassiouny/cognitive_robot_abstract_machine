@@ -117,7 +117,7 @@ class WorldWithMobileRobot(WorldWithRobot):
     move relative to the root body.
     """
 
-    odom_body_name: PrefixedName = field(default=PrefixedName("odom"))
+    odometry_body_name: PrefixedName = field(default=PrefixedName("odom"))
     """
     Name of the body the robot drives relative to.
     """
@@ -141,14 +141,14 @@ class WorldWithMobileRobot(WorldWithRobot):
         world_with_robot = self.parse_robot()
 
         root = Body(name=self.root_name)
-        odom = Body(name=self.odom_body_name)
+        odometry_body = Body(name=self.odometry_body_name)
         localization = Connection6DoF.create_with_dofs(
-            parent=root, child=odom, world=self.world
+            parent=root, child=odometry_body, world=self.world
         )
         self.world.add_connection(localization)
 
         drive = self.drive_class.create_with_dofs(
-            parent=odom,
+            parent=odometry_body,
             child=world_with_robot.root,
             translation_velocity_limits=self.translation_velocity_limit,
             rotation_velocity_limits=self.rotation_velocity_limit,

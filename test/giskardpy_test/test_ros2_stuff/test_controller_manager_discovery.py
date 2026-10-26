@@ -113,6 +113,11 @@ class ControllerManagerMimic:
     The node of the manager followed by one node per controller.
     """
 
+    list_requests: int = field(init=False, default=0)
+    """
+    How often the manager was asked for its controllers.
+    """
+
     def __post_init__(self):
         manager = ControllerManager(self.name)
         manager_node = Node(manager.node_name, namespace=manager.namespace)
@@ -149,6 +154,7 @@ class ControllerManagerMimic:
         """
         Report the controllers of this manager.
         """
+        self.list_requests += 1
         response.controller = [
             controller_manager_messages.ControllerState(
                 name=controller.name,
@@ -283,13 +289,13 @@ def start(
     serve.append(ControllerManagerMimics(managers=list(managers)))
 
 
-# %% interfaces that only discover
+# %% an interface that discovers
 
 
 @dataclass
-class CommandDiscoveringInterface(ClosedLoopRobotInterfaceConfig):
+class DiscoveringInterface(ClosedLoopRobotInterfaceConfig):
     """
-    An interface that takes the joints it commands from a controller manager.
+    An interface that takes its state and its commands from a controller manager.
     """
 
     controller_manager_name: str
@@ -300,18 +306,6 @@ class CommandDiscoveringInterface(ClosedLoopRobotInterfaceConfig):
     whitelist: list[str] | None = None
     """
     The controllers to consider, all if ``None``.
-    """
-
-    def setup(self):
-        self.add_velocity_controllers_from_controller_manager(
-            self.controller_manager_name, whitelist=self.whitelist
-        )
-
-
-@dataclass
-class FullyDiscoveringInterface(CommandDiscoveringInterface):
-    """
-    An interface that takes both its state and its commands from a controller manager.
     """
 
     def setup(self):
@@ -373,7 +367,7 @@ def test_a_controller_manager_in_a_namespace_yields_its_velocity_controller(serv
         ],
     )
     start(serve, manager)
-    giskard = closed_loop_pr2(CommandDiscoveringInterface(manager.name))
+    giskard = closed_loop_pr2(DiscoveringInterface(manager.name))
 
     giskard.setup()
 
@@ -396,7 +390,7 @@ def test_an_inactive_velocity_controller_is_not_commanded(serve):
         name="controller_manager", controllers=[active, inactive]
     )
     start(serve, manager)
-    giskard = closed_loop_pr2(CommandDiscoveringInterface(manager.name))
+    giskard = closed_loop_pr2(DiscoveringInterface(manager.name))
 
     giskard.setup()
 
@@ -419,7 +413,7 @@ def test_a_whitelist_limits_the_commanded_controllers(serve):
     )
     start(serve, manager)
     giskard = closed_loop_pr2(
-        CommandDiscoveringInterface(manager.name, whitelist=[listed.name])
+        DiscoveringInterface(manager.name, whitelist=[listed.name])
     )
 
     giskard.setup()
@@ -440,9 +434,7 @@ def test_a_whitelisted_controller_that_is_not_loaded_raises(serve):
     )
     start(serve, manager)
     giskard = closed_loop_pr2(
-        CommandDiscoveringInterface(
-            manager.name, whitelist=["controller_that_is_not_loaded"]
-        )
+        DiscoveringInterface(manager.name, whitelist=["controller_that_is_not_loaded"])
     )
 
     with pytest.raises(ControllersNotLoadedError):
@@ -459,7 +451,7 @@ def test_a_whitelisted_controller_that_is_not_active_raises(serve):
     manager = ControllerManagerMimic(name="controller_manager", controllers=[inactive])
     start(serve, manager)
     giskard = closed_loop_pr2(
-        CommandDiscoveringInterface(manager.name, whitelist=[inactive.name])
+        DiscoveringInterface(manager.name, whitelist=[inactive.name])
     )
 
     with pytest.raises(ControllersNotActiveError):
@@ -489,10 +481,13 @@ def manager_with_broadcaster_and_velocity_controller() -> ControllerManagerMimic
     )
 
 
-def test_discovering_only_commands_reads_no_joint_state_topic(serve):
+def test_a_whitelist_without_the_broadcaster_reads_no_joint_state_topic(serve):
     manager = manager_with_broadcaster_and_velocity_controller()
     start(serve, manager)
-    giskard = closed_loop_pr2(CommandDiscoveringInterface(manager.name))
+    [_, velocity_controller] = manager.controllers
+    giskard = closed_loop_pr2(
+        DiscoveringInterface(manager.name, whitelist=[velocity_controller.name])
+    )
 
     giskard.setup()
 
@@ -503,11 +498,21 @@ def test_discovering_everything_reads_the_topic_of_the_joint_state_broadcaster(s
     manager = manager_with_broadcaster_and_velocity_controller()
     start(serve, manager)
     [broadcaster, _] = manager.controllers
-    giskard = closed_loop_pr2(FullyDiscoveringInterface(manager.name))
+    giskard = closed_loop_pr2(DiscoveringInterface(manager.name))
 
     giskard.setup()
 
     assert joint_state_topics(giskard) == [manager.joint_state_topic_of(broadcaster)]
+
+
+def test_discovering_asks_the_controller_manager_for_its_controllers_once(serve):
+    manager = manager_with_broadcaster_and_velocity_controller()
+    start(serve, manager)
+    giskard = closed_loop_pr2(DiscoveringInterface(manager.name))
+
+    giskard.setup()
+
+    assert manager.list_requests == 1
 
 
 # %% robots that are commanded through their controller managers
