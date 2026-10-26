@@ -25,6 +25,7 @@ from krrood.ormatic.utils import classproperty
 # %% Imports
 import json
 from dataclasses import dataclass
+from datetime import timedelta
 from time import perf_counter
 from typing_extensions import Any, TYPE_CHECKING
 from uuid import UUID
@@ -71,7 +72,7 @@ class RestoredWorld:
     Entity lookup context for the restored world.
     """
 
-    duration_seconds: float
+    duration: timedelta
     """
     Elapsed time spent decoding and applying the snapshot.
     """
@@ -151,7 +152,7 @@ class StorageReaderInterface(CameraInterface):
         self._recorded_camera_id = observation.camera.id
         self.rk_logger.debug(
             "Mongo sensor replay restored full world in %.6f s and projected camera in %.6f s",
-            restored.duration_seconds,
+            restored.duration.total_seconds(),
             perf_counter() - projection_started,
         )
 
@@ -215,7 +216,9 @@ class StorageReaderInterface(CameraInterface):
         WorldModelSnapshot.apply_to_json_snapshot_to_world(
             target_world, json.loads(snapshot), **tracker.create_kwargs()
         )
-        return RestoredWorld(tracker=tracker, duration_seconds=perf_counter() - started)
+        return RestoredWorld(
+            tracker=tracker, duration=timedelta(seconds=perf_counter() - started)
+        )
 
     def _restore_full_world(self, cas_frame: dict[str, Any]) -> None:
         """
@@ -229,7 +232,7 @@ class StorageReaderInterface(CameraInterface):
         rk_world.init_world_entity_tracker_from_world(reasoning_world)
         self.rk_logger.debug(
             "Mongo full replay restored world in %.3f ms",
-            restored.duration_seconds * 1000.0,
+            restored.duration.total_seconds() * 1000.0,
         )
 
     def has_new_data(self) -> bool:
