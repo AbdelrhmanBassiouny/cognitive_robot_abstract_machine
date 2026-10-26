@@ -3,11 +3,14 @@ from __future__ import annotations
 # %% Imports
 import math
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 
 import numpy as np
+from typing_extensions import Self, Sequence
+
+from krrood.ormatic.utils import classproperty
+from krrood.patterns.specificity_ranking import concrete_subclasses
 from semantic_digital_twin.spatial_types import Point2
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
@@ -288,12 +291,7 @@ class CameraDistortionModel(StrEnum):
         """
         Return the number of coefficients defined by this model.
         """
-        return {
-            CameraDistortionModel.NONE: 0,
-            CameraDistortionModel.PLUMB_BOB: 5,
-            CameraDistortionModel.RATIONAL_POLYNOMIAL: 8,
-            CameraDistortionModel.EQUIDISTANT: 4,
-        }[self]
+        return CameraDistortion.get_type_for_model(self).coefficient_count
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -327,6 +325,43 @@ class CameraDistortion(ABC):
         Return coefficients in the ROS order defined by :attr:`model`.
         """
 
+    @property
+    @abstractmethod
+    def coefficient_count(self) -> int:
+        """
+        Return the number of coefficients required by this distortion model.
+        """
+
+    @classmethod
+    @abstractmethod
+    def _from_ordered_coefficients(
+        cls, ordered_coefficients: tuple[float, ...]
+    ) -> Self:
+        """
+        Construct distortion from coefficients with a validated count and ROS order.
+        """
+
+    @staticmethod
+    def get_type_for_model(model: CameraDistortionModel) -> type[CameraDistortion]:
+        """
+        Find the concrete distortion implementation declaring the model identifier.
+
+        :param model: Mathematical model to resolve.
+        :return: The unique concrete implementation of the model.
+        :raises InvalidCameraDistortionError: If no unique implementation exists.
+        """
+        candidates = [
+            distortion_type
+            for distortion_type in concrete_subclasses(CameraDistortion)
+            if distortion_type.model == model
+        ]
+        if len(candidates) != 1:
+            raise InvalidCameraDistortionError(
+                model=model.value,
+                reason=f"requires one concrete implementation, found {len(candidates)}",
+            )
+        return candidates[0]
+
     @staticmethod
     def from_ordered_coefficients(
         model: CameraDistortionModel,
@@ -338,46 +373,20 @@ class CameraDistortion(ABC):
         :param model: Mathematical model defining coefficient order.
         :param coefficients: Coefficients ordered according to ``model``.
         :return: Structured distortion value.
-        :raises InvalidCameraDistortionError: If the coefficient count is invalid.
+        :raises InvalidCameraDistortionError: If the coefficient count is invalid or the
+            model has no unique concrete implementation.
         """
+        distortion_type = CameraDistortion.get_type_for_model(model)
         ordered_coefficients = tuple(coefficients)
-        if len(ordered_coefficients) != model.coefficient_count:
+        if len(ordered_coefficients) != distortion_type.coefficient_count:
             raise InvalidCameraDistortionError(
                 model=model.value,
                 reason=(
-                    f"requires {model.coefficient_count} coefficients, got "
+                    f"requires {distortion_type.coefficient_count} coefficients, got "
                     f"{len(ordered_coefficients)}"
                 ),
             )
-        match model:
-            case CameraDistortionModel.NONE:
-                return NoCameraDistortion()
-            case CameraDistortionModel.PLUMB_BOB:
-                return PlumbBobCameraDistortion(
-                    radial_coefficient_1=ordered_coefficients[0],
-                    radial_coefficient_2=ordered_coefficients[1],
-                    tangential_coefficient_1=ordered_coefficients[2],
-                    tangential_coefficient_2=ordered_coefficients[3],
-                    radial_coefficient_3=ordered_coefficients[4],
-                )
-            case CameraDistortionModel.RATIONAL_POLYNOMIAL:
-                return RationalPolynomialCameraDistortion(
-                    radial_coefficient_1=ordered_coefficients[0],
-                    radial_coefficient_2=ordered_coefficients[1],
-                    tangential_coefficient_1=ordered_coefficients[2],
-                    tangential_coefficient_2=ordered_coefficients[3],
-                    radial_coefficient_3=ordered_coefficients[4],
-                    radial_coefficient_4=ordered_coefficients[5],
-                    radial_coefficient_5=ordered_coefficients[6],
-                    radial_coefficient_6=ordered_coefficients[7],
-                )
-            case CameraDistortionModel.EQUIDISTANT:
-                return EquidistantCameraDistortion(
-                    radial_coefficient_1=ordered_coefficients[0],
-                    radial_coefficient_2=ordered_coefficients[1],
-                    radial_coefficient_3=ordered_coefficients[2],
-                    radial_coefficient_4=ordered_coefficients[3],
-                )
+        return distortion_type._from_ordered_coefficients(ordered_coefficients)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -386,17 +395,21 @@ class NoCameraDistortion(CameraDistortion):
     Represent an image without modeled lens distortion.
     """
 
-    @property
-    def model(self) -> CameraDistortionModel:
-        """
-        Return the no-distortion model identifier.
-        """
+    @classproperty
+    def model(cls) -> CameraDistortionModel:
         return CameraDistortionModel.NONE
 
+    @classproperty
+    def coefficient_count(cls) -> int:
+        return 0
+
+    @classmethod
+    def _from_ordered_coefficients(
+        cls, ordered_coefficients: tuple[float, ...]
+    ) -> Self:
+        return cls()
+
     def to_ordered_coefficients(self) -> tuple[float, ...]:
-        """
-        Return the empty coefficient sequence.
-        """
         return ()
 
 
@@ -454,17 +467,27 @@ class PlumbBobCameraDistortion(RadialTangentialCameraDistortion):
     Represent radial-tangential distortion using the plumb-bob model.
     """
 
-    @property
-    def model(self) -> CameraDistortionModel:
-        """
-        Return the plumb-bob model identifier.
-        """
+    @classproperty
+    def model(cls) -> CameraDistortionModel:
         return CameraDistortionModel.PLUMB_BOB
 
+    @classproperty
+    def coefficient_count(cls) -> int:
+        return 5
+
+    @classmethod
+    def _from_ordered_coefficients(
+        cls, ordered_coefficients: tuple[float, ...]
+    ) -> Self:
+        return cls(
+            radial_coefficient_1=ordered_coefficients[0],
+            radial_coefficient_2=ordered_coefficients[1],
+            tangential_coefficient_1=ordered_coefficients[2],
+            tangential_coefficient_2=ordered_coefficients[3],
+            radial_coefficient_3=ordered_coefficients[4],
+        )
+
     def to_ordered_coefficients(self) -> tuple[float, ...]:
-        """
-        Return coefficients in plumb-bob order.
-        """
         return self.radial_tangential_coefficients
 
 
@@ -489,17 +512,30 @@ class RationalPolynomialCameraDistortion(RadialTangentialCameraDistortion):
     Sixth radial distortion coefficient, conventionally ``k6``.
     """
 
-    @property
-    def model(self) -> CameraDistortionModel:
-        """
-        Return the rational-polynomial model identifier.
-        """
+    @classproperty
+    def model(cls) -> CameraDistortionModel:
         return CameraDistortionModel.RATIONAL_POLYNOMIAL
 
+    @classproperty
+    def coefficient_count(cls) -> int:
+        return 8
+
+    @classmethod
+    def _from_ordered_coefficients(
+        cls, ordered_coefficients: tuple[float, ...]
+    ) -> Self:
+        return cls(
+            radial_coefficient_1=ordered_coefficients[0],
+            radial_coefficient_2=ordered_coefficients[1],
+            tangential_coefficient_1=ordered_coefficients[2],
+            tangential_coefficient_2=ordered_coefficients[3],
+            radial_coefficient_3=ordered_coefficients[4],
+            radial_coefficient_4=ordered_coefficients[5],
+            radial_coefficient_5=ordered_coefficients[6],
+            radial_coefficient_6=ordered_coefficients[7],
+        )
+
     def to_ordered_coefficients(self) -> tuple[float, ...]:
-        """
-        Return coefficients in rational-polynomial order.
-        """
         return (
             *self.radial_tangential_coefficients,
             self.radial_coefficient_4,
@@ -534,17 +570,26 @@ class EquidistantCameraDistortion(CameraDistortion):
     Fourth equidistant distortion coefficient, conventionally ``k4``.
     """
 
-    @property
-    def model(self) -> CameraDistortionModel:
-        """
-        Return the equidistant model identifier.
-        """
+    @classproperty
+    def model(cls) -> CameraDistortionModel:
         return CameraDistortionModel.EQUIDISTANT
 
+    @classproperty
+    def coefficient_count(cls) -> int:
+        return 4
+
+    @classmethod
+    def _from_ordered_coefficients(
+        cls, ordered_coefficients: tuple[float, ...]
+    ) -> Self:
+        return cls(
+            radial_coefficient_1=ordered_coefficients[0],
+            radial_coefficient_2=ordered_coefficients[1],
+            radial_coefficient_3=ordered_coefficients[2],
+            radial_coefficient_4=ordered_coefficients[3],
+        )
+
     def to_ordered_coefficients(self) -> tuple[float, ...]:
-        """
-        Return coefficients in equidistant-model order.
-        """
         return (
             self.radial_coefficient_1,
             self.radial_coefficient_2,

@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 # %% Imports
+from unittest.mock import Mock
+
 from krrood.adapters.json_serializer import from_json, to_json
 
 import numpy as np
 import pytest
 
 from semantic_digital_twin.spatial_types import Point2
+from semantic_digital_twin.datastructures import camera_model as camera_model_module
 from semantic_digital_twin.datastructures.camera_model import (
     CameraDistortion,
     CameraDistortionModel,
@@ -16,6 +19,7 @@ from semantic_digital_twin.datastructures.camera_model import (
     PlumbBobCameraDistortion,
     FieldOfViewCameraModel,
     PinholeCameraModel,
+    RationalPolynomialCameraDistortion,
 )
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
@@ -168,6 +172,74 @@ def test_plumb_bob_distortion_names_ordered_coefficients() -> None:
     assert distortion.tangential_coefficient_2 == coefficients[3]
     assert distortion.radial_coefficient_3 == coefficients[4]
     assert distortion.to_ordered_coefficients() == coefficients
+
+
+# %% Distortion construction dispatch
+@pytest.mark.parametrize(
+    "implementations", [[], [NoCameraDistortion, NoCameraDistortion]]
+)
+def test_distortion_model_requires_unique_implementation(
+    monkeypatch: pytest.MonkeyPatch,
+    implementations: list[type[CameraDistortion]],
+) -> None:
+    """
+    Missing or ambiguous model implementations raise a distortion error.
+    """
+    monkeypatch.setattr(
+        camera_model_module,
+        "concrete_subclasses",
+        Mock(return_value=implementations),
+    )
+
+    with pytest.raises(InvalidCameraDistortionError):
+        CameraDistortion.get_type_for_model(CameraDistortionModel.NONE)
+
+
+@pytest.mark.parametrize(
+    ("distortion_type", "coefficients"),
+    [
+        (NoCameraDistortion, ()),
+        (PlumbBobCameraDistortion, (0.1, -0.2, 0.01, 0.02, 0.03)),
+        (
+            RationalPolynomialCameraDistortion,
+            (0.1, -0.2, 0.01, 0.02, 0.03, -0.04, 0.05, -0.06),
+        ),
+        (EquidistantCameraDistortion, (0.1, -0.2, 0.3, -0.4)),
+    ],
+)
+def test_distortion_factory_roundtrips_subclass_coefficients(
+    distortion_type: type[CameraDistortion], coefficients: tuple[float, ...]
+) -> None:
+    """
+    Each concrete distortion implementation preserves its ROS coefficient sequence.
+    """
+    distortion = CameraDistortion.from_ordered_coefficients(
+        model=distortion_type.model, coefficients=coefficients
+    )
+
+    assert type(distortion) is distortion_type
+    assert distortion.to_ordered_coefficients() == coefficients
+
+
+def test_distortion_factory_delegates_to_subclass_parser(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    The matching distortion implementation owns ordered coefficient construction.
+    """
+    coefficients = (0.1, -0.2, 0.01, 0.02, 0.03)
+    expected = PlumbBobCameraDistortion(radial_coefficient_1=coefficients[0])
+    parser = Mock(return_value=expected)
+    monkeypatch.setattr(
+        PlumbBobCameraDistortion, "_from_ordered_coefficients", parser, raising=False
+    )
+
+    distortion = CameraDistortion.from_ordered_coefficients(
+        model=PlumbBobCameraDistortion().model, coefficients=coefficients
+    )
+
+    parser.assert_called_once_with(coefficients)
+    assert distortion is expected
 
 
 def test_equidistant_distortion_names_ordered_coefficients() -> None:
