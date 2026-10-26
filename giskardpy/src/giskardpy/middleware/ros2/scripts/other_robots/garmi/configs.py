@@ -3,7 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
-from giskardpy.middleware.ros2.command_publishing import MultiDOFCommandFormat
+from giskardpy.middleware.ros2.command_publishing import (
+    MultiDOFCommandFormat,
+    TwistStampedFormat,
+)
 from giskardpy.middleware.ros2.robot_interface_config import (
     ClosedLoopRobotInterfaceConfig,
 )
@@ -36,9 +39,7 @@ class WorldWithGarmiConfig(WorldWithMobileRobot):
     Builds a map -> odom_combined -> GARMI kinematic tree using an omni-drive base.
     """
 
-    odom_body_name: PrefixedName = field(
-        default_factory=lambda: PrefixedName("odom_combined")
-    )
+    odom_body_name: PrefixedName = field(default_factory=lambda: PrefixedName("odom"))
     robot_class: type[Garmi] = field(kw_only=True, default=Garmi, init=False)
     """
     The robot class that is applied to the parsed description.
@@ -64,7 +65,9 @@ class GarmiVelocityInterface(ClosedLoopRobotInterfaceConfig):
         omni_drive = self.world.get_connections_by_type(OmniDrive)[0]
         self.sync_odometry_topic("/r100_0603/platform/odom/filtered", omni_drive)
         self.add_base_cmd_velocity(
-            cmd_vel_topic="/r100_0603/cmd_vel_unstamped", joint=omni_drive
+            cmd_vel_topic="/r100_0603/joy_teleop/cmd_vel",
+            joint=omni_drive,
+            command_format=TwistStampedFormat(),
         )
 
         # The merged whole-robot joint state (~50 Hz): arms + lift, the platform's
