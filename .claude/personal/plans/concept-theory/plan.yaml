@@ -1,0 +1,175 @@
+schema_version: 1
+id: concept-theory
+title: 'Concept theory: one three-valued definition per activity concept, shared by every component'
+description: 'Contact, support, containment, holding, pick-up, place, insert, push and motion get
+  one definition each: a three-valued verdict (holds / fails / undecided) with tolerances derived
+  from declared resolutions, tested against stated laws. Perception, segmind, coraplex/cramph
+  conditions and giskardpy monitors read the same estimators. Foundation items feed
+  eql-planning-robots by 2026-12-18; evaluation Mar-Aug 2027; target ICRA 2028 or RA-L.'
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 532
+waves:
+- id: foundation
+  name: Shared concept layer (Nov 2 - Dec 18)
+  description: Verdict, resolutions and the core estimators; consumed by eql-planning-robots' action effects.
+- id: integration
+  name: Consumers read the shared concepts (Jan - Feb 2027)
+  description: segmind, cramph and giskardpy switch to the shared estimators once cramph lands.
+- id: evaluation
+  name: Laws, agreement and transfer (Mar - Aug 2027)
+  description: The experiments of the research plan and the paper.
+tracks:
+- id: theory
+  name: Theory and evidence
+  wave: foundation
+- id: estimators
+  name: Verdict, resolutions and estimators
+  wave: foundation
+- id: consumers
+  name: segmind, cramph and giskardpy
+  wave: integration
+- id: experiments
+  name: Experiments and paper
+  wave: evaluation
+items:
+- id: rebaseline-on-main
+  title: Re-run every counterexample against cram2 main and update the inconsistency report and cards
+  track: theory
+  status: not_started
+  depends_on: []
+  notes: 'The local analysis read the integration tip; main has since merged #670 and #717 (support
+    by contact normal, contact tolerance wired, grasp by finger contact, containment gated on
+    support change) and #787 (InsideOf rewrite), and cramph c91fcc427 removed all action pre/post
+    conditions. Local docs only (branch concept-theory-exploration); see roadmap for the dossier.'
+- id: theory-freeze
+  title: Review the core theory and cards with the professor; freeze the numbering of definitions, laws and measures
+  track: theory
+  status: not_started
+  depends_on:
+  - rebaseline-on-main
+  notes: 'Dossier pages p/04_core_theory.html and the cards. Also restore the recorded episode
+    corpus and reconcile its episode count with the run configuration (risk R2 of the research plan).'
+- id: trinary-verdict
+  title: A concept verdict in krrood that reuses the trinary scalar (0 / 0.5 / 1) instead of a new encoding
+  track: estimators
+  status: not_started
+  depends_on: []
+  notes: 'HOLDS/UNDECIDED/FAILS map onto krrood symbolic_math trinary values and cramph
+    ObservationStateValues one to one, so a decide() compiles into a casadi observation. Name the
+    cause of an unknown: inside the error band versus no data / not running. krrood only, no
+    workspace imports.'
+- id: concept-resolutions
+  title: Declared concept resolutions from which every truth-deciding tolerance is derived, with a liveness test
+  track: estimators
+  status: not_started
+  depends_on:
+  - trinary-verdict
+  notes: 'Spatial resolution, slowest detected speed, friction angle, dwell time; derived
+    constants per the core theory section 6. A liveness test fails for any registered constant no
+    code path reads (catches the dead 0.9 / 0.1 grasp thresholds).'
+- id: contact-and-support
+  title: Three-valued InContactWith and SupportedBy sharing one spatial resolution
+  track: estimators
+  status: not_started
+  depends_on:
+  - concept-resolutions
+  - rebaseline-on-main
+  notes: 'Extend Sorin Arion''s contact-normal SupportedBy from #670 (5 mm contact, 30 deg cone)
+    rather than replace it: add the undecided band, the object-down condition and the stability
+    margin; reconcile the 1 mm contact and 5 mm support tolerances; drop the duplicated 0.1 m
+    penetration literal.'
+- id: holds-estimator
+  title: One Holds estimator that does not depend on the executor, replacing GripperHolds and the reattach switch
+  track: estimators
+  status: not_started
+  depends_on:
+  - concept-resolutions
+  notes: 'Today Holds is kinematic attachment (GripperHolds), a preceding-PickUp fallback, and never
+    true under physics (LetContactCarryTheBodies). Holds = finger contact plus co-motion. Delete
+    is_body_gripped, _grips_of_every_arm and the unused 0.9 / 0.1 thresholds test-first. Agree the
+    home with Jonas Dech and Simon Stelter (cramph).'
+- id: containment-and-insert
+  title: Containment by the excursion estimator, evaluated independently of support changes
+  track: estimators
+  status: not_started
+  depends_on:
+  - concept-resolutions
+  notes: 'Replaces the 0.9 vertex ratio of segmind''s ContainmentDetector and the four inside
+    measures. #717 evaluates containment only when support changes, so a held object entering a
+    container (Insert) gets no event until it rests; keep that gate as a performance guard only.'
+- id: segmind-on-concepts
+  title: segmind detectors read the shared estimators, on the episode clock
+  track: consumers
+  status: not_started
+  depends_on:
+  - contact-and-support
+  - containment-and-insert
+  - holds-estimator
+  notes: 'Replace the 15 s abs() window and datetime.now timestamps with the episode clock, motion
+    windows in seconds not ticks, Placing per contact episode. Build on Sorin''s
+    segmind-post-conditions (PostConditionJudge) as the action-implies-event law monitor returning
+    verdicts, and invert its segmind -> coraplex import.'
+- id: cramph-concept-monitor
+  title: A cramph ConceptMonitor node whose observation is a concept verdict, and concept post-conditions for actions
+  track: consumers
+  status: not_started
+  depends_on:
+  - trinary-verdict
+  - holds-estimator
+  - contact-and-support
+  notes: 'Resolutions bound through a ContextExtension; failures through
+    ChildChooser.failure_monitors_for; FAILS is read with observes_false since unknown reads
+    false. Fills the post-condition overhaul Jonas announced in c91fcc427, and is the Achieve(goal)
+    template eql-planning-robots needs.'
+  blockers:
+  - cramph has not landed upstream (cram2 #724 and its stack; Simon Stelter's fork PR 14 has changes requested).
+- id: giskard-tolerances-from-resolutions
+  title: giskardpy monitor thresholds (0.01 m / rad defaults, dwell and progress timeouts) derived from resolutions
+  track: consumers
+  status: not_started
+  depends_on:
+  - cramph-concept-monitor
+  notes: 'PoseReached, JointPositionReached, LocalMinimumReached, StillProgressing (5 s),
+    minimum_convergence_rate and the 0.005 m tightening. Add a contact monitor (force plus distance)
+    using the shared Contact estimator. Coordinate with Simon''s resolved_position_threshold work.'
+- id: law-monitors
+  title: The laws as EQL queries over recorded episodes, with a violation report for current versus new definitions
+  track: experiments
+  status: not_started
+  depends_on:
+  - segmind-on-concepts
+  - theory-freeze
+  notes: 'Ground truth from scenario scripts and simulator contacts, never from the detectors under
+    test. Includes the unseen-agent surprise score with minimal pairs. Research plan D3 / E1 / E4.'
+- id: agreement-invariance-sensitivity
+  title: Estimator agreement, metamorphic invariance and constant sensitivity studies
+  track: experiments
+  status: not_started
+  depends_on:
+  - contact-and-support
+  - containment-and-insert
+  - holds-estimator
+  - theory-freeze
+  notes: 'Research plan D4 / D5 / E2 / E3 / E5: geometry vs simulated removal vs perception vs
+    segmentation, Cohen kappa with coverage; answer-flip curves for the question set. Push estimator
+    checked on Simon''s Push-T MuJoCo episodes (t-task-force).'
+- id: robocasa-transfer
+  title: RoboCasa as the zero-retuning transfer domain, its success checks registered as estimators
+  track: experiments
+  status: not_started
+  depends_on:
+  - eql-planning-robots/robocasa-goals
+  - agreement-invariance-sensitivity
+  notes: 'obj_inside_of, check_obj_in_receptacle, contact checks and gripper_obj_far from Tom
+    Schierenbeck''s condition survey (#523, on main) become estimators of containment, contact and
+    holds; report agreement and event F1 with only sensor noise declared.'
+- id: paper
+  title: Paper for ICRA 2028 or RA-L
+  track: experiments
+  status: not_started
+  depends_on:
+  - law-monitors
+  - agreement-invariance-sensitivity
+  - robocasa-transfer
+  notes: 'Deadline about mid-September 2027. No preprint and no public mention of the related
+    submission before its review decision.'
