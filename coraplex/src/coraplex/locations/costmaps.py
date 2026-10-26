@@ -297,7 +297,7 @@ class Costmap(Location):
                     self.world.root,
                 )
 
-    def segment_map(self) -> list[np.ndarray]:
+    def segment_map(self) -> list[NDArray[np.float64]]:
         """
         Finds partitions in the locations and isolates them, a partition is a number of entries in the locations which are
         neighbours. Returns a list of numpy arrays with one partition per array.
