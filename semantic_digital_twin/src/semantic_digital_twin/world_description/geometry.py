@@ -28,12 +28,11 @@ from typing_extensions import (
     Self,
     Tuple,
     TYPE_CHECKING,
-    Generic,
     TypeVar,
 )
 
 from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json, from_json
-from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
+from krrood.bounds import Bounds, BoundsInterface
 from random_events.interval import SimpleInterval, Bound, closed
 from random_events.product_algebra import SimpleEvent
 from semantic_digital_twin.datastructures.variables import SpatialVariables
@@ -788,6 +787,20 @@ class Mesh(Shape):
             )
         return mesh
 
+    @cached_property
+    def is_textured(self) -> bool:
+        """
+        Whether the mesh's file paints its surface with a texture.
+
+        Answering it leaves :attr:`mesh` unloaded and the textures of the file's parts
+        unmerged.
+        """
+        file_scene = trimesh.load_scene(str(self.local_file), process=False)
+        return any(
+            isinstance(part.visual, TextureVisuals)
+            for part in file_scene.geometry.values()
+        )
+
     @classmethod
     def from_file(
         cls, file_path: str, texture_file_path: Optional[str] = None, **kwargs
@@ -1251,23 +1264,10 @@ class Box(Shape):
         )
 
 
-T = TypeVar("T")
-
-
 @dataclass
-class Bounds(Generic[T], SubClassSafeGeneric):
+class CoordinateBounds(Bounds[npt.NDArray[np.float64]]):
     """
-    The lower and upper corner of an axis-aligned region.
-    """
-
-    lower: T
-    """
-    The corner with the smallest coordinate on every axis.
-    """
-
-    upper: T
-    """
-    The corner with the largest coordinate on every axis.
+    Bounds whose corners are plain coordinate vectors, one coordinate per axis.
     """
 
     def clip_segment(
@@ -1276,9 +1276,6 @@ class Bounds(Generic[T], SubClassSafeGeneric):
         """
         Clip the parametrized segment ``start + t * direction`` (``t`` in ``[0, 1]``)
         against this region, using the slab method.
-
-        Assumes ``lower``/``upper`` are plain numeric arrays, as returned by
-        :meth:`VolumetricBoundingBox.to_array_bounds`.
 
         .. note::
             ``start``/``direction`` are plain arrays rather than :class:`Point3`/
@@ -1321,7 +1318,7 @@ plane.
 
 
 @dataclass(eq=False)
-class AxisAlignedBox(Generic[PointT], SubClassSafeGeneric, ABC):
+class AxisAlignedBox(BoundsInterface[PointT], ABC):
     """
     Shared behaviour for an axis-aligned box expressed over a fixed set of spatial axes.
 
@@ -1416,7 +1413,23 @@ class AxisAlignedBox(Generic[PointT], SubClassSafeGeneric, ABC):
             }
         )
 
-    def to_array_bounds(self) -> Bounds[npt.NDArray[np.float64]]:
+    @property
+    def lower(self) -> PointT:
+        return self._corner_at([interval.lower for interval in self._ordered_intervals])
+
+    @property
+    def upper(self) -> PointT:
+        return self._corner_at([interval.upper for interval in self._ordered_intervals])
+
+    def _corner_at(self, coordinates: List[float]) -> PointT:
+        """
+        :param coordinates: The corner's coordinate along each of :meth:`axes`.
+        :return: The corner, in the reference frame of the box's origin.
+        """
+        point_type = self.get_type_of_generic_parameter(PointT)
+        return point_type(*coordinates, reference_frame=self.origin.reference_frame)
+
+    def to_array_bounds(self) -> CoordinateBounds:
         """
         Express this bounding box's lower and upper corners as plain-float vectors.
 
@@ -1430,7 +1443,7 @@ class AxisAlignedBox(Generic[PointT], SubClassSafeGeneric, ABC):
         intervals = self._ordered_intervals
         lower = np.array([interval.lower for interval in intervals], dtype=np.float64)
         upper = np.array([interval.upper for interval in intervals], dtype=np.float64)
-        return Bounds(lower, upper)
+        return CoordinateBounds(lower, upper)
 
     @classmethod
     def from_array_bounds(
@@ -1590,27 +1603,6 @@ class VolumetricBoundingBox(AxisAlignedBox[Point3]):
         :return: The z interval of the bounding box.
         """
         return self._interval(self.min_z, self.max_z, self.origin.z)
-
-    def to_point3_bounds(self) -> Bounds[Point3]:
-        """
-        Express this bounding box's lower and upper corners as ``Point3`` instances.
-
-        :return: The corners, in the same frame as ``origin``.
-        """
-        x, y, z = self.x_interval, self.y_interval, self.z_interval
-        lower = Point3(
-            x.lower,
-            y.lower,
-            z.lower,
-            reference_frame=self.origin.reference_frame,
-        )
-        upper = Point3(
-            x.upper,
-            y.upper,
-            z.upper,
-            reference_frame=self.origin.reference_frame,
-        )
-        return Bounds(lower, upper)
 
     @property
     def scale(self) -> Scale:
@@ -1939,10 +1931,10 @@ class PlanarBoundingBox(AxisAlignedBox[Point2]):
         """
         Check if the bounding box contains a point.
         """
-        point_in_bb = point.reference_frame._world.transform(
-            point.to_point3(), self.origin.reference_frame
+        point_in_box_frame = point.reference_frame._world.transform(
+            point, self.origin.reference_frame
         )
-        x, y = float(point_in_bb.x), float(point_in_bb.y)
+        x, y = float(point_in_box_frame.x), float(point_in_box_frame.y)
         return self.simple_event.contains((x, y))
 
     def extrude(self, half_height: float) -> VolumetricBoundingBox:

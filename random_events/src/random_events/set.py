@@ -123,7 +123,7 @@ class SetElement(AbstractSimpleSet):
     def as_composite_set(self) -> AbstractCompositeSet:
         return Set.from_simple_sets(self)
 
-    def __deepcopy__(self):
+    def __deepcopy__(self, memo: dict[int, Any] | None = None) -> Self:
         return SetElement.from_data(self.element, self.all_elements)
 
 

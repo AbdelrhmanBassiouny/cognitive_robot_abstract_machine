@@ -1,11 +1,12 @@
 import os.path
 import shutil
 
+import mujoco
 import numpy
 import pytest
 
 from semantic_digital_twin.adapters.mjcf import MJCFParser
-from semantic_digital_twin.adapters.multi_sim import MujocoLight
+from semantic_digital_twin.adapters.multi_sim import MujocoLight, MujocoTendon
 from semantic_digital_twin.world_description.connections import FixedConnection
 
 MJCF_DIR = os.path.join(
@@ -393,3 +394,56 @@ def test_a_scene_named_by_a_package_uri_is_read_from_that_package(
     assert [body.name for body in from_package.kinematic_structure_entities] == [
         body.name for body in from_file.kinematic_structure_entities
     ]
+
+
+# %% tendons
+
+
+def test_a_fixed_tendon_couples_the_joints_with_the_coefficients_mujoco_reads():
+    file_path = os.path.join(MJCF_DIR, "mjx_single_cube_no_mesh.xml")
+    model = mujoco.MjModel.from_xml_path(file_path)
+    tendon = model.tendon("finger")
+    first_wrap = model.tendon_adr[tendon.id]
+    wraps = range(first_wrap, first_wrap + model.tendon_num[tendon.id])
+    expected = {
+        model.joint(model.wrap_objid[wrap]).name: float(model.wrap_prm[wrap])
+        for wrap in wraps
+    }
+
+    world = MJCFParser(file_path).parse()
+
+    (parsed,) = [
+        simulator_property
+        for simulator_property in world.simulator_additional_properties
+        if isinstance(simulator_property, MujocoTendon)
+        and simulator_property.name == "finger"
+    ]
+    assert parsed.joints == expected
+
+
+class SceneCompiled(Exception):
+    """
+    Raised in place of compiling a MuJoCo scene, to show that it was compiled.
+    """
+
+
+def refuse_to_compile(spec: mujoco.MjSpec) -> None:
+    """
+    :raises SceneCompiled: Always.
+    """
+    raise SceneCompiled()
+
+
+def test_parsing_a_scene_without_tendons_does_not_compile_it(monkeypatch):
+    """
+    Compiling a scene loads every mesh and texture it refers to, which only reading a
+    tendon needs.
+    """
+    file_path = os.path.join(MJCF_DIR, "table.xml")
+    root_name = mujoco.MjSpec.from_file(file_path).worldbody.name
+    monkeypatch.setattr(mujoco.MjSpec, "to_xml", refuse_to_compile)
+    monkeypatch.setattr(mujoco.MjSpec, "compile", refuse_to_compile)
+
+    world = MJCFParser(file_path).parse()
+
+    assert world.root.name.name == root_name
