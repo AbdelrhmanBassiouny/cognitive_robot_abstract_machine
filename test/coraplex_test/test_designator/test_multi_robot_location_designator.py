@@ -156,7 +156,6 @@ def test_new_reachability_location_body(
         Pose(reference_frame=milk),
         arm,
         context=context_of(extensions),
-        seed=SAMPLING_SEED,
     )
 
     pose = next(iter(location))
@@ -181,7 +180,6 @@ def test_visibility_location_pose(multiple_robot_simple_apartment_context):
     location = VisibilityLocation(
         world.get_body_by_name("milk.stl").global_pose,
         context=context_of(extensions),
-        seed=SAMPLING_SEED,
     )
 
     pose = next(iter(location))
@@ -205,7 +203,6 @@ def test_visibility_location_body(multiple_robot_simple_apartment_context):
     location = VisibilityLocation(
         Pose(reference_frame=world.get_body_by_name("milk.stl")),
         context=context_of(extensions),
-        seed=SAMPLING_SEED,
     )
 
     pose = next(iter(location))

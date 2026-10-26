@@ -252,7 +252,7 @@ def test_a_modification_on_a_statechart_not_compiled_yet_only_adds(
     with statechart.modify():
         statechart.add_node(first := _node_arriving_at_once("first"))
 
-    assert not statechart.is_compiled
+    assert not statechart.compiler.is_compiled
     statechart_executor.compile(statechart)
     _tick_until_succeeded(statechart_executor, first)
 

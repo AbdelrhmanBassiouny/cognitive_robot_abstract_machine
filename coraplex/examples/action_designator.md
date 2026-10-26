@@ -64,14 +64,14 @@ from coraplex.testing import setup_world
 world = setup_world()
 pr2 = PR2.from_world(world)
 
-# A location samples its candidates from a costmap, so a seed is what makes this
-# example run the same way twice.
+# A location samples its candidates from a costmap with the seed of the plan's
+# context, so this example runs the same way twice.
 from coraplex.plans.context_extensions import RobotAccess, StatementGrounding
 from cramph.context import StatechartContext
 from coraplex.plans.executors import KinematicallySimulatedPlanExecutor
 from cramph.statechart import Statechart
 
-extensions = [RobotAccess(pr2), StatementGrounding(sampling_seed=0)]
+extensions = [RobotAccess(pr2), StatementGrounding()]
 context = KinematicallySimulatedPlanExecutor(
     StatechartContext.with_extensions(world, extensions)
 ).context
@@ -254,7 +254,6 @@ description = TransportAction.from_graspable_by_closest_grasps(
     Pose.from_xyz_quaternion(3.0, 2.2, 1.04, 0.0, 0.0, 1.0, 0.0, reference_frame=world.root),
     pr2.left_arm,
     context,
-    seed=0,
 )
 run(Sequence(nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH),
             description]))

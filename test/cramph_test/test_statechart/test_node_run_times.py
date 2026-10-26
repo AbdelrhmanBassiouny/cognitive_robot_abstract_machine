@@ -1,7 +1,7 @@
 """
 Tests for :attr:`~cramph.node.StatechartNode.start_time` and
 :attr:`~cramph.node.StatechartNode.end_time`, derived from
-:class:`~cramph.statechart.StateHistory`.
+:class:`~cramph.state_history.StateHistory`.
 """
 
 from __future__ import annotations
@@ -15,7 +15,6 @@ from cramph.executor import StatechartExecutor
 from cramph.nodes_for_testing import ConstTrueNode, NodeRecordingItsCallbacks
 from cramph.statechart import Statechart
 from krrood.symbolic_math.symbolic_math import Scalar
-
 
 # %% compiling
 

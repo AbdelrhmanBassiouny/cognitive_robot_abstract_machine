@@ -735,14 +735,13 @@ class CartesianPose(Parallel):
 
     def expand(self) -> None:
         """
-        Create the position and the orientation task, then adopt them before the nodes
-        this goal was handed, as :meth:`~cramph.composites.ControlStructureNode.expand`
-        does.
+        Create the position and the orientation task, before the nodes this goal was
+        handed.
         """
         if self.root_link is None:
             self.root_link = self.context.world.root
-        self.nodes[:0] = self.create_tasks()
-        super().expand()
+        for position, task in enumerate(self.create_tasks()):
+            self._insert_at(position, task)
 
     def create_tasks(self) -> list[MotionStatechartNode]:
         """
@@ -1045,10 +1044,10 @@ class CartesianVelocityLimit(Parallel):
 
     def expand(self) -> None:
         """
-        Create the linear and the angular velocity limit, then adopt them as
-        :meth:`~cramph.composites.ControlStructureNode.expand` does.
+        Create the linear and the angular velocity limit, before the nodes this goal
+        was handed.
         """
-        self.nodes[:0] = [
+        limits = [
             CartesianPositionVelocityLimit(
                 root_link=self.root_link,
                 tip_link=self.tip_link,
@@ -1062,4 +1061,5 @@ class CartesianVelocityLimit(Parallel):
                 weight=self.weight,
             ),
         ]
-        super().expand()
+        for position, limit in enumerate(limits):
+            self._insert_at(position, limit)

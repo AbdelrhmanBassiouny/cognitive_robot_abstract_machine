@@ -68,7 +68,6 @@ def test_ref_chain_after_copy_with_execute_complex_plan(pr2_apartment_context):
         Pose.from_xyz_quaternion(3.1, 2.2, 0.95, 0.0, 0.0, 1.0, 0.0, world.root),
         copy_robot.right_arm,
         context_of(copy_extensions),
-        seed=SAMPLING_SEED,
     )
     plan = Sequence(nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH), description])
     run_plan(plan, copy_extensions)

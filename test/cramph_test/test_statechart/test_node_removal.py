@@ -133,7 +133,7 @@ def test_a_node_no_compile_covered_yet_leaves_a_compiled_statechart(
 
     assert statechart.nodes == [compiled, kept]
     assert [node.index for node in statechart.nodes] == [0, 1]
-    assert statechart.latest_compile_covers(kept)
+    assert statechart.compiler.latest_compile_covers(kept)
 
 
 def test_a_compiled_statechart_runs_after_a_joining_node_was_removed_again(

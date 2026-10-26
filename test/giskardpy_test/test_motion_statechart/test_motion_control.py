@@ -70,7 +70,7 @@ def test_a_node_reading_the_controller_configuration_needs_motion_control() -> N
     statechart.add_node(node := LocalMinimumReached())
 
     with pytest.raises(NodesMissingContextExtensionsError) as raised:
-        statechart.compile()
+        statechart.compiler.compile()
 
     assert raised.value.nodes_by_missing_extension == {MotionControlContext: [node]}
 

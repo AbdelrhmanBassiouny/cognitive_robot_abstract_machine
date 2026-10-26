@@ -178,6 +178,6 @@ def test_a_chart_seen_before_compiling_is_snapshotted_with_its_compiled_transiti
     observer = ChartObserver()
     observer.snapshot(chart)
 
-    chart.compile()
+    chart.compiler.compile()
 
     assert observer.snapshot(chart).edges == structure_of(chart).edges

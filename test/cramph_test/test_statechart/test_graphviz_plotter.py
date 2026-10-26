@@ -33,7 +33,7 @@ def expand(statechart: Statechart) -> Statechart:
     Rebuilds the transitions of `statechart`, whose goals expanded when they joined it,
     which is as far as a statechart has to be built to be drawn.
     """
-    statechart._add_transitions()
+    statechart.compiler.add_transitions()
     return statechart
 
 

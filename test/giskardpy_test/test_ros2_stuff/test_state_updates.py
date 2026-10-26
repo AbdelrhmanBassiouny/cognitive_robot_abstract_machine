@@ -10,7 +10,8 @@ from cramph.data_types import LifeCycleValues
 from cramph.executor import NoPacing, StatechartExecutor
 from cramph.monitors import CountSimulationTimeSeconds, CountTicks
 from cramph.node import StatechartNode
-from cramph.statechart import StateHistory, StateHistoryObserver, Statechart
+from cramph.state_history import StateHistory, StateHistoryObserver
+from cramph.statechart import Statechart
 from giskardpy.middleware.ros2.action_server import GoalOutcome
 from giskardpy.middleware.ros2.child_choices import (
     ChildChoiceClient,

@@ -15,7 +15,8 @@ from cramph.exceptions import (
     NonPositiveRealTimeFactorError,
     TickLimitReachedError,
 )
-from cramph.statechart import RecompileCallback, Statechart
+from cramph.compiler import RecompileCallback
+from cramph.statechart import Statechart
 from krrood.symbolic_math.symbolic_math import FloatVariable
 
 if TYPE_CHECKING:
@@ -470,8 +471,8 @@ class StatechartExecutor(Executor, RecompileCallback):
         """
         super().compile(statechart)
         self.tick_count = 0
-        self.statechart.compile()
-        self.statechart.add_recompile_callback(self)
+        self.statechart.compiler.compile()
+        self.statechart.compiler.add_recompile_callback(self)
         self._notify_compiled()
         self.statechart.tick()
 

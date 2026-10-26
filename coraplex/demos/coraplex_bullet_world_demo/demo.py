@@ -101,13 +101,6 @@ class ApartmentBody(StrEnum):
     SPOON_DRAWER = "cabinet10_drawer_top"
 
 
-SAMPLING_SEED = 0
-"""
-The seed the demonstration samples its standing poses with, so it runs the same way
-every time.
-"""
-
-
 @dataclass
 class PlaceSettingObject:
     """
@@ -315,7 +308,7 @@ class BulletWorldDemonstration(RobotDemonstration):
     def build_context_extensions(self, world: World) -> list[ContextExtension]:
         return [
             RobotAccess(world.get_semantic_annotations_by_type(self.used_robot)[0]),
-            StatementGrounding(sampling_seed=SAMPLING_SEED),
+            StatementGrounding(),
             PlanRewriting(transformations=[OpenDrawerBeforeMoveAndPickUp()]),
         ]
 
@@ -355,21 +348,18 @@ class BulletWorldDemonstration(RobotDemonstration):
                         self.milk.target_location(world),
                         left_arm,
                         context,
-                        seed=SAMPLING_SEED,
                     ),
                     TransportAction.from_graspable_by_closest_grasps(
                         self.bowl.annotation_in(world),
                         self.bowl.target_location(world),
                         left_arm,
                         context,
-                        seed=SAMPLING_SEED,
                     ),
                     TransportAction.from_graspable_by_closest_grasps(
                         self.spoon.annotation_in(world),
                         self.spoon.target_location(world),
                         left_arm,
                         context,
-                        seed=SAMPLING_SEED,
                     ),
                 ]
             )
@@ -386,8 +376,8 @@ def main(
     """
     Run the demonstration.
 
-    :param executor_type: The executor running the plan, which decides whether it
-        drives the real robot or simulates it.
+    :param executor_type: The executor running the plan, which decides whether it drives
+        the real robot or simulates it.
     :param collision_avoidance: Whether the statechart avoids collisions.
     :param event_segmentation: Whether SegMind segments the run into events.
     :param debug: Whether to run in debug mode, publishing every copy of the world a

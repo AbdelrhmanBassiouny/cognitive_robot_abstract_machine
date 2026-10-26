@@ -33,7 +33,8 @@ from giskardpy.middleware.ros2.world_updates import OutgoingWorldUpdates
 from cramph.exceptions import SelfInStartConditionError
 from giskardpy.motion_statechart.graph_node import EndMotion
 from cramph.monitors import CountSimulationTimeSeconds
-from cramph.statechart import LastObservationState, Statechart
+from cramph.state import LastObservationState
+from cramph.statechart import Statechart
 from cramph.nodes_for_testing import ConstTrueNode
 from giskardpy.qp.qp_controller_config import QPControllerConfig
 from krrood.adapters.json_serializer import from_json

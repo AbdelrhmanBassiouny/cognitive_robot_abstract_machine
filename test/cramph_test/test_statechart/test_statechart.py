@@ -3852,7 +3852,7 @@ class TestEagerStateVariables:
             )
         )
         barrier.success_condition = barrier.observes_true
-        msc._add_transitions()
+        msc.compiler.add_transitions()
         assert barrier in barrier._success_condition.node_dependencies
 
     def test_nested_success_condition_survives_json_round_trip(self) -> None:
@@ -3874,7 +3874,7 @@ class TestEagerStateVariables:
         msc_copy = Statechart.from_json(
             new_json_data, context=StatechartContext(world=World())
         )
-        msc_copy._add_transitions()
+        msc_copy.compiler.add_transitions()
 
         barrier_copy = msc_copy.get_node_by_index(barrier.index)
         assert barrier_copy in barrier_copy._success_condition.node_dependencies

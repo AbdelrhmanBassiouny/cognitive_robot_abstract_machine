@@ -27,7 +27,8 @@ from cramph.node import (
     TransitionCondition,
 )
 from cramph.node import EndStatechart
-from cramph.statechart import LifeCycleState, ObservationState, Statechart
+from cramph.state import LifeCycleState, ObservationState
+from cramph.statechart import Statechart
 from cramph.nodes_for_testing import (
     ConstTrueNode,
     CompositeNodeWithNestedCompositeChild,
@@ -124,7 +125,7 @@ def test_nested_goals(tmp_path) -> None:
     msc_copy = Statechart.from_json(
         new_json_data, context=StatechartContext(world=World())
     )
-    msc_copy._add_transitions()
+    msc_copy.compiler.add_transitions()
     msc.draw(str(tmp_path / "statechart.pdf"))
 
     for node in msc.nodes:
@@ -326,7 +327,7 @@ def test_duplicate_condition() -> None:
     msc_copy = Statechart.from_json(
         new_json_data, context=StatechartContext(world=World())
     )
-    msc_copy._add_transitions()
+    msc_copy.compiler.add_transitions()
     assert len(msc_copy.unique_edges) == 3
 
 
@@ -478,8 +479,8 @@ def assert_conditions_survive_json_round_trip(msc: Statechart) -> None:
         json.loads(json.dumps(msc.to_json())), context=StatechartContext(world=World())
     )
 
-    msc.compile()
-    msc_copy.compile()
+    msc.compiler.compile()
+    msc_copy.compiler.compile()
 
     assert [
         [str(condition) for condition in node.conditions] for node in msc_copy.nodes

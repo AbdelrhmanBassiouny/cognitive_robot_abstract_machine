@@ -13,13 +13,9 @@ from dataclasses import dataclass
 
 from typing_extensions import Any, Self
 
-from cramph.statechart import (
-    LastObservationState,
-    LifeCycleState,
-    ObservationState,
-    Statechart,
-    StateHistoryItem,
-)
+from cramph.state import LastObservationState, LifeCycleState, ObservationState
+from cramph.statechart import Statechart
+from cramph.state_history import StateHistoryItem
 from giskardpy.middleware.ros2.exceptions import StateUpdateAheadOfStatechartError
 
 # %% the states Giskard reports

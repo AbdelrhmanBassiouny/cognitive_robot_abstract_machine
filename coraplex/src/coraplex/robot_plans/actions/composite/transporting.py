@@ -57,7 +57,6 @@ class TransportAction(SequentialAction):
         arm: Arm,
         context: StatechartContext,
         number_of_grasps: int = GraspsByCloseness.number_of_grasps,
-        seed: int | None = None,
     ) -> Self:
         """
         A transport that takes `graspable` to `target_location`, standing wherever each
@@ -71,7 +70,6 @@ class TransportAction(SequentialAction):
             them.
         :param number_of_grasps: How many of the object's grasps closest to a standing
             pose are tried from there.
-        :param seed: Seed for sampling the standing poses; ``None`` samples afresh.
         :return: The transport, standing near the object to pick it up and near the
             target to place it.
         """
@@ -81,7 +79,6 @@ class TransportAction(SequentialAction):
                 arm=arm,
                 context=context,
                 number_of_grasps=number_of_grasps,
-                seed=seed,
             ),
             place=a(MoveAndPlaceAction)(
                 carry=a(CarryAction)(
@@ -92,7 +89,6 @@ class TransportAction(SequentialAction):
                                 target_pose=target_location,
                                 arm=arm,
                                 context=context,
-                                seed=seed,
                             ),
                         )
                     )
@@ -257,7 +253,6 @@ class MoveAndPickUpAction(SequentialAction):
         arm: Arm,
         context: StatechartContext,
         number_of_grasps: int = GraspsByCloseness.number_of_grasps,
-        seed: int | None = None,
     ) -> Match:
         """
         A pick-up of `graspable`, standing wherever it can be reached from and taking it
@@ -269,14 +264,13 @@ class MoveAndPickUpAction(SequentialAction):
             them.
         :param number_of_grasps: How many of the object's grasps closest to a standing
             pose are tried from there.
-        :param seed: Seed for sampling the standing poses; ``None`` samples afresh.
         :return: The pick-up, with the standing pose and the grasp left open.
         """
         object_pose = Pose(reference_frame=graspable.root)
         standing_position = variable(
             Pose,
             domain=ReachabilityLocation(
-                target_pose=object_pose, arm=arm, context=context, seed=seed
+                target_pose=object_pose, arm=arm, context=context
             ),
         )
         return a(cls)(
@@ -349,7 +343,6 @@ class MoveAndOpenAction(SequentialAction):
         arm: Arm,
         context: StatechartContext,
         number_of_grasps: int = GraspsByCloseness.number_of_grasps,
-        seed: int | None = None,
     ) -> Match:
         """
         An opening of the container `handle` belongs to, standing wherever the handle
@@ -362,7 +355,6 @@ class MoveAndOpenAction(SequentialAction):
             them.
         :param number_of_grasps: How many of the handle's grasps closest to a standing
             pose are tried from there.
-        :param seed: Seed for sampling the standing poses; ``None`` samples afresh.
         :return: The opening, with the standing pose and the grasp left open.
         """
         handle_pose = Pose(reference_frame=handle.root)
@@ -373,7 +365,6 @@ class MoveAndOpenAction(SequentialAction):
                 arm=arm,
                 reach_fraction=ReachFraction.ACCESSING,
                 context=context,
-                seed=seed,
             ),
         )
         return a(cls)(

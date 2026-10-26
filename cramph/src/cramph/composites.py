@@ -207,12 +207,10 @@ class ControlStructureNode(CompositeNode, ABC):
             holders[-1],
         )
 
-    def expand(self) -> None:
-        self._adopt_nodes()
-
-    def _adopt_nodes(self) -> None:
+    def adopt_handed_children(self) -> None:
         """
-        Adopt every node this goal was handed and wire them.
+        Puts every node in :attr:`nodes` below this goal in its statechart and wires
+        them.
         """
         for node in list(self.nodes):
             self._check_can_be_a_child(node)
@@ -896,24 +894,26 @@ class CancelledWhenTrue(StoppedWhenTrue):
 # %% choosing a child while running
 
 
-ChoosingNode = TypeVar("ChoosingNode", bound="CompositeNodeChoosingItsChild")
+GenericChoosingNode = TypeVar(
+    "GenericChoosingNode", bound="CompositeNodeChoosingItsChild"
+)
 
 
 @dataclass
-class ChildChooser(Generic[ChoosingNode], SubClassSafeGeneric, ABC):
+class ChildChooser(Generic[GenericChoosingNode], SubClassSafeGeneric, ABC):
     """
     Decides which child the nodes of :attr:`node_type` run next.
     """
 
     @classproperty
-    def node_type(cls) -> type[ChoosingNode]:
+    def node_type(cls) -> type[GenericChoosingNode]:
         """
         :return: The kind of :class:`CompositeNodeChoosingItsChild` this chooser
             chooses the children of.
         """
-        return cls.get_type_of_generic_parameter(ChoosingNode)
+        return cls.get_type_of_generic_parameter(GenericChoosingNode)
 
-    def has_choice_for(self, node: ChoosingNode) -> bool:
+    def has_choice_for(self, node: GenericChoosingNode) -> bool:
         """
         :param node: The node asking for its next child.
         :return: Whether :meth:`choose_child` can answer `node` now; if not, `node`
@@ -922,7 +922,7 @@ class ChildChooser(Generic[ChoosingNode], SubClassSafeGeneric, ABC):
         return True
 
     @abstractmethod
-    def choose_child(self, node: ChoosingNode) -> StatechartNode | None:
+    def choose_child(self, node: GenericChoosingNode) -> StatechartNode | None:
         """
         :param node: The node asking for its next child.
         :return: The child `node` runs next, or None if no child is left.
@@ -930,7 +930,7 @@ class ChildChooser(Generic[ChoosingNode], SubClassSafeGeneric, ABC):
 
     def prepare_chosen_child(
         self,
-        node: ChoosingNode,
+        node: GenericChoosingNode,
         child: StatechartNode,
     ) -> None:
         """
@@ -944,7 +944,7 @@ class ChildChooser(Generic[ChoosingNode], SubClassSafeGeneric, ABC):
 
     def failure_monitors_for(
         self,
-        node: ChoosingNode,
+        node: GenericChoosingNode,
         child: StatechartNode,
     ) -> list[StatechartNode]:
         """
@@ -1235,8 +1235,8 @@ class CompositeNodeChoosingItsChild(SucceedsOnObservingTrue, CompositeNode):
 
         .. warning:: Unlike :meth:`~cramph.node.StatechartNode.on_reset` this compiles
             the statechart again, unless nothing was chosen since the latest reset,
-            which waits until every :class:`~cramph.statechart.RecompileCallback` is at
-            rest, see :meth:`~cramph.statechart.Statechart.compile`.
+            which waits until every :class:`~cramph.compiler.RecompileCallback` is at
+            rest, see :meth:`~cramph.compiler.StatechartCompiler.compile`.
         """
         children_of_this_run = self.nodes[self._children_of_earlier_runs :]
         if not children_of_this_run and not self._out_of_children:

@@ -18,12 +18,8 @@ from cramph.nodes_for_testing import (
     NodeAssertionError,
     NodeSucceedingOnObservingTrue,
 )
-from cramph.statechart import (
-    StateHistory,
-    StateHistoryItem,
-    StateHistoryObserver,
-    Statechart,
-)
+from cramph.state_history import StateHistory, StateHistoryItem, StateHistoryObserver
+from cramph.statechart import Statechart
 
 # %% observers
 
@@ -267,7 +263,7 @@ def test_failed_settle_does_not_publish_partial_snapshot(
         history_chart.life_cycle_state[history_chart.nodes[0]] = LifeCycleValues.PAUSED
         raise failure
 
-    monkeypatch.setattr(history_chart._compiled_tick, "settle", fail_settle)
+    monkeypatch.setattr(history_chart.compiler.compiled_tick, "settle", fail_settle)
     with pytest.raises(NodeAssertionError) as caught:
         history_chart.tick()
 

@@ -11,12 +11,8 @@ from typing_extensions import Any
 
 from cramph.context import StatechartContext
 from cramph.data_types import StatechartPayloadKey
-from cramph.statechart import (
-    LastObservationState,
-    LifeCycleState,
-    ObservationState,
-    Statechart,
-)
+from cramph.state import LastObservationState, LifeCycleState, ObservationState
+from cramph.statechart import Statechart
 from semantic_digital_twin.world import World
 
 # %% following the payloads
@@ -54,7 +50,7 @@ class ReportedStatechart:
             self.statechart.add_nodes_from_json(
                 payload[StatechartPayloadKey.JOINED_NODES]
             )
-        self.statechart._add_transitions()
+        self.statechart.compiler.add_transitions()
         self.statechart.life_cycle_state.data = LifeCycleState.from_json(
             payload[StatechartPayloadKey.LIFE_CYCLE_STATE], statechart=self.statechart
         ).data

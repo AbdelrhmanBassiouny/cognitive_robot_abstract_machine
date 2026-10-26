@@ -612,9 +612,10 @@ Further hooks a node class may override:
 - `cleanup()` is called once the executor finished running the statechart (see
   [Ending the statechart](#ending-the-statechart)).
 
-A composite node adds its children in `expand()`, which is called once when it joins a
-statechart, and may reject them in `check_children()`, which runs when the statechart is
-compiled and the children's conditions are complete. The plan language constructs, for
+When a composite node joins a statechart, it first puts the children it was handed below
+itself in `adopt_handed_children()`, which the plan language constructs override, and then
+creates children of its own in `expand()`. It may reject them in `check_children()`, which
+runs when the statechart is compiled and the children's conditions are complete. The plan language constructs, for
 example, raise `CompositeNodeWithoutChildrenError` there if they were handed no node.
 
 Data or services that are not part of every statechart reach a node through its

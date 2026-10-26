@@ -45,11 +45,11 @@ real inside the `/steps` sequence its `StatementNode` chose. Simon would rather 
 candidate; doing without it needs plan transformations that can insert beside a node
 no language node runs.
 
-### Holding still inside `Statechart.compile`
+### Holding still inside `StatechartCompiler.compile`
 
 Waiting for every `RecompileCallback` to come to rest happens around a world-structure
-rebuild and before a node chooses its child (`Statechart._when_held_still`), not inside
-`Statechart.compile` itself. A compile that waits has to leave the statechart ticking
+rebuild and before a node chooses its child (`StatechartCompiler.when_held_still`), not inside
+`StatechartCompiler.compile` itself. A compile that waits has to leave the statechart ticking
 with nodes it has not compiled yet, but the state arrays grow the moment a node joins
 and the compiled tick keeps reading the arrays it was compiled against, so the tick
 would run on stale state until the compile happened.

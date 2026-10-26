@@ -29,8 +29,8 @@ above zero wherever the robot meets the criterion. Both also merge in an occupan
 position where the robot can stand without colliding with its surroundings. The costmaps are built from the world as it
 is when the candidates are sampled.
 
-We start with a world holding the PR2 in the apartment. The candidates are sampled at random, so every location is
-given a seed, which makes this example run the same way every time.
+We start with a world holding the PR2 in the apartment. The candidates are sampled at random, with the seed of the
+plan's context, so this example runs the same way every time.
 
 ```python
 from coraplex.testing import setup_world
@@ -43,7 +43,7 @@ from cramph.context import StatechartContext
 from coraplex.plans.executors import KinematicallySimulatedPlanExecutor
 from cramph.statechart import Statechart
 
-extensions = [RobotAccess(pr2_view), StatementGrounding(sampling_seed=0)]
+extensions = [RobotAccess(pr2_view), StatementGrounding()]
 context = KinematicallySimulatedPlanExecutor(
     StatechartContext.with_extensions(world, extensions)
 ).context
@@ -92,7 +92,7 @@ from semantic_digital_twin.spatial_types.spatial_types import Pose
 location = ReachabilityLocation(
     Pose(reference_frame=world.get_body_by_name("milk.stl")),
     pr2_view.left_arm,
-    context=context, seed=0,
+    context=context,
 )
 
 run(NavigateAction(target_location=location.ground()))
@@ -130,7 +130,7 @@ location = ReachabilityLocation(
     Pose(reference_frame=drawer.handle.root),
     pr2_view.left_arm,
     ReachFraction.ACCESSING,
-    context=context, seed=0,
+    context=context,
 )
 
 print(location.ground())
@@ -145,7 +145,7 @@ with its default camera. It only needs the target.
 from coraplex.locations.locations import VisibilityLocation
 
 location = VisibilityLocation(
-    Pose(reference_frame=world.get_body_by_name("milk.stl")), context=context, seed=0
+    Pose(reference_frame=world.get_body_by_name("milk.stl")), context=context
 )
 
 run(NavigateAction(target_location=location.ground()))
@@ -156,16 +156,15 @@ pr2_view.root.parent_connection.origin = origin_pose.homogeneous_matrix
 ## Iterating the Candidates
 
 A location is a generator of candidates, which is useful when the first candidate does not work for some reason. A
-location samples at most `number_of_samples` candidates. It draws them with its `seed`; a seed of `None` draws
-different candidates each time. A location an action builds takes the plan's seed, the `sampling_seed` of its
-`StatementGrounding`.
+location samples at most `number_of_samples` candidates. It draws them with the plan's seed, the `sampling_seed` of the
+`StatementGrounding` in its context, which is 0 unless set; a seed of `None` draws different candidates each time.
 
 ```python
 from semantic_digital_twin.spatial_types.spatial_types import Point3
 
 location = VisibilityLocation(
     Pose(Point3.from_iterable([-1, 0, 1.2]), reference_frame=world.root),
-    context=context, seed=0,
+    context=context,
     number_of_samples=5,
 )
 
@@ -189,7 +188,7 @@ navigate = a(NavigateAction)(
         domain=ReachabilityLocation(
             Pose(reference_frame=world.get_body_by_name("milk.stl")),
             pr2_view.left_arm,
-            context=context, seed=0,
+            context=context,
         ),
     )
 )
@@ -209,7 +208,7 @@ how far, in cells, its candidates spread around the stand-off distance.
 location = ReachabilityLocation(
     Pose(reference_frame=world.get_body_by_name("milk.stl")),
     pr2_view.left_arm,
-    context=context, seed=0,
+    context=context,
     map_resolution=0.04,
     map_cells=100,
     ring_standard_deviation=8,

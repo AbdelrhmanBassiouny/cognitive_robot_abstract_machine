@@ -66,8 +66,8 @@ class StatementGrounding(ContextExtension):
     has a limit of its own.
     """
 
-    sampling_seed: int | None = None
+    sampling_seed: int | None = 0
     """
-    Seed for the locations the plan's actions sample, so a run can be repeated; ``None``
-    samples afresh each run.
+    Seed for the locations the plan's actions sample, so a run repeats; ``None`` samples
+    afresh each run.
     """

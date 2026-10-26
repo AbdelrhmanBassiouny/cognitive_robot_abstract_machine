@@ -163,8 +163,8 @@ class SequenceCreatingItsSteps(Sequence):
     """
 
     def expand(self) -> None:
-        self.nodes = [ConstTrueNode(), ConstTrueNode(), ConstTrueNode()]
-        super().expand()
+        for _ in range(3):
+            self.add_node(ConstTrueNode())
 
 
 @dataclass(repr=False, eq=False, kw_only=True)

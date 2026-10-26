@@ -16,7 +16,8 @@ from typing_extensions import TYPE_CHECKING, Any, Callable, Optional
 
 from coraplex.robot_plans.actions.base import Action
 from cramph.visualization import WorldVisualization
-from cramph.statechart import StateHistory, StateHistoryObserver, Statechart
+from cramph.state_history import StateHistory, StateHistoryObserver
+from cramph.statechart import Statechart
 from semantic_digital_twin.callbacks.callback import (
     ModelChangeCallback,
     StateChangeCallback,

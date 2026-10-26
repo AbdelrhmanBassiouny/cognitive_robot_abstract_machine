@@ -93,7 +93,6 @@ from ...plan_running import (
     simulated_executor,
     statechart_of,
 )
-from ...sampling import SAMPLING_SEED
 
 # %% expanding a plan without running it
 
@@ -1166,7 +1165,7 @@ def test_the_drawer_is_opened_once_in_front_of_a_move_and_pick_up_still_to_be_gr
     plan_transformations = [OpenDrawerBeforeMoveAndPickUp()]
 
     move_and_pick_up = MoveAndPickUpAction.from_graspable_by_closest_grasps(
-        spoon, view.right_arm, context_of(extensions), seed=SAMPLING_SEED
+        spoon, view.right_arm, context_of(extensions)
     )
     plan = rewritten(
         Sequence(nodes=[StatementNode(statement=move_and_pick_up)]),
@@ -1199,7 +1198,6 @@ def test_the_drawer_is_opened_in_front_of_a_transports_pick_up_before_it_is_grou
         Pose(reference_frame=world.root),
         view.right_arm,
         context_of(extensions),
-        seed=SAMPLING_SEED,
     )
     plan = rewritten(Sequence(nodes=[transport]), extensions, plan_transformations)
 
@@ -1276,7 +1274,6 @@ def test_a_transport_of_an_object_in_no_drawer_is_left_alone(pr2_apartment_conte
         Pose(reference_frame=world.root),
         view.right_arm,
         context_of(extensions),
-        seed=SAMPLING_SEED,
     )
 
     plan = rewritten(Sequence(nodes=[transport]), extensions, plan_transformations)

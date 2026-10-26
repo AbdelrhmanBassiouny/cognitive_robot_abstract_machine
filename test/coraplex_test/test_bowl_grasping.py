@@ -163,7 +163,6 @@ def test_transporting_a_bowl_grasps_it_at_its_rim(pr2_and_bowl):
         Pose.from_xyz_rpy(5.0, 3.3, 0.75, reference_frame=world.root),
         robot.left_arm,
         context_of(robot_extensions(robot)),
-        seed=SAMPLING_SEED,
     )
 
     Sequence(nodes=[transport])
