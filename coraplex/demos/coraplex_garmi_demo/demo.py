@@ -112,7 +112,8 @@ class SceneBody(StrEnum):
 
     APARTMENT = "apartment"
     """
-    The apartment's origin, which marks whether the scene was already populated.
+    The apartment's origin, posed in the occupancy map frame the robot localizes in,
+    which also marks whether the scene was already populated.
     """
 
 
@@ -155,22 +156,25 @@ class ScenePose(Enum):
     Where GARMI and the transported objects start, and where the objects are carried to.
     """
 
-    GARMI_START = ScenePlacement(0, 6, 0, yaw=math.pi / 2)
+    GARMI_START = ScenePlacement(-4.8, 1.5, 0, yaw=math.pi)
     """
-    Where GARMI starts, in its ``odom`` frame.
+    Where GARMI starts, in its ``odom`` frame: facing the kitchen from the room.
+
+    The simulated world's ``odom`` frame is the occupancy map frame the apartment is posed
+    in, not the apartment's own frame the other placements are relative to.
     """
 
-    BOWL_START = ScenePlacement(0.0, 7.2, 1.0)
+    BOWL_START = ScenePlacement(0.0, 7.2, 0.973)
     """
-    Where the bowl starts, on the kitchen counter.
+    Where the bowl starts, on the kitchen counter, relative to the apartment.
     """
 
     BOWL_TARGET = ScenePlacement(1.6, 5.2, 0.8)
     """
-    Where the bowl is carried to.
+    Where the bowl is carried to, relative to the apartment.
     """
 
-    SPOON_START = ScenePlacement(-0.09, 0.0, -0.069)
+    SPOON_START = ScenePlacement(-0.265, 0.0, -0.033)
     """
     Where the spoon starts, relative to its drawer: lying on the drawer's bottom plate,
     clear of its walls.
@@ -181,7 +185,7 @@ class ScenePose(Enum):
 
     SPOON_TARGET = ScenePlacement(1.6, 5.4, 0.8)
     """
-    Where the spoon is carried to.
+    Where the spoon is carried to, relative to the apartment.
     """
 
 
@@ -290,7 +294,7 @@ class GarmiApartmentDemonstration(RobotDemonstration):
                 parent_T_self=ScenePose.BOWL_START.value.transform,
             ),
             parent_connection_specification=Connection6DoFSpecification(),
-        ).spawn(world)
+        ).spawn(world, parent=world.get_body_by_name(SceneBody.APARTMENT))
 
         # %% spoon
 
@@ -320,6 +324,7 @@ class GarmiApartmentDemonstration(RobotDemonstration):
         world = context.world
         robot = context.require_extension(RobotAccess).robot
         right_arm = robot.get_right_arm_if_specified()
+        apartment = world.get_body_by_name(SceneBody.APARTMENT)
         statechart = Statechart(context=context)
         statechart.add_node(
             Sequence(
@@ -329,7 +334,7 @@ class GarmiApartmentDemonstration(RobotDemonstration):
                         world.get_semantic_annotations_by_type(Bowl)[0],
                         Pose(
                             position=ScenePose.BOWL_TARGET.value.position,
-                            reference_frame=world.root,
+                            reference_frame=apartment,
                         ),
                         right_arm,
                         context,
@@ -339,7 +344,7 @@ class GarmiApartmentDemonstration(RobotDemonstration):
                         world.get_semantic_annotations_by_type(Spoon)[0],
                         Pose(
                             position=ScenePose.SPOON_TARGET.value.position,
-                            reference_frame=world.root,
+                            reference_frame=apartment,
                         ),
                         right_arm,
                         context,
