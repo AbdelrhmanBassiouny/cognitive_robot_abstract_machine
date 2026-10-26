@@ -40,10 +40,15 @@ items:
   title: Land the Montessori shape vocabulary, the board's hole geometry and the piece set
   branch: claude/ecstatic-knuth-curscv
   track: stack
+  blockers:
+    - >-
+      Upstream cram2#804 review (2026-10-26), 3 open threads on SemDT geometry.py: Hue's
+      FULL_TURN/DECIMAL_PLACES as classproperty; Polygon2D's ClassVars as fields with defaults.
+      Being fixed on #202 then re-cut here.
   depends_on: []
   status: in_progress
   pull_request_number: 488
-  session: https://claude.ai/code/session_01T25zXQPBeES9MrL6i2dE1K
+  session: https://claude.ai/code/session_01GESraow875svtqq3zJ7JZ1
   notes: 'montessori semantics, exceptions, hole_geometry (+ resources/board.stl), pieces;
     SemDT geometry.py, shape_collection.py, exceptions.py; their tests - 14 files (list on
     #488). Off main, cut from #202 at 136ea6888: KnownPiece is replaced by PieceSet worlds of
