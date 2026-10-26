@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
 import open3d
 from sensor_msgs.msg import CameraInfo
 
@@ -97,7 +98,7 @@ class RosCameraModelAdapter:
             camera_info.distortion_model = camera_model.distortion.model.value
             camera_info.d = list(camera_model.distortion.to_ordered_coefficients())
         camera_info.k = camera_model.intrinsic_matrix.reshape(9).tolist()
-        camera_info.r = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+        camera_info.r = np.eye(3).reshape(9).tolist()
         camera_info.p = [
             camera_model.focal_length_x,
             0.0,
