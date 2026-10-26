@@ -78,7 +78,7 @@ class RegionSpec:
 @dataclass
 class CameraPlacement:
     """
-    Place a detached semantic camera relative to a parent body.
+    Describe a standalone camera and its pose relative to a parent body.
     """
 
     camera: Camera
