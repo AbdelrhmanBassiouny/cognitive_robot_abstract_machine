@@ -138,7 +138,7 @@ def test_a_detector_needs_the_segmind_context(milk_in_the_apartment) -> None:
     statechart.add_node(detector := ContactDetector(tracked_object=milk))
 
     with pytest.raises(NodesMissingContextExtensionsError) as raised:
-        statechart.compile()
+        statechart.compiler.compile()
 
     assert raised.value.nodes_by_missing_extension == {SegmindContext: [detector]}
 

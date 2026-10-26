@@ -2174,11 +2174,21 @@ class CompositeNode(StatechartNode):
     def create_structure_copy(self) -> CompositeNode:
         return StructureCopyCompositeNode(name=self.name)
 
+    def adopt_handed_children(self) -> None:
+        """
+        Puts the children this node was handed below it in its statechart. Puts none
+        unless overridden.
+
+        Called once, when this node joins a statechart, right before :meth:`expand`.
+        """
+        return None
+
     def expand(self) -> None:
         """
         Instantiate child nodes, add them to this node, and wire their life cycle transition conditions.
 
-        Called once, when this node joins a statechart.
+        Called once, when this node joins a statechart, after
+        :meth:`adopt_handed_children`.
 
         .. warning:: Nodes have not been built yet.
         """
@@ -2226,7 +2236,7 @@ class CompositeNode(StatechartNode):
         """
         if self.accepts_children_after_compile:
             return
-        if self.statechart.latest_compile_covers(self):
+        if self.statechart.compiler.latest_compile_covers(self):
             raise StatechartAlreadyCompiledError()
 
     def _add_node_sanity_check(self, node: StatechartNode) -> None:

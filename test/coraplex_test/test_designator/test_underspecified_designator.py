@@ -23,7 +23,7 @@ from coraplex.plans.failures import (
 )
 from giskardpy.motion_statechart.exceptions import CollisionViolatedError
 from cramph.threaded_nodes import FunctionCall
-from cramph.statechart import StateHistory, StateHistoryObserver
+from cramph.state_history import StateHistory, StateHistoryObserver
 from coraplex.plans.underspecified import (
     ActionTrial,
     UnderspecifiedChildChooser,

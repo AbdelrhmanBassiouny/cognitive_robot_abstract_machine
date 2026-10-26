@@ -33,12 +33,8 @@ from typing_extensions import Any
 
 from cramph.data_types import StatechartPayloadKey
 from cramph.plotters.graphviz import StatechartGraphviz
-from cramph.statechart import (
-    LastObservationState,
-    LifeCycleState,
-    ObservationState,
-    Statechart,
-)
+from cramph.state import LastObservationState, LifeCycleState, ObservationState
+from cramph.statechart import Statechart
 from semantic_digital_twin.adapters.ros import rospy
 
 # %% the window
@@ -305,7 +301,7 @@ class DotGraphViewer(QWidget):
         motion_statechart_data = json_data.get(StatechartPayloadKey.STATECHART)
         if motion_statechart_data is not None:
             self.motion_statechart = Statechart.from_json(motion_statechart_data)
-            self.motion_statechart._add_transitions()
+            self.motion_statechart.compiler.add_transitions()
 
     def parse_state(self, json_data: dict[str, Any]):
         life_cycle_data = json_data.get(StatechartPayloadKey.LIFE_CYCLE_STATE)

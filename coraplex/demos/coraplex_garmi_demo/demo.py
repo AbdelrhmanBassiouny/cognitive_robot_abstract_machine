@@ -18,7 +18,7 @@ from __future__ import annotations
 import math
 import os
 from dataclasses import dataclass
-from enum import Enum, IntEnum, StrEnum
+from enum import Enum, StrEnum
 
 from ament_index_python.packages import get_package_share_directory
 
@@ -211,21 +211,6 @@ class GarmiDrive(Enum):
     DEMONSTRATION = DriveVelocityLimits(translation=0.1, rotation=0.1)
 
 
-class SamplingSeed(IntEnum):
-    """
-    The seeds the plan's locations draw from.
-    """
-
-    REPEATABLE = 0
-    """
-    Fixes the poses the plan's locations draw, so this run repeats the one before it.
-
-    The locations draw from their costmaps rather than ranking them, so an unpinned run
-    stands somewhere new every time and reaches the drawer only on the attempts whose base
-    pose happens to allow it.
-    """
-
-
 # %% the demonstration
 
 
@@ -307,7 +292,7 @@ class GarmiApartmentDemonstration(RobotDemonstration):
     def build_context_extensions(self, world: World) -> list[ContextExtension]:
         return [
             RobotAccess(world.get_semantic_annotations_by_type(self.used_robot)[0]),
-            StatementGrounding(sampling_seed=SamplingSeed.REPEATABLE),
+            StatementGrounding(),
             PlanRewriting(transformations=[OpenDrawerBeforeMoveAndPickUp()]),
         ]
 
@@ -331,7 +316,6 @@ class GarmiApartmentDemonstration(RobotDemonstration):
                         ),
                         right_arm,
                         context,
-                        seed=SamplingSeed.REPEATABLE,
                     ),
                     TransportAction.from_graspable_by_closest_grasps(
                         world.get_semantic_annotations_by_type(Spoon)[0],
@@ -341,7 +325,6 @@ class GarmiApartmentDemonstration(RobotDemonstration):
                         ),
                         right_arm,
                         context,
-                        seed=SamplingSeed.REPEATABLE,
                     ),
                 ]
             )

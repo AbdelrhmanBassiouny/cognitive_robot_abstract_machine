@@ -21,7 +21,7 @@ from cramph.visualization import RvizVisualization
 from cramph.context import StatechartContext
 from cramph.composites import (
     ChildChooser,
-    ChoosingNode,
+    GenericChoosingNode,
     Sequence,
     StatementNode,
 )
@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class PlanChildChooser(ChildChooser[ChoosingNode], ABC):
+class PlanChildChooser(ChildChooser[GenericChoosingNode], ABC):
     """
     Chooses children that are part of a plan: each is rewritten by the plan
     transformations of its statechart, and given up on once it stops approaching its
@@ -50,7 +50,7 @@ class PlanChildChooser(ChildChooser[ChoosingNode], ABC):
 
     def prepare_chosen_child(
         self,
-        node: ChoosingNode,
+        node: GenericChoosingNode,
         child: StatechartNode,
     ) -> None:
         """
@@ -64,7 +64,7 @@ class PlanChildChooser(ChildChooser[ChoosingNode], ABC):
 
     def failure_monitors_for(
         self,
-        node: ChoosingNode,
+        node: GenericChoosingNode,
         child: StatechartNode,
     ) -> list[StatechartNode]:
         """

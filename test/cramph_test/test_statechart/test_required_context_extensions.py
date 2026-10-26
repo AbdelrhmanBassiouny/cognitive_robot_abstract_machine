@@ -145,7 +145,7 @@ def test_compiling_raises_for_a_node_missing_a_required_extension(
     )
 
     with pytest.raises(NodesMissingContextExtensionsError) as raised:
-        statechart.compile()
+        statechart.compiler.compile()
 
     assert raised.value.nodes_by_missing_extension == {ExtensionANodeRequires: [node]}
 
@@ -166,7 +166,7 @@ def test_compiling_reports_every_missing_extension_at_once(
     )
 
     with pytest.raises(NodesMissingContextExtensionsError) as raised:
-        statechart.compile()
+        statechart.compiler.compile()
 
     assert raised.value.nodes_by_missing_extension == {
         ExtensionANodeRequires: [first, second],
@@ -185,9 +185,9 @@ def test_compiling_succeeds_once_the_required_extension_is_registered(
         )
     )
 
-    statechart.compile()
+    statechart.compiler.compile()
 
-    assert statechart.is_compiled
+    assert statechart.compiler.is_compiled
 
 
 def test_a_node_joining_a_compiled_statechart_is_checked(
@@ -236,7 +236,7 @@ def test_compiling_raises_for_an_expanded_composite_node_missing_a_required_exte
     statechart.add_node(composite := CompositeRequiringAnExtension(name="composite"))
 
     with pytest.raises(NodesMissingContextExtensionsError) as raised:
-        statechart.compile()
+        statechart.compiler.compile()
 
     assert raised.value.nodes_by_missing_extension == {
         ExtensionANodeRequires: [composite]
@@ -271,6 +271,6 @@ def test_a_composite_node_expanded_elsewhere_compiles_without_what_it_read_to_ex
     received = Statechart.from_json(
         expanded_elsewhere.to_json(), context=statechart_context
     )
-    received.compile()
+    received.compiler.compile()
 
-    assert received.is_compiled
+    assert received.compiler.is_compiled

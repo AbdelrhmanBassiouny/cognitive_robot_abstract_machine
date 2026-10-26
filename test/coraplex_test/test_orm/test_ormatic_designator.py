@@ -21,7 +21,6 @@ from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
 from ...plan_running import context_of, simulated_executor, statechart_of
-from ...sampling import SAMPLING_SEED
 from cramph.context import ContextExtension
 
 
@@ -159,7 +158,6 @@ def test_a_plan_whose_transport_still_holds_queries_cannot_be_stored(
         Pose.from_xyz_quaternion(2.4, 2.8, 1, 0, 0, 0, 1, reference_frame=world.root),
         robot_view.left_arm,
         context_of(extensions),
-        seed=SAMPLING_SEED,
     )
 
     with pytest.raises(QueryCannotBePersisted) as failure:

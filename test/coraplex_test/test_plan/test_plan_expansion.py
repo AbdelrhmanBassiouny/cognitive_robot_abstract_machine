@@ -47,7 +47,6 @@ from ...plan_running import (
     simulated_executor,
     statechart_of,
 )
-from ...sampling import SAMPLING_SEED
 from cramph.context import ContextExtension
 
 # %% helpers
@@ -64,7 +63,7 @@ def _compile(plan: StatechartNode, extensions: list[ContextExtension]) -> Statec
     executor = simulated_executor(extensions)
     statechart = statechart_of(executor, plan)
     executor.prepare(statechart)
-    statechart.compile()
+    statechart.compiler.compile()
     return statechart
 
 
@@ -314,7 +313,6 @@ def test_a_transport_runs_with_its_underspecified_steps(
                 Pose.from_xyz_rpy(2.37, 2.5, 1.05, reference_frame=world.root),
                 view.right_arm,
                 context_of(extensions),
-                seed=SAMPLING_SEED,
             ),
         ]
     )

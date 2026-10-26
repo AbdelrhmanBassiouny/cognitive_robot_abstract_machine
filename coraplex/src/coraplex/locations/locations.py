@@ -14,7 +14,7 @@ from coraplex.locations.costmaps import (
     RingCostmap,
     VisibilityCostmap,
 )
-from coraplex.plans.context_extensions import RobotAccess
+from coraplex.plans.context_extensions import RobotAccess, StatementGrounding
 from cramph.context import StatechartContext
 from semantic_digital_twin.robots.robot_parts import AbstractRobot, Arm
 from semantic_digital_twin.spatial_types.spatial_types import Pose
@@ -50,6 +50,14 @@ class CostmapLocation(Location, ABC):
         """
         return self.context.require_extension(RobotAccess).robot
 
+    @property
+    def sampling_seed(self) -> int | None:
+        """
+        :return: The seed of the plan the location is sampled for, so a run can be
+            repeated; ``None`` samples afresh each time.
+        """
+        return self.context.require_extension(StatementGrounding).sampling_seed
+
     @abstractmethod
     def costmap(self) -> Costmap:
         """
@@ -58,7 +66,7 @@ class CostmapLocation(Location, ABC):
         """
 
     def candidates(self) -> Iterator[Pose]:
-        return self.costmap().sample(self.number_of_samples, self.seed)
+        return self.costmap().sample(self.number_of_samples, self.sampling_seed)
 
     def _in_world(self, pose: Pose) -> Pose:
         """

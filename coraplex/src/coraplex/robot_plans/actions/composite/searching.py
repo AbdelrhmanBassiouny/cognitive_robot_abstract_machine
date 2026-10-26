@@ -71,7 +71,6 @@ class SearchAction(SequentialAction):
         context: StatechartContext,
         cross_arm_length: float = 0.5,
         detection_margin: float = 0.5,
-        seed: int | None = None,
     ) -> Self:
         """
         A search driving to a pose `target_location` is visible from, looking at
@@ -86,7 +85,6 @@ class SearchAction(SequentialAction):
             lie.
         :param detection_margin: How far beyond the places looked at an object may lie
             and still be detected.
-        :param seed: Seed for sampling the standing poses; ``None`` samples afresh.
         :return: The search, with the standing pose left open.
         """
         reference_frame = target_location.reference_frame
@@ -114,7 +112,7 @@ class SearchAction(SequentialAction):
                 target_location=variable(
                     Pose,
                     domain=VisibilityLocation(
-                        target_pose=target_location, context=context, seed=seed
+                        target_pose=target_location, context=context
                     ),
                 )
             ),

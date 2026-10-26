@@ -13,7 +13,8 @@ from cramph.executor import StatechartExecutor
 from giskardpy.middleware.ros2.control_loop import ControlLoop
 from giskardpy.middleware.ros2.feedback_publisher import ActionFeedbackPublisher
 from semantic_digital_twin.input_synchronization import WorldStateInputs
-from cramph.statechart import CompiledTick, Statechart
+from cramph.compiled_tick import CompiledTick
+from cramph.statechart import Statechart
 from giskardpy.qp.qp_controller import QPController
 from krrood.adapters.json_serializer import SubclassJSONSerializer
 from krrood.exceptions import DataclassException

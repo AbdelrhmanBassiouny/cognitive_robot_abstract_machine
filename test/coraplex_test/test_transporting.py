@@ -51,7 +51,6 @@ from semantic_digital_twin.world_description.world_entity import Body
 
 from .conftest import expand
 from ..plan_running import context_of, robot_of, run_plan
-from ..sampling import SAMPLING_SEED
 from cramph.context import ContextExtension
 from krrood.entity_query_language.backends import EntityQueryLanguageGenerativeBackend
 
@@ -94,7 +93,6 @@ def _pick_up_the_milk(
                     Pose(reference_frame=milk.root),
                     robot.right_arm,
                     context=context_of(extensions),
-                    seed=SAMPLING_SEED,
                 ),
             )
         ),
@@ -123,7 +121,6 @@ def _place_at(
                         target,
                         robot.right_arm,
                         context=context_of(extensions),
-                        seed=SAMPLING_SEED,
                     ),
                 )
             )
@@ -194,7 +191,7 @@ def test_a_transport_of_a_graspable_stands_around_the_object_then_the_target(
     target = Pose.from_xyz_rpy(4.0, 1.5, 0.9, reference_frame=world.root)
 
     transport = TransportAction.from_graspable_by_closest_grasps(
-        milk, target, robot.right_arm, context_of(extensions), seed=SAMPLING_SEED
+        milk, target, robot.right_arm, context_of(extensions)
     )
 
     pick_up_location = _standing_positions(transport.pick_up._kwargs_["navigate"])
@@ -543,7 +540,7 @@ def test_a_pick_up_of_a_graspable_tries_each_standing_pose_with_its_closest_gras
     world, robot, extensions = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
     step = MoveAndPickUpAction.from_graspable_by_closest_grasps(
-        milk, robot.right_arm, context_of(extensions), seed=SAMPLING_SEED
+        milk, robot.right_arm, context_of(extensions)
     )
 
     pick_ups = list(
@@ -568,7 +565,6 @@ def test_a_pick_up_of_a_graspable_tries_as_many_closest_grasps_as_asked_for(
         milk,
         robot.right_arm,
         context_of(extensions),
-        seed=SAMPLING_SEED,
         number_of_grasps=NON_DEFAULT_NUMBER_OF_GRASPS,
     )
 
@@ -591,7 +587,7 @@ def test_a_pick_up_of_a_graspable_tries_the_grasps_from_each_standing_pose_close
     world, robot, extensions = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
     step = MoveAndPickUpAction.from_graspable_by_closest_grasps(
-        milk, robot.right_arm, context_of(extensions), seed=SAMPLING_SEED
+        milk, robot.right_arm, context_of(extensions)
     )
 
     pick_ups = list(
@@ -616,7 +612,6 @@ def test_a_transport_of_a_graspable_picks_it_up_by_the_closest_grasps(
         Pose.from_xyz_rpy(4.0, 1.5, 0.9, reference_frame=world.root),
         robot.right_arm,
         context_of(extensions),
-        seed=SAMPLING_SEED,
     )
 
     pick_ups = list(
@@ -641,7 +636,6 @@ def test_a_transport_of_a_graspable_tries_as_many_closest_grasps_as_asked_for(
         Pose.from_xyz_rpy(4.0, 1.5, 0.9, reference_frame=world.root),
         robot.right_arm,
         context_of(extensions),
-        seed=SAMPLING_SEED,
         number_of_grasps=NON_DEFAULT_NUMBER_OF_GRASPS,
     )
 
@@ -700,7 +694,6 @@ def test_a_transport_of_a_graspable_faces_it_where_it_is_when_it_picks_it_up(
         Pose.from_xyz_rpy(4.0, 1.5, 0.9, reference_frame=world.root),
         robot.right_arm,
         context_of(extensions),
-        seed=SAMPLING_SEED,
     )
 
     _move_the_milk(world)
@@ -877,7 +870,7 @@ def test_a_move_and_open_tries_the_grasps_from_each_standing_pose_closest_first(
     world, robot, extensions = pr2_apartment_context
     handle = Handle(root=world.get_body_by_name(DRAWER_HANDLE))
     step = MoveAndOpenAction.from_handle_by_closest_grasps(
-        handle, robot.left_arm, context_of(extensions), seed=SAMPLING_SEED
+        handle, robot.left_arm, context_of(extensions)
     )
 
     openings = list(

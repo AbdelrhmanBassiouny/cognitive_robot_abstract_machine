@@ -63,10 +63,7 @@ from semantic_digital_twin.robots.robot_parts import Arm
 from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Drawer
 from semantic_digital_twin.spatial_types.spatial_types import Pose
-from coraplex.plans.context_extensions import (
-    RobotAccess,
-    StatementGrounding,
-)
+from coraplex.plans.context_extensions import RobotAccess
 from cramph.context import StatechartContext
 
 if TYPE_CHECKING:
@@ -190,15 +187,11 @@ class DrawerOpening(
         :param drawer: The drawer to open
         :param arm: The arm that opens it
         :param context: The context of the statechart the opening is inserted in,
-            holding the robot that opens the drawer and the seed its standing pose is
-            sampled with
+            holding the robot that opens the drawer
         :return: The opening, from a standing pose tried together with it.
         """
         open_the_drawer = MoveAndOpenAction.from_handle_by_closest_grasps(
-            drawer.handle,
-            arm,
-            context,
-            seed=context.require_extension(StatementGrounding).sampling_seed,
+            drawer.handle, arm, context
         )
         return [StatementNode(statement=open_the_drawer)]
 
@@ -236,7 +229,6 @@ class OpenDrawerBeforePickUp(DrawerOpening[PickUpAction]):
                     Pose(reference_frame=graspable.root),
                     plan_node.arm,
                     context=plan_node.context,
-                    seed=plan_node.sampling_seed,
                 ),
             ),
         )

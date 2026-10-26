@@ -85,6 +85,11 @@ class Costmap(Location):
     """
     The world from which this locations was created.
     """
+    seed: int | None = field(default=None, kw_only=True)
+    """
+    Seed of the sampling, so a run can be repeated; ``None`` samples afresh each time.
+    """
+
     visualization_ids: List[int] = field(default_factory=list, init=False)
 
     def close_visualization(self) -> None:

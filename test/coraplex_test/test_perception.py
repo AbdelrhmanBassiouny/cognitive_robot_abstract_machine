@@ -803,7 +803,7 @@ def test_perception_task_needs_ros_access(
     )
 
     with pytest.raises(NodesMissingContextExtensionsError) as raised:
-        statechart.compile()
+        statechart.compiler.compile()
 
     assert raised.value.nodes_by_missing_extension == {RosContextExtension: [task]}
 

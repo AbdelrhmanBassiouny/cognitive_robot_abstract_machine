@@ -11,7 +11,7 @@ from coraplex.plans.plan_transformation import PlanRewriting, PlanTransformation
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction
 from semantic_digital_twin.datastructures.definitions import TorsoState
 
-from ...plan_running import simulated_executor, statechart_of, with_grounding
+from ...plan_running import simulated_executor, statechart_of
 from ...sampling import SAMPLING_SEED
 
 # %% debug validation
@@ -113,24 +113,6 @@ def test_a_copied_plan_rewriting_offers_the_nodes_offered_already_again(
     world.rebind_world_entities(rewriting).rewrite(torso)
 
     assert counting.applications == 2
-
-
-# %% the seed an action samples its locations with
-
-
-def test_an_action_samples_with_the_seed_of_its_plan(pr2_apartment_context) -> None:
-    """
-    The locations an action samples, for instance those a plan transformation adds, take
-    the plan's seed, so a run repeats.
-    """
-    _, _, extensions = pr2_apartment_context
-    action = MoveTorsoAction(torso_state=TorsoState.HIGH)
-
-    statechart_of(
-        simulated_executor(with_grounding(extensions, sampling_seed=5)), action
-    )
-
-    assert action.sampling_seed == 5
 
 
 # %% repeatable location samples

@@ -144,4 +144,4 @@ def test_garmi_demonstration_pins_the_draws_its_locations_make(rclpy_node):
         for extension in extensions
         if isinstance(extension, StatementGrounding)
     ]
-    assert grounding.sampling_seed == demo_module.SamplingSeed.REPEATABLE
+    assert grounding.sampling_seed == StatementGrounding().sampling_seed

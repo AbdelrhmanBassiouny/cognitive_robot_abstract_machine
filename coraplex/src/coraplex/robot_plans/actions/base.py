@@ -6,7 +6,7 @@ from dataclasses import dataclass, field, fields
 
 from typing_extensions import Any
 
-from coraplex.plans.context_extensions import RobotAccess, StatementGrounding
+from coraplex.plans.context_extensions import RobotAccess
 from coraplex.plans.plan_transformation import PlanRewriting
 from krrood.ormatic.utils import classproperty
 from cramph.node import SucceedsOnObservingTrue, FailsOnObservingFalse
@@ -98,14 +98,6 @@ class Action(CompositeNode, ABC):
         return self.context.require_extension(RobotAccess).robot
 
     @property
-    def sampling_seed(self) -> int | None:
-        """
-        :return: The seed for the locations this action samples, so a run can be
-            repeated; ``None`` samples afresh each run.
-        """
-        return self.context.require_extension(StatementGrounding).sampling_seed
-
-    @property
     def controlled_root(self) -> KinematicStructureEntity:
         """
         :return: The topmost entity this action's motions may move the robot relative
@@ -135,8 +127,8 @@ class Action(CompositeNode, ABC):
     def expand(self) -> None:
         """
         Creates what this action does below it, once the
-        :class:`~coraplex.plans.plan_transformation.PlanRewriting` of :attr:`context`, if any,
-        configured this action.
+        :class:`~coraplex.plans.plan_transformation.PlanRewriting` of :attr:`context`,
+        if any, configured this action.
         """
         rewriting = self.context.get_extension(PlanRewriting)
         if rewriting is not None:
@@ -270,8 +262,8 @@ class GoalAction(Action, SucceedsOnObservingTrue, FailsOnObservingFalse, ABC):
 class ActionOfSteps(Action, ControlStructureNode, ABC):
     """
     An action that is the control structure node of its own steps, the nodes
-    :meth:`create_steps` creates, so the steps are its children and the control structure node it
-    also is decides how they run and when they are done.
+    :meth:`create_steps` creates, so the steps are its children and the control
+    structure node it also is decides how they run and when they are done.
     """
 
     nodes: list[StatechartNode] = field(default_factory=list, init=False, repr=False)
@@ -287,17 +279,12 @@ class ActionOfSteps(Action, ControlStructureNode, ABC):
             action is expanded.
         """
 
-    # Action and ControlStructureNode both define expand; deciding it here keeps it from
-    # depending on the order of the bases. Action.expand adopts the steps as a language
-    # node in _create_children.
-    expand = Action.expand
-
     def _create_children(self) -> None:
         """
         Puts the steps below this action and lets the control structure node wire them.
         """
         self.nodes = [self._as_node(step) for step in self.create_steps()]
-        self._adopt_nodes()
+        self.adopt_handed_children()
 
 
 @dataclass(eq=False, repr=False, kw_only=True)

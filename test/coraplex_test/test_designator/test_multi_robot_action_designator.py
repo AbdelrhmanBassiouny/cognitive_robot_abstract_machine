@@ -764,7 +764,6 @@ def test_transport(multiple_robot_apartment_context, rclpy_node):
         ),
         right_or_only_arm(robot),
         context_of(extensions),
-        seed=SAMPLING_SEED,
     )
     plan = Sequence(nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH), description])
     run_plan(plan, extensions)
@@ -809,7 +808,6 @@ def test_transport_open_container(multiple_robot_apartment_context, rclpy_node):
         target_pose,
         right_or_only_arm(robot),
         context_of(extensions),
-        seed=SAMPLING_SEED,
     )
     plan = Sequence(
         nodes=[
@@ -1100,7 +1098,7 @@ def test_search_action(multiple_robot_apartment_context) -> None:
         6, -2, 1.2, reference_frame=world.root
     )
     search = SearchAction.looking_around(
-        milk_body.global_pose, Milk, context_of(extensions), seed=SAMPLING_SEED
+        milk_body.global_pose, Milk, context_of(extensions)
     )
 
     run_plan(search, extensions)
@@ -1180,7 +1178,7 @@ def test_a_search_leaves_the_world_as_it_found_it(multiple_robot_apartment_conte
 
     run_plan(
         SearchAction.looking_around(
-            milk_body.global_pose, Milk, context_of(extensions), seed=SAMPLING_SEED
+            milk_body.global_pose, Milk, context_of(extensions)
         ),
         extensions,
     )

@@ -48,6 +48,16 @@ class CompositeNodeCountingTheChildrenOfAnother(EndedByOwner, CompositeNode):
         self.counted_children = len(self.watched.nodes)
 
 
+@dataclass(eq=False, repr=False, kw_only=True)
+class SequenceAddingAStepOfItsOwn(Sequence):
+    """
+    A sequence that adds one more step while it expands, after the ones it was handed.
+    """
+
+    def expand(self) -> None:
+        self.add_node(ConstTrueNode(name="own step"))
+
+
 # %% expanding a composite node once it joins
 
 
@@ -73,6 +83,18 @@ def test_a_nested_composite_node_expands_with_its_parent(
     assert inner in statechart.nodes
     assert step in statechart.nodes
     assert step.parent_node is inner
+
+
+def test_a_control_structure_node_expanding_on_its_own_adopts_the_nodes_it_was_handed(
+    statechart_executor: StatechartExecutor,
+) -> None:
+    statechart = Statechart(context=statechart_executor.context)
+    handed = NodeSucceedingOnObservingTrue(observation=ObservationStateValues.TRUE)
+    statechart.add_node(sequence := SequenceAddingAStepOfItsOwn(nodes=[handed]))
+
+    [own_step] = sequence.nodes[1:]
+    assert handed.parent_node is sequence
+    assert str(own_step.start_condition) == str(handed.is_succeeded)
 
 
 def test_a_node_handed_to_a_joined_composite_node_joins_right_away(
@@ -123,7 +145,7 @@ def test_a_compiled_statechart_takes_new_nodes(
     statechart.add_node(added := ConstTrueNode())
 
     assert added in statechart.nodes
-    assert statechart.is_compiled
+    assert statechart.compiler.is_compiled
 
 
 # %% conditions a composite node wires over its own children

@@ -357,7 +357,7 @@ def test_a_sent_plan_compiles_without_what_its_actions_read_to_expand(
 
     receiver.compile(received)
 
-    assert received.is_compiled
+    assert received.compiler.is_compiled
 
 
 def test_an_underspecified_node_is_sent_as_a_node_choosing_its_child(

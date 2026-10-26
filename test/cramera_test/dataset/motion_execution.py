@@ -13,7 +13,8 @@ from cramph.context import StatechartContext
 from cramph.data_types import LifeCycleValues
 from cramph.node import StatechartNode
 from cramph.nodes_for_testing import ConstTrueNode
-from cramph.statechart import StateHistoryItem, Statechart
+from cramph.state_history import StateHistoryItem
+from cramph.statechart import Statechart
 from semantic_digital_twin.world import World
 
 from cramera.live.bridge import Bridge

@@ -402,7 +402,7 @@ def test_action_without_steps_is_rejected(simple_pr2_context) -> None:
     statechart = _expanded(ActionRunningHandedInSteps(steps=[]), extensions)
 
     with pytest.raises(CompositeNodeWithoutChildrenError):
-        statechart.compile()
+        statechart.compiler.compile()
 
 
 def _subclasses_of(cls: type) -> list[type]:
