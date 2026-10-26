@@ -96,7 +96,7 @@ class RayTracingCameraInterface(CameraInterface):
         cas.set(CASViews.DEPTH_IMAGE, frame.depth_in_millimeters.swapaxes(0, 1).copy())
         cas.set(CASViews.COLOR_TO_DEPTH_RATIO, self.camera_config.color_to_depth_ratio)
         cas.set(CASViews.OBJECT_IMAGE, frame.segmentation.swapaxes(0, 1).copy())
-        cas.set(CASViews.OBJECT_COLOR_MAP, frame.object_color_map)
+        cas.set(CASViews.BODY_COLORS, frame.body_colors)
         cas.set_ref(CASViews.GROUND_TRUTH_WORLD_REFERENCE, world)
         cas.camera_observation = CameraObservation(
             camera=camera,

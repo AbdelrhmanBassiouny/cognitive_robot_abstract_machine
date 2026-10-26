@@ -29,6 +29,7 @@ from semantic_digital_twin.datastructures.camera_rendering import (
     OpticalAxisDepthMode,
     RayDistanceDepthMode,
     BodyColorRenderingMode,
+    BodyColorAssignment,
     TexturedColorRenderingMode,
 )
 from semantic_digital_twin.robots.robot_parts import Camera
@@ -196,12 +197,12 @@ def test_combined_render_handles_no_hits(
 # %% RGB-D products
 
 
-def test_body_color_map_preserves_bodies_sharing_a_color(
+def test_body_color_assignments_preserve_bodies_sharing_a_color(
     camera_intersections: CameraIntersections,
     ray_test_world: tuple[World, Body, Body, Body, Body],
 ) -> None:
     """
-    A shared geometry color maps to every visible body with that color.
+    A shared geometry color is associated with every visible body using it.
     """
     fixture = camera_intersections
     _, first_body, second_body, *_ = ray_test_world
@@ -212,15 +213,12 @@ def test_body_color_map_preserves_bodies_sharing_a_color(
 
     frame = fixture.ray_tracer.render(fixture.camera)
 
-    assert frame.object_color_map == {
-        ",".join(
-            str(channel)
-            for channel in BodyColorRenderingMode.get_body_color(first_body)
-        ): [
-            body.name.name
-            for body in sorted([first_body, second_body], key=lambda body: body.index)
-        ]
-    }
+    assert frame.body_colors == [
+        BodyColorAssignment(
+            color=color,
+            bodies=sorted([first_body, second_body], key=lambda body: body.index),
+        )
+    ]
 
 
 def test_body_color_rgbd_render_preserves_encodings(
@@ -244,7 +242,11 @@ def test_body_color_rgbd_render_preserves_encodings(
         -fixture.query.return_value.hit_points[:, 2]
     )
     np.testing.assert_array_equal(frame.depth_in_millimeters, expected_depth)
-    assert frame.object_color_map == {"255,0,0": [fixture.body.name.name]}
+    assert frame.body_colors == [
+        BodyColorAssignment(
+            color=fixture.body.collision[0].color, bodies=[fixture.body]
+        )
+    ]
     assert frame.camera_model is fixture.camera.camera_model
     fixture.query.assert_called_once()
 
@@ -283,7 +285,7 @@ def test_mesh_render_preserves_rgb_channels(
     camera_intersections: CameraIntersections, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """
-    Mesh images are published in BGR order with no body color map.
+    Mesh images are published in BGR order with no body color assignments.
     """
     fixture = camera_intersections
     image = Image.new(
@@ -304,7 +306,7 @@ def test_mesh_render_preserves_rgb_channels(
     )
     expected[:] = [0, 0, 255]
     np.testing.assert_array_equal(frame.color_bgr, expected)
-    assert frame.object_color_map == {}
+    assert frame.body_colors == []
     assert (
         frame.color_bgr.shape[:2]
         == frame.depth_in_millimeters.shape

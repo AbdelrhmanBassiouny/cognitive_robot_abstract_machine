@@ -75,7 +75,7 @@ def rectangular_frame(
         color_bgr=np.repeat(pixels[:, :, None], 3, axis=2).astype(np.uint8),
         depth_in_millimeters=pixels.astype(np.uint16),
         segmentation=pixels.astype(np.int32),
-        object_color_map={},
+        body_colors=[],
         camera_model=camera_model,
     )
 

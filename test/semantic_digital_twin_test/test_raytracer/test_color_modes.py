@@ -47,7 +47,7 @@ class ForegroundColorRenderingMode(ColorRenderingMode):
     ) -> RenderedColorFrame:
         color_image = np.zeros((*segmentation.shape, 3), dtype=np.uint8)
         color_image[segmentation >= 0] = [0, 255, 0]
-        return RenderedColorFrame(color_image=color_image, object_color_map={})
+        return RenderedColorFrame(color_image=color_image, body_colors=[])
 
 
 # %% Color mode dispatch

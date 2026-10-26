@@ -470,7 +470,7 @@ class RayTracer:
             color_bgr=color_frame.color_image,
             depth_in_millimeters=self.convert_depth_to_millimeters(frame.depth),
             segmentation=frame.segmentation,
-            object_color_map=color_frame.object_color_map,
+            body_colors=color_frame.body_colors,
             camera_model=camera_model,
         )
 

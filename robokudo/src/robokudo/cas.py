@@ -110,7 +110,7 @@ class CASViews(StrEnum):
     rendered scene can be fully segmented per object.
     """
 
-    OBJECT_COLOR_MAP = "object_color_map"
+    BODY_COLORS = "body_colors"
     """
     Object color mapping data which assigns objects visible in OBJECT_IMAGE to entity names.
     """

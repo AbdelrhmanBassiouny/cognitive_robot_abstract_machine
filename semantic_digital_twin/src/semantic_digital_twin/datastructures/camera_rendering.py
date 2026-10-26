@@ -13,6 +13,7 @@ import numpy as np
 import trimesh
 from PIL import Image
 
+from semantic_digital_twin.world_description.geometry import Color
 from semantic_digital_twin.spatial_computations.exceptions import (
     UnsupportedCameraProjection,
 )
@@ -26,11 +27,29 @@ if TYPE_CHECKING:
     from semantic_digital_twin.world import World
 
 
+# %% Body color assignments
+@dataclass
+class BodyColorAssignment:
+    """
+    Associate a geometry color with the visible bodies sharing it.
+    """
+
+    color: Color
+    """
+    Collision geometry color assigned to the bodies.
+    """
+
+    bodies: list[Body]
+    """
+    Visible bodies sharing the color.
+    """
+
+
 # %% Color rendering conventions
 @dataclass(frozen=True)
 class ColorRenderingMode(ABC):
     """
-    Produce aligned BGR images and visible body names grouped by color.
+    Produce aligned BGR images and visible bodies grouped by color.
     """
 
     @abstractmethod
@@ -58,7 +77,7 @@ class ColorRenderingMode(ABC):
         :param camera_model: Validated effective projection model.
         :param scene: World geometry with the rendering camera already positioned.
         :param world: World supplying the bodies identified by the segmentation.
-        :return: BGR colors and visible body names grouped by RGB color keys.
+        :return: BGR colors and visible bodies grouped by geometry color.
         """
         ...
 
@@ -80,15 +99,18 @@ class BodyColorRenderingMode(ColorRenderingMode):
         world: World,
     ) -> RenderedColorFrame:
         color_rgb = np.zeros((*segmentation.shape, 3), dtype=np.uint8)
-        object_color_map: dict[str, list[str]] = {}
+        body_colors: dict[Color, BodyColorAssignment] = {}
         for body_index in np.unique(segmentation[segmentation >= 0]):
             body = world.kinematic_structure[int(body_index)]
             body_rgb = self.get_body_color(body)
             color_rgb[segmentation == body_index] = body_rgb
-            color_key = ",".join(str(channel) for channel in body_rgb)
-            object_color_map.setdefault(color_key, []).append(body.name.name)
+            color = body.collision[0].color
+            body_colors.setdefault(
+                color, BodyColorAssignment(color=color, bodies=[])
+            ).bodies.append(body)
         return RenderedColorFrame(
-            color_image=color_rgb[:, :, ::-1].copy(), object_color_map=object_color_map
+            color_image=color_rgb[:, :, ::-1].copy(),
+            body_colors=list(body_colors.values()),
         )
 
     @staticmethod
@@ -139,7 +161,7 @@ class TexturedColorRenderingMode(ColorRenderingMode):
         image = np.array(Image.open(io.BytesIO(image_bytes)).convert("RGB"))
         return RenderedColorFrame(
             color_image=image.transpose(1, 0, 2)[:, :, ::-1].copy(),
-            object_color_map={},
+            body_colors=[],
         )
 
 
@@ -247,9 +269,9 @@ class RenderedRGBDFrame:
     Body-index segmentation image aligned with the color and depth images.
     """
 
-    object_color_map: dict[str, list[str]]
+    body_colors: list[BodyColorAssignment]
     """
-    Visible body names grouped by comma-separated RGB color keys.
+    Visible bodies grouped by their collision geometry color.
     """
 
     camera_model: PinholeCameraModel
@@ -303,14 +325,14 @@ class RayIntersections:
 @dataclass
 class RenderedColorFrame:
     """
-    BGR image values and the associated body names grouped by color.
+    BGR image values and the associated bodies grouped by color.
     """
 
     color_image: np.ndarray
     """
     Width-first color image in BGR channel order.
     """
-    object_color_map: dict[str, list[str]]
+    body_colors: list[BodyColorAssignment]
     """
-    Visible body names grouped by comma-separated RGB color keys.
+    Visible bodies grouped by their collision geometry color.
     """

@@ -21,9 +21,11 @@ from robokudo.io.ray_tracing_camera_interface import (
 from semantic_digital_twin.datastructures.camera_model import FieldOfViewCameraModel
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
 from semantic_digital_twin.datastructures.camera_rendering import (
+    BodyColorAssignment,
     RenderedRGBDFrame,
     BodyColorRenderingMode,
 )
+from semantic_digital_twin.world_description.geometry import Color
 
 # %% Interface integration
 
@@ -105,7 +107,9 @@ def test_interface_publishes_shared_rendered_frame(monkeypatch: MonkeyPatch) -> 
         color_bgr=np.zeros((2, 3, 3), dtype=np.uint8),
         depth_in_millimeters=np.full((2, 3), 1000, dtype=np.uint16),
         segmentation=np.full((2, 3), context.camera.root.index, dtype=np.int32),
-        object_color_map={},
+        body_colors=[
+            BodyColorAssignment(color=Color.RED(), bodies=[context.camera.root])
+        ],
         camera_model=context.camera.camera_model,
     )
     render = Mock(return_value=frame)
@@ -125,5 +129,5 @@ def test_interface_publishes_shared_rendered_frame(monkeypatch: MonkeyPatch) -> 
     np.testing.assert_array_equal(
         cas.get(CASViews.OBJECT_IMAGE), frame.segmentation.swapaxes(0, 1)
     )
-    assert cas.get(CASViews.OBJECT_COLOR_MAP) == frame.object_color_map
+    assert cas.get(CASViews.BODY_COLORS) == frame.body_colors
     assert cas.camera_observation.effective_camera_model is frame.camera_model
