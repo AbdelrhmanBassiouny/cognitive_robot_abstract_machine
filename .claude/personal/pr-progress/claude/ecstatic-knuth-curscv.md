@@ -1,20 +1,19 @@
-## shape-vocabulary-on-main (montessori-perception-split, layer 2) - draft #488
+## shape-vocabulary-on-main (montessori-perception-split, layer 2) - #488, upstream cram2#804
 
-Layer = verbatim files of #202 (montessori_perception_on_main), re-cut after every #202 change.
-Work happens in the /home/user/wt202 worktree; tests: PYTHONPATH=$(ls -d /home/user/wt202/*/src | tr '\n' ':')
-.venv/bin/python -m pytest --noconftest. Format with the venv's bin on PATH (docformatter).
+Layer = files of #202 (montessori_perception_on_main), re-cut after every #202 change; geometry.py is
+main's file plus #202's additions. Tests: PYTHONPATH=$(ls -d <worktree>/*/src | tr '\n' ':')
+<repo>/.venv/bin/python -m pytest --noconftest (venv from `uv sync --extra dev --python 3.12`).
 
 Plan:
-- Land the layer once the developer is happy with the KnownPiece replacement and CI is green.
+- Land once cram2#804's reviewer is satisfied and its CI is green.
 
 Done:
-- #488 = #202 at 136ea6888 (ab39a37e7, 14 files, 79 passed). #202 montessori tests: 65 passed, 1 skipped.
-- hole_for finds a shape's hole by fit alone (name preference removed); that thread is resolved.
-- Answered the partial-description question on the KnownPiece thread: #265 has EQL look requests,
-  not observation-vs-PieceSet matching. #265 is an integration branch (never merged; extract from
-  it), so that work would be its own PR extracting LookRequest/PerceptionBackend. Thread left open.
+- cram2#804 review 2026-10-26: Hue.full_turn/decimal_places classproperties; Polygon2D
+  alignment_angle_step/corner_match_tolerance fields kept by turned()/centered(); circle(corner_count=64)
+  parameter. #202 880368fd3, #488 a0ed6304d; 84 passed.
 
 Next:
-- CI on #202 136ea6888 and #488 ab39a37e7 (not polled; ORM mapping of PieceSet unverified here).
-- The developer's answer on the KnownPiece thread: a separate item for EQL observation matching, or close it.
-- Sim insertion now has only real clearance (1 mm/side for the cube); the physics demos were not run here.
+- Developer: answer the 3 cram2#804 threads (no upstream comments from sessions); the circle thread
+  was answered with a parameter, not a field.
+- CI on #488 a0ed6304d and cram2#804 (not polled).
+- #202 is conflicted with main (needs-resolution) and its description lacks the 2026-10-26 round.
