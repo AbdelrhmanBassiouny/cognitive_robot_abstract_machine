@@ -15,6 +15,7 @@ from typing_extensions import Generic
 from coraplex.plans.executors import RealRobotPlanExecutor
 from coraplex.plans.plan_transformation import MatchedType, PlanTransformation
 from coraplex.robot_plans.actions.core.robot_body import MoveFingersToWidthAction
+from cramph.composites import ControlStructureNode
 from giskardpy.middleware.ros2.franka_gripper_tasks import (
     GripperGraspTask,
     GripperMoveTask,
@@ -125,7 +126,7 @@ class DriveGarmiGripperStatesWithTheirFrankaDriver(
                 width=plan_node.width,
                 speed=self.finger_speed,
             )
-        plan_node.statechart.replace(self._step_holding(plan_node), task)
+        plan_node.statechart.replace(ControlStructureNode.step_holding(plan_node), task)
 
 
 @dataclass

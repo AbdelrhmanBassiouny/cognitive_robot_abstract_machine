@@ -189,6 +189,24 @@ class ControlStructureNode(CompositeNode, ABC):
                 return ancestor
         raise NoControlStructureNodeAboveError(node=node)
 
+    @staticmethod
+    def step_holding(node: StatechartNode) -> StatechartNode:
+        """
+        :param node: A node of a statechart.
+        :return: `node`, or the node above it, that the closest control structure node
+            above `node` holds as a step, or the top-level node above `node` when no
+            control structure node is above it.
+        """
+        holders = [node, *node.path]
+        return next(
+            (
+                holder
+                for holder in holders
+                if isinstance(holder.parent_node, ControlStructureNode)
+            ),
+            holders[-1],
+        )
+
     def expand(self) -> None:
         self._adopt_nodes()
 

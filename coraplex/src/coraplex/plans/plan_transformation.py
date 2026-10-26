@@ -74,24 +74,6 @@ class PlanTransformation(Generic[MatchedType], SubClassSafeGeneric, ABC):
         :param plan_node: The node this transformation is applied to
         """
 
-    @staticmethod
-    def _step_holding(node: StatechartNode) -> StatechartNode:
-        """
-        :param node: A node of a plan.
-        :return: `node`, or the node above it, that the control structure node nearest above
-            `node` runs, or the top-level node above `node` when no control structure node
-            runs it.
-        """
-        holders = [node, *node.path]
-        return next(
-            (
-                holder
-                for holder in holders
-                if isinstance(holder.parent_node, ControlStructureNode)
-            ),
-            holders[-1],
-        )
-
 
 # %% configuring a node before it expands
 
@@ -172,7 +154,7 @@ class SequentialInsertion(
         """
 
     def _insert(self, anchor: StatechartNode, node: StatechartNode) -> StatechartNode:
-        step = self._step_holding(anchor)
+        step = ControlStructureNode.step_holding(anchor)
         if not isinstance(step.parent_node, Sequence):
             step.statechart.replace(step, Sequence(nodes=[step]))
         match self.position:
@@ -195,7 +177,7 @@ class ParallelInsertion(
     """
 
     def _insert(self, anchor: StatechartNode, node: StatechartNode) -> StatechartNode:
-        step = self._step_holding(anchor)
+        step = ControlStructureNode.step_holding(anchor)
         if not isinstance(step.parent_node, Parallel):
             step.statechart.replace(step, Parallel(nodes=[step]))
         step.parent_node.add_node(node)

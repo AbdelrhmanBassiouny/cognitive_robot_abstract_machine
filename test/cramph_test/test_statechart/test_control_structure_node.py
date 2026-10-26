@@ -437,6 +437,43 @@ def test_a_node_without_a_language_node_above_it_has_none_closest_above_it(
         ControlStructureNode.closest_above(top_level)
 
 
+# %% the step holding a node
+
+
+def test_the_step_holding_a_nested_node_is_the_child_of_the_closest_language_node(
+    statechart_executor: StatechartExecutor,
+) -> None:
+    statechart = Statechart(context=statechart_executor.context)
+    nested = _succeeding("nested")
+    paused = PausedWhileTrue(
+        name="paused", monitor=ConstFalseNode(), monitored_node=nested
+    )
+    statechart.add_node(Sequence(nodes=[paused]))
+
+    assert ControlStructureNode.step_holding(nested) is paused
+
+
+def test_a_step_holds_itself(statechart_executor: StatechartExecutor) -> None:
+    statechart = Statechart(context=statechart_executor.context)
+    step = _succeeding("step")
+    statechart.add_node(Sequence(nodes=[step]))
+
+    assert ControlStructureNode.step_holding(step) is step
+
+
+def test_without_a_language_node_above_the_top_level_node_holds_a_node(
+    statechart_executor: StatechartExecutor,
+) -> None:
+    statechart = Statechart(context=statechart_executor.context)
+    nested = _succeeding("nested")
+    paused = PausedWhileTrue(
+        name="paused", monitor=ConstFalseNode(), monitored_node=nested
+    )
+    statechart.add_node(paused)
+
+    assert ControlStructureNode.step_holding(nested) is paused
+
+
 # %% a failed replacement
 
 
