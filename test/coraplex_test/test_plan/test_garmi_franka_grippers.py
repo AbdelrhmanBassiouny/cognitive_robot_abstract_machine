@@ -15,7 +15,7 @@ from coraplex.robot_plans.actions.core.robot_body import (
     MoveFingersToWidthAction,
     SetGripperAction,
 )
-from coraplex.robot_plans.garmi_franka_grippers import (
+from coraplex.garmi_franka_grippers import (
     CloseGarmiFingersToWidthWithTheirFrankaDriver,
     DriveGarmiGripperStatesWithTheirFrankaDriver,
     FrankaGripperActionName,
