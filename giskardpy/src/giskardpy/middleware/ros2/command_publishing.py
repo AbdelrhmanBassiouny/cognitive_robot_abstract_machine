@@ -608,7 +608,8 @@ class DriveVelocityCommandPublisher(CommandPublisher):
 
     twist: Twist = field(init=False, default_factory=Twist)
     """
-    The twist reused for every publication.
+    The twist reused for every publication, which :attr:`command_format` turns into the
+    message it publishes.
     """
 
     velocity_publisher: Publisher = field(init=False)
