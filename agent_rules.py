@@ -9,21 +9,6 @@ from krrood.development_tools.agent_rule import ProjectRules, Section
 from krrood.ormatic.utils import classproperty
 
 
-class RunningTests(Section):
-    """
-    The rules on running this repository's tests.
-    """
-
-    @classproperty
-    def parent(cls) -> type[Section]:
-        return ProjectRules
-
-    NEVER_BUILD_ORM_INTERFACES_IN_TEST_RUNS = (
-        "Pass `--orm-build never`, and regenerate the ORM interfaces explicitly "
-        "with `scripts/regenerate_all_orm.py` when a change needs it"
-    )
-
-
 class GeneratedORMInterfaces(Section):
     """
     The rules on the generated ORM interfaces.
@@ -33,21 +18,26 @@ class GeneratedORMInterfaces(Section):
     def parent(cls) -> type[Section]:
         return ProjectRules
 
-    NEVER_EDIT_ORM_INTERFACES = (
+    NEVER_EDIT = (
         "`ormatic_interface.py` files are generated, never written, and "
         "git-ignored (see `.gitignore`). Never edit them, and never read them to "
         "debug an ORM problem; regenerate them with "
         "`scripts/regenerate_all_orm.py` instead"
     )
 
-    BUILD_ORM_INTERFACES_LOCALLY = (
+    BUILD_LOCALLY = (
         "The test suite builds them for its runs; a local checkout builds them "
         "with `scripts/regenerate_all_orm.py`"
     )
 
-    NEVER_TRACK_ORM_INTERFACES = (
+    NEVER_TRACK = (
         "Never track one again: git refuses to overwrite a tracked path a checkout "
         "has generated its own copy of, which makes every branch switch fail"
+    )
+
+    NEVER_BUILD_IN_TEST_RUNS = (
+        "Pass `--orm-build never` to the test runs you start, and regenerate them "
+        "with `scripts/regenerate_all_orm.py` when a change needs it"
     )
 
     ASK_ABOUT_PERSISTENT_ORM_PROBLEMS = (

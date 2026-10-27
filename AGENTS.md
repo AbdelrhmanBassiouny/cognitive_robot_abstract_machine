@@ -160,34 +160,34 @@
 
 # Krrood rules
 
-## Errors
-<!-- from Errors in krrood/development_tools/rules/krrood_rules.py -->
+## Dataclass exceptions
+<!-- from DataclassExceptions in krrood/development_tools/rules/krrood_rules.py -->
 - Custom exceptions subclass `krrood.exceptions.DataclassException`, implementing its `error_message` and `suggest_correction`
 
-## Constants and class level values
-<!-- from ConstantsAndClassLevelValues in krrood/development_tools/rules/krrood_rules.py -->
+## Class properties
+<!-- from ClassProperties in krrood/development_tools/rules/krrood_rules.py -->
 - Use the `classproperty` `krrood` provides
 
-## Structured data
-<!-- from StructuredData in krrood/development_tools/rules/krrood_rules.py -->
+## Path enumerations
+<!-- from PathEnumerations in krrood/development_tools/rules/krrood_rules.py -->
 - A path enum subclasses `krrood.patterns.path_enumeration.PathEnumeration`, so every path derived from a member is a plain `Path`; its members' `name` is the path's last component, so read the member name as `_name_`
+
+## JSON serialization
+<!-- from JSONSerialization in krrood/development_tools/rules/krrood_rules.py -->
 - JSON that our own classes round-trip goes through `krrood.adapters.json_serializer`: use `DataclassJSONSerializer` wherever it can (de)serialize the class; where a class needs more, subclass `SubclassJSONSerializer` and build on `DataclassJSONSerializer`'s `to_json`/`from_json`. Never hand-write field-by-field `to_json`/`from_json`
 
-## Type hints
-<!-- from TypeHints in krrood/development_tools/rules/krrood_rules.py -->
+## Subclass safe generics
+<!-- from SubclassSafeGenerics in krrood/development_tools/rules/krrood_rules.py -->
 - Generic classes inherit `Generic` and then `krrood.patterns.subclass_safe_generic.SubClassSafeGeneric`, which narrows field types when a subclass binds a parameter. Read a bound type with `get_type_of_generic_parameter`, never via `__orig_bases__`. Such classes cannot be frozen dataclasses
 
 # Project rules
-
-## Running tests
-<!-- from RunningTests in agent_rules.py -->
-- Pass `--orm-build never`, and regenerate the ORM interfaces explicitly with `scripts/regenerate_all_orm.py` when a change needs it
 
 ## Generated ORM interfaces
 <!-- from GeneratedORMInterfaces in agent_rules.py -->
 - `ormatic_interface.py` files are generated, never written, and git-ignored (see `.gitignore`). Never edit them, and never read them to debug an ORM problem; regenerate them with `scripts/regenerate_all_orm.py` instead
 - The test suite builds them for its runs; a local checkout builds them with `scripts/regenerate_all_orm.py`
 - Never track one again: git refuses to overwrite a tracked path a checkout has generated its own copy of, which makes every branch switch fail
+- Pass `--orm-build never` to the test runs you start, and regenerate them with `scripts/regenerate_all_orm.py` when a change needs it
 - When regenerating the ORM interfaces does not fix an ORM problem, ask the developer
 - If an ORM import creates an import cycle, ask the user if a local import is fine
 

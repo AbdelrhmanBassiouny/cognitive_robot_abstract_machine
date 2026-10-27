@@ -115,6 +115,11 @@ module they come from. Find the member by the rule's text and change it there.
   cognitive_robot_abstract_machine). A rule that names krrood's API is in a
   `KrroodRules` section in `krrood_rules.py`; every other rule is in a `PythonRules`
   section in `python_rules.py`, in the order they appear.
+- Every section names its own subject, so no two sections share a title, even across
+  rule sets: a section of `KrroodRules` is named for the krrood API it covers
+  (`DataclassExceptions`, `JSONSerialization`), never for the `PythonRules` section on
+  the same topic. Add a rule to the section whose subject it is; when no section fits,
+  declare one with a name of its own.
 
 After changing a rule, run `krrood agents-md` (the pre-commit hook does this) and commit
 the regenerated `AGENTS.md` with the change; CI fails when the file is stale or was
