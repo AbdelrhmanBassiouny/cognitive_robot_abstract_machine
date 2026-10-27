@@ -29,7 +29,7 @@ where = ["src"]
 include = ["segmind*"]
 
 [tool.setuptools.dynamic]
-version = {attr = "segmind.__version__"}
+version = {attr = "segmind._version.__version__"}
 
 [dependency-groups]
 workspace = [

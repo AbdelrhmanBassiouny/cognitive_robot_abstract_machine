@@ -13,6 +13,7 @@ from krrood.class_diagrams.class_diagram import WrappedClass
 from krrood.entity_query_language.factories import variable_from, entity, variable, an
 from krrood.ormatic.utils import classproperty
 from krrood.parametrization.model_registries import ModelRegistry
+from krrood.patterns.mixin import Mixin
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from probabilistic_model.distributions.gaussian import GaussianDistribution
 from probabilistic_model.distributions.helper import make_dirac
@@ -114,6 +115,8 @@ if TYPE_CHECKING:
         Sink,
         ShelfLayer,
         Wall,
+        CounterTop,
+        Cabinet,
     )
     from semantic_digital_twin.world import World
     from semantic_digital_twin.world_description.graph_of_convex_sets.boxes import (
@@ -140,7 +143,7 @@ TKinematicStructureEntity = TypeVar(
 
 @dataclass(eq=False)
 class HasRootKinematicStructureEntity(
-    SemanticAnnotation, Generic[TKinematicStructureEntity], SubClassSafeGeneric
+    SemanticAnnotation, Generic[TKinematicStructureEntity], SubClassSafeGeneric, Mixin
 ):
     """
     Base class for shared method for HasRootBody and HasRootRegion.
@@ -334,7 +337,7 @@ class HasRootKinematicStructureEntity(
 
 
 @dataclass(eq=False)
-class HasRootBody(HasRootKinematicStructureEntity[Body]):
+class HasRootBody(HasRootKinematicStructureEntity[Body], Mixin):
     """
     Abstract base class for all objects which have a unambiguous root reference frame.
 
@@ -408,7 +411,7 @@ class HasRootBody(HasRootKinematicStructureEntity[Body]):
 
 
 @dataclass(eq=False)
-class HasGraspCandidates(HasRootBody):
+class HasGraspCandidates(HasRootBody, Mixin):
     """
     A mixin class for semantic annotations that state where they may be grasped, in
     :meth:`surface_grasp_statement`, and offer grasp candidates.
@@ -544,7 +547,7 @@ class HasGraspCandidates(HasRootBody):
 
 
 @dataclass(eq=False)
-class HasRootRegion(HasRootKinematicStructureEntity[Region]):
+class HasRootRegion(HasRootKinematicStructureEntity[Region], Mixin):
     """
     A mixin class for semantic annotations that have a region.
     """
@@ -611,7 +614,7 @@ class HasRootRegion(HasRootKinematicStructureEntity[Region]):
 
 
 @dataclass(eq=False)
-class PartWholeRelationship(HasRootKinematicStructureEntity):
+class PartWholeRelationship(HasRootKinematicStructureEntity, Mixin):
     """
     Base for annotations that have structural *parts* (the part-whole relation).
 
@@ -695,7 +698,7 @@ class PartWholeRelationship(HasRootKinematicStructureEntity):
 
 
 @dataclass(eq=False)
-class HasApertures(HasRootBody, PartWholeRelationship):
+class HasApertures(HasRootBody, PartWholeRelationship, Mixin):
     """
     A mixin class for semantic annotations that have apertures.
 
@@ -717,7 +720,7 @@ class HasApertures(HasRootBody, PartWholeRelationship):
 
 
 @dataclass(eq=False)
-class HasMovableJoint(HasRootBody, ABC):
+class HasMovableJoint(HasRootBody, Mixin, ABC):
     """
     A mixin class for semantic annotations whose root moves relative to its parent, such
     as a door on its hinge or a drawer on its rails.
@@ -773,7 +776,7 @@ class HasMovableJoint(HasRootBody, ABC):
 
 
 @dataclass(eq=False)
-class HasDrawers(PartWholeRelationship):
+class HasDrawers(PartWholeRelationship, Mixin):
     """
     A mixin class for semantic annotations that have drawers.
     """
@@ -790,7 +793,7 @@ class HasDrawers(PartWholeRelationship):
 
 
 @dataclass(eq=False)
-class HasShelfLayers(PartWholeRelationship):
+class HasShelfLayers(PartWholeRelationship, Mixin):
     """
     A mixin class for semantic annotations that have shelf layers.
     """
@@ -807,7 +810,7 @@ class HasShelfLayers(PartWholeRelationship):
 
 
 @dataclass(eq=False)
-class HasDoors(PartWholeRelationship):
+class HasDoors(PartWholeRelationship, Mixin):
     """
     A mixin class for semantic annotations that have doors.
     """
@@ -824,7 +827,7 @@ class HasDoors(PartWholeRelationship):
 
 
 @dataclass(eq=False)
-class HasHandle(HasGraspCandidates, PartWholeRelationship):
+class HasHandle(HasGraspCandidates, PartWholeRelationship, Mixin):
     """
     A mixin class for semantic annotations that have a handle, and are grasped at it
     when they have one.
@@ -849,7 +852,7 @@ class HasHandle(HasGraspCandidates, PartWholeRelationship):
 
 
 @dataclass(eq=False)
-class HasPinchableWall(HasGraspCandidates):
+class HasPinchableWall(HasGraspCandidates, Mixin):
     """
     A mixin class for semantic annotations with a thin upright wall that a gripper
     pinches from above.
@@ -938,7 +941,7 @@ class HasPinchableWall(HasGraspCandidates):
 
 
 @dataclass(eq=False)
-class HasRim(HasPinchableWall, PartWholeRelationship):
+class HasRim(HasPinchableWall, PartWholeRelationship, Mixin):
     """
     A mixin class for open containers that have a rim, and are grasped at it when they
     have one.
@@ -996,7 +999,7 @@ class HasRim(HasPinchableWall, PartWholeRelationship):
 
 
 @dataclass(eq=False)
-class HasHandles(HasRootBody, PartWholeRelationship):
+class HasHandles(HasRootBody, PartWholeRelationship, Mixin):
     """
     A mixin class for semantic annotations that may have more than one handle.
     """
@@ -1019,7 +1022,7 @@ A type variable for HasRootBody.
 
 
 @dataclass(eq=False)
-class HasLegs(PartWholeRelationship):
+class HasLegs(PartWholeRelationship, Mixin):
     """
     A mixin class for semantic annotations that have legs.
     """
@@ -1036,7 +1039,7 @@ class HasLegs(PartWholeRelationship):
 
 
 @dataclass(eq=False)
-class HasSink(PartWholeRelationship):
+class HasSink(PartWholeRelationship, Mixin):
     """
     A mixin class for semantic annotations that have a sink.
     """
@@ -1089,7 +1092,7 @@ class IsStorageSpace(HasRootBody, Generic[THasRootBody], SubClassSafeGeneric):
 
 
 @dataclass(eq=False)
-class HasSupportingSurface(IsStorageSpace):
+class HasSupportingSurface(IsStorageSpace, Mixin):
     """
     A semantic annotation that represents a supporting surface.
     """
@@ -1539,7 +1542,7 @@ class HasSupportingSurface(IsStorageSpace):
 
 
 @dataclass(eq=False)
-class HasCaseAsRootBody(HasSupportingSurface):
+class HasCaseAsRootBody(HasSupportingSurface, Mixin):
     """
     A mixin class for semantic annotations that have a case as root body.
     """
@@ -1616,3 +1619,44 @@ class HasCaseAsRootBody(HasSupportingSurface):
             cls._create_container_event(scale, wall_thickness),
             connection_specification=connection_specification,
         )
+
+
+# %% furniture built from other furniture
+
+
+@dataclass(eq=False)
+class HasCabinets(PartWholeRelationship, Mixin):
+    """
+    A mixin class for semantic annotations built from cabinets.
+    """
+
+    cabinets: list[Cabinet] = field(
+        default_factory=list,
+        hash=False,
+        kw_only=True,
+        metadata=IsPartWholeRelationship().as_dict(),
+    )
+    """
+    The cabinets the semantic annotation is built from.
+    """
+
+
+@dataclass(eq=False)
+class HasCounterTop(PartWholeRelationship, Mixin):
+    """
+    A mixin class for semantic annotations that carry a counter top.
+
+    Distinct from :class:`HasSupportingSurface`, which is the bare region something can
+    be put on: this is the worktop as a thing in its own right, which is what a scan
+    sees and what in turn carries the sink.
+    """
+
+    counter_top: CounterTop = field(
+        default=None,
+        hash=False,
+        kw_only=True,
+        metadata=IsPartWholeRelationship().as_dict(),
+    )
+    """
+    The counter top of the semantic annotation.
+    """
