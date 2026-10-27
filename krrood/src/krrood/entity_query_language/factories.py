@@ -1092,12 +1092,12 @@ class IsSubclass(Predicate):
     Whether one class is a subclass of another class (or tuple of classes).
     """
 
-    subclass: type
+    subclass: Type
     """
     The candidate subclass.
     """
 
-    parent_or_parents: type | tuple[type, ...]
+    parent_or_parents: Type | tuple[Type, ...]
     """
     The class or tuple of classes checked against.
     """

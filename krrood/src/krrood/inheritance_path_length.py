@@ -4,7 +4,7 @@ import math
 from dataclasses import dataclass
 from functools import lru_cache
 from inspect import isclass
-from typing_extensions import TYPE_CHECKING
+from typing_extensions import TYPE_CHECKING, Type
 
 from krrood.entity_query_language.predicate import (
     RenderedFields,
@@ -29,12 +29,12 @@ class InheritancePathLength(SymbolicFunction):
     exists.
     """
 
-    child_class: type
+    child_class: Type
     """
     The child class.
     """
 
-    parent_class: type
+    parent_class: Type
     """
     The parent class.
     """
