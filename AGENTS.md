@@ -200,3 +200,27 @@
 ## Domain specific conventions
 <!-- from DomainSpecificConventions in agent_rules.py -->
 - For spatial types and connections, follow `semantic_digital_twin/doc/style_guide.md`
+
+## Pull request labels
+<!-- from PullRequestLabels in agent_rules.py -->
+- Label every pull request you open or prepare with its kinds of change and the frameworks it changes. Where you cannot set a label, because the repository lacks it or the pull request is opened through a link, name the labels to the user instead
+- Apply every kind-of-change label that describes a part of the change:
+  - `api-break`: the change can break code that already uses it - it removes or renames a public module, class, method, field or parameter, changes a signature incompatibly, changes the documented behaviour or return value of a public method, or changes an ORM schema or a serialized format
+  - `new-feature`: the change adds public API or user-visible behaviour without breaking existing users
+  - `bug-fix`: the change makes existing behaviour match its documented or intended contract
+  - `documentation`: documentation is the purpose of the change, not only an accompaniment of a code change
+  - `dev-tools`: the change modifies the tools contributors work with - scripts, formatters, pre-commit hooks, CI workflows, agent rules
+  - `maintenance`: the change modifies code without changing its behaviour or API - refactoring, cleanup, dependency updates
+- Apply `api-break` whenever any part of the change breaks existing users, however small that part is
+- Apply the label of every framework whose directory the change modifies, its tests under `test/<framework>_test` included:
+  - `KRROOD`: `krrood`
+  - `semDT`: `semantic_digital_twin`
+  - `CoraPlex`: `coraplex`
+  - `Giskard`: `giskardpy`
+  - `segmind`: `segmind`
+  - `Experiment`: `experiments`
+  - `Robokudo`: `robokudo`
+  - `cramera`: `cramera`
+- Before review is requested on an `api-break` pull request:
+  - its description states what breaks and how users migrate
+  - tell the user to discuss the break with the code owners of the affected frameworks, listed in `.github/CODEOWNERS`, or in the Cramgineers channel
