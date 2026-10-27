@@ -47,6 +47,7 @@ from krrood.entity_query_language.evaluation_context import (
 )
 from krrood.entity_query_language.exceptions import NoExpressionFoundForGivenID
 from krrood.entity_query_language.utils import make_list, T, make_set, is_iterable
+from krrood.patterns.role import Role
 from krrood.symbol_graph.symbol_graph import SymbolGraph
 
 if TYPE_CHECKING:
@@ -1510,6 +1511,18 @@ class OperationResult:
             and self.operand == other.operand
             and self.previous_operation_result == other.previous_operation_result
         )
+
+
+@dataclass(eq=False)
+class ProbabilisticOperationResult(Role[OperationResult]):
+    """
+    An operation result whose bindings a probabilistic model assigns a likelihood to.
+    """
+
+    log_likelihood: float
+    """
+    The natural logarithm of the likelihood of the bindings under the model.
+    """
 
 
 class UnificationDict(UserDict):
