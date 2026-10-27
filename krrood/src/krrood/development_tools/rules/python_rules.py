@@ -440,7 +440,7 @@ class Methods(Section):
     )
 
 
-class Errors(Section):
+class Exceptions(Section):
     """
     The rules on raising and declaring exceptions.
     """
@@ -454,9 +454,9 @@ class Errors(Section):
         "exception"
     )
 
-    DATACLASS_EXCEPTIONS = "Create meaningful custom exceptions as dataclasses"
+    DECLARE_AS_DATACLASSES = "Create meaningful custom exceptions as dataclasses"
 
-    EXCEPTIONS_IN_THE_CLOSEST_MODULE = (
+    PLACE_IN_THE_CLOSEST_MODULE = (
         "Put each exception in the `exceptions.py` closest to the code that raises it:",
         (
             (

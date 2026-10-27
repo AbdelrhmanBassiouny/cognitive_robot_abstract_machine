@@ -21,9 +21,9 @@ for formatting hooks.
 The rules are code. A rule set is a subclass of `RuleSet` and becomes a top-level heading
 of `AGENTS.md`. A section is an enum subclassing `Section`, whose members are its rules:
 each member's value is the rule's statement, or a tuple of the statement and the details
-that spell it out. Every member is an `AgentRule`, so `Errors.NEVER_TRY_EXCEPT.statement`
-is one of the Python rules on errors. A section names the section or rule set it is
-nested under by overriding the `parent` classproperty to return it: `Errors` returns
+that spell it out. Every member is an `AgentRule`, so `Exceptions.NEVER_TRY_EXCEPT.statement`
+is one of the Python rules on exceptions. A section names the section or rule set it is
+nested under by overriding the `parent` classproperty to return it: `Exceptions` returns
 `DesignPrinciples`, which in turn returns `PythonRules`. A section's heading is its class name in words, in
 sentence case (`ExternalServicesAndCI` becomes "External services and CI"). A rule that
 names code builds that name from the imported object with `CodeReference`, so the rule
@@ -117,8 +117,8 @@ module they come from. Find the member by the rule's text and change it there.
   section in `python_rules.py`, in the order they appear.
 - A section is named for its topic, broadly enough that later rules on that topic fit
   in it (`Serialization`, not `JSONSerialization`). Rule sets may share a topic: the
-  krrood rules on errors are in `krrood_rules.Errors`, under "Krrood rules", and the
-  Python ones in `python_rules.Errors`, under "Python rules". Sections nested in the
+  krrood rules on exceptions are in `krrood_rules.Exceptions`, under "Krrood rules", and the
+  Python ones in `python_rules.Exceptions`, under "Python rules". Sections nested in the
   same parent never share a title. Add a rule to the section whose topic it is; when
   no section fits, declare one.
 

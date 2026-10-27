@@ -96,8 +96,8 @@
 - A method with a single caller must earn its place under these rules; otherwise inline it
 - Reduce nesting and complexity with guard clauses: handle alternative outputs first by inverting conditions and returning early, so the main branch holds the main output and the biggest compute. A single level of abstraction never justifies deep nesting; split the method instead
 
-### Errors
-<!-- from Errors in krrood/development_tools/rules/python_rules.py -->
+### Exceptions
+<!-- from Exceptions in krrood/development_tools/rules/python_rules.py -->
 - Never use try-except; a program in an illegal state raises an appropriate exception
 - Create meaningful custom exceptions as dataclasses
 - Put each exception in the `exceptions.py` closest to the code that raises it:
@@ -160,8 +160,8 @@
 
 # Krrood rules
 
-## Errors
-<!-- from Errors in krrood/development_tools/rules/krrood_rules.py -->
+## Exceptions
+<!-- from Exceptions in krrood/development_tools/rules/krrood_rules.py -->
 - Custom exceptions subclass `krrood.exceptions.DataclassException`, implementing its `error_message` and `suggest_correction`
 
 ## Constants and class level values

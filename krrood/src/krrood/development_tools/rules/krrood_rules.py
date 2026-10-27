@@ -25,16 +25,16 @@ from krrood.patterns.path_enumeration import PathEnumeration
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 
 
-class Errors(Section):
+class Exceptions(Section):
     """
-    The rules on errors in a repository built on krrood.
+    The rules on exceptions in a repository built on krrood.
     """
 
     @classproperty
     def parent(cls) -> type[Section]:
         return KrroodRules
 
-    SUBCLASS_DATACLASS_EXCEPTION = (
+    SUBCLASS_THE_KRROOD_BASE_CLASS = (
         f"Custom exceptions subclass {CodeReference(DataclassException).path}, "
         f"implementing its {CodeReference(DataclassException.error_message).name} "
         f"and {CodeReference(DataclassException.suggest_correction).name}"
