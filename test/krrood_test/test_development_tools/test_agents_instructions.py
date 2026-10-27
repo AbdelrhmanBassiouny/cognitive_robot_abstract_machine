@@ -81,16 +81,15 @@ def test_python_rules_name_no_krrood_api(repository_root: Path) -> None:
     assert "krrood" not in rules.lower()
 
 
-def test_every_shipped_section_has_its_own_title() -> None:
-    sections = []
+def test_no_two_shipped_sibling_sections_share_a_title() -> None:
+    sibling_titles = []
     unvisited = [PythonRules, KrroodRules]
     while unvisited:
         section = unvisited.pop()
-        sections.append(section)
+        sibling_titles.append([subsection.title for subsection in section.subsections])
         unvisited.extend(section.subsections)
-    titles = [section.title for section in sections]
 
-    assert sorted(titles) == sorted(set(titles))
+    assert all(len(titles) == len(set(titles)) for titles in sibling_titles)
 
 
 def test_shipped_rules_name_no_cram_package(repository_root: Path) -> None:

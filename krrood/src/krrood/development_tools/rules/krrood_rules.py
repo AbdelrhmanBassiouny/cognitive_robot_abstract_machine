@@ -25,47 +25,47 @@ from krrood.patterns.path_enumeration import PathEnumeration
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 
 
-class DataclassExceptions(Section):
+class Errors(Section):
     """
-    The rules on the base class of custom exceptions.
+    The rules on errors in a repository built on krrood.
     """
 
     @classproperty
     def parent(cls) -> type[Section]:
         return KrroodRules
 
-    SUBCLASS_FOR_CUSTOM_EXCEPTIONS = (
+    SUBCLASS_DATACLASS_EXCEPTION = (
         f"Custom exceptions subclass {CodeReference(DataclassException).path}, "
         f"implementing its {CodeReference(DataclassException.error_message).name} "
         f"and {CodeReference(DataclassException.suggest_correction).name}"
     )
 
 
-class ClassProperties(Section):
+class ConstantsAndClassLevelValues(Section):
     """
-    The rules on properties of a class rather than of its instances.
+    The rules on constants and other values that belong to a class.
     """
 
     @classproperty
     def parent(cls) -> type[Section]:
         return KrroodRules
 
-    USE_THE_KRROOD_IMPLEMENTATION = (
+    USE_KRROOD_CLASSPROPERTY = (
         f"Use the {CodeReference(classproperty).name} {CodeReference(krrood).name} "
         "provides"
     )
 
 
-class PathEnumerations(Section):
+class Enums(Section):
     """
-    The rules on enums whose values are paths.
+    The rules on enumerations.
     """
 
     @classproperty
     def parent(cls) -> type[Section]:
         return KrroodRules
 
-    SUBCLASS_FOR_ENUMS_OF_PATHS = (
+    SUBCLASS_PATH_ENUMERATION = (
         f"A path enum subclasses {CodeReference(PathEnumeration).path}, so every "
         f"path derived from a member is a plain {CodeReference(Path).name}; its "
         "members' `name` is the path's last "
@@ -73,16 +73,16 @@ class PathEnumerations(Section):
     )
 
 
-class JSONSerialization(Section):
+class Serialization(Section):
     """
-    The rules on converting our own classes to and from JSON.
+    The rules on converting our own classes to and from a stored form.
     """
 
     @classproperty
     def parent(cls) -> type[Section]:
         return KrroodRules
 
-    USE_THE_KRROOD_SERIALIZER = (
+    ROUND_TRIP_JSON_WITH_KRROOD = (
         "JSON that our own classes round-trip goes through "
         f"{CodeReference(json_serializer).path}: use "
         f"{CodeReference(DataclassJSONSerializer).name} wherever it can "
@@ -96,16 +96,16 @@ class JSONSerialization(Section):
     )
 
 
-class SubclassSafeGenerics(Section):
+class Generics(Section):
     """
-    The rules on generic classes whose subclasses bind their parameters.
+    The rules on generic classes.
     """
 
     @classproperty
     def parent(cls) -> type[Section]:
         return KrroodRules
 
-    INHERIT_AFTER_GENERIC = (
+    NARROW_FIELD_TYPES_IN_SUBCLASSES = (
         f"Generic classes inherit {CodeReference(Generic).name} and then "
         f"{CodeReference(SubClassSafeGeneric).path}, which narrows field types "
         "when a subclass binds a parameter. Read a bound type with "

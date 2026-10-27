@@ -160,24 +160,24 @@
 
 # Krrood rules
 
-## Dataclass exceptions
-<!-- from DataclassExceptions in krrood/development_tools/rules/krrood_rules.py -->
+## Errors
+<!-- from Errors in krrood/development_tools/rules/krrood_rules.py -->
 - Custom exceptions subclass `krrood.exceptions.DataclassException`, implementing its `error_message` and `suggest_correction`
 
-## Class properties
-<!-- from ClassProperties in krrood/development_tools/rules/krrood_rules.py -->
+## Constants and class level values
+<!-- from ConstantsAndClassLevelValues in krrood/development_tools/rules/krrood_rules.py -->
 - Use the `classproperty` `krrood` provides
 
-## Path enumerations
-<!-- from PathEnumerations in krrood/development_tools/rules/krrood_rules.py -->
+## Enums
+<!-- from Enums in krrood/development_tools/rules/krrood_rules.py -->
 - A path enum subclasses `krrood.patterns.path_enumeration.PathEnumeration`, so every path derived from a member is a plain `Path`; its members' `name` is the path's last component, so read the member name as `_name_`
 
-## JSON serialization
-<!-- from JSONSerialization in krrood/development_tools/rules/krrood_rules.py -->
+## Serialization
+<!-- from Serialization in krrood/development_tools/rules/krrood_rules.py -->
 - JSON that our own classes round-trip goes through `krrood.adapters.json_serializer`: use `DataclassJSONSerializer` wherever it can (de)serialize the class; where a class needs more, subclass `SubclassJSONSerializer` and build on `DataclassJSONSerializer`'s `to_json`/`from_json`. Never hand-write field-by-field `to_json`/`from_json`
 
-## Subclass safe generics
-<!-- from SubclassSafeGenerics in krrood/development_tools/rules/krrood_rules.py -->
+## Generics
+<!-- from Generics in krrood/development_tools/rules/krrood_rules.py -->
 - Generic classes inherit `Generic` and then `krrood.patterns.subclass_safe_generic.SubClassSafeGeneric`, which narrows field types when a subclass binds a parameter. Read a bound type with `get_type_of_generic_parameter`, never via `__orig_bases__`. Such classes cannot be frozen dataclasses
 
 # Project rules
