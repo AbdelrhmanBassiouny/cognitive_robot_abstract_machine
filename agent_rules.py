@@ -5,7 +5,7 @@ after the shared rule sets.
 
 from __future__ import annotations
 
-from krrood.development_tools.agent_rule import ProjectRules, Section
+from krrood.development_tools.agent_rule import ProjectRules, RuleSet, Section
 from krrood.ormatic.utils import classproperty
 
 
@@ -15,7 +15,7 @@ class GeneratedORMInterfaces(Section):
     """
 
     @classproperty
-    def parent(cls) -> type[Section]:
+    def default_rule_set(cls) -> type[RuleSet]:
         return ProjectRules
 
     NEVER_EDIT = (
@@ -57,7 +57,7 @@ class KrroodIsolation(Section):
     """
 
     @classproperty
-    def parent(cls) -> type[Section]:
+    def default_rule_set(cls) -> type[RuleSet]:
         return ProjectRules
 
     KRROOD_IMPORTS_NO_WORKSPACE_PACKAGE = (
@@ -87,7 +87,7 @@ class DomainSpecificConventions(Section):
     """
 
     @classproperty
-    def parent(cls) -> type[Section]:
+    def default_rule_set(cls) -> type[RuleSet]:
         return ProjectRules
 
     FOLLOW_THE_SPATIAL_STYLE_GUIDE = (

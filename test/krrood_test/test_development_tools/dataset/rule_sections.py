@@ -1,5 +1,5 @@
 """
-A small rule set standing in for the ones krrood ships.
+A few rule sets and sections standing in for the ones krrood ships.
 """
 
 from __future__ import annotations
@@ -7,12 +7,18 @@ from __future__ import annotations
 from krrood.development_tools.agent_rule import RuleSet, Section
 from krrood.ormatic.utils import classproperty
 
-# %% rule set
+# %% rule sets
 
 
 class DatasetRules(RuleSet):
     """
     A rule set standing in for the ones krrood ships.
+    """
+
+
+class AdditionalDatasetRules(RuleSet):
+    """
+    A second rule set, some of whose rules are in the sections of :class:`DatasetRules`.
     """
 
 
@@ -25,7 +31,7 @@ class DesignPrinciples(Section):
     """
 
     @classproperty
-    def parent(cls) -> type[Section]:
+    def default_rule_set(cls) -> type[RuleSet]:
         return DatasetRules
 
     KEEP_DESIGNS_SIMPLE = "A rule about design"
@@ -33,7 +39,8 @@ class DesignPrinciples(Section):
 
 class Errors(Section):
     """
-    A subsection whose first rule is spelled out by details.
+    A subsection whose first rule is spelled out by details and whose last rule belongs
+    to another rule set.
     """
 
     @classproperty
@@ -44,6 +51,8 @@ class Errors(Section):
 
     NAME_ERRORS = "Another rule about errors"
 
+    WRAP_ERRORS = "A rule about errors of another rule set", (), AdditionalDatasetRules
+
 
 class Testing(Section):
     """
@@ -51,7 +60,7 @@ class Testing(Section):
     """
 
     @classproperty
-    def parent(cls) -> type[Section]:
+    def default_rule_set(cls) -> type[RuleSet]:
         return DatasetRules
 
 
@@ -69,11 +78,11 @@ class Assertions(Section):
 
 class Deployment(Section):
     """
-    A section without rules.
+    A section without rules of the rule set it belongs to.
     """
 
     @classproperty
-    def parent(cls) -> type[Section]:
+    def default_rule_set(cls) -> type[RuleSet]:
         return DatasetRules
 
 

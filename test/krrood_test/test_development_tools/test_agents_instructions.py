@@ -20,12 +20,14 @@ from krrood.development_tools.command_line import (
     Option,
     Subcommand,
 )
-from krrood.development_tools.exceptions import SectionWithoutParent
+from krrood.development_tools.exceptions import SectionWithoutRuleSet
+from krrood.development_tools import shipped_rules
 from krrood.development_tools.repository_files import RepositoryInstructionsFile
 from krrood.exceptions import DataclassException
 from krrood.patterns import path_enumeration
 
 from .dataset.rule_sections import (
+    AdditionalDatasetRules,
     DatasetRules,
     Deployment,
     DesignPrinciples,
@@ -37,11 +39,13 @@ from .dataset_files import DatasetFile
 # %% sections
 
 
-def test_a_rule_set_lists_its_sections_and_their_rules(repository_root: Path) -> None:
+def test_the_file_lists_the_rules_of_the_chosen_rule_sets_under_their_sections(
+    repository_root: Path,
+) -> None:
     instructions = AgentsInstructions(repository_root, (DatasetRules,))
 
     assert instructions.text == DatasetFile.RULE_SECTIONS_TEXT.read_text().format(
-        source_path=DatasetRules.source_path
+        source_path=DesignPrinciples.source_path
     )
 
 
@@ -53,17 +57,25 @@ def test_the_subsections_of_a_section_are_the_sections_nested_in_it() -> None:
     assert DesignPrinciples.subsections == [Errors]
 
 
-def test_a_section_naming_no_parent_is_rejected() -> None:
-    with pytest.raises(SectionWithoutParent):
-        Section.parent
+def test_a_top_level_section_naming_no_rule_set_is_rejected() -> None:
+    with pytest.raises(SectionWithoutRuleSet):
+        Section.default_rule_set
 
 
-def test_a_section_lists_only_its_own_rules() -> None:
-    assert Errors.rules == [Errors.RAISE_ERRORS, Errors.NAME_ERRORS]
+def test_a_nested_section_takes_the_rule_set_of_its_parent() -> None:
+    assert Errors.default_rule_set is DesignPrinciples.default_rule_set
 
 
-def test_a_section_without_rules_has_none_to_list() -> None:
-    assert not Deployment.has_rules
+def test_a_section_lists_only_its_own_rules_of_the_chosen_rule_sets() -> None:
+    assert Errors.rules_in((DatasetRules,)) == [Errors.RAISE_ERRORS, Errors.NAME_ERRORS]
+
+
+def test_a_rule_naming_a_rule_set_belongs_to_that_one() -> None:
+    assert Errors.rules_in((AdditionalDatasetRules,)) == [Errors.WRAP_ERRORS]
+
+
+def test_a_section_without_rules_of_the_chosen_rule_sets_has_none_to_list() -> None:
+    assert not Deployment.lists_rules_in((DatasetRules, AdditionalDatasetRules))
 
 
 def test_a_title_keeps_acronyms_in_capitals() -> None:
@@ -82,8 +94,13 @@ def test_python_rules_name_no_krrood_api(repository_root: Path) -> None:
 
 
 def test_no_two_shipped_sibling_sections_share_a_title() -> None:
-    sibling_titles = []
-    unvisited = [PythonRules, KrroodRules]
+    shipped_top_level = [
+        section
+        for section in Section.top_level
+        if section.__module__ == shipped_rules.__name__
+    ]
+    sibling_titles = [[section.title for section in shipped_top_level]]
+    unvisited = list(shipped_top_level)
     while unvisited:
         section = unvisited.pop()
         sibling_titles.append([subsection.title for subsection in section.subsections])
@@ -145,7 +162,7 @@ def test_the_project_rules_module_declares_project_sections(
 ) -> None:
     module = ProjectRules.import_from(project_rules_repository)
 
-    assert module.Deployment in ProjectRules.subsections
+    assert module.Deployment in Section.top_level
 
 
 def test_the_project_rules_module_is_imported_once(

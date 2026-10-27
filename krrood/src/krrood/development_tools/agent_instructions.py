@@ -10,11 +10,11 @@ from pathlib import Path
 
 import jinja2
 
-from krrood.development_tools.agent_rule import ProjectRules, RuleSet
+from krrood.development_tools.agent_rule import ProjectRules, RuleSet, Section
 from krrood.development_tools.repository_files import RepositoryInstructionsFile
 
-# imported to declare the sections of the shipped rule sets
-from krrood.development_tools.rules import krrood_rules, python_rules  # noqa: F401
+# imported to declare the sections of the shipped rules
+from krrood.development_tools import shipped_rules  # noqa: F401
 from krrood.patterns.path_enumeration import PathEnumeration
 
 # %% file contents
@@ -48,7 +48,7 @@ class AgentsInstructions:
 
     rule_sets: tuple[type[RuleSet], ...]
     """
-    The rule sets the file lists, in this order.
+    The rule sets whose rules the file lists.
     """
 
     def __post_init__(self) -> None:
@@ -69,7 +69,7 @@ class AgentsInstructions:
     def text(self) -> str:
         """
         The content ``AGENTS.md`` must have: the rules of the chosen rule sets, under the
-        headings of the sections that list any.
+        headings of the sections that list any, in the order the sections are declared.
         """
         environment = jinja2.Environment(
             loader=jinja2.FileSystemLoader(TemplateFile.AGENTS.parent),
@@ -78,7 +78,7 @@ class AgentsInstructions:
             keep_trailing_newline=True,
         )
         return environment.get_template(TemplateFile.AGENTS.name).render(
-            rule_sets=self.rule_sets
+            sections=Section.top_level, rule_sets=self.rule_sets
         )
 
     def is_current(self) -> bool:

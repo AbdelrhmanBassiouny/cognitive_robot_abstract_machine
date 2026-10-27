@@ -1,5 +1,7 @@
 """
-The rules for any Python repository, one section per class.
+The rules krrood ships, one section per topic, each rule belonging to
+:class:`~krrood.development_tools.agent_rule.PythonRules` unless it names
+:class:`~krrood.development_tools.agent_rule.KrroodRules`.
 """
 
 from __future__ import annotations
@@ -7,17 +9,29 @@ from __future__ import annotations
 import dataclasses
 import unittest
 from enum import Enum, IntEnum, StrEnum
+from pathlib import Path
 
 import pytest
 import typing_extensions
-from typing_extensions import Any, ClassVar, Protocol
+from typing_extensions import Any, ClassVar, Generic, Protocol
 
+import krrood
+from krrood.adapters import json_serializer
+from krrood.adapters.json_serializer import (
+    DataclassJSONSerializer,
+    SubclassJSONSerializer,
+)
 from krrood.development_tools.agent_rule import (
     CodeReference,
+    KrroodRules,
     PythonRules,
+    RuleSet,
     Section,
 )
+from krrood.exceptions import DataclassException
 from krrood.ormatic.utils import classproperty
+from krrood.patterns.path_enumeration import PathEnumeration
+from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 
 
 class ApplyingTheseRules(Section):
@@ -26,7 +40,7 @@ class ApplyingTheseRules(Section):
     """
 
     @classproperty
-    def parent(cls) -> type[Section]:
+    def default_rule_set(cls) -> type[RuleSet]:
         return PythonRules
 
     LEAVE_UNTOUCHED_CODE_ALONE = (
@@ -52,7 +66,7 @@ class AskTheDeveloper(Section):
     """
 
     @classproperty
-    def parent(cls) -> type[Section]:
+    def default_rule_set(cls) -> type[RuleSet]:
         return PythonRules
 
     ASK_INSTEAD_OF_INVENTING_REASONS = (
@@ -73,7 +87,7 @@ class Testing(Section):
     """
 
     @classproperty
-    def parent(cls) -> type[Section]:
+    def default_rule_set(cls) -> type[RuleSet]:
         return PythonRules
 
 
@@ -209,7 +223,7 @@ class CodeStyle(Section):
     """
 
     @classproperty
-    def parent(cls) -> type[Section]:
+    def default_rule_set(cls) -> type[RuleSet]:
         return PythonRules
 
     USE_DATACLASSES = "Always use dataclasses"
@@ -343,7 +357,7 @@ class Imports(Section):
     """
 
     @classproperty
-    def parent(cls) -> type[Section]:
+    def default_rule_set(cls) -> type[RuleSet]:
         return PythonRules
 
     ABSOLUTE_IMPORTS = (
@@ -365,7 +379,7 @@ class DesignPrinciples(Section):
     """
 
     @classproperty
-    def parent(cls) -> type[Section]:
+    def default_rule_set(cls) -> type[RuleSet]:
         return PythonRules
 
     OBJECT_ORIENTED_AND_SOLID = (
@@ -476,6 +490,16 @@ class Exceptions(Section):
         "the check silently disappears. Raise a custom exception instead"
     )
 
+    SUBCLASS_THE_KRROOD_BASE_CLASS = (
+        (
+            f"Custom exceptions subclass {CodeReference(DataclassException).path}, "
+            f"implementing its {CodeReference(DataclassException.error_message).name} "
+            f"and {CodeReference(DataclassException.suggest_correction).name}"
+        ),
+        (),
+        KrroodRules,
+    )
+
 
 class ConstantsAndClassLevelValues(Section):
     """
@@ -505,6 +529,15 @@ class ConstantsAndClassLevelValues(Section):
                 "applies"
             ),
         ),
+    )
+
+    USE_KRROOD_CLASSPROPERTY = (
+        (
+            f"Use the {CodeReference(classproperty).name} "
+            f"{CodeReference(krrood).name} provides"
+        ),
+        (),
+        KrroodRules,
     )
 
 
@@ -559,6 +592,45 @@ class StructuredData(Section):
         "of its own type and is read in, never embedded as a string"
     )
 
+    SUBCLASS_PATH_ENUMERATION = (
+        (
+            f"A path enum subclasses {CodeReference(PathEnumeration).path}, so every "
+            f"path derived from a member is a plain {CodeReference(Path).name}; its "
+            "members' `name` is the path's last component, so read the member name "
+            "as `_name_`"
+        ),
+        (),
+        KrroodRules,
+    )
+
+
+class Serialization(Section):
+    """
+    The rules on converting our own classes to and from a stored form.
+    """
+
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return DesignPrinciples
+
+    ROUND_TRIP_JSON_WITH_KRROOD = (
+        (
+            "JSON that our own classes round-trip goes through "
+            f"{CodeReference(json_serializer).path}: use "
+            f"{CodeReference(DataclassJSONSerializer).name} wherever it can "
+            "(de)serialize the class; where a class needs more, subclass "
+            f"{CodeReference(SubclassJSONSerializer).name} and build on "
+            f"{CodeReference(DataclassJSONSerializer).name}'s "
+            f"{CodeReference(DataclassJSONSerializer.to_json).name}/"
+            f"{CodeReference(DataclassJSONSerializer.from_json).name}. Never "
+            "hand-write field-by-field "
+            f"{CodeReference(SubclassJSONSerializer.to_json).name}/"
+            f"{CodeReference(SubclassJSONSerializer.from_json).name}"
+        ),
+        (),
+        KrroodRules,
+    )
+
 
 class TypeHints(Section):
     """
@@ -566,7 +638,7 @@ class TypeHints(Section):
     """
 
     @classproperty
-    def parent(cls) -> type[Section]:
+    def default_rule_set(cls) -> type[RuleSet]:
         return PythonRules
 
     ANNOTATE_EVERYTHING = (
@@ -592,6 +664,18 @@ class TypeHints(Section):
         "member (`class MemberOfFamily(Family[ConcreteType])`)"
     )
 
+    NARROW_FIELD_TYPES_IN_GENERIC_SUBCLASSES = (
+        (
+            f"Generic classes inherit {CodeReference(Generic).name} and then "
+            f"{CodeReference(SubClassSafeGeneric).path}, which narrows field types "
+            "when a subclass binds a parameter. Read a bound type with "
+            f"{CodeReference(SubClassSafeGeneric.get_type_of_generic_parameter).name}, "
+            "never via `__orig_bases__`. Such classes cannot be frozen dataclasses"
+        ),
+        (),
+        KrroodRules,
+    )
+
 
 class Documentation(Section):
     """
@@ -599,7 +683,7 @@ class Documentation(Section):
     """
 
     @classproperty
-    def parent(cls) -> type[Section]:
+    def default_rule_set(cls) -> type[RuleSet]:
         return PythonRules
 
     DOCUMENT_EVERYTHING = (
@@ -664,7 +748,7 @@ class VersionControl(Section):
     """
 
     @classproperty
-    def parent(cls) -> type[Section]:
+    def default_rule_set(cls) -> type[RuleSet]:
         return PythonRules
 
     AUTHOR_AS_THE_HUMAN = (
@@ -704,7 +788,7 @@ class Miscellaneous(Section):
     """
 
     @classproperty
-    def parent(cls) -> type[Section]:
+    def default_rule_set(cls) -> type[RuleSet]:
         return PythonRules
 
     USE_THE_PROJECT_INTERPRETER = (

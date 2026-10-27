@@ -1,6 +1,6 @@
 """
-The rules agents follow, the sections of ``AGENTS.md`` that declare them and the rule
-sets those sections form.
+The rules agents follow, the rule sets they belong to and the sections of ``AGENTS.md``
+that declare them.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from types import ModuleType
 
 from typing_extensions import Any, Callable
 
-from krrood.development_tools.exceptions import SectionWithoutParent
+from krrood.development_tools.exceptions import SectionWithoutRuleSet
 from krrood.development_tools.repository_files import RepositoryInstructionsFile
 from krrood.ormatic.utils import classproperty
 
@@ -60,122 +60,15 @@ class CodeReference:
         return f"`{self.target.__name__}`"
 
 
-# %% rules
-
-
-@dataclass(frozen=True)
-class AgentRule:
-    """
-    One rule agents follow, rendered as a Markdown list item.
-    """
-
-    statement: str
-    """
-    The rule itself.
-    """
-
-    details: tuple[str, ...] = ()
-    """
-    The points that spell the rule out, rendered as a nested list below it.
-    """
-
-
-# %% sections
-
-
-class Section(AgentRule, Enum):
-    """
-    A section of ``AGENTS.md``, whose members are the rules it lists. A member's value
-    is the rule's statement, or its statement and details. A section nested under
-    another overrides :attr:`parent` to return it.
-    """
-
-    @classproperty
-    def parent(cls) -> type[Section] | None:
-        """
-        The section this one is nested under; none for a rule set.
-
-        :raises SectionWithoutParent: If the section names no section it is nested
-            under.
-        """
-        raise SectionWithoutParent(cls)
-
-    @classproperty
-    def title(cls) -> str:
-        """
-        The text of the section's heading: the words of the class name in sentence case,
-        keeping acronyms such as ``CI`` in capitals.
-        """
-        first_word, *other_words = re.findall(
-            r"[A-Z]+(?![a-z])|[A-Z][a-z0-9]*", cls.__name__
-        )
-        return " ".join(
-            [
-                first_word,
-                *(word if word.isupper() else word.lower() for word in other_words),
-            ]
-        )
-
-    @classproperty
-    def rules(cls) -> list[Section]:
-        """
-        The rules the section lists directly, in declaration order.
-        """
-        return list(cls)
-
-    @classproperty
-    def subsections(cls) -> list[type[Section]]:
-        """
-        The sections nested directly under this one, in definition order.
-        """
-        return [
-            section for section in Section.__subclasses__() if section.parent is cls
-        ]
-
-    @classproperty
-    def has_rules(cls) -> bool:
-        """
-        Whether the section lists any rule, directly or in a subsection.
-        """
-        return bool(cls.rules) or any(
-            subsection.has_rules for subsection in cls.subsections
-        )
-
-    @classproperty
-    def depth(cls) -> int:
-        """
-        How deeply the section is nested, counting a rule set as depth 1.
-        """
-        return 1 if cls.parent is None else cls.parent.depth + 1
-
-    @classproperty
-    def heading(cls) -> str:
-        """
-        The section's heading as a line of Markdown.
-        """
-        return f"{'#' * cls.depth} {cls.title}"
-
-    @classproperty
-    def source_path(cls) -> Path:
-        """
-        The path of the module declaring the section, relative to the directory its
-        top-level package or module lies in.
-        """
-        return Path(*cls.__module__.split(".")).with_suffix(".py")
-
-
 # %% rule sets
 
 
-class RuleSet(Section):
+class RuleSet:
     """
-    A set of rules a repository adopts as a whole: a top-level section of
-    ``AGENTS.md``. The rule sets are the subclasses of this class.
+    A set of rules a repository adopts as a whole. A rule belongs to exactly one rule
+    set, and ``AGENTS.md`` lists only the rules of the rule sets a repository chose. The
+    rule sets are the subclasses of this class.
     """
-
-    @classproperty
-    def parent(cls) -> None:
-        return None
 
     @classproperty
     def available(cls) -> list[type[RuleSet]]:
@@ -231,3 +124,137 @@ class ProjectRules(RuleSet):
         sys.modules[module_name] = module
         specification.loader.exec_module(module)
         return module
+
+
+# %% rules
+
+
+@dataclass(frozen=True)
+class AgentRule:
+    """
+    One rule agents follow, rendered as a Markdown list item.
+    """
+
+    statement: str
+    """
+    The rule itself.
+    """
+
+    details: tuple[str, ...] = ()
+    """
+    The points that spell the rule out, rendered as a nested list below it.
+    """
+
+    rule_set: type[RuleSet] | None = None
+    """
+    The rule set the rule belongs to; none for the default rule set of its section.
+    """
+
+
+# %% sections
+
+
+class Section(AgentRule, Enum):
+    """
+    A section of ``AGENTS.md`` on one topic, whose members are the rules it lists. A
+    member's value is the rule's statement, optionally followed by its details and its
+    rule set. A section nested under another overrides :attr:`parent` to return it; a
+    top-level section overrides :attr:`default_rule_set` instead.
+    """
+
+    @classproperty
+    def parent(cls) -> type[Section] | None:
+        """
+        The section this one is nested under; none for a top-level section.
+        """
+        return None
+
+    @classproperty
+    def default_rule_set(cls) -> type[RuleSet]:
+        """
+        The rule set of the section's rules that name none, which a nested section
+        takes from its parent.
+
+        :raises SectionWithoutRuleSet: If a top-level section names no rule set.
+        """
+        if cls.parent is None:
+            raise SectionWithoutRuleSet(cls)
+        return cls.parent.default_rule_set
+
+    @classproperty
+    def top_level(cls) -> list[type[Section]]:
+        """
+        The sections nested under no other section, in definition order.
+        """
+        return [
+            section for section in Section.__subclasses__() if section.parent is None
+        ]
+
+    @classproperty
+    def title(cls) -> str:
+        """
+        The text of the section's heading: the words of the class name in sentence case,
+        keeping acronyms such as ``CI`` in capitals.
+        """
+        first_word, *other_words = re.findall(
+            r"[A-Z]+(?![a-z])|[A-Z][a-z0-9]*", cls.__name__
+        )
+        return " ".join(
+            [
+                first_word,
+                *(word if word.isupper() else word.lower() for word in other_words),
+            ]
+        )
+
+    @classmethod
+    def rules_in(cls, rule_sets: tuple[type[RuleSet], ...]) -> list[Section]:
+        """
+        :param rule_sets: The rule sets whose rules to list.
+        :return: The rules of those rule sets the section lists directly, in declaration
+            order.
+        """
+        return [
+            rule for rule in cls if (rule.rule_set or cls.default_rule_set) in rule_sets
+        ]
+
+    @classmethod
+    def lists_rules_in(cls, rule_sets: tuple[type[RuleSet], ...]) -> bool:
+        """
+        :param rule_sets: The rule sets whose rules count.
+        :return: Whether the section lists any rule of those rule sets, directly or in a
+            subsection.
+        """
+        return bool(cls.rules_in(rule_sets)) or any(
+            subsection.lists_rules_in(rule_sets) for subsection in cls.subsections
+        )
+
+    @classproperty
+    def subsections(cls) -> list[type[Section]]:
+        """
+        The sections nested directly under this one, in definition order.
+        """
+        return [
+            section for section in Section.__subclasses__() if section.parent is cls
+        ]
+
+    @classproperty
+    def depth(cls) -> int:
+        """
+        How deeply the section is nested, counting a top-level section as depth 1.
+        """
+        return 1 if cls.parent is None else cls.parent.depth + 1
+
+    @classproperty
+    def heading(cls) -> str:
+        """
+        The section's heading as a line of Markdown.
+        """
+        return f"{'#' * cls.depth} {cls.title}"
+
+    @classproperty
+    def source_path(cls) -> Path:
+        """
+        The path of the module declaring the section, relative to the directory its
+        top-level package or module lies in.
+        """
+        return Path(*cls.__module__.split(".")).with_suffix(".py")
