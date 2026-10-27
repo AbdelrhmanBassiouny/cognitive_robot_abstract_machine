@@ -1,16 +1,17 @@
-Branch claude/blissful-davinci-9fogks, PR #477 -> main (ready, marked by user); upstream PR open on cram2.
+Branch claude/blissful-davinci-9fogks, PR #477 -> main (ready, marked by user); upstream PR cram2#777 open.
 
 Plan:
 - Bindings-based generation + ProbabilisticOperationResult scoring (landed on the branch).
 
 Done:
-- ec0af2b0f ProbabilisticModelException base (upstream review, relayed by user): all probabilistic_model
-  exceptions + 11 krrood parametrization model exceptions. krrood 2732 passed, pm 1127 passed.
-- f8ab5bc15 ValueOutsideVariableDomain; review thread 4326175838 replied, left open.
+- f15c328ae davidprueser's two cram2#777 threads: ProbabilisticOperationResult is Role[OperationResult]
+  in base_expressions; Match._find_assigned_variable_ + NoAttributeWithAccessPathName replace
+  test/krrood_test/pattern_variables.py. main merged to 4eaae933a. krrood 2765 passed (4 env fails), pm 1304 passed.
 
 Next:
-- This session cannot reach cram2 (same-named repo can't be attached next to the fork): upstream review
-  replies must be posted by the user or a session with cram2 attached.
+- Upstream thread replies on cram2#777 must be posted by the user or a session with cram2 attached.
+- Fork thread r4326175838 (_stated_values_ as iterator) open, awaiting user's decision.
 - Numeric pattern variable hash_map AttributeError (also on main): separate bug task.
-Env: .venv; run per package with --confcutdir; restore test_verbalization/verbalization_results.py after runs;
-ignore test_gui (no libEGL) and test_mesh_three_graph_visualizer (needs semantic_digital_twin).
+Env: .venv (py3.12); run per package with --confcutdir; restore test_verbalization/verbalization_results.py after runs;
+ignore test_gui (no libEGL), test_mesh_three_graph_visualizer, test_quantifier_overload_types (mypy);
+graphviz and test_jacobian_dot/ddot fail pre-existing.
