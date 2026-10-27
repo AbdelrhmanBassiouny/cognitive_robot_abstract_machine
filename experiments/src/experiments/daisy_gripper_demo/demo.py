@@ -40,7 +40,7 @@ from coraplex.execution_environment import (
     semi_real_robot,
     kinematically_simulated_robot,
 )
-from coraplex.plans.factories import parallel, sequential
+from coraplex.plans.factories import sequential
 from coraplex.plans.plan_node import PlanNode
 from coraplex.robot_plans import MoveGripperMotion, PrintMotion, WaitMotion
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
@@ -224,7 +224,7 @@ class DAiSyGripperDemonstration(RobotDemonstration):
         def both_grippers_step(state_type: GripperState) -> list[PlanNode]:
             return [
                 self.announcement("both grippers", state_type),
-                parallel(
+                sequential(
                     [
                         MoveGripperMotion(
                             configuration=left_gripper.default_configuration(state_type)
