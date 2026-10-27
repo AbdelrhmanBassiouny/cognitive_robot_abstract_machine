@@ -16,6 +16,8 @@ from krrood.entity_query_language.verbalization.vocabulary.english import Direct
 
 from krrood.entity_query_language.core.base_expressions import (
     Bindings,
+    OperationResult,
+    ProbabilisticOperationResult,
     Selectable,
     SymbolicExpression,
 )
@@ -59,9 +61,6 @@ try:
         UnderspecifiedParameters,
         SelectedAttributesParameters,
     )
-    from krrood.parametrization.probabilistic_operation_result import (
-        ProbabilisticOperationResult,
-    )
     from probabilistic_model.probabilistic_model import ProbabilisticModel
 except ImportError as e:
     logger.debug(f"Couldn't import probabilistic model needed classes: {e}")
@@ -72,7 +71,6 @@ except ImportError as e:
     FullyFactorizedRegistry = NoneType
     SelectedAttributesParameters = NoneType
     UnderspecifiedParameters = NoneType
-    ProbabilisticOperationResult = NoneType
     ProbabilisticModel = NoneType
 
 T = TypeVar("T")
@@ -420,7 +418,8 @@ class ProbabilisticBackend(GenerativeBackend):
             log_likelihoods[most_likely_first],
         ):
             yield ProbabilisticOperationResult(
-                bindings, log_likelihood=float(log_likelihood)
+                role_taker=OperationResult(bindings),
+                log_likelihood=float(log_likelihood),
             )
 
     def compute_log_likelihood(
@@ -444,7 +443,8 @@ class ProbabilisticBackend(GenerativeBackend):
             parameters.model_sample_from_bindings(model.variables, bindings)
         )
         return ProbabilisticOperationResult(
-            bindings, log_likelihood=float(log_likelihood)
+            role_taker=OperationResult(bindings),
+            log_likelihood=float(log_likelihood),
         )
 
     def _resolve_model_to_sample(

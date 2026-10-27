@@ -1209,6 +1209,36 @@ class UnboundPatternVariable(UsageError):
 
 
 @dataclass
+class NoAttributeWithAccessPathName(UsageError):
+    """
+    Raised when a match's pattern assigns a variable to no attribute whose access path
+    has the requested name.
+    """
+
+    match: Match
+    """
+    The match whose pattern was searched.
+    """
+
+    access_path_name: str
+    """
+    The requested name of an attribute's access path.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The pattern of '{self.match}' assigns a variable to no attribute whose "
+            f"access path is named '{self.access_path_name}'."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Name the access path from the matched class, e.g. 'Rectangle.width', and "
+            "leave the attribute open with '...' or give it a value in the pattern."
+        )
+
+
+@dataclass
 class CausesEffectRequiresEqualityComparator(UsageError):
     """
     Raised when a :func:`~krrood.entity_query_language.query.match.Match.causes_effect`

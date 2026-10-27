@@ -31,7 +31,6 @@ from ..dataset.example_classes import (
     ActionWithMissingAggregationsMixin,
 )
 from ..dataset.semantic_world_like_classes import Cabinet, Container, Body, Handle
-from ..pattern_variables import find_assigned_variable
 
 
 def test_enum_domain():
@@ -315,8 +314,8 @@ def test_model_sample_from_bindings_refuses_a_value_that_is_no_element_of_a_symb
         parameters.model_sample_from_bindings(
             [enum],
             {
-                find_assigned_variable(
-                    query, "EnumAction.enum"
+                query._find_assigned_variable_(
+                    "EnumAction.enum"
                 )._id_: TestEnum.OPTION_A.value
             },
         )

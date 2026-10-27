@@ -15,13 +15,16 @@ from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
 from random_events.variable import Continuous
 
 from ..dataset.derived_attributes import Rectangle
-from ..pattern_variables import find_assigned_variable
 from ..dataset.semantic_world_like_classes import Apple, Body
 from krrood.entity_query_language.backends import (
     SQLAlchemyBackend,
     EntityQueryLanguageBackend,
     EntityQueryLanguageGenerativeBackend,
     ProbabilisticBackend,
+)
+from krrood.entity_query_language.core.base_expressions import (
+    OperationResult,
+    ProbabilisticOperationResult,
 )
 from krrood.entity_query_language.core.variable import Literal
 from krrood.entity_query_language.exceptions import (
@@ -37,6 +40,7 @@ from krrood.entity_query_language.factories import (
 from krrood.ormatic.data_access_objects.helper import to_dao
 from krrood.entity_query_language.core.variable import Variable as KRROODVariable
 from krrood.parametrization.model_registries import DictRegistry
+from krrood.patterns.role import Role
 from krrood.parametrization.parameterizer import UnderspecifiedParameters
 from random_events.interval import reals
 from random_events.set import Set
@@ -448,8 +452,8 @@ def test_probabilistic_backend_samples_bindings_with_their_log_likelihood(
     rectangle_backend,
 ):
     query = a(Rectangle)(width=..., height=...)
-    width = find_assigned_variable(query, "Rectangle.width")
-    height = find_assigned_variable(query, "Rectangle.height")
+    width = query._find_assigned_variable_("Rectangle.width")
+    height = query._find_assigned_variable_("Rectangle.height")
     rows = list(rectangle_backend.sample_bindings(query))
     assert len(rows) == rectangle_backend.number_of_samples
     assert {
@@ -464,8 +468,8 @@ def test_probabilistic_backend_computes_the_log_likelihood_of_given_bindings(
     rectangle_backend,
 ):
     query = a(Rectangle)(width=..., height=...)
-    width = find_assigned_variable(query, "Rectangle.width")
-    height = find_assigned_variable(query, "Rectangle.height")
+    width = query._find_assigned_variable_("Rectangle.width")
+    height = query._find_assigned_variable_("Rectangle.height")
     rectangle_width, rectangle_height = RECTANGLE_SIDES[1]
     bindings = {width._id_: rectangle_width, height._id_: rectangle_height}
     row = rectangle_backend.compute_log_likelihood(query, bindings)
@@ -475,11 +479,20 @@ def test_probabilistic_backend_computes_the_log_likelihood_of_given_bindings(
 
 def test_bindings_the_model_cannot_produce_have_no_likelihood(rectangle_backend):
     query = a(Rectangle)(width=..., height=...)
-    width = find_assigned_variable(query, "Rectangle.width")
-    height = find_assigned_variable(query, "Rectangle.height")
+    width = query._find_assigned_variable_("Rectangle.width")
+    height = query._find_assigned_variable_("Rectangle.height")
     first_width, _ = RECTANGLE_SIDES[0]
     _, second_height = RECTANGLE_SIDES[1]
     row = rectangle_backend.compute_log_likelihood(
         query, {width._id_: first_width, height._id_: second_height}
     )
     assert row.log_likelihood == -np.inf
+
+
+def test_a_sampled_row_is_a_role_of_the_operation_result_of_its_bindings(
+    rectangle_backend,
+):
+    query = a(Rectangle)(width=..., height=...)
+    row = next(rectangle_backend.sample_bindings(query))
+    assert isinstance(row.role_taker, OperationResult)
+    assert Role.roles_for(row.role_taker, ProbabilisticOperationResult) == [row]

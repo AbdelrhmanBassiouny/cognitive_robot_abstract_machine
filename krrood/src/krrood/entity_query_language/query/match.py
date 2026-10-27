@@ -63,6 +63,7 @@ from krrood.entity_query_language.exceptions import (
     CalledMatchMultipleTimes,
     MatchTypeCannotBeDetermined,
     PositionalArgumentsInMatchPattern,
+    NoAttributeWithAccessPathName,
     UnboundPatternVariable,
 )
 from krrood.entity_query_language.predicate import HasType
@@ -544,6 +545,22 @@ class Match(
         if conditions:
             selection = selection.where(*conditions)
         return selection
+
+    def _find_assigned_variable_(self, access_path_name: str) -> Variable:
+        """
+        :param access_path_name: The name of an attribute's access path, e.g.
+            ``"Rectangle.width"``, which is also the name of the model variable the
+            attribute corresponds to.
+        :return: The variable this match's pattern assigns to that attribute.
+        :raises NoAttributeWithAccessPathName: If the pattern assigns a variable to no
+            attribute with that access path name.
+        """
+        for attribute_match in self._matches_with_variables_:
+            if attribute_match.name_from_variable_access_path == access_path_name:
+                return attribute_match.assigned_variable
+        raise NoAttributeWithAccessPathName(
+            match=self, access_path_name=access_path_name
+        )
 
     def _construct_instance_from_bindings_(self, bindings: Bindings) -> T:
         """
