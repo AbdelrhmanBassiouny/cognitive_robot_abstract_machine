@@ -10,7 +10,11 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
 from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Handle
-from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.spatial_types.spatial_types import (
+    Pose,
+    RotationMatrix,
+    Vector3,
+)
 from .conftest import left_or_only_arm
 from ..plan_running import simulated_executor, statechart_of
 
@@ -25,6 +29,11 @@ class ApartmentBody(StrEnum):
     DRAWER_HANDLE = "handle_cab10_m"
     """
     The handle of the apartment's middle cabinet drawer.
+    """
+
+    DRAWER = "cabinet10_drawer_middle"
+    """
+    The middle cabinet drawer the handle pulls out.
     """
 
 
@@ -107,4 +116,44 @@ def test_back_off_pose_clears_the_grasp_by_the_release_clearance(pr2_at_drawer):
         back_off.to_np()[:3, 3] - tool_goal.to_np()[:3, 3],
         -action.release_clearance * np.asarray(grasp_pose.to_np()[:3, 0]),
         atol=1e-9,
+    )
+
+
+def test_back_off_pose_clears_the_drawer_of_a_grasp_from_above(pr2_at_drawer):
+    """
+    A grasp from above closes with one finger between the handle and the drawer front,
+    so the gripper backs off until it is clear of the drawer, and by the release
+    clearance beyond its top.
+    """
+    world, robot, extensions, handle = pr2_at_drawer
+    arm = left_or_only_arm(robot)
+    world_T_handle = world.transform(Pose(reference_frame=handle.root), world.root)
+    downward = Vector3(0, 0, -1, reference_frame=world.root)
+    pull_axis = Vector3(1, 0, 0, reference_frame=world.root)
+    grasp_pose = world.transform(
+        Pose(
+            position=world_T_handle.position,
+            orientation=RotationMatrix.from_vectors(x=downward, y=pull_axis).quaternion,
+            reference_frame=world.root,
+        ),
+        handle.root,
+    )
+    action = OpenAction(grasp=GraspCandidate(handle, grasp_pose), arm=arm)
+
+    tool_goal = world.transform(
+        arm.end_effector.tool_frame_goal_for_grasp(grasp_pose), world.root
+    )
+    back_off = world.transform(
+        action.back_off_pose(grasp_pose, arm.end_effector), world.root
+    )
+    drawer = world.get_body_by_name(ApartmentBody.DRAWER)
+    drawer_top = (
+        drawer.collision.as_bounding_box_collection_in_frame(world.root)
+        .bounding_box()
+        .z_interval.upper
+    )
+    grasp_height = world_T_handle.to_np()[2, 3]
+
+    assert back_off.to_np()[2, 3] - tool_goal.to_np()[2, 3] == pytest.approx(
+        drawer_top - grasp_height + action.release_clearance, abs=1e-3
     )

@@ -50,7 +50,8 @@ class MovesContainerByItsHandle(
 
     release_clearance: float = 0.05
     """
-    The gap in meters between the handle and the gripper once it has let go.
+    How far in meters the gripper backs off once it has let go, past where it leaves the
+    bounding box of the body :attr:`mechanism` moves.
     """
 
     @classmethod
@@ -80,18 +81,33 @@ class MovesContainerByItsHandle(
         :return: A new goal moving the container while its handle is held.
         """
 
+    @property
+    def mechanism(self) -> ActiveConnection1DOF:
+        """
+        The connection the container moves along while its handle is held.
+        """
+        return self.grasp.graspable.root.get_first_parent_connection_of_type(
+            ActiveConnection1DOF
+        )
+
     def back_off_pose(self, grasp_pose: Pose, end_effector: EndEffector) -> Pose:
         """
-        The tool frame goal that clears the released handle, back along the way the
-        gripper came in, so an open gripper still straddling the handle is drawn off it
-        rather than across it.
+        The tool frame goal that clears the released handle and the container, back
+        along the way the gripper came in, so an open gripper still straddling the
+        handle is drawn off it rather than across it.
 
         :param grasp_pose: The grasp frame the handle was held by.
         :param end_effector: The end effector that held it.
         :return: The pose the tool frame backs off to, in `grasp_pose`'s frame.
         """
+        distance = (
+            HasApproachesGraspPoses.distance_to_boundary(
+                self.mechanism.child, grasp_pose
+            )
+            + self.release_clearance
+        )
         return HasApproachesGraspPoses.pre_grasp_pose(
-            grasp_pose, end_effector, self.release_clearance
+            grasp_pose, end_effector, distance
         )
 
     def create_temporary_collision_rules(self) -> list[CollisionRule]:
@@ -128,12 +144,10 @@ class OpenAction(MovesContainerByItsHandle):
     """
 
     def _create_mechanism_goal(self) -> MotionStatechartNode:
-        handle = self.grasp.graspable.root
-        mechanism = handle.get_first_parent_connection_of_type(ActiveConnection1DOF)
         return ArticulateGraspedMechanism(
             tip_link=self.arm.end_effector.tool_frame,
-            environment_link=handle,
-            goal_joint_state=mechanism.dof.limits.upper.position,
+            environment_link=self.grasp.graspable.root,
+            goal_joint_state=self.mechanism.dof.limits.upper.position,
         )
 
 
