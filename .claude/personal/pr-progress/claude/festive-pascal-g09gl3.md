@@ -5,7 +5,7 @@ Plan
 
 Done
 - 0193fdb98: project RunningTests folded into GeneratedORMInterfaces (duplicates tomsch420 flagged).
-- 3aec5a7bf: krrood sections are Errors, ConstantsAndClassLevelValues, Enums, Serialization, Generics; test checks sibling titles only.
+- 3aec5a7bf, 2e94103c4: krrood sections are Exceptions, ConstantsAndClassLevelValues, Enums, Serialization, Generics; test checks sibling titles only.
 
 Next
 - User replies on cram2#806 threads (krrood_rules.py:28/99, python_rules.py:443/511/563) and re-requests tomsch420.
