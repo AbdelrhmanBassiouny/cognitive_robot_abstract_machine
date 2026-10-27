@@ -180,22 +180,6 @@ Where a run keeps the record of which test created each world.
 """
 
 
-PARKED_MARKER = "parked"
-"""
-The marker of tests set aside until a problem in :data:`FUTURE_PROBLEMS_FILE` is solved.
-"""
-
-FUTURE_PROBLEMS_FILE = "future_problems.md"
-"""
-The file at the repository root listing the problems parked tests wait for.
-"""
-
-PARKED_REASON = f"parked, see {FUTURE_PROBLEMS_FILE}"
-"""
-Why a parked test is skipped.
-"""
-
-
 def pytest_addoption(parser: pytest.Parser) -> None:
     """
     Let a run state when it builds the ORM interfaces it reads.
@@ -235,16 +219,6 @@ def pytest_configure(config: pytest.Config) -> None:
     living_worlds = LivingWorlds(world_type=World)
     living_worlds.watch()
     config.stash[LIVING_WORLDS] = living_worlds
-
-
-def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
-    """
-    Skip every test marked ``parked``, pointing at the list of problems it waits for.
-    """
-    skip = pytest.mark.skip(reason=PARKED_REASON)
-    for item in items:
-        if item.get_closest_marker(PARKED_MARKER) is not None:
-            item.add_marker(skip)
 
 
 def pytest_runtest_setup(item: pytest.Item) -> None:
