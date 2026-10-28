@@ -4,7 +4,6 @@ import itertools
 import logging
 import math
 import os
-import re
 import shutil
 from abc import ABC, abstractmethod
 from copy import deepcopy
@@ -22,12 +21,12 @@ from plyfile import PlyData
 from trimesh.visual.texture import TextureVisuals, SimpleMaterial
 from typing_extensions import Any, Self, TYPE_CHECKING, TypeVar
 
+from krrimage.color import Color
 from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json, from_json
 from krrood.bounds import Bounds, BoundsInterface
 from random_events.interval import SimpleInterval, Bound, closed
 from random_events.product_algebra import SimpleEvent
 from semantic_digital_twin.datastructures.variables import SpatialVariables
-from semantic_digital_twin.exceptions import MalformedHexColor
 from semantic_digital_twin.mixin import HasSimulatorProperties
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -53,211 +52,6 @@ if TYPE_CHECKING:
     )
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class Color:
-    """
-    Dataclass for storing rgba_color as an RGBA value.
-
-    The values are stored as floats between 0 and 1. The default rgba_color is white.
-    """
-
-    R: float = 1.0
-    """
-    Red value of the color.
-    """
-
-    G: float = 1.0
-    """
-    Green value of the color.
-    """
-
-    B: float = 1.0
-    """
-    Blue value of the color.
-    """
-
-    A: float = 1.0
-    """
-    Opacity of the color.
-    """
-
-    def __post_init__(self):
-        """
-        Make sure the color values are floats, because ros2 sucks.
-        """
-        self.R = float(self.R)
-        self.G = float(self.G)
-        self.B = float(self.B)
-        self.A = float(self.A)
-
-    def __hash__(self):
-        return hash((self.R, self.G, self.B, self.A))
-
-    def to_rgba(self) -> tuple[float, float, float, float]:
-        return (self.R, self.G, self.B, self.A)
-
-    def to_rgb(self) -> tuple[float, float, float]:
-        return (self.R, self.G, self.B)
-
-    def to_hex(self, prefix: str = "#") -> str:
-        """
-        :param prefix: The characters the digits are written behind.
-        :return: The color written as ``#RRGGBB``, two hex digits per channel.
-
-        ..note:: The opacity is not part of it, the same way it is not part of
-            :meth:`to_rgb`.
-        """
-        return prefix + "".join(
-            f"{round(channel * 255):02X}" for channel in self.to_rgb()
-        )
-
-    @classmethod
-    def RED(self):
-        return Color(1, 0, 0)
-
-    @classmethod
-    def YELLOW(self):
-        return Color(1, 1, 0)
-
-    @classmethod
-    def GREEN(self):
-        return Color(0, 1, 0)
-
-    @classmethod
-    def CYAN(self):
-        return Color(0, 1, 1)
-
-    @classmethod
-    def BLUE(self):
-        return Color(0, 0, 1)
-
-    @classmethod
-    def MAGENTA(self):
-        return Color(1, 0, 1)
-
-    @classmethod
-    def WHITE(self):
-        return Color(1, 1, 1)
-
-    @classmethod
-    def BLACK(self):
-        return Color(0, 0, 0)
-
-    @classmethod
-    def GRAY(self):
-        return Color(0.498, 0.498, 0.498)
-
-    @classmethod
-    def BEIGE(self):
-        return Color(1, 0.827, 0.6078)
-
-    @classmethod
-    def ORANGE(self):
-        return Color(1, 0.647, 0)
-
-    @classmethod
-    def from_list(cls, color: list[float]):
-        """
-        Set the rgba_color from a list of RGBA values.
-
-        :param color: The list of RGBA values
-        """
-        if len(color) == 3:
-            return cls.from_rgb(color)
-        elif len(color) == 4:
-            return cls.from_rgba(color)
-        else:
-            raise ValueError("Color list must have 3 or 4 elements")
-
-    @classmethod
-    def from_rgb(cls, rgb: list[float]):
-        """
-        Set the rgba_color from a list of RGB values.
-
-        :param rgb: The list of RGB values
-        """
-        return cls(*rgb, 1)
-
-    @classmethod
-    def from_rgba(cls, rgba: list[float]):
-        """
-        Set the rgba_color from a list of RGBA values.
-
-        :param rgba: The list of RGBA values
-        """
-        return cls(*rgba)
-
-    @classmethod
-    def from_hex(
-        cls,
-        hex_color: str,
-        prefix: str = "#",
-        pattern: str = "(?:[0-9a-fA-F]{2}){3,4}",
-    ) -> Self:
-        """
-        Read a color written as two hex digits per channel, red first.
-
-        A fourth pair of digits sets the opacity; without it the color is fully opaque.
-
-        :param hex_color: The color, optionally preceded by a ``#`` and written in
-            either case.
-        :param prefix: The characters the digits may be written behind.
-        :param pattern: What the digits have to look like, by default three or four
-            channels of two hex digits each.
-        :raises MalformedHexColor: If the string is not written that way.
-        :return: The color it names.
-        """
-        digits = hex_color.removeprefix(prefix)
-        if re.fullmatch(pattern, digits) is None:
-            raise MalformedHexColor(hex_color)
-        return cls.from_list(
-            [
-                int(digits[index : index + 2], 16) / 255
-                for index in range(0, len(digits), 2)
-            ]
-        )
-
-    @classmethod
-    def PINK(cls) -> Self:
-        return cls(1, 0, 1, 1)
-
-    @classmethod
-    def BLACK(cls) -> Self:
-        return cls(0, 0, 0, 1)
-
-    @classmethod
-    def WHITE(cls) -> Self:
-        return cls(1, 1, 1, 1)
-
-    @classmethod
-    def RED(cls) -> Self:
-        return cls(1, 0, 0, 1)
-
-    @classmethod
-    def GREEN(cls) -> Self:
-        return cls(0, 1, 0, 1)
-
-    @classmethod
-    def BLUE(cls) -> Self:
-        return cls(0, 0, 1, 1)
-
-    @classmethod
-    def YELLOW(cls) -> Self:
-        return cls(1, 1, 0, 1)
-
-    @classmethod
-    def CYAN(cls) -> Self:
-        return cls(0, 1, 1, 1)
-
-    @classmethod
-    def MAGENTA(cls) -> Self:
-        return cls(1, 0, 1, 1)
-
-    @classmethod
-    def GREY(cls) -> Self:
-        return cls(0.5, 0.5, 0.5, 1)
 
 
 @dataclass

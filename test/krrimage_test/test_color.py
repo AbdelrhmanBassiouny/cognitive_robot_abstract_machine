@@ -1,11 +1,11 @@
 """
-Tests for reading and writing a color as a hex string.
+Tests for reading and writing a color.
 """
 
 import pytest
 
-from semantic_digital_twin.exceptions import MalformedHexColor
-from semantic_digital_twin.world_description.geometry import Color
+from krrimage.color import Color
+from krrimage.exceptions import MalformedHexColor, WrongNumberOfColorChannels
 
 # %% reading a hex string
 
@@ -61,6 +61,35 @@ def test_the_written_hex_string_leaves_out_the_opacity():
     """
     translucent = Color.from_hex("#4080C020")
     assert translucent.to_hex() == Color.from_hex("#4080C0").to_hex()
+
+
+# %% writing the bytes of a pixel
+
+
+def test_each_channel_becomes_the_byte_its_hex_digits_name():
+    assert Color.from_hex("#4080C0").to_rgb_bytes() == bytes([0x40, 0x80, 0xC0])
+
+
+def test_the_pixel_bytes_leave_out_the_opacity():
+    translucent = Color.from_hex("#4080C020")
+    assert translucent.to_rgb_bytes() == Color.from_hex("#4080C0").to_rgb_bytes()
+
+
+# %% reading a list of channels
+
+
+def test_a_list_of_three_channels_is_fully_opaque():
+    assert Color.from_list([0.25, 0.5, 0.75]) == Color(0.25, 0.5, 0.75, Color().A)
+
+
+def test_a_fourth_channel_in_a_list_names_the_opacity():
+    assert Color.from_list([0.25, 0.5, 0.75, 0.125]).A == 0.125
+
+
+@pytest.mark.parametrize("channels", [[], [0.5, 0.5], [0.5, 0.5, 0.5, 0.5, 0.5]])
+def test_a_list_of_neither_three_nor_four_channels_is_rejected(channels):
+    with pytest.raises(WrongNumberOfColorChannels):
+        Color.from_list(channels)
 
 
 # %% colors as set and dictionary members

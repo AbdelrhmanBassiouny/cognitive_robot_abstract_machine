@@ -47,6 +47,7 @@ jobs:
           - lib: experiments
           - lib: cramera
           - lib: krrspatial
+          - lib: krrimage
           - lib: version
           - lib: cognitive_robot_abstract_machine
     uses: ./.github/workflows/ci_reusable.yml

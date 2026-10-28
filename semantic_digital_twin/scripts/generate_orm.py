@@ -12,6 +12,7 @@ from pathlib import Path
 
 import trimesh
 
+import krrimage.color
 import semantic_digital_twin
 import semantic_digital_twin.orm.model
 
@@ -64,7 +65,7 @@ def generate_orm():
     logging.getLogger("krrood").setLevel(logging.DEBUG)
 
     ormatic = ORMatic.from_package(
-        [semantic_digital_twin],
+        [semantic_digital_twin, krrimage.color],
         ormatic_interface_dependencies=[],
         ignored_classes=ignore_classes,
         type_mappings={
