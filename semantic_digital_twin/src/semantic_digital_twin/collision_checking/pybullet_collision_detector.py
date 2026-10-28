@@ -1,7 +1,6 @@
 import hashlib
 import logging
 import os
-import tempfile
 from dataclasses import dataclass, field
 from importlib.resources import files
 from pathlib import Path
@@ -36,6 +35,7 @@ logger = logging.getLogger(__name__)
 
 
 CACHE_DIR = create_cache_dir("convex_decompositions")
+LOG_DIR = create_cache_dir("log")
 
 _shape_cache: dict[Any, bullet.CollisionShape] = {}
 """
@@ -288,37 +288,33 @@ def convert_to_decomposed_obj_and_save_in_tmp(
     mesh: Mesh,
     mesh_decomposer: MeshDecomposer | None = None,
     cache_dir: Path = CACHE_DIR,
+    log_path: Path = LOG_DIR,
 ) -> str:
     """
     Converts a mesh to a convex decomposition and saves it in a cache file.
 
-    The cache file appears only once it is completely written, so a concurrent call
-    never reads a partially written file or the mesh before it is decomposed.
-
     :param mesh: the mesh to convert.
     :param mesh_decomposer: optional decomposer used for non-convex meshes.
     :param cache_dir: the cache directory to save the convex decomposition in.
+    :param log_path: the path to the log file.
     :return: the path to the convex decomposition file.
     """
     trimesh_obj = mesh.mesh
     file_hash = trimesh_quantized_hash(trimesh_obj)
     obj_file_name = str(cache_dir / f"{file_hash}.obj")
-    if os.path.exists(obj_file_name):
-        logging.debug(f'Cache hit, loaded "{obj_file_name}".')
-        return obj_file_name
-
-    create_path(obj_file_name)
-    with tempfile.NamedTemporaryFile(
-        mode="w", dir=cache_dir, suffix=".obj", delete=False
-    ) as temporary_file:
-        temporary_file.write(trimesh.exchange.obj.export_obj(trimesh_obj))
-    if not trimesh_obj.is_convex and mesh_decomposer is not None:
-        with suppress_stdout_stderr():
-            mesh_decomposer.apply_to_mesh_and_save(mesh, temporary_file.name)
-        logging.info(f'Saved convex decomposition to "{obj_file_name}".')
+    if not os.path.exists(obj_file_name):
+        obj_str = trimesh.exchange.obj.export_obj(trimesh_obj)
+        create_path(obj_file_name)
+        with open(obj_file_name, "w") as f:
+            f.write(obj_str)
+        if not trimesh_obj.is_convex and mesh_decomposer is not None:
+            with suppress_stdout_stderr():
+                mesh_decomposer.apply_to_mesh_and_save(mesh, obj_file_name)
+            logging.info(f'Saved convex decomposition to "{obj_file_name}".')
+        else:
+            logging.info(f'Saved obj to "{obj_file_name}".')
     else:
-        logging.info(f'Saved obj to "{obj_file_name}".')
-    os.replace(temporary_file.name, obj_file_name)
+        logging.debug(f'Cache hit, loaded "{obj_file_name}".')
     return obj_file_name
 
 

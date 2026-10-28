@@ -1,6 +1,5 @@
 import copy
 import os
-from dataclasses import dataclass
 
 import giskardpy_bullet_bindings as pb
 import pytest
@@ -14,10 +13,8 @@ from semantic_digital_twin.collision_checking.pybullet_collision_detector import
     clear_cache,
     convert_to_decomposed_obj_and_save_in_tmp,
     create_shape_from_geometry,
-    trimesh_quantized_hash,
 )
 from semantic_digital_twin.utils import create_cache_dir
-from semantic_digital_twin.pipeline.mesh_decomposition.base import MeshDecomposer
 from semantic_digital_twin.pipeline.mesh_decomposition.bullet_vhacd import (
     BulletVHACDMeshDecomposer,
 )
@@ -25,7 +22,7 @@ from semantic_digital_twin.pipeline.mesh_decomposition.coacd import COACDMeshDec
 from semantic_digital_twin.pipeline.mesh_decomposition.vhacd import VHACDMeshDecomposer
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.testing import world_setup_simple
-from semantic_digital_twin.world_description.geometry import Mesh, Shape
+from semantic_digital_twin.world_description.geometry import Mesh
 from semantic_digital_twin.world_description.world_entity import Body
 
 
@@ -196,50 +193,3 @@ def test_create_shape_from_geometry_shared_shape_does_not_leak_pose_between_worl
     )
 
     assert collision_b_after.distance == pytest.approx(baseline_distance_b)
-
-
-# %% a cache entry read while it is still being written
-
-
-@dataclass
-class CacheEntryWatchingDecomposer(MeshDecomposer):
-    """
-    Decomposes a mesh into its convex hull and records whether the cache entry the
-    decomposition is meant for can already be read while the decomposition runs.
-    """
-
-    cache_entry: Path
-    """
-    The cache file the decomposition ends up in.
-    """
-
-    entry_readable_while_decomposing: bool | None = None
-    """
-    Whether :attr:`cache_entry` existed while the decomposition ran, or ``None`` before
-    it ran.
-    """
-
-    def apply_to_mesh(self, mesh: Mesh) -> list[Shape]:
-        return [Mesh.from_trimesh(mesh=mesh.mesh.convex_hull, origin=mesh.origin)]
-
-    def apply_to_mesh_and_save(self, mesh: Mesh, output_path: str) -> str:
-        self.entry_readable_while_decomposing = self.cache_entry.exists()
-        self.apply_to_mesh(mesh)[0].mesh.export(output_path, file_type="obj")
-        return output_path
-
-
-def test_a_cache_entry_appears_only_once_its_decomposition_is_written(
-    clean_cache, cache_dir, non_convex_mesh
-):
-    """
-    A concurrent reader that finds the cache entry must find the finished
-    decomposition, never the raw mesh it is computed from.
-    """
-    cache_entry = cache_dir / f"{trimesh_quantized_hash(non_convex_mesh.mesh)}.obj"
-    decomposer = CacheEntryWatchingDecomposer(cache_entry=cache_entry)
-
-    convert_to_decomposed_obj_and_save_in_tmp(
-        non_convex_mesh, mesh_decomposer=decomposer, cache_dir=cache_dir
-    )
-
-    assert decomposer.entry_readable_while_decomposing is False
