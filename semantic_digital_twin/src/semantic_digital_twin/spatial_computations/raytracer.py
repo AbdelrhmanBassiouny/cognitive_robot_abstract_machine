@@ -280,7 +280,7 @@ class RayTracer:
             hit_points=points,
             ray_origins=ray_origins[ray_indices],
             ray_directions=ray_directions[ray_indices],
-            world_T_camera=self.scene.camera_transform,
+            world_T_camera=HomogeneousTransformationMatrix(self.scene.camera_transform),
         )
         valid_depths = hit_depths >= 0.0
         hit_pixels = hit_pixels[valid_depths]
