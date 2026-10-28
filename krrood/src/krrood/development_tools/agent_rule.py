@@ -1,6 +1,6 @@
 """
-The rules agents follow, the rule sets they belong to and the sections of ``AGENTS.md``
-that declare them.
+The rules agents follow, typed by the rule set they belong to, and the sections of
+``AGENTS.md`` that list them.
 """
 
 from __future__ import annotations
@@ -15,7 +15,6 @@ from types import ModuleType
 
 from typing_extensions import Any, Callable
 
-from krrood.development_tools.exceptions import SectionWithoutRuleSet
 from krrood.development_tools.repository_files import RepositoryInstructionsFile
 from krrood.ormatic.utils import classproperty
 
@@ -60,48 +59,63 @@ class CodeReference:
         return f"`{self.target.__name__}`"
 
 
-# %% rule sets
+# %% rules
 
 
-class RuleSet:
+@dataclass(frozen=True)
+class AgentRule:
     """
-    A set of rules a repository adopts as a whole. A rule belongs to exactly one rule
-    set, and ``AGENTS.md`` lists only the rules of the rule sets a repository chose. The
-    rule sets are the subclasses of this class.
+    One rule agents follow, rendered as a Markdown list item.
+
+    The type of a rule is the rule set it belongs to, which a repository adopts as a
+    whole; the rule sets are the subclasses of this class.
+    """
+
+    statement: str
+    """
+    The rule itself.
+    """
+
+    details: tuple[str, ...] = ()
+    """
+    The points that spell the rule out, rendered as a nested list below it.
     """
 
     @classproperty
-    def available(cls) -> list[type[RuleSet]]:
+    def available(cls) -> list[type[AgentRule]]:
         """
         Every rule set declared, in definition order.
         """
-        return cls.__subclasses__()
+        return AgentRule.__subclasses__()
 
     @classproperty
     def command_line_name(cls) -> str:
         """
         The name the command line chooses the rule set by.
         """
-        return cls.__name__.removesuffix("Rules").lower()
+        return cls.__name__.removesuffix("Rule").lower()
 
 
-class PythonRules(RuleSet):
+@dataclass(frozen=True)
+class PythonRule(AgentRule):
     """
-    The rule set for any Python repository.
-    """
-
-
-class KrroodRules(RuleSet):
-    """
-    The rule set for a repository built on krrood, naming the krrood API it uses.
+    A rule for any Python repository.
     """
 
 
-class ProjectRules(RuleSet):
+@dataclass(frozen=True)
+class KrroodRule(AgentRule):
     """
-    The rule set of one repository only, whose sections the repository declares in its
-    :attr:`~krrood.development_tools.repository_files.RepositoryInstructionsFile.PROJECT_RULES`
-    or in modules that one imports.
+    A rule for a repository built on krrood, naming the krrood API it uses.
+    """
+
+
+@dataclass(frozen=True)
+class ProjectRule(AgentRule):
+    """
+    A rule of one repository only, declared in its :attr:`~krrood.development_tools.repo
+    sitory_files.RepositoryInstructionsFile.PROJECT_RULES` or in modules that one
+    imports.
     """
 
     @classmethod
@@ -126,40 +140,16 @@ class ProjectRules(RuleSet):
         return module
 
 
-# %% rules
-
-
-@dataclass(frozen=True)
-class AgentRule:
-    """
-    One rule agents follow, rendered as a Markdown list item.
-    """
-
-    statement: str
-    """
-    The rule itself.
-    """
-
-    details: tuple[str, ...] = ()
-    """
-    The points that spell the rule out, rendered as a nested list below it.
-    """
-
-    rule_set: type[RuleSet] | None = None
-    """
-    The rule set the rule belongs to; none for the default rule set of its section.
-    """
-
-
 # %% sections
 
 
-class Section(AgentRule, Enum):
+class Section(Enum):
     """
-    A section of ``AGENTS.md`` on one topic, whose members are the rules it lists. A
-    member's value is the rule's statement, optionally followed by its details and its
-    rule set. A section nested under another overrides :attr:`parent` to return it; a
-    top-level section overrides :attr:`default_rule_set` instead.
+    A section of ``AGENTS.md`` on one topic, whose members name the rules it lists and
+    whose values are those rules.
+
+    Its name is the topic followed by ``Rules``. A section nested under another
+    overrides :attr:`parent` to return it.
     """
 
     @classproperty
@@ -168,18 +158,6 @@ class Section(AgentRule, Enum):
         The section this one is nested under; none for a top-level section.
         """
         return None
-
-    @classproperty
-    def default_rule_set(cls) -> type[RuleSet]:
-        """
-        The rule set of the section's rules that name none, which a nested section
-        takes from its parent.
-
-        :raises SectionWithoutRuleSet: If a top-level section names no rule set.
-        """
-        if cls.parent is None:
-            raise SectionWithoutRuleSet(cls)
-        return cls.parent.default_rule_set
 
     @classproperty
     def top_level(cls) -> list[type[Section]]:
@@ -193,11 +171,11 @@ class Section(AgentRule, Enum):
     @classproperty
     def title(cls) -> str:
         """
-        The text of the section's heading: the words of the class name in sentence case,
+        The text of the section's heading: the words of the topic in sentence case,
         keeping acronyms such as ``CI`` in capitals.
         """
         first_word, *other_words = re.findall(
-            r"[A-Z]+(?![a-z])|[A-Z][a-z0-9]*", cls.__name__
+            r"[A-Z]+(?![a-z])|[A-Z][a-z0-9]*", cls.__name__.removesuffix("Rules")
         )
         return " ".join(
             [
@@ -207,18 +185,16 @@ class Section(AgentRule, Enum):
         )
 
     @classmethod
-    def rules_in(cls, rule_sets: tuple[type[RuleSet], ...]) -> list[Section]:
+    def rules_in(cls, rule_sets: tuple[type[AgentRule], ...]) -> list[Section]:
         """
         :param rule_sets: The rule sets whose rules to list.
-        :return: The rules of those rule sets the section lists directly, in declaration
-            order.
+        :return: The members of the section whose rules belong to those rule sets, in
+            declaration order.
         """
-        return [
-            rule for rule in cls if (rule.rule_set or cls.default_rule_set) in rule_sets
-        ]
+        return [member for member in cls if isinstance(member.value, rule_sets)]
 
     @classmethod
-    def lists_rules_in(cls, rule_sets: tuple[type[RuleSet], ...]) -> bool:
+    def lists_rules_in(cls, rule_sets: tuple[type[AgentRule], ...]) -> bool:
         """
         :param rule_sets: The rule sets whose rules count.
         :return: Whether the section lists any rule of those rule sets, directly or in a
@@ -254,7 +230,7 @@ class Section(AgentRule, Enum):
     @classproperty
     def source_path(cls) -> Path:
         """
-        The path of the module declaring the section, relative to the directory its
-        top-level package or module lies in.
+        The path of the module declaring the section, relative to the directory its top-
+        level package or module lies in.
         """
         return Path(*cls.__module__.split(".")).with_suffix(".py")

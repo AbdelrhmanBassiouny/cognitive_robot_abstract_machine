@@ -18,29 +18,40 @@ for formatting hooks.
 
 ## Rule sets
 
-The rules are code. A section is an enum subclassing `Section`, named for one topic,
-whose members are its rules. Each member's value is the rule's statement, optionally
-followed by a tuple of the details that spell it out and by the rule set the rule
-belongs to. Every member is an `AgentRule`, so `Exceptions.NEVER_TRY_EXCEPT.statement`
-is one of the rules on exceptions. A nested section names the section it is nested under
-by overriding the `parent` classproperty: `Exceptions` returns `DesignPrinciples`. A
-section's heading is its class name in words, in sentence case (`ExternalServicesAndCI`
+The rules are code. A section is an enum subclassing `Section`, named for one topic
+followed by `Rules`. Its members name its rules, and each member's value is the rule: an
+`AgentRule` holding the rule's statement and, optionally, the details that spell it
+out, so `ExceptionModellingRules.NEVER_TRY_EXCEPT.value.statement` is one of the rules on
+modelling exceptions. A nested section names the section it is part of by overriding
+the `parent` classproperty: `ExceptionModellingRules` returns `DesignPrinciplesRules`.
+A section's heading is its topic in words, in sentence case (`ExternalServicesAndCIRules`
 becomes "External services and CI"). A rule that names code builds that name from the
 imported object with `CodeReference`, so the rule follows a rename.
 
-A rule set is a subclass of `RuleSet`. Every rule belongs to one: the one its value
-names, or else its section's `default_rule_set`, which a top-level section declares and a
-nested section takes from its parent. A topic both rule sets cover is one section, so
-`Exceptions` lists the Python rules on exceptions and the krrood one together.
+The type of a rule is the rule set it belongs to: a subclass of `AgentRule`. A topic
+several rule sets cover is one section, so `ExceptionModellingRules` lists the
+`PythonRule`s on exceptions and the `KrroodRule` together:
+
+```python
+class ExceptionModellingRules(Section):
+    @classproperty
+    def parent(cls) -> type[Section]:
+        return DesignPrinciplesRules
+
+    NEVER_TRY_EXCEPT = PythonRule("Never use try-except; ...")
+    SUBCLASS_THE_KRROOD_BASE_CLASS = KrroodRule(
+        f"Custom exceptions subclass {CodeReference(DataclassException).path}, ..."
+    )
+```
 
 `--rule-sets` chooses the rule sets whose rules `AGENTS.md` lists (all of them by
 default); a section none of whose rules is chosen is left out:
 
-- `python`: rules for any Python repository, `PythonRules`.
+- `python`: rules for any Python repository, `PythonRule`.
 - `krrood`: conventions for a repository built on krrood, naming the krrood API each one
   uses (`DataclassException`, `classproperty`, `PathEnumeration`, the JSON serializer,
-  `SubClassSafeGeneric`), `KrroodRules`.
-- `project`: the repository's own rules, `ProjectRules` (see
+  `SubClassSafeGeneric`), `KrroodRule`.
+- `project`: the repository's own rules, `ProjectRule` (see
   [Project rules](#project-rules)).
 
 A repository that does not use krrood generates its file with
@@ -90,23 +101,19 @@ rather than krrood.
 
 ## Project rules
 
-A repository's own rules are code too. Declare them as sections whose
-`default_rule_set` is `ProjectRules` in `agent_rules.py` at the repository root, or in
-modules that one imports; `krrood agents-md` imports that module and lists its sections
-after the shipped ones:
+A repository's own rules are code too. Declare them as `ProjectRule`s in sections in
+`agent_rules.py` at the repository root, or in modules that one imports; `krrood
+agents-md` imports that module and lists its sections after the shipped ones:
 
 ```python
-from krrood.development_tools.agent_rule import ProjectRules, RuleSet, Section
-from krrood.ormatic.utils import classproperty
+from krrood.development_tools.agent_rule import ProjectRule, Section
 
 
-class Deployment(Section):
-    @classproperty
-    def default_rule_set(cls) -> type[RuleSet]:
-        return ProjectRules
-
-    DEPLOY_FROM_TAGS = "Deploy only tagged commits"
-    TAG_RELEASES = "Tag every release", ("Use semantic versions", "Sign the tag")
+class DeploymentRules(Section):
+    DEPLOY_FROM_TAGS = ProjectRule("Deploy only tagged commits")
+    TAG_RELEASES = ProjectRule(
+        "Tag every release", ("Use semantic versions", "Sign the tag")
+    )
 ```
 
 ## Changing a rule
@@ -114,13 +121,13 @@ class Deployment(Section):
 Never edit `AGENTS.md`: the comment above each section's rules names the class and
 module they come from. Find the member by the rule's text and change it there.
 
-- A repository's own rule is in a section of `ProjectRules` in its `agent_rules.py` or a
+- A repository's own rule is a `ProjectRule` in its `agent_rules.py` or a
   module it imports.
 - A shared rule lives in `krrood/development_tools/shipped_rules.py` (in `krrood/src`
-  of cognitive_robot_abstract_machine). A rule that names krrood's API belongs to
-  `KrroodRules`; every other one to `PythonRules`.
+  of cognitive_robot_abstract_machine). A rule that names krrood's API is a
+  `KrroodRule`; every other one is a `PythonRule`.
 - A section is named for its topic, broadly enough that later rules on that topic fit
-  in it (`Serialization`, not `JSONSerialization`). Each topic is one section, whatever
+  in it (`SerializationRules`, not `JSONSerializationRules`). Each topic is one section, whatever
   rule sets its rules belong to, so sections never share a title. Add a rule to the
   section whose topic it is; when no section fits, declare one.
 
@@ -129,5 +136,5 @@ the regenerated `AGENTS.md` with the change; CI fails when the file is stale or 
 edited by hand. A shared rule reaches other repositories with the next krrood release.
 
 To adopt the tools in a repository with an `AGENTS.md`, first move its rules into
-`agent_rules.py` as `ProjectRules` sections, then run `krrood agents-md`, which replaces
+`agent_rules.py` as `ProjectRule`s, then run `krrood agents-md`, which replaces
 the file.

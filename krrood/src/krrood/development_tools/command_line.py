@@ -15,7 +15,7 @@ from pathlib import Path
 from typing_extensions import Sequence
 
 from krrood.development_tools.agent_instructions import AgentsInstructions
-from krrood.development_tools.agent_rule import RuleSet
+from krrood.development_tools.agent_rule import AgentRule
 from krrood.development_tools.formatting import DocstringFormatter
 from krrood.development_tools.repository_files import RepositoryInstructionsFile
 
@@ -129,8 +129,8 @@ class CommandLine:
         agents_parser.add_argument(
             Option.RULE_SETS,
             nargs="+",
-            choices=[rule_set.command_line_name for rule_set in RuleSet.available],
-            default=[rule_set.command_line_name for rule_set in RuleSet.available],
+            choices=[rule_set.command_line_name for rule_set in AgentRule.available],
+            default=[rule_set.command_line_name for rule_set in AgentRule.available],
             help="The rule sets AGENTS.md lists; all of them when omitted. The "
             "repository's own rules are those its "
             f"{RepositoryInstructionsFile.PROJECT_RULES} declares.",
@@ -162,7 +162,7 @@ class CommandLine:
             Path.cwd(),
             tuple(
                 rule_set
-                for rule_set in RuleSet.available
+                for rule_set in AgentRule.available
                 if rule_set.command_line_name in arguments.rule_sets
             ),
         )

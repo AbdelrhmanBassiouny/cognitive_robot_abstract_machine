@@ -20,6 +20,6 @@ class RepositoryInstructionsFile(StrEnum):
     PROJECT_RULES = "agent_rules.py"
     """
     The module ``krrood agents-md`` imports to find the repository's own rules: the
-    sections nested under :class:`~krrood.development_tools.agent_rule.ProjectRules` it
+    sections of :class:`~krrood.development_tools.agent_rule.ProjectRule` rules it
     declares or imports.
     """

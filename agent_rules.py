@@ -5,62 +5,53 @@ after the shared rule sets.
 
 from __future__ import annotations
 
-from krrood.development_tools.agent_rule import ProjectRules, RuleSet, Section
-from krrood.ormatic.utils import classproperty
+from krrood.development_tools.agent_rule import ProjectRule, Section
 
 
-class GeneratedORMInterfaces(Section):
+class GeneratedORMInterfacesRules(Section):
     """
     The rules on the generated ORM interfaces.
     """
 
-    @classproperty
-    def default_rule_set(cls) -> type[RuleSet]:
-        return ProjectRules
-
-    NEVER_EDIT = (
+    NEVER_EDIT = ProjectRule(
         "`ormatic_interface.py` files are generated, never written, and "
         "git-ignored (see `.gitignore`). Never edit them, and never read them to "
         "debug an ORM problem; regenerate them with "
         "`scripts/regenerate_all_orm.py` instead"
     )
 
-    BUILD_LOCALLY = (
+    BUILD_LOCALLY = ProjectRule(
         "The test suite builds them for its runs; a local checkout builds them "
         "with `scripts/regenerate_all_orm.py`"
     )
 
-    NEVER_TRACK = (
+    NEVER_TRACK = ProjectRule(
         "Never track one again: git refuses to overwrite a tracked path a checkout "
         "has generated its own copy of, which makes every branch switch fail"
     )
 
-    NEVER_BUILD_IN_TEST_RUNS = (
+    NEVER_BUILD_IN_TEST_RUNS = ProjectRule(
         "Pass `--orm-build never` to the test runs you start, and regenerate them "
         "with `scripts/regenerate_all_orm.py` when a change needs it"
     )
 
-    ASK_ABOUT_PERSISTENT_ORM_PROBLEMS = (
+    ASK_ABOUT_PERSISTENT_ORM_PROBLEMS = ProjectRule(
         "When regenerating the ORM interfaces does not fix an ORM problem, ask the "
         "developer"
     )
 
-    ASK_ABOUT_ORM_IMPORT_CYCLES = (
+    ASK_ABOUT_ORM_IMPORT_CYCLES = ProjectRule(
         "If an ORM import creates an import cycle, ask the user if a local import "
         "is fine"
     )
 
 
-class KrroodIsolation(Section):
+class KrroodIsolationRules(Section):
     """
     The rules keeping krrood independent of the other workspace packages.
     """
 
-    @classproperty
-    def default_rule_set(cls) -> type[RuleSet]:
-        return ProjectRules
-
-    KRROOD_IMPORTS_NO_WORKSPACE_PACKAGE = (
+    KRROOD_IMPORTS_NO_WORKSPACE_PACKAGE = ProjectRule(
         "`krrood`, including its tests under `test/krrood_test`, never imports "
         "another workspace package - in particular not `coraplex`, "
         "`semantic_digital_twin`, `giskardpy`, `physics_simulators`, `robokudo` or "
@@ -68,29 +59,25 @@ class KrroodIsolation(Section):
         "`probabilistic_model`, which `krrood`'s source already depends on"
     )
 
-    MIMIC_OTHER_PACKAGES_IN_KRROOD_TESTS = (
+    MIMIC_OTHER_PACKAGES_IN_KRROOD_TESTS = ProjectRule(
         "When a `krrood` test needs behaviour another package triggers, mimic the "
         "relevant classes and patterns in `test/krrood_test/dataset` and test "
         "against the mimics. Keep the test in `krrood` and do not depend on "
         "another package to reproduce the scenario"
     )
 
-    MIMICS_IMPORT_ONLY_KRROOD_DEPENDENCIES = (
+    MIMICS_IMPORT_ONLY_KRROOD_DEPENDENCIES = ProjectRule(
         "Those mimic classes import only `krrood`, `random_events` and "
         "`probabilistic_model`"
     )
 
 
-class DomainSpecificConventions(Section):
+class DomainSpecificConventionsRules(Section):
     """
     The rules pointing to the conventions of one domain.
     """
 
-    @classproperty
-    def default_rule_set(cls) -> type[RuleSet]:
-        return ProjectRules
-
-    FOLLOW_THE_SPATIAL_STYLE_GUIDE = (
+    FOLLOW_THE_SPATIAL_STYLE_GUIDE = ProjectRule(
         "For spatial types and connections, follow "
         "`semantic_digital_twin/doc/style_guide.md`"
     )

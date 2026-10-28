@@ -6,8 +6,8 @@
 {% if section.rules_in(rule_sets) %}
 <!-- from {{ section.__qualname__ }} in {{ section.source_path }} -->
 {% for rule in section.rules_in(rule_sets) %}
-- {{ rule.statement }}
-{% for detail in rule.details %}
+- {{ rule.value.statement }}
+{% for detail in rule.value.details %}
   - {{ detail }}
 {% endfor %}
 {% endfor %}

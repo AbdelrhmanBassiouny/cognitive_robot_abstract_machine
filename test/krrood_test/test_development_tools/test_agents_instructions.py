@@ -7,11 +7,11 @@ from typing_extensions import Callable
 
 from krrood.development_tools.agent_instructions import AgentsInstructions
 from krrood.development_tools.agent_rule import (
+    AgentRule,
     CodeReference,
-    KrroodRules,
-    ProjectRules,
-    PythonRules,
-    RuleSet,
+    KrroodRule,
+    ProjectRule,
+    PythonRule,
     Section,
 )
 from krrood.development_tools.command_line import (
@@ -20,19 +20,18 @@ from krrood.development_tools.command_line import (
     Option,
     Subcommand,
 )
-from krrood.development_tools.exceptions import SectionWithoutRuleSet
 from krrood.development_tools import shipped_rules
 from krrood.development_tools.repository_files import RepositoryInstructionsFile
 from krrood.exceptions import DataclassException
 from krrood.patterns import path_enumeration
 
 from .dataset.rule_sections import (
-    AdditionalDatasetRules,
-    DatasetRules,
-    Deployment,
-    DesignPrinciples,
-    Errors,
-    ReleasesThroughCI,
+    AdditionalDatasetRule,
+    DatasetRule,
+    DeploymentRules,
+    DesignPrinciplesRules,
+    ErrorsRules,
+    ReleasesThroughCIRules,
 )
 from .dataset_files import DatasetFile
 
@@ -42,52 +41,46 @@ from .dataset_files import DatasetFile
 def test_the_file_lists_the_rules_of_the_chosen_rule_sets_under_their_sections(
     repository_root: Path,
 ) -> None:
-    instructions = AgentsInstructions(repository_root, (DatasetRules,))
+    instructions = AgentsInstructions(repository_root, (DatasetRule,))
 
     assert instructions.text == DatasetFile.RULE_SECTIONS_TEXT.read_text().format(
-        source_path=DesignPrinciples.source_path
+        source_path=DesignPrinciplesRules.source_path
     )
 
 
 def test_a_section_is_nested_in_the_section_its_parent_returns() -> None:
-    assert Errors.parent is DesignPrinciples
+    assert ErrorsRules.parent is DesignPrinciplesRules
 
 
 def test_the_subsections_of_a_section_are_the_sections_nested_in_it() -> None:
-    assert DesignPrinciples.subsections == [Errors]
-
-
-def test_a_top_level_section_naming_no_rule_set_is_rejected() -> None:
-    with pytest.raises(SectionWithoutRuleSet):
-        Section.default_rule_set
-
-
-def test_a_nested_section_takes_the_rule_set_of_its_parent() -> None:
-    assert Errors.default_rule_set is DesignPrinciples.default_rule_set
+    assert DesignPrinciplesRules.subsections == [ErrorsRules]
 
 
 def test_a_section_lists_only_its_own_rules_of_the_chosen_rule_sets() -> None:
-    assert Errors.rules_in((DatasetRules,)) == [Errors.RAISE_ERRORS, Errors.NAME_ERRORS]
+    assert ErrorsRules.rules_in((DatasetRule,)) == [
+        ErrorsRules.RAISE_ERRORS,
+        ErrorsRules.NAME_ERRORS,
+    ]
 
 
-def test_a_rule_naming_a_rule_set_belongs_to_that_one() -> None:
-    assert Errors.rules_in((AdditionalDatasetRules,)) == [Errors.WRAP_ERRORS]
+def test_a_section_lists_the_rules_of_each_rule_set_it_holds() -> None:
+    assert ErrorsRules.rules_in((AdditionalDatasetRule,)) == [ErrorsRules.WRAP_ERRORS]
 
 
 def test_a_section_without_rules_of_the_chosen_rule_sets_has_none_to_list() -> None:
-    assert not Deployment.lists_rules_in((DatasetRules, AdditionalDatasetRules))
+    assert not DeploymentRules.lists_rules_in((DatasetRule, AdditionalDatasetRule))
 
 
-def test_a_title_keeps_acronyms_in_capitals() -> None:
-    assert ReleasesThroughCI.title == "Releases through CI"
+def test_a_title_names_the_topic_keeping_acronyms_in_capitals() -> None:
+    assert ReleasesThroughCIRules.title == "Releases through CI"
 
 
-def test_the_rule_sets_are_the_subclasses_of_rule_set() -> None:
-    assert RuleSet.available[:3] == [PythonRules, KrroodRules, ProjectRules]
+def test_the_rule_sets_are_the_subclasses_of_agent_rule() -> None:
+    assert AgentRule.available[:3] == [PythonRule, KrroodRule, ProjectRule]
 
 
 def test_python_rules_name_no_krrood_api(repository_root: Path) -> None:
-    text = AgentsInstructions(repository_root, (PythonRules,)).text
+    text = AgentsInstructions(repository_root, (PythonRule,)).text
     rules = "\n".join(line for line in text.splitlines() if not line.startswith("<!--"))
 
     assert "krrood" not in rules.lower()
@@ -110,7 +103,7 @@ def test_no_two_shipped_sibling_sections_share_a_title() -> None:
 
 
 def test_shipped_rules_name_no_cram_package(repository_root: Path) -> None:
-    text = AgentsInstructions(repository_root, (PythonRules, KrroodRules)).text
+    text = AgentsInstructions(repository_root, (PythonRule, KrroodRule)).text
 
     assert "cram" not in text.lower()
 
@@ -160,23 +153,23 @@ def project_rules_repository(
 def test_the_project_rules_module_declares_project_sections(
     project_rules_repository: Path,
 ) -> None:
-    module = ProjectRules.import_from(project_rules_repository)
+    module = ProjectRule.import_from(project_rules_repository)
 
-    assert module.Deployment in Section.top_level
+    assert module.DeploymentRules in Section.top_level
 
 
 def test_the_project_rules_module_is_imported_once(
     project_rules_repository: Path,
 ) -> None:
-    assert ProjectRules.import_from(
+    assert ProjectRule.import_from(project_rules_repository) is ProjectRule.import_from(
         project_rules_repository
-    ) is ProjectRules.import_from(project_rules_repository)
+    )
 
 
 def test_a_repository_without_a_project_rules_module_has_none(
     repository_root: Path,
 ) -> None:
-    assert ProjectRules.import_from(repository_root) is None
+    assert ProjectRule.import_from(repository_root) is None
 
 
 # %% command line
@@ -187,7 +180,7 @@ def test_agents_md_command_writes_a_new_file(repository_root: Path) -> None:
 
     assert exit_status == ExitStatus.FAILURE
     assert (repository_root / RepositoryInstructionsFile.AGENTS).read_text() == (
-        AgentsInstructions(repository_root, tuple(RuleSet.available)).text
+        AgentsInstructions(repository_root, tuple(AgentRule.available)).text
     )
 
 
@@ -200,7 +193,7 @@ def test_agents_md_command_replaces_a_hand_written_file(
     CommandLine.main([Subcommand.AGENTS_MD])
 
     assert path.read_text() == (
-        AgentsInstructions(repository_root, tuple(RuleSet.available)).text
+        AgentsInstructions(repository_root, tuple(AgentRule.available)).text
     )
 
 
@@ -208,11 +201,11 @@ def test_agents_md_command_writes_only_the_chosen_rule_sets(
     repository_root: Path,
 ) -> None:
     CommandLine.main(
-        [Subcommand.AGENTS_MD, Option.RULE_SETS, PythonRules.command_line_name]
+        [Subcommand.AGENTS_MD, Option.RULE_SETS, PythonRule.command_line_name]
     )
 
     assert (repository_root / RepositoryInstructionsFile.AGENTS).read_text() == (
-        AgentsInstructions(repository_root, (PythonRules,)).text
+        AgentsInstructions(repository_root, (PythonRule,)).text
     )
 
 
@@ -223,13 +216,13 @@ def test_agents_md_command_keeps_rule_set_order_whatever_the_order_given(
         [
             Subcommand.AGENTS_MD,
             Option.RULE_SETS,
-            KrroodRules.command_line_name,
-            PythonRules.command_line_name,
+            KrroodRule.command_line_name,
+            PythonRule.command_line_name,
         ]
     )
 
     assert (repository_root / RepositoryInstructionsFile.AGENTS).read_text() == (
-        AgentsInstructions(repository_root, (PythonRules, KrroodRules)).text
+        AgentsInstructions(repository_root, (PythonRule, KrroodRule)).text
     )
 
 
@@ -259,9 +252,9 @@ def test_agents_md_command_adds_the_project_rules(
     CommandLine.main([Subcommand.AGENTS_MD])
 
     text = (project_rules_repository / RepositoryInstructionsFile.AGENTS).read_text()
-    assert ProjectRules.import_from(project_rules_repository).Deployment.heading in (
-        text.splitlines()
-    )
+    assert ProjectRule.import_from(
+        project_rules_repository
+    ).DeploymentRules.heading in (text.splitlines())
 
 
 def test_check_fails_when_the_file_is_missing(repository_root: Path) -> None:

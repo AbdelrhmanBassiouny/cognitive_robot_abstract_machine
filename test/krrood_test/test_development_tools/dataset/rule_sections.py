@@ -4,40 +4,40 @@ A few rule sets and sections standing in for the ones krrood ships.
 
 from __future__ import annotations
 
-from krrood.development_tools.agent_rule import RuleSet, Section
+from dataclasses import dataclass
+
+from krrood.development_tools.agent_rule import AgentRule, Section
 from krrood.ormatic.utils import classproperty
 
 # %% rule sets
 
 
-class DatasetRules(RuleSet):
+@dataclass(frozen=True)
+class DatasetRule(AgentRule):
     """
-    A rule set standing in for the ones krrood ships.
+    A rule of a rule set standing in for the ones krrood ships.
     """
 
 
-class AdditionalDatasetRules(RuleSet):
+@dataclass(frozen=True)
+class AdditionalDatasetRule(AgentRule):
     """
-    A second rule set, some of whose rules are in the sections of :class:`DatasetRules`.
+    A rule of a second rule set, sharing the sections of :class:`DatasetRule`.
     """
 
 
 # %% sections
 
 
-class DesignPrinciples(Section):
+class DesignPrinciplesRules(Section):
     """
     A section listing rules and holding a subsection.
     """
 
-    @classproperty
-    def default_rule_set(cls) -> type[RuleSet]:
-        return DatasetRules
-
-    KEEP_DESIGNS_SIMPLE = "A rule about design"
+    KEEP_DESIGNS_SIMPLE = DatasetRule("A rule about design")
 
 
-class Errors(Section):
+class ErrorsRules(Section):
     """
     A subsection whose first rule is spelled out by details and whose last rule belongs
     to another rule set.
@@ -45,52 +45,46 @@ class Errors(Section):
 
     @classproperty
     def parent(cls) -> type[Section]:
-        return DesignPrinciples
+        return DesignPrinciplesRules
 
-    RAISE_ERRORS = ("A rule about errors", ("A first detail", "A second detail"))
+    RAISE_ERRORS = DatasetRule(
+        "A rule about errors", ("A first detail", "A second detail")
+    )
 
-    NAME_ERRORS = "Another rule about errors"
+    NAME_ERRORS = DatasetRule("Another rule about errors")
 
-    WRAP_ERRORS = "A rule about errors of another rule set", (), AdditionalDatasetRules
+    WRAP_ERRORS = AdditionalDatasetRule("A rule about errors of another rule set")
 
 
-class Testing(Section):
+class TestingRules(Section):
     """
     A section listing rules only in its subsection.
     """
 
-    @classproperty
-    def default_rule_set(cls) -> type[RuleSet]:
-        return DatasetRules
 
-
-class Assertions(Section):
+class AssertionsRules(Section):
     """
     The subsection of a section without rules of its own.
     """
 
     @classproperty
     def parent(cls) -> type[Section]:
-        return Testing
+        return TestingRules
 
-    ASSERT_EXACTLY = "A rule about assertions"
+    ASSERT_EXACTLY = DatasetRule("A rule about assertions")
 
 
-class Deployment(Section):
+class DeploymentRules(Section):
     """
     A section without rules of the rule set it belongs to.
     """
 
-    @classproperty
-    def default_rule_set(cls) -> type[RuleSet]:
-        return DatasetRules
 
-
-class ReleasesThroughCI(Section):
+class ReleasesThroughCIRules(Section):
     """
     A subsection whose name ends in an acronym.
     """
 
     @classproperty
     def parent(cls) -> type[Section]:
-        return Deployment
+        return DeploymentRules
