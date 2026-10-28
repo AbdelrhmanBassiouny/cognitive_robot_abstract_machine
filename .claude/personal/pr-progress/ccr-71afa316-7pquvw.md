@@ -1,11 +1,11 @@
 PR #534 (draft, base `claude/festive-pascal-g09gl3` = #517).
 
 Plan
-- `PullRequestLabels` project rule section in `agent_rules.py`, regenerated `AGENTS.md`.
+- Top-level `PullRequestLabelsRules` in `agent_rules.py` (#517's agents layout), regenerated `AGENTS.md`.
 
 Done
-- Section, AGENTS.md regenerated, dev-tools tests pass, draft PR opened.
+- Merged #517 head (ddf666cb94); review thread (suggest labels on PRs not opened) fixed, resolved.
 
 Next
-- Retarget to `main` once #517 merges; add `dev-tools` label upstream on promotion.
+- Re-merge #517 when it moves; retarget to `main` once it merges; `dev-tools` label upstream on promotion.
 - Possible follow-up: basstler promotion links pass `labels=`.
