@@ -332,6 +332,11 @@ class DAiSyLeftArm(Arm[DAiSyLeftGripper]):
         self._setup_hardware_interfaces_for_active_connections()
 
     def setup_joint_states(self) -> list[JointState]:
+        """
+        The park state keeps the wrist on the side grasps on the table are reached from,
+        so reaching one from it does not pass through the wrist singularity at
+        :attr:`DAiSyJoint.LEFT_WRIST_2` = 0.
+        """
         connections = self.active_connections
         arm_park = JointState.from_mapping(
             name=PrefixedName("left_arm_park", prefix=self.name.name),
@@ -340,11 +345,11 @@ class DAiSyLeftArm(Arm[DAiSyLeftGripper]):
                     connections,
                     [
                         -1.84,  # left_shoulder_pan_joint
-                        -1.94,  # left_shoulder_lift_joint
-                        1.81,  # left_elbow_joint
-                        -1.45,  # left_wrist_1_joint
-                        -1.60,  # left_wrist_2_joint
-                        -3.40,  # left_wrist_3_joint
+                        -1.49,  # left_shoulder_lift_joint
+                        1.43,  # left_elbow_joint
+                        1.63,  # left_wrist_1_joint
+                        1.60,  # left_wrist_2_joint
+                        -0.26,  # left_wrist_3_joint
                     ],
                 )
             ),
