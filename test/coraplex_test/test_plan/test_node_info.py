@@ -7,7 +7,11 @@ from krrood.entity_query_language.factories import a, variable
 
 from coraplex.datastructures.enums import NodeDetail, NodeDetailNotation
 from coraplex.plans.failures import PlanFailure
-from coraplex.plans.node_info import NodeDetailRenderer, NodeInfoSection
+from coraplex.plans.node_info import (
+    NodeDetailRenderer,
+    NodeDetailRule,
+    NodeInfoSection,
+)
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction
 from semantic_digital_twin.datastructures.definitions import TorsoState
@@ -68,6 +72,16 @@ def test_an_enum_member_is_named_by_its_name():
     An enumeration member reads as its name, without its enumeration.
     """
     assert NodeDetailRenderer().render(TorsoState.HIGH) == TorsoState.HIGH.name
+
+
+def test_an_enum_member_that_is_a_text_is_named_by_its_name():
+    """
+    A member of a text enumeration reads as its name, not as its text.
+    """
+    assert (
+        NodeDetailRenderer().render(NodeDetail.DESIGNATOR_PARAMETER)
+        == NodeDetail.DESIGNATOR_PARAMETER.name
+    )
 
 
 def test_a_body_is_named_by_its_name():
@@ -231,6 +245,46 @@ def test_a_description_is_shown_by_the_fields_that_hold_a_value():
             f"height {renderer.render(description.height)}",
         ]
     )
+
+
+# %% kinds of values added later
+
+
+@dataclass
+class ValueWithItsOwnRule:
+    """
+    A kind of value the renderer does not know, written by a rule added for it.
+    """
+
+    reading: float
+    """
+    The number its rule writes.
+    """
+
+
+class RuleAddedForAValue(NodeDetailRule[ValueWithItsOwnRule]):
+    """
+    Writes a :class:`ValueWithItsOwnRule` as its reading alone.
+    """
+
+    @classmethod
+    def render(
+        cls,
+        value: ValueWithItsOwnRule,
+        nested: bool,
+        renderer: NodeDetailRenderer,
+    ) -> str:
+        return renderer.render(value.reading, nested)
+
+
+def test_a_kind_of_value_is_written_by_the_rule_added_for_it():
+    """
+    A rule added for a kind of value writes it, instead of the description the renderer
+    would write.
+    """
+    renderer = NodeDetailRenderer()
+
+    assert renderer.render(ValueWithItsOwnRule(reading=0.5)) == renderer.render(0.5)
 
 
 # %% node details
