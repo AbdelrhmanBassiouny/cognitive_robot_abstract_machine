@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import os
+import tempfile
 from dataclasses import dataclass, field
 from importlib.resources import files
 from pathlib import Path
@@ -293,6 +294,9 @@ def convert_to_decomposed_obj_and_save_in_tmp(
     """
     Converts a mesh to a convex decomposition and saves it in a cache file.
 
+    The cache file appears only once it is complete, so a process that finds it never
+    reads a decomposition that is still being written.
+
     :param mesh: the mesh to convert.
     :param mesh_decomposer: optional decomposer used for non-convex meshes.
     :param cache_dir: the cache directory to save the convex decomposition in.
@@ -302,19 +306,22 @@ def convert_to_decomposed_obj_and_save_in_tmp(
     trimesh_obj = mesh.mesh
     file_hash = trimesh_quantized_hash(trimesh_obj)
     obj_file_name = str(cache_dir / f"{file_hash}.obj")
-    if not os.path.exists(obj_file_name):
-        obj_str = trimesh.exchange.obj.export_obj(trimesh_obj)
-        create_path(obj_file_name)
-        with open(obj_file_name, "w") as f:
-            f.write(obj_str)
-        if not trimesh_obj.is_convex and mesh_decomposer is not None:
-            with suppress_stdout_stderr():
-                mesh_decomposer.apply_to_mesh_and_save(mesh, obj_file_name)
-            logging.info(f'Saved convex decomposition to "{obj_file_name}".')
-        else:
-            logging.info(f'Saved obj to "{obj_file_name}".')
-    else:
+    if os.path.exists(obj_file_name):
         logging.debug(f'Cache hit, loaded "{obj_file_name}".')
+        return obj_file_name
+
+    create_path(obj_file_name)
+    with tempfile.NamedTemporaryFile(
+        "w", dir=os.path.dirname(obj_file_name), suffix=".obj", delete=False
+    ) as unfinished_file:
+        unfinished_file.write(trimesh.exchange.obj.export_obj(trimesh_obj))
+    if not trimesh_obj.is_convex and mesh_decomposer is not None:
+        with suppress_stdout_stderr():
+            mesh_decomposer.apply_to_mesh_and_save(mesh, unfinished_file.name)
+        logging.info(f'Saved convex decomposition to "{obj_file_name}".')
+    else:
+        logging.info(f'Saved obj to "{obj_file_name}".')
+    os.replace(unfinished_file.name, obj_file_name)
     return obj_file_name
 
 
