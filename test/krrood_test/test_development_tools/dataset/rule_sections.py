@@ -4,7 +4,7 @@ A few sections standing in for the ones krrood ships.
 
 from __future__ import annotations
 
-from krrood.development_tools.agent_rule import Section
+from krrood.development_tools.agents.rule import Section
 from krrood.ormatic.utils import classproperty
 
 # %% sections

@@ -14,9 +14,11 @@ from pathlib import Path
 
 from typing_extensions import Sequence
 
-from krrood.development_tools.agent_instructions import AgentsInstructions
+from krrood.development_tools.agents.instructions import AgentsInstructions
 from krrood.development_tools.formatting import DocstringFormatter
-from krrood.development_tools.repository_files import RepositoryInstructionsFile
+from krrood.development_tools.agents.repository_files import (
+    RepositoryInstructionsFile,
+)
 
 logger = logging.getLogger(__name__)
 

@@ -5,18 +5,16 @@ repository declares.
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 from dataclasses import dataclass
 from pathlib import Path
-from types import ModuleType
 
 from krrood.code_generation.generator import CodeGenerator
-from krrood.development_tools.agent_rule import Section
-from krrood.development_tools.repository_files import RepositoryInstructionsFile
-
-# imported to declare the sections of the shipped rules
-from krrood.development_tools import shipped_rules  # noqa: F401
+from krrood.development_tools.agents import shipped_rules
+from krrood.development_tools.agents.repository_files import (
+    RepositoryInstructionsFile,
+)
+from krrood.development_tools.agents.rule import Section
+from krrood.development_tools.agents.rule_module import RuleModule
 from krrood.patterns.path_enumeration import PathEnumeration
 
 # %% file contents
@@ -56,32 +54,15 @@ class AgentsInstructions:
     def from_repository(cls, repository_root: Path) -> AgentsInstructions:
         """
         :param repository_root: The directory holding the repository's ``AGENTS.md``.
-        :return: The file listing every section declared: the ones krrood ships, then
-            the repository's own.
+        :return: The file listing the sections krrood ships, then the repository's own.
         """
-        cls.import_project_rules(repository_root)
-        return cls(repository_root, Section.top_level)
-
-    @classmethod
-    def import_project_rules(cls, repository_root: Path) -> ModuleType | None:
-        """
-        Import the repository's rules module, once per process, which declares the
-        repository's own sections.
-
-        :param repository_root: The directory holding the module.
-        :return: The module; none if the repository has no such module.
-        """
-        path = repository_root / RepositoryInstructionsFile.PROJECT_RULES
-        if not path.is_file():
-            return None
-        module_name = path.stem
-        if module_name in sys.modules:
-            return sys.modules[module_name]
-        specification = importlib.util.spec_from_file_location(module_name, path)
-        module = importlib.util.module_from_spec(specification)
-        sys.modules[module_name] = module
-        specification.loader.exec_module(module)
-        return module
+        sections = RuleModule(shipped_rules).sections
+        project_rules = RuleModule.import_from(
+            repository_root, RepositoryInstructionsFile.PROJECT_RULES
+        )
+        if project_rules is not None:
+            sections += project_rules.sections
+        return cls(repository_root, sections)
 
     @property
     def path(self) -> Path:

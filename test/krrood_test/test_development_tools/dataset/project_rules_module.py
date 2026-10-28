@@ -4,7 +4,7 @@ A repository's own rules module, standing in for the one a repository declares.
 
 from __future__ import annotations
 
-from krrood.development_tools.agent_rule import Section
+from krrood.development_tools.agents.rule import Section
 
 
 class DeploymentRules(Section):

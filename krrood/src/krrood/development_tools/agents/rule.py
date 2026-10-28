@@ -94,15 +94,6 @@ class Section(AgentRule, Enum):
         return None
 
     @classproperty
-    def top_level(cls) -> list[type[Section]]:
-        """
-        The sections nested under no other section, in definition order.
-        """
-        return [
-            section for section in Section.__subclasses__() if section.parent is None
-        ]
-
-    @classproperty
     def title(cls) -> str:
         """
         The text of the section's heading: the words of the topic in sentence case,

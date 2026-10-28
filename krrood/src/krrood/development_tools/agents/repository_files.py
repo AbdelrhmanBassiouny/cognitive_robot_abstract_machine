@@ -1,5 +1,5 @@
 """
-The files the development tools read and write in a repository.
+The files ``krrood agents-md`` reads and writes in a repository.
 """
 
 from __future__ import annotations
@@ -18,8 +18,8 @@ class RepositoryInstructionsFile(StrEnum):
     repository's own.
     """
 
-    PROJECT_RULES = "agent_rules.py"
+    PROJECT_RULES = "agent_rules"
     """
-    The module ``krrood agents-md`` imports to find the repository's own rules: the
-    sections it declares or imports.
+    The module or package ``krrood agents-md`` imports to find the repository's own
+    rules: the sections defined in it.
     """

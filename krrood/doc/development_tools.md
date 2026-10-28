@@ -29,6 +29,9 @@ CI"). A rule that names code builds that name from the imported object with
 `CodeReference`, so the rule follows a rename:
 
 ```python
+from krrood.development_tools.agents.rule import CodeReference, Section
+
+
 class ExceptionModellingRules(Section):
     @classproperty
     def parent(cls) -> type[Section]:
@@ -39,6 +42,13 @@ class ExceptionModellingRules(Section):
         f"Custom exceptions subclass {CodeReference(DataclassException).path}, ..."
     )
 ```
+
+The shipped rules live in the package `krrood.development_tools.agents.shipped_rules`,
+one module per top-level section, holding that section and the sections nested in it.
+`krrood agents-md` finds every section defined in a module of that package; a section
+a module only imports, or one defined anywhere else, is never listed. Top-level
+sections appear in alphabetical order of their headings, and nested sections in the
+order they are written.
 
 ## Installation
 
@@ -84,11 +94,13 @@ rather than krrood.
 
 ## Project rules
 
-A repository's own rules are code too. Declare them in sections in `agent_rules.py` at the repository root, or in modules that one imports; `krrood
-agents-md` imports that module and lists its sections after the shipped ones:
+A repository's own rules are code too. Declare them in sections in an `agent_rules.py`
+module at the repository root, or in the modules of an `agent_rules` package there.
+`krrood agents-md` imports it and lists the sections defined in it after the shipped
+ones, found and ordered the same way:
 
 ```python
-from krrood.development_tools.agent_rule import Section
+from krrood.development_tools.agents.rule import Section
 
 
 class DeploymentRules(Section):
@@ -101,18 +113,19 @@ class DeploymentRules(Section):
 Never edit `AGENTS.md`: the comment above each section's rules names the class and
 module they come from. Find the member by the rule's text and change it there.
 
-- A repository's own rule is in its `agent_rules.py` or a module it imports.
-- A shared rule lives in `krrood/development_tools/shipped_rules.py` (in `krrood/src`
-  of cognitive_robot_abstract_machine).
+- A repository's own rule is in its `agent_rules.py`, or in a module of its
+  `agent_rules` package.
+- A shared rule lives in the module for its top-level section in
+  `krrood/development_tools/agents/shipped_rules/` (in `krrood/src` of
+  cognitive_robot_abstract_machine).
 - A section is named for its topic, broadly enough that later rules on that topic fit
   in it (`SerializationRules`, not `JSONSerializationRules`). Each topic is one section, so
-  sections never share a title. Add a rule to the
-  section whose topic it is; when no section fits, declare one.
+  sections never share a title. Add a rule to the section whose topic it is; when no
+  section fits, declare one, as a new module for a new top-level section.
 
 After changing a rule, run `krrood agents-md` (the pre-commit hook does this) and commit
 the regenerated `AGENTS.md` with the change; CI fails when the file is stale or was
 edited by hand. A shared rule reaches other repositories with the next krrood release.
 
 To adopt the tools in a repository with an `AGENTS.md`, first move its rules into
-`agent_rules.py`, then run `krrood agents-md`, which replaces
-the file.
+`agent_rules.py`, then run `krrood agents-md`, which replaces the file.
