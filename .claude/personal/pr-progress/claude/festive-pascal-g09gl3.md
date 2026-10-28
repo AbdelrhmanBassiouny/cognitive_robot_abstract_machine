@@ -5,6 +5,7 @@ Plan
 
 Done
 - 4fab6af70: agents subpackage, shipped_rules split, RuleModule discovery, Miscellaneous dissolved, agent_rules may be a package.
+- ddf666cb9: agents package __init__ files emptied (review).
 
 Next
 - User replies on cram2#806 threads (krrood_rules.py:28/99, python_rules.py:443/511/563; now shipped_rules.py) and re-requests tomsch420.
