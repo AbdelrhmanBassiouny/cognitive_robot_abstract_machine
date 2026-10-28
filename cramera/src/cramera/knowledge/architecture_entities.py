@@ -8,8 +8,6 @@ from dataclasses import dataclass
 
 from cramera.knowledge.entity import NamedEntity
 
-from typing_extensions import List, Tuple
-
 
 @dataclass(unsafe_hash=True)
 class ModuleGrouping(NamedEntity):
@@ -79,7 +77,7 @@ class PythonClass(NamedEntity):
     Repository-relative module path.
     """
 
-    bases: Tuple[str, ...]
+    bases: tuple[str, ...]
     """
     Names of the direct base classes.
     """
@@ -103,7 +101,7 @@ class PythonClass(NamedEntity):
         """
         return self.module + "." + self.name
 
-    def related_highlight_ids(self) -> List[str]:
+    def related_highlight_ids(self) -> list[str]:
         """
         The subpackage and package to light up instead of the class itself.
 

@@ -52,7 +52,7 @@ class ZooDataset:
     """
 
 
-def load_cached_dataset(cache_file) -> Optional[ZooDataset]:
+def load_cached_dataset(cache_file) -> ZooDataset | None:
     """
     Loads the dataset from cache if it exists.
     """
@@ -85,7 +85,7 @@ def save_dataset_to_cache(dataset: ZooDataset, cache_file: str) -> None:
     logger.info("Dataset cached successfully.")
 
 
-def get_dataset(dataset_id, cache_file: Optional[str] = None) -> Optional[ZooDataset]:
+def get_dataset(dataset_id, cache_file: str | None = None) -> ZooDataset | None:
     """
     Fetches dataset from cache or downloads it if not available.
 
@@ -124,8 +124,8 @@ def get_dataset(dataset_id, cache_file: Optional[str] = None) -> Optional[ZooDat
 
 
 def load_zoo_dataset(
-    cache_file: Optional[str] = None,
-) -> Tuple[List[Case], List[Species]]:
+    cache_file: str | None = None,
+) -> tuple[list[Case], list[Species]]:
     """
     Load the zoo dataset.
 
@@ -163,7 +163,7 @@ def load_zoo_dataset(
     return all_cases, targets
 
 
-def load_zoo_cases(cache_file: Optional[str] = None) -> List[Case]:
+def load_zoo_cases(cache_file: str | None = None) -> list[Case]:
     """
     Load the zoo dataset cases.
 
@@ -205,7 +205,7 @@ class PhysicalObject:
     The name of the object.
     """
 
-    _contained_objects: List[PhysicalObject] = field(default_factory=list)
+    _contained_objects: list[PhysicalObject] = field(default_factory=list)
     """
     The list of objects contained in this object.
     """
@@ -232,11 +232,11 @@ class PhysicalObject:
     """
 
     @property
-    def contained_objects(self) -> List[PhysicalObject]:
+    def contained_objects(self) -> list[PhysicalObject]:
         return self._contained_objects
 
     @contained_objects.setter
-    def contained_objects(self, value: List[PhysicalObject]):
+    def contained_objects(self, value: list[PhysicalObject]):
         self._contained_objects = value
 
     @_is_a_robot_rdr.decorator
@@ -245,8 +245,8 @@ class PhysicalObject:
 
     @_select_parts_rdr.decorator
     def select_objects_that_are_parts_of_robot(
-        self, objects: List[PhysicalObject], robot: Robot
-    ) -> List[PhysicalObject]:
+        self, objects: list[PhysicalObject], robot: Robot
+    ) -> list[PhysicalObject]:
         pass
 
     def __str__(self):
@@ -270,7 +270,7 @@ class Part(PhysicalObject): ...
 
 @dataclass(eq=False)
 class Robot(PhysicalObject):
-    parts: List[Part] = field(default_factory=list)
+    parts: list[Part] = field(default_factory=list)
 
 
 class Base(sqlalchemy.orm.DeclarativeBase):
@@ -317,12 +317,12 @@ class MappedAnimal(MappedAsDataclass, Base):
     catsize: Mapped[bool]
     species: Mapped[Species] = mapped_column(nullable=True)
 
-    habitats: Mapped[Set[HabitatTable]] = relationship(default_factory=set)
+    habitats: Mapped[set[HabitatTable]] = relationship(default_factory=set)
 
 
 @dataclass(unsafe_hash=True)
 class WorldEntity:
-    world: Optional[World] = field(default=None, kw_only=True, repr=False, hash=False)
+    world: World | None = field(default=None, kw_only=True, repr=False, hash=False)
 
 
 @dataclass(unsafe_hash=True)
@@ -355,9 +355,9 @@ class PrismaticConnection(Connection): ...
 @dataclass
 class World:
     id: int = 0
-    bodies: List[Body] = field(default_factory=list)
-    connections: List[Connection] = field(default_factory=list)
-    views: List[View] = field(default_factory=list, repr=False)
+    bodies: list[Body] = field(default_factory=list)
+    connections: list[Connection] = field(default_factory=list)
+    views: list[View] = field(default_factory=list, repr=False)
 
     def __hash__(self):
         return hash(self.id)
@@ -376,7 +376,7 @@ class View(WorldEntity): ...
 class Drawer(View):
     handle: Handle
     container: Container
-    correct: Optional[bool] = None
+    correct: bool | None = None
 
     def __hash__(self):
         return hash((self.__class__.__name__, self.handle, self.container))
@@ -394,7 +394,7 @@ class Drawer(View):
 @dataclass
 class Cabinet(View):
     container: Container
-    drawers: List[Drawer] = field(default_factory=list)
+    drawers: list[Drawer] = field(default_factory=list)
 
     def __hash__(self):
         return hash((self.__class__.__name__, self.container))

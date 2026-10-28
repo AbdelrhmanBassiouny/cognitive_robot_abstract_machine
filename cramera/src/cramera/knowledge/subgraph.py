@@ -8,7 +8,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 
-from typing_extensions import Any, ClassVar, Dict, List, Optional, TYPE_CHECKING
+from typing_extensions import Any, ClassVar, TYPE_CHECKING
 
 from cramera.knowledge.enums import ColourGroup, EdgeKind
 from cramera.knowledge.life_cycle_style import LifeCycleStyle
@@ -40,7 +40,7 @@ class TreePosition:
     filters the tree by.
     """
 
-    parent: Optional[str] = None
+    parent: str | None = None
     """
     Id of the node's parent entry, or None for a root.
     """
@@ -72,18 +72,18 @@ class GraphNode:
     Tooltip text (label plus its detail lines, newline-joined).
     """
 
-    status: Optional[str] = None
+    status: str | None = None
     """
     Live execution status; only the plan view sets this.
     """
 
-    tree_position: Optional[TreePosition] = None
+    tree_position: TreePosition | None = None
     """
     Placement in the node's tree; set by a view the frontend renders as a tree rather
     than as a graph.
     """
 
-    def to_payload(self) -> Dict[str, Any]:
+    def to_payload(self) -> dict[str, Any]:
         """
         The JSON-serializable shape the frontend's graph panel expects.
         """
@@ -117,7 +117,7 @@ class DetailEntry:
     Colour group, mirrors the node's own group.
     """
 
-    lines: List[str]
+    lines: list[str]
     """
     Tooltip/detail-panel lines describing the node.
     """
@@ -149,7 +149,7 @@ class GraphEdge:
     Edge label shown on hover.
     """
 
-    def to_payload(self) -> Dict[str, str]:
+    def to_payload(self) -> dict[str, str]:
         """
         The JSON-serializable shape the frontend's graph panel expects.
 
@@ -187,17 +187,17 @@ class SubgraphAccumulator:
     Accumulates the nodes/edges/details of one drill-down/graph-panel subgraph.
     """
 
-    nodes: List[GraphNode] = field(default_factory=list)
+    nodes: list[GraphNode] = field(default_factory=list)
     """
     Every node added to this subgraph so far.
     """
 
-    edges: List[GraphEdge] = field(default_factory=list)
+    edges: list[GraphEdge] = field(default_factory=list)
     """
     Every edge added to this subgraph so far.
     """
 
-    details: Dict[str, DetailEntry] = field(default_factory=dict)
+    details: dict[str, DetailEntry] = field(default_factory=dict)
     """
     Detail-panel entry per node id.
     """
@@ -207,9 +207,9 @@ class SubgraphAccumulator:
         node_id: str,
         label: str,
         group: ColourGroup,
-        lines: List[str],
-        status: Optional[str] = None,
-        tree_position: Optional[TreePosition] = None,
+        lines: list[str],
+        status: str | None = None,
+        tree_position: TreePosition | None = None,
     ) -> None:
         """
         Append one graph node and its detail-panel entry.
@@ -277,22 +277,22 @@ class GraphPanelPayload(CrameraPayload):
     :meth:`panel_options` adds the options specific to that view.
     """
 
-    nodes: List[GraphNode] = field(default_factory=list)
+    nodes: list[GraphNode] = field(default_factory=list)
     """
     Every node in this view.
     """
 
-    edges: List[GraphEdge] = field(default_factory=list)
+    edges: list[GraphEdge] = field(default_factory=list)
     """
     Every edge in this view.
     """
 
-    details: Dict[str, DetailEntry] = field(default_factory=dict)
+    details: dict[str, DetailEntry] = field(default_factory=dict)
     """
     Detail-panel entry per node id.
     """
 
-    TAB: ClassVar[Optional[str]] = None
+    TAB: ClassVar[str | None] = None
     """
     Name of the graph-panel tab this view serves, or None for a view that is only ever
     reached by drilling into a node.
@@ -310,12 +310,12 @@ class GraphPanelPayload(CrameraPayload):
         raise NotImplementedError("%s serves no graph-panel tab" % cls.__name__)
 
     @abstractmethod
-    def panel_options(self) -> Dict[str, Any]:
+    def panel_options(self) -> dict[str, Any]:
         """
         The payload keys only this view sends, such as its breadcrumb or legend.
         """
 
-    def to_payload(self) -> Dict[str, Any]:
+    def to_payload(self) -> dict[str, Any]:
         """
         The JSON-serializable shape the frontend's graph panel expects.
         """

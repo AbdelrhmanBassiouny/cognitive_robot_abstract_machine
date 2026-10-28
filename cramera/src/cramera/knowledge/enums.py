@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from typing_extensions import Optional, Tuple, Union
+from typing_extensions import Union
 
 
 # %% viewer entity identifiers
@@ -70,7 +70,7 @@ class LabelledGroup(StrEnum):
     to classify nodes and once to build the legend.
     """
 
-    def __new__(cls, value: str, label: str) -> "LabelledGroup":
+    def __new__(cls, value: str, label: str) -> LabelledGroup:
         """
         Bind a serialized group value to its legend text.
 
@@ -83,7 +83,7 @@ class LabelledGroup(StrEnum):
         return member
 
     @classmethod
-    def legend(cls) -> Tuple["LabelledGroup", ...]:
+    def legend(cls) -> tuple[LabelledGroup, ...]:
         """
         Every group of this kind, in declaration order, for a view's legend.
         """
@@ -121,7 +121,7 @@ class PlanNodeGroup(LabelledGroup):
     OTHER = ("other_plan_node", "Other plan node")
 
     @classmethod
-    def of_plan_node_kind(cls, kind: Optional[str]) -> "PlanNodeGroup":
+    def of_plan_node_kind(cls, kind: str | None) -> PlanNodeGroup:
         """
         The group a coraplex plan-node class belongs to.
 

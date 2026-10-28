@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import Any, Dict, List, Optional, Tuple
+from typing_extensions import Any
 
 from cramera.body_geometry import POSE_PRECISION
 
@@ -77,17 +77,17 @@ class MarkerEntry:
     The frame the marker's pose is expressed in.
     """
 
-    position: List[float]
+    position: list[float]
     """
     The marker's position in its frame, as ``[x, y, z]``.
     """
 
-    quaternion: List[float]
+    quaternion: list[float]
     """
     The marker's orientation in its frame, as ``[qx, qy, qz, qw]``.
     """
 
-    scale: List[float]
+    scale: list[float]
     """
     The marker's scale, with the meaning ``visualization_msgs`` gives it per type.
     """
@@ -102,7 +102,7 @@ class MarkerEntry:
     The marker's opacity between 0 and 1.
     """
 
-    points: List[List[float]] = field(default_factory=list)
+    points: list[list[float]] = field(default_factory=list)
     """
     The marker's point list (line, point and list types), relative to its pose.
     """
@@ -113,7 +113,7 @@ class MarkerEntry:
     """
 
     @classmethod
-    def from_message(cls, marker: Any) -> Optional[MarkerEntry]:
+    def from_message(cls, marker: Any) -> MarkerEntry | None:
         """
         A ``visualization_msgs`` marker as the viewer renders it, read duck-typed.
 
@@ -147,7 +147,7 @@ class MarkerEntry:
         )
 
 
-def _rounded(values: List[float]) -> List[float]:
+def _rounded(values: list[float]) -> list[float]:
     """
     :param values: The coordinates to round for publication.
     """
@@ -167,7 +167,7 @@ class MarkerStore:
     The current markers of one topic, maintained the way RViz maintains them.
     """
 
-    entries: Dict[Tuple[str, int], MarkerEntry] = field(default_factory=dict)
+    entries: dict[tuple[str, int], MarkerEntry] = field(default_factory=dict)
     """
     The live markers, keyed by ``(namespace, id)``.
     """
@@ -177,7 +177,7 @@ class MarkerStore:
     Bumped whenever the marker set changes, so publishing can be change-driven.
     """
 
-    def observe(self, markers: List[Any]) -> bool:
+    def observe(self, markers: list[Any]) -> bool:
         """
         Apply one ``MarkerArray``'s worth of messages.
 

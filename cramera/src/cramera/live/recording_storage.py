@@ -20,7 +20,6 @@ from enum import StrEnum
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from typing_extensions import Optional
 
 from cramera import paths
 from cramera.recording_fields import SceneField, TrajectoryField
@@ -96,10 +95,10 @@ class SceneDestination(StrEnum):
 def save_recording_bundle(
     name: str,
     destination: SceneDestination = SceneDestination.LOCAL,
-    robot: Optional[str] = None,
-    environment: Optional[str] = None,
-    task: Optional[str] = None,
-    frame_range: Optional[FrameRange] = None,
+    robot: str | None = None,
+    environment: str | None = None,
+    task: str | None = None,
+    frame_range: FrameRange | None = None,
 ) -> str:
     """
     Promote the finalized ``__recording__`` bundle to a permanent, saved scene.
@@ -177,10 +176,10 @@ class RecordingBundle:
     def save(
         self,
         destination: Path,
-        frame_range: Optional[FrameRange],
-        robot: Optional[str],
-        environment: Optional[str],
-        task: Optional[str],
+        frame_range: FrameRange | None,
+        robot: str | None,
+        environment: str | None,
+        task: str | None,
     ) -> None:
         """
         Publish a prepared copy, retaining the original until indexing succeeds.
@@ -229,9 +228,9 @@ class RecordingBundle:
     def rename(
         self,
         name: str,
-        robot: Optional[str],
-        environment: Optional[str],
-        task: Optional[str],
+        robot: str | None,
+        environment: str | None,
+        task: str | None,
     ) -> None:
         """
         Update the saved scene's identity without changing its recorded data.

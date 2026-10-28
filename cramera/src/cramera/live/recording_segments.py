@@ -5,15 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from typing_extensions import (
-    Any,
-    ClassVar,
-    Dict,
-    List,
-    Optional,
-    Sequence,
-    TYPE_CHECKING,
-)
+from typing_extensions import Any, ClassVar, Sequence, TYPE_CHECKING
 
 from cramera.live.frame_range import FrameRange
 
@@ -81,16 +73,16 @@ class RecordedSegment:
     Index of the frame the stretch ends at.
     """
 
-    window: Optional[ObjectWindow] = None
+    window: ObjectWindow | None = None
     """
     The object carried during this stretch, if one was.
     """
 
-    def to_payload(self) -> Dict[str, Any]:
+    def to_payload(self) -> dict[str, Any]:
         """
         The segment in the ``scene.json`` shape a bundle carries and the viewer reads.
         """
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "step": self.step,
             "action": None,
             "arm": None,
@@ -125,7 +117,7 @@ def has_moved(one: Sequence[float], other: Sequence[float], tolerance: float) ->
     )
 
 
-def object_windows(frames: List[RecordedFrame]) -> List[ObjectWindow]:
+def object_windows(frames: list[RecordedFrame]) -> list[ObjectWindow]:
     """
     The carry window of every object that ended the recording somewhere else.
 
@@ -149,7 +141,7 @@ def object_windows(frames: List[RecordedFrame]) -> List[ObjectWindow]:
     return windows
 
 
-def derive_segments(frames: List[RecordedFrame]) -> List[RecordedSegment]:
+def derive_segments(frames: list[RecordedFrame]) -> list[RecordedSegment]:
     """
     Divide a recording into the stretches its timeline is marked with.
 
@@ -208,7 +200,7 @@ def _carry_step(window: ObjectWindow) -> str:
     return "move_" + window.object_key.split(".")[0]
 
 
-def _step_at(frames: List[RecordedFrame], index: int) -> Optional[str]:
+def _step_at(frames: list[RecordedFrame], index: int) -> str | None:
     """
     The action reported at one frame, or the last one reported before it.
 
@@ -225,13 +217,13 @@ def _step_at(frames: List[RecordedFrame], index: int) -> Optional[str]:
     return None
 
 
-def _step_segments(frames: List[RecordedFrame]) -> List[RecordedSegment]:
+def _step_segments(frames: list[RecordedFrame]) -> list[RecordedSegment]:
     """
     One stretch per run of consecutive frames reporting the same action.
 
     :param frames: The recording's ticks, in order.
     """
-    segments: List[RecordedSegment] = []
+    segments: list[RecordedSegment] = []
     start = 0
     for index in range(1, len(frames) + 1):
         ended = index == len(frames)
@@ -253,7 +245,7 @@ def _step_segments(frames: List[RecordedFrame]) -> List[RecordedSegment]:
 
 
 def _first_frame_away_from(
-    frames: List[RecordedFrame], key: str, pose: Sequence[float]
+    frames: list[RecordedFrame], key: str, pose: Sequence[float]
 ) -> int:
     """
     Index of the first frame at which an object had left ``pose``.
@@ -270,7 +262,7 @@ def _first_frame_away_from(
 
 
 def _last_frame_away_from(
-    frames: List[RecordedFrame], key: str, pose: Sequence[float]
+    frames: list[RecordedFrame], key: str, pose: Sequence[float]
 ) -> int:
     """
     Index of the last frame at which an object was not yet resting at ``pose``.
@@ -297,8 +289,8 @@ around them is cut down.
 
 
 def clip_segment_payloads(
-    payloads: List[Dict[str, Any]], frame_range: FrameRange
-) -> List[Dict[str, Any]]:
+    payloads: list[dict[str, Any]], frame_range: FrameRange
+) -> list[dict[str, Any]]:
     """
     Narrow a bundle's segments to the stretch of the run a trim keeps.
 
