@@ -1,11 +1,11 @@
-PR #524 (draft, stacked on #512): domain_models/krrimage + Color moved out of SemDT. Plan: domain-models.
+PR #524 (draft, stacked on #527): domain_models/krrimage + Color moved out of SemDT. Plan: domain-models, item krrimage.
 
 Plan
-- krrimage on krrspatial: drop ImagePoint/ImageBox/Pixel/PixelBox for krrspatial int/float points and boxes.
+- krrimage on base krrspatial: ImagePlane, ImageCoordinateSystem, ImagePoint (PlanarPoint[ImageCoordinateSystem, float]), ImageBox, Pixel/PixelBox, ColorImage, Color.
 
 Done
-- Package, wiring (workspace, CI, version test, ORM further_source_folders), tests pushed.
+- a4e9bbdb: took ImagePlane and ImageCoordinateSystem into krrimage.coordinates from #527's review; geometry.py conflict with main resolved to krrimage's Color. 47 krrimage tests pass.
 
 Next
-- Blocked on krrspatial-numeric (claude/krrspatial); then restack #524 onto it.
-- Check CI's ORM build (local generate_orm fails on base too: MetaData).
+- Check CI, including the ORM build (local generate_orm fails on base too: MetaData).
+- Lands after cram2#761; move Color as #761 left it.
