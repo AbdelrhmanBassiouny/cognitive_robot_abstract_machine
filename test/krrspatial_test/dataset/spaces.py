@@ -1,54 +1,33 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from uuid import UUID, uuid4
+from dataclasses import dataclass
 
 from typing_extensions import Self
 
+from krrood.patterns.interface import Interface
 from krrspatial.coordinate_system import (
     AffineCoordinateChange,
+    CoordinateSystem,
     CoordinateSystemT,
-    ImageCoordinateSystem,
     RigidCoordinateChange,
 )
 from krrspatial.planar_point import CoordinateT, PlanarPoint
 from krrspatial.reference_frame import ReferenceFrame
-from krrspatial.space import ImagePlane
+from krrspatial.space import Space
 
-# %% image planes and their coordinate systems, told apart by name
+# %% a plane whose coordinate systems differ by scaling each axis
 
 
-@dataclass(eq=False)
-class NamedImagePlane(ImagePlane):
+class ScalablePlane(Space, Interface):
     """
-    An image plane that only has a name.
-    """
-
-    name: str
-    """
-    What the plane is called.
+    A plane whose coordinate systems differ by scaling and shifting each axis, so its
+    coordinate changes are affine but not rigid.
     """
 
 
-@dataclass(eq=False)
-class NamedImageCoordinateSystem(ImageCoordinateSystem):
+class ScalablePlaneCoordinateSystem(CoordinateSystem[ScalablePlane], Interface):
     """
-    An image coordinate system that only has a name and the plane it charts.
-    """
-
-    name: str
-    """
-    What the coordinate system is called.
-    """
-
-    space: ImagePlane | None = None
-    """
-    The plane the coordinate system charts.
-    """
-
-    id: UUID = field(default_factory=uuid4)
-    """
-    The identifier serialized points refer to the coordinate system with.
+    A coordinate system on a :class:`ScalablePlane`.
     """
 
 
@@ -78,9 +57,9 @@ class StoredPlanarPoint(PlanarPoint[CoordinateSystemT, CoordinateT]):
 
 
 @dataclass
-class StoredImagePoint(StoredPlanarPoint[ImageCoordinateSystem, float]):
+class StoredScalablePlanePoint(StoredPlanarPoint[ScalablePlaneCoordinateSystem, float]):
     """
-    A position on an image that stores its coordinates as given.
+    A point on a scalable plane that stores its coordinates as given.
     """
 
 
@@ -112,10 +91,9 @@ class StoredCoordinateChange(AffineCoordinateChange[CoordinateSystemT]):
 
 
 @dataclass
-class StoredImageCoordinateChange(StoredCoordinateChange[ImageCoordinateSystem]):
+class StoredScalingChange(StoredCoordinateChange[ScalablePlaneCoordinateSystem]):
     """
-    A change between two coordinate systems of one image plane, such as from a crop to
-    the whole image.
+    A change between two coordinate systems of one scalable plane.
     """
 
 

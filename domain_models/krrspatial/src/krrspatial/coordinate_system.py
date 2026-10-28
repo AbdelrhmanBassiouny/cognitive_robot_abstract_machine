@@ -7,7 +7,7 @@ from typing_extensions import Generic, Self, TypeVar
 from krrood.adapters.object_reference import IdentifiedObject
 from krrood.patterns.interface import Interface
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
-from krrspatial.space import ImagePlane, Space
+from krrspatial.space import Space
 
 # %% what coordinates are given in
 
@@ -31,13 +31,6 @@ class CoordinateSystem(
     space: SpaceT | None
     """
     The space this coordinate system charts; ``None`` where it is not known.
-    """
-
-
-class ImageCoordinateSystem(CoordinateSystem[ImagePlane], Interface):
-    """
-    Pixel coordinates on an image plane, from the top left corner of one image of it,
-    with ``x`` along the columns and ``y`` down the rows.
     """
 
 

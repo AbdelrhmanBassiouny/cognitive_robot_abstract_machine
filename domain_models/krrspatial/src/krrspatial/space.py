@@ -19,13 +19,3 @@ class EuclideanSpace(Space, Interface):
     Physical space, in metres; its coordinate systems are reference frames, related by
     rigid transforms, which keep distances and angles.
     """
-
-
-class ImagePlane(Space, Interface):
-    """
-    The plane an image shows its scene on; crops and resizes of the image show the same
-    plane.
-
-    Its coordinate systems are related by scaling and shifting each axis, which keeps
-    ratios of distances along an axis but not distances.
-    """

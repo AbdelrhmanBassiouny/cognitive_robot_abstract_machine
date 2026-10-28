@@ -3,11 +3,10 @@
 Points in the spaces they belong to, and the coordinate systems their coordinates are
 given in.
 
-- `krrspatial.space`: `Space`, a set of points with a geometry; `EuclideanSpace`, physical
-  space in metres; and `ImagePlane`, the plane an image shows.
+- `krrspatial.space`: `Space`, a set of points with a geometry, and `EuclideanSpace`,
+  physical space in metres.
 - `krrspatial.coordinate_system`: `CoordinateSystem`, what coordinates on one space are
-  given in; `ImageCoordinateSystem`, pixels from an image's top left corner;
-  `CoordinateRepresentation`, a point, direction or orientation given by its
+  given in; `CoordinateRepresentation`, a point, direction or orientation given by its
   coordinates in a coordinate system;
   `CoordinateChange`, between two coordinate systems of the same space, which can be
   inverted and composed; `AffineCoordinateChange`, one that keeps straight lines; and
@@ -22,7 +21,9 @@ given in.
 | Space | Coordinate system | Coordinate change | Kept by the change |
 |---|---|---|---|
 | `EuclideanSpace` | `ReferenceFrame`, metres | `RigidCoordinateChange` | distances, angles |
-| `ImagePlane` | `ImageCoordinateSystem`, pixels | `AffineCoordinateChange`: scaling and shifting each axis (crop, resize) | straight lines, ratios along a line |
+
+Other domain models add their own spaces on these interfaces; `krrimage`, for example,
+adds image planes, whose coordinate systems are related by affine changes.
 
 Points of two spaces, such as a body and an image of it, relate only through a map
 between the spaces, such as a camera, never through a coordinate change.
@@ -30,13 +31,13 @@ between the spaces, such as a camera, never through a coordinate change.
 ```python
 from dataclasses import dataclass
 
-from krrspatial.coordinate_system import ImageCoordinateSystem
 from krrspatial.planar_point import PlanarPoint
+from krrspatial.reference_frame import ReferenceFrame
 
 
 @dataclass
-class PositionOnImage(PlanarPoint[ImageCoordinateSystem, float]):
+class PositionOnTable(PlanarPoint[ReferenceFrame, float]):
     x: float
     y: float
-    coordinate_system: ImageCoordinateSystem
+    coordinate_system: ReferenceFrame
 ```

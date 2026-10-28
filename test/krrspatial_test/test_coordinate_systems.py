@@ -11,65 +11,41 @@ from krrspatial.coordinate_system import (
     CoordinateRepresentation,
     CoordinateSystem,
     CoordinateSystemT,
-    ImageCoordinateSystem,
     RigidCoordinateChange,
     SpaceT,
 )
 from krrspatial.reference_frame import ReferenceFrame
-from krrspatial.space import EuclideanSpace, ImagePlane, Space
+from krrspatial.space import EuclideanSpace, Space
 
-from .dataset.frames import NamedFrame
 from .dataset.spaces import (
-    NamedImageCoordinateSystem,
+    ScalablePlaneCoordinateSystem,
     StoredFrameChange,
-    StoredImageCoordinateChange,
+    StoredScalingChange,
 )
 
 # %% spaces
 
 
-@pytest.mark.parametrize("space_kind", [Space, EuclideanSpace, ImagePlane])
+@pytest.mark.parametrize("space_kind", [Space, EuclideanSpace])
 def test_a_space_cannot_be_instantiated(space_kind):
     with pytest.raises(InterfaceInstantiationError):
         space_kind()
 
 
-@pytest.mark.parametrize("space_kind", [EuclideanSpace, ImagePlane])
-def test_physical_space_and_image_planes_are_spaces(space_kind):
-    assert issubclass(space_kind, Space)
-
-
-def test_an_image_plane_is_not_physical_space():
-    assert not issubclass(ImagePlane, EuclideanSpace)
+def test_physical_space_is_a_space():
+    assert issubclass(EuclideanSpace, Space)
 
 
 # %% coordinate systems on spaces
 
 
-@pytest.mark.parametrize(
-    "coordinate_system_kind", [CoordinateSystem, ImageCoordinateSystem]
-)
-def test_a_coordinate_system_interface_cannot_be_instantiated(coordinate_system_kind):
+def test_a_coordinate_system_cannot_be_instantiated():
     with pytest.raises(InterfaceInstantiationError):
-        coordinate_system_kind()
+        CoordinateSystem()
 
 
-@pytest.mark.parametrize(
-    "coordinate_system_kind, space_kind",
-    [(ReferenceFrame, EuclideanSpace), (ImageCoordinateSystem, ImagePlane)],
-)
-def test_a_coordinate_system_reports_the_kind_of_space_it_charts(
-    coordinate_system_kind, space_kind
-):
-    assert coordinate_system_kind.get_type_of_generic_parameter(SpaceT) is space_kind
-
-
-def test_an_image_coordinate_system_is_not_a_reference_frame():
-    assert not isinstance(NamedImageCoordinateSystem("camera image"), ReferenceFrame)
-
-
-def test_a_reference_frame_is_not_an_image_coordinate_system(table_frame: NamedFrame):
-    assert not isinstance(table_frame, ImageCoordinateSystem)
+def test_a_reference_frame_charts_physical_space():
+    assert ReferenceFrame.get_type_of_generic_parameter(SpaceT) is EuclideanSpace
 
 
 # %% values given in a coordinate system
@@ -107,9 +83,9 @@ def test_an_affine_change_is_a_coordinate_change():
     assert issubclass(AffineCoordinateChange, CoordinateChange)
 
 
-def test_a_change_of_image_coordinates_is_affine_but_not_rigid():
-    assert issubclass(StoredImageCoordinateChange, AffineCoordinateChange)
-    assert not issubclass(StoredImageCoordinateChange, RigidCoordinateChange)
+def test_an_affine_change_need_not_be_rigid():
+    assert issubclass(StoredScalingChange, AffineCoordinateChange)
+    assert not issubclass(StoredScalingChange, RigidCoordinateChange)
 
 
 def test_a_rigid_change_reports_the_kind_of_coordinate_system_it_changes():
@@ -121,18 +97,18 @@ def test_a_rigid_change_reports_the_kind_of_coordinate_system_it_changes():
 
 def test_a_coordinate_change_reports_the_kind_of_coordinate_system_it_changes():
     assert (
-        StoredImageCoordinateChange.get_type_of_generic_parameter(CoordinateSystemT)
-        is ImageCoordinateSystem
+        StoredScalingChange.get_type_of_generic_parameter(CoordinateSystemT)
+        is ScalablePlaneCoordinateSystem
     )
 
 
 def test_a_coordinate_changes_coordinate_systems_are_narrowed_to_the_bound_kind():
     coordinate_system_types = {
         change_field.name: change_field.type
-        for change_field in fields(StoredImageCoordinateChange)
+        for change_field in fields(StoredScalingChange)
     }
 
     assert coordinate_system_types == {
-        "source_coordinate_system": ImageCoordinateSystem | None,
-        "target_coordinate_system": ImageCoordinateSystem | None,
+        "source_coordinate_system": ScalablePlaneCoordinateSystem | None,
+        "target_coordinate_system": ScalablePlaneCoordinateSystem | None,
     }
