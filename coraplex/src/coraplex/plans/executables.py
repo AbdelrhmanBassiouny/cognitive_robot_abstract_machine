@@ -551,9 +551,9 @@ class MoveBranchExecutable(Executable):
         Move the branch, unless a physically simulated world is holding the body by
         contact already, in which case it is left where the physics puts it.
         """
-        if GiskardExecutable.execution_type == ExecutionType.PHYSICALLY_SIMULATED:
-            return
         with self.execution_scope():
+            if GiskardExecutable.execution_type == ExecutionType.PHYSICALLY_SIMULATED:
+                return
             self.context.world.move_branch(self.body, self.new_parent)
 
 
