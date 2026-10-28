@@ -102,26 +102,12 @@ class Color:
         """
         return self.to_rgb()[0]
 
-    @R.setter
-    def R(self, red: float) -> None:
-        """
-        Replace the red channel of this color.
-        """
-        self.set_rgb(red, self.G, self.B)
-
     @property
     def G(self) -> float:
         """
         Green intensity in the RGB representation.
         """
         return self.to_rgb()[1]
-
-    @G.setter
-    def G(self, green: float) -> None:
-        """
-        Replace the green channel of this color.
-        """
-        self.set_rgb(self.R, green, self.B)
 
     @property
     def B(self) -> float:
@@ -130,26 +116,12 @@ class Color:
         """
         return self.to_rgb()[2]
 
-    @B.setter
-    def B(self, blue: float) -> None:
-        """
-        Replace the blue channel of this color.
-        """
-        self.set_rgb(self.R, self.G, blue)
-
     @property
     def A(self) -> float:
         """
         Opacity of the color.
         """
         return self.opacity
-
-    @A.setter
-    def A(self, opacity: float) -> None:
-        """
-        Replace the opacity channel of this color.
-        """
-        self.opacity = float(opacity)
 
     def __eq__(self, other: object) -> bool:
         """

@@ -61,47 +61,6 @@ def test_hue_saturation_value_exposes_rgb_channels() -> None:
     assert (color.R, color.G, color.B, color.A) == color.to_rgba()
 
 
-def test_red_channel_remains_writable() -> None:
-    """
-    Assigning red updates the stored HSV coordinates.
-    """
-    color = Color.BLACK()
-    color.R = 1.0
-    assert color == Color.RED()
-
-
-def test_green_channel_remains_writable() -> None:
-    """
-    Assigning green updates the stored HSV coordinates.
-    """
-    color = Color.BLACK()
-    color.G = 1.0
-    assert color == Color.GREEN()
-
-
-def test_blue_channel_remains_writable() -> None:
-    """
-    Assigning blue updates the stored HSV coordinates.
-    """
-    color = Color.BLACK()
-    color.B = 1.0
-    assert color == Color.BLUE()
-
-
-def test_opacity_remains_writable_without_changing_color_coordinates() -> None:
-    """
-    Assigning opacity leaves hue, saturation, and value untouched.
-    """
-    color = Color.RED()
-    expected_color = copy(color)
-    color.A = 0.25
-
-    assert color.A == 0.25
-    assert color.hue == expected_color.hue
-    assert color.saturation == expected_color.saturation
-    assert color.value == expected_color.value
-
-
 def test_invalid_channel_count_raises_color_exception() -> None:
     """
     A color requires RGB channels and optional opacity.
