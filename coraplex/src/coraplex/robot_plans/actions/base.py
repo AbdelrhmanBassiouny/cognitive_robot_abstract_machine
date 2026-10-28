@@ -193,6 +193,14 @@ class Action(CompositeNode, ABC):
         self._take_temporary_collision_rules_out_of_force()
         super().on_reset()
 
+    def cleanup(self) -> None:
+        """
+        Takes :attr:`temporary_collision_rules` out of force, so a run that stopped
+        while this action ran leaves none of them behind.
+        """
+        self._take_temporary_collision_rules_out_of_force()
+        super().cleanup()
+
     def _take_temporary_collision_rules_out_of_force(self) -> None:
         """
         Takes :attr:`temporary_collision_rules` out of force, which skips those that are

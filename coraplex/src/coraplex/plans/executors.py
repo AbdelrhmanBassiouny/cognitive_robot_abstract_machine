@@ -152,15 +152,16 @@ class PlanExecutor(Executor, ABC):
         if self.debug and self.ros_node is None:
             raise DebuggingWithoutRosNode()
         self.supplied_context_extensions = list(self.context.extensions.values())
+        self.child_chooser = UnderspecifiedChildChooser(
+            executor=self, trial_executor_type=KinematicallySimulatedPlanExecutor
+        )
+        # Raises for a context another executor runs on before anything of it changed.
+        self.context.add_extension(ChildChooserAccess(choosers=[self.child_chooser]))
         rewriting = self.context.get_extension(PlanRewriting)
         if rewriting is not None:
             self.context.extensions[type(rewriting)] = (
                 rewriting.copy_with_preceding_transformations(self.adaptations)
             )
-        self.child_chooser = UnderspecifiedChildChooser(
-            executor=self, trial_executor_type=KinematicallySimulatedPlanExecutor
-        )
-        self.context.add_extension(ChildChooserAccess(choosers=[self.child_chooser]))
         super().__post_init__()
 
     def default_context_extensions(self) -> list[ContextExtension]:

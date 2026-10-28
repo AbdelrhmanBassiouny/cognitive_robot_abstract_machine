@@ -156,6 +156,7 @@ from ...plan_running import (
     statechart_of,
 )
 from cramph.context import ContextExtension
+from krrood.entity_query_language.factories import a
 
 # %% standing a robot next to something
 
@@ -1833,7 +1834,7 @@ def test_a_robot_holding_nothing_drives_with_its_arms_parked(
     _, robot, extensions = multiple_robot_apartment_context
     carry = CarryAction(navigate=drive_ahead(robot))
 
-    expand(carry, extensions)
+    run_plan(carry, extensions)
 
     navigate, park_arms = carry.nodes
     assert navigate is carry.navigate
@@ -1848,7 +1849,7 @@ def test_only_the_arms_holding_nothing_are_parked(
     cup_held_tilted(robot)
     carry = CarryAction(navigate=drive_ahead(robot))
 
-    expand(carry, extensions)
+    run_plan(carry, extensions)
 
     parked_arms = [
         arm
@@ -1860,28 +1861,44 @@ def test_only_the_arms_holding_nothing_are_parked(
     assert parked_arms == [arm for arm in robot.all_arms if arm is not holding_arm]
 
 
-def test_a_cup_put_down_earlier_in_the_plan_is_not_carried(
+def test_a_carry_holds_only_its_drive_until_it_starts(
     multiple_robot_apartment_context,
 ) -> None:
     _, robot, extensions = multiple_robot_apartment_context
-    cup = cup_in_reach(robot, "cup")
+    cup_held_tilted(robot)
     carry = CarryAction(navigate=drive_ahead(robot))
 
-    expand(
+    expand(carry, extensions)
+
+    assert carry.nodes == [carry.navigate]
+
+
+def test_a_cup_picked_up_by_a_statement_ends_upright(
+    multiple_robot_apartment_context,
+) -> None:
+    """
+    The pick-up is grounded only when it starts, after the carry joined the plan.
+    """
+    _, robot, extensions = multiple_robot_apartment_context
+    cup = cup_in_reach(robot, "tilted_cup", roll=0.3)
+    arm = left_or_only_arm(robot)
+    carry = CarryAction(navigate=drive_ahead(robot))
+
+    run_plan(
         Sequence(
             nodes=[
-                PickUpAction.from_above(cup, left_or_only_arm(robot)),
-                PlaceAction(
-                    object_designator=cup,
-                    target_location=Pose.from_xyz_rpy(y=0.1, reference_frame=cup.root),
-                ),
+                a(PickUpAction)(grasp=PickUpAction.from_above(cup, arm).grasp, arm=arm),
                 carry,
             ]
         ),
-        extensions,
+        [*extensions, PlanRewriting(transformations=[ParkArmsBeforeFirstAction()])],
     )
 
-    assert [type(node) for node in carry.nodes] == [NavigateAction, ParkArmsAction]
+    # The cup is held with the orientation error the gripper reached its grasp with.
+    assert (
+        tilt_from_upright(cup.root)
+        <= carry.upright_threshold + PickUpAction.orientation_threshold
+    )
 
 
 def test_a_placing_carries_its_object_to_where_it_stands(

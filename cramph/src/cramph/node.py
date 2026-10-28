@@ -2206,8 +2206,11 @@ class CompositeNode(StatechartNode):
         Adds a node to this node and to the statechart this node belongs to.
 
         :param node: The node to add as a child of this node.
+        :raises StatechartAlreadyCompiledError: If this node accepts no children any
+            more, see :meth:`_check_accepts_children`.
         """
         self._add_node_sanity_check(node)
+        self._check_accepts_children()
         if node not in self.nodes:
             self.nodes.append(node)
         self._place_child_in_statechart(node)
@@ -2217,14 +2220,14 @@ class CompositeNode(StatechartNode):
         Makes `node` a child of this node in the statechart this node belongs to,
         without touching :attr:`nodes`.
 
+        .. note:: It does not check :meth:`_check_accepts_children`; check that before
+            changing :attr:`nodes`, so a rejected node leaves this node as it was.
+
         :param node: The node that becomes a child of this node.
-        :raises StatechartAlreadyCompiledError: If this node accepts no children any
-            more, see :meth:`_check_accepts_children`.
         """
         self._add_node_sanity_check(node)
         if node._statechart is self.statechart:
             return
-        self._check_accepts_children()
         node.parent_node = self
         self.statechart.add_node(node)
 

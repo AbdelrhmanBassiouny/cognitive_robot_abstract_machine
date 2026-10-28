@@ -14,6 +14,7 @@ from coraplex.exceptions import (
     MotionDidNotFinish,
     PlanNotCompiled,
 )
+from coraplex.plans.executors import KinematicallySimulatedPlanExecutor
 from coraplex.plans.plan_transformation import PlanRewriting
 from coraplex.plans.failures import (
     MotionExceededSimulationTimeLimit,
@@ -27,7 +28,10 @@ from coraplex.robot_plans.actions.core.robot_body import (
     ParkArmsAction,
 )
 from cramph.composites import Sequence
-from cramph.exceptions import StatechartOfDifferentContextError
+from cramph.exceptions import (
+    DuplicateContextExtensionError,
+    StatechartOfDifferentContextError,
+)
 from cramph.data_types import LifeCycleValues, ObservationStateValues
 from cramph.executor import Pacer, StatechartExecutor
 from cramph.node import CancelStatechart
@@ -409,3 +413,20 @@ def test_the_rewriting_a_plan_was_given_is_left_as_it_was(
     physically_simulated_executor([*extensions, given])
 
     assert given.transformations == [detecting]
+
+
+def test_a_second_executor_on_a_context_leaves_the_rewriting_of_the_first_alone(
+    pr2_apartment_context,
+) -> None:
+    world, robot_view, extensions = pr2_apartment_context
+    first = simulated_executor(extensions)
+    rewriting = first.context.require_extension(PlanRewriting)
+    transformations = list(rewriting.transformations)
+
+    with pytest.raises(DuplicateContextExtensionError):
+        KinematicallySimulatedPlanExecutor(
+            first.context, plan_adaptations=[DetectBeforeGrasp()]
+        )
+
+    assert first.context.require_extension(PlanRewriting) is rewriting
+    assert rewriting.transformations == transformations
