@@ -29,20 +29,17 @@ class NodeDetailRenderer:
         :param value: The value of a detail.
         :param nested: Whether the value sits in a description nested in the detail; a
             match or a description nested there is named by its class.
-        :return: A class by its name, an enumeration member by its name, a body by
-            :meth:`body_name`, a semantic annotation by its name, a pose by its position,
-            a boolean as on or off, a list by its items, a match by
-            :meth:`render_match`, an open value as any value of its type, a failure by
-            its message, a description by :meth:`render_description`, and anything
-            else by its text.
+        :return: A class by its name, an enumeration member by its name, a body or a
+            semantic annotation by its name, a pose by its position, a boolean as on or
+            off, a list by its items, a match by :meth:`render_match`, an open value as
+            any value of its type, a failure by its message, a description by
+            :meth:`render_description`, and anything else by its text.
         """
         if isinstance(value, type):
             return value.__name__
         if isinstance(value, Enum):
             return value.name
-        if isinstance(value, Body):
-            return self.body_name(value)
-        if isinstance(value, SemanticAnnotation):
+        if isinstance(value, (Body, SemanticAnnotation)):
             return str(value.name)
         if isinstance(value, Pose):
             position = value.position
@@ -73,13 +70,6 @@ class NodeDetailRenderer:
         if is_dataclass(value):
             return self.render_description(value, nested)
         return str(value)
-
-    def body_name(self, body: Body) -> str:
-        """
-        :param body: A body a detail names.
-        :return: The name the body is shown by.
-        """
-        return str(body.name)
 
     def render_match(self, match: Match, nested: bool) -> str:
         """

@@ -53,16 +53,6 @@ class DescriptionNestingADescription:
     """
 
 
-@dataclass
-class RendererNamingBodiesByIdentifier(NodeDetailRenderer):
-    """
-    Names a body by its identifier instead of by its name.
-    """
-
-    def body_name(self, body: Body) -> str:
-        return str(body.id)
-
-
 # %% single values
 
 
@@ -240,21 +230,6 @@ def test_a_description_is_shown_by_the_fields_that_hold_a_value():
             f"torso {DescriptionOfATorsoState.__name__}",
             f"height {renderer.render(description.height)}",
         ]
-    )
-
-
-# %% naming bodies
-
-
-def test_a_subclass_names_the_bodies_in_a_list():
-    """
-    A subclass that names bodies differently names each body of a list that way.
-    """
-    renderer = RendererNamingBodiesByIdentifier()
-    body = Body(name=PrefixedName("milk", "kitchen"))
-
-    assert renderer.render([body, body]) == NodeDetailNotation.PART_SEPARATOR.join(
-        [str(body.id), str(body.id)]
     )
 
 
