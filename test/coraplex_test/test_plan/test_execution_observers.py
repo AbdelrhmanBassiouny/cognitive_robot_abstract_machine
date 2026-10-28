@@ -38,6 +38,9 @@ from giskardpy.motion_statechart.motion_statechart import (
     StateHistory,
 )
 from semantic_digital_twin.datastructures.definitions import TorsoState
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+
+import numpy as np
 
 
 # %% observer records

@@ -9,27 +9,25 @@ from collections import defaultdict
 from copy import deepcopy
 from dataclasses import dataclass, field
 from typing_extensions import (
-    get_origin,
-    get_args,
-    Generic,
-    TypeVar,
-    Unpack,
-    Self,
     TYPE_CHECKING,
-    Union,
     Any,
+    Generic,
+    Self,
+    TypeVar,
+    Union,
+    Unpack,
     cast,
+    get_args,
+    get_origin,
 )
 from uuid import UUID
 
 import numpy as np
-
-
 from krrood.adapters.json_serializer import list_like_classes
 from krrood.class_diagrams.attribute_introspector import (
     DataclassOnlyIntrospector,
 )
-from krrood.entity_query_language.factories import variable, contains, a, entity
+from krrood.entity_query_language.factories import a, contains, entity, variable
 from krrood.ormatic.utils import classproperty
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood.utils import get_generic_type_parameters
@@ -41,23 +39,31 @@ from semantic_digital_twin.datastructures.camera_model import (
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
 from semantic_digital_twin.adapters.package_resolver import CompositePathResolver
 from semantic_digital_twin.adapters.urdf import URDFParser
-from semantic_digital_twin.datastructures.definitions import JointStateType
+from semantic_digital_twin.datastructures.definitions import (
+    GripperState,
+    JointStateType,
+)
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.datastructures.robots.gripper_configuration import (
+    GripperConfiguration,
+    GripperStateConfiguration,
+)
 from semantic_digital_twin.exceptions import (
+    CopiedWorldDiffersFromOriginalError,
+    DuplicateRobotAssignmentsError,
     GripperAxesNotPerpendicular,
+    MissingDefaultCameraError,
     MoreThanOneBodyHeld,
     NoJointStateWithType,
     NothingHeld,
     PathResolutionError,
+    RobotPartBelongsToAnotherRobotError,
     UselessConceptError,
-    DuplicateRobotAssignmentsError,
-    MissingDefaultCameraError,
 )
 from semantic_digital_twin.input_synchronization import InputSynchronizer
 from semantic_digital_twin.robots.exceptions import (
-    InvalidRobotAnnotation,
     MissingDriveConnectionError,
 )
 from semantic_digital_twin.robots.input_source import (
@@ -70,13 +76,13 @@ from semantic_digital_twin.robots.input_source import (
 from semantic_digital_twin.robots.robot_part_mixins import (
     HasEndEffector,
     HasInputSource,
+    HasLeftRightArm,
     HasMobileBase,
     HasSensors,
+    RobotPartMixin,
     TGenericEndEffector,
-    HasLeftRightArm,
     TGenericInputSource,
     TGenericSensors,
-    RobotPartMixin,
 )
 from semantic_digital_twin.semantic_annotations.mixins import (
     HasRootBody,
@@ -86,26 +92,26 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Table,
 )
 from semantic_digital_twin.spatial_types import (
-    Vector3,
-    RotationMatrix,
     HomogeneousTransformationMatrix,
+    RotationMatrix,
+    Vector3,
 )
-from semantic_digital_twin.spatial_types.spatial_types import Point3, Pose
 from semantic_digital_twin.spatial_types.derivatives import DerivativeMap
+from semantic_digital_twin.spatial_types.spatial_types import Point3, Pose
+from semantic_digital_twin.world_description.connection_properties import JointServo
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection,
-    FixedConnection,
-    WheeledDrive,
     ActiveConnection1DOF,
+    FixedConnection,
     PrismaticConnection,
+    WheeledDrive,
 )
 from semantic_digital_twin.world_description.degree_of_freedom import (
-    DegreeOfFreedomLimits,
     DegreeOfFreedom,
 )
 from semantic_digital_twin.world_description.geometry import (
-    VolumetricBoundingBox,
     Scale,
+    VolumetricBoundingBox,
 )
 from semantic_digital_twin.world_description.connection_properties import (
     DriveServos,
@@ -128,11 +134,11 @@ from semantic_digital_twin.world_description.world_modification import (
 if TYPE_CHECKING:
     from rclpy.node import Node
 
-    from semantic_digital_twin.world import World
     from semantic_digital_twin.specifications.connections import ConnectionSpecification
     from semantic_digital_twin.specifications.kinematic_structure_entities import (
         BodySpecification,
     )
+    from semantic_digital_twin.world import World
 else:
     World = Any
 
@@ -783,6 +789,24 @@ class EndEffector(AbstractRobotPart, ABC):
     Usually the point the robot tries to align with the object.
     """
 
+    def default_configuration(
+        self,
+        state_type: GripperState,
+        finger_velocity: float | None = None,
+    ) -> GripperConfiguration:
+        """
+        Build the default gripper configuration for a state this end effector declares.
+
+        :param state_type: The state type to build the configuration for.
+        :param finger_velocity: Optional maximum finger joint velocity (in m/s) to
+            enforce during the motion.
+        :return: The configuration carrying the declared joint state for that type.
+        """
+        configuration = GripperStateConfiguration.from_state_type(self, state_type)
+        if finger_velocity is not None:
+            configuration.finger_velocity = finger_velocity
+        return configuration
+
     def __post_init__(self):
         super().__post_init__()
         approach = self.approach_axis.to_np()[:3]
@@ -1324,33 +1348,38 @@ class AbstractRobot(Agent, HasRobotParts, ABC):
 
     def validate(self) -> bool:
         """
-        Validate copied world identity, default camera and part ownership.
+        Validate world identity, camera defaults, part ownership, and mixin constraints.
+
+        Robots without declared cameras need no default camera.
 
         :return: Whether every robot annotation constraint holds.
-        :raises InvalidRobotAnnotation: If copied entities or part ownership differ.
+        :raises CopiedWorldDiffersFromOriginalError: If deepcopying the world does not
+            reproduce the original world's entities.
+        :raises MissingDefaultCameraError: If the robot declares cameras but marks none
+            of them as its default camera.
+        :raises RobotPartBelongsToAnotherRobotError: If a robot part refers to a robot
+            other than this one.
         """
         self_world_copy = deepcopy(self._world)
 
-        if set(self_world_copy._world_entity_hash_table) != set(
-            self._world._world_entity_hash_table
-        ):
-            raise InvalidRobotAnnotation(
-                reason="Copying the robot changed its world entity identifiers."
+        differing_entity_hashes = set(
+            self_world_copy._world_entity_hash_table.keys()
+        ) ^ set(self._world._world_entity_hash_table.keys())
+        if differing_entity_hashes:
+            raise CopiedWorldDiffersFromOriginalError(
+                world=self._world,
+                differing_entity_hashes=sorted(differing_entity_hashes),
             )
-        if (
-            self_world_copy.get_semantic_annotations_by_type(AbstractRobot)[
-                0
-            ].get_default_camera()
-            is None
-        ):
-            raise InvalidRobotAnnotation(
-                reason="The copied robot has no default camera."
-            )
+
+        declared_cameras = [
+            part for part in self._robot_parts if isinstance(part, Camera)
+        ]
+        if declared_cameras and self.get_default_camera() is None:
+            raise MissingDefaultCameraError(robot=type(self))
+
         for part in self._robot_parts:
-            if part._robot is not self:
-                raise InvalidRobotAnnotation(
-                    reason="A robot part refers to a different robot."
-                )
+            if part._robot != self:
+                raise RobotPartBelongsToAnotherRobotError(robot_part=part, robot=self)
 
             if isinstance(part, RobotPartMixin):
                 part.validate()
