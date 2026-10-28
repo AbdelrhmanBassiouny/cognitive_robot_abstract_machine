@@ -11,7 +11,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from semantic_digital_twin.world_description.geometry import Color
-from typing_extensions import List
 
 OBJECT_COLORS = (
     "#f3f0ea",
@@ -36,7 +35,7 @@ class ObjectPalette:
     Assigns object colours by position, wrapping around when it runs out.
     """
 
-    colors: List[Color] = field(
+    colors: list[Color] = field(
         default_factory=lambda: [
             # by name, not ``cls``: the factory runs after the class exists
             ObjectPalette._color_from_hex(hex_value)

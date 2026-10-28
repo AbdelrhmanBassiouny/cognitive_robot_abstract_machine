@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import Optional, TYPE_CHECKING
+from typing_extensions import TYPE_CHECKING
 
 from krrood.exceptions import DataclassException
 
@@ -26,17 +26,17 @@ class InsufficientVectorsError(SpatialTypesError):
     Raised when a rotation matrix is constructed from fewer than two vectors.
     """
 
-    x: Optional[Vector3]
+    x: Vector3 | None
     """
     The vector given for the x axis.
     """
 
-    y: Optional[Vector3]
+    y: Vector3 | None
     """
     The vector given for the y axis.
     """
 
-    z: Optional[Vector3]
+    z: Vector3 | None
     """
     The vector given for the z axis.
     """
@@ -70,7 +70,7 @@ class ReferenceFrameMismatchError(SpatialTypesError):
     The frame that was found instead, or ``None`` if the value has no frame.
     """
 
-    context: Optional[str] = None
+    context: str | None = None
     """
     Description of the value whose frame was checked, e.g. the argument name.
     """

@@ -7,18 +7,7 @@ from enum import Enum, StrEnum
 
 import casadi as ca
 import numpy as np
-from typing_extensions import (
-    Any,
-    overload,
-    Optional,
-    Dict,
-    Self,
-    List,
-    Union,
-    Tuple,
-    Callable,
-    TypeVar,
-)
+from typing_extensions import Any, Callable, Self, TypeVar, overload
 
 import krrood.symbolic_math.symbolic_math as sm
 from krrood.adapters.json_serializer import SubclassJSONSerializer
@@ -86,7 +75,7 @@ class SpatialType(CoordinateRepresentation[ReferenceFrame], ABC):
     Implement Symbolic Math protocol.
     """
 
-    reference_frame: Optional[ReferenceFrame] = field(kw_only=True, default=None)
+    reference_frame: ReferenceFrame | None = field(kw_only=True, default=None)
     """
     The reference frame associated with the object.
 
@@ -110,7 +99,7 @@ class SpatialType(CoordinateRepresentation[ReferenceFrame], ABC):
         """
         return target_frame_T_reference_frame @ self
 
-    def to_json(self, **kwargs) -> Dict[str, Any]:
+    def to_json(self, **kwargs) -> dict[str, Any]:
         """
         The json of a spatial type: the frames it is expressed in, and its value, as
         numbers if it is constant and as the expression computing it otherwise.
@@ -125,7 +114,7 @@ class SpatialType(CoordinateRepresentation[ReferenceFrame], ABC):
             )
         return result
 
-    def _frames_to_json(self, data: Dict[str, Any]) -> None:
+    def _frames_to_json(self, data: dict[str, Any]) -> None:
         """
         Put references to the frames this value is expressed in into its json.
 
@@ -137,13 +126,13 @@ class SpatialType(CoordinateRepresentation[ReferenceFrame], ABC):
             )
 
     @abstractmethod
-    def _constant_to_json(self) -> Dict[str, Any]:
+    def _constant_to_json(self) -> dict[str, Any]:
         """
         :return: The json entries holding the numbers of this constant value.
         """
 
     @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+    def _from_json(cls, data: dict[str, Any], **kwargs) -> Self:
         if sm.SymbolicMathJSONKey.EXPRESSION not in data:
             return cls._from_constant_json(data, **kwargs)
         result = sm.ExpressionGraph.from_json(
@@ -152,7 +141,7 @@ class SpatialType(CoordinateRepresentation[ReferenceFrame], ABC):
         result._frames_from_json(data, **kwargs)
         return result
 
-    def _frames_from_json(self, data: Dict[str, Any], **kwargs) -> None:
+    def _frames_from_json(self, data: dict[str, Any], **kwargs) -> None:
         """
         Set the frames this value is expressed in from references in its json.
 
@@ -165,7 +154,7 @@ class SpatialType(CoordinateRepresentation[ReferenceFrame], ABC):
 
     @classmethod
     @abstractmethod
-    def _from_constant_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+    def _from_constant_json(cls, data: dict[str, Any], **kwargs) -> Self:
         """
         :param data: The json of a constant value, as :meth:`_constant_to_json` wrote it.
         :param kwargs: The kwargs of the ``_from_json`` that is reading it.
@@ -174,8 +163,8 @@ class SpatialType(CoordinateRepresentation[ReferenceFrame], ABC):
 
     @classmethod
     def _parse_optional_frame_from_json(
-        cls, data: Dict[str, Any], frame: SpatialFrameKey, **kwargs
-    ) -> Optional[ReferenceFrame]:
+        cls, data: dict[str, Any], frame: SpatialFrameKey, **kwargs
+    ) -> ReferenceFrame | None:
         """
         Resolve a reference frame a serialized spatial type refers to.
 
@@ -191,8 +180,8 @@ class SpatialType(CoordinateRepresentation[ReferenceFrame], ABC):
 
     @staticmethod
     def _ensure_consistent_frame(
-        spatial_objects: List[Optional[SpatialType]],
-    ) -> Optional[ReferenceFrame]:
+        spatial_objects: list[SpatialType | None],
+    ) -> ReferenceFrame | None:
         """
         Ensures that all provided spatial objects have a consistent reference frame.
 
@@ -280,16 +269,16 @@ class HomogeneousTransformationMatrix(
         for a matrix that scales or shears.
     """
 
-    child_frame: Optional[ReferenceFrame] = field(kw_only=True, default=None)
+    child_frame: ReferenceFrame | None = field(kw_only=True, default=None)
     """
     child_frame of this transformation matrix.
     """
 
     def __init__(
         self,
-        data: Optional[sm.MatrixData] = None,
-        reference_frame: Optional[ReferenceFrame] = None,
-        child_frame: Optional[ReferenceFrame] = None,
+        data: sm.MatrixData | None = None,
+        reference_frame: ReferenceFrame | None = None,
+        child_frame: ReferenceFrame | None = None,
     ):
         """
         :param data: A 4x4 matrix of some form that represents the rotation matrix.
@@ -321,7 +310,7 @@ class HomogeneousTransformationMatrix(
         self[3, :] = _ConstantMatrixParts.HOMOGENEOUS_BOTTOM_ROW
 
     @classmethod
-    def _from_constant_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+    def _from_constant_json(cls, data: dict[str, Any], **kwargs) -> Self:
         reference_frame = cls._parse_optional_frame_from_json(
             data, frame=SpatialFrameKey.REFERENCE, **kwargs
         )
@@ -362,18 +351,18 @@ class HomogeneousTransformationMatrix(
         transformation_matrix.append([0, 0, 0, 1])
         return cls(transformation_matrix)
 
-    def _frames_to_json(self, data: Dict[str, Any]) -> None:
+    def _frames_to_json(self, data: dict[str, Any]) -> None:
         super()._frames_to_json(data)
         if self.child_frame is not None:
             ReferenceFrameReference(SpatialFrameKey.CHILD).write(data, self.child_frame)
 
-    def _frames_from_json(self, data: Dict[str, Any], **kwargs) -> None:
+    def _frames_from_json(self, data: dict[str, Any], **kwargs) -> None:
         super()._frames_from_json(data, **kwargs)
         self.child_frame = self._parse_optional_frame_from_json(
             data, frame=SpatialFrameKey.CHILD, **kwargs
         )
 
-    def _constant_to_json(self) -> Dict[str, Any]:
+    def _constant_to_json(self) -> dict[str, Any]:
         return {
             "position": self.position.to_np().tolist(),
             "rotation": self.quaternion.to_np().tolist(),
@@ -382,10 +371,10 @@ class HomogeneousTransformationMatrix(
     @classmethod
     def from_point_rotation_matrix(
         cls,
-        point: Optional[Point3] = None,
-        rotation_matrix: Optional[RotationMatrix] = None,
-        reference_frame: Optional[ReferenceFrame] = None,
-        child_frame: Optional[ReferenceFrame] = None,
+        point: Point3 | None = None,
+        rotation_matrix: RotationMatrix | None = None,
+        reference_frame: ReferenceFrame | None = None,
+        child_frame: ReferenceFrame | None = None,
     ) -> HomogeneousTransformationMatrix:
         """
         Constructs a TransformationMatrix object from a given point, a rotation matrix,
@@ -428,8 +417,8 @@ class HomogeneousTransformationMatrix(
         roll: sm.ScalarData = 0,
         pitch: sm.ScalarData = 0,
         yaw: sm.ScalarData = 0,
-        reference_frame: Optional[ReferenceFrame] = None,
-        child_frame: Optional[ReferenceFrame] = None,
+        reference_frame: ReferenceFrame | None = None,
+        child_frame: ReferenceFrame | None = None,
     ) -> HomogeneousTransformationMatrix:
         """
         Creates a TransformationMatrix object from position (x, y, z) and Euler angles
@@ -463,8 +452,8 @@ class HomogeneousTransformationMatrix(
         quat_y: sm.ScalarData = 0,
         quat_z: sm.ScalarData = 0,
         quat_w: sm.ScalarData = 1,
-        reference_frame: Optional[ReferenceFrame] = None,
-        child_frame: Optional[ReferenceFrame] = None,
+        reference_frame: ReferenceFrame | None = None,
+        child_frame: ReferenceFrame | None = None,
     ) -> HomogeneousTransformationMatrix:
         """
         Creates a `TransformationMatrix` instance from the provided position coordinates
@@ -500,8 +489,8 @@ class HomogeneousTransformationMatrix(
         z: sm.ScalarData = 0,
         axis: Vector3 | sm.NumericalVector = None,
         angle: sm.ScalarData = 0,
-        reference_frame: Optional[ReferenceFrame] = None,
-        child_frame: Optional[ReferenceFrame] = None,
+        reference_frame: ReferenceFrame | None = None,
+        child_frame: ReferenceFrame | None = None,
     ) -> Self:
         """
         Creates an instance of the class from x, y, z coordinates, axis and angle.
@@ -699,8 +688,8 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
     def __init__(
         self,
-        data: Optional[sm.MatrixData] = None,
-        reference_frame: Optional[ReferenceFrame] = None,
+        data: sm.MatrixData | None = None,
+        reference_frame: ReferenceFrame | None = None,
     ):
         """
         :param data: A 4x4 matrix of some form that represents the rotation matrix.
@@ -724,7 +713,7 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         self[3, :] = _ConstantMatrixParts.HOMOGENEOUS_BOTTOM_ROW
 
     @classmethod
-    def _from_constant_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+    def _from_constant_json(cls, data: dict[str, Any], **kwargs) -> Self:
         reference_frame = cls._parse_optional_frame_from_json(
             data, frame=SpatialFrameKey.REFERENCE, **kwargs
         )
@@ -733,7 +722,7 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
             reference_frame=reference_frame,
         ).rotation_matrix
 
-    def _constant_to_json(self) -> Dict[str, Any]:
+    def _constant_to_json(self) -> dict[str, Any]:
         return {
             "quaternion": self.quaternion.to_np().tolist(),
         }
@@ -915,10 +904,10 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     @classmethod
     def from_vectors(
         cls,
-        x: Optional[Vector3] = None,
-        y: Optional[Vector3] = None,
-        z: Optional[Vector3] = None,
-        reference_frame: Optional[ReferenceFrame] = None,
+        x: Vector3 | None = None,
+        y: Vector3 | None = None,
+        z: Vector3 | None = None,
+        reference_frame: ReferenceFrame | None = None,
     ) -> RotationMatrix:
         """
         Create a rotation matrix from 2 or 3 orthogonal vectors.
@@ -957,7 +946,7 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     def from_x_axis(
         cls,
         x_vector: Vector3,
-        reference_frame: Optional[ReferenceFrame] = None,
+        reference_frame: ReferenceFrame | None = None,
     ) -> RotationMatrix:
         """
         Create a rotation matrix from the direction its x-axis points along.
@@ -989,10 +978,10 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     @classmethod
     def from_rpy(
         cls,
-        roll: Optional[sm.ScalarData] = None,
-        pitch: Optional[sm.ScalarData] = None,
-        yaw: Optional[sm.ScalarData] = None,
-        reference_frame: Optional[ReferenceFrame] = None,
+        roll: sm.ScalarData | None = None,
+        pitch: sm.ScalarData | None = None,
+        yaw: sm.ScalarData | None = None,
+        reference_frame: ReferenceFrame | None = None,
     ) -> RotationMatrix:
         """
         Conversion of roll, pitch, yaw to 4x4 rotation matrix according to:
@@ -1034,7 +1023,7 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         return self.T
 
     @property
-    def rpy(self) -> Tuple[sm.Scalar, sm.Scalar, sm.Scalar]:
+    def rpy(self) -> tuple[sm.Scalar, sm.Scalar, sm.Scalar]:
         """
         :return: roll, pitch, yaw
         """
@@ -1139,7 +1128,7 @@ class Point3(Point):
         x: sm.ScalarData = 0,
         y: sm.ScalarData = 0,
         z: sm.ScalarData = 0,
-        reference_frame: Optional[ReferenceFrame] = None,
+        reference_frame: ReferenceFrame | None = None,
     ):
         """
 
@@ -1167,7 +1156,7 @@ class Point3(Point):
     def from_iterable(
         cls,
         data: sm.VectorData,
-        reference_frame: Optional[ReferenceFrame] = None,
+        reference_frame: ReferenceFrame | None = None,
     ) -> Point3:
         """
         Creates an instance of Point3 from provided iterable data.
@@ -1194,7 +1183,7 @@ class Point3(Point):
         return result
 
     @classmethod
-    def _from_constant_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+    def _from_constant_json(cls, data: dict[str, Any], **kwargs) -> Self:
         reference_frame = cls._parse_optional_frame_from_json(
             data, frame=SpatialFrameKey.REFERENCE, **kwargs
         )
@@ -1205,7 +1194,7 @@ class Point3(Point):
 
     @classmethod
     def create_with_variables(
-        cls, name: str, resolver: Callable[[], List[float] | np.ndarray] | None = None
+        cls, name: str, resolver: Callable[[], list[float] | np.ndarray] | None = None
     ) -> Self:
         """
         Creates a Vector3 object with float variables in all relevant entries.
@@ -1229,7 +1218,7 @@ class Point3(Point):
             z.resolve = lambda: resolver()[2]
         return result
 
-    def _constant_to_json(self) -> Dict[str, Any]:
+    def _constant_to_json(self) -> dict[str, Any]:
         return {
             "data": self.to_np().tolist(),
         }
@@ -1282,7 +1271,7 @@ class Point3(Point):
 
     def project_to_plane(
         self, frame_V_plane_vector1: Vector3, frame_V_plane_vector2: Vector3
-    ) -> Tuple[Point3, sm.Scalar]:
+    ) -> tuple[Point3, sm.Scalar]:
         """
         Projects a point onto a plane defined by two vectors.
 
@@ -1304,7 +1293,7 @@ class Point3(Point):
 
     def project_to_line(
         self, line_point: Point3, line_direction: Vector3
-    ) -> Tuple[Point3, sm.Scalar]:
+    ) -> tuple[Point3, sm.Scalar]:
         """
         :param line_point: a point that the line intersects, must have the same reference frame as self
         :param line_direction: the direction of the line, must have the same reference frame as self
@@ -1322,7 +1311,7 @@ class Point3(Point):
 
     def distance_to_line_segment(
         self, line_start: Point3, line_end: Point3
-    ) -> Tuple[sm.Scalar, Point3]:
+    ) -> tuple[sm.Scalar, Point3]:
         """
         All parameters must have the same reference frame as self.
 
@@ -1388,7 +1377,7 @@ class Point2(Point, PlanarPoint[ReferenceFrame, sm.Scalar]):
         self,
         x: sm.ScalarData = 0,
         y: sm.ScalarData = 0,
-        reference_frame: Optional[ReferenceFrame] = None,
+        reference_frame: ReferenceFrame | None = None,
     ):
         """
         :param x: X-coordinate of the point. Defaults to 0.
@@ -1450,14 +1439,14 @@ class Point2(Point, PlanarPoint[ReferenceFrame, sm.Scalar]):
         return OrthogonalProjection(self.reference_frame).unproject(self, height)
 
     @classmethod
-    def _from_constant_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+    def _from_constant_json(cls, data: dict[str, Any], **kwargs) -> Self:
         reference_frame = cls._parse_optional_frame_from_json(
             data, frame=SpatialFrameKey.REFERENCE, **kwargs
         )
         x, y = data["data"][:2]
         return cls(x=x, y=y, reference_frame=reference_frame)
 
-    def _constant_to_json(self) -> Dict[str, Any]:
+    def _constant_to_json(self) -> dict[str, Any]:
         return {
             "data": self.to_np().tolist(),
         }
@@ -1596,8 +1585,8 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         x: sm.ScalarData = 0,
         y: sm.ScalarData = 0,
         z: sm.ScalarData = 0,
-        reference_frame: Optional[ReferenceFrame] = None,
-        visualisation_frame: Optional[ReferenceFrame] = None,
+        reference_frame: ReferenceFrame | None = None,
+        visualisation_frame: ReferenceFrame | None = None,
     ):
         """
 
@@ -1625,7 +1614,7 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         self._casadi_sx[3] = 0
 
     @classmethod
-    def _from_constant_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+    def _from_constant_json(cls, data: dict[str, Any], **kwargs) -> Self:
         reference_frame = cls._parse_optional_frame_from_json(
             data, frame=SpatialFrameKey.REFERENCE, **kwargs
         )
@@ -1634,7 +1623,7 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
             reference_frame=reference_frame,
         )
 
-    def _constant_to_json(self) -> Dict[str, Any]:
+    def _constant_to_json(self) -> dict[str, Any]:
         return {
             "data": self.to_np().tolist(),
         }
@@ -1643,7 +1632,7 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     def from_iterable(
         cls,
         data: sm.VectorData,
-        reference_frame: Optional[ReferenceFrame] = None,
+        reference_frame: ReferenceFrame | None = None,
     ) -> Vector3:
         """
         Creates an instance of Vector3 from provided iterable data.
@@ -1675,27 +1664,27 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         return result
 
     @classmethod
-    def X(cls, reference_frame: Optional[ReferenceFrame] = None) -> Vector3:
+    def X(cls, reference_frame: ReferenceFrame | None = None) -> Vector3:
         return cls(x=1, y=0, z=0, reference_frame=reference_frame)
 
     @classmethod
-    def Y(cls, reference_frame: Optional[ReferenceFrame] = None) -> Vector3:
+    def Y(cls, reference_frame: ReferenceFrame | None = None) -> Vector3:
         return cls(x=0, y=1, z=0, reference_frame=reference_frame)
 
     @classmethod
-    def Z(cls, reference_frame: Optional[ReferenceFrame] = None) -> Vector3:
+    def Z(cls, reference_frame: ReferenceFrame | None = None) -> Vector3:
         return cls(x=0, y=0, z=1, reference_frame=reference_frame)
 
     @classmethod
-    def NEGATIVE_X(cls, reference_frame: Optional[ReferenceFrame] = None) -> Vector3:
+    def NEGATIVE_X(cls, reference_frame: ReferenceFrame | None = None) -> Vector3:
         return cls(x=-1, y=0, z=0, reference_frame=reference_frame)
 
     @classmethod
-    def NEGATIVE_Y(cls, reference_frame: Optional[ReferenceFrame] = None) -> Vector3:
+    def NEGATIVE_Y(cls, reference_frame: ReferenceFrame | None = None) -> Vector3:
         return cls(x=0, y=-1, z=0, reference_frame=reference_frame)
 
     @classmethod
-    def NEGATIVE_Z(cls, reference_frame: Optional[ReferenceFrame] = None) -> Vector3:
+    def NEGATIVE_Z(cls, reference_frame: ReferenceFrame | None = None) -> Vector3:
         return cls(x=0, y=0, z=-1, reference_frame=reference_frame)
 
     @classmethod
@@ -1704,7 +1693,7 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         x: sm.ScalarData = 0,
         y: sm.ScalarData = 0,
         z: sm.ScalarData = 0,
-        reference_frame: Optional[ReferenceFrame] = None,
+        reference_frame: ReferenceFrame | None = None,
     ) -> Vector3:
         v = cls(x=x, y=y, z=z, reference_frame=reference_frame)
         v.scale(1, unsafe=True)
@@ -1712,7 +1701,7 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
     @classmethod
     def create_with_variables(
-        cls, name: str, resolver: Callable[[], List[float] | np.ndarray] | None = None
+        cls, name: str, resolver: Callable[[], list[float] | np.ndarray] | None = None
     ) -> Self:
         """
         Creates a Vector3 object with float variables in all relevant entries.
@@ -1813,7 +1802,7 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     def safe_division(
         self,
         other: sm.ScalarData,
-        if_nan: Optional[Vector3] = None,
+        if_nan: Vector3 | None = None,
     ) -> sm.GenericSymbolicType:
         """
         A version of division where no sub-expression is ever NaN.
@@ -1966,7 +1955,7 @@ class Quaternion(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         y: sm.ScalarData = 0,
         z: sm.ScalarData = 0,
         w: sm.ScalarData = 1,
-        reference_frame: Optional[ReferenceFrame] = None,
+        reference_frame: ReferenceFrame | None = None,
     ):
         """
 
@@ -1993,7 +1982,7 @@ class Quaternion(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         return Quaternion.from_iterable(self.casadi_sx.__neg__())
 
     @classmethod
-    def _from_constant_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+    def _from_constant_json(cls, data: dict[str, Any], **kwargs) -> Self:
         reference_frame = cls._parse_optional_frame_from_json(
             data, frame=SpatialFrameKey.REFERENCE, **kwargs
         )
@@ -2002,7 +1991,7 @@ class Quaternion(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
             reference_frame=reference_frame,
         )
 
-    def _constant_to_json(self) -> Dict[str, Any]:
+    def _constant_to_json(self) -> dict[str, Any]:
         return {
             "data": self.to_np().tolist(),
         }
@@ -2011,7 +2000,7 @@ class Quaternion(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     def from_iterable(
         cls,
         data: sm.VectorData,
-        reference_frame: Optional[ReferenceFrame] = None,
+        reference_frame: ReferenceFrame | None = None,
     ) -> Quaternion:
         """
         Creates an instance of Quaternion from provided iterable data.
@@ -2098,7 +2087,7 @@ class Quaternion(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         roll: sm.ScalarData,
         pitch: sm.ScalarData,
         yaw: sm.ScalarData,
-        reference_frame: Optional[ReferenceFrame] = None,
+        reference_frame: ReferenceFrame | None = None,
     ) -> Quaternion:
         """
         Creates a Quaternion instance from specified roll, pitch, and yaw angles.
@@ -2143,7 +2132,7 @@ class Quaternion(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
     @classmethod
     def from_rotation_matrix(
-        cls, r: Union[RotationMatrix, HomogeneousTransformationMatrix]
+        cls, r: RotationMatrix | HomogeneousTransformationMatrix
     ) -> Quaternion:
         """
         Creates a Quaternion object initialized from a given rotation matrix.
@@ -2230,7 +2219,7 @@ class Quaternion(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         return RotationMatrix.from_quaternion(self)
 
     @property
-    def rpy(self) -> Tuple[sm.Scalar, sm.Scalar, sm.Scalar]:
+    def rpy(self) -> tuple[sm.Scalar, sm.Scalar, sm.Scalar]:
         """
         :return: roll, pitch, yaw
         """
@@ -2304,9 +2293,9 @@ class AxisAngle(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
     def __init__(
         self,
-        axis: Optional[Vector3] = None,
+        axis: Vector3 | None = None,
         angle: sm.ScalarData = 0,
-        reference_frame: Optional[ReferenceFrame] = None,
+        reference_frame: ReferenceFrame | None = None,
     ):
         """
         :param axis: The unit axis to rotate around. Defaults to the z-axis.
@@ -2326,7 +2315,7 @@ class AxisAngle(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
             )
 
     @classmethod
-    def _from_constant_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+    def _from_constant_json(cls, data: dict[str, Any], **kwargs) -> Self:
         reference_frame = cls._parse_optional_frame_from_json(
             data, frame=SpatialFrameKey.REFERENCE, **kwargs
         )
@@ -2336,7 +2325,7 @@ class AxisAngle(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
             reference_frame=reference_frame,
         )
 
-    def _constant_to_json(self) -> Dict[str, Any]:
+    def _constant_to_json(self) -> dict[str, Any]:
         return {
             "axis": self.axis.to_np()[:3].tolist(),
             "angle": float(self.angle),
@@ -2401,12 +2390,11 @@ class AxisAngle(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
 @dataclass(eq=False, init=False, repr=False)
 class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
-
     def __init__(
         self,
-        position: Optional[Point3] = None,
-        orientation: Optional[Quaternion] = None,
-        reference_frame: Optional[ReferenceFrame] = None,
+        position: Point3 | None = None,
+        orientation: Quaternion | None = None,
+        reference_frame: ReferenceFrame | None = None,
     ):
         """
         Initialize a 3D point with orientation and a reference frame in a kinematic
@@ -2441,7 +2429,7 @@ class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         self[3, :] = _ConstantMatrixParts.HOMOGENEOUS_BOTTOM_ROW
 
     @classmethod
-    def _from_constant_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+    def _from_constant_json(cls, data: dict[str, Any], **kwargs) -> Self:
         reference_frame = cls._parse_optional_frame_from_json(
             data, frame=SpatialFrameKey.REFERENCE, **kwargs
         )
@@ -2451,7 +2439,7 @@ class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
             reference_frame=reference_frame,
         )
 
-    def _constant_to_json(self) -> Dict[str, Any]:
+    def _constant_to_json(self) -> dict[str, Any]:
         return {
             "position": self.position.to_np().tolist(),
             "rotation": self.quaternion.to_np().tolist(),
@@ -2466,7 +2454,7 @@ class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         roll: sm.ScalarData = 0,
         pitch: sm.ScalarData = 0,
         yaw: sm.ScalarData = 0,
-        reference_frame: Optional[ReferenceFrame] = None,
+        reference_frame: ReferenceFrame | None = None,
     ) -> Self:
         """
         Creates a Pose object from position (x, y, z) and Euler angles (roll, pitch,
@@ -2497,7 +2485,7 @@ class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         quat_y: sm.ScalarData = 0,
         quat_z: sm.ScalarData = 0,
         quat_w: sm.ScalarData = 1,
-        reference_frame: Optional[ReferenceFrame] = None,
+        reference_frame: ReferenceFrame | None = None,
     ) -> Self:
         """
         Creates a `Pose` instance from the provided position coordinates and quaternion
@@ -2528,7 +2516,7 @@ class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         z: sm.ScalarData = 0,
         axis: Vector3 | sm.NumericalVector = None,
         angle: sm.ScalarData = 0,
-        reference_frame: Optional[ReferenceFrame] = None,
+        reference_frame: ReferenceFrame | None = None,
     ) -> Self:
         """
         Creates an instance of the class from x, y, z coordinates, axis and angle.
@@ -2816,13 +2804,13 @@ class Pose2D(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     # %% JSON serialization
 
     @classmethod
-    def _from_constant_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+    def _from_constant_json(cls, data: dict[str, Any], **kwargs) -> Self:
         reference_frame = cls._parse_optional_frame_from_json(
             data, frame=SpatialFrameKey.REFERENCE, **kwargs
         )
         return cls.from_xy_yaw(*data["data"], reference_frame=reference_frame)
 
-    def _constant_to_json(self) -> Dict[str, Any]:
+    def _constant_to_json(self) -> dict[str, Any]:
         return {
             "data": self.to_np().tolist(),
         }

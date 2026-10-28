@@ -19,7 +19,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from typing_extensions import Any, Dict, Iterable, List, Optional
+from typing_extensions import Any, Iterable
 
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.world import World
@@ -51,18 +51,18 @@ class WorldModelsBundle:
     fields.
     """
 
-    models: List[Dict[str, Any]]
+    models: list[dict[str, Any]]
     """
     The scene's ``models`` entries: the environment (if any bodies remain outside the
     robot and the object overlay) followed by the robot, when one is bound.
     """
 
-    robot: Optional[Dict[str, Any]]
+    robot: dict[str, Any] | None
     """
     The scene's ``robot`` field, or None without a bound robot.
     """
 
-    missing_assets: List[str]
+    missing_assets: list[str]
     """
     Every asset a model referenced but could not resolve, across all models.
     """
@@ -70,10 +70,10 @@ class WorldModelsBundle:
 
 def bundle_world_models(
     world: World,
-    robot: Optional[AbstractRobot],
+    robot: AbstractRobot | None,
     output_directory: Path,
     mesh_subdirectory: str,
-    overlay_bodies: Optional[Iterable[Body]] = None,
+    overlay_bodies: Iterable[Body] | None = None,
 ) -> WorldModelsBundle:
     """
     Serialize a world's robot and environment bodies into URDF models on disk.
@@ -101,7 +101,7 @@ def bundle_world_models(
     robot_bodies = [
         body for body in _robot_bodies(world, robot) if body not in excluded
     ]
-    models: List[Dict[str, Any]] = []
+    models: list[dict[str, Any]] = []
     environment_bodies = [
         body
         for body in world.bodies_topologically_sorted
@@ -132,7 +132,7 @@ def bundle_world_models(
     )
 
 
-def build_live_scene(bridge: Bridge) -> Optional[str]:
+def build_live_scene(bridge: Bridge) -> str | None:
     """
     Bundle the live world's current model into a throwaway scene.
 
@@ -150,7 +150,7 @@ def build_live_scene(bridge: Bridge) -> Optional[str]:
         return _write_bundle(bridge, output_directory, signature)
 
 
-def _existing_signature(output_directory: Path) -> Optional[str]:
+def _existing_signature(output_directory: Path) -> str | None:
     """
     The signature the existing bundle was built from, or None without a readable one.
 
@@ -201,7 +201,7 @@ def _write_bundle(bridge: Bridge, output_directory: Path, signature: str) -> str
     return paths.LIVE_SCENE_NAME
 
 
-def _robot_bodies(world: World, robot: Optional[AbstractRobot]) -> List[Body]:
+def _robot_bodies(world: World, robot: AbstractRobot | None) -> list[Body]:
     """
     The robot's subtree in serialization order, or an empty list without a robot.
 
@@ -214,7 +214,7 @@ def _robot_bodies(world: World, robot: Optional[AbstractRobot]) -> List[Body]:
     return [body for body in world.bodies_topologically_sorted if body in subtree]
 
 
-def _model_payload(report: BundleReport, is_robot: bool) -> Dict[str, Any]:
+def _model_payload(report: BundleReport, is_robot: bool) -> dict[str, Any]:
     """
     One entry of the scene's ``models`` list.
 
@@ -228,7 +228,7 @@ def _model_payload(report: BundleReport, is_robot: bool) -> Dict[str, Any]:
     return payload
 
 
-def _robot_payload(robot: Optional[AbstractRobot]) -> Optional[Dict[str, Any]]:
+def _robot_payload(robot: AbstractRobot | None) -> dict[str, Any] | None:
     """
     The scene's ``robot`` field, or None if no robot is bound.
 

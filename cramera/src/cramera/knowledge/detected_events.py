@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
-from typing_extensions import Any, Dict, List, Optional
+from typing_extensions import Any
 
 from cramera.recording_fields import SceneField, TrajectoryField
 from cramera.knowledge.query_domain import QueryDomain
@@ -67,18 +67,18 @@ class DetectedEventRecord:
     When the event was detected.
     """
 
-    tracked_object: Optional[str] = None
+    tracked_object: str | None = None
     """
     Name of the primary body the event was detected on, or None for an event about no
     body in particular.
     """
 
-    with_object: Optional[str] = None
+    with_object: str | None = None
     """
     Name of the second body the event relates the first one to, if any.
     """
 
-    def to_payload(self) -> Dict[str, Any]:
+    def to_payload(self) -> dict[str, Any]:
         """
         The record as a recorded bundle carries it, with the moment as an ISO instant.
         """
@@ -91,7 +91,7 @@ class DetectedEventRecord:
         }
 
     @classmethod
-    def of_payload(cls, payload: Dict[str, Any]) -> DetectedEventRecord:
+    def of_payload(cls, payload: dict[str, Any]) -> DetectedEventRecord:
         """
         One record as a bundle carries it.
 
@@ -106,7 +106,7 @@ class DetectedEventRecord:
         )
 
     @classmethod
-    def of_scene(cls, scene: Dict[str, Any]) -> List[DetectedEventRecord]:
+    def of_scene(cls, scene: dict[str, Any]) -> list[DetectedEventRecord]:
         """
         Every detection a recorded scene carries, or none for a scene recorded without
         detectors.

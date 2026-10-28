@@ -4,7 +4,7 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from uuid import UUID
 
-from typing_extensions import Any, Dict, TypeVar
+from typing_extensions import Any, TypeVar
 
 from krrood.adapters.json_serializer import from_json
 from krrood.adapters.object_reference import ObjectReference
@@ -65,7 +65,7 @@ class ReferenceFrameReference(ObjectReference):
     How a serialized spatial type points at a :class:`ReferenceFrame`.
     """
 
-    def resolve(self, data: Dict[str, Any], **kwargs) -> ReferenceFrame:
+    def resolve(self, data: dict[str, Any], **kwargs) -> ReferenceFrame:
         """
         :raises MissingReferenceFrameResolver: If the kwargs carry no
             :class:`ReferenceFrameResolver`.

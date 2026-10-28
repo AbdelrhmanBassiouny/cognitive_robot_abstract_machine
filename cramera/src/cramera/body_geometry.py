@@ -10,14 +10,7 @@ import numpy
 from scipy.spatial.transform import Rotation
 from semantic_digital_twin.spatial_types import Point3, Pose
 from semantic_digital_twin.world_description.geometry import Scale
-from typing_extensions import (
-    List,
-    Optional,
-    Protocol,
-    runtime_checkable,
-    Tuple,
-    TYPE_CHECKING,
-)
+from typing_extensions import Protocol, runtime_checkable, TYPE_CHECKING
 
 POSE_PRECISION = 5
 """
@@ -144,7 +137,7 @@ class NumericPose:
 
 def shape_collections_of(
     entity: KinematicStructureEntity,
-) -> Tuple[ShapeCollection, ...]:
+) -> tuple[ShapeCollection, ...]:
     """
     The shape collections an entity's geometry is read from, most descriptive first.
 
@@ -161,7 +154,7 @@ def shape_collections_of(
     return ()
 
 
-def mesh_file_of(entity: KinematicStructureEntity) -> Optional[str]:
+def mesh_file_of(entity: KinematicStructureEntity) -> str | None:
     """
     The file an entity's own geometry lives in, or None for one built from primitives.
 
@@ -174,7 +167,7 @@ def mesh_file_of(entity: KinematicStructureEntity) -> Optional[str]:
     return None
 
 
-def measure_body(entity: KinematicStructureEntity) -> Optional[Scale]:
+def measure_body(entity: KinematicStructureEntity) -> Scale | None:
     """
     Measure an entity from the first of its shape collections that has any shapes.
 
@@ -194,7 +187,7 @@ def measure_body(entity: KinematicStructureEntity) -> Optional[Scale]:
     return None
 
 
-def rounded_scale(scale: Scale, precision: int) -> List[float]:
+def rounded_scale(scale: Scale, precision: int) -> list[float]:
     """
     A scale as ``[x, y, z]``, rounded for publication.
 
@@ -210,7 +203,7 @@ def rounded_scale(scale: Scale, precision: int) -> List[float]:
 
 def rounded_pose(
     entity: KinematicStructureEntity, precision: int = POSE_PRECISION
-) -> List[float]:
+) -> list[float]:
     """
     An entity's world pose as ``[x, y, z, qx, qy, qz, qw]``, rounded for publication.
 

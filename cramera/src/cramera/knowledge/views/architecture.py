@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
-from typing_extensions import Any, ClassVar, Dict, List, TYPE_CHECKING
+from typing_extensions import Any, ClassVar, TYPE_CHECKING
 
 from cramera.knowledge.architecture_entities import Package, PythonClass, SubPackage
 from cramera.knowledge.enums import EdgeKind, NodeGroup
@@ -33,7 +33,7 @@ class SubgraphViewPayload(GraphPanelPayload):
     Breadcrumb label shown above the subgraph.
     """
 
-    def panel_options(self) -> Dict[str, Any]:
+    def panel_options(self) -> dict[str, Any]:
         """
         The breadcrumb; a drill-down view sends nothing else of its own.
         """
@@ -49,7 +49,7 @@ class SubgraphViewPayload(GraphPanelPayload):
     """
 
     @staticmethod
-    def _class_lines(python_class: PythonClass, drill_hint: bool = True) -> List[str]:
+    def _class_lines(python_class: PythonClass, drill_hint: bool = True) -> list[str]:
         """
         Detail lines shown for a class node.
 
@@ -75,9 +75,9 @@ class SubgraphViewPayload(GraphPanelPayload):
         cls,
         view: SubgraphAccumulator,
         parent_id: str,
-        shown: List[PythonClass],
+        shown: list[PythonClass],
         total: int,
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Add class nodes plus their on-screen inheritance edges to a view.
 
@@ -88,7 +88,7 @@ class SubgraphViewPayload(GraphPanelPayload):
             note.
         :return: Extra detail lines for the parent (a truncation notice, if any).
         """
-        name_to_id: Dict[str, str] = {}
+        name_to_id: dict[str, str] = {}
         for python_class in shown:
             class_id = python_class.qualified_name
             view.add(

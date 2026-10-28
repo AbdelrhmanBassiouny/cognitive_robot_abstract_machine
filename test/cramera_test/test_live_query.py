@@ -13,7 +13,7 @@ import pytest
 krrood = pytest.importorskip("krrood", reason="EQL requires krrood")
 
 from semantic_digital_twin.spatial_types import Point3  # noqa: E402
-from typing_extensions import Any, List  # noqa: E402
+from typing_extensions import Any
 
 from cramera.knowledge.presets import Preset  # noqa: E402
 from cramera.knowledge.query_domain import QueryDomain  # noqa: E402
@@ -36,7 +36,7 @@ class AnswersFromStorage(QueryEvaluation):
     An evaluation standing in for one that reads a database instead of this process.
     """
 
-    stored: List[NamedRecord] = field(default_factory=list)
+    stored: list[NamedRecord] = field(default_factory=list)
 
     def evaluate(self, expression: Any) -> Any:
         return list(self.stored)
@@ -49,12 +49,12 @@ class GrowingRecordSource:
     alongside the ones its finished runs already stored.
     """
 
-    records: List[NamedRecord] = field(default_factory=list)
+    records: list[NamedRecord] = field(default_factory=list)
     """
     What this source's current-state domain ranges over.
     """
 
-    stored: List[NamedRecord] = field(default_factory=list)
+    stored: list[NamedRecord] = field(default_factory=list)
     """
     What its episodic-memory domain answers with.
     """
@@ -73,7 +73,7 @@ class GrowingRecordSource:
         """
         return iter(self.records)
 
-    def knowledge(self) -> List[QueryableKnowledge]:
+    def knowledge(self) -> list[QueryableKnowledge]:
         """
         The two bodies of knowledge this source offers.
         """
@@ -90,7 +90,7 @@ class GrowingRecordSource:
             ),
         ]
 
-    def presets(self) -> List[Preset]:
+    def presets(self) -> list[Preset]:
         """
         The ready-made queries this source offers.
         """
@@ -103,7 +103,7 @@ class GrowingRecordSource:
             ),
         ]
 
-    def unlisted_presets(self) -> List[Preset]:
+    def unlisted_presets(self) -> list[Preset]:
         """
         The one-per-kind question this source recognizes without showing it.
         """
@@ -124,7 +124,7 @@ class CurrentStateOnlySource:
         """
         return "state-only demo"
 
-    def knowledge(self) -> List[QueryableKnowledge]:
+    def knowledge(self) -> list[QueryableKnowledge]:
         """
         Provide one current-state scope with an empty native record domain.
         """
@@ -135,7 +135,7 @@ class CurrentStateOnlySource:
             )
         ]
 
-    def presets(self) -> List[Preset]:
+    def presets(self) -> list[Preset]:
         """
         Offer no predefined queries for this configuration.
         """
@@ -421,7 +421,7 @@ class TestConcurrentQueries:
         another's answers.
         """
         source.records.extend(make_record(name) for name in ("second", "third"))
-        counts: List[int] = []
+        counts: list[int] = []
         lock = threading.Lock()
 
         def ask() -> None:
