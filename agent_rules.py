@@ -1,22 +1,17 @@
 """
 The rules for this repository only, which ``krrood agents-md`` writes into ``AGENTS.md``
-after the shared rule sets.
+after the rules krrood ships.
 """
 
 from __future__ import annotations
 
-from krrood.development_tools.agent_rule import ProjectRules, Section
-from krrood.ormatic.utils import classproperty
+from krrood.development_tools.agents.rule import Section
 
 
-class GeneratedORMInterfaces(Section):
+class GeneratedORMInterfacesRules(Section):
     """
     The rules on the generated ORM interfaces.
     """
-
-    @classproperty
-    def parent(cls) -> type[Section]:
-        return ProjectRules
 
     NEVER_EDIT = (
         "`ormatic_interface.py` files are generated, never written, and "
@@ -51,14 +46,10 @@ class GeneratedORMInterfaces(Section):
     )
 
 
-class KrroodIsolation(Section):
+class KrroodIsolationRules(Section):
     """
     The rules keeping krrood independent of the other workspace packages.
     """
-
-    @classproperty
-    def parent(cls) -> type[Section]:
-        return ProjectRules
 
     KRROOD_IMPORTS_NO_WORKSPACE_PACKAGE = (
         "`krrood`, including its tests under `test/krrood_test`, never imports "
@@ -81,14 +72,10 @@ class KrroodIsolation(Section):
     )
 
 
-class DomainSpecificConventions(Section):
+class DomainSpecificConventionsRules(Section):
     """
     The rules pointing to the conventions of one domain.
     """
-
-    @classproperty
-    def parent(cls) -> type[Section]:
-        return ProjectRules
 
     FOLLOW_THE_SPATIAL_STYLE_GUIDE = (
         "For spatial types and connections, follow "
@@ -96,15 +83,11 @@ class DomainSpecificConventions(Section):
     )
 
 
-class PullRequestLabels(Section):
+class PullRequestLabelsRules(Section):
     """
     The rules on labelling pull requests by the kind of change and the frameworks it
     changes.
     """
-
-    @classproperty
-    def parent(cls) -> type[Section]:
-        return ProjectRules
 
     LABEL_EVERY_PULL_REQUEST = (
         "Label every pull request you open or prepare with its kinds of change and the "

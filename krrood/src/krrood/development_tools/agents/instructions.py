@@ -8,13 +8,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-import jinja2
-
-from krrood.development_tools.agent_rule import ProjectRules, RuleSet
-from krrood.development_tools.repository_files import RepositoryInstructionsFile
-
-# imported to declare the sections of the shipped rule sets
-from krrood.development_tools.rules import krrood_rules, python_rules  # noqa: F401
+from krrood.code_generation.generator import CodeGenerator
+from krrood.development_tools.agents import shipped_rules
+from krrood.development_tools.agents.repository_files import (
+    RepositoryInstructionsFile,
+)
+from krrood.development_tools.agents.rule import Section
+from krrood.development_tools.agents.rule_module import RuleModule
 from krrood.patterns.path_enumeration import PathEnumeration
 
 # %% file contents
@@ -27,8 +27,7 @@ class TemplateFile(PathEnumeration):
 
     AGENTS = Path(__file__).parent / "templates" / "agents.md.jinja"
     """
-    The content of ``AGENTS.md``: the rules of the chosen rule sets, under the headings
-    of their sections.
+    The content of ``AGENTS.md``: rules under the headings of their sections.
     """
 
 
@@ -38,7 +37,7 @@ class TemplateFile(PathEnumeration):
 @dataclass
 class AgentsInstructions:
     """
-    The ``AGENTS.md`` of one repository, generated from the chosen rule sets.
+    The ``AGENTS.md`` of one repository, listing the rules of the given sections.
     """
 
     repository_root: Path
@@ -46,17 +45,24 @@ class AgentsInstructions:
     The directory holding the repository's ``AGENTS.md``.
     """
 
-    rule_sets: tuple[type[RuleSet], ...]
+    sections: list[type[Section]]
     """
-    The rule sets the file lists, in this order.
+    The top-level sections the file lists, each with the sections nested under it.
     """
 
-    def __post_init__(self) -> None:
+    @classmethod
+    def from_repository(cls, repository_root: Path) -> AgentsInstructions:
         """
-        Import the repository's own rules, so that :class:`ProjectRules` lists its
-        sections.
+        :param repository_root: The directory holding the repository's ``AGENTS.md``.
+        :return: The file listing the sections krrood ships, then the repository's own.
         """
-        ProjectRules.import_from(self.repository_root)
+        sections = RuleModule(shipped_rules).sections
+        project_rules = RuleModule.import_from(
+            repository_root, RepositoryInstructionsFile.PROJECT_RULES
+        )
+        if project_rules is not None:
+            sections += project_rules.sections
+        return cls(repository_root, sections)
 
     @property
     def path(self) -> Path:
@@ -68,17 +74,12 @@ class AgentsInstructions:
     @property
     def text(self) -> str:
         """
-        The content ``AGENTS.md`` must have: the rules of the chosen rule sets, under the
-        headings of the sections that list any.
+        The content ``AGENTS.md`` must have: the rules of :attr:`sections`, under their
+        headings, in the order they are declared.
         """
-        environment = jinja2.Environment(
-            loader=jinja2.FileSystemLoader(TemplateFile.AGENTS.parent),
-            trim_blocks=True,
-            lstrip_blocks=True,
-            keep_trailing_newline=True,
-        )
-        return environment.get_template(TemplateFile.AGENTS.name).render(
-            rule_sets=self.rule_sets
+        return CodeGenerator(str(TemplateFile.AGENTS.parent)).render(
+            TemplateFile.AGENTS.name,
+            sections=self.sections,
         )
 
     def is_current(self) -> bool:

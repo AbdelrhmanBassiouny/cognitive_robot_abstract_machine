@@ -48,8 +48,14 @@ class DatasetFile(PathEnumeration):
     A module declaring a repository's own rules.
     """
 
+    PROJECT_RULES_PACKAGE = Path(__file__).parent / "dataset" / "project_rules_package"
+    """
+    A package declaring a repository's own rules in several modules.
+    """
+
     RULE_SECTIONS_TEXT = Path(__file__).parent / "dataset" / "rule_sections_text.md"
     """
-    The ``AGENTS.md`` listing only the rule set of ``dataset/rule_sections.py``, with
-    ``{source_path}`` standing for the path of that module.
+    The ``AGENTS.md`` listing the design principles and verification sections of
+    ``dataset/rule_sections.py``, with ``{source_path}`` standing for the path of that
+    module.
     """

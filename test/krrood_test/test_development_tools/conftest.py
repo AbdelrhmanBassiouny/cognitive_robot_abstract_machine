@@ -19,12 +19,16 @@ def copy_into_temporary_directory(
     tmp_path: Path,
 ) -> Callable[[DatasetFile, str], Path]:
     """
-    :return: A function copying a dataset file into ``tmp_path`` under a given name.
+    :return: A function copying a dataset file or directory into ``tmp_path`` under a
+        given name.
     """
 
     def copy(dataset_file: DatasetFile, file_name: str) -> Path:
         destination = tmp_path / file_name
-        shutil.copyfile(dataset_file, destination)
+        if dataset_file.is_dir():
+            shutil.copytree(dataset_file, destination)
+        else:
+            shutil.copyfile(dataset_file, destination)
         return destination
 
     return copy

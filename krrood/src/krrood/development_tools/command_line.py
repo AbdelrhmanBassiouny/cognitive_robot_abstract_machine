@@ -14,10 +14,11 @@ from pathlib import Path
 
 from typing_extensions import Sequence
 
-from krrood.development_tools.agent_instructions import AgentsInstructions
-from krrood.development_tools.agent_rule import RuleSet
+from krrood.development_tools.agents.instructions import AgentsInstructions
 from krrood.development_tools.formatting import DocstringFormatter
-from krrood.development_tools.repository_files import RepositoryInstructionsFile
+from krrood.development_tools.agents.repository_files import (
+    RepositoryInstructionsFile,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,11 +50,6 @@ class Option(StrEnum):
     CHECK = "--check"
     """
     Verify a generated file instead of writing it.
-    """
-
-    RULE_SETS = "--rule-sets"
-    """
-    Choose the rule sets a generated ``AGENTS.md`` contains.
     """
 
 
@@ -119,21 +115,12 @@ class CommandLine:
 
         agents_parser = subparsers.add_parser(
             Subcommand.AGENTS_MD,
-            help="Generate AGENTS.md from the rule sets.",
+            help="Generate AGENTS.md from the rules krrood ships and the repository's own.",
         )
         agents_parser.add_argument(
             Option.CHECK,
             action="store_true",
             help="Only verify that AGENTS.md is up to date; exit non-zero if it is not.",
-        )
-        agents_parser.add_argument(
-            Option.RULE_SETS,
-            nargs="+",
-            choices=[rule_set.command_line_name for rule_set in RuleSet.available],
-            default=[rule_set.command_line_name for rule_set in RuleSet.available],
-            help="The rule sets AGENTS.md lists; all of them when omitted. The "
-            "repository's own rules are those its "
-            f"{RepositoryInstructionsFile.PROJECT_RULES} declares.",
         )
         agents_parser.set_defaults(run=self.generate_agents_instructions)
 
@@ -158,14 +145,7 @@ class CommandLine:
         :param arguments: The parsed command line.
         :return: :attr:`ExitStatus.FAILURE` if the file was rewritten or is stale.
         """
-        instructions = AgentsInstructions(
-            Path.cwd(),
-            tuple(
-                rule_set
-                for rule_set in RuleSet.available
-                if rule_set.command_line_name in arguments.rule_sets
-            ),
-        )
+        instructions = AgentsInstructions.from_repository(Path.cwd())
         if arguments.check:
             if instructions.is_current():
                 return ExitStatus.SUCCESS

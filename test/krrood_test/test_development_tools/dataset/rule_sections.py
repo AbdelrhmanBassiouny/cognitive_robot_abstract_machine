@@ -1,87 +1,56 @@
 """
-A small rule set standing in for the ones krrood ships.
+A few sections standing in for the ones krrood ships.
 """
 
 from __future__ import annotations
 
-from krrood.development_tools.agent_rule import RuleSet, Section
+from krrood.development_tools.agents.rule import Section
 from krrood.ormatic.utils import classproperty
-
-# %% rule set
-
-
-class DatasetRules(RuleSet):
-    """
-    A rule set standing in for the ones krrood ships.
-    """
-
 
 # %% sections
 
 
-class DesignPrinciples(Section):
+class DesignPrinciplesRules(Section):
     """
     A section listing rules and holding a subsection.
     """
 
-    @classproperty
-    def parent(cls) -> type[Section]:
-        return DatasetRules
-
     KEEP_DESIGNS_SIMPLE = "A rule about design"
 
 
-class Errors(Section):
+class ErrorsRules(Section):
     """
     A subsection whose first rule is spelled out by details.
     """
 
     @classproperty
     def parent(cls) -> type[Section]:
-        return DesignPrinciples
+        return DesignPrinciplesRules
 
-    RAISE_ERRORS = ("A rule about errors", ("A first detail", "A second detail"))
+    RAISE_ERRORS = "A rule about errors", ("A first detail", "A second detail")
 
     NAME_ERRORS = "Another rule about errors"
 
 
-class Testing(Section):
+class VerificationRules(Section):
     """
     A section listing rules only in its subsection.
     """
 
-    @classproperty
-    def parent(cls) -> type[Section]:
-        return DatasetRules
 
-
-class Assertions(Section):
+class AssertionsRules(Section):
     """
     The subsection of a section without rules of its own.
     """
 
     @classproperty
     def parent(cls) -> type[Section]:
-        return Testing
+        return VerificationRules
 
     ASSERT_EXACTLY = "A rule about assertions"
 
 
-class Deployment(Section):
+class ReleasesThroughCIRules(Section):
     """
-    A section without rules.
+    A section whose name ends in an acronym.
     """
-
-    @classproperty
-    def parent(cls) -> type[Section]:
-        return DatasetRules
-
-
-class ReleasesThroughCI(Section):
-    """
-    A subsection whose name ends in an acronym.
-    """
-
-    @classproperty
-    def parent(cls) -> type[Section]:
-        return Deployment
