@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from uuid import UUID, uuid4
 
-from typing_extensions import Any, Dict
+from typing_extensions import Any
 
 from krrood.adapters.deserialized_object_tracker import DeserializedObjectTracker
 from krrood.adapters.json_serializer import from_json
@@ -42,5 +42,5 @@ class LandmarkReference(ObjectReference):
     How a document points at a :class:`Landmark`.
     """
 
-    def resolve(self, data: Dict[str, Any], **kwargs) -> Landmark:
+    def resolve(self, data: dict[str, Any], **kwargs) -> Landmark:
         return LandmarkTracker.from_kwargs(kwargs).get(from_json(data[self.id_key]))

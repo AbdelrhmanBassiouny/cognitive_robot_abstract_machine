@@ -11,16 +11,7 @@ from __future__ import annotations
 import itertools
 from dataclasses import asdict, dataclass
 
-from typing_extensions import (
-    Any,
-    ClassVar,
-    Dict,
-    Iterator,
-    List,
-    Optional,
-    Tuple,
-    TYPE_CHECKING,
-)
+from typing_extensions import Any, ClassVar, Iterator, TYPE_CHECKING
 
 from cramera import paths
 from cramera.knowledge.enums import EdgeKind, PlanNodeGroup
@@ -40,7 +31,7 @@ from cramera.knowledge.subgraph import (
     TreePosition,
 )
 
-PLAN_LEGEND: Tuple[LegendEntry, ...] = tuple(
+PLAN_LEGEND: tuple[LegendEntry, ...] = tuple(
     LegendEntry(group, group.label) for group in PlanNodeGroup.legend()
 )
 """
@@ -54,7 +45,7 @@ class PlanViewPayload(GraphPanelPayload):
     The executed plan as a tree, one node per plan node the demo ran.
     """
 
-    TAB: ClassVar[Optional[str]] = "plan"
+    TAB: ClassVar[str | None] = "plan"
 
     breadcrumb: str = "executed plan"
     """
@@ -71,7 +62,7 @@ class PlanViewPayload(GraphPanelPayload):
     Whether the viewed scene follows the currently executing plan.
     """
 
-    def panel_options(self) -> Dict[str, Any]:
+    def panel_options(self) -> dict[str, Any]:
         """
         The plan legend and the status flags the plan tab is rendered with.
         """
@@ -99,7 +90,7 @@ class PlanViewPayload(GraphPanelPayload):
         return label.removesuffix("Action") or label
 
     @classmethod
-    def count_nodes(cls, trees: List[Dict[str, Any]]) -> int:
+    def count_nodes(cls, trees: list[dict[str, Any]]) -> int:
         """
         How many nodes a bundle's recorded plan trees hold in total.
 
@@ -114,8 +105,8 @@ class PlanViewPayload(GraphPanelPayload):
         cls,
         view: SubgraphAccumulator,
         node_ids: Iterator[int],
-        tree: Dict[str, Any],
-        parent: Optional[str],
+        tree: dict[str, Any],
+        parent: str | None,
     ) -> None:
         """
         Add one plan node, with a freshly assigned id, and recurse into its children.

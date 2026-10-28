@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from typing_extensions import Any, Dict, List, Optional
+from typing_extensions import Any
 
 from semantic_digital_twin.robots.hsrb import HSRBArm, HSRBGripper
 from semantic_digital_twin.robots.pr2 import (
@@ -126,25 +126,25 @@ class RobotPartAnnotation:
     Whether the part is an arm, end effector, or sensor.
     """
 
-    side: Optional[ArmSide]
+    side: ArmSide | None
     """
     Which arm of the robot the part belongs to, or None for a robot that does not
     specify a left and a right arm.
     """
 
-    links: List[str] = field(default_factory=list)
+    links: list[str] = field(default_factory=list)
     """
     Link names of the part, stripped of their model-name prefix.
 
     An arm's links exclude those of its own end effector.
     """
 
-    attached_to: Optional[str] = None
+    attached_to: str | None = None
     """
     For an end effector, the name of the arm carrying it; None for an arm.
     """
 
-    def to_payload(self) -> Dict[str, Any]:
+    def to_payload(self) -> dict[str, Any]:
         """
         The annotation in the JSON shape written to ``scene.json`` and served live.
         """
@@ -157,7 +157,7 @@ class RobotPartAnnotation:
         }
 
     @classmethod
-    def from_payload(cls, payload: Dict[str, Any]) -> RobotPartAnnotation:
+    def from_payload(cls, payload: dict[str, Any]) -> RobotPartAnnotation:
         """
         Read back an annotation written by :meth:`to_payload`.
 
@@ -173,7 +173,7 @@ class RobotPartAnnotation:
         )
 
     @classmethod
-    def of_recording(cls, robot: Dict[str, Any]) -> List[RobotPartAnnotation]:
+    def of_recording(cls, robot: dict[str, Any]) -> list[RobotPartAnnotation]:
         if "partAnnotations" in robot:
             return [
                 cls.from_payload(payload) for payload in robot["partAnnotations"] or []
@@ -213,7 +213,7 @@ class RobotPartAnnotation:
         return annotations
 
     @staticmethod
-    def link_names(part: AbstractRobotPart) -> List[str]:
+    def link_names(part: AbstractRobotPart) -> list[str]:
         """
         A robot part's link names, stripped of their model-name prefix.
 
@@ -226,7 +226,7 @@ class RobotPartAnnotation:
         return names
 
     @staticmethod
-    def _arm_sides(robot: AbstractRobot) -> Dict[int, ArmSide]:
+    def _arm_sides(robot: AbstractRobot) -> dict[int, ArmSide]:
         """
         :param robot: The robot whose arm annotations are read.
         :return: The side of each arm the robot names as left or right, keyed by arm
@@ -242,7 +242,7 @@ class RobotPartAnnotation:
         return sides
 
     @classmethod
-    def of_robot(cls, robot: AbstractRobot) -> List[RobotPartAnnotation]:
+    def of_robot(cls, robot: AbstractRobot) -> list[RobotPartAnnotation]:
         """
         Recorded arms, their end effectors, and the robot's native sensors.
 

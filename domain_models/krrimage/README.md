@@ -5,8 +5,10 @@ It depends only on `krrood`, `numpy` and `opencv-python`, so a package that rend
 records or perceives images can use it without the semantic digital twin, ROS or a
 physics simulator.
 
-- `krrimage.coordinates`: `Resolution`, `ImagePoint`, `ImageBox`, `Pixel` and
-  `PixelBox`, in pixels from the image's top left corner.
+- `krrimage.coordinates`: `ImagePlane`, the plane an image shows, which crops and
+  resizes of it share; `ImageCoordinateSystem`, pixels on it from an image's top left
+  corner; and `Resolution`, `ImagePoint`, `ImageBox`, `Pixel` and `PixelBox`, given in
+  such a coordinate system.
 - `krrimage.image`: `ColorImage`, red, green and blue bytes, with drawing that returns a
   new image.
 - `krrimage.color`: `Color`, which the semantic digital twin also uses for its shapes.

@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from uuid import UUID
 
-from typing_extensions import Any, Dict
+from typing_extensions import Any
 
 from krrood.adapters.json_serializer import to_json
 from krrood.patterns.interface import Interface
@@ -59,7 +59,7 @@ class ObjectReference(ABC):
         """
         return f"{self.subject}_name"
 
-    def write(self, data: Dict[str, Any], identified_object: IdentifiedObject) -> None:
+    def write(self, data: dict[str, Any], identified_object: IdentifiedObject) -> None:
         """
         Put the reference to an object into a serialized object.
 
@@ -70,7 +70,7 @@ class ObjectReference(ABC):
         data[self.name_key] = to_json(identified_object.name)
 
     @abstractmethod
-    def resolve(self, data: Dict[str, Any], **kwargs) -> IdentifiedObject:
+    def resolve(self, data: dict[str, Any], **kwargs) -> IdentifiedObject:
         """
         The object a serialized object refers to.
 

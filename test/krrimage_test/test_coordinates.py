@@ -1,12 +1,50 @@
 """
-Tests for positions and boxes on an image.
+Tests for the plane images lie on, and for positions and boxes on an image.
 """
 
 from __future__ import annotations
 
-from krrimage.coordinates import ImageBox, ImagePoint, Pixel, PixelBox, Resolution
-from krrspatial.coordinate_system import CoordinateSystemT, ImageCoordinateSystem
+import pytest
+
+from krrimage.coordinates import (
+    ImageBox,
+    ImageCoordinateSystem,
+    ImagePlane,
+    ImagePoint,
+    Pixel,
+    PixelBox,
+    Resolution,
+)
+from krrood.patterns.exceptions import InterfaceInstantiationError
+from krrspatial.coordinate_system import CoordinateSystemT, SpaceT
 from krrspatial.planar_point import CoordinateT
+from krrspatial.reference_frame import ReferenceFrame
+from krrspatial.space import EuclideanSpace, Space
+
+# %% the plane images lie on, and the coordinate systems on it
+
+
+@pytest.mark.parametrize("interface", [ImagePlane, ImageCoordinateSystem])
+def test_an_image_interface_cannot_be_instantiated(interface: type) -> None:
+    with pytest.raises(InterfaceInstantiationError):
+        interface()
+
+
+def test_an_image_plane_is_a_space() -> None:
+    assert issubclass(ImagePlane, Space)
+
+
+def test_an_image_plane_is_not_physical_space() -> None:
+    assert not issubclass(ImagePlane, EuclideanSpace)
+
+
+def test_an_image_coordinate_system_charts_an_image_plane() -> None:
+    assert ImageCoordinateSystem.get_type_of_generic_parameter(SpaceT) is ImagePlane
+
+
+def test_an_image_coordinate_system_is_not_a_reference_frame() -> None:
+    assert not issubclass(ImageCoordinateSystem, ReferenceFrame)
+
 
 # %% positions anywhere on an image
 

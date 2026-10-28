@@ -7,7 +7,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 
-from typing_extensions import Any, Type
+from typing_extensions import Any
 
 
 @dataclass(frozen=True)
@@ -24,7 +24,7 @@ class QueryDomain:
     Name the variable is bound to in a query.
     """
 
-    entity_type: Type[Any]
+    entity_type: type[Any]
     """
     Type of the objects the variable ranges over; also in scope under its class name.
     """

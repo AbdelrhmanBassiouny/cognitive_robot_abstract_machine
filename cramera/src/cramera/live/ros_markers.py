@@ -14,7 +14,7 @@ import os
 import threading
 from dataclasses import dataclass, field
 
-from typing_extensions import Callable, List, Optional, TYPE_CHECKING
+from typing_extensions import Callable, TYPE_CHECKING
 
 from cramera.logging_setup import get_logger
 
@@ -51,7 +51,7 @@ How many marker arrays the subscription buffers.
 """
 
 
-def marker_topics() -> List[str]:
+def marker_topics() -> list[str]:
     """
     The marker topics to watch: the environment's list, or the CRAM defaults.
     """
@@ -72,12 +72,12 @@ class RosMarkerListener:
     The bridge receiving every marker array.
     """
 
-    topics: List[str] = field(default_factory=marker_topics)
+    topics: list[str] = field(default_factory=marker_topics)
     """
     The topics being watched.
     """
 
-    _node: Optional[Node] = field(init=False, default=None)
+    _node: Node | None = field(init=False, default=None)
     """
     The listener's own ROS node, while started.
     """
@@ -87,18 +87,18 @@ class RosMarkerListener:
     The live subscriptions by topic, so the viewer can add and remove them.
     """
 
-    _executor: Optional[SingleThreadedExecutor] = field(init=False, default=None)
+    _executor: SingleThreadedExecutor | None = field(init=False, default=None)
     """
     The executor spinning the node on a daemon thread, while started.
     """
 
-    _thread: Optional[threading.Thread] = field(init=False, default=None)
+    _thread: threading.Thread | None = field(init=False, default=None)
     """
     The listener thread, joined when the session stops.
     """
 
     @classmethod
-    def start_if_available(cls, bridge: Bridge) -> Optional[RosMarkerListener]:
+    def start_if_available(cls, bridge: Bridge) -> RosMarkerListener | None:
         """
         Start a listener when ROS is importable, or report why not.
 
@@ -166,13 +166,13 @@ class RosMarkerListener:
         if subscription is not None:
             self._node.destroy_subscription(subscription)
 
-    def subscribed_topics(self) -> List[str]:
+    def subscribed_topics(self) -> list[str]:
         """
         The topics currently being watched.
         """
         return sorted(self._subscriptions)
 
-    def available_marker_topics(self) -> List[str]:
+    def available_marker_topics(self) -> list[str]:
         """
         Every ``MarkerArray`` topic currently advertised in the ROS graph.
         """

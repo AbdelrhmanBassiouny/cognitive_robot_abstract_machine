@@ -13,7 +13,6 @@ from dataclasses import dataclass, field
 
 from giskardpy.motion_statechart.data_types import LifeCycleValues
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
-from typing_extensions import List, Optional, Tuple
 
 from cramera.live.chart_structure import (
     ChartNodeEntry,
@@ -38,24 +37,24 @@ class ChartObserver:
     What the run calls what the chart is executing, shown above it.
     """
 
-    _chart: Optional[MotionStatechart] = field(default=None, init=False)
+    _chart: MotionStatechart | None = field(default=None, init=False)
     """
     The chart last seen, to recognize a newly compiled one.
     """
 
-    _structure: Optional[ChartStructure] = field(default=None, init=False)
+    _structure: ChartStructure | None = field(default=None, init=False)
     """
     Its nodes and transitions, which only change when the chart does.
     """
 
-    _sent_node_states: Optional[Tuple[List[str], List[ObservationName]]] = field(
+    _sent_node_states: tuple[list[str], list[ObservationName]] | None = field(
         default=None, init=False
     )
     """
     Where its nodes stood when :meth:`change` last reported them.
     """
 
-    def snapshot(self, chart: Optional[MotionStatechart]) -> Optional[ChartSnapshot]:
+    def snapshot(self, chart: MotionStatechart | None) -> ChartSnapshot | None:
         """
         What the chart looks like now, or None when nothing is executing.
 
@@ -93,7 +92,7 @@ class ChartObserver:
             edges=list(structure.edges),
         )
 
-    def change(self, chart: Optional[MotionStatechart]) -> Optional[ChartSnapshot]:
+    def change(self, chart: MotionStatechart | None) -> ChartSnapshot | None:
         """
         The snapshot to send a viewer that already holds the last one: None while the
         chart stands where it was reported to stand.

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 
-from typing_extensions import Any, ClassVar, Dict, List, Optional
+from typing_extensions import Any, ClassVar
 
 
 from cramera.knowledge.enums import EdgeKind, NodeGroup
@@ -26,19 +26,19 @@ class KnowledgeGraphPayload(GraphPanelPayload):
     The knowledge-graph overview: the whole recorded episode in one graph.
     """
 
-    TAB: ClassVar[Optional[str]] = "knowledge"
+    TAB: ClassVar[str | None] = "knowledge"
 
     status: str = ""
     """
     One-line summary shown above the graph.
     """
 
-    presets: List[Preset] = field(default_factory=list)
+    presets: list[Preset] = field(default_factory=list)
     """
     Ready-made EQL queries the query panel offers.
     """
 
-    def panel_options(self) -> Dict[str, Any]:
+    def panel_options(self) -> dict[str, Any]:
         """
         The status line and the query presets, which only the overview sends.
         """

@@ -1,5 +1,6 @@
 """
-Positions and boxes on an image, in pixels from its top left corner.
+The plane images lie on, and positions and boxes on an image, in pixels from its top
+left corner.
 
 ``x`` runs along the columns and ``y`` down the rows, so a box's lower corner is its top
 left one.
@@ -10,8 +11,30 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from krrood.bounds import Bounds
-from krrspatial.coordinate_system import ImageCoordinateSystem
+from krrood.patterns.interface import Interface
+from krrspatial.coordinate_system import CoordinateSystem
 from krrspatial.planar_point import PlanarPoint
+from krrspatial.space import Space
+
+# %% the plane images lie on, and the coordinate systems on it
+
+
+class ImagePlane(Space, Interface):
+    """
+    The plane an image shows its scene on; crops and resizes of the image show the same
+    plane.
+
+    Its coordinate systems are related by scaling and shifting each axis, which keeps
+    ratios of distances along an axis but not distances.
+    """
+
+
+class ImageCoordinateSystem(CoordinateSystem[ImagePlane], Interface):
+    """
+    Pixel coordinates on an image plane, from the top left corner of one image of it,
+    with ``x`` along the columns and ``y`` down the rows.
+    """
+
 
 # %% the size of an image
 

@@ -7,7 +7,7 @@ name = "krrspatial"
 authors = [
     { name = "Simon Stelter", email = "stelter@uni-bremen.de" },
 ]
-description = "Points in the spaces they are given in: reference frames and images."
+description = "Points in the spaces they are given in, and the reference frames of physical space."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 classifiers = [
