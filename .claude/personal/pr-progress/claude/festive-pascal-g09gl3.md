@@ -1,10 +1,10 @@
 PR #517 (ready): krrood development tools; upstream cram2#806.
 
 Plan
-- Sections are enums named <Topic>Rules mixing in AgentRule; members are the rules; no rule sets; nesting via parent.
+- development_tools/agents: Section(AgentRule, Enum) members are rules; shipped_rules/ package, one module per top-level section; RuleModule finds defined sections, alphabetical.
 
 Done
-- 138046f71: Section(AgentRule, Enum); --rule-sets and Python/Krrood/ProjectRule removed; AgentsInstructions(root, sections) + from_repository.
+- 4fab6af70: agents subpackage, shipped_rules split, RuleModule discovery, Miscellaneous dissolved, agent_rules may be a package.
 
 Next
 - User replies on cram2#806 threads (krrood_rules.py:28/99, python_rules.py:443/511/563; now shipped_rules.py) and re-requests tomsch420.
