@@ -22,7 +22,7 @@ from typing_extensions import Any
 from coraplex.datastructures.dataclasses import Context
 from coraplex.plans.factories import sequential
 from coraplex.plans.plan_node import PlanNode
-from coraplex.querying.predicates import GripperIsFree
+from coraplex.querying.predicates import GripperIsFree, IsAmongTheClosestGraspsTo
 from coraplex.robot_plans.actions.base import ActionDescription
 from coraplex.robot_plans.actions.core.pick_up import GraspingAction
 from coraplex.robot_plans.mixins import HasApproachesGraspPoses
@@ -44,9 +44,9 @@ class ContainerAction(ActionDescription, HasApproachesGraspPoses):
     differs.
     """
 
-    handle: Handle
+    grasp: GraspCandidate
     """
-    The handle of the container that should be moved.
+    The grasp on the handle of the container that should be moved.
     """
 
     arm: Arm
@@ -79,13 +79,31 @@ class ContainerAction(ActionDescription, HasApproachesGraspPoses):
         """
         return self.pre_grasp_pose(grasp_pose, end_effector, self.release_clearance)
 
+    @classmethod
+    def from_handle(cls, handle: Handle, arm: Arm, standing_position: Pose) -> Self:
+        """
+        :param handle: The handle of the container.
+        :param arm: The arm that takes hold of the handle.
+        :param standing_position: Where the robot stands while it takes hold.
+        :return: This action, taking `handle` by its grasp closest to
+            `standing_position`.
+        """
+        grasps = handle.grasp_candidates()
+        [closest_grasp] = [
+            grasp
+            for grasp in grasps
+            if IsAmongTheClosestGraspsTo(
+                grasp, standing_position, grasps, number_of_grasps=1
+            )()
+        ]
+        return cls(grasp=closest_grasp, arm=arm)
+
     @property
     def _action_plan(self) -> PlanNode:
-        handle_grasp = GraspCandidate.from_body_origin(self.handle)
         return sequential(
             [
                 GraspingAction(
-                    handle_grasp,
+                    self.grasp,
                     self.arm,
                     approach_clearance=self.approach_clearance,
                 ),
@@ -97,7 +115,7 @@ class ContainerAction(ActionDescription, HasApproachesGraspPoses):
                     allow_gripper_collision=True,
                 ),
                 MoveToolCenterPointMotion(
-                    self.back_off_pose(handle_grasp.grasp_pose, self.arm.end_effector),
+                    self.back_off_pose(self.grasp.grasp_pose, self.arm.end_effector),
                     self.arm,
                     allow_gripper_collision=True,
                 ),
@@ -113,7 +131,7 @@ class OpenAction(ContainerAction):
 
     @property
     def _mechanism_motion(self) -> BaseMotion:
-        return OpeningMotion(self.handle.root, self.arm)
+        return OpeningMotion(self.grasp.graspable.root, self.arm)
 
     @staticmethod
     def pre_condition(
@@ -134,7 +152,8 @@ class OpenAction(ContainerAction):
         The gripper is clear of the handle by then, so what it holds says nothing about
         whether the container was opened.
         """
-        open_connection = kwargs["handle"].root.get_first_parent_connection_of_type(
+        handle_body = kwargs["grasp"].graspable.root
+        open_connection = handle_body.get_first_parent_connection_of_type(
             ActiveConnection1DOF
         )
 
@@ -149,7 +168,7 @@ class CloseAction(ContainerAction):
 
     @property
     def _mechanism_motion(self) -> BaseMotion:
-        return ClosingMotion(self.handle.root, self.arm)
+        return ClosingMotion(self.grasp.graspable.root, self.arm)
 
     @staticmethod
     def post_condition(
@@ -158,7 +177,8 @@ class CloseAction(ContainerAction):
         """
         The container has to be closed.
         """
-        close_connection = kwargs["handle"].root.get_first_parent_connection_of_type(
+        handle_body = kwargs["grasp"].graspable.root
+        close_connection = handle_body.get_first_parent_connection_of_type(
             ActiveConnection1DOF
         )
 

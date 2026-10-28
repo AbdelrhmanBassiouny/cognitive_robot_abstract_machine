@@ -1,10 +1,16 @@
+import itertools
 import logging
 from dataclasses import dataclass
 
 import numpy as np
 import pytest
+
 from coraplex.datastructures.enums import InsertionPosition, ReachFraction
 from coraplex.exceptions import CannotMatchOnType, ReachHasNoFinalApproach
+from coraplex.execution_environment import (
+    PhysicallySimulatedRobot,
+    kinematically_simulated_robot,
+)
 from coraplex.language import SequentialNode
 from coraplex.orm.ormatic_interface import *  # type: ignore
 from coraplex.plans.factories import execute_single, sequential
@@ -15,6 +21,7 @@ from coraplex.plans.plan_transformation import (
     PlanTransformation,
 )
 from coraplex.plans.underspecified import UnderspecifiedNode
+from coraplex.querying.predicates import IsAmongTheClosestGraspsTo
 from coraplex.robot_plans.actions.composite.facing import FaceAndLookAtAction
 from coraplex.robot_plans.actions.composite.transporting import (
     MoveAndOpenAction,
@@ -26,10 +33,6 @@ from coraplex.robot_plans.actions.core.navigation import (
     FaceAtAction,
     LookAtAction,
     NavigateAction,
-)
-from coraplex.execution_environment import (
-    PhysicallySimulatedRobot,
-    kinematically_simulated_robot,
 )
 from coraplex.robot_plans.actions.core.pick_up import (
     GraspingAction,
@@ -56,6 +59,7 @@ from krrood.entity_query_language.factories import a, variable
 from krrood.entity_query_language.query.match import Match
 from krrood.exceptions import UnboundGenericParameter
 from semantic_digital_twin.datastructures.definitions import GripperState, TorsoState
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.robots.robot_parts import Arm, EndEffector
 from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
@@ -66,15 +70,13 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Spoon,
 )
 from semantic_digital_twin.spatial_types.spatial_types import Pose
-from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.world import World
-
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.world_entity import Body
-
+from .test_graph_parsing import detect_actions_of, reach_action
 from ..conftest import left_or_only_arm
 from ..test_transporting import pick_and_place_of_the_milk
-from .test_graph_parsing import detect_actions_of, reach_action
+
 
 # %% transformations under test
 
@@ -716,7 +718,9 @@ def handle_opened_by(opening: Match) -> Handle:
     :param opening: The step that opens a drawer.
     :return: The handle it opens the drawer by.
     """
-    return opening._kwargs_["open_container"]._kwargs_["handle"]
+    grasps = opening._kwargs_["open_container"]._kwargs_["grasp"]._domain_.domain
+    [handle] = {grasp.graspable for grasp in grasps}
+    return handle
 
 
 def arm_opening_with(opening: Match) -> Arm:
@@ -803,6 +807,44 @@ def test_opening_a_drawer_tries_its_standing_pose_with_the_opening(
 
     assert opening._type_ is MoveAndOpenAction
     assert handle_opened_by(opening) is drawer.handle
+
+
+def test_opening_a_drawer_takes_the_handle_by_its_grasp_closest_to_the_standing_pose(
+    pr2_apartment_context,
+):
+    """
+    The handle offers a grasp from every side, so each standing pose is tried with the
+    one grasp that approaches the handle from there.
+    """
+    world, view, context = pr2_apartment_context
+    drawer = drawer_holding(world.get_semantic_annotations_by_type(Spoon)[0], world)
+    [opening] = OpenDrawerBeforeMoveAndPickUp().opening_nodes(
+        drawer, view.right_arm, context
+    )
+    grasps = drawer.handle.grasp_candidates()
+
+    openings = list(itertools.islice(context.query_backend.evaluate(opening), 2))
+
+    assert (
+        len({id(move_and_open.navigate.target_location) for move_and_open in openings})
+        == 2
+    )
+    for move_and_open in openings:
+        [closest_grasp] = [
+            grasp
+            for grasp in grasps
+            if IsAmongTheClosestGraspsTo(
+                grasp,
+                move_and_open.navigate.target_location,
+                grasps,
+                number_of_grasps=1,
+            )()
+        ]
+        np.testing.assert_allclose(
+            move_and_open.open_container.grasp.grasp_pose.to_np(),
+            closest_grasp.grasp_pose.to_np(),
+            atol=1e-9,
+        )
 
 
 def test_opening_a_drawer_stands_where_it_is_opened_from(pr2_apartment_context):
