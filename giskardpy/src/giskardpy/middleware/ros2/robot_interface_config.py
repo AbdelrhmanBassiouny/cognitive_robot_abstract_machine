@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Dict, List, Union
+from typing_extensions import TYPE_CHECKING
 
 from nav_msgs.msg import Odometry
 
@@ -168,7 +168,7 @@ class ClosedLoopRobotInterfaceConfig(RobotInterfaceConfig, ABC):
     def sync_odometry_topic(
         self,
         odometry_topic: str | None = None,
-        joint: Union[OmniDrive, DifferentialDrive] = None,
+        joint: OmniDrive | DifferentialDrive = None,
         sync_in_control_loop: bool = True,
     ):
         """
@@ -248,7 +248,7 @@ class ClosedLoopRobotInterfaceConfig(RobotInterfaceConfig, ABC):
     def add_base_cmd_velocity(
         self,
         cmd_vel_topic: str | None = None,
-        joint: Union[OmniDrive, DifferentialDrive] = None,
+        joint: OmniDrive | DifferentialDrive = None,
         minimum_linear_velocity: float = 0.0,
         minimum_angular_velocity: float = 0.0,
         command_format: DriveCommandFormat | None = None,
@@ -285,9 +285,9 @@ class ClosedLoopRobotInterfaceConfig(RobotInterfaceConfig, ABC):
 
     def add_joint_velocity_controller(
         self,
-        namespaces: List[str],
+        namespaces: list[str],
         minimum_valid_velocity: float = 0.0,
-        minimum_velocity_overrides: Dict[str, float] | None = None,
+        minimum_velocity_overrides: dict[str, float] | None = None,
     ):
         """
         Tell Giskard how it can send velocities to joints.
@@ -312,9 +312,9 @@ class ClosedLoopRobotInterfaceConfig(RobotInterfaceConfig, ABC):
     def add_joint_velocity_group_controller(
         self,
         cmd_topic: str,
-        connections: List[str],
+        connections: list[str],
         minimum_valid_velocity: float = 0.0,
-        minimum_velocity_overrides: Dict[str, float] | None = None,
+        minimum_velocity_overrides: dict[str, float] | None = None,
         command_format: GroupCommandFormat | None = None,
     ):
         """
@@ -327,7 +327,7 @@ class ClosedLoopRobotInterfaceConfig(RobotInterfaceConfig, ABC):
         :param command_format: message format the controller consumes; defaults to
             :class:`~giskardpy.middleware.ros2.command_publishing.Float64MultiArrayFormat`.
         """
-        controlled_connections: List[ActiveConnection1DOF] = [
+        controlled_connections: list[ActiveConnection1DOF] = [
             self.world.get_connection_by_name(connection_name)
             for connection_name in connections
         ]

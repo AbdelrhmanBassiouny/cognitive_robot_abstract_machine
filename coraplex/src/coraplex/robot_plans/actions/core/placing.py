@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import Any, Tuple
+from typing_extensions import Any
 
 from krrood.entity_query_language.factories import (
     variable_from,
@@ -129,7 +129,7 @@ class PlaceAction(
             ),
         ]
 
-    def _holding_arm_and_grasp(self) -> Tuple[Arm, GraspCandidate]:
+    def _holding_arm_and_grasp(self) -> tuple[Arm, GraspCandidate]:
         """
         The arm that holds :attr:`object_designator`, and the grasp it holds it by.
 

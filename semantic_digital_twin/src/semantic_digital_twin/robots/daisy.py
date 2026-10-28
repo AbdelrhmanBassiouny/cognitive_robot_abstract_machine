@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from importlib.resources import files
 from pathlib import Path
-from typing import Self, List
+from typing_extensions import Self
 
 from semantic_digital_twin.collision_checking.collision_rules import (
     SelfCollisionMatrixRule,
@@ -83,11 +83,10 @@ class DAiSyJoint(JointName):
 
 @dataclass(eq=False)
 class DAiSyLeftGripperLeftFinger(Finger):
-
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @classmethod
@@ -106,11 +105,10 @@ class DAiSyLeftGripperLeftFinger(Finger):
 
 @dataclass(eq=False)
 class DAiSyLeftGripperRightFinger(Finger):
-
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @classmethod
@@ -129,11 +127,10 @@ class DAiSyLeftGripperRightFinger(Finger):
 
 @dataclass(eq=False)
 class DAiSyRightGripperLeftFinger(Finger):
-
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @classmethod
@@ -152,11 +149,10 @@ class DAiSyRightGripperLeftFinger(Finger):
 
 @dataclass(eq=False)
 class DAiSyRightGripperRightFinger(Finger):
-
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @classmethod
@@ -177,11 +173,10 @@ class DAiSyRightGripperRightFinger(Finger):
 class DAiSyLeftGripper(
     EndEffector, HasTwoFingers[DAiSyLeftGripperLeftFinger, DAiSyLeftGripperRightFinger]
 ):
-
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         self._setup_hardware_interfaces_for_active_connections()
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         """
         The gripper stands open with its fingers at the start of their travel and closed
         where the facing surfaces of their tips meet, 28 mm along it; further travel
@@ -231,11 +226,10 @@ class DAiSyRightGripper(
     EndEffector,
     HasTwoFingers[DAiSyRightGripperLeftFinger, DAiSyRightGripperRightFinger],
 ):
-
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         self._setup_hardware_interfaces_for_active_connections()
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         """
         The gripper stands open with its fingers at the start of their travel and closed
         where the facing surfaces of their tips meet, 28 mm along it; further travel
@@ -283,11 +277,10 @@ class DAiSyRightGripper(
 
 @dataclass(eq=False)
 class DAiSyLeftArm(Arm[DAiSyLeftGripper]):
-
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         self._setup_hardware_interfaces_for_active_connections()
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         connections = self.active_connections
         arm_park = JointState.from_mapping(
             name=PrefixedName("left_arm_park", prefix=self.name.name),
@@ -312,11 +305,10 @@ class DAiSyLeftArm(Arm[DAiSyLeftGripper]):
 
 @dataclass(eq=False)
 class DAiSyRightArm(Arm[DAiSyRightGripper]):
-
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         self._setup_hardware_interfaces_for_active_connections()
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         connections = self.active_connections
         arm_park = JointState.from_mapping(
             name=PrefixedName("right_arm_park", prefix=self.name.name),
@@ -347,10 +339,10 @@ class DAiSyCamera(Camera):
     Setup a fake camera link in URDF to satisfy SemDT
     """
 
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @property

@@ -1,6 +1,5 @@
 from dataclasses import dataclass, field
 
-from typing_extensions import List
 
 from giskardpy.middleware.ros2.robot_interface_config import (
     ClosedLoopRobotInterfaceConfig,
@@ -20,7 +19,7 @@ class StretchVelocityInterface(ClosedLoopRobotInterfaceConfig):
     """
 
     @staticmethod
-    def velocity_controlled_joint_names() -> List[StretchJoint]:
+    def velocity_controlled_joint_names() -> list[StretchJoint]:
         """
         The joints driven by the velocity group controller.
 

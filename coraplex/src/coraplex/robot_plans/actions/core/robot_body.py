@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import timedelta
 
-from typing_extensions import Optional, Any, List
+from typing_extensions import Any
 
 from semantic_digital_twin.collision_checking.collision_matrix import CollisionRule
 from semantic_digital_twin.collision_checking.collision_rules import (
@@ -139,7 +139,7 @@ class ParkArmsAction(ParallelAction, HasMaxJointVelocity):
     Park the arms of the robot.
     """
 
-    arms: List[Arm]
+    arms: list[Arm]
     """
     The arms that should be parked.
     """
@@ -219,7 +219,7 @@ class FollowToolCenterPointPathAction(MovesToolCenterPoint, ParallelAction):
 
     def validate(
         self,
-        result: Optional[Any] = None,
+        result: Any | None = None,
         max_wait_time: timedelta = timedelta(seconds=2),
     ):
         pass

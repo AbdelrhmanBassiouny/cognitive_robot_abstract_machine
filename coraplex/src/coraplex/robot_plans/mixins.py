@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+
 from coraplex.robot_plans.actions.base import Action
 from cramph.node import StatechartNode
 from cramph.world_modification_nodes import MoveBranch
@@ -21,7 +22,6 @@ from semantic_digital_twin.world_description.world_entity import (
     Body,
     KinematicStructureEntity,
 )
-from typing_extensions import Optional
 
 
 @dataclass(kw_only=True, eq=False)
@@ -347,7 +347,7 @@ class HasApproachesGraspPoses:
         self,
         reference_T_grasp: Pose,
         end_effector: EndEffector,
-        grasp: Optional[GraspCandidate] = None,
+        grasp: GraspCandidate | None = None,
     ) -> GraspPoseSequence:
         """
         :param reference_T_grasp: The grasp frame to reach; for a release, where the
@@ -384,7 +384,7 @@ class HasApproachesGraspPoses:
             (reference_T_grasp.homogeneous_matrix @ grasp_T_pre_grasp).pose
         )
 
-    def _approach_distance(self, grasp: Optional[GraspCandidate]) -> float:
+    def _approach_distance(self, grasp: GraspCandidate | None) -> float:
         """
         :param grasp: The grasp on the object, or ``None`` when there is no object.
         :return: The distance in meters from the grasp back to the pre-grasp pose: the

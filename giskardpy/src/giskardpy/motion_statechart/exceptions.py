@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC
 from dataclasses import dataclass
 
-from typing_extensions import TYPE_CHECKING, Type
+from typing_extensions import TYPE_CHECKING
 
 from krrood.exceptions import DataclassException
 from semantic_digital_twin.collision_checking.collision_variable_managers import (
@@ -100,7 +100,7 @@ class UnexpectedWorldEntityCountError(NodeInitializationError):
     The number of matching entities that were found in the world.
     """
 
-    entity_type: Type | str | tuple[Type, ...]
+    entity_type: type | str | tuple[type, ...]
     """
     The type of entity that was searched for.
     """
@@ -238,12 +238,12 @@ class ActionClientTypeMismatchError(MotionStatechartError):
     The action topic that was requested with two different message types.
     """
 
-    existing_message_type: Type
+    existing_message_type: type
     """
     The message type the cached action client for this topic was created with.
     """
 
-    requested_message_type: Type
+    requested_message_type: type
     """
     The message type that was requested for this topic instead.
     """

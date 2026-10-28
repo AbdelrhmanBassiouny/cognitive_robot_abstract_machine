@@ -5,7 +5,6 @@ from datetime import timedelta
 
 import numpy as np
 from numpy.typing import NDArray
-from typing_extensions import List
 
 import krrood.symbolic_math.symbolic_math as sm
 from krrood.symbolic_math.symbolic_math import (
@@ -121,7 +120,7 @@ class NoMonitoredTaskApproachingItsGoal(EndedByOwner, MotionStatechartNode):
         return super().required_context_extensions + (MotionControlContext,)
 
     @property
-    def prerequisite_nodes(self) -> List[MotionStatechartNode]:
+    def prerequisite_nodes(self) -> list[MotionStatechartNode]:
         return list(self.monitored_tasks)
 
     @property
@@ -409,11 +408,11 @@ class StillProgressing(EndedByOwner, CompositeNode):
     """
 
     @property
-    def prerequisite_nodes(self) -> List[MotionStatechartNode]:
+    def prerequisite_nodes(self) -> list[MotionStatechartNode]:
         return [self.monitored_node]
 
     @property
-    def monitored_tasks(self) -> List[ConvergingTask]:
+    def monitored_tasks(self) -> list[ConvergingTask]:
         """
         :return: The converging tasks watched by this node, in the order they were found.
         """
@@ -445,7 +444,7 @@ class StillProgressing(EndedByOwner, CompositeNode):
         return self.nodes[0]
 
     @property
-    def stalled_tasks(self) -> List[ConvergingTask]:
+    def stalled_tasks(self) -> list[ConvergingTask]:
         """
         :return: The monitored tasks that are running but not currently approaching their
             goal, leaving out those that already hold it.
@@ -523,7 +522,7 @@ class StillProgressing(EndedByOwner, CompositeNode):
 
     def _find_converging_tasks(
         self, node: MotionStatechartNode
-    ) -> List[ConvergingTask]:
+    ) -> list[ConvergingTask]:
         """
         Collect every converging task at or below ``node``.
 

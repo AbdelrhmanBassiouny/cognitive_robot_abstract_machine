@@ -17,7 +17,7 @@ except ModuleNotFoundError:
     NavigateToPose = None
 from rclpy.action import ActionClient
 from std_msgs.msg import Header
-from typing_extensions import Type, TypeVar, Generic
+from typing_extensions import TypeVar, Generic
 
 import krrood.symbolic_math.symbolic_math as sm
 from krrood.ormatic.utils import classproperty
@@ -55,7 +55,7 @@ class ActionServerTask(
     Topic name for the action server.
     """
 
-    message_type: Type[Action]
+    message_type: type[Action]
     """
     Fully specified goal message that can be send out.
     """

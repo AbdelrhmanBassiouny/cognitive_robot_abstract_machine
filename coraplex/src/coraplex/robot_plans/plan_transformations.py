@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC
 from dataclasses import dataclass
 
-from typing_extensions import TYPE_CHECKING, Generic, List, Optional
+from typing_extensions import TYPE_CHECKING, Generic
 
 from coraplex.datastructures.enums import (
     DetectionTechnique,
@@ -165,7 +165,7 @@ class DrawerOpening(
 
     def _closed_drawers_containing(
         self, annotation: HasRootBody, world: World
-    ) -> List[Drawer]:
+    ) -> list[Drawer]:
         """
         :param annotation: The object to locate
         :param world: The world the object and the drawers belong to
@@ -299,7 +299,7 @@ class OpenDrawerBeforeMoveAndPickUp(DrawerOpening[MoveAndPickUpAction]):
 
     def _pick_up_target(
         self, plan_node: MoveAndPickUpAction | StatementNode
-    ) -> Optional[PickUpTarget]:
+    ) -> PickUpTarget | None:
         """
         :param plan_node: A node this matches.
         :return: What the move-and-pick-up picks up and with which arm, or ``None`` if
@@ -313,7 +313,7 @@ class OpenDrawerBeforeMoveAndPickUp(DrawerOpening[MoveAndPickUpAction]):
     @staticmethod
     def _pick_up_target_shared_by_candidates_of(
         move_and_pick_up: Match[MoveAndPickUpAction],
-    ) -> Optional[PickUpTarget]:
+    ) -> PickUpTarget | None:
         """
         :param move_and_pick_up: A move-and-pick-up still to be grounded.
         :return: The object and arm every one of its candidates picks up with, or
