@@ -241,6 +241,16 @@ class GiskardExecutable(Executable):
     """
 
     collision_avoidance: ClassVar[bool] = False
+    """
+    Whether the robot of the context avoids colliding with its surroundings and with
+    itself, managed by :py:class:`pycram.motion_executor.ExecutionEnvironment`.
+
+    Adds an
+    :class:`~giskardpy.motion_statechart.goals.collision_avoidance.ExternalCollisionAvoidance`
+    and a
+    :class:`~giskardpy.motion_statechart.goals.collision_avoidance.SelfCollisionAvoidance`
+    for that robot to the motion state chart.
+    """
 
     simulation: ClassVar[MujocoSim | None] = None
     """
@@ -249,17 +259,6 @@ class GiskardExecutable(Executable):
 
     Shared the way :attr:`execution_type` is, and set by entering a
     :class:`~coraplex.execution_environment.PhysicallySimulatedRobot`.
-    """
-
-    """
-    Whether the robot avoids colliding with its surroundings and with itself, managed by
-    :py:class:`pycram.motion_executor.ExecutionEnvironment`.
-
-    Adds an
-    :class:`~giskardpy.motion_statechart.goals.collision_avoidance.ExternalCollisionAvoidance`
-    and a
-    :class:`~giskardpy.motion_statechart.goals.collision_avoidance.SelfCollisionAvoidance`
-    to the motion state chart.
     """
 
     @classproperty
@@ -281,7 +280,8 @@ class GiskardExecutable(Executable):
         """
         Extend the motion state chart with the nodes that terminate it: one that cancels
         the motion once it reaches its goal, and one that gives up on it once it stops
-        approaching one.
+        approaching one. When :attr:`collision_avoidance` is asked for, add the
+        collision avoidance of the robot of the context as well.
 
         This runs just before compilation rather than during parsing, because the
         execution type is only known once an
@@ -289,8 +289,9 @@ class GiskardExecutable(Executable):
         """
         end_trigger = self.root_node.goal_reached
         if GiskardExecutable.collision_avoidance:
-            self.motion_state_chart.add_node(ExternalCollisionAvoidance())
-            self.motion_state_chart.add_node(SelfCollisionAvoidance())
+            robot = self.context.robot
+            self.motion_state_chart.add_node(ExternalCollisionAvoidance(robot=robot))
+            self.motion_state_chart.add_node(SelfCollisionAvoidance(robot=robot))
 
         end_motion = EndMotion()
         end_motion.start_condition = end_trigger

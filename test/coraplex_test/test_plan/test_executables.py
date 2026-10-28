@@ -37,9 +37,12 @@ from giskardpy.motion_statechart.monitors.payload_monitors import (
 from giskardpy.motion_statechart.monitors.progress_monitors import StillProgressing
 from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.robots.stretch import Stretch
 from semantic_digital_twin.robots.tiago import Tiago
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from semantic_digital_twin.specifications.robots import RobotSpecification
+from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import Sphere
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
@@ -285,6 +288,57 @@ def test_prepare_for_execution_leaves_out_collision_avoidance_when_not_asked_for
     chart = reach_action_executable.motion_state_chart
     assert chart.get_nodes_by_type(ExternalCollisionAvoidance) == []
     assert chart.get_nodes_by_type(SelfCollisionAvoidance) == []
+
+
+def test_prepare_for_execution_avoids_collisions_of_the_robot_of_the_context(
+    reach_action_executable,
+):
+    """
+    Both collision avoidance goals belong to the robot the plan moves, so a world that
+    holds other robots too leaves no doubt about which robot has to keep clear.
+    """
+    with ExecutionEnvironment(
+        ExecutionType.KINEMATICALLY_SIMULATED, collision_avoidance=True
+    ):
+        reach_action_executable.prepare_for_execution()
+
+    chart = reach_action_executable.motion_state_chart
+    [external_collision_avoidance] = chart.get_nodes_by_type(ExternalCollisionAvoidance)
+    [self_collision_avoidance] = chart.get_nodes_by_type(SelfCollisionAvoidance)
+    robot = reach_action_executable.context.robot
+    assert external_collision_avoidance.robot is robot
+    assert self_collision_avoidance.robot is robot
+
+
+@pytest.fixture
+def tiago_world_with_a_stretch(_tiago_world_setup) -> World:
+    """
+    A world holding a Tiago and, three metres in front of it, a Stretch.
+    """
+    world = deepcopy(_tiago_world_setup)
+    RobotSpecification(
+        Stretch, world_T_odom=HomogeneousTransformationMatrix.from_xyz_rpy(x=3)
+    ).spawn(world)
+    return world
+
+
+def test_a_robot_avoids_collisions_in_a_world_with_another_robot(
+    tiago_world_with_a_stretch,
+):
+    """
+    A motion with collision avoidance runs for the robot of its plan when the world
+    holds another robot as well.
+    """
+    world = tiago_world_with_a_stretch
+    [tiago] = world.get_semantic_annotations_by_type(Tiago)
+    plan = execute_single(
+        MoveTorsoAction(TorsoState.HIGH), context=Context(world, tiago)
+    )
+
+    with ExecutionEnvironment(
+        ExecutionType.KINEMATICALLY_SIMULATED, collision_avoidance=True
+    ):
+        plan.perform()
 
 
 @pytest.mark.parametrize("holds_a_body", [False, True])
