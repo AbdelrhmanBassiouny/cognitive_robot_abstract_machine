@@ -1,13 +1,14 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
 
 import numpy as np
 import pytest
 
 from semantic_digital_twin.adapters.urdf import URDFParser
-from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.datastructures.joint_state import JointState
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.exceptions import (
     GripperAxesNotPerpendicular,
     MoreThanOneBodyHeld,
