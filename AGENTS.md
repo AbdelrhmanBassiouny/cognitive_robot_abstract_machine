@@ -182,7 +182,8 @@
 
 # Pull request labels
 <!-- from PullRequestLabelsRules in agent_rules.py -->
-- Label every pull request you open or prepare with its kinds of change and the frameworks it changes. Where you cannot set a label, because the repository lacks it or the pull request is opened through a link, name the labels to the user instead
+- Label every pull request you open with its kinds of change and the frameworks it changes. Where you cannot set a label, because the repository lacks it or the pull request is opened through a link, name the labels to the user instead
+- On a pull request you do not open yourself - one you prepare for the developer to open, review, or are asked about - set no labels; suggest to its developer which labels to add and, for an `api-break`, what the rules below ask of it
 - Apply every kind-of-change label that describes a part of the change:
   - `api-break`: the change can break code that already uses it - it removes or renames a public module, class, method, field or parameter, changes a signature incompatibly, changes the documented behaviour or return value of a public method, or changes an ORM schema or a serialized format
   - `new-feature`: the change adds public API or user-visible behaviour without breaking existing users

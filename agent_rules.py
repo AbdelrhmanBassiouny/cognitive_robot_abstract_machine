@@ -90,10 +90,17 @@ class PullRequestLabelsRules(Section):
     """
 
     LABEL_EVERY_PULL_REQUEST = (
-        "Label every pull request you open or prepare with its kinds of change and the "
+        "Label every pull request you open with its kinds of change and the "
         "frameworks it changes. Where you cannot set a label, because the repository "
         "lacks it or the pull request is opened through a link, name the labels to the "
         "user instead"
+    )
+
+    SUGGEST_LABELS_FOR_OTHER_PULL_REQUESTS = (
+        "On a pull request you do not open yourself - one you prepare for the "
+        "developer to open, review, or are asked about - set no labels; suggest to its "
+        "developer which labels to add and, for an `api-break`, what the rules below "
+        "ask of it"
     )
 
     CHANGE_KIND_LABELS = (
