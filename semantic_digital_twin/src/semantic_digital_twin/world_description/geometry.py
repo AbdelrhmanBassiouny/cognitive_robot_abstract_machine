@@ -25,6 +25,7 @@ from typing_extensions import Any, Self, TYPE_CHECKING, TypeVar, Sequence
 
 from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json, from_json
 from krrood.bounds import Bounds, BoundsInterface
+from krrood.ormatic.utils import classproperty
 from random_events.interval import SimpleInterval, Bound, closed
 from random_events.product_algebra import SimpleEvent
 from semantic_digital_twin.datastructures.variables import SpatialVariables
@@ -59,12 +60,13 @@ logger = logging.getLogger(__name__)
 # %% Color representation
 
 
-@dataclass(eq=False)
+@dataclass(unsafe_hash=True)
 class Color:
     """
     A color stored in HSV with RGB channel access and independent opacity.
 
     Channel values are normalized from zero to one. The default color is opaque white.
+    Equality and hashing compare the stored hue, saturation, value, and opacity.
     """
 
     hue: float = 0.0
@@ -123,20 +125,6 @@ class Color:
         """
         return self.opacity
 
-    def __eq__(self, other: object) -> bool:
-        """
-        Compare exact RGBA values.
-        """
-        if not isinstance(other, Color):
-            return NotImplemented
-        return self.to_rgba() == other.to_rgba()
-
-    def __hash__(self) -> int:
-        """
-        Hash the same RGBA values used for equality.
-        """
-        return hash(self.to_rgba())
-
     def to_rgba(self) -> tuple[float, float, float, float]:
         """
         Return RGB channels followed by opacity.
@@ -148,6 +136,35 @@ class Color:
         Return RGB channels converted from the stored HSV coordinates.
         """
         return hsv_to_rgb(self.hue, self.saturation, self.value)
+
+    @classproperty
+    def opencv_maximum_channel_value(cls) -> int:
+        """Largest channel value in an 8-bit OpenCV HSV_FULL image."""
+        return np.iinfo(np.uint8).max
+
+    @classproperty
+    def opencv_hue_channel_count(cls) -> int:
+        """Number of hue steps in one turn of an 8-bit OpenCV HSV_FULL image."""
+        return cls.opencv_maximum_channel_value + 1
+
+    @classmethod
+    def from_opencv_hue_saturation_value_full(
+        cls, hue: int, saturation: int, value: int
+    ) -> Self:
+        """Create a color from OpenCV's 8-bit HSV_FULL channels."""
+        return cls(
+            hue=hue / cls.opencv_hue_channel_count,
+            saturation=saturation / cls.opencv_maximum_channel_value,
+            value=value / cls.opencv_maximum_channel_value,
+        )
+
+    def to_opencv_hue_saturation_value_full(self) -> tuple[int, int, int]:
+        """Return OpenCV's 8-bit HSV_FULL channels, excluding opacity."""
+        return (
+            int(self.hue * self.opencv_hue_channel_count),
+            round(self.saturation * self.opencv_maximum_channel_value),
+            round(self.value * self.opencv_maximum_channel_value),
+        )
 
     def to_hex(self, prefix: str = "#") -> str:
         """

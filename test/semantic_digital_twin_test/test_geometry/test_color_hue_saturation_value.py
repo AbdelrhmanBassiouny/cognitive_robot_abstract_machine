@@ -84,15 +84,39 @@ def test_rgb_and_hue_saturation_value_construction_share_equality_and_hash() -> 
     assert len({hsv_color, rgb_color}) == 1
 
 
-def test_equal_gray_colors_can_retain_different_hues() -> None:
+@pytest.mark.parametrize(
+    "first, second",
+    [
+        (
+            Color(hue=0.25, saturation=0.0, value=0.5),
+            Color(hue=0.75, saturation=0.0, value=0.5),
+        ),
+        (
+            Color(hue=0.25, saturation=0.25, value=0.0),
+            Color(hue=0.25, saturation=0.75, value=0.0),
+        ),
+    ],
+)
+def test_visually_identical_colors_preserve_distinct_coordinates(
+    first: Color, second: Color
+) -> None:
     """
-    An undefined visible hue does not affect color equality.
+    Distinct HSV coordinates remain separate dictionary keys even for identical RGB.
     """
-    first = Color(hue=0.25, saturation=0.0, value=0.5)
-    second = Color(hue=0.75, saturation=0.0, value=0.5)
+    assert first.to_rgba() == second.to_rgba()
+    assert first != second
+    assert len({first, second}) == 2
 
-    assert first == second
-    assert hash(first) == hash(second)
+
+def test_color_hash_uses_stored_coordinates() -> None:
+    """
+    The color hash is determined by its stored HSVA coordinates.
+    """
+    color = Color(hue=0.25, saturation=0.0, value=0.5, opacity=0.75)
+
+    assert hash(color) == hash(
+        (color.hue, color.saturation, color.value, color.opacity)
+    )
 
 
 # %% Color serialization

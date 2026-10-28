@@ -17,7 +17,6 @@ from robokudo.annotators.core import BaseAnnotator
 from robokudo.cas import CASViews
 from robokudo.exceptions import ImageContourMissing
 from robokudo.io.camera_model_adapters import Open3DCameraModelAdapter
-from robokudo.io.color_adapters import OpenCVHueSaturationValueAdapter
 from semantic_digital_twin.world_description.geometry import Color
 from robokudo.types.scene import ObjectHypothesis
 from robokudo.utils.cv_helper import get_scaled_color_image_for_depth_image
@@ -128,13 +127,13 @@ class ImageClusterExtractor(BaseAnnotator):
                 Initialize default parameter values.
                 """
                 self.minimum_hue_saturation_value: Color = (
-                    OpenCVHueSaturationValueAdapter.from_channels(
+                    Color.from_opencv_hue_saturation_value_full(
                         hue=150, saturation=130, value=85
                     )
                 )
                 """Lower normalized hue, saturation, and value bound for color segmentation."""
                 self.maximum_hue_saturation_value: Color = (
-                    OpenCVHueSaturationValueAdapter.from_channels(
+                    Color.from_opencv_hue_saturation_value_full(
                         hue=200, saturation=255, value=255
                     )
                 )
@@ -154,10 +153,10 @@ class ImageClusterExtractor(BaseAnnotator):
                 }
                 # A lower hue above the upper hue selects both sides of the hue seam.
                 self.color_ranges[ColorName.RED] = {
-                    ColorRangeBound.LOWER: OpenCVHueSaturationValueAdapter.from_channels(
+                    ColorRangeBound.LOWER: Color.from_opencv_hue_saturation_value_full(
                         hue=245, saturation=150, value=95
                     ),
-                    ColorRangeBound.UPPER: OpenCVHueSaturationValueAdapter.from_channels(
+                    ColorRangeBound.UPPER: Color.from_opencv_hue_saturation_value_full(
                         hue=15, saturation=255, value=255
                     ),
                 }
@@ -222,11 +221,11 @@ class ImageClusterExtractor(BaseAnnotator):
         :param maximum_hue_saturation_value: Upper channel bounds; a lower hue selects a wrapped range.
         :return: Binary mask with inclusive channel bounds.
         """
-        minimum_channels = OpenCVHueSaturationValueAdapter.to_channels(
-            minimum_hue_saturation_value
+        minimum_channels = (
+            minimum_hue_saturation_value.to_opencv_hue_saturation_value_full()
         )
-        maximum_channels = OpenCVHueSaturationValueAdapter.to_channels(
-            maximum_hue_saturation_value
+        maximum_channels = (
+            maximum_hue_saturation_value.to_opencv_hue_saturation_value_full()
         )
         if minimum_hue_saturation_value.hue <= maximum_hue_saturation_value.hue:
             return cv2.inRange(
@@ -244,7 +243,7 @@ class ImageClusterExtractor(BaseAnnotator):
             self.hue_saturation_value_image,
             minimum_channels,
             (
-                OpenCVHueSaturationValueAdapter.maximum_channel_value,
+                Color.opencv_maximum_channel_value,
                 maximum_saturation,
                 maximum_value,
             ),
