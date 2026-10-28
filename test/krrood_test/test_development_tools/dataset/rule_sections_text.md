@@ -11,7 +11,7 @@
   - A second detail
 - Another rule about errors
 
-# Testing
+# Verification
 
 ## Assertions
 <!-- from AssertionsRules in {source_path} -->

@@ -14,12 +14,12 @@ class RepositoryInstructionsFile(StrEnum):
 
     AGENTS = "AGENTS.md"
     """
-    The instructions agents read, generated from the rule sets.
+    The instructions agents read, generated from the rules krrood ships and the
+    repository's own.
     """
 
     PROJECT_RULES = "agent_rules.py"
     """
     The module ``krrood agents-md`` imports to find the repository's own rules: the
-    sections of :class:`~krrood.development_tools.agent_rule.ProjectRule` rules it
-    declares or imports.
+    sections it declares or imports.
     """

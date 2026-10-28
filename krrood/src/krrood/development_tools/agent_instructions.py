@@ -5,11 +5,14 @@ repository declares.
 
 from __future__ import annotations
 
+import importlib.util
+import sys
 from dataclasses import dataclass
 from pathlib import Path
+from types import ModuleType
 
 from krrood.code_generation.generator import CodeGenerator
-from krrood.development_tools.agent_rule import AgentRule, ProjectRule, Section
+from krrood.development_tools.agent_rule import Section
 from krrood.development_tools.repository_files import RepositoryInstructionsFile
 
 # imported to declare the sections of the shipped rules
@@ -26,8 +29,7 @@ class TemplateFile(PathEnumeration):
 
     AGENTS = Path(__file__).parent / "templates" / "agents.md.jinja"
     """
-    The content of ``AGENTS.md``: the rules of the chosen rule sets, under the headings
-    of their sections.
+    The content of ``AGENTS.md``: rules under the headings of their sections.
     """
 
 
@@ -37,7 +39,7 @@ class TemplateFile(PathEnumeration):
 @dataclass
 class AgentsInstructions:
     """
-    The ``AGENTS.md`` of one repository, generated from the chosen rule sets.
+    The ``AGENTS.md`` of one repository, listing the rules of the given sections.
     """
 
     repository_root: Path
@@ -45,17 +47,41 @@ class AgentsInstructions:
     The directory holding the repository's ``AGENTS.md``.
     """
 
-    rule_sets: tuple[type[AgentRule], ...]
+    sections: list[type[Section]]
     """
-    The rule sets whose rules the file lists.
+    The top-level sections the file lists, each with the sections nested under it.
     """
 
-    def __post_init__(self) -> None:
+    @classmethod
+    def from_repository(cls, repository_root: Path) -> AgentsInstructions:
         """
-        Import the repository's own rules, so that ``AGENTS.md`` lists its
-        sections.
+        :param repository_root: The directory holding the repository's ``AGENTS.md``.
+        :return: The file listing every section declared: the ones krrood ships, then
+            the repository's own.
         """
-        ProjectRule.import_from(self.repository_root)
+        cls.import_project_rules(repository_root)
+        return cls(repository_root, Section.top_level)
+
+    @classmethod
+    def import_project_rules(cls, repository_root: Path) -> ModuleType | None:
+        """
+        Import the repository's rules module, once per process, which declares the
+        repository's own sections.
+
+        :param repository_root: The directory holding the module.
+        :return: The module; none if the repository has no such module.
+        """
+        path = repository_root / RepositoryInstructionsFile.PROJECT_RULES
+        if not path.is_file():
+            return None
+        module_name = path.stem
+        if module_name in sys.modules:
+            return sys.modules[module_name]
+        specification = importlib.util.spec_from_file_location(module_name, path)
+        module = importlib.util.module_from_spec(specification)
+        sys.modules[module_name] = module
+        specification.loader.exec_module(module)
+        return module
 
     @property
     def path(self) -> Path:
@@ -67,13 +93,12 @@ class AgentsInstructions:
     @property
     def text(self) -> str:
         """
-        The content ``AGENTS.md`` must have: the rules of the chosen rule sets, under the
-        headings of the sections that list any, in the order the sections are declared.
+        The content ``AGENTS.md`` must have: the rules of :attr:`sections`, under their
+        headings, in the order they are declared.
         """
         return CodeGenerator(str(TemplateFile.AGENTS.parent)).render(
             TemplateFile.AGENTS.name,
-            sections=Section.top_level,
-            rule_sets=self.rule_sets,
+            sections=self.sections,
         )
 
     def is_current(self) -> bool:

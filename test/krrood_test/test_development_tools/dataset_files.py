@@ -50,7 +50,7 @@ class DatasetFile(PathEnumeration):
 
     RULE_SECTIONS_TEXT = Path(__file__).parent / "dataset" / "rule_sections_text.md"
     """
-    The ``AGENTS.md`` listing only the rules of :class:`DatasetRule` in
+    The ``AGENTS.md`` listing the design principles and verification sections of
     ``dataset/rule_sections.py``, with ``{source_path}`` standing for the path of that
     module.
     """

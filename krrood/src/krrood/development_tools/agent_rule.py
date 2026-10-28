@@ -1,13 +1,10 @@
 """
-The rules agents follow, typed by the rule set they belong to, and the sections of
-``AGENTS.md`` that list them.
+The rules agents follow and the sections of ``AGENTS.md`` that list them.
 """
 
 from __future__ import annotations
 
-import importlib.util
 import re
-import sys
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -15,7 +12,6 @@ from types import ModuleType
 
 from typing_extensions import Any, Callable
 
-from krrood.development_tools.repository_files import RepositoryInstructionsFile
 from krrood.ormatic.utils import classproperty
 
 # %% code named by rules
@@ -66,9 +62,6 @@ class CodeReference:
 class AgentRule:
     """
     One rule agents follow, rendered as a Markdown list item.
-
-    The type of a rule is the rule set it belongs to, which a repository adopts as a
-    whole; the rule sets are the subclasses of this class.
     """
 
     statement: str
@@ -81,72 +74,13 @@ class AgentRule:
     The points that spell the rule out, rendered as a nested list below it.
     """
 
-    @classproperty
-    def available(cls) -> list[type[AgentRule]]:
-        """
-        Every rule set declared, in definition order.
-        """
-        return AgentRule.__subclasses__()
-
-    @classproperty
-    def command_line_name(cls) -> str:
-        """
-        The name the command line chooses the rule set by.
-        """
-        return cls.__name__.removesuffix("Rule").lower()
-
-
-@dataclass(frozen=True)
-class PythonRule(AgentRule):
-    """
-    A rule for any Python repository.
-    """
-
-
-@dataclass(frozen=True)
-class KrroodRule(AgentRule):
-    """
-    A rule for a repository built on krrood, naming the krrood API it uses.
-    """
-
-
-@dataclass(frozen=True)
-class ProjectRule(AgentRule):
-    """
-    A rule of one repository only, declared in its :attr:`~krrood.development_tools.repo
-    sitory_files.RepositoryInstructionsFile.PROJECT_RULES` or in modules that one
-    imports.
-    """
-
-    @classmethod
-    def import_from(cls, repository_root: Path) -> ModuleType | None:
-        """
-        Import the repository's rules module, once per process, which declares the
-        repository's sections.
-
-        :param repository_root: The directory holding the module.
-        :return: The module; none if the repository has no such module.
-        """
-        path = repository_root / RepositoryInstructionsFile.PROJECT_RULES
-        if not path.is_file():
-            return None
-        module_name = path.stem
-        if module_name in sys.modules:
-            return sys.modules[module_name]
-        specification = importlib.util.spec_from_file_location(module_name, path)
-        module = importlib.util.module_from_spec(specification)
-        sys.modules[module_name] = module
-        specification.loader.exec_module(module)
-        return module
-
 
 # %% sections
 
 
-class Section(Enum):
+class Section(AgentRule, Enum):
     """
-    A section of ``AGENTS.md`` on one topic, whose members name the rules it lists and
-    whose values are those rules.
+    A section of ``AGENTS.md`` on one topic, whose members are the rules it lists.
 
     Its name is the topic followed by ``Rules``. A section nested under another
     overrides :attr:`parent` to return it.
@@ -182,26 +116,6 @@ class Section(Enum):
                 first_word,
                 *(word if word.isupper() else word.lower() for word in other_words),
             ]
-        )
-
-    @classmethod
-    def rules_in(cls, rule_sets: tuple[type[AgentRule], ...]) -> list[Section]:
-        """
-        :param rule_sets: The rule sets whose rules to list.
-        :return: The members of the section whose rules belong to those rule sets, in
-            declaration order.
-        """
-        return [member for member in cls if isinstance(member.value, rule_sets)]
-
-    @classmethod
-    def lists_rules_in(cls, rule_sets: tuple[type[AgentRule], ...]) -> bool:
-        """
-        :param rule_sets: The rule sets whose rules count.
-        :return: Whether the section lists any rule of those rule sets, directly or in a
-            subsection.
-        """
-        return bool(cls.rules_in(rule_sets)) or any(
-            subsection.lists_rules_in(rule_sets) for subsection in cls.subsections
         )
 
     @classproperty
