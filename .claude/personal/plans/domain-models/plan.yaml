@@ -58,8 +58,9 @@ items:
   depends_on:
   - planar-point-interface
   session: https://claude.ai/code/session_01J17aVY3vyQM8goACbkHkcp
-  notes: '#524 on #527: ImagePoint implements PlanarPoint[ImageCoordinateSystem, float]; Pixel
-    stays a grid cell. Pushed 2a830dd575; CI pending. cram2#761 rewrites SemDT''s Color (mutable
+  notes: '#524 on #527: krrimage.coordinates owns ImagePlane and ImageCoordinateSystem (moved
+    from krrspatial in #527''s review); ImagePoint implements PlanarPoint[ImageCoordinateSystem,
+    float]; Pixel stays a grid cell. Pushed a4e9bbdb; CI pending. cram2#761 rewrites SemDT''s Color (mutable
     setters, HueSaturationValue): #524 lands after it and moves Color as #761 left it, HueSaturationValue
     included; ask before dropping the setters. Whichever of #524/#526 lands second merges
     the domain_models/README.md entries.'
@@ -159,20 +160,20 @@ items:
     of its own pickup; the robot''s live capture projected onto the apartment walls while
     it works.'
 - id: planar-point-interface
-  title: 'krrspatial''s casadi-free base: Space (EuclideanSpace, ImagePlane), CoordinateSystem[SpaceT]
-    (ReferenceFrame, ImageCoordinateSystem), CoordinateChange (affine, rigid), PlanarPoint'
+  title: 'krrspatial''s casadi-free base: Space (EuclideanSpace), CoordinateSystem[SpaceT]
+    (ReferenceFrame), CoordinateChange (affine, rigid), PlanarPoint'
   branch: claude/krrspatial-interfaces
   pull_request_number: 527
   track: spatial
   status: in_progress
   depends_on: []
-  session: https://claude.ai/code/session_01GoHMif2Xa7Mnqzz9mKFpTT
-  notes: '#527 on #528. A reference frame is a coordinate system on physical space, not a
+  session: https://claude.ai/code/session_018wfiv7nbshkp1Yenu79fsh
+  notes: '#527 on main. A reference frame is a coordinate system on physical space, not a
     space: Space is the point set, CoordinateSystem what coordinates are given in, CoordinateChange[CoordinateSystemT]
     the change within one space (declares inverse, @); AffineCoordinateChange and RigidCoordinateChange
-    name what a change keeps. CoordinateRepresentation[CoordinateSystemT].coordinate_system:
-    a value given in a coordinate system; PlanarPoint is one. Pushed 03adbed9fa (user-marked
-    ready); CI pending.'
+    name what a change keeps. ImagePlane and ImageCoordinateSystem moved to krrimage (#524)
+    per review. IdentifiedObject keeps public id and name (owner decided). Pushed 5af267fe
+    (user-marked ready); CI pending; review thread on IdentifiedObject left open with the answer.'
 - id: image-coordinate-change
   title: krrimage's ImageCoordinateChange (scale and shift per axis) for crops and resizes,
     with cv2 resampling
