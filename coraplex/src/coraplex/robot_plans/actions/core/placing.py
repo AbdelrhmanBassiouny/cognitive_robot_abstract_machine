@@ -21,6 +21,7 @@ from coraplex.robot_plans.mixins import (
     HasApproachesGraspPoses,
     HasGraspDetectionThreshold,
     MovesToolCenterPoint,
+    OperatesGripper,
     PlaceTuningParameters,
 )
 from semantic_digital_twin.collision_checking.collision_matrix import CollisionRule
@@ -38,6 +39,7 @@ from semantic_digital_twin.spatial_types.spatial_types import Pose
 @dataclass(eq=False, repr=False, kw_only=True)
 class PlaceAction(
     MovesToolCenterPoint,
+    OperatesGripper,
     ReattachesBranches,
     SequentialAction,
     HasApproachesGraspPoses,
@@ -96,7 +98,7 @@ class PlaceAction(
             ),
             Parallel(
                 nodes=[
-                    self.create_finger_goal(
+                    self.gripper_goal_type.moving_gripper_to(
                         arm.end_effector.default_configuration(
                             GripperState.OPEN,
                             finger_velocity=self.release_opening_velocity,

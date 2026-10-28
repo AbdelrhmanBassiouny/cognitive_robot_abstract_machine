@@ -12,7 +12,8 @@ from semantic_digital_twin.collision_checking.collision_variable_managers import
 
 if TYPE_CHECKING:
     from giskardpy.motion_statechart.monitors.progress_monitors import StillProgressing
-    from semantic_digital_twin.robots.robot_parts import AbstractRobot
+    from semantic_digital_twin.datastructures.definitions import GripperState
+    from semantic_digital_twin.robots.robot_parts import AbstractRobot, EndEffector
     from semantic_digital_twin.world_description.world_entity import (
         KinematicStructureEntity,
     )
@@ -243,6 +244,35 @@ class UnknownGriplinkActionError(MotionStatechartError):
 
     def suggest_correction(self) -> str:
         return "Build the task with Grip, Release, Flexgrip or Flexrelease."
+
+
+@dataclass
+class NoGriplinkEndpoint(MotionStatechartError):
+    """
+    Raised when a gripper state has no griplink action server endpoint to command it on.
+    """
+
+    end_effector: EndEffector
+    """
+    The gripper whose state is to be commanded.
+    """
+
+    state_type: GripperState
+    """
+    The gripper state no griplink endpoint serves.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The gripper '{self.end_effector.name}' has no griplink endpoint to "
+            f"command the state {self.state_type.name}."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Command a gripper state the gripper declares an endpoint for, or add an "
+            "endpoint for this gripper and state."
+        )
 
 
 @dataclass

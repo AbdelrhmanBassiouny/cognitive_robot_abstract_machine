@@ -13,6 +13,7 @@ from coraplex.robot_plans.mixins import (
     HasApproachesGraspPoses,
     HasGraspDetectionThreshold,
     MovesToolCenterPoint,
+    OperatesGripper,
     PickUpTuningParameters,
     ReachTuningParameters,
 )
@@ -56,6 +57,7 @@ class HasGraspChoice:
 @dataclass(eq=False, repr=False, kw_only=True)
 class ReachAction(
     MovesToolCenterPoint,
+    OperatesGripper,
     SequentialAction,
     HasApproachesGraspPoses,
     ReachTuningParameters,
@@ -108,7 +110,7 @@ class ReachAction(
         ]
         if self.open_gripper_at_pre_pose:
             children.append(
-                self.create_finger_goal(
+                self.gripper_goal_type.moving_gripper_to(
                     self.arm.end_effector.default_configuration(GripperState.OPEN)
                 )
             )
@@ -217,6 +219,7 @@ class PickUpAction(
 @dataclass(eq=False, repr=False, kw_only=True)
 class GraspingAction(
     MovesToolCenterPoint,
+    OperatesGripper,
     SequentialAction,
     HasGraspChoice,
     HasApproachesGraspPoses,
@@ -258,7 +261,7 @@ class GraspingAction(
                 grasp_detection_threshold=self.grasp_detection_threshold,
             ),
             self.closing_step(
-                self.create_finger_goal(
+                self.gripper_goal_type.moving_gripper_to(
                     self.arm.end_effector.default_configuration(
                         GripperState.CLOSE, finger_velocity=self.grasp_closing_velocity
                     ),

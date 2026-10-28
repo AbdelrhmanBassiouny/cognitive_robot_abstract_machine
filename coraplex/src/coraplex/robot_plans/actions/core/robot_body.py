@@ -23,6 +23,7 @@ from coraplex.robot_plans.actions.core.exceptions import WidthBeyondGripperOpeni
 from coraplex.robot_plans.mixins import (
     HasMaxJointVelocity,
     MovesToolCenterPoint,
+    OperatesGripper,
 )
 from cramph.composites import Sequence
 from cramph.node import StatechartNode
@@ -62,7 +63,7 @@ class MoveTorsoAction(SequentialAction):
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class SetGripperAction(GoalAction):
+class SetGripperAction(OperatesGripper, GoalAction):
     """
     Moves a gripper to the given configuration.
     """
@@ -73,7 +74,7 @@ class SetGripperAction(GoalAction):
     """
 
     def create_goal(self) -> StatechartNode:
-        return self.create_finger_goal(self.configuration)
+        return self.gripper_goal_type.moving_gripper_to(self.configuration)
 
 
 @dataclass(eq=False, repr=False, kw_only=True)

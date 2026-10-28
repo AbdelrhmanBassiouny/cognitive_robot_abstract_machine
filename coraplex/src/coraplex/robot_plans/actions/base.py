@@ -18,21 +18,13 @@ from cramph.node import (
     StatechartNode,
     expanded_child_field,
 )
-from giskardpy.motion_statechart.goals.gripper import (
-    MoveFingers,
-    MoveFingersToJointState,
-    MoveGripper,
-)
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from giskardpy.motion_statechart.tasks.cartesian_tasks import HoldPose
 from krrood.class_diagrams.attribute_introspector import DataclassOnlyIntrospector
 from krrood.patterns.field_metadata import JSONMetadata
 from krrood.symbolic_math.symbolic_math import Scalar, trinary_if_cases
 from semantic_digital_twin.collision_checking.collision_matrix import CollisionRule
-from semantic_digital_twin.datastructures.robots.gripper_configuration import (
-    GripperConfiguration,
-)
-from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase, HasTwoFingers
+from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
@@ -146,37 +138,6 @@ class Action(CompositeNode, ABC):
             own.
         """
         return []
-
-    @staticmethod
-    def create_finger_goal(
-        configuration: GripperConfiguration,
-        stall_minimum_time: float | None = None,
-        tolerate_stall: bool = False,
-    ) -> MoveFingers:
-        """
-        :param configuration: The configuration to bring the fingers of its end effector
-            into, at its finger velocity.
-        :param stall_minimum_time: See :attr:`~giskardpy.motion_statechart.goals.gripper.MoveFingers.stall_minimum_time`.
-        :param tolerate_stall: See :attr:`~giskardpy.motion_statechart.goals.gripper.MoveFingers.tolerate_stall`.
-        :return: A new goal bringing the fingers into `configuration`: to the width its
-            fingertips stand apart in its joint state for a two-finger gripper, to its
-            joint state for any other hand.
-        """
-        end_effector = configuration.end_effector
-        if isinstance(end_effector, HasTwoFingers):
-            return MoveGripper(
-                gripper=end_effector,
-                width=end_effector.separation_at(configuration.joint_state),
-                finger_velocity=configuration.finger_velocity,
-                stall_minimum_time=stall_minimum_time,
-                tolerate_stall=tolerate_stall,
-            )
-        return MoveFingersToJointState(
-            goal_state=configuration.joint_state,
-            finger_velocity=configuration.finger_velocity,
-            stall_minimum_time=stall_minimum_time,
-            tolerate_stall=tolerate_stall,
-        )
 
     def on_start(self) -> None:
         super().on_start()

@@ -8,6 +8,10 @@ from coraplex.robot_plans.actions.base import Action
 from cramph.node import StatechartNode
 from cramph.world_modification_nodes import MoveBranch
 from cramph.composites import Parallel
+from giskardpy.motion_statechart.goals.gripper import (
+    MoveFingers,
+    MovesGripperToConfiguration,
+)
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
@@ -272,6 +276,22 @@ class MovesToolCenterPoint(Action, ABC):
                 )
             )
         return limits
+
+
+@dataclass(eq=False, repr=False, kw_only=True)
+class OperatesGripper(Action, ABC):
+    """
+    An action that brings a gripper into a configuration, such as opening or closing
+    it.
+    """
+
+    gripper_goal_type: type[MovesGripperToConfiguration] = field(
+        default=MoveFingers, init=False
+    )
+    """
+    The kind of node bringing the gripper into the configurations this action asks for,
+    as set by the plan transformations configuring the action.
+    """
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
