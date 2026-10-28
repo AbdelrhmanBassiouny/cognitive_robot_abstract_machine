@@ -270,7 +270,7 @@ with kinematically_simulated_robot:
 
 ## Opening
 
-Opening allows the robot to open a drawer, taking the drawer's handle by a grasp. Here the handle is taken at its own
+Opening allows the robot to open a drawer, grabbing the drawer's handle by a grasp. Here the handle is grasped at its own
 origin; `OpenAction.from_handle` instead picks the handle's grasp closest to where the robot stands.
 
 For the moment this designator works only in the apartment environment, therefore we remove the kitchen and spawn the
