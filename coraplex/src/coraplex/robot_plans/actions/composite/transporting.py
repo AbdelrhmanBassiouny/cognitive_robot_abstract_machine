@@ -315,7 +315,8 @@ class MoveAndOpenAction(ActionDescription):
         :param standing_position: Where the robot stands while opening.
         :param handle: The handle of the container to open.
         :param arm: The arm to open with.
-        :return: The step opening the container from `standing_position`.
+        :return: The step opening the container from `standing_position`, taking
+            `handle` by its grasp closest to there.
         """
         handle_pose = Pose(reference_frame=handle.root)
         return cls(
@@ -323,7 +324,7 @@ class MoveAndOpenAction(ActionDescription):
             face_and_look_at=FaceAndLookAtAction(
                 face_at=FaceAtAction(handle_pose), look_at=LookAtAction(handle_pose)
             ),
-            open_container=OpenAction(handle=handle, arm=arm),
+            open_container=OpenAction.from_handle(handle, arm, standing_position),
         )
 
     @property

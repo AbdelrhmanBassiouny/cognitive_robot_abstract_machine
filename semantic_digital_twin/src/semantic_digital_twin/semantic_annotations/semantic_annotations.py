@@ -117,9 +117,33 @@ class Handle(HasGraspCandidates):
 
     def default_grasp_candidates(self) -> list[GraspCandidate]:
         """
-        :return: Grasps drawn uniformly from :meth:`surface_grasp_statement`.
+        The grasps at the centre of the handle's bar that close around it, one
+        approaching from each of the four sides around it.
+
+        The bar runs along the longest extent of the root's collision geometry.
+
+        :raises NoGraspGeometry: If the root body has no collision geometry to tell
+            which way the bar runs.
         """
-        return self.drawn_grasp_candidates()
+        if not self.root.has_collision():
+            raise NoGraspGeometry(self)
+        mesh = self.root.combined_mesh
+        bar_axis = np.argmax(mesh.extents)
+        bar_direction = Vector3.from_iterable(np.eye(3)[bar_axis])
+        across_bar = np.delete(np.eye(3), bar_axis, axis=0)
+        return [
+            GraspCandidate(
+                self,
+                Pose(
+                    position=Point3.from_iterable(mesh.bounds.mean(axis=0)),
+                    orientation=RotationMatrix.from_vectors(
+                        x=approach, y=bar_direction.cross(approach)
+                    ).quaternion,
+                    reference_frame=self.root,
+                ),
+            )
+            for approach in map(Vector3.from_iterable, [*across_bar, *-across_bar])
+        ]
 
     def surface_grasp_statement(
         self,
