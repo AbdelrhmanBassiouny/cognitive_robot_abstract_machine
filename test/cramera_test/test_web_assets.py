@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 import ast
 
-from typing_extensions import ClassVar, Dict, List
+from typing_extensions import ClassVar
 
 from cramera.knowledge.eql_session import EqlSession
 from cramera.knowledge.recorded_statecharts import NO_STATECHART
@@ -48,7 +48,7 @@ def read(relative_path: str) -> str:
     return (WEB_ROOT / relative_path).read_text(encoding="utf-8")
 
 
-def panel_scripts() -> List[Path]:
+def panel_scripts() -> list[Path]:
     """
     Every script belonging to a panel, at any depth under ``panels/``.
     """
@@ -352,7 +352,7 @@ class TestQueryPanelHints:
     resolve.
     """
 
-    def advertised_variables(self) -> List[str]:
+    def advertised_variables(self) -> list[str]:
         """
         Every EQL variable name the query panel offers the user.
         """
@@ -385,7 +385,7 @@ class TestEveryLoadedModuleHasAConsumer:
     highlight arrow shipped that way once, drawn by no panel.
     """
 
-    CONSUMED_GLOBALS: ClassVar[Dict[str, str]] = {
+    CONSUMED_GLOBALS: ClassVar[dict[str, str]] = {
         "core/highlight_arrow.js": "HighlightArrow",
         "core/answer_table.js": "AnswerTable",
         "core/question_display.js": "QuestionDisplay",
@@ -401,7 +401,7 @@ class TestEveryLoadedModuleHasAConsumer:
     The global each of these modules defines, which some other script has to call.
     """
 
-    def callers_of(self, name: str, defined_in: str) -> List[str]:
+    def callers_of(self, name: str, defined_in: str) -> list[str]:
         """
         Every script other than the module itself that names ``name``.
 
@@ -441,7 +441,7 @@ class TestTheViewerServesWithoutTheFullStack:
     sourced, so anything the server imports on its way up must not reach it.
     """
 
-    SERVED_MODULES: ClassVar[List[str]] = [
+    SERVED_MODULES: ClassVar[list[str]] = [
         "cramera/src/cramera/knowledge/detected_events.py",
         "cramera/src/cramera/knowledge/presets.py",
         "cramera/src/cramera/knowledge/eql_session.py",
@@ -453,7 +453,7 @@ class TestTheViewerServesWithoutTheFullStack:
     Modules the recorded server pulls in when it starts.
     """
 
-    def imported_packages(self, source: Path) -> List[str]:
+    def imported_packages(self, source: Path) -> list[str]:
         """
         The top-level packages one module imports.
 
@@ -492,7 +492,7 @@ class TestGraphTabOrder:
     BUTTON_PATTERN = re.compile(r'<button data-view="(\w+)"(\s+class="active")?')
     TABLE_PATTERN = re.compile(r"const TABS = \{(.*?)\n  \};", re.S)
 
-    def buttons(self) -> List[str]:
+    def buttons(self) -> list[str]:
         """
         The tab names in the order the panel renders their buttons in.
         """

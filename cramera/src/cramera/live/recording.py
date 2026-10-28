@@ -15,7 +15,6 @@ import time
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 
-from typing_extensions import Dict, List, Optional
 
 from cramera.live.bridge import ChartSnapshot, WorldStateSnapshot
 from cramera.live.frame_range import FrameRange, InvalidFrameRange
@@ -61,22 +60,22 @@ class RecordedFrame:
     :class:`~cramera.live.bridge.WorldStateSnapshot` reports it.
     """
 
-    frames: Dict[str, float]
+    frames: dict[str, float]
     """
     Movable connection position by prefixed name.
     """
 
-    base: Optional[List[float]]
+    base: list[float] | None
     """
     Robot base pose as ``[x, y, z, qx, qy, qz, qw]``, or None without a robot.
     """
 
-    objects: Dict[str, List[float]]
+    objects: dict[str, list[float]]
     """
     Loose-object pose by mesh key, in the same 7-element form as :attr:`base`.
     """
 
-    step: Optional[str] = None
+    step: str | None = None
     """
     Label of the action the plan was performing on this tick, or None between actions.
 
@@ -84,7 +83,7 @@ class RecordedFrame:
     :mod:`cramera.live.recording_segments`).
     """
 
-    statechart: Optional[ChartSnapshot] = None
+    statechart: ChartSnapshot | None = None
     """
     The motion statechart executing on this tick, or None while no motion runs.
 
@@ -109,18 +108,18 @@ class Recording:
     The recording's current lifecycle state.
     """
 
-    scene_name: Optional[str] = None
+    scene_name: str | None = None
     """
     Name of the scene bundle the finalized recording was written to, filled in by
     whoever bundles it (see :mod:`cramera.live.recording_bundle`); None until then.
     """
 
-    _frames: List[RecordedFrame] = field(default_factory=list)
+    _frames: list[RecordedFrame] = field(default_factory=list)
     """
     Every tick captured so far, in recording order.
     """
 
-    _tick_times: List[float] = field(default_factory=list)
+    _tick_times: list[float] = field(default_factory=list)
     """
     Wall-clock time of each captured tick, used to estimate the frame rate.
     """
@@ -143,8 +142,8 @@ class Recording:
     def append(
         self,
         snapshot: WorldStateSnapshot,
-        step: Optional[str] = None,
-        statechart: Optional[ChartSnapshot] = None,
+        step: str | None = None,
+        statechart: ChartSnapshot | None = None,
     ) -> None:
         """
         Buffer one tick, or do nothing while not actively recording.
@@ -170,8 +169,8 @@ class Recording:
             self._tick_times.append(time.time())
 
     def _held_statechart(
-        self, statechart: Optional[ChartSnapshot]
-    ) -> Optional[ChartSnapshot]:
+        self, statechart: ChartSnapshot | None
+    ) -> ChartSnapshot | None:
         """
         The snapshot to store for a tick: the one the previous tick already holds when
         the statechart has not changed since, so an unchanged stretch costs one object.
@@ -183,7 +182,7 @@ class Recording:
         held = self._frames[-1].statechart
         return held if held == statechart else statechart
 
-    def update_statechart(self, statechart: Optional[ChartSnapshot]) -> None:
+    def update_statechart(self, statechart: ChartSnapshot | None) -> None:
         """Complete the latest world frame with a plan's final chart observation.
 
         A plan boundary can follow chart changes without another world update.
@@ -198,7 +197,7 @@ class Recording:
                 self._frames[-1], statechart=self._held_statechart(statechart)
             )
 
-    def stop(self) -> List[RecordedFrame]:
+    def stop(self) -> list[RecordedFrame]:
         """
         Finalize the recording and return its buffered frames.
 
@@ -224,7 +223,7 @@ class Recording:
             self._frames = []
             self._tick_times = []
 
-    def frames_in(self, frame_range: FrameRange) -> List[RecordedFrame]:
+    def frames_in(self, frame_range: FrameRange) -> list[RecordedFrame]:
         """
         The buffered frames a range selects, in recording order.
 
@@ -270,7 +269,7 @@ class Recording:
             return fallback
         return max(1.0, round(len(self._tick_times) / duration, 2))
 
-    def status_payload(self) -> Dict[str, object]:
+    def status_payload(self) -> dict[str, object]:
         """
         What the viewer polls to show recording/playback controls.
         """

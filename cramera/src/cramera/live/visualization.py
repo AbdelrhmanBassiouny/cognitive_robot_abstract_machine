@@ -11,7 +11,7 @@ import atexit
 from dataclasses import dataclass, field
 from functools import partial
 
-from typing_extensions import Any, Callable, Optional, TYPE_CHECKING
+from typing_extensions import Any, Callable, TYPE_CHECKING
 
 from coraplex.plans.plan_callbacks import PlanCallback
 from coraplex.plans.plan_node import MotionNode, PlanNode
@@ -161,7 +161,7 @@ class BridgePlanCallback(PlanCallback, StateHistoryObserver):
 
 
 def _finalize_recording_at_exit(
-    bridge: Bridge, recording: Optional[Recording] = None
+    bridge: Bridge, recording: Recording | None = None
 ) -> None:
     """
     Best-effort safety net: write the current recording to disk if the process is about
@@ -211,22 +211,22 @@ class LiveVisualization(PlanVisualization):
     The bridge translating between the world and the viewer.
     """
 
-    state_sync: Optional[WorldStateSync] = field(init=False, default=None)
+    state_sync: WorldStateSync | None = field(init=False, default=None)
     """
     The callback publishing state changes, while started.
     """
 
-    model_sync: Optional[WorldModelSync] = field(init=False, default=None)
+    model_sync: WorldModelSync | None = field(init=False, default=None)
     """
     The callback refreshing the catalogs on model changes, while started.
     """
 
-    marker_listener: Optional[RosMarkerListener] = field(init=False, default=None)
+    marker_listener: RosMarkerListener | None = field(init=False, default=None)
     """
     The ROS marker subscription feeding the debug overlay, when ROS is available.
     """
 
-    _recording: Optional[Recording] = field(init=False, default=None)
+    _recording: Recording | None = field(init=False, default=None)
     """
     The capture owned by this visualization session.
     """
@@ -236,7 +236,7 @@ class LiveVisualization(PlanVisualization):
     Automatic queries owned by this visualization's world attachment.
     """
 
-    _exit_callback: Optional[Callable[[], None]] = field(init=False, default=None)
+    _exit_callback: Callable[[], None] | None = field(init=False, default=None)
     """
     The registered finalizer for this session's capture.
     """

@@ -11,7 +11,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from typing_extensions import Any, ClassVar, Dict, List, Optional, Set, Tuple
+from typing_extensions import Any, ClassVar
 
 from cramera import paths
 from cramera.knowledge.architecture_entities import Package, PythonClass
@@ -41,17 +41,17 @@ class ArchitectureScan:
     The CRAM repository's static architecture graph.
     """
 
-    packages: List[Package]
+    packages: list[Package]
     """
     Every top-level package found.
     """
 
-    classes: List[PythonClass]
+    classes: list[PythonClass]
     """
     Every class found across all packages.
     """
 
-    dependency_edges: List[PackageDependency]
+    dependency_edges: list[PackageDependency]
     """
     Cross-package import edges.
     """
@@ -67,17 +67,17 @@ class RawArchitectureScan:
     because the cache is plain JSON and a full scan takes seconds.
     """
 
-    packages: List[Dict[str, Any]] = field(default_factory=list)
+    packages: list[dict[str, Any]] = field(default_factory=list)
     """
     One dict per workspace member: name, description and its two counts.
     """
 
-    classes: List[Dict[str, Any]] = field(default_factory=list)
+    classes: list[dict[str, Any]] = field(default_factory=list)
     """
     One dict per scanned class, without its subpackage — that is derived on typing.
     """
 
-    dependency_edges: List[Tuple[str, str]] = field(default_factory=list)
+    dependency_edges: list[tuple[str, str]] = field(default_factory=list)
     """
     Sorted ``(importing package, imported package)`` pairs.
     """
@@ -106,7 +106,7 @@ class ArchitectureScanner:
     GENERATED_MAPPING_FILE: ClassVar[str] = "ormatic_interface.py"
     """Generated database mappings omitted from the architecture graph."""
 
-    SKIPPED_DIRECTORIES: ClassVar[Set[str]] = {
+    SKIPPED_DIRECTORIES: ClassVar[set[str]] = {
         "__pycache__",
         "node_modules",
         "doc",
@@ -120,7 +120,7 @@ class ArchitectureScanner:
     Directories never descended into during the architecture scan.
     """
 
-    PACKAGE_DESCRIPTIONS: ClassVar[Dict[str, str]] = {
+    PACKAGE_DESCRIPTIONS: ClassVar[dict[str, str]] = {
         "krrood": "knowledge representation & reasoning through OO design (home of EQL)",
         "coraplex": "the plan executive: designators, plans, locations",
         "pycram": "legacy plan executive (resources/demos)",
@@ -146,7 +146,7 @@ class ArchitectureScanner:
     """
 
     @classmethod
-    def of_configured_root(cls) -> "ArchitectureScanner":
+    def of_configured_root(cls) -> ArchitectureScanner:
         """
         A scanner for the repository :func:`cramera.paths.architecture_root` points at.
         """
@@ -203,7 +203,7 @@ class ArchitectureScanner:
 
         package_directories = self._package_directories()
         package_names = set(package_directories)
-        imports: Dict[str, Set[str]] = {}
+        imports: dict[str, set[str]] = {}
         modules_per_package = {
             package: self._scan_package_modules(
                 package, base, package_names, raw.classes, imports
@@ -229,7 +229,7 @@ class ArchitectureScanner:
         )
         return raw
 
-    def _package_directories(self) -> Dict[str, str]:
+    def _package_directories(self) -> dict[str, str]:
         """
         Every workspace member of the repository, plus ``root`` for its loose scripts.
         """
@@ -249,9 +249,9 @@ class ArchitectureScanner:
         self,
         package: str,
         base: str,
-        package_names: Set[str],
-        classes: List[Dict[str, Any]],
-        imports: Dict[str, Set[str]],
+        package_names: set[str],
+        classes: list[dict[str, Any]],
+        imports: dict[str, set[str]],
     ) -> int:
         """
         Parse every module of one package, collecting its classes and imports.
@@ -290,7 +290,7 @@ class ArchitectureScanner:
         return module_count
 
     @staticmethod
-    def _parsed_module(path: str) -> Optional[ast.Module]:
+    def _parsed_module(path: str) -> ast.Module | None:
         """
         One module's syntax tree, or None when it cannot be parsed.
 
@@ -311,8 +311,8 @@ class ArchitectureScanner:
         package: str,
         module: str,
         package_names: set,
-        classes: List[Dict[str, Any]],
-        imports: Dict[str, set],
+        classes: list[dict[str, Any]],
+        imports: dict[str, set],
     ) -> None:
         """
         Collect class definitions and cross-package imports from one module.
@@ -364,7 +364,7 @@ class ArchitectureScanner:
                     if root in package_names and root != package:
                         imports.setdefault(package, set()).add(root)
 
-    def _load_cache(self, cram_root: str, require_classes: bool) -> Optional[tuple]:
+    def _load_cache(self, cram_root: str, require_classes: bool) -> tuple | None:
         """
         The cached scan if it is usable, else None.
 

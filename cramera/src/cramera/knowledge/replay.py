@@ -7,7 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from typing_extensions import Any, ClassVar, Dict
+from typing_extensions import Any, ClassVar
 
 
 @dataclass(frozen=True)
@@ -49,7 +49,7 @@ class ReplayWindow:
         at = moment.timestamp()
         return cls(start=at - cls.LEAD_SECONDS, end=at + cls.TAIL_SECONDS)
 
-    def to_payload(self) -> Dict[str, Any]:
+    def to_payload(self) -> dict[str, Any]:
         """
         The JSON shape the viewer opens a replay from.
         """

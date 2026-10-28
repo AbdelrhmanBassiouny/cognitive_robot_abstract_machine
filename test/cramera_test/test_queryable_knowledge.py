@@ -14,7 +14,7 @@ import pytest
 
 krrood = pytest.importorskip("krrood", reason="EQL requires krrood")
 
-from typing_extensions import Any, List  # noqa: E402
+from typing_extensions import Any
 
 from cramera.knowledge.query_domain import QueryDomain  # noqa: E402
 from cramera.knowledge.queryable_knowledge import (  # noqa: E402
@@ -62,7 +62,7 @@ class TestQueryableKnowledge:
         assert isinstance(knowledge.evaluation, InMemoryEvaluation)
 
     def test_declared_domains_are_the_ones_offered(self):
-        domains: List[QueryDomain] = [QueryDomain("record", NamedRecord, [])]
+        domains: list[QueryDomain] = [QueryDomain("record", NamedRecord, [])]
         knowledge = QueryableKnowledge(
             scope=QueryScope.EPISODIC_MEMORY,
             domains=domains,

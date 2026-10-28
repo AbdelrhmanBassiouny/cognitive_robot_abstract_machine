@@ -12,7 +12,7 @@ from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.world_entity import Body
-from typing_extensions import Any, List
+from typing_extensions import Any
 
 from cramera.live.bridge import Bridge
 from cramera.live.markers import MarkerEntry, MarkerStore
@@ -68,7 +68,7 @@ class MimicMarker:
     pose: MimicPose = field(default_factory=MimicPose)
     scale: Point = field(default_factory=lambda: Point(0.1, 0.1, 0.1))
     color: Color = field(default_factory=Color)
-    points: List[Any] = field(default_factory=list)
+    points: list[Any] = field(default_factory=list)
     text: str = ""
 
 
@@ -221,7 +221,7 @@ class RecordingListener:
     A marker listener mimic recording what the settings ask of it.
     """
 
-    topics: List[str] = field(default_factory=lambda: ["/semworld/viz_marker"])
+    topics: list[str] = field(default_factory=lambda: ["/semworld/viz_marker"])
 
     def subscribe(self, topic: str) -> None:
         if topic not in self.topics:
@@ -231,10 +231,10 @@ class RecordingListener:
         if topic in self.topics:
             self.topics.remove(topic)
 
-    def subscribed_topics(self) -> List[str]:
+    def subscribed_topics(self) -> list[str]:
         return sorted(self.topics)
 
-    def available_marker_topics(self) -> List[str]:
+    def available_marker_topics(self) -> list[str]:
         return ["/coraplex/viz_marker", "/semworld/viz_marker"]
 
 

@@ -7,7 +7,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 
 from coraplex.datastructures.enums import JointType
-from typing_extensions import Any, ClassVar, Dict, List, Optional, TYPE_CHECKING
+from typing_extensions import Any, ClassVar, TYPE_CHECKING
 
 from cramera.knowledge.enums import EdgeKind, KinematicChainGroup, SceneEntityPrefix
 from cramera.knowledge.scene_bundle import ParsedUrdf
@@ -32,7 +32,7 @@ class UrdfViewPayload(GraphPanelPayload):
     The scene robot's URDF as a kinematic tree.
     """
 
-    TAB: ClassVar[Optional[str]] = "kinematics"
+    TAB: ClassVar[str | None] = "kinematics"
     """
     Tab identifier used to select this payload type before constructing its view.
     """
@@ -42,16 +42,16 @@ class UrdfViewPayload(GraphPanelPayload):
     Breadcrumb label shown above the tree.
     """
 
-    legend: Optional[List[LegendEntry]] = None
+    legend: list[LegendEntry] | None = None
     """
     Robot-part colour legend, or None when the URDF could not be read.
     """
 
-    def panel_options(self) -> Dict[str, Any]:
+    def panel_options(self) -> dict[str, Any]:
         """
         The breadcrumb, plus the part legend once the URDF has been read.
         """
-        options: Dict[str, Any] = {"breadcrumb": self.breadcrumb}
+        options: dict[str, Any] = {"breadcrumb": self.breadcrumb}
         if self.legend is not None:
             options["legend"] = [asdict(entry) for entry in self.legend]
         return options
