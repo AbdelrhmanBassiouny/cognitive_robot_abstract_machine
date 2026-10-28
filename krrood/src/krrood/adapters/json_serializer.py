@@ -899,7 +899,7 @@ class NumpyNDarrayJSONSerializer(ExternalClassJSONSerializer[np.ndarray]):
         :raises ObjectArraySerializationError: If the array holds Python objects.
         """
         if obj.dtype.hasobject:
-            raise ObjectArraySerializationError(element_type=str(obj.dtype))
+            raise ObjectArraySerializationError(element_type=obj.dtype)
         return {
             JSONField.TYPE: get_full_class_name(type(obj)),
             NumpyArrayJSONKey.ELEMENT_TYPE: obj.dtype.str,

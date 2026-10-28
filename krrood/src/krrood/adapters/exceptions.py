@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing_extensions import Any
+from typing_extensions import Any, TYPE_CHECKING
 
 from krrood.adapters.json_field import JSONField
 from krrood.exceptions import DataclassException
+
+if TYPE_CHECKING:
+    import numpy as np
 
 
 @dataclass
@@ -132,7 +135,7 @@ class ObjectArraySerializationError(JSONSerializationError):
     references rather than values.
     """
 
-    element_type: str
+    element_type: np.dtype
     """
     The element type of the array.
     """
