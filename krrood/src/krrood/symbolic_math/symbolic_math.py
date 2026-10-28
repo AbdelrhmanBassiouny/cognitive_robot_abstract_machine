@@ -2438,10 +2438,10 @@ def logic_not(expression: ScalarData) -> Scalar:
     return ~expression
 
 
-def logic_to_str(expression: ScalarData) -> str:
+def boolean_expression_to_str(expression: ScalarData) -> str:
     """
-    Renders an expression built from the two-valued logic operators, with every variable
-    quoted by its name.
+    Renders a boolean expression, with every variable quoted by its name. Unlike
+    :meth:`Scalar.__str__`, it accepts only boolean expressions.
 
     :param expression: The expression to render.
     :return: The rendered expression, using ``and``, ``or``, ``not``, ``True`` and
@@ -2453,23 +2453,23 @@ def logic_to_str(expression: ScalarData) -> str:
     if casadi_expression.is_symbolic():
         return f'"{casadi_expression}"'
     if casadi_expression.is_constant():
-        return _logic_constant_to_str(expression, float(casadi_expression))
+        return _boolean_constant_to_str(expression, float(casadi_expression))
     match casadi_expression.op():
         case ca.OP_AND:
-            left = logic_to_str(casadi_expression.dep(0))
-            right = logic_to_str(casadi_expression.dep(1))
+            left = boolean_expression_to_str(casadi_expression.dep(0))
+            right = boolean_expression_to_str(casadi_expression.dep(1))
             return f"({left} and {right})"
         case ca.OP_OR:
-            left = logic_to_str(casadi_expression.dep(0))
-            right = logic_to_str(casadi_expression.dep(1))
+            left = boolean_expression_to_str(casadi_expression.dep(0))
+            right = boolean_expression_to_str(casadi_expression.dep(1))
             return f"({left} or {right})"
         case ca.OP_NOT:
-            return f"not {logic_to_str(casadi_expression.dep(0))}"
+            return f"not {boolean_expression_to_str(casadi_expression.dep(0))}"
         case _:
             raise CannotConvertToStringError(expression=expression)
 
 
-def _logic_constant_to_str(expression: ScalarData, value: float) -> str:
+def _boolean_constant_to_str(expression: ScalarData, value: float) -> str:
     """
     :param expression: The constant expression being rendered, reported if it is
         neither true nor false.

@@ -183,7 +183,7 @@ class TransitionCondition(SubclassJSONSerializer):
         :param new_expression: The expression to validate.
         :raises CannotConvertToStringError: If `new_expression` has no rendered form.
         """
-        sm.logic_to_str(new_expression)
+        sm.boolean_expression_to_str(new_expression)
 
     def _check_no_terminal_node(self, new_expression: Scalar) -> None:
         """
@@ -260,7 +260,7 @@ class TransitionCondition(SubclassJSONSerializer):
         free_symbols = self.expression.free_variables()
         if not free_symbols:
             return str(self.expression.is_constant_true())
-        rendered_condition = sm.logic_to_str(self.expression)
+        rendered_condition = sm.boolean_expression_to_str(self.expression)
         for variable in free_symbols:
             rendered_condition = rendered_condition.replace(
                 variable.name, name_variable(variable)

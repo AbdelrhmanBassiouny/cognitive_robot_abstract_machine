@@ -14,4 +14,4 @@ repos:
         language: python
         additional_dependencies: ["black==25.11.0", "docformatter==1.7.8", "typing_extensions", "tqdm"]
         files: \.py$
-        exclude: (?x)^(.*/ormatic_interface\.py)$
+        exclude: (?x)^(.*/ormatic_interface\.py|segmind/src/segmind/detectors/models/.*_rdr\.py|segmind/src/segmind/detectors/models/.*_scrdr(_cases|_defs)?\.py)$
