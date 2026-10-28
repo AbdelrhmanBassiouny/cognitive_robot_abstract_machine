@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import pickle
+import tempfile
 from dataclasses import dataclass, field
 
 import pandas as pd
@@ -67,16 +68,20 @@ def load_cached_dataset(cache_file) -> Optional[ZooDataset]:
     return ZooDataset(**parts)
 
 
-def save_dataset_to_cache(dataset: ZooDataset, cache_file):
+def save_dataset_to_cache(dataset: ZooDataset, cache_file: str) -> None:
     """
     Saves only essential parts of the dataset to cache.
+
+    Each part file appears only once it is completely written, so a concurrent
+    :func:`load_cached_dataset` never reads a partially written part.
     """
-    with open(cache_file.replace(".pkl", "_features.pkl"), "wb") as f:
-        pickle.dump(dataset.features, f)
-    with open(cache_file.replace(".pkl", "_targets.pkl"), "wb") as f:
-        pickle.dump(dataset.targets, f)
-    with open(cache_file.replace(".pkl", "_ids.pkl"), "wb") as f:
-        pickle.dump(dataset.ids, f)
+    for key, part in vars(dataset).items():
+        part_file = cache_file.replace(".pkl", f"_{key}.pkl")
+        with tempfile.NamedTemporaryFile(
+            directory=os.path.dirname(part_file), delete=False
+        ) as temporary_file:
+            pickle.dump(part, temporary_file)
+        os.replace(temporary_file.name, part_file)
     logger.info("Dataset cached successfully.")
 
 
