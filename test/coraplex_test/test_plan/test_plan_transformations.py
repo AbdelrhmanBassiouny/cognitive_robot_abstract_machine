@@ -1,3 +1,4 @@
+import itertools
 import logging
 from dataclasses import dataclass
 
@@ -17,6 +18,7 @@ from coraplex.plans.plan_transformation import (
     PlanTransformation,
 )
 from coraplex.plans.underspecified import UnderspecifiedNode
+from coraplex.querying.predicates import IsAmongTheClosestGraspsTo
 from coraplex.robot_plans.actions.core.misc import DetectAction
 from coraplex.robot_plans.actions.composite.facing import FaceAndLookAtAction
 from coraplex.robot_plans.actions.core.navigation import (
@@ -699,7 +701,9 @@ def handle_opened_by(opening: Match) -> Handle:
     :param opening: The step that opens a drawer.
     :return: The handle it opens the drawer by.
     """
-    return opening._kwargs_["open_container"]._kwargs_["handle"]
+    grasps = opening._kwargs_["open_container"]._kwargs_["grasp"]._domain_.domain
+    [handle] = {grasp.graspable for grasp in grasps}
+    return handle
 
 
 def arm_opening_with(opening: Match) -> Arm:
@@ -786,6 +790,44 @@ def test_opening_a_drawer_tries_its_standing_pose_with_the_opening(
 
     assert opening._type_ is MoveAndOpenAction
     assert handle_opened_by(opening) is drawer.handle
+
+
+def test_opening_a_drawer_takes_the_handle_by_its_grasp_closest_to_the_standing_pose(
+    pr2_apartment_context,
+):
+    """
+    The handle offers a grasp from every side, so each standing pose is tried with the
+    one grasp that approaches the handle from there.
+    """
+    world, view, context = pr2_apartment_context
+    drawer = drawer_holding(world.get_semantic_annotations_by_type(Spoon)[0], world)
+    [opening] = OpenDrawerBeforeMoveAndPickUp().opening_nodes(
+        drawer, view.right_arm, context
+    )
+    grasps = drawer.handle.grasp_candidates()
+
+    openings = list(itertools.islice(context.query_backend.evaluate(opening), 2))
+
+    assert (
+        len({id(move_and_open.navigate.target_location) for move_and_open in openings})
+        == 2
+    )
+    for move_and_open in openings:
+        [closest_grasp] = [
+            grasp
+            for grasp in grasps
+            if IsAmongTheClosestGraspsTo(
+                grasp,
+                move_and_open.navigate.target_location,
+                grasps,
+                number_of_grasps=1,
+            )()
+        ]
+        np.testing.assert_allclose(
+            move_and_open.open_container.grasp.grasp_pose.to_np(),
+            closest_grasp.grasp_pose.to_np(),
+            atol=1e-9,
+        )
 
 
 def test_opening_a_drawer_stands_where_it_is_opened_from(pr2_apartment_context):

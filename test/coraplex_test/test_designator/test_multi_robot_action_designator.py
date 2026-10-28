@@ -271,11 +271,15 @@ def multiple_robot_apartment_context(
         if isinstance(view, HasMobileBase)
         else False
     )
-    yield world, view, Context(
+    yield (
         world,
         view,
-        alternative_motion_mappings=ALTERNATIVE_MOTION_MAPPINGS,
-        sampling_seed=SAMPLING_SEED,
+        Context(
+            world,
+            view,
+            alternative_motion_mappings=ALTERNATIVE_MOTION_MAPPINGS,
+            sampling_seed=SAMPLING_SEED,
+        ),
     )
     view.mobile_base.full_body_controlled = full_body_controlled
     snapshot.restore()
@@ -667,7 +671,9 @@ def test_open(multiple_robot_apartment_context):
                 )
             ),
             OpenAction(
-                _handle_annotation(world, "handle_cab10_m"),
+                GraspCandidate.from_body_origin(
+                    _handle_annotation(world, "handle_cab10_m")
+                ),
                 left_or_only_arm(context.robot),
             ),
         ],
@@ -702,7 +708,10 @@ def test_close(multiple_robot_apartment_context, rclpy_node):
                     world,
                 )
             ),
-            CloseAction(handle, left_or_only_arm(context.robot)),
+            CloseAction(
+                GraspCandidate.from_body_origin(handle),
+                left_or_only_arm(context.robot),
+            ),
         ],
         context,
     )

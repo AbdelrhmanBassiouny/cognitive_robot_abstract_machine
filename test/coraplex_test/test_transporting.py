@@ -782,7 +782,7 @@ def test_a_move_and_open_from_a_standing_position_opens_the_given_handle(
     )
 
     assert move_and_open.navigate.target_location is standing_position
-    assert move_and_open.open_container.handle is handle
+    assert move_and_open.open_container.grasp.graspable is handle
     assert move_and_open.open_container.arm is context.robot.left_arm
 
 
