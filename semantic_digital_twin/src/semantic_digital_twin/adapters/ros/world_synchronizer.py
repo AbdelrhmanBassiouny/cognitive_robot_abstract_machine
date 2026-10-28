@@ -16,6 +16,7 @@ import rclpy  # type: ignore
 import std_msgs.msg
 from rclpy.node import Node as RosNode
 from rclpy.publisher import Publisher
+from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.subscription import Subscription
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -53,6 +54,27 @@ from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import (
     WorldEntityWithClassBasedID,
 )
+
+UPDATE_QUEUE_DEPTH = 1000
+"""
+How many updates are kept for a receiver that has not taken them yet.
+
+A state update carries only the degrees of freedom that changed since the one before, so
+an update a receiver drops is lost for good: a degree of freedom that changed once and
+then held still is never heard of. A receiver busy for a second or two -- taking a look
+through a camera, say -- with updates arriving at a few hundred a second must find them
+all waiting.
+"""
+
+UPDATE_QUALITY_OF_SERVICE = QoSProfile(
+    reliability=ReliabilityPolicy.RELIABLE,
+    history=HistoryPolicy.KEEP_LAST,
+    depth=UPDATE_QUEUE_DEPTH,
+)
+"""
+How updates are published and received: reliably, keeping :data:`UPDATE_QUEUE_DEPTH` of
+them for a receiver that has fallen behind.
+"""
 
 
 class PublicationProgress(ABC):
@@ -161,10 +183,12 @@ class Synchronizer(WorldEntityWithClassBasedID, PublicationProgress):
             std_msgs.msg.String,
             topic=self.topic_name,
             callback=self.subscription_callback,
-            qos_profile=10,
+            qos_profile=UPDATE_QUALITY_OF_SERVICE,
         )
         self.publisher = self.node.create_publisher(
-            std_msgs.msg.String, topic=self.topic_name, qos_profile=10
+            std_msgs.msg.String,
+            topic=self.topic_name,
+            qos_profile=UPDATE_QUALITY_OF_SERVICE,
         )
         self.wait_until_connected()
 
