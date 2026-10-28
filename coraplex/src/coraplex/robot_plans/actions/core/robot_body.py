@@ -38,8 +38,10 @@ from semantic_digital_twin.datastructures.joint_state import JointState
 from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from semantic_digital_twin.datastructures.definitions import (
     TorsoState,
-    GripperState,
     StaticJointState,
+)
+from semantic_digital_twin.datastructures.robots.gripper_configuration import (
+    GripperConfiguration,
 )
 
 
@@ -62,21 +64,16 @@ class MoveTorsoAction(SequentialAction):
 @dataclass(eq=False, repr=False, kw_only=True)
 class SetGripperAction(GoalAction):
     """
-    Set the gripper state of the robot.
+    Moves a gripper to the given configuration.
     """
 
-    gripper: EndEffector
+    configuration: GripperConfiguration
     """
-    The gripper that should be set.
-    """
-
-    motion: GripperState
-    """
-    The motion that should be set on the gripper.
+    The configuration the gripper is to reach.
     """
 
     def create_goal(self) -> StatechartNode:
-        return self.create_finger_goal(self.gripper, self.motion)
+        return self.create_finger_goal(self.configuration)
 
 
 @dataclass(eq=False, repr=False, kw_only=True)

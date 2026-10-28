@@ -227,6 +227,61 @@ class InvalidConstraintExpressionShapeError(MotionStatechartError):
 
 
 @dataclass
+class UnknownGriplinkActionError(MotionStatechartError):
+    """
+    Raised when a griplink action server task is built for a griplink action it does not
+    build goals for.
+    """
+
+    message_type: type
+    """
+    The griplink action the task was built with.
+    """
+
+    def error_message(self) -> str:
+        return f'Cannot build a goal for the griplink action "{self.message_type.__name__}".'
+
+    def suggest_correction(self) -> str:
+        return "Build the task with Grip, Release, Flexgrip or Flexrelease."
+
+
+@dataclass
+class GriplinkParameterOutOfRangeError(MotionStatechartError):
+    """
+    Raised when a griplink parameter lies outside the interval the gripper accepts.
+    """
+
+    parameter_name: str
+    """
+    The name of the offending parameter.
+    """
+
+    value: float
+    """
+    The value the parameter was given.
+    """
+
+    lower_bound: float
+    """
+    The smallest value the gripper accepts.
+    """
+
+    upper_bound: float
+    """
+    The largest value the gripper accepts.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"Griplink parameter {self.parameter_name} is {self.value}, outside the "
+            f"valid interval [{self.lower_bound}..{self.upper_bound}]."
+        )
+
+    def suggest_correction(self) -> str:
+        return f"Choose a {self.parameter_name} within the valid interval."
+
+
+@dataclass
 class ActionClientTypeMismatchError(MotionStatechartError):
     """
     Raised when an action topic is requested with a different message type than the one

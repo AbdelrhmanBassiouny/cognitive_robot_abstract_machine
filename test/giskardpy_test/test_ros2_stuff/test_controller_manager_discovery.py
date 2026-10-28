@@ -36,7 +36,7 @@ from giskardpy.middleware.ros2.robot_interface_config import (
 )
 from giskardpy.middleware.ros2.scripts.iai_robots.daisy.configs import (
     DAiSyVelocityInterface,
-    WorldWithDaisyConfig,
+    WorldWithDAiSyConfig,
 )
 from giskardpy.middleware.ros2.scripts.iai_robots.tracy.configs import (
     TracyVelocityInterface,
@@ -669,7 +669,7 @@ def closed_loop_daisy() -> Giskard:
     A Giskard that commands DAiSy through its velocity interface.
     """
     return Giskard(
-        world_config=WorldWithDaisyConfig(urdf=load_xacro(DAiSy.get_ros_file_path())),
+        world_config=WorldWithDAiSyConfig(urdf=load_xacro(DAiSy.get_ros_file_path())),
         robot_interface_config=DAiSyVelocityInterface(),
         server_config=GiskardServerConfig(),
         qp_controller_config=QPControllerConfig(target_frequency=25),

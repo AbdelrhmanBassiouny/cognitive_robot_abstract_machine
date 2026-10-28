@@ -11,7 +11,7 @@ from giskardpy.middleware.ros2.robot_interface_config import (
     StandAloneRobotInterfaceConfig,
 )
 from giskardpy.middleware.ros2.scripts.iai_robots.daisy.configs import (
-    WorldWithDaisyConfig,
+    WorldWithDAiSyConfig,
 )
 from giskardpy.middleware.ros2.scripts.iai_robots.hsr.configs import (
     WorldWithHSRConfig,
@@ -153,7 +153,7 @@ def test_standalone_controls_the_joints_tracy_declares(init_rospy, tracy_world) 
 
 def test_standalone_controls_the_joints_daisy_declares(init_rospy, daisy_world) -> None:
     giskard = set_up_standalone(
-        WorldWithDaisyConfig(urdf=load_xacro(DAiSy.get_ros_file_path()))
+        WorldWithDAiSyConfig(urdf=load_xacro(DAiSy.get_ros_file_path()))
     )
 
     assert controlled_joint_names(giskard.world_config.world) == (

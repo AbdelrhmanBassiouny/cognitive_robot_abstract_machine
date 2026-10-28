@@ -168,7 +168,7 @@ def gripper_goal(end_effector: EndEffector, state: GripperState) -> MoveFingers:
     """
     :return: A new goal moving the gripper of `end_effector` to `state`.
     """
-    return Action.create_finger_goal(end_effector, state)
+    return Action.create_finger_goal(end_effector.default_configuration(state))
 
 
 def joint_goal_of(torso_move: MoveTorsoAction) -> JointPositionList:
@@ -1096,7 +1096,11 @@ def test_parking_ends_before_a_first_action_running_in_parallel_starts(
     world, view, extensions = pr2_apartment_context
     started_together = [
         MoveTorsoAction(torso_state=TorsoState.HIGH),
-        SetGripperAction(gripper=view.right_arm.end_effector, motion=GripperState.OPEN),
+        SetGripperAction(
+            configuration=view.right_arm.end_effector.default_configuration(
+                GripperState.OPEN
+            )
+        ),
     ]
     in_parallel = Parallel(nodes=list(started_together))
 
@@ -1116,7 +1120,9 @@ def test_parking_ends_before_a_plan_that_starts_in_parallel(pr2_apartment_contex
         nodes=[
             MoveTorsoAction(torso_state=TorsoState.HIGH),
             SetGripperAction(
-                gripper=view.right_arm.end_effector, motion=GripperState.OPEN
+                configuration=view.right_arm.end_effector.default_configuration(
+                    GripperState.OPEN
+                )
             ),
         ]
     )

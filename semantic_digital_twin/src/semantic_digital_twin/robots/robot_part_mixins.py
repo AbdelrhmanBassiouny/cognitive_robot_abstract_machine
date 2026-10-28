@@ -49,6 +49,7 @@ from semantic_digital_twin.robots.input_source import InputSource
 
 if TYPE_CHECKING:
     from rclpy.node import Node
+    from semantic_digital_twin.datastructures.joint_state import JointState
     from semantic_digital_twin.world import World
     from semantic_digital_twin.world_description.connections import (
         ActiveConnection1DOF,
@@ -418,11 +419,19 @@ class HasTwoFingers(
         """
         :param state_type: The state to stand the gripper in.
         :return: How far apart the fingertips' facing surfaces stand with the gripper in
-            that state, in metres, see :attr:`Fingertips.separation`. The world stands
-            as it did afterwards.
+            the joint state of that type, see :meth:`separation_at`.
+        """
+        return self.separation_at(self.get_joint_state_by_type(state_type))
+
+    def separation_at(self, joint_state: JointState) -> float:
+        """
+        :param joint_state: The joint state to stand the gripper in.
+        :return: How far apart the fingertips' facing surfaces stand with the gripper in
+            that joint state, in metres, see :attr:`Fingertips.separation`. The world
+            stands as it did afterwards.
         """
         with self._world.reset_state_context():
-            self.get_joint_state_by_type(state_type).apply_to(self._world)
+            joint_state.apply_to(self._world)
             return self.fingertips.separation
 
     @property

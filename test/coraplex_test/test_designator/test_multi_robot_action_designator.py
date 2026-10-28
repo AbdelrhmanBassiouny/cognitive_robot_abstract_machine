@@ -383,7 +383,10 @@ def test_move_gripper_multi(multiple_robot_apartment_context):
     end_effector = left_or_only_arm(view).end_effector
 
     for state in (GripperState.OPEN, GripperState.CLOSE):
-        run_plan(SetGripperAction(gripper=end_effector, motion=state), extensions)
+        run_plan(
+            SetGripperAction(configuration=end_effector.default_configuration(state)),
+            extensions,
+        )
 
         if isinstance(end_effector, HasTwoFingers):
             assert end_effector.fingertips.separation == pytest.approx(
@@ -1238,7 +1241,9 @@ def test_set_gripper_drives_the_gripper_it_names(multiple_robot_apartment_contex
     """
     _, robot, extensions = multiple_robot_apartment_context
     end_effector = left_or_only_arm(robot).end_effector
-    action = SetGripperAction(gripper=end_effector, motion=GripperState.OPEN)
+    action = SetGripperAction(
+        configuration=end_effector.default_configuration(GripperState.OPEN)
+    )
 
     expand(action, extensions)
 

@@ -126,7 +126,9 @@ class MovesContainerByItsHandle(
                 approach_clearance=self.approach_clearance,
             ),
             self._create_mechanism_goal(),
-            self.create_finger_goal(end_effector, GripperState.OPEN),
+            self.create_finger_goal(
+                end_effector.default_configuration(GripperState.OPEN)
+            ),
             self.tool_center_point_goal(
                 self.back_off_pose(self.grasp.grasp_pose, end_effector),
                 self.arm,
