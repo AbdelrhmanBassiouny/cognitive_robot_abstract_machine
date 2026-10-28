@@ -8,7 +8,6 @@ from dataclasses import dataclass
 
 from cramera.knowledge.entity import NamedEntity
 
-from typing_extensions import Optional
 
 from cramera.robot_parts import ArmSide
 from semantic_digital_twin.spatial_types import Point3
@@ -22,13 +21,13 @@ class Gripper(NamedEntity):
     An end effector of the recorded robot.
     """
 
-    side: Optional[ArmSide]
+    side: ArmSide | None
     """
     Which arm the gripper belongs to, or None for a robot that does not specify a left
     and a right arm.
     """
 
-    opening_metres: Optional[float] = None
+    opening_metres: float | None = None
     """
     Maximum opening width in metres as recorded by the onboarder, or None when the
     bundle does not report one.
@@ -41,7 +40,7 @@ class RecordedArm(NamedEntity):
     A manipulator of the recorded robot.
     """
 
-    side: Optional[ArmSide]
+    side: ArmSide | None
     """
     Which arm this is, or None for a robot that does not specify a left and a right arm.
     """
@@ -85,7 +84,7 @@ class BenchObject(NamedEntity):
     Human-readable display name.
     """
 
-    height_metres: Optional[float]
+    height_metres: float | None
     """
     Object height in metres as recorded by the onboarder, or None when the bundle does
     not report one (the object's shapes carry no measurable size).
@@ -153,17 +152,17 @@ class ActionEpisode(NamedEntity):
     Episode duration in seconds.
     """
 
-    performed_by: Optional[RecordedArm]
+    performed_by: RecordedArm | None
     """
     The arm that performed the manipulation, if any.
     """
 
-    picks: Optional[BenchObject]
+    picks: BenchObject | None
     """
     The object the episode picks up, if any.
     """
 
-    places_at: Optional[BenchObject]
+    places_at: BenchObject | None
     """
     The location the object is placed at, if any.
     """

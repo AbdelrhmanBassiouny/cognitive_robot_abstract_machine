@@ -4,7 +4,7 @@ Tests for reading a world's sem_dt robot-part annotations and publishing them.
 
 from dataclasses import dataclass, field
 
-from typing_extensions import Any, List, Optional
+from typing_extensions import Any
 
 from cramera.robot_parts import (
     ArmSide,
@@ -30,7 +30,7 @@ class PartWithBodies:
     A robot part exposing the bodies whose link names get published.
     """
 
-    bodies: List[Any] = field(default_factory=list)
+    bodies: list[Any] = field(default_factory=list)
 
 
 @dataclass
@@ -46,7 +46,7 @@ class ArmPart(PartWithBodies):
     An arm, optionally carrying an end effector.
     """
 
-    end_effector: Optional[EndEffectorPart] = None
+    end_effector: EndEffectorPart | None = None
 
 
 @dataclass
@@ -59,7 +59,7 @@ class TwoArmedRobot:
     right: ArmPart
 
     @property
-    def all_arms(self) -> List[ArmPart]:
+    def all_arms(self) -> list[ArmPart]:
         return [self.left, self.right]
 
     @property
@@ -87,7 +87,7 @@ class OneArmedRobot:
     """
 
     @property
-    def all_arms(self) -> List[ArmPart]:
+    def all_arms(self) -> list[ArmPart]:
         return [self.arm]
 
     @property

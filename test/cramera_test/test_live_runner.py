@@ -11,7 +11,7 @@ import sys
 from dataclasses import dataclass, field
 
 from semantic_digital_twin.world import World
-from typing_extensions import Any, Dict, List
+from typing_extensions import Any
 
 from cramera.live import runner, visualization
 
@@ -46,7 +46,7 @@ class TestStart:
 
 class TestMain:
     def test_main_preselects_the_cramera_backend_and_runs_the_demo(self, monkeypatch):
-        run_calls: List[Dict[str, Any]] = []
+        run_calls: list[dict[str, Any]] = []
         # main() preselects the backend by writing the real environment, and monkeypatch
         # records an undo only for a variable that was there: setting it first, then
         # deleting it, leaves the test with none and still restores that afterwards

@@ -11,7 +11,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from typing_extensions import Optional
 
 from semantic_digital_twin.spatial_types import Point3, Pose
 
@@ -73,7 +72,7 @@ class RecordWithClassLevelDefaults:
     What the rendered row is titled with.
     """
 
-    _bookkeeping_: Optional[str] = field(
+    _bookkeeping_: str | None = field(
         default=None, init=False, repr=False, compare=False
     )
     """

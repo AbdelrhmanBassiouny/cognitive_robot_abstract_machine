@@ -6,8 +6,6 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from typing_extensions import Optional, Tuple
-
 
 class MeshFormat(StrEnum):
     """
@@ -35,14 +33,14 @@ class MeshFormat(StrEnum):
     """
 
     @classmethod
-    def suffixes(cls) -> Tuple[str, ...]:
+    def suffixes(cls) -> tuple[str, ...]:
         """
         Every known mesh suffix, in the order the members are declared.
         """
         return tuple(member.value for member in cls)
 
     @classmethod
-    def of_path(cls, path: str) -> Optional[MeshFormat]:
+    def of_path(cls, path: str) -> MeshFormat | None:
         """
         The format a path names, or None when it names no mesh at all.
 

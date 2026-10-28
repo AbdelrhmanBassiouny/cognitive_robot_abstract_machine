@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import Any, ClassVar, Dict, Optional, TYPE_CHECKING
+from typing_extensions import Any, ClassVar, TYPE_CHECKING
 
 from cramera.knowledge.recorded_statecharts import RecordedStatecharts
 from cramera.knowledge.subgraph import GraphPanelPayload
@@ -27,7 +27,7 @@ class ChartViewPayload(GraphPanelPayload):
     show.
     """
 
-    TAB: ClassVar[Optional[str]] = "chart"
+    TAB: ClassVar[str | None] = "chart"
 
     breadcrumb: str = "motion statechart"
     """
@@ -66,7 +66,7 @@ class ChartViewPayload(GraphPanelPayload):
         """
         return cls(recorded=RecordedStatecharts.of_scene(knowledge_base.scene_name))
 
-    def panel_options(self) -> Dict[str, Any]:
+    def panel_options(self) -> dict[str, Any]:
         """
         The breadcrumb and the live/layout flags the statechart tab is rendered with,
         plus the recorded statecharts a replay follows.
