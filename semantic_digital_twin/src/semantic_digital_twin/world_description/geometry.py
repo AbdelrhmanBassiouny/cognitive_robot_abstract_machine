@@ -687,7 +687,19 @@ class Mesh(Shape):
         :param process: Whether trimesh merges vertices and drops degenerate faces.
         :return: The loaded mesh, measured in meters, without a copy of the raw file.
         """
-        mesh = trimesh.load_mesh(filename, process=process)
+        scene = trimesh.load_scene(filename, process=process)
+        placements = [scene.graph[node] for node in scene.graph.nodes_geometry]
+        # Merging the scene into one mesh copies even a file's only mesh twice, and
+        # trimesh converts the colours of every copy, so a lone mesh in place is taken
+        # as it is.
+        if (
+            len(placements) == 1
+            and np.allclose(placements[0][0], np.eye(4))
+            and isinstance(scene.geometry[placements[0][1]], trimesh.Trimesh)
+        ):
+            mesh = scene.geometry[placements[0][1]]
+        else:
+            mesh = scene.to_mesh()
         mesh.metadata.pop(TrimeshMetadataKey.RAW_PLY_FILE, None)
         if mesh.units is not None:
             mesh.convert_units("meters")

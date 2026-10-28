@@ -416,6 +416,15 @@ def test_an_array_keeps_its_shape_and_element_type_exactly():
     np.testing.assert_array_equal(result, obj)
 
 
+def test_an_array_without_dimensions_keeps_its_shape():
+    obj = np.array(2.5)
+
+    result = from_json(to_json(obj))
+
+    assert result.shape == obj.shape
+    assert result == obj
+
+
 def test_serializing_an_array_holds_less_than_twice_its_bytes():
     """
     Large arrays, such as the vertices of a mesh, are serialized whenever they are

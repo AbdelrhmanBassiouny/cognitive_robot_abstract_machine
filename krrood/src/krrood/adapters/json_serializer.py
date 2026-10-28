@@ -900,14 +900,13 @@ class NumpyNDarrayJSONSerializer(ExternalClassJSONSerializer[np.ndarray]):
         """
         if obj.dtype.hasobject:
             raise ObjectArraySerializationError(element_type=str(obj.dtype))
-        contiguous = np.ascontiguousarray(obj)
         return {
             JSONField.TYPE: get_full_class_name(type(obj)),
-            NumpyArrayJSONKey.ELEMENT_TYPE: contiguous.dtype.str,
-            NumpyArrayJSONKey.SHAPE: list(contiguous.shape),
-            NumpyArrayJSONKey.ELEMENTS: base64.b64encode(contiguous.tobytes()).decode(
-                "ascii"
-            ),
+            NumpyArrayJSONKey.ELEMENT_TYPE: obj.dtype.str,
+            NumpyArrayJSONKey.SHAPE: list(obj.shape),
+            NumpyArrayJSONKey.ELEMENTS: base64.b64encode(
+                np.require(obj, requirements="C")
+            ).decode("ascii"),
         }
 
     @classmethod

@@ -425,6 +425,41 @@ def test_a_mesh_read_from_a_ply_file_keeps_no_copy_of_the_raw_file(tmp_path):
     assert TrimeshMetadataKey.RAW_PLY_FILE not in mesh.mesh.metadata
 
 
+def test_a_file_of_one_mesh_in_place_is_read_without_merging_its_scene(
+    tmp_path, monkeypatch
+):
+    """
+    Every serialization of a mesh reads its file again, and merging the file's scene
+    copies the mesh twice, converting its colours each time.
+    """
+    mesh = Mesh.from_trimesh(mesh=trimesh.creation.box(), directory=tmp_path)
+
+    def merge_scene(scene: trimesh.Scene) -> trimesh.Trimesh:
+        raise AssertionError("the scene of a file of one mesh in place was merged")
+
+    monkeypatch.setattr(trimesh.Scene, "to_mesh", merge_scene)
+
+    np.testing.assert_array_equal(
+        mesh.unscaled_mesh.faces, trimesh.creation.box().faces
+    )
+
+
+def test_a_file_of_several_meshes_reads_as_all_of_them_in_place(tmp_path):
+    scene = trimesh.Scene()
+    scene.add_geometry(trimesh.creation.box(extents=(1.0, 1.0, 1.0)), node_name="first")
+    scene.add_geometry(
+        trimesh.creation.box(extents=(1.0, 1.0, 1.0)),
+        node_name="moved",
+        transform=trimesh.transformations.translation_matrix([3.0, 0.0, 0.0]),
+    )
+    file_path = tmp_path / "two_boxes.glb"
+    scene.export(str(file_path))
+
+    mesh = Mesh(filename=str(file_path))
+
+    np.testing.assert_allclose(mesh.unscaled_mesh.bounds, scene.bounds)
+
+
 # %% the units a mesh file declares
 
 
