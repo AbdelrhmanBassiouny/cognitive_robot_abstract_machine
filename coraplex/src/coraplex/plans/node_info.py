@@ -71,9 +71,9 @@ class NodeDetailRenderer:
         """
         :param field_values: The values of a description's fields, by field name.
         :return: Each field's name followed by its value, rendered as nested in the
-            description.
+            description, one field per line.
         """
-        return NodeDetailNotation.PART_SEPARATOR.join(
+        return NodeDetailNotation.FIELD_SEPARATOR.join(
             f"{name} {self.render(value, nested=True)}"
             for name, value in field_values.items()
         )
@@ -283,12 +283,14 @@ class NodeInfoSection:
 
     def to_lines(self) -> list[str]:
         """
-        :return: The heading followed by one line per detail, its value written by
+        :return: The heading followed by the lines of each detail, its value written by
             :class:`NodeDetailRenderer`.
         """
         renderer = NodeDetailRenderer()
         return [f"--- {self.heading} ---"] + [
-            f"{name}: {renderer.render(value)}" for name, value in self.entries.items()
+            line
+            for name, value in self.entries.items()
+            for line in f"{name}: {renderer.render(value)}".splitlines()
         ]
 
 

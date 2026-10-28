@@ -530,7 +530,12 @@ class NodeDetailNotation(StrEnum):
     PART_SEPARATOR = ", "
     """
     Joins the parts of a value that has several, such as a pose's coordinates or the
-    fields of a nested description.
+    items of a list.
+    """
+
+    FIELD_SEPARATOR = "\n"
+    """
+    Joins the fields of a description or a match, so each field starts a line of its own.
     """
 
     MATCH_SEPARATOR = ": "

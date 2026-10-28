@@ -239,7 +239,7 @@ def test_a_description_is_shown_by_the_fields_that_hold_a_value():
         torso=DescriptionOfATorsoState(TorsoState.MID), height=0.5
     )
 
-    assert renderer.render(description) == NodeDetailNotation.PART_SEPARATOR.join(
+    assert renderer.render(description) == NodeDetailNotation.FIELD_SEPARATOR.join(
         [
             f"torso {DescriptionOfATorsoState.__name__}",
             f"height {renderer.render(description.height)}",
@@ -300,3 +300,24 @@ def test_a_section_shows_each_detail_readably():
     )
 
     assert raw.to_lines() == readable.to_lines()
+
+
+def test_a_detail_with_several_fields_shows_each_field_on_its_own_line():
+    """
+    A detail whose value has several fields spans one line per field.
+    """
+    renderer = NodeDetailRenderer()
+    description = DescriptionNestingADescription(
+        torso=DescriptionOfATorsoState(TorsoState.MID), height=0.5
+    )
+    section = NodeInfoSection(
+        NodeDetail.DESIGNATOR_PARAMETER, {"description": description}
+    )
+    first_field_only = NodeInfoSection(
+        NodeDetail.DESIGNATOR_PARAMETER,
+        {"description": f"torso {DescriptionOfATorsoState.__name__}"},
+    )
+
+    assert section.to_lines() == first_field_only.to_lines() + [
+        f"height {renderer.render(description.height)}"
+    ]
