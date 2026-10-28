@@ -261,8 +261,8 @@ run(Sequence(nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH),
 
 ## Opening
 
-Opening allows the robot to open a drawer, the drawer is identified by an ObjectPart designator which describes the
-handle of the drawer that should be grasped.
+Opening allows the robot to open a drawer, grabbing the drawer's handle by a grasp. `OpenAction.from_handle` tries the
+grasps the handle offers, the one closest to where the robot stands first.
 
 For the moment this designator works only in the apartment environment, therefore we remove the kitchen and spawn the
 apartment.
@@ -292,8 +292,7 @@ run(Sequence(nodes=[
 
 ## Closing
 
-Closing lets the robot close an open drawer, like opening the drawer is identified by an ObjectPart designator
-describing the handle to be grasped.
+Closing lets the robot close an open drawer, taking its handle by a grasp just like opening does.
 
 This action designator only works in the apartment environment for the moment, therefore we remove the kitchen and spawn
 the apartment. Additionally, we open the drawer such that we can close it with the action designator.
