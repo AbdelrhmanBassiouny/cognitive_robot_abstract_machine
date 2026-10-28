@@ -1,8 +1,8 @@
 {
-  "request_identifier": "70801ecc7615745b",
+  "request_identifier": "bd76c16be01c59ed",
   "upstream": "cram2/cognitive_robot_abstract_machine",
   "fork_owner": "AbdelrhmanBassiouny",
-  "pull_request": 806,
-  "branch": null,
+  "pull_request": null,
+  "branch": "ccr-71afa316-7pquvw",
   "failure_logs": false
 }
