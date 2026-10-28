@@ -26,7 +26,12 @@ from semantic_digital_twin.pipeline.mesh_decomposition.coacd import COACDMeshDec
 from semantic_digital_twin.pipeline.mesh_decomposition.vhacd import VHACDMeshDecomposer
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.testing import world_setup_simple
-from semantic_digital_twin.world_description.geometry import Mesh, Shape
+from semantic_digital_twin.world_description.geometry import (
+    Mesh,
+    MeshFileFormat,
+    Scale,
+    Shape,
+)
 from semantic_digital_twin.world_description.world_entity import Body
 
 
@@ -250,3 +255,33 @@ def test_a_decomposition_appears_in_the_cache_only_once_it_is_finished(
     assert sum(1 for line in open(cached) if line.startswith("o ")) == len(
         decomposer.apply_to_mesh(non_convex_mesh)
     )
+
+
+# %% mesh files Bullet cannot read
+
+
+def bounds_of(shape: pb.CollisionShape) -> list[list[float]]:
+    """
+    :return: The lower and upper corner of the shape's axis-aligned bounding box.
+    """
+    return [
+        corner.to_np()[:3].tolist()
+        for corner in shape.get_aabb(pb.Transform.identity())
+    ]
+
+
+def test_mesh_in_a_file_bullet_cannot_read_collides_like_the_same_mesh_in_obj(
+    monkeypatch,
+):
+    monkeypatch.setattr(pybullet_collision_detector, "_shape_cache", {})
+    box = trimesh.creation.box(extents=(1.0, 2.0, 3.0))
+    meshes = [
+        Mesh.from_trimesh(mesh=box, scale=Scale(2.0, 1.0, 1.0), file_type=file_format)
+        for file_format in (MeshFileFormat.GLB, MeshFileFormat.OBJ)
+    ]
+
+    glb_shape, obj_shape = [
+        create_shape_from_geometry(geometry=mesh) for mesh in meshes
+    ]
+
+    assert bounds_of(glb_shape) == bounds_of(obj_shape)

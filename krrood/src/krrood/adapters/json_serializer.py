@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import enum
 import inspect
 import pathlib
@@ -22,6 +23,7 @@ from krrood.adapters.exceptions import (
     UnknownModuleError,
     ClassNotFoundError,
     ClassNotSerializableError,
+    ObjectArraySerializationError,
 )
 from krrood.adapters.json_field import JSONField
 from krrood.adapters.keyword_argument import SerializationKeywordArgument
@@ -870,36 +872,53 @@ class NumpyArrayJSONKey(enum.StrEnum):
 
     ELEMENT_TYPE = "type"
     """
-    The type the elements of the array share.
+    The type the elements of the array share, with its byte order.
+    """
+
+    SHAPE = "shape"
+    """
+    The length of each dimension of the array.
     """
 
     ELEMENTS = "data"
     """
-    The elements of the array, nested as deeply as the array has dimensions.
+    The elements of the array in C order, as base64 of their bytes.
     """
 
 
 @dataclass
 class NumpyNDarrayJSONSerializer(ExternalClassJSONSerializer[np.ndarray]):
     """
-    External JSON serializer for numpy ndarrays.
+    External JSON serializer for numpy ndarrays, which keeps the elements as their raw
+    bytes, a fraction of the memory a list of Python numbers takes.
     """
 
     @classmethod
     def to_json(cls, obj: np.ndarray, **kwargs) -> dict[str, Any]:
+        """
+        :raises ObjectArraySerializationError: If the array holds Python objects.
+        """
+        if obj.dtype.hasobject:
+            raise ObjectArraySerializationError(element_type=str(obj.dtype))
+        contiguous = np.ascontiguousarray(obj)
         return {
             JSONField.TYPE: get_full_class_name(type(obj)),
-            NumpyArrayJSONKey.ELEMENT_TYPE: str(obj.dtype),
-            NumpyArrayJSONKey.ELEMENTS: obj.tolist(),
+            NumpyArrayJSONKey.ELEMENT_TYPE: contiguous.dtype.str,
+            NumpyArrayJSONKey.SHAPE: list(contiguous.shape),
+            NumpyArrayJSONKey.ELEMENTS: base64.b64encode(contiguous.tobytes()).decode(
+                "ascii"
+            ),
         }
 
     @classmethod
     def from_json(
         cls, data: dict[str, Any], clazz: type[np.ndarray], **kwargs
     ) -> np.ndarray:
-        return np.array(
-            data[NumpyArrayJSONKey.ELEMENTS], dtype=data[NumpyArrayJSONKey.ELEMENT_TYPE]
-        )
+        # A bytearray, unlike bytes, gives a writable array.
+        return np.frombuffer(
+            bytearray(base64.b64decode(data[NumpyArrayJSONKey.ELEMENTS])),
+            dtype=data[NumpyArrayJSONKey.ELEMENT_TYPE],
+        ).reshape(data[NumpyArrayJSONKey.SHAPE])
 
 
 class CoordinateSparseArrayJSONKey(enum.StrEnum):

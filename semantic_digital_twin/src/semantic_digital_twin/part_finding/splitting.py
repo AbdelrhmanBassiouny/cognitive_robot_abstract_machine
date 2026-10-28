@@ -346,6 +346,31 @@ class ColoredShape:
             meshes.append(mesh)
         return trimesh.util.concatenate(meshes)
 
+    # Cutting reads the arrays of :attr:`mesh` once as plain numpy arrays: trimesh would
+    # otherwise hash the whole of :attr:`mesh` again for every piece, to check that its
+    # caches are still valid.
+
+    @cached_property
+    def faces(self) -> NDArray[np.int64]:
+        """
+        :return: The vertex indices of each face of :attr:`mesh`.
+        """
+        return self.mesh.faces.view(np.ndarray)
+
+    @cached_property
+    def vertices(self) -> NDArray[np.float64]:
+        """
+        :return: The positions of the vertices of :attr:`mesh`.
+        """
+        return self.mesh.vertices.view(np.ndarray)
+
+    @cached_property
+    def face_colors(self) -> NDArray[np.uint8]:
+        """
+        :return: The RGBA colour of each face of :attr:`mesh`.
+        """
+        return np.asarray(self.mesh.visual.face_colors).view(np.ndarray)
+
     def piece(self, faces: NDArray[np.int64], body: Body) -> ShapeCollection:
         """
         :param faces: The indices of the faces of :attr:`mesh` that make up the piece.
@@ -355,9 +380,14 @@ class ColoredShape:
             the surface finish and simulator properties that all of :attr:`shapes`
             share.
         """
-        mesh = self.mesh.submesh([faces], append=True)
+        piece_vertices, piece_faces = np.unique(self.faces[faces], return_inverse=True)
+        mesh = trimesh.Trimesh(
+            vertices=self.vertices[piece_vertices],
+            faces=piece_faces.reshape(-1, 3),
+            process=False,
+        )
         mesh.visual = trimesh.visual.ColorVisuals(
-            mesh, face_colors=self.mesh.visual.face_colors[faces]
+            mesh, face_colors=self.face_colors[faces]
         )
         shape = Mesh.from_trimesh(
             mesh=mesh,
