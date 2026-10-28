@@ -34,7 +34,6 @@ from cramph.monitors import (
     CountTicks,
     Print,
     Pulse,
-    ThreadedPredicateMonitor,
 )
 from cramph.node import (
     CancelStatechart,
@@ -221,7 +220,7 @@ def node_types_needing_a_case() -> set[type[StatechartNode]]:
     return (
         concrete_node_types(cramph)
         - concrete_node_types(nodes_for_testing)
-        - {FunctionCall, ThreadedPredicateMonitor}
+        - {FunctionCall}
     )
 
 
