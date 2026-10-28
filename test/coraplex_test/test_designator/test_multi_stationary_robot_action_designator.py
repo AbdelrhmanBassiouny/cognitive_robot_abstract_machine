@@ -3,12 +3,7 @@ import numpy as np
 import pytest
 from rustworkx import NoEdgeBetweenNodes
 
-
-from giskardpy.utils.utils_for_tests import compare_axis_angle, compare_orientations
 from coraplex.datastructures.trajectory import PoseTrajectory
-
-from cramph.composites import Parallel, Sequence, TryAll, TryInOrder
-from cramph.threaded_nodes import FunctionCall
 from coraplex.robot_plans.actions.core.pick_up import (
     ReachAction,
     GraspingAction,
@@ -21,31 +16,30 @@ from coraplex.robot_plans.actions.core.robot_body import (
     FollowToolCenterPointPathAction,
 )
 from coraplex.testing import _make_sine_scan_poses
+from cramph.composites import Sequence
+from giskardpy.utils.utils_for_tests import compare_axis_angle, compare_orientations
 from krrood.entity_query_language.factories import an, entity, variable
-
 from semantic_digital_twin.adapters.multi_sim import MujocoSim
 from semantic_digital_twin.datastructures.definitions import (
     GripperState,
     StaticJointState,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.robots.daisy import DAiSy
 from semantic_digital_twin.robots.tracy import Tracy
+from semantic_digital_twin.semantic_annotations.mixins import HasGraspCandidates
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Point3
 from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import Connection6DoF
 from semantic_digital_twin.world_description.geometry import Box, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
-from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
-from semantic_digital_twin.semantic_annotations.mixins import HasGraspCandidates
-from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
-
-from ...conftest import SAMPLING_SEED
-from ...pytest_environment import runs_in_continuous_integration
 from ..conftest import grasp_point_of, left_or_only_arm, right_or_only_arm
 from ..world_snapshot import WorldSnapshot
 from ...plan_running import perform_in_physics, run_plan, robot_extensions
+from ...pytest_environment import runs_in_continuous_integration
 
 
 @pytest.fixture(
@@ -267,8 +261,7 @@ def test_pick_up_multi(stationary_block_context):
         nodes=[
             ParkArmsAction(arms=view.all_arms),
             PickUpAction(
-                grasp=graspable_annotation(world, box_body).grasp_candidates()[0],
-                arm=left_or_only_arm(view),
+                grasp=top_down_grasp(world, box_body), arm=left_or_only_arm(view)
             ),
         ]
     )
@@ -289,7 +282,7 @@ def place_position(robot_setup) -> Point3:
     if robot_class == Tracy:
         return Point3(0.9, 0.0, 0.93, reference_frame=world.root)
     elif robot_class == DAiSy:
-        return Point3(0.6, 1.2, 1.2, reference_frame=world.root)
+        return Point3(0.6, 1.2, 0.9, reference_frame=world.root)
     else:
         raise ValueError(f"Unsupported robot class: {robot_class}")
 
@@ -304,8 +297,7 @@ def test_place_multi(stationary_block_context, place_position):
         nodes=[
             ParkArmsAction(arms=view.all_arms),
             PickUpAction(
-                grasp=graspable_annotation(world, box_body).grasp_candidates()[0],
-                arm=left_or_only_arm(view),
+                grasp=top_down_grasp(world, box_body), arm=left_or_only_arm(view)
             ),
             PlaceAction(
                 object_designator=graspable_annotation(world, box_body),
