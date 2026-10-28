@@ -7,7 +7,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from typing_extensions import Any, Dict
+from typing_extensions import Any
 
 
 @dataclass(kw_only=True)
@@ -25,7 +25,7 @@ class CrameraPayload(ABC):
     """
 
     @abstractmethod
-    def to_payload(self) -> Dict[str, Any]:
+    def to_payload(self) -> dict[str, Any]:
         """
         The JSON-serializable shape the frontend expects.
         """

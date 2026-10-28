@@ -19,7 +19,6 @@ from semantic_digital_twin.world_description.connections import (
 )
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 from semantic_digital_twin.world_description.world_entity import Body
-from typing_extensions import Dict, Tuple
 
 from cramera.live.bridge import Bridge
 from cramera.live.transforms import (
@@ -44,7 +43,7 @@ Name of the fixed connection the tests expect to stay static.
 """
 
 
-def make_kitchen() -> Tuple[World, RevoluteConnection]:
+def make_kitchen() -> tuple[World, RevoluteConnection]:
     """
     A world with one actuated hinge and one fixed shelf, both under the root.
     """
@@ -62,7 +61,7 @@ def make_kitchen() -> Tuple[World, RevoluteConnection]:
     return world, hinge
 
 
-def make_draggable_object() -> Tuple[World, Connection6DoF, Body]:
+def make_draggable_object() -> tuple[World, Connection6DoF, Body]:
     """
     A world whose one free-floating body is mesh-named, so the bridge's own discovery
     publishes it and a queued viewer move reaches it.
@@ -89,7 +88,7 @@ def make_draggable_object() -> Tuple[World, Connection6DoF, Body]:
 
 def observe(
     graph: TransformGraph, world: World, now: float
-) -> Dict[str, ConnectionActivity]:
+) -> dict[str, ConnectionActivity]:
     """
     One observation of every connection in ``world``, indexed by connection name.
 

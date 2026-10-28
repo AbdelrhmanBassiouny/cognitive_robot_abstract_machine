@@ -5,7 +5,7 @@ Dispatch a graph-panel tab name or a double-clicked node id to its view.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing_extensions import Any, Dict, Optional
+from typing_extensions import Any
 
 from cramera.knowledge.graph_payload import KnowledgeGraphPayload
 from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase
@@ -33,7 +33,7 @@ class UnknownViewPayload(GraphPanelPayload):
     Human-readable description of the unknown tab name.
     """
 
-    def panel_options(self) -> Dict[str, Any]:
+    def panel_options(self) -> dict[str, Any]:
         """
         The error message; there is no graph to describe.
         """
@@ -63,7 +63,7 @@ class GraphPanelViews:
         return cls.of_scene(None)
 
     @classmethod
-    def of_scene(cls, scene: Optional[str]) -> GraphPanelViews:
+    def of_scene(cls, scene: str | None) -> GraphPanelViews:
         """
         The views of one named scene bundle.
 
@@ -89,7 +89,7 @@ class GraphPanelViews:
                 return payload_type.of_tab(self.knowledge_base)
         return UnknownViewPayload(error="unknown view: %s" % name)
 
-    def for_node(self, node_id: str) -> Optional[GraphPanelPayload]:
+    def for_node(self, node_id: str) -> GraphPanelPayload | None:
         """
         The inside view of a double-clicked node, or None if it has none.
 

@@ -12,7 +12,7 @@ krrood = pytest.importorskip("krrood", reason="EQL requires krrood")
 from krrood.entity_query_language.evaluable import Evaluable  # noqa: E402
 from krrood.entity_query_language.factories import an, entity, variable  # noqa: E402
 from semantic_digital_twin.spatial_types import Point3, Pose  # noqa: E402
-from typing_extensions import Any, List  # noqa: E402
+from typing_extensions import Any
 
 from cramera.body_geometry import pose_label  # noqa: E402
 from cramera.knowledge.query_domain import QueryDomain  # noqa: E402
@@ -41,7 +41,7 @@ class AnswersElsewhere(QueryEvaluation):
     What it answers with, whatever it is asked.
     """
 
-    asked: List[Any] = field(default_factory=list)
+    asked: list[Any] = field(default_factory=list)
     """
     Every query expression handed to it, in order.
     """
