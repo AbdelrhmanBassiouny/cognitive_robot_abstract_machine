@@ -16,7 +16,7 @@ from semantic_digital_twin.world import World
 
 from krrood.entity_query_language.evaluable import Evaluable
 from krrood.exceptions import DataclassException
-from typing_extensions import Any, Dict, List
+from typing_extensions import Any
 
 from cramera.knowledge.query_domain import QueryDomain
 
@@ -126,7 +126,7 @@ class QueryableKnowledge:
     Which of a demo's bodies of knowledge this is.
     """
 
-    domains: List[QueryDomain]
+    domains: list[QueryDomain]
     """
     The ready-made variables a question about it may range over.
     """
@@ -136,7 +136,7 @@ class QueryableKnowledge:
     Where a question about it is worked out.
     """
 
-    extra_names: Dict[str, Any] = field(default_factory=dict)
+    extra_names: dict[str, Any] = field(default_factory=dict)
     """
     Further names a question about it may use, such as the vocabulary its values are
     recorded in.

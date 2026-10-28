@@ -68,7 +68,6 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.world import World
-from typing_extensions import List
 
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.world_entity import Body
@@ -122,7 +121,7 @@ class MoveGrippersBeforeTorsoMotion(InsertionTransformation[MoveTorsoAction]):
     def anchor(self, plan_node: ActionNode) -> PlanNode:
         return motion_of(plan_node)
 
-    def nodes_to_insert(self, plan_node: ActionNode) -> List[ActionLike]:
+    def nodes_to_insert(self, plan_node: ActionNode) -> list[ActionLike]:
         return [
             gripper_motion(left_gripper(plan_node), GripperState.OPEN),
             gripper_motion(right_gripper(plan_node), GripperState.CLOSE),
@@ -157,7 +156,7 @@ class ParkArmsBeforeTorsoMotion(InsertionTransformation[MoveTorsoAction]):
     def anchor(self, plan_node: ActionNode) -> PlanNode:
         return motion_of(plan_node)
 
-    def nodes_to_insert(self, plan_node: ActionNode) -> List[ActionLike]:
+    def nodes_to_insert(self, plan_node: ActionNode) -> list[ActionLike]:
         return [ParkArmsAction(plan_node.plan.context.robot.all_arms)]
 
 
@@ -180,11 +179,11 @@ class MoveGripperLastInTheReachBody(InsertionTransformation[ReachAction]):
         ]
         return body
 
-    def nodes_to_insert(self, plan_node: ActionNode) -> List[ActionLike]:
+    def nodes_to_insert(self, plan_node: ActionNode) -> list[ActionLike]:
         return [gripper_motion(right_gripper(plan_node), GripperState.CLOSE)]
 
 
-def motions_of(plan_node: PlanNode) -> List[MotionNode]:
+def motions_of(plan_node: PlanNode) -> list[MotionNode]:
     """
     :param plan_node: The node whose children to look at.
     :return: The motions directly below the given node, in their plan order.
@@ -249,7 +248,7 @@ class MoveGripperBeforeEveryAction(InsertionTransformation[ActionNode]):
     def anchor(self, plan_node: ActionNode) -> PlanNode:
         return plan_node
 
-    def nodes_to_insert(self, plan_node: ActionNode) -> List[ActionLike]:
+    def nodes_to_insert(self, plan_node: ActionNode) -> list[ActionLike]:
         return [gripper_motion(right_gripper(plan_node), GripperState.CLOSE)]
 
 
@@ -262,7 +261,7 @@ class TransformationWithoutPosition(InsertionTransformation[MoveTorsoAction]):
     def anchor(self, plan_node: ActionNode) -> PlanNode:
         return plan_node
 
-    def nodes_to_insert(self, plan_node: ActionNode) -> List[ActionLike]:
+    def nodes_to_insert(self, plan_node: ActionNode) -> list[ActionLike]:
         return [gripper_motion(left_gripper(plan_node), GripperState.OPEN)]
 
 
@@ -358,7 +357,7 @@ class MoveGripperBeforeHighTorso(InsertionTransformation[MoveTorsoAction]):
     def anchor(self, plan_node: ActionNode) -> PlanNode:
         return motion_of(plan_node)
 
-    def nodes_to_insert(self, plan_node: ActionNode) -> List[ActionLike]:
+    def nodes_to_insert(self, plan_node: ActionNode) -> list[ActionLike]:
         return [gripper_motion(left_gripper(plan_node), GripperState.OPEN)]
 
 
@@ -469,7 +468,7 @@ class MoveGripperBeforeJointMotion(InsertionTransformation[MoveJointsMotion]):
     def anchor(self, plan_node: MotionNode) -> PlanNode:
         return plan_node
 
-    def nodes_to_insert(self, plan_node: MotionNode) -> List[ActionLike]:
+    def nodes_to_insert(self, plan_node: MotionNode) -> list[ActionLike]:
         return [gripper_motion(right_gripper(plan_node), GripperState.CLOSE)]
 
 
@@ -677,7 +676,7 @@ How far the drawer is pulled out after an opening of it has been built.
 """
 
 
-def motions_below(plan_node: PlanNode) -> List[type]:
+def motions_below(plan_node: PlanNode) -> list[type]:
     """
     :param plan_node: The node whose expansion to look at.
     :return: The type of every motion under the given node, in their plan order.
@@ -1180,7 +1179,7 @@ def test_a_transport_of_an_object_in_no_drawer_is_left_alone(pr2_apartment_conte
 # %% parking around a pick-and-place
 
 
-def step_types_of(plan_node: ActionNode) -> List[type]:
+def step_types_of(plan_node: ActionNode) -> list[type]:
     """
     :param plan_node: The node of an expanded composite action.
     :return: The type of each step the action runs, in the order they are run.
@@ -1242,7 +1241,7 @@ class MoveLeftGripperBeforeTorso(InsertionTransformation[MoveTorsoAction]):
     def anchor(self, plan_node: ActionNode) -> PlanNode:
         return plan_node
 
-    def nodes_to_insert(self, plan_node: ActionNode) -> List[ActionLike]:
+    def nodes_to_insert(self, plan_node: ActionNode) -> list[ActionLike]:
         return [gripper_motion(left_gripper(plan_node), GripperState.OPEN)]
 
 
@@ -1252,11 +1251,11 @@ class MoveRightGripperBeforeTorso(MoveLeftGripperBeforeTorso):
     Puts a right gripper motion there instead.
     """
 
-    def nodes_to_insert(self, plan_node: ActionNode) -> List[ActionLike]:
+    def nodes_to_insert(self, plan_node: ActionNode) -> list[ActionLike]:
         return [gripper_motion(right_gripper(plan_node), GripperState.CLOSE)]
 
 
-def warnings_of(caplog) -> List[str]:
+def warnings_of(caplog) -> list[str]:
     """
     :param caplog: The capture of this test's log records.
     :return: The message of every warning the plan reported.
@@ -1334,7 +1333,7 @@ def test_a_transformation_the_case_does_not_need_is_no_collision(
 # %% holding an object at its own width
 
 
-def width_motions_of(plan) -> List[MoveFingersToWidthMotion]:
+def width_motions_of(plan) -> list[MoveFingersToWidthMotion]:
     """
     :param plan: The plan to read.
     :return: The motions of it that send the fingers to a width.
@@ -1345,7 +1344,7 @@ def width_motions_of(plan) -> List[MoveFingersToWidthMotion]:
     ]
 
 
-def shutting_motions_of(plan) -> List[MoveGripperMotion]:
+def shutting_motions_of(plan) -> list[MoveGripperMotion]:
     """
     :param plan: The plan to read.
     :return: The motions of it that shut the gripper.

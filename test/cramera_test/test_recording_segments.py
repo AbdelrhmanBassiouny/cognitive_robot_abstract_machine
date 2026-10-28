@@ -9,7 +9,7 @@ their carry windows begin and end, and which action names the stretch around the
 
 from __future__ import annotations
 
-from typing_extensions import Dict, List, Optional, Sequence
+from typing_extensions import Sequence
 
 from cramera.live.recording_segments import (
     MOTION_TOLERANCE,
@@ -28,7 +28,7 @@ Where an object sits before anything touches it.
 """
 
 
-def at(x: float) -> List[float]:
+def at(x: float) -> list[float]:
     """
     A pose ``x`` metres along the world's x axis.
 
@@ -38,9 +38,9 @@ def at(x: float) -> List[float]:
 
 
 def recording(
-    poses: Sequence[Dict[str, List[float]]],
-    steps: Optional[Sequence[Optional[str]]] = None,
-) -> List[RecordedFrame]:
+    poses: Sequence[dict[str, list[float]]],
+    steps: Sequence[str | None] | None = None,
+) -> list[RecordedFrame]:
     """
     A recording of ``poses``, one tick per entry, with the actions reported alongside.
 
@@ -58,7 +58,7 @@ def recording(
     ]
 
 
-def carrying_milk() -> List[RecordedFrame]:
+def carrying_milk() -> list[RecordedFrame]:
     """
     Six ticks in which the milk is picked up, carried, and set down elsewhere.
     """

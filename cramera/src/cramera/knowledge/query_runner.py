@@ -12,18 +12,7 @@ from collections.abc import Mapping
 from dataclasses import MISSING, dataclass, field, fields, is_dataclass
 from datetime import datetime
 
-from typing_extensions import (
-    AbstractSet,
-    Any,
-    Dict,
-    FrozenSet,
-    List,
-    Optional,
-    Protocol,
-    Tuple,
-    Type,
-    runtime_checkable,
-)
+from typing_extensions import AbstractSet, Any, Protocol, runtime_checkable
 
 from krrood.entity_query_language import factories as eql_factories
 from krrood.entity_query_language.evaluable import Evaluable
@@ -65,7 +54,7 @@ class HighlightsRelatedNodes(Protocol):
     An entity whose answer row lights up graph nodes besides its own.
     """
 
-    def related_highlight_ids(self) -> List[str]:
+    def related_highlight_ids(self) -> list[str]:
         """
         Ids of the further graph nodes a row for this entity highlights.
         """
@@ -85,7 +74,7 @@ class RenderResult(CrameraPayload):
     ``"rows"`` for arbitrary answer rows, ``"entities"`` when every row names an entity.
     """
 
-    rows: List[Dict[str, Any]]
+    rows: list[dict[str, Any]]
     """
     The query's answer rows; each row's own keys depend on what the query asked for.
     """
@@ -100,12 +89,12 @@ class RenderResult(CrameraPayload):
     Whether the result was truncated at ``limit``.
     """
 
-    highlight: List[str]
+    highlight: list[str]
     """
     Ids of the graph nodes this result should highlight, sorted and deduplicated.
     """
 
-    replay: List[Optional[ReplayWindow]] = field(default_factory=list)
+    replay: list[ReplayWindow | None] = field(default_factory=list)
     """
     The window worth replaying around each row's moment, one entry per row and None for
     a row naming no moment.
@@ -115,12 +104,12 @@ class RenderResult(CrameraPayload):
     the window as a column.
     """
 
-    verbalization: Optional[QueryVerbalization] = None
+    verbalization: QueryVerbalization | None = None
     """
     The query read back as English, or None when there was no expression to word.
     """
 
-    def to_payload(self) -> Dict[str, Any]:
+    def to_payload(self) -> dict[str, Any]:
         """
         The JSON-serializable shape the frontend's EQL panel expects.
         """
@@ -149,12 +138,12 @@ class AnswerRow:
     One rendered answer row and what the viewer may do with it.
     """
 
-    values: Dict[str, Any]
+    values: dict[str, Any]
     """
     The row's own columns, keyed as the panel shows them.
     """
 
-    replay: Optional[ReplayWindow] = None
+    replay: ReplayWindow | None = None
     """
     The window of the demo recording worth replaying around this row's moment, or None
     when the row names no moment.
@@ -167,12 +156,12 @@ class _RenderedRows:
     A query result rendered into answer rows, before it is wrapped as a RenderResult.
     """
 
-    rows: List[AnswerRow]
+    rows: list[AnswerRow]
     """
     The rendered answer rows.
     """
 
-    highlight: List[str]
+    highlight: list[str]
     """
     Ids of the graph nodes to highlight, collected while rendering.
     """
@@ -197,7 +186,7 @@ class RowRenderer:
     Maximum number of answer rows to render.
     """
 
-    entity_types: Tuple[Type[Any], ...] = ()
+    entity_types: tuple[type[Any], ...] = ()
     """
     Types whose instances are titled and highlighted as entities.
 
@@ -213,7 +202,7 @@ class RowRenderer:
     asked for; answer values naming nothing the viewer shows are left alone.
     """
 
-    highlight: List[str] = field(default_factory=list)
+    highlight: list[str] = field(default_factory=list)
     """
     Ids of the graph nodes the rendered rows should highlight.
     """
@@ -224,7 +213,7 @@ class RowRenderer:
 
         :param result: The evaluated query result to render.
         """
-        rows: List[AnswerRow] = []
+        rows: list[AnswerRow] = []
         if result is None:
             return _RenderedRows(rows, self.highlight, False)
         if isinstance(result, (str, int, float, bool, Point3, Pose, NumericPose)):
@@ -257,7 +246,7 @@ class RowRenderer:
         if isinstance(item, Mapping):  # a unification row from set_of()
             columns = self._column_names([str(key) for key in item])
             values = {}
-            window: Optional[ReplayWindow] = None
+            window: ReplayWindow | None = None
             for column, value in zip(columns, item.values()):
                 name = self._row_title(value)
                 if name:
@@ -269,7 +258,7 @@ class RowRenderer:
         return AnswerRow({"value": self._jsonable(item)})
 
     @staticmethod
-    def _column_names(keys: List[str]) -> List[str]:
+    def _column_names(keys: list[str]) -> list[str]:
         """
         The headings a set of asked-for values is shown under.
 
@@ -343,7 +332,7 @@ class RowRenderer:
             return value
         return repr(value)
 
-    def _row_title(self, value: Any) -> Optional[str]:
+    def _row_title(self, value: Any) -> str | None:
         """
         The name a row for this value is titled and highlighted by, or None.
 
@@ -354,7 +343,7 @@ class RowRenderer:
         return self._entity_name(value)
 
     @staticmethod
-    def _entity_name(value: Any) -> Optional[str]:
+    def _entity_name(value: Any) -> str | None:
         """
         The entity's name, or None for a value that is not one of our entities.
 
@@ -371,12 +360,12 @@ class EqlQueryRunner:
     Evaluates native EQL queries against a fixed set of domains.
     """
 
-    domains: List[QueryDomain]
+    domains: list[QueryDomain]
     """
     The ready-made variables every query of this runner may range over.
     """
 
-    extra_names: Dict[str, Any] = field(default_factory=dict)
+    extra_names: dict[str, Any] = field(default_factory=dict)
     """
     Further names a query may use, such as constants or the raw domain lists.
     """
@@ -393,13 +382,13 @@ class EqlQueryRunner:
     The workspace classes a query of this runner may name besides its own domains.
     """
 
-    highlightable_ids: FrozenSet[str] = frozenset()
+    highlightable_ids: frozenset[str] = frozenset()
     """
     Ids the viewer can light up; see :attr:`RowRenderer.highlightable_ids`.
     """
 
     @property
-    def entity_types(self) -> Tuple[Type[Any], ...]:
+    def entity_types(self) -> tuple[type[Any], ...]:
         """
         The types this runner's answers are rendered as entities.
         """
@@ -415,7 +404,7 @@ class EqlQueryRunner:
             class_index=self.class_index,
         )
 
-    def namespace(self) -> Dict[str, Any]:
+    def namespace(self) -> dict[str, Any]:
         """
         A namespace for evaluating one EQL query (fresh variables each time).
         """
@@ -452,7 +441,7 @@ class EqlQueryRunner:
         exec(compile(tree, "<eql>", "exec"), namespace)
         return namespace.get("result")
 
-    def verbalize(self, code: str) -> Optional[QueryVerbalization]:
+    def verbalize(self, code: str) -> QueryVerbalization | None:
         """
         Read an EQL query string back as English without evaluating it.
 

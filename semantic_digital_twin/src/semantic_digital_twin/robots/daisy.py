@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
-from typing import Self
+from typing_extensions import Self
 
 from griplink_interfaces.action import Flexgrip, Flexrelease, Grip, Release
 from krrood.ormatic.utils import classproperty
@@ -74,7 +74,7 @@ class DAiSyJoint(JointName):
 
 @dataclass(eq=False)
 class DAiSyLeftGripperLeftFinger(Finger):
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         pass
 
     def setup_joint_states(self) -> list[JointState]:
@@ -96,7 +96,7 @@ class DAiSyLeftGripperLeftFinger(Finger):
 
 @dataclass(eq=False)
 class DAiSyLeftGripperRightFinger(Finger):
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         pass
 
     def setup_joint_states(self) -> list[JointState]:
@@ -118,7 +118,7 @@ class DAiSyLeftGripperRightFinger(Finger):
 
 @dataclass(eq=False)
 class DAiSyRightGripperLeftFinger(Finger):
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         pass
 
     def setup_joint_states(self) -> list[JointState]:
@@ -140,7 +140,7 @@ class DAiSyRightGripperLeftFinger(Finger):
 
 @dataclass(eq=False)
 class DAiSyRightGripperRightFinger(Finger):
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         pass
 
     def setup_joint_states(self) -> list[JointState]:
@@ -186,7 +186,7 @@ class DAiSyLeftGripper(
             ),
         }
 
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         self._setup_hardware_interfaces_for_active_connections()
 
     def setup_joint_states(self) -> list[JointState]:
@@ -262,7 +262,7 @@ class DAiSyRightGripper(
             ),
         }
 
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         self._setup_hardware_interfaces_for_active_connections()
 
     def setup_joint_states(self) -> list[JointState]:
@@ -308,7 +308,7 @@ class DAiSyRightGripper(
 
 @dataclass(eq=False)
 class DAiSyLeftArm(Arm[DAiSyLeftGripper]):
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         self._setup_hardware_interfaces_for_active_connections()
 
     def setup_joint_states(self) -> list[JointState]:
@@ -348,7 +348,7 @@ class DAiSyLeftArm(Arm[DAiSyLeftGripper]):
 
 @dataclass(eq=False)
 class DAiSyRightArm(Arm[DAiSyRightGripper]):
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         self._setup_hardware_interfaces_for_active_connections()
 
     def setup_joint_states(self) -> list[JointState]:
@@ -393,7 +393,7 @@ class DAiSyCamera(Camera):
     Setup a fake camera link in URDF to satisfy SemDT
     """
 
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         pass
 
     def setup_joint_states(self) -> list[JointState]:

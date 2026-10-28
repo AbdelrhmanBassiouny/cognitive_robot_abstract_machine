@@ -11,6 +11,7 @@ PACKAGES = [
     "probabilistic_model",
     "random_events",
     "robokudo",
+    "segmind",
     "semantic_digital_twin",
 ]
 

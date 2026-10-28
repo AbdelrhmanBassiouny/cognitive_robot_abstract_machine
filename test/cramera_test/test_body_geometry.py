@@ -31,7 +31,7 @@ from semantic_digital_twin.spatial_types import (
 )
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body, Region
-from typing_extensions import Any, Optional
+from typing_extensions import Any
 
 from cramera.body_geometry import (
     measure_body,
@@ -46,8 +46,8 @@ from cramera.body_geometry import (
 
 # %% fixtures
 def _body_with_shapes(
-    visual: Optional[ShapeCollection] = None,
-    collision: Optional[ShapeCollection] = None,
+    visual: ShapeCollection | None = None,
+    collision: ShapeCollection | None = None,
 ) -> Body:
     """
     A real ``Body``, registered in its own single-body ``World``.

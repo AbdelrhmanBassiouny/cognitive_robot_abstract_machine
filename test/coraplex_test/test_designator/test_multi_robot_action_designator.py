@@ -50,7 +50,7 @@ from semantic_digital_twin.datastructures.definitions import (
 )
 from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
 from semantic_digital_twin.robots.robot_parts import AbstractRobot, EndEffector
-from typing_extensions import Generator, Iterable, Tuple
+from typing_extensions import Generator, Iterable
 
 from ..conftest import grasp_point_of, left_or_only_arm, right_or_only_arm
 from ..world_snapshot import WorldSnapshot
@@ -255,7 +255,7 @@ def setup_multi_robot_apartment(
 @pytest.fixture
 def multiple_robot_apartment_context(
     setup_multi_robot_apartment,
-) -> Generator[Tuple[World, AbstractRobot, Context]]:
+) -> Generator[tuple[World, AbstractRobot, Context]]:
     """
     The shared apartment world with one robot, the robot and a context for both,
     returned to its initial model, state and full body control setting after the test.

@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Tuple, List
+from typing_extensions import Any
 
-from typing_extensions import Optional, Dict, Any
 
 from coraplex.plans.plan_node import PlanNode
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
@@ -57,7 +56,7 @@ class MoveTorsoAction(ActionDescription):
 
     @staticmethod
     def post_condition(
-        variables: Dict[str, Variable], context: Context, kwargs: Dict[str, Any]
+        variables: dict[str, Variable], context: Context, kwargs: dict[str, Any]
     ) -> SymbolicExpression | bool:
         """
         The target joint state for the torso needs to be achieved.
@@ -85,7 +84,7 @@ class SetGripperAction(ActionDescription):
 
     @staticmethod
     def post_condition(
-        variables: Dict[str, Variable], context: Context, kwargs: Dict[str, Any]
+        variables: dict[str, Variable], context: Context, kwargs: dict[str, Any]
     ) -> SymbolicExpression:
         """
         The gripper's target joint state needs to be achieved.
@@ -99,7 +98,7 @@ class ParkArmsAction(ActionDescription, HasMaxJointVelocity):
     Park the arms of the robot.
     """
 
-    arms: List[Arm]
+    arms: list[Arm]
     """
     The arms that should be parked.
     """
@@ -116,7 +115,7 @@ class ParkArmsAction(ActionDescription, HasMaxJointVelocity):
             )
         )
 
-    def get_joint_poses(self) -> Tuple[List[str], List[float]]:
+    def get_joint_poses(self) -> tuple[list[str], list[float]]:
         """
         :return: The joint positions that should be set for the arm to be in the park position.
         """
@@ -162,7 +161,7 @@ class FollowToolCenterPointPathAction(ActionDescription, HasTcpGoalThresholds):
 
     def validate(
         self,
-        result: Optional[Any] = None,
+        result: Any | None = None,
         max_wait_time: timedelta = timedelta(seconds=2),
     ):
         pass
@@ -203,7 +202,7 @@ class MoveManipulatorAction(ActionDescription, HasTcpGoalThresholds):
 
     @staticmethod
     def post_condition(
-        variables: Dict[str, Variable], context: Context, kwargs: Dict[str, Any]
+        variables: dict[str, Variable], context: Context, kwargs: dict[str, Any]
     ) -> SymbolicExpression:
         end_effector = variables["end_effector"]
         target_pose = variables["target_pose"]

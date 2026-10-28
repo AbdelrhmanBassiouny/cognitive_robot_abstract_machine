@@ -17,7 +17,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
 )
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
-from typing_extensions import Any, Dict
+from typing_extensions import Any
 
 from coraplex.datastructures.dataclasses import Context
 from coraplex.plans.factories import sequential
@@ -117,7 +117,7 @@ class OpenAction(ContainerAction):
 
     @staticmethod
     def pre_condition(
-        variables: Dict[str, Variable], context: Context, kwargs: Dict[str, Any]
+        variables: dict[str, Variable], context: Context, kwargs: dict[str, Any]
     ) -> ConditionType:
         """
         The gripper with which to open the container has to be free.
@@ -126,7 +126,7 @@ class OpenAction(ContainerAction):
 
     @staticmethod
     def post_condition(
-        variables: Dict[str, Variable], context: Context, kwargs: Dict[str, Any]
+        variables: dict[str, Variable], context: Context, kwargs: dict[str, Any]
     ) -> ConditionType:
         """
         The container has to be open.
@@ -153,7 +153,7 @@ class CloseAction(ContainerAction):
 
     @staticmethod
     def post_condition(
-        variables: Dict[str, Variable], context: Context, kwargs: Dict[str, Any]
+        variables: dict[str, Variable], context: Context, kwargs: dict[str, Any]
     ) -> SymbolicExpression | bool:
         """
         The container has to be closed.

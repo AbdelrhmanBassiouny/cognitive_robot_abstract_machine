@@ -16,7 +16,6 @@ from datetime import timedelta
 
 import pytest
 from unittest.mock import patch
-from typing_extensions import List
 
 from giskardpy.motion_statechart.goals.collision_avoidance import (
     ExternalCollisionAvoidance,
@@ -74,7 +73,7 @@ class SimulationThatCountsItsSteps:
     Stands in for a started simulation, counting the physics steps asked of it.
     """
 
-    steps: List[timedelta] = field(default_factory=list)
+    steps: list[timedelta] = field(default_factory=list)
     """
     Every period the physics was asked to advance by.
     """
@@ -123,7 +122,7 @@ def test_motion_state_chart_is_created_once(reach_action_executable):
     )
 
 
-def _nodes_below(goal: Goal) -> List[MotionStatechartNode]:
+def _nodes_below(goal: Goal) -> list[MotionStatechartNode]:
     """
     :return: Every node held by `goal` or by a goal below it.
     """

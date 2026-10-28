@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import (
+from typing_extensions import (
     TYPE_CHECKING,
     Any,
     Generic,
@@ -186,7 +186,7 @@ class HasRobotParts(ABC):
 
         return robot_parts
 
-    def setup_robot_part_semantic_annotations(self):
+    def setup_robot_part_semantic_annotations(self) -> None:
         """
         Automatically discovers and initializes sub-parts by introspecting dataclass
         fields.
@@ -1199,7 +1199,7 @@ class AbstractRobot(Agent, HasRobotParts, ABC):
         )
         return mobile_base_type.get_drive_connection_type()
 
-    def setup_robot_part_semantic_annotations(self):
+    def setup_robot_part_semantic_annotations(self) -> None:
         """
         Sets up the semantic annotations for all robot parts of this robot.
         """
@@ -1307,7 +1307,7 @@ class AbstractRobot(Agent, HasRobotParts, ABC):
 
         return True
 
-    def _setup_velocity_limits(self):
+    def _setup_velocity_limits(self) -> None:
         """
         Sets up velocity limits for 1-DOF connections in the robot.
         """
@@ -1365,7 +1365,7 @@ class AbstractRobot(Agent, HasRobotParts, ABC):
     def tighten_dof_velocity_limits_of_1dof_connections(
         self,
         new_limits: defaultdict[ActiveConnection1DOF, float],
-    ):
+    ) -> None:
         """
         Convenience method for tightening the velocity limits of all one degree-of-
         freedom (1DOF) active connections in the system.
@@ -1496,7 +1496,7 @@ class AbstractRobot(Agent, HasRobotParts, ABC):
             if isinstance(robot_part.source, InputSynchronizer)
         ]
 
-    def get_torso(self):
+    def get_torso(self) -> Torso:
         [torso] = [p for p in self._robot_parts if isinstance(p, Torso)]
         return torso
 
@@ -1535,7 +1535,7 @@ class AbstractRobot(Agent, HasRobotParts, ABC):
         raise MissingDefaultCameraError(type(self))
 
     @abstractmethod
-    def _setup_collision_rules(self):
+    def _setup_collision_rules(self) -> None:
         """
         Sets up collision rules for the robot.
         """
