@@ -164,9 +164,10 @@ class SIFTAnnotator(ThreadedAnnotator):
         spatial_points = []
         responses = []
         for keypoint in keypoints:
-            pixel_column, pixel_row = round(
-                keypoint.pt[0] * color_to_depth_ratio.horizontal
-            ), round(keypoint.pt[1] * color_to_depth_ratio.vertical)
+            pixel_column, pixel_row = (
+                round(keypoint.pt[0] * color_to_depth_ratio.horizontal),
+                round(keypoint.pt[1] * color_to_depth_ratio.vertical),
+            )
             if not (
                 0 <= pixel_row < depth_image.shape[0]
                 and 0 <= pixel_column < depth_image.shape[1]

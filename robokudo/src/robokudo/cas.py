@@ -25,16 +25,7 @@ from enum import StrEnum
 
 import numpy as np
 import open3d
-from typing_extensions import (
-    TYPE_CHECKING,
-    Any,
-    Dict,
-    List,
-    Optional,
-    Tuple,
-    Type,
-    TypeVar,
-)
+from typing_extensions import TYPE_CHECKING, Any, TypeVar
 
 from robokudo.exceptions import (
     CameraObservationMissing,
@@ -150,14 +141,14 @@ class CAS:
     Human readable timestamp string.
     """
 
-    views: Dict[str, Any] = field(default_factory=dict)
+    views: dict[str, Any] = field(default_factory=dict)
     """
     Dictionary storing view data, each view stores data that is typically singular for a single CAS.
 
     Example: Sensor data, a camera observation, and a point cloud.
     """
 
-    annotations: List[Annotation] = field(default_factory=list)
+    annotations: list[Annotation] = field(default_factory=list)
     """
     List of annotations, each annotation describes a certain part of the acquired sensor data. In contrast to views
     there can be multiple annotations for the same 'thing' in the data.
@@ -170,7 +161,7 @@ class CAS:
         self.timestamp_readable = dt_timestamp.strftime("%Y-%m-%d %H:%M:%S")
 
     @property
-    def color_image(self) -> Optional[np.ndarray]:
+    def color_image(self) -> np.ndarray | None:
         return self.views.get(CASViews.COLOR_IMAGE)
 
     @color_image.setter
@@ -178,7 +169,7 @@ class CAS:
         self.views[CASViews.COLOR_IMAGE] = value
 
     @property
-    def depth_image(self) -> Optional[np.ndarray]:
+    def depth_image(self) -> np.ndarray | None:
         return self.views.get(CASViews.DEPTH_IMAGE)
 
     @depth_image.setter
@@ -202,7 +193,7 @@ class CAS:
         self.views[CASViews.COLOR_TO_DEPTH_RATIO] = value
 
     @property
-    def camera_observation(self) -> Optional[CameraObservation]:
+    def camera_observation(self) -> CameraObservation | None:
         """
         Return the semantic camera metadata for the current frame.
         """
@@ -247,7 +238,7 @@ class CAS:
         self.views[CASViews.POINTCLOUD_CAMERA_MODEL] = value
 
     @property
-    def cloud(self) -> Optional[open3d.geometry.PointCloud]:
+    def cloud(self) -> open3d.geometry.PointCloud | None:
         return self.views.get(CASViews.CLOUD)
 
     @cloud.setter
@@ -255,7 +246,7 @@ class CAS:
         self.views[CASViews.CLOUD] = value
 
     @property
-    def query(self) -> Optional[Any]:
+    def query(self) -> Any | None:
         return self.views.get(CASViews.QUERY)
 
     @query.setter
@@ -263,7 +254,7 @@ class CAS:
         self.views[CASViews.QUERY] = value
 
     @property
-    def cas_id(self) -> Optional[int]:
+    def cas_id(self) -> int | None:
         return self.views.get(CASViews.CAS_ID)
 
     @cas_id.setter
@@ -271,7 +262,7 @@ class CAS:
         self.views[CASViews.CAS_ID] = value
 
     @property
-    def ground_truth_world_ref(self) -> Optional[World]:
+    def ground_truth_world_ref(self) -> World | None:
         return self.views.get(CASViews.GROUND_TRUTH_WORLD_REFERENCE)
 
     @ground_truth_world_ref.setter
@@ -329,7 +320,7 @@ class CAS:
     T = TypeVar("T")
 
     @staticmethod
-    def filter_by_type(type_to_include: Type[T], input_list: List[Any]) -> List[T]:
+    def filter_by_type(type_to_include: type[T], input_list: list[Any]) -> list[T]:
         """
         Filter a list to include only objects of a specific type.
 
@@ -341,7 +332,7 @@ class CAS:
             element for element in input_list if isinstance(element, type_to_include)
         ]
 
-    def filter_annotations_by_type(self, type_to_include: Type[T]) -> List[T]:
+    def filter_annotations_by_type(self, type_to_include: type[T]) -> list[T]:
         """
         Filter annotations to include only those of a specific type.
 
@@ -352,8 +343,8 @@ class CAS:
 
     @staticmethod
     def _filter_objects(
-        objects: List[Any], criteria: Dict[str, Tuple[str, Any]]
-    ) -> List[Any]:
+        objects: list[Any], criteria: dict[str, tuple[str, Any]]
+    ) -> list[Any]:
         """
         Filters a list of objects based on specified criteria.
 
@@ -388,10 +379,10 @@ class CAS:
 
     def filter_by_type_and_criteria(
         self,
-        type_to_include: Type,
-        input_list: List[Any],
-        criteria: Dict[str, Tuple[str, Any]],
-    ) -> List[Any]:
+        type_to_include: type,
+        input_list: list[Any],
+        criteria: dict[str, tuple[str, Any]],
+    ) -> list[Any]:
         """
         Filters a list of objects based on specified criteria. Objects must be of type 'type_to_include'
 

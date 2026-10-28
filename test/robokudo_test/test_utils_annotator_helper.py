@@ -236,17 +236,17 @@ class TestUtilsAnnotatorHelper(object):
         cloud_in_world = transform_cloud_from_camera_to_world(
             camera_to_world_cas, cloud, transform_inplace=True
         )
-        assert (
-            cloud_in_world == cloud
-        ), "different object instance was returned on in-place transform"
+        assert cloud_in_world == cloud, (
+            "different object instance was returned on in-place transform"
+        )
 
         cloud_back = transform_cloud_from_world_to_camera(
             camera_to_world_cas, cloud_in_world, transform_inplace=True
         )
 
-        assert (
-            cloud_back == cloud
-        ), "different object instance was returned on in-place transform"
+        assert cloud_back == cloud, (
+            "different object instance was returned on in-place transform"
+        )
 
         dists = cloud.compute_point_cloud_distance(cloud_back)
         assert np.all(np.asarray(dists) < 1.0e-6)
@@ -262,16 +262,16 @@ class TestUtilsAnnotatorHelper(object):
         cloud_in_world = transform_cloud_from_camera_to_world(identity_cas, cloud)
 
         dists_in_world = cloud.compute_point_cloud_distance(cloud_in_world)
-        assert np.all(
-            np.asarray(dists_in_world) < 1.0e-6
-        ), "transform_cloud_from_camera_to_world changed points in identify transform"
+        assert np.all(np.asarray(dists_in_world) < 1.0e-6), (
+            "transform_cloud_from_camera_to_world changed points in identify transform"
+        )
 
         cloud_in_camera = transform_cloud_from_world_to_camera(identity_cas, cloud)
 
         dists_in_camera = cloud.compute_point_cloud_distance(cloud_in_camera)
-        assert np.all(
-            np.asarray(dists_in_camera) < 1.0e-6
-        ), "transform_cloud_from_world_to_camera changed points in identify transform"
+        assert np.all(np.asarray(dists_in_camera) < 1.0e-6), (
+            "transform_cloud_from_world_to_camera changed points in identify transform"
+        )
 
     ######################
     # Transform Matrices #
@@ -417,12 +417,12 @@ class TestUtilsAnnotatorHelper(object):
         annotator_in_pipeline.camera_intrinsics = copy.deepcopy(kinect_intrinsics)
 
         scale_camera_intrinsics(annotator_in_pipeline)
-        assert annotator_in_pipeline.camera_intrinsics.width == int(
-            width * scalex
-        ), f"Width should be scaled to {scalex}"
-        assert annotator_in_pipeline.camera_intrinsics.height == int(
-            height * scaley
-        ), f"Height should be scaled to {scaley}"
+        assert annotator_in_pipeline.camera_intrinsics.width == int(width * scalex), (
+            f"Width should be scaled to {scalex}"
+        )
+        assert annotator_in_pipeline.camera_intrinsics.height == int(height * scaley), (
+            f"Height should be scaled to {scaley}"
+        )
 
         scaled_matrix = copy.deepcopy(kinect_intrinsics.intrinsic_matrix)
         scaled_matrix[0, [0, 2]] *= scalex

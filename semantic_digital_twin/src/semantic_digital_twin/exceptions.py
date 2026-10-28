@@ -8,7 +8,7 @@ from pathlib import Path
 from uuid import UUID
 
 import mujoco
-from typing_extensions import TYPE_CHECKING, Callable, Any, List
+from typing_extensions import TYPE_CHECKING, Callable, Any
 
 from krrood.adapters.exceptions import UntrackedObjectError
 from krrood.exceptions import DataclassException
@@ -823,8 +823,7 @@ class UnknownPartWholeRelationshipField(UsageError):
 
     def suggest_correction(self) -> str:
         return (
-            f"the available fields are:"
-            f" {', '.join(self.available_fields) or '(none)'}"
+            f"the available fields are: {', '.join(self.available_fields) or '(none)'}"
         )
 
 
@@ -861,17 +860,17 @@ class NoSinglePartWholeRelationshipField(UsageError):
     type alone, but not exactly one field of the annotation holds parts of that type.
     """
 
-    annotation: Type[HasRootBody]
+    annotation: type[HasRootBody]
     """
     The annotation type the part is for.
     """
 
-    part_type: Type[HasRootBody]
+    part_type: type[HasRootBody]
     """
     The type of the part.
     """
 
-    matching_fields: List[str]
+    matching_fields: list[str]
     """
     The names of the annotation's part-whole relationship fields that hold parts of that
     type.
@@ -1037,6 +1036,30 @@ class InvalidPlaneDimensions(UsageError):
 
     def suggest_correction(self) -> str:
         return ""
+
+
+@dataclass
+class HandleWiderThanLong(UsageError):
+    """
+    Raised when a handle scale is wider (y) than it is long (z).
+    """
+
+    scale: Scale
+    """
+    The scale the handle geometry was requested with.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The handle scale {self.scale} is wider (y={self.scale.y}) than it is "
+            f"long (z={self.scale.z})."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "pass the length of the handle as z and its width as y, and roll the "
+            "handle pose to lay the bar along the front it is mounted on."
+        )
 
 
 @dataclass
@@ -1845,9 +1868,9 @@ class WorldEntityWithIDNotInKwargs(UntrackedObjectError):
     """
     The name the reference to that entity went by when it was written.
 
-    Says which entity is meant where the id alone says nothing. ``None`` where the
-    reference carries no name, and never used to look an entity up: the id is its
-    identity.
+    Says which entity is meant where the id alone says nothing. ``None``
+    where the reference carries no name, and never used to look an
+    entity up: the id is its identity.
     """
 
     def error_message(self) -> str:

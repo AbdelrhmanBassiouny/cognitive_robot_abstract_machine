@@ -25,7 +25,7 @@ import open3d
 import torch
 from krrood.ormatic.utils import classproperty
 from py_trees.common import Status
-from typing_extensions import TYPE_CHECKING, Any, Dict, List, Optional
+from typing_extensions import TYPE_CHECKING, Any
 from ultralytics import SAM, YOLO
 from ultralytics.utils.plotting import colors
 
@@ -121,18 +121,18 @@ class YoloAnnotator(ThreadedAnnotator):
 
                 Created during setup if it does not exist.
                 """
-                self.pretrained_model: Optional[str] = None
+                self.pretrained_model: str | None = None
                 """
                 Name of a model ultralytics provides, e.g. ``yolov8m.pt``, inside
                 :attr:`models_directory`.
 
                 Takes precedence over weights inside a ROS package.
                 """
-                self.ros_package_name: Optional[str] = None
+                self.ros_package_name: str | None = None
                 """
                 Name of the ROS package holding custom weights.
                 """
-                self.weights_path: Optional[str] = None
+                self.weights_path: str | None = None
                 """
                 Path of the custom weights, relative to the ROS package.
                 """
@@ -152,7 +152,7 @@ class YoloAnnotator(ThreadedAnnotator):
                 """
                 Class name of the detections that become human hypotheses.
                 """
-                self.ignored_class_names: List[str] = []
+                self.ignored_class_names: list[str] = []
                 """
                 Classes whose detections are neither annotated nor visualized.
                 """
@@ -225,7 +225,7 @@ class YoloAnnotator(ThreadedAnnotator):
     def __init__(
         self,
         name: str = "YoloAnnotator",
-        descriptor: Optional[YoloAnnotator.Descriptor] = None,
+        descriptor: YoloAnnotator.Descriptor | None = None,
     ) -> None:
         super().__init__(name, descriptor)
 
@@ -233,15 +233,15 @@ class YoloAnnotator(ThreadedAnnotator):
         """
         Where the YOLO model is loaded from.
         """
-        self.model: Optional[YOLO] = None
+        self.model: YOLO | None = None
         """
         The YOLO detection model, loaded during setup.
         """
-        self.class_names: Dict[int, str] = {}
+        self.class_names: dict[int, str] = {}
         """
         Name of each class the model detects, by class id, loaded during setup.
         """
-        self.segmentation_model: Optional[SAM] = None
+        self.segmentation_model: SAM | None = None
         """
         The SAM model refining the hypothesis masks in precision mode, loaded during
         setup.
@@ -269,7 +269,7 @@ class YoloAnnotator(ThreadedAnnotator):
             )
         return super().setup(**kwargs)
 
-    def _load_class_names(self) -> Dict[int, str]:
+    def _load_class_names(self) -> dict[int, str]:
         """
         :return: Name of each class the model detects, by class id.
         """
@@ -329,7 +329,7 @@ class YoloAnnotator(ThreadedAnnotator):
             return color_image
         return get_scaled_color_image_for_depth_image(self.get_cas(), color_image)
 
-    def _detect(self, detection_image: npt.NDArray[np.uint8]) -> List[YoloDetection]:
+    def _detect(self, detection_image: npt.NDArray[np.uint8]) -> list[YoloDetection]:
         """
         :return: The objects the model detects in the image with sufficient confidence.
         """
@@ -373,7 +373,7 @@ class YoloAnnotator(ThreadedAnnotator):
         self,
         detection: YoloDetection,
         detection_image: npt.NDArray[np.uint8],
-        existing_hypotheses: List[ObjectHypothesis],
+        existing_hypotheses: list[ObjectHypothesis],
     ) -> AnnotatedDetection:
         """
         Classify the existing hypothesis the detection overlaps, or else a new one.
@@ -409,8 +409,8 @@ class YoloAnnotator(ThreadedAnnotator):
         )
 
     def _most_overlapped_hypothesis(
-        self, region: Rect, hypotheses: List[ObjectHypothesis]
-    ) -> Optional[ObjectHypothesis]:
+        self, region: Rect, hypotheses: list[ObjectHypothesis]
+    ) -> ObjectHypothesis | None:
         """
         :return: The hypothesis overlapping the region the most, if it overlaps by more
             than the configured minimum.
@@ -504,7 +504,7 @@ class YoloAnnotator(ThreadedAnnotator):
             mask_true_value=self.mask_foreground,
         )
 
-    def _visualize(self, annotated_detections: List[AnnotatedDetection]) -> None:
+    def _visualize(self, annotated_detections: list[AnnotatedDetection]) -> None:
         """
         Draw the annotated hypotheses into the color image, together with their masks in
         precision mode, and output the point clouds of the new hypotheses.
@@ -523,7 +523,9 @@ class YoloAnnotator(ThreadedAnnotator):
             draw_bounding_boxes_from_object_hypotheses(
                 visualization_image,
                 [annotated.hypothesis],
-                lambda _: f"{classification.classname}, {classification.confidence:.2f}",
+                lambda _: (
+                    f"{classification.classname}, {classification.confidence:.2f}"
+                ),
             )
         self.get_annotator_output_struct().set_image(visualization_image)
         if parameters.global_with_depth:

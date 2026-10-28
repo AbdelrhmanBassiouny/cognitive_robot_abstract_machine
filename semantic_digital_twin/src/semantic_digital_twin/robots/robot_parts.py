@@ -8,12 +8,22 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing_extensions import Self, TYPE_CHECKING, DefaultDict, Union, Any, cast
+from typing_extensions import (
+    get_origin,
+    get_args,
+    Generic,
+    TypeVar,
+    Unpack,
+    Self,
+    TYPE_CHECKING,
+    Union,
+    Any,
+    cast,
+)
 from uuid import UUID
 
 import numpy as np
 
-from typing_extensions import get_origin, get_args, Generic, TypeVar, Unpack
 
 from krrood.adapters.json_serializer import list_like_classes
 from krrood.class_diagrams.attribute_introspector import (
@@ -1402,7 +1412,7 @@ class AbstractRobot(Agent, HasRobotParts, ABC):
 
     def tighten_dof_velocity_limits_of_1dof_connections(
         self,
-        new_limits: DefaultDict[ActiveConnection1DOF, float],
+        new_limits: defaultdict[ActiveConnection1DOF, float],
     ) -> None:
         """
         Convenience method for tightening the velocity limits of all one degree-of-

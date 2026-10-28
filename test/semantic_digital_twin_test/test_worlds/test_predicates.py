@@ -297,9 +297,9 @@ def test_visibility_follows_camera_orientation(pr2_world_copy: World) -> None:
 
 def test_occluding_bodies(pr2_world_state_reset: World):
     world = deepcopy(pr2_world_state_reset)
-    world.get_body_by_name("base_footprint").parent_connection.origin = (
-        HomogeneousTransformationMatrix.from_xyz_rpy(0, 0, 0)
-    )
+    world.get_body_by_name(
+        "base_footprint"
+    ).parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(0, 0, 0)
 
     def make_body(name: str) -> Body:
         result = Body(name=PrefixedName(name))
@@ -346,9 +346,9 @@ def test_occluding_bodies_follows_camera_orientation(pr2_world_state_reset: Worl
     axis, so a pair off to the side is only resolved once the head is turned towards it.
     """
     world = deepcopy(pr2_world_state_reset)
-    world.get_body_by_name("base_footprint").parent_connection.origin = (
-        HomogeneousTransformationMatrix.from_xyz_rpy(0, 0, 0)
-    )
+    world.get_body_by_name(
+        "base_footprint"
+    ).parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(0, 0, 0)
 
     def make_body(name: str) -> Body:
         result = Body(name=PrefixedName(name))

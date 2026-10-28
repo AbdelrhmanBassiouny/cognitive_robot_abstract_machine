@@ -148,7 +148,7 @@ class ViewPayload:
         }
 
     @staticmethod
-    def from_document(document: dict[str, Any]) -> "ViewPayload":
+    def from_document(document: dict[str, Any]) -> ViewPayload:
         """
         Create a payload object from a storage document.
         """

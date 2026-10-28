@@ -75,12 +75,13 @@ def position_bounding_box_relative_to_target(
     """
     Position a bounding box relative to the target's center and orientation.
 
-    Preserve the input box's extent and replace its pose with the supplied relative
-    transform composed with the target's pose.
+    Preserve the input box's extent and replace its pose with the
+    supplied relative transform composed with the target's pose.
 
     :param input_bounding_box: Bounding box whose extent is preserved
     :param target_bounding_box: Reference bounding box
-    :param transform_matrix: 4x4 transform matrix relative to target center
+    :param transform_matrix: 4x4 transform matrix relative to target
+        center
     :return: Transformed bounding box
     """
     target_transform = get_transform_matrix(

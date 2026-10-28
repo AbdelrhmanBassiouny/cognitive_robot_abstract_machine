@@ -208,9 +208,9 @@ class FileReaderInterface(CameraInterface):
                         camera_observation_data["effective_camera_model"] = from_json(
                             camera_observation_data["effective_camera_model"]
                         )
-                        self.loaded_data[matched_timestamp][
-                            matched_data_type
-                        ] = camera_observation_data
+                        self.loaded_data[matched_timestamp][matched_data_type] = (
+                            camera_observation_data
+                        )
 
         self.frame_timestamps = list(self.loaded_data)
         self.next_frame_index = 0

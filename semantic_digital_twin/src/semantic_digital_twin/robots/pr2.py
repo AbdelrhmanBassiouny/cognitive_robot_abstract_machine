@@ -8,9 +8,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from importlib.resources import files
 from pathlib import Path
-from typing_extensions import Self
+from typing_extensions import Generic, Self
 
-from typing_extensions import Generic
 
 from krrood.ormatic.utils import classproperty
 from semantic_digital_twin.adapters.sensors.lidar import Lidar, LidarSource
@@ -185,7 +184,6 @@ class PR2BaseLidar(Lidar):
 
 @dataclass(eq=False)
 class PR2RightGripperLeftFinger(Finger):
-
     def setup_hardware_interfaces(self):
         pass
 
@@ -208,7 +206,6 @@ class PR2RightGripperLeftFinger(Finger):
 
 @dataclass(eq=False)
 class PR2RightGripperRightFinger(Finger):
-
     def setup_hardware_interfaces(self):
         pass
 
@@ -231,7 +228,6 @@ class PR2RightGripperRightFinger(Finger):
 
 @dataclass(eq=False)
 class PR2LeftGripperLeftFinger(Finger):
-
     def setup_hardware_interfaces(self):
         pass
 
@@ -254,7 +250,6 @@ class PR2LeftGripperLeftFinger(Finger):
 
 @dataclass(eq=False)
 class PR2LeftGripperRightFinger(Finger):
-
     def setup_hardware_interfaces(self):
         return
 
@@ -309,7 +304,6 @@ class PR2Gripper(
 class PR2RightGripper(
     PR2Gripper[PR2RightGripperLeftFinger, PR2RightGripperRightFinger]
 ):
-
     def setup_joint_states(self) -> list[JointState]:
         right_gripper_joints = self.active_connections
 
@@ -354,7 +348,6 @@ class PR2RightGripper(
 
 @dataclass(eq=False)
 class PR2LeftGripper(PR2Gripper[PR2LeftGripperLeftFinger, PR2LeftGripperRightFinger]):
-
     def setup_joint_states(self) -> list[JointState]:
         left_gripper_joints = self.active_connections
         left_gripper_open = JointState.from_mapping(
@@ -398,7 +391,6 @@ class PR2LeftGripper(PR2Gripper[PR2LeftGripperLeftFinger, PR2LeftGripperRightFin
 
 @dataclass(eq=False)
 class PR2Neck(Neck[PR2KinectV1], ServoedRobotPart):
-
     def setup_hardware_interfaces(self):
 
         controlled_joints = [
@@ -482,7 +474,6 @@ class PR2Arm(
 
 @dataclass(eq=False)
 class PR2LeftArm(PR2Arm[PR2LeftGripper]):
-
     def setup_hardware_interfaces(self):
         controlled_joints = [
             PR2Joint.LEFT_SHOULDER_PAN,
@@ -537,7 +528,6 @@ class PR2LeftArm(PR2Arm[PR2LeftGripper]):
 
 @dataclass(eq=False)
 class PR2RightArm(PR2Arm[PR2RightGripper]):
-
     def setup_hardware_interfaces(self):
         controlled_joints = [
             PR2Joint.RIGHT_SHOULDER_PAN,
@@ -589,7 +579,6 @@ class PR2Torso(
     HasNeck[PR2Neck],
     ServoedRobotPart,
 ):
-
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(
         cls, robot_root: KinematicStructureEntity
@@ -650,7 +639,6 @@ class PR2Torso(
 
 @dataclass(eq=False)
 class PR2MobileBase(MobileBase[OmniDrive], HasTorso[PR2Torso], HasLidar[PR2BaseLidar]):
-
     @classproperty
     def topic_name(cls) -> str:
         """

@@ -242,12 +242,14 @@ class Storage:
         """
         Load views from MongoDB into a CAS document.
 
-        Retrieve and decode each persisted view referenced in ``view_ids``.
+        Retrieve and decode each persisted view referenced in
+        ``view_ids``.
 
         :param cas_document: CAS document to update with loaded views
-        :param excluded_view_names: View names to leave undecoded for caller-specific
-            handling.
-        :param included_view_names: View names to decode when a reader selects inputs.
+        :param excluded_view_names: View names to leave undecoded for
+            caller-specific handling.
+        :param included_view_names: View names to decode when a reader
+            selects inputs.
         """
         excluded_view_names = excluded_view_names or set()
         for expected_view_name, view_id in cas_document[
@@ -268,9 +270,9 @@ class Storage:
                 raise RecordedViewNameMismatch(
                     expected_name=expected_view_name, recorded_name=decoded_view_name
                 )
-            cas_document[StorageDocumentField.VIEWS][
-                decoded_view_name
-            ] = decoded_view_value
+            cas_document[StorageDocumentField.VIEWS][decoded_view_name] = (
+                decoded_view_value
+            )
 
     def load_view_document(
         self, cas_document: dict[str, Any], view_name: str
@@ -291,12 +293,14 @@ class Storage:
         """
         Load annotations from MongoDB into a CAS.
 
-        Restore the annotations from the database and insert them into the CAS. If no
-        (pickled) annotations are available, cas will be untouched.
+        Restore the annotations from the database and insert them into
+        the CAS. If no (pickled) annotations are available, cas will be
+        untouched.
 
-        :param cas_document: A dict representing a frame of a CAS in the database
-        :param cas: The 'robokudo.cas.CAS' instance where the annotations shall be
-            inserted to
+        :param cas_document: A dict representing a frame of a CAS in the
+            database
+        :param cas: The 'robokudo.cas.CAS' instance where the
+            annotations shall be inserted to
         """
         if cas_document["annotations"]:
             tracker = world.get_world_entity_tracker()

@@ -36,6 +36,7 @@ from .test_adapters.test_mjcf import VISUAL_ONLY_GEOM_SCENE
 
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.exceptions import (
+    HandleWiderThanLong,
     InvalidPlaneDimensions,
     MergedRobotAnnotationNotFound,
     MissingConnectionAxisError,
@@ -1217,6 +1218,13 @@ def test_default_spec_matches_handle_without_explicit_scale(empty_world):
     _assert_same_geometry(spec_body.collision, factory.root.collision)
 
 
+def test_default_spec_handle_rejects_width_above_length():
+    with pytest.raises(HandleWiderThanLong):
+        Handle.get_default_root_kinematic_structure_entity_specification(
+            "handle", Scale(x=0.068, y=0.5, z=0.015)
+        )
+
+
 def test_default_spec_matches_door(empty_world):
     scale = Scale(0.03, 1, 2)
     with empty_world.modify_world():
@@ -1746,8 +1754,12 @@ def _factory_overrides():
         for method_name, method in vars(annotation_type).items():
             if not method_name.startswith("create_with_new_"):
                 continue
-            yield annotation_type, method_name, inspect.signature(
-                method.__func__ if isinstance(method, classmethod) else method
+            yield (
+                annotation_type,
+                method_name,
+                inspect.signature(
+                    method.__func__ if isinstance(method, classmethod) else method
+                ),
             )
 
 

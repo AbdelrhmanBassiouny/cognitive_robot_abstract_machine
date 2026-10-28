@@ -103,7 +103,6 @@ class JustinJoint(JointName):
 
 @dataclass(eq=False)
 class JustinLeftThumb(Finger):
-
     def setup_hardware_interfaces(self) -> None:
         pass
 
@@ -126,7 +125,6 @@ class JustinLeftThumb(Finger):
 
 @dataclass(eq=False)
 class JustinLeftIndexFinger(Finger):
-
     def setup_hardware_interfaces(self) -> None:
         pass
 
@@ -147,7 +145,6 @@ class JustinLeftIndexFinger(Finger):
 
 @dataclass(eq=False)
 class JustinLeftMiddleFinger(Finger):
-
     def setup_hardware_interfaces(self) -> None:
         pass
 
@@ -170,7 +167,6 @@ class JustinLeftMiddleFinger(Finger):
 
 @dataclass(eq=False)
 class JustinLeftRingFinger(Finger):
-
     def setup_hardware_interfaces(self) -> None:
         pass
 
@@ -191,7 +187,6 @@ class JustinLeftRingFinger(Finger):
 
 @dataclass(eq=False)
 class JustinRightThumb(Finger):
-
     def setup_hardware_interfaces(self) -> None:
         pass
 
@@ -214,7 +209,6 @@ class JustinRightThumb(Finger):
 
 @dataclass(eq=False)
 class JustinRightIndexFinger(Finger):
-
     def setup_hardware_interfaces(self) -> None:
         pass
 
@@ -235,7 +229,6 @@ class JustinRightIndexFinger(Finger):
 
 @dataclass(eq=False)
 class JustinRightMiddleFinger(Finger):
-
     def setup_hardware_interfaces(self) -> None:
         pass
 
@@ -258,7 +251,6 @@ class JustinRightMiddleFinger(Finger):
 
 @dataclass(eq=False)
 class JustinRightRingFinger(Finger):
-
     def setup_hardware_interfaces(self) -> None:
         pass
 
@@ -289,7 +281,6 @@ class JustinLeftHand(
         JustinLeftRingFinger,
     ],
 ):
-
     def setup_hardware_interfaces(self) -> None:
         self._setup_hardware_interfaces_for_active_connections()
 
@@ -340,7 +331,6 @@ class JustinRightHand(
         JustinRightMiddleFinger,
     ],
 ):
-
     def setup_hardware_interfaces(self) -> None:
         self._setup_hardware_interfaces_for_active_connections()
 
@@ -383,7 +373,6 @@ class JustinRightHand(
 
 @dataclass(eq=False)
 class JustinLeftArm(Arm[JustinLeftHand]):
-
     def setup_hardware_interfaces(self) -> None:
         self._setup_hardware_interfaces_for_active_connections()
 
@@ -409,7 +398,6 @@ class JustinLeftArm(Arm[JustinLeftHand]):
 
 @dataclass(eq=False)
 class JustinRightArm(Arm[JustinRightHand]):
-
     def setup_hardware_interfaces(self) -> None:
         self._setup_hardware_interfaces_for_active_connections()
 
@@ -435,7 +423,6 @@ class JustinRightArm(Arm[JustinRightHand]):
 
 @dataclass(eq=False)
 class JustinCamera(RobotCamera[FieldOfViewCameraModel]):
-
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(
         cls, robot_root: KinematicStructureEntity
@@ -464,7 +451,6 @@ class JustinCamera(RobotCamera[FieldOfViewCameraModel]):
 
 @dataclass(eq=False)
 class JustinNeck(Neck[JustinCamera]):
-
     def setup_hardware_interfaces(self) -> None:
         self._setup_hardware_interfaces_for_active_connections()
 
@@ -485,7 +471,6 @@ class JustinNeck(Neck[JustinCamera]):
 class JustinTorso(
     Torso, HasLeftRightArm[JustinLeftArm, JustinRightArm], HasNeck[JustinNeck]
 ):
-
     def setup_hardware_interfaces(self) -> None:
         self._setup_hardware_interfaces_for_active_connections()
 
@@ -504,7 +489,6 @@ class JustinTorso(
 
 @dataclass(eq=False)
 class JustinMobileBase(MobileBase[OmniDrive], HasTorso[JustinTorso]):
-
     @classproperty
     def forward_axis(cls) -> Vector3:
         return Vector3.X()
