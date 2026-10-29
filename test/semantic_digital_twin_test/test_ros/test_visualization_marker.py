@@ -172,7 +172,7 @@ def test_visualization_marker_regions_are_transparent(rclpy_node, cylinder_bot_w
     region = Region(
         name=PrefixedName("region"),
         area=ShapeCollection(
-            shapes=[Box(scale=Scale(0.1, 0.1, 0.1), color=Color(A=1.0))]
+            shapes=[Box(scale=Scale(0.1, 0.1, 0.1), color=Color.from_rgba(opacity=1.0))]
         ),
     )
     connection = FixedConnection(parent=cylinder_bot_world.root, child=region)

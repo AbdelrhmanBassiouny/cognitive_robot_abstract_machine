@@ -233,7 +233,7 @@ def test_world_multi_sim_with_change(test_urdf_1_world):
         box = Box(
             origin=box_origin,
             scale=Scale(1.0, 1.5, 0.5),
-            color=Color(1.0, 0.0, 0.0, 1.0),
+            color=Color.from_rgba(red=1.0, green=0.0, blue=0.0, opacity=1.0),
         )
         new_body.collision = ShapeCollection([box], reference_frame=new_body)
 
@@ -256,7 +256,7 @@ def test_world_multi_sim_with_change(test_urdf_1_world):
         region_box = Box(
             scale=Scale(0.1, 0.5, 0.2),
             origin=HomogeneousTransformationMatrix.from_xyz_rpy(reference_frame=region),
-            color=Color(0.0, 1.0, 0.0, 0.8),
+            color=Color.from_rgba(red=0.0, green=1.0, blue=0.0, opacity=0.8),
         )
         region.area = ShapeCollection([region_box], reference_frame=region)
 
@@ -840,7 +840,7 @@ def test_spawn_body_with_connections():
         box = Box(
             origin=box_origin,
             scale=Scale(0.4, 0.4, 1.0),
-            color=Color(0.9, 0.9, 0.9, 1.0),
+            color=Color.from_rgba(red=0.9, green=0.9, blue=0.9, opacity=1.0),
         )
         spawn_body.collision = ShapeCollection([box], reference_frame=spawn_body)
 
@@ -856,7 +856,7 @@ def test_spawn_body_with_connections():
         cylinder = Cylinder(
             width=0.2,
             height=0.1,
-            color=Color(0.9, 0.1, 0.1, 1.0),
+            color=Color.from_rgba(red=0.9, green=0.1, blue=0.1, opacity=1.0),
         )
         spawn_left_shoulder_body.collision = ShapeCollection(
             [cylinder], reference_frame=spawn_left_shoulder_body
@@ -889,7 +889,7 @@ def test_spawn_body_with_connections():
         cylinder = Cylinder(
             width=0.2,
             height=0.1,
-            color=Color(0.9, 0.1, 0.1, 1.0),
+            color=Color.from_rgba(red=0.9, green=0.1, blue=0.1, opacity=1.0),
         )
         spawn_right_shoulder_body.collision = ShapeCollection(
             [cylinder], reference_frame=spawn_right_shoulder_body
@@ -1042,7 +1042,7 @@ def test_world_sim_state_sync():
                         reference_frame=plane_body
                     ),
                     scale=Scale(2.0, 2.0, plane_half_thickness * 2),
-                    color=Color(1.0, 1.0, 0.0, 1.0),
+                    color=Color.from_rgba(red=1.0, green=1.0, blue=0.0, opacity=1.0),
                 )
             ],
             reference_frame=plane_body,
@@ -1058,7 +1058,7 @@ def test_world_sim_state_sync():
                     scale=Scale(
                         box_half_size * 2, box_half_size * 2, box_half_size * 2
                     ),
-                    color=Color(1.0, 0.0, 0.0, 1.0),
+                    color=Color.from_rgba(red=1.0, green=0.0, blue=0.0, opacity=1.0),
                 )
             ],
             reference_frame=falling_box,
@@ -1472,7 +1472,7 @@ def _build_box_on_plane_world() -> BoxOnPlaneWorld:
                         reference_frame=ground_plane
                     ),
                     scale=Scale(2.0, 2.0, 0.1),
-                    color=Color(1.0, 1.0, 0.0, 1.0),
+                    color=Color.from_rgba(red=1.0, green=1.0, blue=0.0, opacity=1.0),
                 )
             ],
             reference_frame=ground_plane,
@@ -1487,7 +1487,7 @@ def _build_box_on_plane_world() -> BoxOnPlaneWorld:
                         reference_frame=box
                     ),
                     scale=Scale(0.2, 0.2, 0.2),
-                    color=Color(1.0, 0.0, 0.0, 1.0),
+                    color=Color.from_rgba(red=1.0, green=0.0, blue=0.0, opacity=1.0),
                 )
             ],
             reference_frame=box,
@@ -1701,7 +1701,7 @@ def test_prebuilt_world_multiple_free_bodies_start_at_authored_poses():
                         reference_frame=ground_plane
                     ),
                     scale=Scale(2.0, 2.0, 0.1),
-                    color=Color(1.0, 1.0, 0.0, 1.0),
+                    color=Color.from_rgba(red=1.0, green=1.0, blue=0.0, opacity=1.0),
                 )
             ],
             reference_frame=ground_plane,
@@ -1727,7 +1727,9 @@ def test_prebuilt_world_multiple_free_bodies_start_at_authored_poses():
                         scale=Scale(
                             box_half_size * 2, box_half_size * 2, box_half_size * 2
                         ),
-                        color=Color(0.9, 0.3, 0.3, 1.0),
+                        color=Color.from_rgba(
+                            red=0.9, green=0.3, blue=0.3, opacity=1.0
+                        ),
                     )
                 ],
                 reference_frame=cube,

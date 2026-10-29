@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from typing_extensions import TYPE_CHECKING
 
+from krrood.exceptions import DataclassException
 from semantic_digital_twin.exceptions import UsageError
 
 if TYPE_CHECKING:
@@ -270,3 +271,22 @@ class MissingDriveConnectionError(RobotPartValidationError):
 
     def error_message(self) -> str:
         return f"{type(self.robot_part).__name__} is not moved by a drive."
+
+
+# %% Robot annotation consistency
+@dataclass
+class InvalidRobotAnnotation(UsageError):
+    """
+    A robot annotation violates a world or part ownership constraint.
+    """
+
+    reason: str
+    """
+    Constraint violated by the robot annotation.
+    """
+
+    def error_message(self) -> str:
+        return self.reason
+
+    def suggest_correction(self) -> str:
+        return "Restore consistent world entities, a default camera and robot part ownership."

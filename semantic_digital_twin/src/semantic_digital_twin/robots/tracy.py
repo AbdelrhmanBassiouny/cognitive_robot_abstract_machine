@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+# %% Imports
 import os
 from collections import defaultdict
 from dataclasses import dataclass
@@ -32,10 +33,11 @@ from semantic_digital_twin.robots.robot_part_mixins import (
 from semantic_digital_twin.robots.robot_parts import (
     AbstractRobot,
     MountingTable,
-    Camera,
+    RobotCamera,
     EndEffector,
     Finger,
 )
+from semantic_digital_twin.datastructures.camera_model import FieldOfViewCameraModel
 from semantic_digital_twin.robots.robotiq_85_gripper import Robotiq85Gripper
 from semantic_digital_twin.robots.ur10e_arm import UR10eArm
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
@@ -43,6 +45,8 @@ from semantic_digital_twin.spatial_types import Vector3
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
+
+# %% Robot parts
 
 
 class TracyTopic(StrEnum):
@@ -397,16 +401,16 @@ class TracyRightArm(UR10eArm[TracyRightGripper]):
 
 
 @dataclass(eq=False)
-class TracyCamera(Camera):
+class TracyCamera(RobotCamera[FieldOfViewCameraModel]):
+    """
+    Tracy's fixed camera rooted at its calibrated camera link.
+    """
+
     def setup_hardware_interfaces(self) -> None:
         pass
 
     def setup_joint_states(self) -> list[JointState]:
         return []
-
-    @property
-    def forward_facing_axis(self) -> Vector3:
-        return Vector3.Z(reference_frame=self.root)
 
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(
@@ -416,7 +420,9 @@ class TracyCamera(Camera):
             root=robot_root._world.get_body_in_branch_by_name(
                 robot_root, "camera_link"
             ),
-            field_of_view=FieldOfView(horizontal_angle=1.047, vertical_angle=0.785),
+            camera_model=FieldOfViewCameraModel(
+                angular_extent=FieldOfView(horizontal_angle=1.047, vertical_angle=0.785)
+            ),
             minimal_height=0.8,
             maximal_height=1.7,
             default_camera=True,

@@ -476,7 +476,7 @@ class URDFParser(WorldModelParser):
         if material is None:
             return None
         if material.color is not None:
-            color = Color(*material.color.rgba)
+            color = Color.from_rgba(*material.color.rgba)
         else:
             named_colors = {
                 named.name: named.color
@@ -485,7 +485,7 @@ class URDFParser(WorldModelParser):
             }
             if material.name not in named_colors:
                 return None
-            color = Color(*named_colors[material.name].rgba)
+            color = Color.from_rgba(*named_colors[material.name].rgba)
         # The mesh's file is read only when there is a color to give.
         if isinstance(shape, Mesh) and shape.is_textured:
             return None
