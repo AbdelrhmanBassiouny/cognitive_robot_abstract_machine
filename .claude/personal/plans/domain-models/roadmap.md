@@ -1,7 +1,8 @@
 # domain-models — standing rules
 
+- Design decisions for spatial and image items live in https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS; read it before starting or resolving one, and record new decisions there.
 - A domain model depends on `krrood`, on other domain models and on libraries outside this repository.
-- Never duplicate a class to drop a dependency, and never keep two implementations of one concept (no numeric copy of the symbolic spatial types).
+- Never duplicate a class to drop a dependency, and never keep two implementations of one concept (no numeric copy of the symbolic spatial types). Moved classes stay importable from their old module, so old imports and JSON type names keep resolving.
 - krrood_spatial_math (was krrspatial) is the one home of spatial types: its base holds the casadi-free interfaces (spaces, coordinate systems and frames, representations, changes, SpaceMap, PlanarPoint); points, vectors, rotations and transforms sit behind its casadi extra. Image spaces are krrood_image's (was krrimage).
 - A space is a point set (EuclideanSpace, ImagePlane); values are CoordinateRepresentations of a CoordinateSystem on it, never of the space. A change within one space implements the CoordinateChange kind naming what it keeps; the frame type fixes it (affine between AffineFrames, rigid between CartesianFrames). A map between spaces is a SpaceMap, never a CoordinateChange.
 - A transform is only a change, never a value: HomogeneousTransformationMatrix is a RigidCoordinateChange, Pose its value. A rotation is a value (an orientation); a value never inherits from a part of it.
@@ -11,4 +12,3 @@
 - Classes with a dimension end in 3D or 2D (CartesianFrame3D, EuclideanSpace2D, Point3D); 3D-only types keep plain names. Frames are right-handed and in metres, stated in the docstring; a Handedness type waits until two conventions share one space.
 - One image plane per sensor, shared by every image it takes; an image is pixels in an ImageCoordinateSystem on it. Where and when an image was taken is a Capture role on the image, never fields of the image.
 - Perception adopts these types only after cram2#761 and #795 land, never by asking an open upstream PR to depend on an unmerged domain model. #761's CameraModel and CameraObservation are moved and retyped (SpaceMap, Capture), never rewritten beside them.
-- Moved classes stay importable from their old module, so old imports and JSON type names keep resolving.

@@ -40,8 +40,9 @@ items:
   status: not_started
   depends_on:
   - planar-point-interface
-  notes: 'First half of splitting #526: a pure move based on #527, with the old module re-exporting it
-    and no behaviour change, so the adopt PR''s diff shows only the interface work.'
+  notes: 'First half of splitting #526, opened only after the #526 preview is reviewed: SemDT''s spatial
+    types moved unchanged to krrood_spatial_math.spatial_types behind the [casadi] extra, based on #527,
+    the old module re-exporting them, so the adopt PR''s diff shows only the interface work.'
 - id: spatial-math-adopt
   title: SemDT's spatial types implement krrood_spatial_math's frame and change interfaces
   branch: claude/krrspatial
@@ -50,11 +51,12 @@ items:
   depends_on:
   - spatial-math-move
   session: https://claude.ai/code/session_01GoHMif2Xa7Mnqzz9mKFpTT
-  notes: 'Today #526 (user-marked ready) on #527, to be split: after the move PR, a new adopt PR on it
-    carries #526''s changes with its review applied, then #526 is closed. Review decisions: HomogeneousTransformationMatrix
-    is only a RigidCoordinateChange[CartesianFrame3D], Pose its value; RotationMatrix is a value; translation_matrix
-    is removed; handedness is docstring only; CoordinateT keeps its name with the new docstring. OrthogonalProjection
-    (#518) and Line3 come along.'
+  notes: 'Follow https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS. Next, on #526 as a preview: merge
+    #527''s renames; HomogeneousTransformationMatrix only a RigidCoordinateChange[CartesianFrame3D] (SpatialType
+    split so it keeps reference_frame and child_frame), Pose its value; RotationMatrix stays a value;
+    remove translation_matrix; handedness in docstrings only; Point2 keeps sm.Scalar. Reply on its threads
+    as the doc''s #526 table says. Once the user and Simon have reviewed it, a new adopt PR on spatial-math-move
+    re-applies it and #526 is closed with links to both.'
   pull_request_number: 526
 - id: krrimage
   title: domain_models/krrood_image (images, colours, pixels) with Color moved out of SemDT
@@ -65,11 +67,12 @@ items:
   depends_on:
   - planar-point-interface
   session: https://claude.ai/code/session_01J17aVY3vyQM8goACbkHkcp
-  notes: '#524 on #527: krrood_image.coordinates owns ImagePlane and ImageCoordinateSystem; ImagePoint
-    implements PlanarPoint[ImageCoordinateSystem, float]; Pixel stays a grid cell. Pushed a4e9bbdb. Rename
-    krrimage to krrood_image here once #527''s rename is merged in. cram2#761 rewrites SemDT''s Color:
-    #524 lands after it and moves Color as #761 left it, HueSaturationValue included; ask before dropping
-    the setters. Whichever of #524 and the adopt PR lands second merges the domain_models/README.md entries.'
+  notes: '#524 on #527: krrood_image.coordinates owns ImagePlane and ImageCoordinateSystem, which becomes
+    an AffineFrame once #527 adds it; ImagePoint implements PlanarPoint[ImageCoordinateSystem, float];
+    Pixel stays a grid cell. Pushed a4e9bbdb. Rename krrimage to krrood_image here once #527''s rename
+    is merged in. cram2#761 rewrites SemDT''s Color: #524 lands after it and moves Color as #761 left
+    it; ask before dropping the setters. Whichever of #524 and the adopt PR lands second merges the README
+    entries.'
 - id: image-extensions
   title: Depth and segmentation images, camera intrinsics, SemDT's CameraResolution and VideoResolution
     collapsed into Resolution
@@ -106,10 +109,12 @@ items:
   status: not_started
   depends_on:
   - spatial-math-adopt
-  notes: 'Subtracting points in different frames is silently accepted today; raise ReferenceFrameMismatchError.
-    HomogeneousTransformationMatrix.dot should raise when child_frame and the operand''s reference_frame
-    are both set and differ; written but held out of #526 because SemDT''s TestTransformationMatrix.test_reference_frames
-    asserts the opposite. Waits on the user and Simon (Q1 of the questions doc) before changing that test.'
+  notes: 'Subtracting points in different frames is silently accepted today; raise ReferenceFrameMismatchError
+    (ask whether it is renamed with CartesianFrame3D). HomogeneousTransformationMatrix.dot should raise
+    when child_frame and the operand''s reference_frame are both set and differ; written but held out
+    of #526 because SemDT''s TestTransformationMatrix.test_reference_frames asserts the opposite. Waits
+    on the user and Simon (Q1 of https://claude.ai/artifact/UW7BdpNyW1r2sc63ktzA9T) before changing that
+    test.'
 - id: spatial-action
   title: Each spatial value says how a coordinate change acts on it, replacing the operand lists in dot
   branch: claude/krrood-spatial-math-action
@@ -121,7 +126,8 @@ items:
   notes: 'A change acts on values of its own coordinate-system kind and keeps their type: a point by R
     p + t, a vector by R v, an orientation by composition. Each value implements the action (double dispatch)
     instead of HomogeneousTransformationMatrix.dot and RotationMatrix.dot listing operands; planar changes
-    act on Point2 and Pose2D. Waits on Simon''s answers to Q4 (Point3 in RotationMatrix.dot) and Q5 (AxisAngle).'
+    act on Point2 and Pose2D. Answers Simon''s #526 threads on transform and the dot mixin. Waits on his
+    Q4 (Point3 in RotationMatrix.dot) and Q5 (AxisAngle) in https://claude.ai/artifact/UW7BdpNyW1r2sc63ktzA9T.'
 - id: planar-coordinate-system
   title: Point2 and Pose2D are given in a CartesianFrame2D on a EuclideanSpace2D, with dimension on the
     space and planar rigid changes
@@ -130,11 +136,12 @@ items:
   status: not_started
   depends_on:
   - spatial-math-adopt
-  notes: EuclideanSpace gets a dimension classproperty, with EuclideanSpace3D and EuclideanSpace2D. A
+  notes: 'EuclideanSpace gets a dimension classproperty, with EuclideanSpace3D and EuclideanSpace2D. A
     CartesianFrame2D is the x-y plane of a CartesianFrame3D and charts a EuclideanSpace2D; Point2 and
-    Pose2D move onto it. SE(2) is RigidCoordinateChange[CartesianFrame2D], only between frames sharing
-    one plane. A Pose projects to a Pose2D by the angle of its x-axis projected onto the plane, atan2(r21,
-    r11) (equal to the ZYX yaw), raising a custom exception when that axis is normal to the plane.
+    Pose2D move onto it. Points get a 3D interface beside PlanarPoint (Simon''s #526 review on Point).
+    SE(2) is RigidCoordinateChange[CartesianFrame2D], only between frames sharing one plane. A Pose projects
+    to a Pose2D by the angle of its x-axis projected onto the plane, atan2(r21, r11) (equal to the ZYX
+    yaw), raising a custom exception when that axis is normal to the plane.'
 - id: spatial-math-imports
   title: The workspace imports spatial types from krrood_spatial_math, with the 3D/2D class names (Point3D,
     Point2D, Vector3D, Line3D, Pose3D)
@@ -169,12 +176,12 @@ items:
   status: in_progress
   depends_on: []
   session: https://claude.ai/code/session_018wfiv7nbshkp1Yenu79fsh
-  notes: '#527 on main, user-marked ready, last pushed 5af267fe. Next on #527: rename the package krrspatial
-    to krrood_spatial_math (directory, tests, CI, workspace pyproject); ReferenceFrame to CartesianFrame3D
-    with CartesianFrame3DResolver, CartesianFrame3DReference, MissingCartesianFrame3DResolver and the
-    test mimics; AffineFrame and CartesianFrame between CoordinateSystem and the frames, change classes
-    generic over them; docstrings say right-handed, metres. Then reply to and resolve its threads and
-    merge #527 into #524 and #526. Decisions: https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS'
+  notes: '#527 on main, user-marked ready, at 5af267fe. Follow https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS.
+    Next on #527: package krrspatial to krrood_spatial_math (directory, tests, CI, workspace pyproject);
+    ReferenceFrame to CartesianFrame3D, with CartesianFrame3DResolver, CartesianFrame3DReference, MissingCartesianFrame3DResolver
+    and the test mimics; AffineFrame and CartesianFrame under CoordinateSystem, change classes generic
+    over them; the docstrings and replies in the doc''s #527 table, CoordinateT keeping its name. Then
+    resolve those threads and merge #527 into #524 and #526.'
 - id: image-coordinate-change
   title: krrood_image's ImageCoordinateChange (scale and shift per axis) for crops and resizes, with cv2
     resampling
@@ -183,11 +190,11 @@ items:
   status: not_started
   depends_on:
   - krrimage
-  notes: 'Implements AffineCoordinateChange[ImageCoordinateSystem]: a crop or resize is a new ImageCoordinateSystem
-    on the same ImagePlane, so an ImagePoint found in a crop maps back to the whole image. ColorImage.cropped/resized
-    do the pixel work with cv2 and return the change; it also yields the 2x3 matrix cv2.warpAffine takes.
-    Pasting one image into another (ColorImage.pasted/fitted) maps between two planes, not within one:
-    same algebra, a separate map class.'
+  notes: 'Implements AffineCoordinateChange[ImageCoordinateSystem], the pixel AffineFrame: a crop or resize
+    is a new ImageCoordinateSystem on the same ImagePlane, so an ImagePoint found in a crop maps back
+    to the whole image. ColorImage.cropped/resized do the pixel work with cv2 and return the change; it
+    also yields the 2x3 matrix cv2.warpAffine takes. Pasting one image into another maps between two planes:
+    a SpaceMap, not a change.'
 - id: world-as-euclidean-space
   title: SemDT's World is the EuclideanSpace its bodies chart; CartesianFrame3D.express checks the space
     before changing coordinates
