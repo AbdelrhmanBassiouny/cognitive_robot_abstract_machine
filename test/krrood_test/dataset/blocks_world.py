@@ -27,8 +27,8 @@ class Block:
     """
     A block resting on another block or on the table.
 
-    Compared by value, so two blocks with the same name and support are equal but
-    remain distinct objects.
+    Compared by value, so two blocks with the same name and support are equal but remain
+    distinct objects.
     """
 
     name: str

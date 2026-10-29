@@ -58,14 +58,15 @@ class State(AttributeReader):
     value.
 
     Queries evaluated under :meth:`as_current` read the assigned values, and the live
-    value of every fluent the state does not assign. The live objects are never
-    changed. Two states are equal when they assign the same values to the same fluents.
+    value of every fluent the state does not assign. The live objects are never changed.
+    Two states are equal when they assign the same values to the same fluents.
     """
 
     assignments: dict[Fluent, Any] = field(default_factory=dict)
     """
-    The value of every fluent this state changes. Never mutated; a changed state is a
-    new :class:`State`.
+    The value of every fluent this state changes.
+
+    Never mutated; a changed state is a new :class:`State`.
     """
 
     def __hash__(self) -> int:

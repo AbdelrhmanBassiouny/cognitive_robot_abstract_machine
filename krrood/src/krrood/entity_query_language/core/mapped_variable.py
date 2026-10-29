@@ -634,9 +634,9 @@ class Attribute(SingleValueMapping[T]):
         self, value: Any, sources: OperationResult | None = None
     ) -> Iterable[T]:
         """
-        Read the attribute through the current evaluation context's
-        :attr:`~krrood.entity_query_language.evaluation_context.EvaluationContext.attribute_reader`,
-        or from *value* itself outside an evaluation.
+        Read the attribute through the current evaluation context's :attr:`~krrood.entit
+        y_query_language.evaluation_context.EvaluationContext.attribute_reader`, or from
+        *value* itself outside an evaluation.
         """
         evaluation_context = get_evaluation_context()
         if evaluation_context is None:

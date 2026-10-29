@@ -55,6 +55,9 @@ class TwoTowers:
 
 @pytest.fixture
 def two_towers() -> TwoTowers:
+    """
+    :return: A fresh :class:`TwoTowers` world for each test.
+    """
     table = Table("table")
     a = Block("a", table)
     return TwoTowers(table=table, a=a, b=Block("b", table), c=Block("c", a))
@@ -118,8 +121,8 @@ def test_every_query_under_state_reads_it(two_towers):
 
 def test_query_started_during_another_evaluation_reads_state(two_towers):
     """
-    A query started from inside a running evaluation, here by a symbolic function,
-    reads the same state as the evaluation that started it.
+    A query started from inside a running evaluation, here by a symbolic function, reads
+    the same state as the evaluation that started it.
     """
 
     @symbolic_function
@@ -160,8 +163,8 @@ def test_later_assignment_replaces_an_earlier_one(two_towers):
 
 def test_fluents_identify_instances_by_identity(two_towers):
     """
-    Two blocks that compare equal are still different objects, so assigning a fluent
-    of one never assigns the other.
+    Two blocks that compare equal are still different objects, so assigning a fluent of
+    one never assigns the other.
     """
     first = Block("d", two_towers.table)
     second = Block("d", two_towers.table)
