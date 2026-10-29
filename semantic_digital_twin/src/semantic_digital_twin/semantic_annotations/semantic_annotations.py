@@ -388,7 +388,7 @@ class EntryWay(Aperture):
         return RegionSpecification.box(
             name,
             scale or Scale(),
-            color=color or Color(R=1.0, G=1.0, B=1.0, A=0.2),
+            color=color or Color.from_rgba(red=1.0, green=1.0, blue=1.0, opacity=0.2),
             connection_specification=connection_specification,
         )
 

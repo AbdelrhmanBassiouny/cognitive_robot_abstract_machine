@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+# %% Imports
 import os
 from collections import defaultdict
 from dataclasses import dataclass
@@ -19,6 +20,7 @@ from semantic_digital_twin.datastructures.definitions import (
     StaticJointState,
     TorsoState,
 )
+from semantic_digital_twin.datastructures.camera_model import FieldOfViewCameraModel
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -32,18 +34,27 @@ from semantic_digital_twin.robots.robot_part_mixins import (
 from semantic_digital_twin.robots.robot_parts import (
     AbstractRobot,
     Arm,
-    Camera,
+    RobotCamera,
     EndEffector,
     Finger,
     MobileBase,
     Neck,
     Torso,
 )
-from semantic_digital_twin.spatial_types import Vector3
-from semantic_digital_twin.world_description.connections import OmniDrive
+from semantic_digital_twin.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Vector3,
+    RotationMatrix,
+)
+from semantic_digital_twin.world_description.connections import (
+    FixedConnection,
+    OmniDrive,
+)
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
+
+# %% Robot parts
 
 
 class GarmiJoint(JointName):
@@ -157,7 +168,7 @@ class GarmiJoint(JointName):
 
 
 @dataclass(eq=False)
-class GarmiCamera(Camera):
+class GarmiCamera(RobotCamera[FieldOfViewCameraModel]):
     """
     The head camera of the GARMI robot.
     """
@@ -173,10 +184,6 @@ class GarmiCamera(Camera):
         """
         return []
 
-    @property
-    def forward_facing_axis(self) -> Vector3:
-        return Vector3.X(reference_frame=self.root)
-
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(
         cls, robot_root: KinematicStructureEntity
@@ -185,8 +192,19 @@ class GarmiCamera(Camera):
         Sets up the default configuration for the camera.
         """
         return cls(
-            root=robot_root._world.get_body_in_branch_by_name(robot_root, "head"),
-            field_of_view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049),
+            root=cls.create_optical_body(
+                robot_root._world.get_body_in_branch_by_name(robot_root, "head"),
+                HomogeneousTransformationMatrix(
+                    data=RotationMatrix.from_vectors(
+                        x=-Vector3.Y(), y=-Vector3.Z(), z=Vector3.X()
+                    )
+                ),
+            ),
+            camera_model=FieldOfViewCameraModel(
+                angular_extent=FieldOfView(
+                    horizontal_angle=0.99483, vertical_angle=0.75049
+                )
+            ),
             minimal_height=0.75049,
             maximal_height=0.99483,
             default_camera=True,

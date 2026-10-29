@@ -73,7 +73,12 @@ with world.modify_world():
         name=PrefixedName("Box1"),
         collision=ShapeCollection(shapes=[Box(scale=Scale(0.1, 0.1, 0.1))]),
         visual=ShapeCollection(
-            shapes=[Box(scale=Scale(0.1, 0.1, 0.1), color=Color(1, 0, 0))]
+            shapes=[
+                Box(
+                    scale=Scale(0.1, 0.1, 0.1),
+                    color=Color.from_rgba(red=1, green=0, blue=0),
+                )
+            ]
         ),
     )
 
@@ -81,7 +86,12 @@ with world.modify_world():
         name=PrefixedName("Box2"),
         collision=ShapeCollection(shapes=[Box(scale=Scale(0.1, 0.1, 0.1))]),
         visual=ShapeCollection(
-            shapes=[Box(scale=Scale(0.1, 0.1, 0.1), color=Color(0, 1, 0))]
+            shapes=[
+                Box(
+                    scale=Scale(0.1, 0.1, 0.1),
+                    color=Color.from_rgba(red=0, green=1, blue=0),
+                )
+            ]
         ),
     )
 
@@ -89,7 +99,12 @@ with world.modify_world():
         name=PrefixedName("Box3"),
         collision=ShapeCollection(shapes=[Box(scale=Scale(0.1, 0.1, 0.1))]),
         visual=ShapeCollection(
-            shapes=[Box(scale=Scale(0.1, 0.1, 0.1), color=Color(0, 0, 1))]
+            shapes=[
+                Box(
+                    scale=Scale(0.1, 0.1, 0.1),
+                    color=Color.from_rgba(red=0, green=0, blue=1),
+                )
+            ]
         ),
     )
 
@@ -150,7 +165,12 @@ plan = sequential(
         # Stack Box 2
         ParkArmsAction(tracy.all_arms),
         PickUpAction(
-            GraspCandidate(box2_annotation, Pose.from_xyz_rpy(pitch=np.pi/2, reference_frame=box2_annotation.root)),
+            GraspCandidate(
+                box2_annotation,
+                Pose.from_xyz_rpy(
+                    pitch=np.pi / 2, reference_frame=box2_annotation.root
+                ),
+            ),
             tracy.left_arm,
         ),
         PlaceAction(
@@ -160,7 +180,12 @@ plan = sequential(
         # Stack Box 3
         ParkArmsAction(tracy.all_arms),
         PickUpAction(
-            GraspCandidate(box3_annotation, Pose.from_xyz_rpy(pitch=np.pi/2, reference_frame=box3_annotation.root)),
+            GraspCandidate(
+                box3_annotation,
+                Pose.from_xyz_rpy(
+                    pitch=np.pi / 2, reference_frame=box3_annotation.root
+                ),
+            ),
             tracy.right_arm,
         ),
         PlaceAction(
