@@ -1,12 +1,12 @@
-PR #535, plan item eql-planning/fluent-state-overlay (auto mode).
+PR #535, plan item eql-planning/fluent-state-overlay (auto mode). Draft.
 
 Plan:
-- EQL: an AttributeReader interface with a live default; EvaluationContext.attribute_reader; Attribute reads through it; nested new contexts inherit the reader.
-- krrood.planning.state: Fluent (identity of the instance) and a frozen State(AttributeReader) with with_assignments, equality and hash over assignments, and as_current().
-- Tests first in test/krrood_test/test_planning against a blocksworld mimic.
+- EQL reads attributes through EvaluationContext.attribute_reader (AttributeReader interface); new default contexts inherit the current reader.
+- krrood.planning.state: Fluent (by identity) and a frozen State(AttributeReader) with with_assignments, eq/hash and as_current().
 
 Done:
-- Bootstrap commit, draft PR, manifest set to in progress.
+- Implemented; 11 tests in test/krrood_test/test_planning; the EQL, RDR and ontomatic suites pass locally (2 object-diagram failures: no graphviz binary here).
+- PR description lists the open points: plain-Python reads bypass the overlay; only Attribute is hooked; no normalization of no-op assignments.
 
 Next:
-- Write the failing tests, then the EQL hook, then State.
+- Check CI on the PR; owner review, then mark ready.
