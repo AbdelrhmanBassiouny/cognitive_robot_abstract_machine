@@ -1,18 +1,34 @@
 from __future__ import annotations
 
 import logging
-from abc import ABC
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import IntEnum
 
 from griplink_interfaces.action import Flexgrip, Flexrelease, Grip, Release
-from semantic_digital_twin.robots.griplink_gripper import GriplinkGripPreset
+from typing_extensions import Self
 
-from giskardpy.motion_statechart.context import MotionStatechartContext
-from giskardpy.motion_statechart.data_types import ObservationStateValues
+from cramph.data_types import ObservationStateValues
+from cramph.node import StatechartNode
 from giskardpy.motion_statechart.exceptions import (
     GriplinkParameterOutOfRangeError,
+    NoGriplinkEndpoint,
     UnknownGriplinkActionError,
+)
+from giskardpy.motion_statechart.goals.gripper import (
+    MoveFingers,
+    MovesGripperToConfiguration,
+)
+from krrood.ormatic.utils import classproperty
+from semantic_digital_twin.datastructures.robots.gripper_configuration import (
+    GripperConfiguration,
+)
+from semantic_digital_twin.robots.griplink_gripper import (
+    GriplinkEndpoint,
+    GriplinkFlexConfiguration,
+    GriplinkGripperConfiguration,
+    GriplinkGripPreset,
+    GriplinkPresetConfiguration,
 )
 from giskardpy.motion_statechart.ros2_nodes.ros_tasks import ActionServerTask
 
@@ -52,9 +68,6 @@ class GriplinkStatus(IntEnum):
     CMD_FAILED = 25
     AXIS_BLOCKED = 26
     PENDING = 27
-
-
-# %% griplink action server tasks
 
 
 # %% griplink message types
@@ -151,7 +164,7 @@ class GriplinkAction:
 # %% griplink action server tasks
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class GriplinkActionServerTask(
     ActionServerTask[
         GriplinkAction,
@@ -159,6 +172,7 @@ class GriplinkActionServerTask(
         GriplinkResultResponse,
         GriplinkFeedback,
     ],
+    MovesGripperToConfiguration,
     ABC,
 ):
     """
@@ -168,11 +182,72 @@ class GriplinkActionServerTask(
     goal for their griplink actions.
     """
 
-    def on_tick(self, context: MotionStatechartContext) -> ObservationStateValues:
+    @classproperty
+    @abstractmethod
+    def commanded_actions(cls) -> frozenset[type]:
+        """
+        The griplink actions this task builds goals for.
+        """
+
+    @classmethod
+    def moving_gripper_to(
+        cls,
+        configuration: GripperConfiguration,
+        stall_minimum_time: float | None = None,
+        tolerate_stall: bool = False,
+    ) -> StatechartNode:
+        """
+        Differs from :meth:`MovesGripperToConfiguration.moving_gripper_to` in driving a
+        griplink gripper through the griplink action server serving the state of
+        `configuration`; any other configuration is reached as
+        :meth:`MoveFingers.moving_gripper_to` reaches it, which alone reads
+        `stall_minimum_time` and `tolerate_stall`.
+
+        :raises NoGriplinkEndpoint: If the gripper declares no endpoint for the state of
+            a griplink configuration that executes it.
+        """
+        match configuration:
+            case GriplinkPresetConfiguration():
+                return GriplinkPresetActionServerTask.from_configuration(configuration)
+            case GriplinkFlexConfiguration():
+                return GriplinkFlexActionServerTask.from_configuration(configuration)
+        return MoveFingers.moving_gripper_to(
+            configuration, stall_minimum_time, tolerate_stall
+        )
+
+    @classmethod
+    @abstractmethod
+    def from_configuration(cls, configuration: GriplinkGripperConfiguration) -> Self:
+        """
+        :param configuration: The configuration to bring the gripper into.
+        :return: A new task bringing the gripper into `configuration` through the
+            endpoint serving its state.
+        :raises NoGriplinkEndpoint: If the gripper declares no endpoint for that state
+            that executes one of :attr:`commanded_actions`.
+        """
+
+    @classmethod
+    def endpoint_serving(
+        cls, configuration: GriplinkGripperConfiguration
+    ) -> GriplinkEndpoint:
+        """
+        :param configuration: The configuration to bring the gripper into.
+        :return: The endpoint the gripper of `configuration` declares for its state.
+        :raises NoGriplinkEndpoint: If the gripper declares none, or one executing an
+            action other than :attr:`commanded_actions`.
+        """
+        state_type = configuration.joint_state.state_type
+        endpoint = configuration.end_effector.griplink_endpoint(state_type)
+        if endpoint is None or endpoint.message_type not in cls.commanded_actions:
+            raise NoGriplinkEndpoint(
+                end_effector=configuration.end_effector, state_type=state_type
+            )
+        return endpoint
+
+    def on_tick(self) -> ObservationStateValues:
         """
         Observes the gripper status the server reports once its result arrived.
 
-        :param context: The motion statechart context the task runs in.
         :return:``TRUE`` when the server reported success, ``FALSE`` otherwise, and
             ``UNKNOWN`` while no result has arrived yet.
         """
@@ -187,7 +262,7 @@ class GriplinkActionServerTask(
         return ObservationStateValues.UNKNOWN
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class GriplinkPresetActionServerTask(GriplinkActionServerTask):
     """
     Node for calling the griplink action server of a griplink gripper to execute a
@@ -199,12 +274,23 @@ class GriplinkPresetActionServerTask(GriplinkActionServerTask):
     Grip preset the server executes.
     """
 
-    def build_msg(self, context: MotionStatechartContext):
+    @classproperty
+    def commanded_actions(cls) -> frozenset[type]:
+        return frozenset((Grip, Release))
+
+    @classmethod
+    def from_configuration(cls, configuration: GriplinkPresetConfiguration) -> Self:
+        endpoint = cls.endpoint_serving(configuration)
+        return cls(
+            action_topic=endpoint.action_topic,
+            message_type=endpoint.message_type,
+            grip_preset=configuration.grip_preset,
+        )
+
+    def build_action_goal(self) -> None:
         """
         Builds the ``Grip`` or ``Release`` goal selecting the configured preset.
 
-        :param context: The motion statechart context the task runs in.
-        :return: None; the goal is stored for :meth:`on_start` to send.
         :raises UnknownGriplinkActionError: If the task was built for neither ``Grip``
             nor ``Release``.
         """
@@ -214,13 +300,13 @@ class GriplinkPresetActionServerTask(GriplinkActionServerTask):
             goal_type = Release.Goal
         else:
             raise UnknownGriplinkActionError(message_type=self.message_type)
-        self._msg = goal_type(
+        self._action_goal = goal_type(
             port=0,
             index=self.grip_preset.value,
         )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class GriplinkFlexActionServerTask(GriplinkActionServerTask):
     """
     Node for calling the griplink action server of a griplink gripper to flex grip to a
@@ -256,7 +342,23 @@ class GriplinkFlexActionServerTask(GriplinkActionServerTask):
     Converted to µm/s² when building the goal message.
     """
 
-    def __post_init__(self):
+    @classproperty
+    def commanded_actions(cls) -> frozenset[type]:
+        return frozenset((Flexgrip, Flexrelease))
+
+    @classmethod
+    def from_configuration(cls, configuration: GriplinkFlexConfiguration) -> Self:
+        endpoint = cls.endpoint_serving(configuration)
+        return cls(
+            action_topic=endpoint.action_topic,
+            message_type=endpoint.message_type,
+            grip_position=configuration.grip_position,
+            grip_force=configuration.grip_force,
+            grip_velocity=configuration.grip_velocity,
+            grip_acceleration=configuration.grip_acceleration,
+        )
+
+    def __post_init__(self) -> None:
         """
         Fills the parameters left unset with the defaults of the commanded action.
 
@@ -304,17 +406,15 @@ class GriplinkFlexActionServerTask(GriplinkActionServerTask):
                 upper_bound=upper_bound,
             )
 
-    def build_msg(self, context: MotionStatechartContext):
+    def build_action_goal(self) -> None:
         """
         Builds the ``Flexgrip`` or ``Flexrelease`` goal from the task's parameters.
 
-        :param context: The motion statechart context the task runs in.
-        :return: None; the goal is stored for :meth:`on_start` to send.
         :raises UnknownGriplinkActionError: If the task was built for neither
             ``Flexgrip`` nor ``Flexrelease``.
         """
         if self.message_type is Flexgrip:
-            self._msg = Flexgrip.Goal(
+            self._action_goal = Flexgrip.Goal(
                 port=0,
                 position=self._to_micrometres(self.grip_position),
                 force=self._to_millinewtons(self.grip_force),
@@ -322,7 +422,7 @@ class GriplinkFlexActionServerTask(GriplinkActionServerTask):
                 acceleration=self._to_micrometres(self.grip_acceleration),
             )
         elif self.message_type is Flexrelease:
-            self._msg = Flexrelease.Goal(
+            self._action_goal = Flexrelease.Goal(
                 port=0,
                 position=self._to_micrometres(self.grip_position),
                 speed=self._to_micrometres(self.grip_velocity),

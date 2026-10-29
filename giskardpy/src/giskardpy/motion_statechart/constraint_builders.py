@@ -5,12 +5,13 @@ from dataclasses import dataclass
 import numpy as np
 
 import krrood.symbolic_math.symbolic_math as sm
-from giskardpy.motion_statechart.data_types import DefaultWeights
+from giskardpy.motion_statechart.weights import DefaultWeights
 from giskardpy.qp.constraint import LargeNumber
 from giskardpy.qp.constraint_collection import ConstraintCollection
 from semantic_digital_twin.spatial_types import (
     AxisAngle,
     Point3,
+    Quaternion,
     Vector3,
     RotationMatrix,
 )
@@ -146,25 +147,71 @@ class GeometricConstraintBuilder:
         :param frame_R_goal: goal rotation as rotation matrix
         :param reference_velocity: value used for normalization rad/s
         """
+        quaternion_error = self._quaternion_error(frame_R_current, frame_R_goal)
+
+        # w is redundant
+        for i in range(3):
+            self.collection.add_equality_constraint(
+                task_expression=quaternion_error[i],
+                equality_bound=-quaternion_error[i],
+                quadratic_weight=quadratic_weight,
+                reference_velocity=reference_velocity,
+                name=self._indexed_constraint_name(name, i),
+            )
+
+    def add_yaw_goal_constraint(
+        self,
+        frame_R_current: RotationMatrix,
+        frame_R_goal: RotationMatrix,
+        reference_velocity: sm.ScalarData,
+        quadratic_weight: sm.ScalarData,
+        name: str | None = None,
+    ) -> None:
+        """
+        Adds one constraint turning frame_R_current about the z-axis of the frame until
+        it faces the way frame_R_goal does, for a rotation that can only turn about that
+        axis.
+
+        Make sure that both are expressed relative to the same frame.
+        :param frame_R_current: current rotation, turned only about the z-axis of the
+            frame. It should depend on active dofs.
+        :param frame_R_goal: goal rotation, of which only the yaw is reached
+        :param reference_velocity: value used for normalization rad/s
+        """
+        frame_R_goal_yaw = RotationMatrix.from_rpy(
+            yaw=frame_R_goal.rpy[2], reference_frame=frame_R_goal.reference_frame
+        )
+        quaternion_error = self._quaternion_error(frame_R_current, frame_R_goal_yaw)
+        self.collection.add_equality_constraint(
+            task_expression=quaternion_error.z,
+            equality_bound=-quaternion_error.z,
+            quadratic_weight=quadratic_weight,
+            reference_velocity=reference_velocity,
+            name=name,
+        )
+
+    @staticmethod
+    def _quaternion_error(
+        frame_R_current: RotationMatrix, frame_R_goal: RotationMatrix
+    ) -> Quaternion:
+        """
+        :return: The rotation from frame_R_current to frame_R_goal, the shorter way
+            round.
+        """
         # avoid singularity
         # the sign determines in which direction the robot moves when in singularity.
         # -0.0001 preserves the old behavior from before this goal was refactored
         hack = RotationMatrix.from_axis_angle(AxisAngle(Vector3.Z(), -0.0001))
         frame_R_current = frame_R_current.dot(hack)
-        q_actual = frame_R_current.quaternion
-        q_goal = frame_R_goal.quaternion
-        q_goal = sm.if_less(q_goal.dot(q_actual), 0, -q_goal, q_goal)
-        q_error = q_actual.diff(q_goal)
-
-        # w is redundant
-        for i in range(3):
-            self.collection.add_equality_constraint(
-                task_expression=q_error[i],
-                equality_bound=-q_error[i],
-                quadratic_weight=quadratic_weight,
-                reference_velocity=reference_velocity,
-                name=self._indexed_constraint_name(name, i),
-            )
+        current_quaternion = frame_R_current.quaternion
+        goal_quaternion = frame_R_goal.quaternion
+        goal_quaternion = sm.if_less(
+            goal_quaternion.dot(current_quaternion),
+            0,
+            -goal_quaternion,
+            goal_quaternion,
+        )
+        return current_quaternion.diff(goal_quaternion)
 
     def add_translational_velocity_limit(
         self,

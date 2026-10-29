@@ -81,3 +81,29 @@ class DomainSpecificConventionsRules(Section):
         "For spatial types and connections, follow "
         "`semantic_digital_twin/doc/style_guide.md`"
     )
+
+
+class CramphIsolationRules(Section):
+    """
+    The rules keeping cramph independent of the motion and plan packages built on it.
+    """
+
+    CRAMPH_IMPORTS_ONLY_KRROOD_AND_SEMANTIC_DIGITAL_TWIN = (
+        "`cramph`, including its tests under `test/cramph_test`, imports only "
+        "`krrood` and `semantic_digital_twin` among the workspace packages - in "
+        "particular not `giskardpy`, `coraplex`, `segmind`, `physics_simulators`, "
+        "`robokudo` or `experiments`"
+    )
+
+    ROS_IS_A_SOFT_DEPENDENCY_OF_CRAMPH = (
+        "ROS is a soft dependency of `cramph`: only a tool that needs it, such as "
+        "the statechart inspector, imports ROS packages, and nothing else in "
+        "`cramph` imports that tool"
+    )
+
+    GENERIC_STATECHART_BEHAVIOUR_BELONGS_IN_CRAMPH = (
+        "Generic statechart behaviour (life cycles, transition conditions, ticking, "
+        "composite nodes, generic monitors, plotting) belongs in `cramph`; "
+        "motion-specific behaviour (QP constraints, tasks, world and robot monitors) "
+        "belongs in `giskardpy`, built on top of `cramph`"
+    )

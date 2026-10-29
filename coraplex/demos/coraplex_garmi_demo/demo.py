@@ -2,9 +2,11 @@
 GARMI transports a bowl and a spoon across the apartment.
 
 The bowl starts on the kitchen counter and the spoon inside a drawer, and both are carried
-to the table. Running with :attr:`~coraplex.datastructures.enums.ExecutionType.REAL` drives
-the actual robot and takes the world from the running world server, merging the apartment
-into it unless the server holds it already. The default runs the whole plan in simulation
+to the table. Running with
+:class:`~coraplex.garmi_franka_grippers.RealGarmiPlanExecutor` drives the
+actual robot, its grippers through their Franka gripper driver, and takes the world from
+the running world server, merging the apartment into it unless the server holds it
+already. The default runs the whole plan in simulation
 against a world built from the apartment's MuJoCo scene and GARMI's URDF, so nothing on
 the network is needed.
 
@@ -18,18 +20,20 @@ from __future__ import annotations
 import math
 import os
 from dataclasses import dataclass
-from enum import Enum, IntEnum, StrEnum
+from enum import Enum, StrEnum
 
 from ament_index_python.packages import get_package_share_directory
 
-from coraplex.datastructures.dataclasses import Context
-from coraplex.datastructures.enums import ExecutionType
 from coraplex.demonstrations import RobotDemonstration
-from coraplex.plans.factories import sequential
-from coraplex.plans.plan_node import PlanNode
+from coraplex.plans.context_extensions import RobotAccess, StatementGrounding
+from coraplex.plans.executors import PlanExecutor, KinematicallySimulatedPlanExecutor
+from coraplex.plans.plan_transformation import PlanRewriting
 from coraplex.robot_plans.actions.composite.transporting import TransportAction
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
 from coraplex.robot_plans.plan_transformations import OpenDrawerBeforeMoveAndPickUp
+from cramph.composites import Sequence
+from cramph.context import ContextExtension, StatechartContext
+from cramph.statechart import Statechart
 from semantic_digital_twin.specifications.connections import (
     Connection6DoFSpecification,
 )
@@ -213,21 +217,6 @@ class GarmiDrive(Enum):
     DEMONSTRATION = DriveVelocityLimits(translation=0.1, rotation=0.1)
 
 
-class SamplingSeed(IntEnum):
-    """
-    The seeds the plan's locations draw from.
-    """
-
-    REPEATABLE = 0
-    """
-    Fixes the poses the plan's locations draw, so this run repeats the one before it.
-
-    The locations draw from their costmaps rather than ranking them, so an unpinned run
-    stands somewhere new every time and reaches the drawer only on the attempts whose base
-    pose happens to allow it.
-    """
-
-
 # %% the demonstration
 
 
@@ -306,65 +295,61 @@ class GarmiApartmentDemonstration(RobotDemonstration):
             parent_connection_specification=Connection6DoFSpecification(),
         ).spawn(world, parent=world.get_body_by_name(SceneBody.SPOON_DRAWER))
 
-    def build_context(self, world: World) -> Context:
-        """
-        Build the plan context around the GARMI in ``world``.
+    def build_context_extensions(self, world: World) -> list[ContextExtension]:
+        return [
+            RobotAccess(world.get_semantic_annotations_by_type(self.used_robot)[0]),
+            StatementGrounding(),
+            PlanRewriting(transformations=[OpenDrawerBeforeMoveAndPickUp()]),
+        ]
 
-        ..note:: The ROS node has to be in the context for a real robot.
-        """
-        return Context(
-            world=world,
-            robot=world.get_semantic_annotations_by_type(self.used_robot)[0],
-            ros_node=self.ros_node,
-            evaluate_conditions=True,
-            alternative_motion_mappings=self.alternative_motion_mappings,
-            sampling_seed=SamplingSeed.REPEATABLE,
-            plan_transformations=[OpenDrawerBeforeMoveAndPickUp()],
-            _debug=True,
-        )
-
-    def build_plan(self, context: Context) -> PlanNode:
+    def build_statechart(self, context: StatechartContext) -> Statechart:
         """
         Carry the bowl and then the spoon to the table.
         """
         world = context.world
-        right_arm = context.robot.get_right_arm_if_specified()
+        robot = context.require_extension(RobotAccess).robot
+        right_arm = robot.get_right_arm_if_specified()
         apartment = world.get_body_by_name(SceneBody.APARTMENT)
-
-        return sequential(
-            [
-                ParkArmsAction(context.robot.all_arms),
-                TransportAction.from_graspable_by_closest_grasps(
-                    world.get_semantic_annotations_by_type(Bowl)[0],
-                    Pose(
-                        position=ScenePose.BOWL_TARGET.value.position,
-                        reference_frame=apartment,
+        statechart = Statechart(context=context)
+        statechart.add_node(
+            Sequence(
+                nodes=[
+                    ParkArmsAction(arms=robot.all_arms),
+                    TransportAction.from_graspable_by_closest_grasps(
+                        world.get_semantic_annotations_by_type(Bowl)[0],
+                        Pose(
+                            position=ScenePose.BOWL_TARGET.value.position,
+                            reference_frame=apartment,
+                        ),
+                        right_arm,
+                        context,
                     ),
-                    right_arm,
-                    context,
-                ),
-                TransportAction.from_graspable_by_closest_grasps(
-                    world.get_semantic_annotations_by_type(Spoon)[0],
-                    Pose(
-                        position=ScenePose.SPOON_TARGET.value.position,
-                        reference_frame=apartment,
+                    TransportAction.from_graspable_by_closest_grasps(
+                        world.get_semantic_annotations_by_type(Spoon)[0],
+                        Pose(
+                            position=ScenePose.SPOON_TARGET.value.position,
+                            reference_frame=apartment,
+                        ),
+                        right_arm,
+                        context,
                     ),
-                    right_arm,
-                    context,
-                ),
-            ],
-            context,
-        ).plan
+                ]
+            )
+        )
+        return statechart
 
 
-def main(execution_type: ExecutionType = ExecutionType.KINEMATICALLY_SIMULATED) -> None:
+def main(
+    executor_type: type[PlanExecutor] = KinematicallySimulatedPlanExecutor,
+) -> None:
     """
     Run the demonstration.
 
-    :param execution_type: Whether to drive the real robot or simulate it.
+    :param executor_type: The executor running the plan, which decides whether it
+        drives the real robot or simulates it.
     """
     GarmiApartmentDemonstration(
-        used_robot=Garmi, execution_type=execution_type, collision_avoidance=True
+        used_robot=Garmi, executor_type=executor_type, collision_avoidance=True
     ).run()
 
 

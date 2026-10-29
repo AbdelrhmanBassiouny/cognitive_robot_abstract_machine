@@ -269,11 +269,14 @@ def world_with_visible_bodies(*names: str) -> tuple[World, list[Body]]:
 
 def published_child_frames(tf_publisher: TFPublisher) -> set[str]:
     """
-    The tf frames the publisher broadcasts a transform for.
+    The tf frames the publisher broadcasts a transform for, on every state change or
+    once per model change.
     """
+    callback = tf_publisher.tf_model_callback
     return {
         transform.child_frame_id
-        for transform in tf_publisher.tf_model_callback.tf_message.transforms
+        for message in (callback.tf_message, callback.static_tf_message)
+        for transform in message.transforms
     }
 
 

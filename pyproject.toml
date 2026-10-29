@@ -16,6 +16,7 @@ authors = [{ name = "AICOR Institute", email = "you@example.com" }]
 dependencies = [
   "coraplex",
   "giskardpy",
+  "cramph",
   "semantic_digital_twin",
   "krrood",
   "random-events",
@@ -84,6 +85,7 @@ exclude-dependencies = [
 members = [
   "coraplex",
   "giskardpy",
+  "cramph",
   "semantic_digital_twin",
   "krrood",
   "random_events",
@@ -97,6 +99,7 @@ members = [
 [tool.uv.sources]
 coraplex       = { workspace = true }
 giskardpy             = { workspace = true }
+cramph                = { workspace = true }
 semantic_digital_twin = { workspace = true }
 krrood                = { workspace = true }
 probabilistic_model   = { workspace = true }
@@ -112,6 +115,7 @@ package-mode = false
 [tool.poetry.dependencies]
 coraplex = { path = "coraplex", develop = true }
 giskardpy = { path = "giskardpy", develop = true }
+cramph = { path = "cramph", develop = true }
 semantic_digital_twin = { path = "semantic_digital_twin", develop = true }
 krrood = { path = "krrood", develop = true }
 random_events = { path = "random_events", develop = true }
