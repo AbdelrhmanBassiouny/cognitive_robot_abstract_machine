@@ -182,7 +182,7 @@
 
 # Pull request labels
 <!-- from PullRequestLabelsRules in agent_rules.py -->
-- Label every pull request you open with its kinds of change and the frameworks it changes. Where you cannot set a label, because the repository lacks it or the pull request is opened through a link, name the labels to the user instead
+- Label every pull request you open with its kinds of change. Where you cannot set a label, because the repository lacks it or the pull request is opened through a link, name the labels to the user instead
 - On a pull request you do not open yourself - one you prepare for the developer to open, review, or are asked about - set no labels; suggest to its developer which labels to add and, for an `api-break`, what the rules below ask of it
 - Apply every kind-of-change label that describes a part of the change:
   - `api-break`: the change can break code that already uses it - it removes or renames a public module, class, method, field or parameter, changes a signature incompatibly, changes the documented behaviour or return value of a public method, or changes an ORM schema or a serialized format
@@ -192,15 +192,7 @@
   - `dev-tools`: the change modifies the tools contributors work with - scripts, formatters, pre-commit hooks, CI workflows, agent rules
   - `maintenance`: the change modifies code without changing its behaviour or API - refactoring, cleanup, dependency updates
 - Apply `api-break` whenever any part of the change breaks existing users, however small that part is
-- Apply the label of every framework whose directory the change modifies, its tests under `test/<framework>_test` included:
-  - `KRROOD`: `krrood`
-  - `semDT`: `semantic_digital_twin`
-  - `CoraPlex`: `coraplex`
-  - `Giskard`: `giskardpy`
-  - `segmind`: `segmind`
-  - `Experiment`: `experiments`
-  - `Robokudo`: `robokudo`
-  - `cramera`: `cramera`
+- Never set or suggest framework labels: the labeler sets them on every pull request from the files it changes, as `.github/labeler.yml` maps them
 - Before review is requested on an `api-break` pull request:
   - its description states what breaks and how users migrate
   - tell the user to discuss the break with the code owners of the affected frameworks, listed in `.github/CODEOWNERS`, or in the Cramgineers channel

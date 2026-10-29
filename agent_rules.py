@@ -5,10 +5,7 @@ after the rules krrood ships.
 
 from __future__ import annotations
 
-from cognitive_robot_abstract_machine.pull_request_labels import (
-    ChangeKindLabel,
-    FrameworkLabel,
-)
+from cognitive_robot_abstract_machine.pull_request_labels import ChangeKindLabel
 from cognitive_robot_abstract_machine.repository_files import RepositoryFile
 from krrood.development_tools.agents.rule import Section
 
@@ -101,15 +98,13 @@ class DomainSpecificConventionsRules(Section):
 
 class PullRequestLabelsRules(Section):
     """
-    The rules on labelling pull requests by the kind of change and the frameworks it
-    changes.
+    The rules on labelling pull requests by the kinds of change they make.
     """
 
     LABEL_EVERY_PULL_REQUEST = (
-        "Label every pull request you open with its kinds of change and the "
-        "frameworks it changes. Where you cannot set a label, because the repository "
-        "lacks it or the pull request is opened through a link, name the labels to the "
-        "user instead"
+        "Label every pull request you open with its kinds of change. Where you cannot "
+        "set a label, because the repository lacks it or the pull request is opened "
+        "through a link, name the labels to the user instead"
     )
 
     SUGGEST_LABELS_FOR_OTHER_PULL_REQUESTS = (
@@ -159,10 +154,10 @@ class PullRequestLabelsRules(Section):
         "existing users, however small that part is"
     )
 
-    FRAMEWORK_LABELS = (
-        "Apply the label of every framework whose directory the change modifies, its "
-        "tests under `test/<framework>_test` included:",
-        tuple(f"`{label}`: `{label.directory}`" for label in FrameworkLabel),
+    LEAVE_FRAMEWORK_LABELS_TO_THE_LABELER = (
+        "Never set or suggest framework labels: the labeler sets them on every pull "
+        f"request from the files it changes, as `{RepositoryFile.LABELER_CONFIGURATION}` "
+        "maps them"
     )
 
     DISCUSS_API_BREAKS_BEFORE_REVIEW = (

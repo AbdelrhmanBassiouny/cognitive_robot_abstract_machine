@@ -20,3 +20,8 @@ class RepositoryFile(PathEnumeration):
     """
     The code owners of each part of the repository.
     """
+
+    LABELER_CONFIGURATION = Path(".github") / "labeler.yml"
+    """
+    The labels set automatically on a pull request from the files it changes.
+    """

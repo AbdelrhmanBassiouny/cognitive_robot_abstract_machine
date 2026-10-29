@@ -9,15 +9,10 @@ from enum import StrEnum
 # %% labels
 
 
-class PullRequestLabel(StrEnum):
+class ChangeKindLabel(StrEnum):
     """
-    A label of a pull request on this repository, whose value is the label's text.
-    """
-
-
-class ChangeKindLabel(PullRequestLabel):
-    """
-    A label naming a kind of change a pull request makes.
+    A label naming a kind of change a pull request makes, whose value is the label's
+    text.
     """
 
     API_BREAK = "api-break"
@@ -49,58 +44,3 @@ class ChangeKindLabel(PullRequestLabel):
     """
     The change modifies code without changing its behaviour or API.
     """
-
-
-class FrameworkLabel(PullRequestLabel):
-    """
-    A label naming a framework of this repository a pull request changes.
-
-    A member is named after the framework's directory.
-    """
-
-    KRROOD = "KRROOD"
-    """
-    The label of ``krrood``.
-    """
-
-    SEMANTIC_DIGITAL_TWIN = "semDT"
-    """
-    The label of ``semantic_digital_twin``.
-    """
-
-    CORAPLEX = "CoraPlex"
-    """
-    The label of ``coraplex``.
-    """
-
-    GISKARDPY = "Giskard"
-    """
-    The label of ``giskardpy``.
-    """
-
-    SEGMIND = "segmind"
-    """
-    The label of ``segmind``.
-    """
-
-    EXPERIMENTS = "Experiment"
-    """
-    The label of ``experiments``.
-    """
-
-    ROBOKUDO = "Robokudo"
-    """
-    The label of ``robokudo``.
-    """
-
-    CRAMERA = "cramera"
-    """
-    The label of ``cramera``.
-    """
-
-    @property
-    def directory(self) -> str:
-        """
-        The framework's directory at the repository root.
-        """
-        return self.name.lower()
