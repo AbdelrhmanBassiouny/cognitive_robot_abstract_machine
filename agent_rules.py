@@ -5,7 +5,14 @@ after the rules krrood ships.
 
 from __future__ import annotations
 
+from cognitive_robot_abstract_machine.pull_request_labels import (
+    ChangeKindLabel,
+    FrameworkLabel,
+)
+from cognitive_robot_abstract_machine.repository_files import RepositoryFile
 from krrood.development_tools.agents.rule import Section
+
+# %% generated ORM interfaces
 
 
 class GeneratedORMInterfacesRules(Section):
@@ -46,6 +53,9 @@ class GeneratedORMInterfacesRules(Section):
     )
 
 
+# %% krrood isolation
+
+
 class KrroodIsolationRules(Section):
     """
     The rules keeping krrood independent of the other workspace packages.
@@ -72,6 +82,9 @@ class KrroodIsolationRules(Section):
     )
 
 
+# %% domain specific conventions
+
+
 class DomainSpecificConventionsRules(Section):
     """
     The rules pointing to the conventions of one domain.
@@ -81,6 +94,9 @@ class DomainSpecificConventionsRules(Section):
         "For spatial types and connections, follow "
         "`semantic_digital_twin/doc/style_guide.md`"
     )
+
+
+# %% pull request labels
 
 
 class PullRequestLabelsRules(Section):
@@ -99,71 +115,64 @@ class PullRequestLabelsRules(Section):
     SUGGEST_LABELS_FOR_OTHER_PULL_REQUESTS = (
         "On a pull request you do not open yourself - one you prepare for the "
         "developer to open, review, or are asked about - set no labels; suggest to its "
-        "developer which labels to add and, for an `api-break`, what the rules below "
-        "ask of it"
+        f"developer which labels to add and, for an `{ChangeKindLabel.API_BREAK}`, "
+        "what the rules below ask of it"
     )
 
     CHANGE_KIND_LABELS = (
         "Apply every kind-of-change label that describes a part of the change:",
         (
             (
-                "`api-break`: the change can break code that already uses it - it "
-                "removes or renames a public module, class, method, field or "
-                "parameter, changes a signature incompatibly, changes the documented "
-                "behaviour or return value of a public method, or changes an ORM "
-                "schema or a serialized format"
+                f"`{ChangeKindLabel.API_BREAK}`: the change can break code that "
+                "already uses it - it removes or renames a public module, class, "
+                "method, field or parameter, changes a signature incompatibly, changes "
+                "the documented behaviour or return value of a public method, or "
+                "changes an ORM schema or a serialized format"
             ),
             (
-                "`new-feature`: the change adds public API or user-visible behaviour "
-                "without breaking existing users"
+                f"`{ChangeKindLabel.NEW_FEATURE}`: the change adds public API or "
+                "user-visible behaviour without breaking existing users"
             ),
             (
-                "`bug-fix`: the change makes existing behaviour match its documented "
-                "or intended contract"
+                f"`{ChangeKindLabel.BUG_FIX}`: the change makes existing behaviour "
+                "match its documented or intended contract"
             ),
             (
-                "`documentation`: documentation is the purpose of the change, not "
-                "only an accompaniment of a code change"
+                f"`{ChangeKindLabel.DOCUMENTATION}`: documentation is the purpose of "
+                "the change, not only an accompaniment of a code change"
             ),
             (
-                "`dev-tools`: the change modifies the tools contributors work with - "
-                "scripts, formatters, pre-commit hooks, CI workflows, agent rules"
+                f"`{ChangeKindLabel.DEV_TOOLS}`: the change modifies the tools "
+                "contributors work with - scripts, formatters, pre-commit hooks, CI "
+                "workflows, agent rules"
             ),
             (
-                "`maintenance`: the change modifies code without changing its "
-                "behaviour or API - refactoring, cleanup, dependency updates"
+                f"`{ChangeKindLabel.MAINTENANCE}`: the change modifies code without "
+                "changing its behaviour or API - refactoring, cleanup, dependency "
+                "updates"
             ),
         ),
     )
 
     API_BREAK_HOWEVER_SMALL = (
-        "Apply `api-break` whenever any part of the change breaks existing users, "
-        "however small that part is"
+        f"Apply `{ChangeKindLabel.API_BREAK}` whenever any part of the change breaks "
+        "existing users, however small that part is"
     )
 
     FRAMEWORK_LABELS = (
         "Apply the label of every framework whose directory the change modifies, its "
         "tests under `test/<framework>_test` included:",
-        (
-            "`KRROOD`: `krrood`",
-            "`semDT`: `semantic_digital_twin`",
-            "`CoraPlex`: `coraplex`",
-            "`Giskard`: `giskardpy`",
-            "`segmind`: `segmind`",
-            "`Experiment`: `experiments`",
-            "`Robokudo`: `robokudo`",
-            "`cramera`: `cramera`",
-        ),
+        tuple(f"`{label}`: `{label.directory}`" for label in FrameworkLabel),
     )
 
     DISCUSS_API_BREAKS_BEFORE_REVIEW = (
-        "Before review is requested on an `api-break` pull request:",
+        f"Before review is requested on an `{ChangeKindLabel.API_BREAK}` pull request:",
         (
             "its description states what breaks and how users migrate",
             (
                 "tell the user to discuss the break with the code owners of the "
-                "affected frameworks, listed in `.github/CODEOWNERS`, or in the "
-                "Cramgineers channel"
+                f"affected frameworks, listed in `{RepositoryFile.CODE_OWNERS}`, or in "
+                "the Cramgineers channel"
             ),
         ),
     )
