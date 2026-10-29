@@ -32,6 +32,7 @@ from semantic_digital_twin.exceptions import (
     WorldEntityNotFoundError,
     WorldEntityWithIDBelongsToAnotherWorld,
     AlreadyBelongsToAWorldError,
+    WorldHasNoUniqueRootError,
 )
 from semantic_digital_twin.robots.minimal_robot import MinimalRobot
 from semantic_digital_twin.robots.pr2 import PR2, PR2Joint
@@ -49,7 +50,7 @@ from semantic_digital_twin.spatial_types.spatial_types import (
     Pose2D,
     RotationMatrix,
 )
-from semantic_digital_twin.testing import StateChangeCounter, world_setup
+from semantic_digital_twin.testing import StateChangeCounter, world_setup  # noqa: F401
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
     PrismaticConnection,
@@ -897,7 +898,7 @@ def test_remove_connection(world_setup):
         new_connection = FixedConnection(r1, r2)
         world.add_connection(new_connection)
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(WorldHasNoUniqueRootError):
         with world.modify_world():
             # if you remove a connection, the child must be connected some other way or deleted
             world.remove_connection(world.get_connection(r1, r2))
@@ -1575,9 +1576,9 @@ def test_set_omni_after_copy(pr2_world_state_reset):
         type(pr2_copy.get_body_by_name("base_footprint").parent_connection) == OmniDrive
     )
 
-    pr2_copy.get_body_by_name("base_footprint").parent_connection.origin = (
-        HomogeneousTransformationMatrix.from_xyz_rpy(10, 10, 0)
-    )
+    pr2_copy.get_body_by_name(
+        "base_footprint"
+    ).parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(10, 10, 0)
     pr2_copy.notify_state_change()
 
     np.testing.assert_array_almost_equal(
@@ -1971,6 +1972,39 @@ def test_world_state_trajectory(world_setup, tmp_path):
         traj.append(world.state, time + dt)
 
 
+def test_world_state_trajectory_goes_on_after_adopting_a_model_with_its_degrees_of_freedom(
+    world_setup,
+) -> None:
+    world = world_setup[0]
+    trajectory = WorldStateTrajectory.from_world_state(world.state, time=0.0)
+    world._notify_model_change()
+
+    assert trajectory.records_degrees_of_freedom_of(world.state)
+    trajectory.adopt_world_model_of(world.state)
+    trajectory.append(world.state, time=1.0)
+
+    assert trajectory.times.tolist() == [0.0, 1.0]
+
+
+def test_world_state_trajectory_rejects_a_model_with_other_degrees_of_freedom(
+    world_setup,
+) -> None:
+    world = world_setup[0]
+    trajectory = WorldStateTrajectory.from_world_state(world.state, time=0.0)
+    with world.modify_world():
+        world.add_connection(
+            Connection6DoF.create_with_dofs(
+                world=world,
+                parent=world.root,
+                child=Body(name=PrefixedName("free_box")),
+            )
+        )
+
+    assert not trajectory.records_degrees_of_freedom_of(world.state)
+    with pytest.raises(WrongWorldModelVersion):
+        trajectory.adopt_world_model_of(world.state)
+
+
 def test_merge_into_empty_world(world_setup):
     world, _, _, _, _, _ = world_setup
     world2 = deepcopy(world)
@@ -2085,7 +2119,6 @@ def test_memoization_clears_only_last_modification_block():
     b1_C_b2 = FixedConnection(parent=b2, child=b1)
 
     with world.modify_world():
-
         assert world.root == b1
 
         with world.modify_world():
