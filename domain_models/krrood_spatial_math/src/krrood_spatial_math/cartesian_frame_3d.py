@@ -11,12 +11,12 @@ from krrood.adapters.object_reference import ObjectReference
 from krrood.patterns.interface import Interface
 from krrood_spatial_math.coordinate_system import CartesianFrame
 from krrood_spatial_math.exceptions import MissingCartesianFrame3DResolver
-from krrood_spatial_math.space import EuclideanSpace
+from krrood_spatial_math.space import EuclideanSpace3D
 
 # %% frames that positions and directions are expressed in
 
 
-class CartesianFrame3D(CartesianFrame[EuclideanSpace], Interface):
+class CartesianFrame3D(CartesianFrame[EuclideanSpace3D], Interface):
     """
     A right-handed Cartesian frame on a three-dimensional Euclidean space, in metres,
     such as the frame of a robot's body.

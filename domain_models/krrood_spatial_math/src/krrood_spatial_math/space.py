@@ -16,6 +16,16 @@ class Space(Interface):
 
 class EuclideanSpace(Space, Interface):
     """
-    Physical space, in metres; its Cartesian frames are related by rigid coordinate
-    changes, which keep distances and angles.
+    A space with distances and angles, such as physical space or the plane an image lies
+    on.
+
+    It has Cartesian frames, related by rigid coordinate changes, and may have other
+    coordinate systems, such as affine pixel frames, related by other changes.
+    """
+
+
+class EuclideanSpace3D(EuclideanSpace, Interface):
+    """
+    A three-dimensional Euclidean space, such as the physical space a robot's bodies are
+    in.
     """

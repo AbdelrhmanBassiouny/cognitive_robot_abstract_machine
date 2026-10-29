@@ -7,7 +7,7 @@ name = "krrood_spatial_math"
 authors = [
     { name = "Simon Stelter", email = "stelter@uni-bremen.de" },
 ]
-description = "Points in the spaces they are given in, and the Cartesian frames of physical space."
+description = "Spaces, the coordinate systems and frames on them, the points given in those, and the changes between coordinate systems."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 classifiers = [
