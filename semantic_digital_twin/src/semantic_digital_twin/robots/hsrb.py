@@ -157,6 +157,15 @@ class HSRBRightFinger(Finger):
 class HSRBGripper(
     EndEffector, HasTwoFingers[HSRBLeftFinger, HSRBRightFinger], ServoedRobotPart
 ):
+    @classproperty
+    def fingers_are_modelled_like_the_real_ones(cls) -> bool:
+        """
+        The hand grips with as much force as its motor builds up from how far it is sent
+        past what it holds, and its finger springs give way on top of that, so a hand
+        closed to the width of what it holds does not hold it; it shuts instead.
+        """
+        return False
+
     @property
     def drive_of_each_joint(self) -> dict[JointName, JointDrive]:
         """
