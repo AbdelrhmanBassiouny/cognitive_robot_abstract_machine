@@ -175,17 +175,15 @@ items:
   track: spatial
   status: in_progress
   blockers:
-    - >-
-      #527 conflicts with main (cramera renamed cramph); krrood CI red from main's since-fixed
-      NamedTemporaryFile(directory=) bug. Merging main fixes both.
+    - ""
   depends_on: []
-  session: https://claude.ai/code/session_018wfiv7nbshkp1Yenu79fsh
-  notes: '#527 on main, user-marked ready. Follow https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS. Next
-    on #527: package krrspatial to krrood_spatial_math; ReferenceFrame to CartesianFrame3D, with CartesianFrame3DResolver,
-    CartesianFrame3DReference, MissingCartesianFrame3DResolver and the test mimics; PlanarPoint to AffinePoint2D,
-    bound to AffineFrame; AffineFrame and CartesianFrame under CoordinateSystem, change classes generic
-    over them; the docstrings and replies in the doc''s #527 table, CoordinateT kept. Then resolve those
-    threads and merge #527 into #524 and #526.'
+  session: https://claude.ai/code/session_018wfiv7QQPnFryjMtQLmPcK
+  notes: >
+    #527 (draft, on main) holds krrood_spatial_math's casadi-free base, renamed and typed per
+    https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS: AffineFrame, CartesianFrame, CartesianFrame3D
+    (and Resolver, Reference), AffinePoint2D, changes generic over frame types. Merged into #526.
+    Open: IdentifiedObject id/name thread (owner resolves), CI on 6c0cdb80, promotion before
+    #526/#524.
 - id: image-coordinate-change
   title: krrood_image's ImageCoordinateChange (scale and shift per axis) for crops and resizes, with cv2
     resampling
