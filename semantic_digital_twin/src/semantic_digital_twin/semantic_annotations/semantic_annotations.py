@@ -2,16 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing_extensions import (
-    List,
-    Iterable,
-    Iterator,
-    Optional,
-    Self,
-    Tuple,
-    TYPE_CHECKING,
-    Union,
-)
+from typing_extensions import Iterable, Iterator, Self, TYPE_CHECKING
 
 import math
 
@@ -115,36 +106,6 @@ class Handle(HasGraspCandidates):
     open or close an object.
     """
 
-    def default_grasp_candidates(self) -> list[GraspCandidate]:
-        """
-        The grasps at the centre of the handle's bar that close around it, one
-        approaching from each of the four sides around it.
-
-        The bar runs along the longest extent of the root's collision geometry.
-
-        :raises NoGraspGeometry: If the root body has no collision geometry to tell
-            which way the bar runs.
-        """
-        if not self.root.has_collision():
-            raise NoGraspGeometry(self)
-        mesh = self.root.combined_mesh
-        bar_axis = np.argmax(mesh.extents)
-        bar_direction = Vector3.from_iterable(np.eye(3)[bar_axis])
-        across_bar = np.delete(np.eye(3), bar_axis, axis=0)
-        return [
-            GraspCandidate(
-                self,
-                Pose(
-                    position=Point3.from_iterable(mesh.bounds.mean(axis=0)),
-                    orientation=RotationMatrix.from_vectors(
-                        x=approach, y=bar_direction.cross(approach)
-                    ).quaternion,
-                    reference_frame=self.root,
-                ),
-            )
-            for approach in map(Vector3.from_iterable, [*across_bar, *-across_bar])
-        ]
-
     def surface_grasp_statement(
         self,
         require_lifting: bool = False,
@@ -235,6 +196,36 @@ class Handle(HasGraspCandidates):
         return BodySpecification.from_event(
             name, handle_event, connection_specification=connection_specification
         )
+
+    def default_grasp_candidates(self) -> list[GraspCandidate]:
+        """
+        The grasps at the centre of the handle's bar that close around it, one
+        approaching from each of the four sides around it.
+
+        The bar runs along the longest extent of the root's collision geometry.
+
+        :raises NoGraspGeometry: If the root body has no collision geometry to tell
+            which way the bar runs.
+        """
+        if not self.root.has_collision():
+            raise NoGraspGeometry(self)
+        mesh = self.root.combined_mesh
+        bar_axis = np.argmax(mesh.extents)
+        bar_direction = Vector3.from_iterable(np.eye(3)[bar_axis])
+        across_bar = np.delete(np.eye(3), bar_axis, axis=0)
+        return [
+            GraspCandidate(
+                self,
+                Pose(
+                    position=Point3.from_iterable(mesh.bounds.mean(axis=0)),
+                    orientation=RotationMatrix.from_vectors(
+                        x=approach, y=bar_direction.cross(approach)
+                    ).quaternion,
+                    reference_frame=self.root,
+                ),
+            )
+            for approach in map(Vector3.from_iterable, [*across_bar, *-across_bar])
+        ]
 
 
 @dataclass(eq=False)

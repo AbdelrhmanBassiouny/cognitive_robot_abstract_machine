@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 # %% Imports
-from abc import ABC
+from collections import defaultdict
+from dataclasses import dataclass
+from typing_extensions import Self
 
 import numpy as np
-from collections import defaultdict
-from dataclasses import dataclass, field
-from typing_extensions import Self
 
 from krrood.ormatic.utils import classproperty
 from semantic_digital_twin.datastructures.definitions import (
@@ -14,6 +13,7 @@ from semantic_digital_twin.datastructures.definitions import (
     GripperState,
     StaticJointState,
 )
+from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_part_mixins import (
@@ -21,10 +21,8 @@ from semantic_digital_twin.robots.robot_part_mixins import (
     HasTorso,
     HasMobileBase,
     HasTwoFingers,
-    HasEndEffector,
     HasSensors,
 )
-from semantic_digital_twin.world_description.connections import OmniDrive
 from semantic_digital_twin.robots.robot_parts import (
     AbstractRobot,
     Arm,
@@ -35,8 +33,11 @@ from semantic_digital_twin.robots.robot_parts import (
     EndEffector,
 )
 from semantic_digital_twin.datastructures.camera_model import FieldOfViewCameraModel
-from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.spatial_types import Vector3
+from semantic_digital_twin.world_description.connections import (
+    ActiveConnection1DOF,
+    OmniDrive,
+)
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
@@ -66,7 +67,6 @@ class MMPDresdenJoint(JointName):
 
 @dataclass(eq=False)
 class MMPDresdenThumb(Finger):
-
     def setup_hardware_interfaces(self) -> None:
         pass
 
@@ -89,7 +89,6 @@ class MMPDresdenThumb(Finger):
 
 @dataclass(eq=False)
 class MMPDresdenIndexFinger(Finger):
-
     def setup_hardware_interfaces(self) -> None:
         pass
 
@@ -114,22 +113,28 @@ class MMPDresdenIndexFinger(Finger):
 class MMPDresdenGripper(
     EndEffector, HasTwoFingers[MMPDresdenThumb, MMPDresdenIndexFinger]
 ):
-
     def setup_hardware_interfaces(self) -> None:
         self._setup_hardware_interfaces_for_active_connections()
 
     def setup_joint_states(self) -> list[JointState]:
-        gripper_joints = self.active_connections
+        """
+        The gripper stands open with its left knuckle, which every other joint of the
+        gripper mimics, at its lower limit and closed with it at its upper limit.
+        """
+        knuckle: ActiveConnection1DOF = self._world.get_connection_by_name(
+            MMPDresdenJoint.GRIPPER_LEFT_KNUCKLE
+        )
+        limits = knuckle.raw_dof.limits
 
         gripper_open = JointState.from_mapping(
             name=PrefixedName(f"{self.name.name}_open", prefix=self.name.name),
-            mapping=dict(zip(gripper_joints, [0.0])),
+            mapping={knuckle: limits.lower.position},
             state_type=GripperState.OPEN,
         )
 
         gripper_close = JointState.from_mapping(
             name=PrefixedName(f"{self.name.name}_close", prefix=self.name.name),
-            mapping=dict(zip(gripper_joints, [0.8])),
+            mapping={knuckle: limits.upper.position},
             state_type=GripperState.CLOSE,
         )
 
@@ -159,7 +164,6 @@ class MMPDresdenGripper(
 
 @dataclass(eq=False)
 class MMPDresdenCamera(RobotCamera[FieldOfViewCameraModel]):
-
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(
         cls, robot_root: KinematicStructureEntity
@@ -185,7 +189,6 @@ class MMPDresdenCamera(RobotCamera[FieldOfViewCameraModel]):
 
 @dataclass(eq=False)
 class MMPDresdenArm(Arm[MMPDresdenGripper]):
-
     def setup_hardware_interfaces(self) -> None:
         self._setup_hardware_interfaces_for_active_connections()
 
@@ -223,7 +226,6 @@ class MMPDresdenArm(Arm[MMPDresdenGripper]):
 
 @dataclass(eq=False)
 class MMPDresdenTorso(Torso, HasOneArm[MMPDresdenArm], HasSensors[MMPDresdenCamera]):
-
     def setup_hardware_interfaces(self) -> None:
         self._setup_hardware_interfaces_for_active_connections()
 
@@ -244,7 +246,6 @@ class MMPDresdenTorso(Torso, HasOneArm[MMPDresdenArm], HasSensors[MMPDresdenCame
 
 @dataclass(eq=False)
 class MMPDresdenMobileBase(MobileBase[OmniDrive], HasTorso[MMPDresdenTorso]):
-
     @classproperty
     def forward_axis(cls) -> Vector3:
         return Vector3.X()

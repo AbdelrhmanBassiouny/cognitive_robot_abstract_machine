@@ -9,7 +9,7 @@ import krrood.symbolic_math.symbolic_math as sm
 from giskardpy.data_types.exceptions import (
     DuplicateNameException,
 )
-from giskardpy.motion_statechart.data_types import LifeCycleValues
+from cramph.data_types import LifeCycleValues
 from giskardpy.motion_statechart.exceptions import (
     InvalidConstraintExpressionShapeError,
 )

@@ -58,6 +58,7 @@ from semantic_digital_twin.world_description.connection_properties import (
     VelocityServoGains,
 )
 from semantic_digital_twin.world_description.connections import (
+    ActiveConnection1DOF,
     OmniDrive,
 )
 from semantic_digital_twin.world_description.world_entity import (
@@ -87,7 +88,8 @@ class HSRBJoint(JointName):
     them stays a plain mapping of names to positions.
 
     ..note:: Connections that no controller commands, such as the drive and passive base
-        wheels and the hand's spring and distal joints, are left out.
+        wheels and the hand's distal joints, are left out. The hand's spring joints are
+        commanded only in simulation.
     """
 
     TORSO_LIFT = "torso_lift_joint"
@@ -103,21 +105,12 @@ class HSRBJoint(JointName):
     HAND_MOTOR = "hand_motor_joint"
     HAND_LEFT_PROXIMAL = "hand_l_proximal_joint"
     HAND_RIGHT_PROXIMAL = "hand_r_proximal_joint"
-
-
-class HSRBSpringJoint(JointName):
-    """
-    Names of the HSRB's finger springs, as spelled in its URDF: joints that let a
-    fingertip give way against what the hand grips, which no controller commands.
-    """
-
     HAND_LEFT_SPRING_PROXIMAL = "hand_l_spring_proximal_joint"
     HAND_RIGHT_SPRING_PROXIMAL = "hand_r_spring_proximal_joint"
 
 
 @dataclass(eq=False)
 class HSRBLeftFinger(Finger):
-
     def setup_hardware_interfaces(self) -> None:
         pass
 
@@ -140,7 +133,6 @@ class HSRBLeftFinger(Finger):
 
 @dataclass(eq=False)
 class HSRBRightFinger(Finger):
-
     def setup_hardware_interfaces(self) -> None:
         pass
 
@@ -165,7 +157,6 @@ class HSRBRightFinger(Finger):
 class HSRBGripper(
     EndEffector, HasTwoFingers[HSRBLeftFinger, HSRBRightFinger], ServoedRobotPart
 ):
-
     @property
     def drive_of_each_joint(self) -> dict[JointName, JointDrive]:
         """
@@ -180,32 +171,40 @@ class HSRBGripper(
             HSRBJoint.HAND_MOTOR: JointDrive(
                 gains=ServoGains(stiffness=50.0, damping=5.0, torque_limit=100.0)
             ),
-            HSRBSpringJoint.HAND_LEFT_SPRING_PROXIMAL: spring,
-            HSRBSpringJoint.HAND_RIGHT_SPRING_PROXIMAL: spring,
+            HSRBJoint.HAND_LEFT_SPRING_PROXIMAL: spring,
+            HSRBJoint.HAND_RIGHT_SPRING_PROXIMAL: spring,
         }
 
     def setup_hardware_interfaces(self) -> None:
         return
 
     def setup_joint_states(self) -> list[JointState]:
+        """
+        The gripper stands open with its motor and both finger springs at their upper
+        limits, and closed with its motor at zero and the springs relaxed.
+        """
         world = self._world
-        hand_motor = world.get_connection_by_name(HSRBJoint.HAND_MOTOR)
-        gripper_joints = [
-            world.get_connection_by_name(HSRBJoint.HAND_LEFT_PROXIMAL),
-            world.get_connection_by_name(HSRBJoint.HAND_RIGHT_PROXIMAL),
-            hand_motor,
+        motor: ActiveConnection1DOF = world.get_connection_by_name(HSRBJoint.HAND_MOTOR)
+        springs: list[ActiveConnection1DOF] = [
+            world.get_connection_by_name(HSRBJoint.HAND_LEFT_SPRING_PROXIMAL),
+            world.get_connection_by_name(HSRBJoint.HAND_RIGHT_SPRING_PROXIMAL),
         ]
 
-        fully_opened = hand_motor.raw_dof.limits.upper.position
         gripper_open = JointState.from_mapping(
             name=PrefixedName("gripper_open", prefix=self.name.name),
-            mapping={joint: fully_opened for joint in gripper_joints},
+            mapping={
+                connection: connection.raw_dof.limits.upper.position
+                for connection in [motor, *springs]
+            },
             state_type=GripperState.OPEN,
         )
 
         gripper_close = JointState.from_mapping(
             name=PrefixedName("gripper_close", prefix=self.name.name),
-            mapping=dict(zip(gripper_joints, [0.0, 0.0, 0.0])),
+            mapping={
+                motor: 0.0,
+                **{spring: spring.raw_dof.limits.lower.position for spring in springs},
+            },
             state_type=GripperState.CLOSE,
         )
 
@@ -235,7 +234,6 @@ class HSRBGripper(
 
 @dataclass(eq=False)
 class HSRBHandCamera(RobotCamera[FieldOfViewCameraModel]):
-
     def setup_hardware_interfaces(self) -> None:
         pass
 
@@ -262,7 +260,6 @@ class HSRBHandCamera(RobotCamera[FieldOfViewCameraModel]):
 
 @dataclass(eq=False)
 class HSRBArm(Arm[HSRBGripper], HasSensors[HSRBHandCamera], ServoedRobotPart):
-
     @property
     def drive_of_each_joint(self) -> dict[JointName, JointDrive]:
         wrist = JointDrive(
@@ -321,7 +318,6 @@ class HSRBArm(Arm[HSRBGripper], HasSensors[HSRBHandCamera], ServoedRobotPart):
 
 @dataclass(eq=False)
 class HSRBHeadCenterCamera(RobotCamera[FieldOfViewCameraModel]):
-
     def setup_hardware_interfaces(self) -> None:
         pass
 
@@ -349,7 +345,6 @@ class HSRBHeadCenterCamera(RobotCamera[FieldOfViewCameraModel]):
 
 @dataclass(eq=False)
 class HSRBHeadLeftCamera(RobotCamera[FieldOfViewCameraModel]):
-
     def setup_hardware_interfaces(self) -> None:
         pass
 
@@ -376,7 +371,6 @@ class HSRBHeadLeftCamera(RobotCamera[FieldOfViewCameraModel]):
 
 @dataclass(eq=False)
 class HSRBHeadRightCamera(RobotCamera[FieldOfViewCameraModel]):
-
     def setup_hardware_interfaces(self) -> None:
         pass
 
@@ -403,7 +397,6 @@ class HSRBHeadRightCamera(RobotCamera[FieldOfViewCameraModel]):
 
 @dataclass(eq=False)
 class HSRBHeadRGBDCamera(RobotCamera[FieldOfViewCameraModel]):
-
     def setup_hardware_interfaces(self) -> None:
         pass
 
@@ -439,7 +432,6 @@ class HSRBNeck(
     ],
     ServoedRobotPart,
 ):
-
     @property
     def drive_of_each_joint(self) -> dict[JointName, JointDrive]:
         head = JointDrive(
@@ -473,7 +465,6 @@ class HSRBNeck(
 
 @dataclass(eq=False)
 class HSRBTorso(Torso, HasOneArm[HSRBArm], HasNeck[HSRBNeck], ServoedRobotPart):
-
     @property
     def drive_of_each_joint(self) -> dict[JointName, JointDrive]:
         """
@@ -552,7 +543,6 @@ class HSRBBaseLidar(Lidar):
 class HSRBMobileBase(
     MobileBase[OmniDrive], HasTorso[HSRBTorso], HasLidar[HSRBBaseLidar]
 ):
-
     @classproperty
     def topic_name(cls) -> str:
         """

@@ -1024,13 +1024,25 @@ class MobileBase(
             SubscribedBasePoseSource,
         )
 
-        robot = self._robot
-        drive = robot.drive if robot is not None else None
-        if drive is None:
-            raise MissingDriveConnectionError(robot_part=self)
         return SubscribedBasePoseSource(
-            world=self._world, node=node, topic_name=self.topic_name, connection=drive
+            world=self._world,
+            node=node,
+            topic_name=self.topic_name,
+            connection=self.drive,
         )
+
+    @property
+    def drive(self) -> WheeledDrive:
+        """
+        The drive attaching the root of this base's robot to its parent.
+
+        :raises MissingDriveConnectionError: If this base belongs to no robot, or its
+            robot is not attached by a drive.
+        """
+        robot = self._robot
+        if robot is None or robot.drive is None:
+            raise MissingDriveConnectionError(robot_part=self)
+        return robot.drive
 
     @classproperty
     @abstractmethod

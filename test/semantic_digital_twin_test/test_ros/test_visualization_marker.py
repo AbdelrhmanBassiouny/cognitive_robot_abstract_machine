@@ -269,11 +269,14 @@ def world_with_visible_bodies(*names: str) -> tuple[World, list[Body]]:
 
 def published_child_frames(tf_publisher: TFPublisher) -> set[str]:
     """
-    The tf frames the publisher broadcasts a transform for.
+    The tf frames the publisher broadcasts a transform for, on every state change or
+    once per model change.
     """
+    callback = tf_publisher.tf_model_callback
     return {
         transform.child_frame_id
-        for transform in tf_publisher.tf_model_callback.tf_message.transforms
+        for message in (callback.tf_message, callback.static_tf_message)
+        for transform in message.transforms
     }
 
 
@@ -293,6 +296,22 @@ def test_markers_are_stamped_with_the_frame_names_the_tf_publisher_publishes(
     viz = VizMarkerPublisher(_world=world, node=rclpy_node)
 
     assert marker_frames(viz) == published_child_frames(tf_publisher)
+
+
+def test_markers_of_equally_named_bodies_do_not_replace_each_other(rclpy_node):
+    """
+    RViz identifies a marker by its namespace and id, so a marker sharing both with
+    another one replaces it.
+    """
+    world, bodies = world_with_visible_bodies("milk", "milk")
+
+    viz = VizMarkerPublisher(_world=world, node=rclpy_node)
+
+    assert sorted((marker.ns, marker.id) for marker in viz.markers.markers) == sorted(
+        (viz.tf_publisher.tf_model_callback.frame_names.assign(body), shape_index)
+        for body in bodies
+        for shape_index, _ in enumerate(body.visual.shapes)
+    )
 
 
 def test_the_tf_publisher_of_the_world_is_adopted(rclpy_node):

@@ -370,6 +370,73 @@ class SurfaceFinish(StrEnum):
     """
 
 
+class MeshFileFormat(StrEnum):
+    """
+    A file format meshes are stored in, named by its file extension.
+    """
+
+    GLB = auto()
+    """
+    Binary glTF: per-vertex colours and textures in one file, positions as 32-bit
+    floats.
+    """
+
+    OBJ = auto()
+    """
+    Wavefront OBJ, as text: positions rounded to eight decimals, colours without
+    alpha, textures in a material and an image file beside it.
+    """
+
+    STL = auto()
+    """
+    Stereolithography: triangles without colours, each with vertices of its own.
+    """
+
+    DAE = auto()
+    """
+    COLLADA.
+    """
+
+    PLY = auto()
+    """
+    Polygon File Format.
+    """
+
+
+@dataclass
+class _MeshGeometry:
+    """
+    The geometry a :class:`Mesh` is serialized as, in place of the file it reads.
+    """
+
+    vertices: npt.NDArray[np.float64]
+    """
+    The positions of the vertices, before the mesh's scale is applied.
+    """
+
+    faces: npt.NDArray[np.int64]
+    """
+    The vertex indices of each triangle.
+    """
+
+    vertex_colors: npt.NDArray[np.uint8] | None = None
+    """
+    The RGBA colour of each vertex, or ``None`` for an uncoloured mesh.
+    """
+
+
+class TrimeshMetadataKey(StrEnum):
+    """
+    A key of the metadata trimesh attaches to a mesh it reads.
+    """
+
+    RAW_PLY_FILE = "_ply_raw"
+    """
+    Every element of the PLY file the mesh was read from, which trimesh copies into
+    every mesh cut from it.
+    """
+
+
 @dataclass
 class Scale:
     """
@@ -685,9 +752,22 @@ class Mesh(Shape):
 
         :param filename: The path of the mesh file.
         :param process: Whether trimesh merges vertices and drops degenerate faces.
-        :return: The loaded mesh, measured in meters.
+        :return: The loaded mesh, measured in meters, without a copy of the raw file.
         """
-        mesh = trimesh.load_mesh(filename, process=process)
+        scene = trimesh.load_scene(filename, process=process)
+        placements = [scene.graph[node] for node in scene.graph.nodes_geometry]
+        # Merging the scene into one mesh copies even a file's only mesh twice, and
+        # trimesh converts the colours of every copy, so a lone mesh in place is taken
+        # as it is.
+        if (
+            len(placements) == 1
+            and np.allclose(placements[0][0], np.eye(4))
+            and isinstance(scene.geometry[placements[0][1]], trimesh.Trimesh)
+        ):
+            mesh = scene.geometry[placements[0][1]]
+        else:
+            mesh = scene.to_mesh()
+        mesh.metadata.pop(TrimeshMetadataKey.RAW_PLY_FILE, None)
         if mesh.units is not None:
             mesh.convert_units("meters")
         return mesh
@@ -713,41 +793,31 @@ class Mesh(Shape):
         # survives serialization (e.g. across the ROS world synchronizer).
         if isinstance(base_mesh.visual, TextureVisuals):
             base_mesh.visual = base_mesh.visual.to_color()
-        mesh_dict = base_mesh.to_dict()
-        if base_mesh.visual.kind is not None:
-            mesh_dict["vertex_colors"] = np.asarray(
-                base_mesh.visual.vertex_colors
-            ).tolist()
-        file_type = self.filename.split(".")[-1]
-        return {
-            **super().to_json(**kwargs),
-            "mesh": mesh_dict,
-            "scale": to_json(self.scale, **kwargs),
-            "file_type": file_type,
-        }
+        geometry = _MeshGeometry(
+            vertices=base_mesh.vertices.view(np.ndarray),
+            faces=base_mesh.faces.view(np.ndarray),
+            vertex_colors=(
+                None
+                if base_mesh.visual.kind is None
+                else np.asarray(base_mesh.visual.vertex_colors)
+            ),
+        )
+        return {**super().to_json(**kwargs), "mesh": to_json(geometry, **kwargs)}
 
     @classmethod
     def _from_json(cls, data: dict[str, Any], **kwargs) -> Mesh:
+        geometry = from_json(data["mesh"], **kwargs)
         # Recreate the trimesh without processing to preserve exact topology
-        vertex_colors = data["mesh"].get("vertex_colors")
         mesh = trimesh.Trimesh(
-            vertices=data["mesh"]["vertices"],
-            faces=data["mesh"]["faces"],
-            vertex_colors=vertex_colors,
+            vertices=geometry.vertices,
+            faces=geometry.faces,
+            vertex_colors=geometry.vertex_colors,
             process=False,
         )
-        origin = from_json(data["origin"], **kwargs)
-        scale = from_json(data["scale"], **kwargs)
-        file_type = data["file_type"]
-        # Export colored meshes as OBJ, which preserves per-vertex colors and is
-        # readable by the visualizer and the collision loader.
-        if vertex_colors is not None:
-            file_type = "obj"
         return cls.from_trimesh(
             mesh=mesh,
-            origin=origin,
-            scale=scale,
-            file_type=file_type,
+            origin=from_json(data["origin"], **kwargs),
+            scale=from_json(data["scale"], **kwargs),
             finish=from_json(data.get("finish"), **kwargs),
         )
 
@@ -911,7 +981,7 @@ class Mesh(Shape):
             mesh=mesh,
             origin=origin,
             scale=scale,
-            file_type="obj",
+            file_type=MeshFileFormat.OBJ,
             texture_file_path=texture_file_path,
         )
 
@@ -924,7 +994,7 @@ class Mesh(Shape):
         uv: np.ndarray | None = None,
         texture_file_path: str | None = None,
         directory: Path | None = None,
-        file_type: str = "obj",
+        file_type: MeshFileFormat = MeshFileFormat.GLB,
         finish: SurfaceFinish | None = None,
     ) -> Mesh:
         """
