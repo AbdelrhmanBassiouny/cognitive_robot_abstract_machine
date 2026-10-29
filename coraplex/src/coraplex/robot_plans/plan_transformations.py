@@ -21,6 +21,7 @@ from coraplex.plans.plan_transformation import (
     PlanTransformation,
 )
 from coraplex.plans.executables import GiskardExecutable
+from coraplex.querying.predicates import IsAmongTheClosestGraspsTo
 from coraplex.robot_plans import MoveToolCenterPointMotion
 from coraplex.robot_plans.motions.gripper import (
     MoveFingersToWidthMotion,
@@ -166,9 +167,11 @@ class DrawerOpening(
         :param drawer: The drawer to open
         :param arm: The arm that opens it
         :param context: The context the standing pose is sampled in
-        :return: The opening, from a standing pose tried together with it.
+        :return: The opening, from a standing pose tried together with it, taking the
+            handle by its grasp closest to that pose.
         """
         handle_pose = Pose(reference_frame=drawer.handle.root)
+        grasps = drawer.handle.grasp_candidates()
         open_the_drawer = a(MoveAndOpenAction)(
             navigate=a(NavigateAction)(
                 target_location=variable(
@@ -182,9 +185,20 @@ class DrawerOpening(
                 face_at=a(FaceAtAction)(target=handle_pose),
                 look_at=a(LookAtAction)(target=handle_pose),
             ),
-            open_container=a(OpenAction)(handle=drawer.handle, arm=arm),
+            open_container=a(OpenAction)(
+                grasp=variable(GraspCandidate, domain=grasps), arm=arm
+            ),
         )
-        return [open_the_drawer]
+        return [
+            open_the_drawer.where(
+                IsAmongTheClosestGraspsTo(
+                    open_the_drawer.open_container.grasp,
+                    open_the_drawer.navigate.target_location,
+                    grasps,
+                    number_of_grasps=1,
+                )
+            )
+        ]
 
     def anchor(self, plan_node: PlanNode) -> PlanNode:
         return plan_node
@@ -446,7 +460,7 @@ class CloseFingersToObjectWidth(PlanTransformation[GraspingAction]):
             for node in plan_node.descendants
             if isinstance(node, MotionNode)
             and isinstance(node.motion, MoveGripperMotion)
-            and node.motion.motion is GripperState.CLOSE
+            and node.motion.configuration.joint_state.state_type is GripperState.CLOSE
         ]
         if not motions:
             raise GraspHasNoClosingMotion(plan_node)
