@@ -372,7 +372,7 @@ class SurfaceFinish(StrEnum):
 
 class MeshFileFormat(StrEnum):
     """
-    A file format meshes are written in, named by its file extension.
+    A file format meshes are stored in, named by its file extension.
     """
 
     GLB = auto()
@@ -385,6 +385,21 @@ class MeshFileFormat(StrEnum):
     """
     Wavefront OBJ, as text: positions rounded to eight decimals, colours without
     alpha, textures in a material and an image file beside it.
+    """
+
+    STL = auto()
+    """
+    Stereolithography: triangles without colours, each with vertices of its own.
+    """
+
+    DAE = auto()
+    """
+    COLLADA.
+    """
+
+    PLY = auto()
+    """
+    Polygon File Format.
     """
 
 
@@ -966,7 +981,7 @@ class Mesh(Shape):
             mesh=mesh,
             origin=origin,
             scale=scale,
-            file_type="obj",
+            file_type=MeshFileFormat.OBJ,
             texture_file_path=texture_file_path,
         )
 

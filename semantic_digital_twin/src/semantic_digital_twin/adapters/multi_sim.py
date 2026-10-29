@@ -2804,8 +2804,10 @@ class MujocoBuilder(MultiSimBuilder):
                 f"Mesh type {type(mesh_entity)} not supported in Mujoco."
             )
         mesh_ext = os.path.splitext(mesh_file_path)[1].lower()
-        if mesh_ext == ".dae":
-            stl_file_path = self._asset_file_path_for(mesh_file_path, suffix=".stl")
+        if mesh_ext == f".{MeshFileFormat.DAE}":
+            stl_file_path = self._asset_file_path_for(
+                mesh_file_path, suffix=f".{MeshFileFormat.STL}"
+            )
             # create a .stl mesh from the original .dae mesh, as a replacement. If it not already exists.
             if not os.path.exists(stl_file_path):
                 self._create_stl_from_dae_mesh(

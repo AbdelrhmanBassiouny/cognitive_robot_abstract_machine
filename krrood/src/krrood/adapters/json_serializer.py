@@ -24,6 +24,7 @@ from krrood.adapters.exceptions import (
     ClassNotFoundError,
     ClassNotSerializableError,
     ObjectArraySerializationError,
+    StructuredArraySerializationError,
 )
 from krrood.adapters.json_field import JSONField
 from krrood.adapters.keyword_argument import SerializationKeywordArgument
@@ -897,9 +898,12 @@ class NumpyNDarrayJSONSerializer(ExternalClassJSONSerializer[np.ndarray]):
     def to_json(cls, obj: np.ndarray, **kwargs) -> dict[str, Any]:
         """
         :raises ObjectArraySerializationError: If the array holds Python objects.
+        :raises StructuredArraySerializationError: If the array holds records.
         """
         if obj.dtype.hasobject:
             raise ObjectArraySerializationError(element_type=obj.dtype)
+        if obj.dtype.fields is not None:
+            raise StructuredArraySerializationError(element_type=obj.dtype)
         return {
             JSONField.TYPE: get_full_class_name(type(obj)),
             NumpyArrayJSONKey.ELEMENT_TYPE: obj.dtype.str,

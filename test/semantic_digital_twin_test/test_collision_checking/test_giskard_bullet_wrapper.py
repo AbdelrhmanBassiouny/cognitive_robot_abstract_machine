@@ -14,6 +14,7 @@ from semantic_digital_twin.collision_checking.pybullet_collision_detector import
     BulletCollisionDetector,
     clear_cache,
     convert_to_decomposed_obj_and_save_in_tmp,
+    convert_to_obj_and_save_in_tmp,
     create_shape_from_geometry,
     trimesh_quantized_hash,
 )
@@ -177,6 +178,7 @@ def test_create_shape_from_geometry_shared_shape_does_not_leak_pose_between_worl
     """
     Two independent ``BulletCollisionDetector`` instances built from worlds with
     identical geometry may end up sharing the same cached ``bullet.CollisionShape``.
+
     Moving a body's pose in one world must not affect collision results in the other.
     """
     world_a, box_a, cylinder_a, sphere_a, mesh_a, compound_a = world_setup_simple
@@ -285,3 +287,39 @@ def test_mesh_in_a_file_bullet_cannot_read_collides_like_the_same_mesh_in_obj(
     ]
 
     assert bounds_of(glb_shape) == bounds_of(obj_shape)
+
+
+def test_a_cached_copy_of_a_mesh_is_not_taken_for_its_decomposition(
+    clean_cache, cache_dir, non_convex_mesh
+):
+    decomposer = DecomposerWatchingTheCache(
+        cache_file=cache_dir / f"{trimesh_quantized_hash(non_convex_mesh.mesh)}.obj"
+    )
+    convert_to_obj_and_save_in_tmp(mesh=non_convex_mesh, cache_dir=cache_dir)
+
+    decomposition = convert_to_decomposed_obj_and_save_in_tmp(
+        non_convex_mesh, mesh_decomposer=decomposer, cache_dir=cache_dir
+    )
+
+    assert sum(1 for line in open(decomposition) if line.startswith("o ")) == len(
+        decomposer.apply_to_mesh(non_convex_mesh)
+    )
+
+
+def test_a_cached_decomposition_is_not_taken_for_a_copy_of_the_mesh(
+    clean_cache, cache_dir, non_convex_mesh
+):
+    decomposer = DecomposerWatchingTheCache(
+        cache_file=cache_dir / f"{trimesh_quantized_hash(non_convex_mesh.mesh)}.obj"
+    )
+    convert_to_decomposed_obj_and_save_in_tmp(
+        non_convex_mesh, mesh_decomposer=decomposer, cache_dir=cache_dir
+    )
+
+    copy = trimesh.load(
+        convert_to_obj_and_save_in_tmp(mesh=non_convex_mesh, cache_dir=cache_dir),
+        force="mesh",
+        process=False,
+    )
+
+    assert len(copy.faces) == len(non_convex_mesh.unscaled_mesh.faces)

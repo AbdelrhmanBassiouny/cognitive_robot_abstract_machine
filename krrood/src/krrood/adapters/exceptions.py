@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from abc import ABC
 from dataclasses import dataclass
 from typing_extensions import Any, TYPE_CHECKING
 
@@ -129,10 +130,10 @@ class UntrackedObjectError(JSONSerializationError):
 
 
 @dataclass
-class ObjectArraySerializationError(JSONSerializationError):
+class ArrayElementTypeSerializationError(JSONSerializationError, ABC):
     """
-    Raised when a numpy array of Python objects is serialized, whose bytes are
-    references rather than values.
+    Raised when a numpy array is serialized whose element type the serializer cannot
+    write down faithfully.
     """
 
     element_type: np.dtype
@@ -143,5 +144,27 @@ class ObjectArraySerializationError(JSONSerializationError):
     def error_message(self) -> str:
         return f"Serializing a numpy array of element type {self.element_type} is not supported."
 
+
+@dataclass
+class ObjectArraySerializationError(ArrayElementTypeSerializationError):
+    """
+    Raised when a numpy array of Python objects is serialized, whose bytes are
+    references rather than values.
+    """
+
     def suggest_correction(self) -> str:
         return "Consider converting the array to a list first and serializing that."
+
+
+@dataclass
+class StructuredArraySerializationError(ArrayElementTypeSerializationError):
+    """
+    Raised when a numpy array of records is serialized, whose field names its element
+    type's byte layout does not carry.
+    """
+
+    def suggest_correction(self) -> str:
+        return (
+            "Consider serializing each field of the array as an array of its own, or, if appropriate, see if"
+            "you could contribute to krrood by adding support for this kind of array"
+        )

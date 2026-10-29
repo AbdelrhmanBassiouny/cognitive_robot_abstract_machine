@@ -20,6 +20,7 @@ from krrood.adapters.exceptions import (
     UnknownModuleError,
     ClassNotFoundError,
     ObjectArraySerializationError,
+    StructuredArraySerializationError,
 )
 from krrood.adapters.json_field import JSONField
 from krrood.adapters.json_serializer import (
@@ -443,6 +444,11 @@ def test_serializing_an_array_holds_less_than_twice_its_bytes():
 def test_an_array_of_python_objects_is_not_serialized():
     with pytest.raises(ObjectArraySerializationError):
         to_json(np.array([object(), object()]))
+
+
+def test_an_array_of_records_is_not_serialized():
+    with pytest.raises(StructuredArraySerializationError):
+        to_json(np.zeros(2, dtype=[("x", np.float64), ("count", np.int32)]))
 
 
 def test_coordinate_sparse_array_keeps_its_stored_entries():

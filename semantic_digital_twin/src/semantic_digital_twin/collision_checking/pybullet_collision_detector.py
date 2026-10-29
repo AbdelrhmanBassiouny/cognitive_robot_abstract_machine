@@ -3,7 +3,7 @@ import logging
 import os
 import tempfile
 from dataclasses import dataclass, field
-from enum import StrEnum, auto
+from enum import StrEnum
 from importlib.resources import files
 from pathlib import Path
 from typing_extensions import Any, Callable
@@ -30,6 +30,7 @@ from semantic_digital_twin.world_description.geometry import (
     Cylinder,
     Scale,
     Mesh,
+    MeshFileFormat,
 )
 from semantic_digital_twin.world_description.world_entity import Body
 
@@ -42,23 +43,12 @@ LOG_DIR = create_cache_dir("log")
 
 class BulletMeshFileFormat(StrEnum):
     """
-    A mesh file format Bullet loads, named by its file extension.
+    A mesh file format Bullet loads.
     """
 
-    OBJ = auto()
-    """
-    Wavefront OBJ.
-    """
-
-    STL = auto()
-    """
-    Stereolithography.
-    """
-
-    DAE = auto()
-    """
-    COLLADA.
-    """
+    OBJ = MeshFileFormat.OBJ
+    STL = MeshFileFormat.STL
+    DAE = MeshFileFormat.DAE
 
 
 _shape_cache: dict[Any, bullet.CollisionShape] = {}
@@ -349,13 +339,18 @@ def convert_to_obj_and_save_in_tmp(mesh: Mesh, cache_dir: Path = CACHE_DIR) -> s
     Saves the geometry of a mesh, before its scale is applied, as an .obj file in the
     cache, for a mesh whose file Bullet cannot read.
 
+    The file is named apart from the mesh's convex decomposition, so neither is read in
+    place of the other.
+
     :param mesh: the mesh to convert.
     :param cache_dir: the cache directory to save the .obj file in.
     :return: the path to the .obj file.
     """
     trimesh_obj = mesh.unscaled_mesh
     return save_in_cache(
-        obj_file_name=str(cache_dir / f"{trimesh_quantized_hash(trimesh_obj)}.obj"),
+        obj_file_name=str(
+            cache_dir / f"{trimesh_quantized_hash(trimesh_obj)}_undecomposed.obj"
+        ),
         write=lambda unfinished_file_name: Path(unfinished_file_name).write_text(
             trimesh.exchange.obj.export_obj(trimesh_obj)
         ),
@@ -371,7 +366,7 @@ def save_in_cache(obj_file_name: str, write: Callable[[str], None]) -> str:
 
     :param obj_file_name: the cache file.
     :param write: writes the file's content to the path it is given.
-    :return: ``obj_file_name``.
+    :return: the cache file.
     """
     if os.path.exists(obj_file_name):
         logging.debug(f'Cache hit, loaded "{obj_file_name}".')
