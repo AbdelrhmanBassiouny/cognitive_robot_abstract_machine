@@ -38,6 +38,7 @@ dependencies = [
     "sqlalchemy",
     "embreex",  # Hardware acceleration for trimesh raycasting
     "rtree",  # For spatial indexing in trimesh
+    "xxhash",  # Fast hashing for trimesh, which hashes meshes to check its caches
     "random_events",
     "plotly",
     "daqp",
@@ -62,7 +63,7 @@ dependencies = [
     "psutil~=5.9.0",
     "giskardpy",
     "krrood",
-    "krrspatial[casadi]",
+    "krrood_spatial_math[casadi]",
     "physics_simulators",
 ]
 license = "LGPL-3.0-only"
@@ -88,7 +89,7 @@ version = {attr = "semantic_digital_twin._version.__version__"}
 workspace = [
     "giskardpy",
     "krrood",
-    "krrspatial",
+    "krrood_spatial_math",
     "physics_simulators",
     "probabilistic_model",
     "random_events",

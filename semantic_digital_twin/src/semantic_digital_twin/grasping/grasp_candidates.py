@@ -9,12 +9,12 @@ from dataclasses import dataclass, field
 import numpy as np
 from typing_extensions import TYPE_CHECKING
 
-from krrspatial.exceptions import ReferenceFrameMismatchError
+from krrood_spatial_math.exceptions import ReferenceFrameMismatchError
 from semantic_digital_twin.exceptions import (
     MissingReferenceFrameError,
     ObjectHasNoWidthWithoutCollision,
 )
-from krrspatial.spatial_types import Pose
+from krrood_spatial_math.spatial_types import Pose
 
 if TYPE_CHECKING:
     from semantic_digital_twin.semantic_annotations.mixins import HasGraspCandidates

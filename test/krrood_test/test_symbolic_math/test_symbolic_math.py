@@ -13,6 +13,7 @@ import scipy.sparse as sp
 import krrood.symbolic_math.symbolic_math as sm
 from krrood.adapters.json_serializer import from_json, to_json
 from krrood.symbolic_math.exceptions import (
+    CannotConvertToStringError,
     FloatVariableAlreadyHasResolveError,
     HasFreeVariablesError,
     NotColumnVectorError,
@@ -147,18 +148,18 @@ class TestLogic3:
             for j in self.values:
                 expected = logic_and(i, j)
                 actual = sm.trinary_logic_and(sm.Scalar(i), sm.Scalar(j))
-                assert (
-                    expected == actual
-                ), f"a={i}, b={j}, expected {expected}, actual {actual}"
+                assert expected == actual, (
+                    f"a={i}, b={j}, expected {expected}, actual {actual}"
+                )
 
     def test_or3(self):
         for i in self.values:
             for j in self.values:
                 expected = logic_or(i, j)
                 actual = sm.trinary_logic_or(sm.Scalar(i), sm.Scalar(j))
-                assert expected == float(
-                    actual
-                ), f"a={i}, b={j}, expected {expected}, actual {actual}"
+                assert expected == float(actual), (
+                    f"a={i}, b={j}, expected {expected}, actual {actual}"
+                )
 
     def test_and3_of_one_argument_is_that_argument(self):
         for i in self.values:
@@ -185,23 +186,6 @@ class TestLogic3:
             expected = logic_not(i)
             actual = sm.trinary_logic_not(sm.Scalar(i))
             assert expected == actual, f"a={i}, expected {expected}, actual {actual}"
-
-    def test_trinary_logic_to_str(self):
-        a = sm.FloatVariable(name="a")
-        b = sm.FloatVariable(name="b")
-        c = sm.FloatVariable(name="c")
-        expression = sm.trinary_logic_and(
-            a, sm.trinary_logic_or(b, sm.trinary_logic_not(c))
-        )
-        expression_str = sm.trinary_logic_to_str(expression)
-        assert expression_str == '("a" and ("b" or not "c"))'
-
-        const_expr = sm.trinary_logic_and(
-            sm.Scalar.const_true(),
-            sm.trinary_logic_or(a, sm.Scalar.const_trinary_unknown()),
-        )
-        const_expr_str = sm.trinary_logic_to_str(const_expr)
-        assert const_expr_str == '("a" or Unknown)'
 
 
 class TestTrinaryPredicates:
@@ -307,6 +291,32 @@ class TestTrinaryPredicates:
 
 
 class TestIfElse:
+    @pytest.mark.parametrize(
+        "guard, selected",
+        [
+            (sm.Scalar.const_true(), True),
+            (sm.Scalar.const_trinary_unknown(), False),
+            (sm.Scalar.const_false(), False),
+        ],
+    )
+    def test_trinary_if_cases_selects_a_case_only_while_its_guard_is_true(
+        self, guard: sm.Scalar, selected: bool
+    ) -> None:
+        """
+        A trinary guard selects its case only while it is True, where :func:`if_cases`
+        would take Unknown for true as well.
+        """
+        a = sm.FloatVariable(name="a")
+        case_result = sm.Scalar(1)
+        else_result = sm.Scalar(2)
+
+        result = sm.trinary_if_cases(
+            cases=[(guard * a, case_result)], else_result=else_result
+        )
+
+        expected = case_result if selected else else_result
+        assert result.substitute([a], [sm.Scalar(1)]).to_np() == expected.to_np()
+
     def test_if_one_arg(self):
         inputs = [
             (sm.FloatVariable(name="muh"), sm.FloatVariable(name="muh2")),
@@ -326,9 +336,9 @@ class TestIfElse:
                 if isinstance(if_result, sm.FloatVariable):
                     assert result_type == sm.Scalar
                     continue
-                assert isinstance(
-                    result, result_type
-                ), f"{type(result)} != {result_type} for {if_function}"
+                assert isinstance(result, result_type), (
+                    f"{type(result)} != {result_type} for {if_function}"
+                )
 
     def test_if_two_arg(self):
         inputs = [
@@ -351,9 +361,9 @@ class TestIfElse:
                 if isinstance(if_result, sm.FloatVariable):
                     assert result_type == sm.Scalar
                     continue
-                assert isinstance(
-                    result, result_type
-                ), f"{type(result)} != {result_type} for {if_function}"
+                assert isinstance(result, result_type), (
+                    f"{type(result)} != {result_type} for {if_function}"
+                )
 
     @pytest.mark.parametrize("condition", bool_values)
     @pytest.mark.parametrize("if_result", numbers)
@@ -542,9 +552,9 @@ class TestFloatVariable:
             result = op(s1, s2)
             assert isinstance(result, sm.Scalar), f"{op.__name__} result is not Scalar"
             f = result.compile()
-            assert f.call_with_kwargs(muh=1, kikariki=2) == op(
-                1, 2
-            ), f"{op.__name__} result is wrong"
+            assert f.call_with_kwargs(muh=1, kikariki=2) == op(1, 2), (
+                f"{op.__name__} result is wrong"
+            )
 
     def test_comparison_operations(self):
         operators = [
@@ -560,9 +570,9 @@ class TestFloatVariable:
             result = op(s1, s2)
             assert isinstance(result, sm.Scalar), f"{op.__name__} result is not Scalar"
             f = result.compile()
-            assert f.call_with_kwargs(muh=1, kikariki=2) == op(
-                1, 2
-            ), f"{op.__name__} result is wrong"
+            assert f.call_with_kwargs(muh=1, kikariki=2) == op(1, 2), (
+                f"{op.__name__} result is wrong"
+            )
 
     def test_back_reference(self):
         v = sm.FloatVariable(name="asdf")
@@ -620,7 +630,6 @@ class TestFloatVariable:
 
 
 class TestExpression:
-
     def test_free_variables(self):
         m = sm.Vector(v := sm.create_float_variables(["a", "b", "c", "d"]))
         assert len(m.free_variables()) == 4
@@ -818,7 +827,6 @@ class TestSymbolicType:
 
 
 class TestCompiledFunction:
-
     def test_empty_compiled_function(self):
         expected = np.array([1, 2, 3])
         e = sm.Vector(expected)
@@ -832,6 +840,12 @@ class TestCompiledFunction:
         f = e.compile(sparse=True)
         assert np.allclose(f().toarray(), expected)
         assert np.allclose(f(np.array([], dtype=float)).toarray(), expected)
+
+    def test_function_of_an_expression_without_entries_has_a_representation(
+        self,
+    ) -> None:
+        function = sm.Matrix().compile()
+        assert repr(function.expression) in repr(function)
 
     def test_dense(self):
         s1_value = 420.0
@@ -1195,17 +1209,17 @@ class TestVector:
             expected = op(v1_np, s1_float)
             assert isinstance(result, sm.Vector), f"{op.__name__} result is not Vector"
             assert np.allclose(result, expected), f"{op.__name__} result is wrong"
-            assert (
-                result.shape[0] == expected.shape[0]
-            ), f"{op.__name__} result shape is wrong"
+            assert result.shape[0] == expected.shape[0], (
+                f"{op.__name__} result shape is wrong"
+            )
 
             result = op(v1, v2)
             expected = op(v1_np, v2_np)
             assert isinstance(result, sm.Vector), f"{op.__name__} result is not Vector"
             assert np.allclose(result, expected), f"{op.__name__} result is wrong"
-            assert (
-                result.shape[0] == expected.shape[0]
-            ), f"{op.__name__} result shape is wrong"
+            assert result.shape[0] == expected.shape[0], (
+                f"{op.__name__} result shape is wrong"
+            )
 
     def test_abs(self):
         f1 = sm.Vector([1, -1, -23])
@@ -1573,36 +1587,36 @@ class TestMatrix:
             result = op(m1, s1)
             assert isinstance(result, sm.Matrix), f"{op.__name__} result is not Matrix"
             assert np.allclose(result, expected), f"{op.__name__} result is wrong"
-            assert np.allclose(
-                result, op(m1, s1_float)
-            ), f"{op.__name__} result is wrong"
-            assert (
-                result.shape == expected.shape
-            ), f"{op.__name__} result shape is wrong"
+            assert np.allclose(result, op(m1, s1_float)), (
+                f"{op.__name__} result is wrong"
+            )
+            assert result.shape == expected.shape, (
+                f"{op.__name__} result shape is wrong"
+            )
 
             expected = op(m1_np, v1_np)
             result = op(m1, v1)
             assert isinstance(result, sm.Matrix), f"{op.__name__} result is not Matrix"
             assert np.allclose(result, expected), f"{op.__name__} result is wrong"
-            assert (
-                result.shape == expected.shape
-            ), f"{op.__name__} result shape is wrong"
+            assert result.shape == expected.shape, (
+                f"{op.__name__} result shape is wrong"
+            )
 
             expected = op(m1_np, v1_np)
             result = op(m1, v1)
             assert isinstance(result, sm.Matrix), f"{op.__name__} result is not Matrix"
             assert np.allclose(result, expected), f"{op.__name__} result is wrong"
-            assert (
-                result.shape == expected.shape
-            ), f"{op.__name__} result shape is wrong"
+            assert result.shape == expected.shape, (
+                f"{op.__name__} result shape is wrong"
+            )
 
             expected = op(m1_np, m2_np)
             result = op(m1, m2)
             assert isinstance(result, sm.Matrix), f"{op.__name__} result is not Matrix"
             assert np.allclose(result, expected), f"{op.__name__} result is wrong"
-            assert (
-                result.shape == expected.shape
-            ), f"{op.__name__} result shape is wrong"
+            assert result.shape == expected.shape, (
+                f"{op.__name__} result shape is wrong"
+            )
 
     def test_abs(self):
         f1 = -sm.Matrix.eye(3)

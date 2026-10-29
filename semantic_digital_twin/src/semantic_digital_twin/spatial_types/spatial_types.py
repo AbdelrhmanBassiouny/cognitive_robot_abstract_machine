@@ -1,11 +1,11 @@
 """
-The spatial types, which live in :mod:`krrspatial.spatial_types`.
+The spatial types, which live in :mod:`krrood_spatial_math.spatial_types`.
 
 This module keeps the names importable here, and keeps JSON documents that name a
 spatial type by this module readable.
 """
 
-from krrspatial.spatial_types import (
+from krrood_spatial_math.spatial_types import (
     AxisAngle,
     GenericHomogeneousSpatialType,
     GenericRotatableSpatialType,

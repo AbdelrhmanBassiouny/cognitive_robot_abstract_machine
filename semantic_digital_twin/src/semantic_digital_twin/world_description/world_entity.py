@@ -37,15 +37,15 @@ from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
 from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from krrood.adapters.object_reference import IdentifiedObject
-from krrspatial.exceptions import ReferenceFrameMismatchError
-from krrspatial.reference_frame import ReferenceFrame
+from krrood_spatial_math.exceptions import ReferenceFrameMismatchError
+from krrood_spatial_math.cartesian_frame_3d import CartesianFrame3D
 from semantic_digital_twin.exceptions import AlreadyBelongsToAWorldError
 from semantic_digital_twin.mixin import HasSimulatorProperties, UniqueSimulatorProperty
 from semantic_digital_twin.world_description.connection_properties import (
     ServoGains,
     VelocityServoGains,
 )
-from krrspatial.spatial_types import (
+from krrood_spatial_math.spatial_types import (
     GenericSpatialType,
     HomogeneousTransformationMatrix,
     Point3,
@@ -369,7 +369,9 @@ class WorldEntityWithSimulatorProperties(WorldEntityWithID, HasSimulatorProperti
 
 
 @dataclass(eq=False)
-class KinematicStructureEntity(WorldEntityWithSimulatorProperties, ReferenceFrame, ABC):
+class KinematicStructureEntity(
+    WorldEntityWithSimulatorProperties, CartesianFrame3D, ABC
+):
     """
     An entity that is part of the kinematic structure of the world.
     """
@@ -1190,7 +1192,9 @@ class Connection(WorldEntityWithSimulatorProperties, ABC):
             connection.
         """
 
-    def _find_references_in_world(self, world: World) -> tuple[
+    def _find_references_in_world(
+        self, world: World
+    ) -> tuple[
         KinematicStructureEntity,
         KinematicStructureEntity,
         HomogeneousTransformationMatrix,

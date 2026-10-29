@@ -7,20 +7,14 @@ from abc import ABC, ABCMeta, abstractmethod
 from dataclasses import dataclass, field
 from functools import wraps
 from threading import RLock
-from typing_extensions import Any, Callable, ClassVar, Optional
+from typing_extensions import Any, Callable, ClassVar
 
 from krrood.singleton import SingletonMeta
 from segmind.datastructures.enums import PlayerStatus
 from segmind.utils import PropagatingThread
 from semantic_digital_twin.world import World
 
-
 logger = logging.getLogger(__name__)
-
-try:
-    from ripple_down_rules.user_interface.gui import RDRCaseViewer
-except ImportError:
-    RDRCaseViewer = None
 
 
 class SingletonABCMeta(SingletonMeta, ABCMeta):
@@ -36,6 +30,7 @@ class SingletonABCMeta(SingletonMeta, ABCMeta):
 class EpisodePlayer(PropagatingThread, ABC, metaclass=SingletonABCMeta):
     """
     The EpisodePlayer class is a base class for all episode players.
+
     It provides common functionality and properties for episode players.
     """
 
@@ -44,7 +39,9 @@ class EpisodePlayer(PropagatingThread, ABC, metaclass=SingletonABCMeta):
     The world associated with the episode player.
     """
 
-    time_between_frames: datetime.timedelta | None = field(default_factory=lambda: datetime.timedelta(seconds=0.01))
+    time_between_frames: datetime.timedelta | None = field(
+        default_factory=lambda: datetime.timedelta(seconds=0.01)
+    )
     """
     The time between frames of the episode player.
     """
@@ -59,17 +56,12 @@ class EpisodePlayer(PropagatingThread, ABC, metaclass=SingletonABCMeta):
     If True, the episode player will stop after it is ready.
     """
 
-    rdr_viewer: Optional[RDRCaseViewer] = None
-    """
-    The RDRCaseViewer instance.
-    """
-
     pause_resume_lock: ClassVar[RLock] = field(default=RLock(), init=False)
     """
     A lock for pausing and resuming the episode player.
     """
 
-    _ready : bool = field(default=False, init=False)
+    _ready: bool = field(default=False, init=False)
     """
     Whether the episode player is ready to start playing.
     """
@@ -181,8 +173,8 @@ class EpisodePlayer(PropagatingThread, ABC, metaclass=SingletonABCMeta):
     @classmethod
     def pause_resume_with_condition(cls, condition: Callable[[Any], bool]) -> Callable:
         """
-        A decorator that pauses the player before the decorated function call if
-        the condition is met, then resumes it afterward.
+        A decorator that pauses the player before the decorated function call if the
+        condition is met, then resumes it afterward.
 
         :param condition: The condition to check before pausing the player.
         :return: The wrapped callable.
@@ -211,8 +203,8 @@ class EpisodePlayer(PropagatingThread, ABC, metaclass=SingletonABCMeta):
     @classmethod
     def pause_resume(cls, func: Callable) -> Callable:
         """
-        A decorator that unconditionally pauses the player before the decorated
-        function call and resumes it afterward.
+        A decorator that unconditionally pauses the player before the decorated function
+        call and resumes it afterward.
 
         :param func: The callable to wrap.
         :return: The wrapped callable.
@@ -221,7 +213,8 @@ class EpisodePlayer(PropagatingThread, ABC, metaclass=SingletonABCMeta):
 
     def _join(self, timeout=None):
         """
-        Joins the episode player thread and removes the instance from the singleton dictionary.
+        Joins the episode player thread and removes the instance from the singleton
+        dictionary.
 
         :param timeout: The timeout.
         """

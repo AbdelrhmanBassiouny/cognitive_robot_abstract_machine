@@ -42,6 +42,7 @@ from semantic_digital_twin.collision_checking.collision_rules import (
     AllowAlwaysInCollision,
     AllowNeverInCollision,
     AllowCollisionForAdjacentPairs,
+    AllowCollisionBetweenFingers,
 )
 from semantic_digital_twin.collision_checking.collision_variable_managers import (
     ExternalCollisionVariableManager,
@@ -343,6 +344,40 @@ class TestCollisionRules:
             if body != held_body
         }
 
+    def test_the_fingers_of_a_gripper_may_touch_each_other(self, pr2_world_copy):
+        """
+        A gripper's finger tips may touch each other, but not the palm they are mounted
+        on, nor the fingers of the other gripper.
+        """
+        pr2 = pr2_world_copy.get_semantic_annotations_by_type(PR2)[0]
+        rule = AllowCollisionBetweenFingers(robot=pr2)
+        rule.update(pr2_world_copy)
+
+        def check(name_a: str, name_b: str) -> CollisionCheck:
+            return CollisionCheck.create_for_bodies_with_collision(
+                pr2_world_copy.get_body_by_name(name_a),
+                pr2_world_copy.get_body_by_name(name_b),
+            )
+
+        allowed = rule.allowed_collision_pairs
+        assert (
+            check("r_gripper_l_finger_tip_link", "r_gripper_r_finger_tip_link")
+            in allowed
+        )
+        assert (
+            check("l_gripper_l_finger_tip_link", "l_gripper_r_finger_tip_link")
+            in allowed
+        )
+        assert (
+            check("r_gripper_l_finger_tip_link", "l_gripper_r_finger_tip_link")
+            not in allowed
+        )
+        palms = {
+            pr2_world_copy.get_body_by_name(name)
+            for name in ("r_gripper_palm_link", "l_gripper_palm_link")
+        }
+        assert not any({c.body_a, c.body_b} & palms for c in allowed)
+
     def test_AvoidExternalCollisions_with_attached_body(self, pr2_apartment_world):
         pr2 = pr2_apartment_world.get_semantic_annotations_by_type(PR2)[0]
         collision_matrix = CollisionMatrix()
@@ -554,7 +589,6 @@ class TestCollisionRules:
 
 
 class TestCollisionGroups:
-
     @dataclass
     class MockCollisionGroupConsumer(CollisionGroupConsumer):
         def on_compute_collisions(self, collision_results: CollisionCheckingResult): ...
@@ -607,9 +641,9 @@ class TestCollisionGroups:
             parent = group.root.parent_connection.parent
             assert group.root.parent_connection.is_controlled or body_to_robot.get(
                 parent
-            ) != body_to_robot.get(
-                group.root
-            ), f"group root {group.root.name} does not have a controlled parent connection and is not an ownership boundary"
+            ) != body_to_robot.get(group.root), (
+                f"group root {group.root.name} does not have a controlled parent connection and is not an ownership boundary"
+            )
 
         # no group body should be in another group body
         for group1, group2 in combinations(
@@ -1217,8 +1251,8 @@ class TestRolledBackCollisionRules:
                 id="external",
             ),
             pytest.param(
-                lambda collision_manager, robot: collision_manager.add_ignore_collision_rule(
-                    AllowAllCollisions()
+                lambda collision_manager, robot: (
+                    collision_manager.add_ignore_collision_rule(AllowAllCollisions())
                 ),
                 id="ignore_all",
             ),

@@ -10,7 +10,7 @@ from krrood.adapters.exceptions import UntrackedObjectError
 from krrood.adapters.json_serializer import from_json, to_json
 from krrood.symbolic_math.symbolic_math import FloatVariable
 from krrood.adapters.json_field import JSONField
-from krrspatial.exceptions import MissingReferenceFrameResolver
+from krrood_spatial_math.exceptions import MissingCartesianFrame3DResolver
 from semantic_digital_twin.adapters.mesh import STLParser
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
     WorldEntityWithIDKwargsTracker,
@@ -137,7 +137,7 @@ def test_KinematicStructureEntityNotInKwargs():
     point = Point3(1, 2, 3, reference_frame=body)
     json_data = point.to_json()
     kwargs = {}
-    with pytest.raises(MissingReferenceFrameResolver):
+    with pytest.raises(MissingCartesianFrame3DResolver):
         Point3.from_json(json_data, **kwargs)
 
 
@@ -477,9 +477,9 @@ def test_json_serialization_with_mesh():
 # %% connection references survive same-name ambiguity
 
 
-def _world_with_two_equally_named_connections() -> (
-    tuple[World, RevoluteConnection, RevoluteConnection]
-):
+def _world_with_two_equally_named_connections() -> tuple[
+    World, RevoluteConnection, RevoluteConnection
+]:
     """
     A world holding two revolute connections that share one name.
 

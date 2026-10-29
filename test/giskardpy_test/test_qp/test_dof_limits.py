@@ -9,9 +9,10 @@ import numpy as np
 import pytest
 
 import krrood.symbolic_math.symbolic_math as sm
-from giskardpy.executor import Executor
-from giskardpy.motion_statechart.context import MotionStatechartContext
-from giskardpy.motion_statechart.motion_statechart import MotionStatechart
+from cramph.context import StatechartContext
+from cramph.executor import StatechartExecutor
+from cramph.statechart import Statechart
+from giskardpy.motion_control import MotionControl
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList, JointState
 from giskardpy.qp.dof_limits import (
     BoundDirection,
@@ -284,14 +285,15 @@ def _peak_acceleration_moving_to(
     )
     connection.position = 0.0
     world.state[degree_of_freedom.id].velocity = initial_velocity
-    statechart = MotionStatechart()
+    executor = StatechartExecutor(
+        context=StatechartContext(world=world),
+        extensions=[MotionControl(qp_controller_config=config)],
+    )
+    statechart = Statechart(context=executor.context)
     statechart.add_node(
         JointPositionList(goal_state=JointState.from_mapping({connection: goal}))
     )
-    executor = Executor(
-        MotionStatechartContext(world=world, qp_controller_config=config)
-    )
-    executor.compile(motion_statechart=statechart)
+    executor.compile(statechart=statechart)
     accelerations = []
     for _ in range(6 * TARGET_FREQUENCY):
         executor.tick()
@@ -340,12 +342,12 @@ def test_directional_velocity_bounds_mirror_at_center(prismatic_bot):
 def test_directional_velocity_bound_reduced_near_upper_limit(prismatic_bot):
     lower_bound, upper_bound = _directional_bounds_at(_profiler(), prismatic_bot, 0.9)
 
-    assert (
-        upper_bound[0] < 0.9
-    ), "Upper bound must brake when approaching the upper limit"
-    assert np.isclose(
-        lower_bound[0], -VELOCITY_LIMIT, atol=1e-3
-    ), "Lower bound is unconstrained moving away from the upper limit"
+    assert upper_bound[0] < 0.9, (
+        "Upper bound must brake when approaching the upper limit"
+    )
+    assert np.isclose(lower_bound[0], -VELOCITY_LIMIT, atol=1e-3), (
+        "Lower bound is unconstrained moving away from the upper limit"
+    )
 
 
 def test_relax_jerk_on_initial_steps_relaxes_only_when_needed():

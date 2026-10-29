@@ -52,6 +52,17 @@ quaternions = [np.array([1.0, 0, 0, 0]), np.array([0.0, 1, 0, 0])]
 
 
 class TestRotationMatrix:
+    def test_expression_with_structural_zeros_is_written_the_same_after_a_round_trip(
+        self,
+    ) -> None:
+        angle = sm.FloatVariable("angle")
+        rotation = RotationMatrix.from_vectors(
+            x=Vector3(sm.cos(angle), sm.sin(angle), 0), z=Vector3.Z()
+        )
+        rotation_json = rotation.to_json()
+
+        assert RotationMatrix.from_json(rotation_json).to_json() == rotation_json
+
     @pytest.mark.parametrize("q1", quaternions)
     @pytest.mark.parametrize("q2", quaternions)
     def test_rotation_distance(self, q1, q2):
@@ -560,9 +571,9 @@ class TestRotationMatrix:
         for r in operations_to_test:
             rotation_part = r[:3, :3]
             det = rotation_part.det()
-            assert np.allclose(
-                det, 1.0, atol=1e-10
-            ), f"Determinant {det} != 1.0 for operation"
+            assert np.allclose(det, 1.0, atol=1e-10), (
+                f"Determinant {det} != 1.0 for operation"
+            )
 
     def test_deepcopy_of_default_constructed_matrix(self):
         """
@@ -2123,7 +2134,6 @@ class TestTransformationMatrix:
 
 
 class TestQuaternion:
-
     def test_from_iterable_copies_a_symbolic_math_type_input(self):
         """
         `from_iterable` must not alias a SymbolicMathType input's casadi_sx: the result

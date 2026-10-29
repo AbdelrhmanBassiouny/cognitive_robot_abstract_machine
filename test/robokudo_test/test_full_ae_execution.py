@@ -13,9 +13,8 @@ import robokudo.cas
 import robokudo.defs
 import robokudo.descriptors.camera_configs.config_filereader_playback
 import robokudo.descriptors.camera_configs.config_mongodb_playback
-import robokudo.descriptors.camera_configs.config_semdt_raytracer
 import robokudo.io.file_reader_interface
-import robokudo.io.semdt_raytracer_camera_interface
+import robokudo.io.ray_tracing_camera_interface
 import robokudo.io.storage_reader_interface
 import robokudo.behaviours.clear_annotator_outputs
 import robokudo.pipeline
@@ -32,11 +31,14 @@ from robokudo.annotators.pointcloud_cluster_extractor import PointCloudClusterEx
 from robokudo.annotators.pointcloud_crop import PointcloudCropAnnotator
 from robokudo.annotators.semantic_world_connector import SemanticDigitalTwinConnector
 from robokudo.annotators.shape_estimator import ShapeEstimatorAnnotator
+from robokudo.descriptors.camera_configs.config_ray_tracing import (
+    RayTracingCameraConfiguration,
+    WorldDescriptorSource,
+)
 from robokudo.descriptors.factories.cr_descriptor_factory import (
     CollectionReaderDescriptorFactory,
 )
-from robokudo.world_descriptor import PredefinedObject
-from semantic_digital_twin.world_description.geometry import Mesh
+from semantic_digital_twin.robots.robot_parts import Camera
 
 
 @pytest.fixture
@@ -57,11 +59,9 @@ class TestFullAEExecution(object):
             "file_reader",
             loop=False,
             target_dir=robokudo.utils.data_downloader.test_data_path() / Path("data"),
-            kinect_height_fix_mode=True,
             color_to_depth_ratio=ColorToDepthRatio(horizontal=0.5, vertical=0.5),
             static_camera_transform_enabled=True,
             static_world_frame="map",
-            static_camera_frame="camera",
         )
 
         # Restrict FOV of pointcloud to robustly get only one object
@@ -100,11 +100,9 @@ class TestFullAEExecution(object):
             "file_reader",
             loop=False,
             target_dir=robokudo.utils.data_downloader.test_data_path() / Path("data"),
-            kinect_height_fix_mode=True,
             color_to_depth_ratio=ColorToDepthRatio(horizontal=0.5, vertical=0.5),
             static_camera_transform_enabled=True,
             static_world_frame="map",
-            static_camera_frame="camera",
         )
 
         pc_crop_config = (
@@ -133,19 +131,19 @@ class TestFullAEExecution(object):
             object_hypotheses = cas.filter_annotations_by_type(
                 robokudo.types.scene.ObjectHypothesis
             )
-            assert (
-                len(object_hypotheses) == 1
-            ), "Each successful CAS should already contain the object hypothesis to be synchronized."
+            assert len(object_hypotheses) == 1, (
+                "Each successful CAS should already contain the object hypothesis to be synchronized."
+            )
 
             object_beliefs = list(rk_world.get_object_belief_states().values())
-            assert (
-                len(object_beliefs) == 1
-            ), "After each successful connector run, the current object should map to exactly one belief."
+            assert len(object_beliefs) == 1, (
+                "After each successful connector run, the current object should map to exactly one belief."
+            )
 
             object_belief = object_beliefs[0]
-            assert (
-                object_belief.latest_hypothesis is object_hypotheses[0]
-            ), "The belief observed at CAS success should point to that CAS's object hypothesis."
+            assert object_belief.latest_hypothesis is object_hypotheses[0], (
+                "The belief observed at CAS success should point to that CAS's object hypothesis."
+            )
             belief_uuids_after_each_successful_cas.append(object_belief.uuid)
 
         successful_cas_instances = (
@@ -159,21 +157,23 @@ class TestFullAEExecution(object):
             )
         )
 
-        assert (
-            len(successful_cas_instances) == 2
-        ), "The file-reader integration fixture should yield the two available successful CAS instances."
-        assert (
-            len(belief_uuids_after_each_successful_cas) == 2
-        ), "The integration test should inspect the belief state immediately after both successful CAS instances."
+        assert len(successful_cas_instances) == 2, (
+            "The file-reader integration fixture should yield the two available successful CAS instances."
+        )
+        assert len(belief_uuids_after_each_successful_cas) == 2, (
+            "The integration test should inspect the belief state immediately after both successful CAS instances."
+        )
         assert (
             belief_uuids_after_each_successful_cas[0]
             == belief_uuids_after_each_successful_cas[1]
-        ), "The second percept should update the same ObjectBeliefState created from the first percept."
+        ), (
+            "The second percept should update the same ObjectBeliefState created from the first percept."
+        )
 
         cas_ids = [cas.cas_id for cas in successful_cas_instances]
-        assert len(set(cas_ids)) == len(
-            cas_ids
-        ), "The repeated runner should count distinct CAS ids, not repeated ticks of the same CAS."
+        assert len(set(cas_ids)) == len(cas_ids), (
+            "The repeated runner should count distinct CAS ids, not repeated ticks of the same CAS."
+        )
 
         first_cas, second_cas = successful_cas_instances
         same_color_image = np.array_equal(
@@ -184,19 +184,21 @@ class TestFullAEExecution(object):
             first_cas.get(robokudo.cas.CASViews.DEPTH_IMAGE),
             second_cas.get(robokudo.cas.CASViews.DEPTH_IMAGE),
         )
-        assert not (
-            same_color_image and same_depth_image
-        ), "The two successful CAS instances should come from distinct RGB-D percepts."
+        assert not (same_color_image and same_depth_image), (
+            "The two successful CAS instances should come from distinct RGB-D percepts."
+        )
 
         all_hypotheses = []
         for cas in successful_cas_instances:
             types_of_annotations = list(map(type, cas.annotations))
-            assert (
-                types_of_annotations.count(robokudo.types.annotation.Plane) == 1
-            ), "The file-reader baseline should detect one support plane per percept."
+            assert types_of_annotations.count(robokudo.types.annotation.Plane) == 1, (
+                "The file-reader baseline should detect one support plane per percept."
+            )
             assert (
                 types_of_annotations.count(robokudo.types.scene.ObjectHypothesis) == 1
-            ), "The cropped file-reader baseline should produce one object hypothesis per percept."
+            ), (
+                "The cropped file-reader baseline should produce one object hypothesis per percept."
+            )
 
             object_hypotheses = cas.filter_annotations_by_type(
                 robokudo.types.scene.ObjectHypothesis
@@ -227,32 +229,33 @@ class TestFullAEExecution(object):
             assert stamped_pose_annotations[0].frame == "map"
 
         object_beliefs = list(rk_world.get_object_belief_states().values())
-        assert (
-            len(object_beliefs) == 1
-        ), "Both observations of the static object should update one stable object belief."
+        assert len(object_beliefs) == 1, (
+            "Both observations of the static object should update one stable object belief."
+        )
 
         object_belief = object_beliefs[0]
-        assert (
-            object_belief.latest_hypothesis is all_hypotheses[-1]
-        ), "The object belief should point to the latest associated object hypothesis."
-        assert (
-            object_belief.latest_pose is not None
-        ), "The object belief should expose the latest pose from its associated hypothesis."
-        assert (
-            object_belief.latest_bbox_3d is not None
-        ), "The object belief should expose the latest 3D bounding box from its associated hypothesis."
-        assert (
-            object_belief.body.parent_connection is not None
-        ), "The object belief body should be attached to the SemDT world frame."
-        assert (
-            len(object_belief.body.visual.shapes) == 1
-        ), "The object belief body should contain one visual shape derived from the latest bounding box."
+        assert object_belief.latest_hypothesis is all_hypotheses[-1], (
+            "The object belief should point to the latest associated object hypothesis."
+        )
+        assert object_belief.latest_pose is not None, (
+            "The object belief should expose the latest pose from its associated hypothesis."
+        )
+        assert object_belief.latest_bbox_3d is not None, (
+            "The object belief should expose the latest 3D bounding box from its associated hypothesis."
+        )
+        assert object_belief.body.parent_connection is not None, (
+            "The object belief body should be attached to the SemDT world frame."
+        )
+        assert len(object_belief.body.visual.shapes) == 1, (
+            "The object belief body should contain one visual shape derived from the latest bounding box."
+        )
 
     def test_run_semdt_raytracer_ae_successfully(self, node) -> None:
         raytracer_config = CollectionReaderDescriptorFactory.create_descriptor(
-            "semdt_raytracer",
-            world_descriptor_name="world_semdt_raytracer_cylinders",
-            resolution=128,
+            RayTracingCameraConfiguration.registry_name,
+            source=WorldDescriptorSource(
+                descriptor_name="world_semdt_raytracer_cylinders"
+            ),
         )
 
         plane_desc = PlaneAnnotator.Descriptor()
@@ -293,6 +296,15 @@ class TestFullAEExecution(object):
         )
         assert tree_result is py_trees.common.Status.SUCCESS
 
+        camera_observation = seq.cas.camera_observation
+        assert (
+            camera_observation.effective_camera_model
+            is camera_observation.camera.camera_model
+        )
+        assert camera_observation.camera in (
+            seq.cas.ground_truth_world_ref.get_semantic_annotations_by_type(Camera)
+        )
+
         types_of_annotations = list(map(type, seq.cas.annotations))
         assert types_of_annotations.count(robokudo.types.annotation.Plane) == 1
         assert types_of_annotations.count(robokudo.types.scene.ObjectHypothesis) == 2
@@ -330,9 +342,10 @@ class TestFullAEExecution(object):
         self, node
     ) -> None:
         raytracer_config = CollectionReaderDescriptorFactory.create_descriptor(
-            "semdt_raytracer",
-            world_descriptor_name="world_semdt_raytracer_tabletop",
-            resolution=128,
+            RayTracingCameraConfiguration.registry_name,
+            source=WorldDescriptorSource(
+                descriptor_name="world_semdt_raytracer_tabletop"
+            ),
         )
 
         plane_desc = PlaneAnnotator.Descriptor()
