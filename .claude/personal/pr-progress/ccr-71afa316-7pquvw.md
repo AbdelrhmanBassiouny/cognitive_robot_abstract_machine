@@ -1,12 +1,13 @@
-PR #534 (draft, base `main`). Upstream: cram2#826 (approved by Tigul, sunava, LucaKro).
+PR #534 (draft, base `main`). Upstream: cram2#826 (approved by Tigul, sunava, LucaKro before 6f126b5d4).
 
 Plan
-- Top-level `PullRequestLabelsRules` in `agent_rules.py`, regenerated `AGENTS.md`: kind-of-change labels only; framework labels left to upstream's `.github/labeler.yml`.
-- Enums in the root package: `pull_request_labels.py` (`ChangeKindLabel`) and `repository_files.py` (`RepositoryFile.CODE_OWNERS`, `.LABELER_CONFIGURATION`); kept out of `agent_rules.py` because `RuleModule.import_from` caches `agent_rules` by bare name.
+- `PullRequestLabelsRules` in `agent_rules.py`/`AGENTS.md`: agents set `api-break`/`new-feature`/`bug-fix`/`maintenance`; framework, `documentation`, `dev-tools` left to `.github/labeler.yml`.
+- `pr_api_break_check.yml` (pull_request, griffe 2.4.1 vs HEAD^1, uploads `api-break` artifact) + `pr_api_break_label.yml` (workflow_run, PR looked up by head SHA, add-only).
 
 Done
-- b0b2b07cc: merged main (cramera removed upstream, labeler added in 611d45f73); dropped `FrameworkLabel`, the member-less `PullRequestLabel` base and their test; new rule never to set/suggest framework labels. Answers LucaKro's "combine with jonas' labeler".
+- 6f126b5d4: griffe check + label workflows, rules aligned with the labeler, `RepositoryFile.API_BREAK_CHECK_WORKFLOW`. Dry run vs main~30 works (~30 s).
 
 Next
-- User: update cram2#826 title/description to the fork PR's, reply to LucaKro, add `dev-tools`/`new-feature`.
-- Possible follow-up: basstler promotion links pass `labels=`.
+- User: copy fork PR title/description to cram2#826, reply to LucaKro, add `new-feature`; approvals may need re-requesting.
+- Unverified on GitHub: actionlint not run here; label job only runs after merge to default branch.
+
