@@ -288,7 +288,10 @@ class ImageClusterExtractor(BaseAnnotator):
 
     # %% Image preparation and contour selection
     def _prepare_images(self) -> npt.NDArray:
-        """Load color and depth images and align the projection intrinsics."""
+        """Load color and depth images and align the projection intrinsics.
+
+        :return: BGR color image resized to the depth image resolution.
+        """
         self.color = self.get_cas().get(CASViews.COLOR_IMAGE)
         self.depth = self.get_cas().get(CASViews.DEPTH_IMAGE)
         cas = self.get_cas()
@@ -310,6 +313,8 @@ class ImageClusterExtractor(BaseAnnotator):
     def _select_contours(self, color_mask: npt.NDArray) -> list[npt.NDArray]:
         """Select the largest outer contours that exceed the configured minimum area.
 
+        :param color_mask: Binary image marking pixels within the selected color range.
+        :return: Outer contours passing the configured area and count limits.
         :raises ImageContourMissing: If the mask contains no contours.
         """
         contours, hierarchy = cv2.findContours(
@@ -347,7 +352,13 @@ class ImageClusterExtractor(BaseAnnotator):
         contour_mask: npt.NDArray,
         maximum_depth: float = 9.0,
     ) -> open3d.geometry.PointCloud:
-        """Project the masked depth image and apply configured outlier removal."""
+        """Project the masked depth image and apply configured outlier removal.
+
+        :param resized_color: BGR color image aligned with the depth image.
+        :param contour_mask: Mask selecting contour pixels with a value of 255.
+        :param maximum_depth: Depth truncation distance in meters.
+        :return: Colored point cloud in the camera frame, filtered if configured.
+        """
         color_rgb = cv2.cvtColor(resized_color, cv2.COLOR_BGR2RGB)
         masked_depth = np.where(contour_mask == 255, self.depth, 0)
 
@@ -377,7 +388,13 @@ class ImageClusterExtractor(BaseAnnotator):
         contours: list[npt.NDArray],
         erosion_kernel_size: int = 5,
     ) -> ImageClusters:
-        """Create contour point clouds and annotate those meeting the minimum size."""
+        """Create contour point clouds and annotate those meeting the minimum size.
+
+        :param resized_color: BGR color image aligned with the depth image.
+        :param contours: Object contours in depth image pixel coordinates.
+        :param erosion_kernel_size: Width and height of the erosion kernel in pixels.
+        :return: Contour point clouds, accepted object hypotheses, and depth visualization.
+        """
         clusters = ImageClusters()
         for contour_index, contour in enumerate(contours):
             contour_mask = np.zeros_like(self.depth, dtype=np.uint8)
@@ -426,7 +443,12 @@ class ImageClusterExtractor(BaseAnnotator):
         visualization_image: npt.NDArray,
         object_hypotheses: list[ObjectHypothesis],
     ) -> npt.NDArray:
-        """Draw object identifiers, point counts, and bounding rectangles."""
+        """Draw object identifiers, point counts, and bounding rectangles.
+
+        :param visualization_image: BGR image on which to draw the annotations.
+        :param object_hypotheses: Objects supplying identifiers, point counts, and bounds.
+        :return: Visualization image with the object annotations drawn on it.
+        """
         for object_hypothesis in object_hypotheses:
             region_of_interest = object_hypothesis.roi.roi
             upper_left = (region_of_interest.pos.x, region_of_interest.pos.y)
