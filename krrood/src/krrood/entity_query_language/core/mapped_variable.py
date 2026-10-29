@@ -24,6 +24,7 @@ from random_events.variable import (
 )
 
 from krrood.class_diagrams.utils import get_type_hints_of_object
+from krrood.entity_query_language.attribute_reader import LiveAttributeReader
 from krrood.entity_query_language.core.base_expressions import (
     UnaryExpression,
     Bindings,
@@ -33,6 +34,7 @@ from krrood.entity_query_language.core.base_expressions import (
     SymbolicExpression,
     UnificationDict,
 )
+from krrood.entity_query_language.evaluation_context import get_evaluation_context
 from krrood.entity_query_language.exceptions import (
     MultipleValuesAlongAccessPath,
     NoValueAlongAccessPath,
@@ -631,8 +633,15 @@ class Attribute(SingleValueMapping[T]):
     def _apply_mapping_(
         self, value: Any, sources: OperationResult | None = None
     ) -> Iterable[T]:
-        if hasattr(value, self._attribute_name_):
-            yield getattr(value, self._attribute_name_)
+        """
+        Read the attribute through the current evaluation context's
+        :attr:`~krrood.entity_query_language.evaluation_context.EvaluationContext.attribute_reader`,
+        or from *value* itself outside an evaluation.
+        """
+        evaluation_context = get_evaluation_context()
+        if evaluation_context is None:
+            return LiveAttributeReader().read(value, self._attribute_name_)
+        return evaluation_context.attribute_reader.read(value, self._attribute_name_)
 
     def _rebuild_on_(self, child: CanBehaveLikeAVariable) -> MappedVariable:
         return child._get_mapped_variable_(

@@ -18,6 +18,11 @@ from dataclasses import dataclass, field
 from ordered_set import OrderedSet
 from typing_extensions import Any, Callable, Iterator, TYPE_CHECKING
 
+from krrood.entity_query_language.attribute_reader import (
+    AttributeReader,
+    LiveAttributeReader,
+)
+
 if TYPE_CHECKING:
     from krrood.entity_query_language.core.base_expressions import (
         OperationResult,
@@ -339,6 +344,11 @@ class EvaluationContext:
     )
     """
     Caches each nested subquery's result stream for the current evaluation pass.
+    """
+
+    attribute_reader: AttributeReader = field(default_factory=LiveAttributeReader)
+    """
+    Reads the attributes of the instances the evaluation ranges over.
     """
 
     has_running_evaluation: bool = field(default=False, init=False)
