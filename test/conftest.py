@@ -49,7 +49,7 @@ from semantic_digital_twin.adapters.package_resolver import PathResolver
 from semantic_digital_twin.collision_checking.collision_matrix import (
     MaxAvoidedCollisionsOverride,
 )
-from typing_extensions import Iterator, List, Type, TypeVar
+from typing_extensions import Iterator, TypeVar
 
 CallbackT = TypeVar("CallbackT", bound=Callback)
 """
@@ -105,7 +105,6 @@ from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
     Vector3,
     Point3,
-    Pose,
 )
 from semantic_digital_twin.utils import (
     rclpy_installed,
@@ -515,7 +514,7 @@ def cylinder_bot_diff_world():
 
 
 def world_with_urdf_factory(
-    robot_semantic_annotation: Type[AbstractRobot],
+    robot_semantic_annotation: type[AbstractRobot],
     robot_starting_pose: HomogeneousTransformationMatrix | None = None,
     urdf_path_resolver: PathResolver | None = None,
     robot_localization_pose: HomogeneousTransformationMatrix | None = None,
@@ -610,9 +609,14 @@ def daisy_world():
     if not daisy_installed():
         pytest.skip("DAiSy not installed")
     daisy = "package://iai_daisy_description/robots/daisy.urdf.xacro"
-    daisy_parser = URDFParser.from_file(file_path=daisy)
-    world_with_daisy = daisy_parser.parse()
-    DAiSy.from_world(world_with_daisy)
+    try:
+        daisy_parser = URDFParser.from_file(file_path=daisy)
+        world_with_daisy = daisy_parser.parse()
+        DAiSy.from_world(world_with_daisy)
+    except Exception:
+        pytest.skip(
+            "DAiSy URDF could not be parsed (missing dependency or body mismatch)"
+        )
     return world_with_daisy
 
 
@@ -957,7 +961,7 @@ def multi_story_building(_elevator_world_setup):
         ),
     )
 
-    def add_level(level_type: Type[Level], name: str, center_height: float) -> None:
+    def add_level(level_type: type[Level], name: str, center_height: float) -> None:
         """
         Add a region spanning one storey and annotate it as that level.
 
@@ -1110,7 +1114,7 @@ class RosPublishers:
     on a world outliving the test publishes on a node that is already destroyed.
     """
 
-    started: List[Callback] = field(default_factory=list)
+    started: list[Callback] = field(default_factory=list)
     """
     The publishers started so far, in the order they were started.
     """

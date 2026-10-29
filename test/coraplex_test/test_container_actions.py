@@ -10,8 +10,9 @@ from coraplex.robot_plans.motions.gripper import (
     MoveToolCenterPointMotion,
 )
 from semantic_digital_twin.datastructures.definitions import GripperState
+from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Handle
-from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.spatial_types.spatial_types import Point3, Pose
 from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
 from .conftest import left_or_only_arm
 
@@ -50,6 +51,40 @@ def motions_of(action) -> list:
     return [node.designator for node in action._action_plan.children]
 
 
+# %% choosing the grasp on the handle
+
+
+def test_a_handle_is_taken_by_the_grasp_approaching_it_from_where_the_robot_stands(
+    pr2_at_drawer,
+):
+    """
+    The handle's own frame says nothing about which side of it faces the room, so the
+    grasp is the one that approaches the handle from the robot's side, whichever side
+    that is.
+    """
+    world, robot, context, handle = pr2_at_drawer
+    arm = left_or_only_arm(robot)
+    horizontal_grasps = [
+        grasp
+        for grasp in handle.grasp_candidates()
+        if world.transform(grasp.grasp_pose, world.root).to_np()[2, 0]
+        == pytest.approx(0, abs=1e-9)
+    ]
+
+    for grasp in horizontal_grasps:
+        world_T_grasp = world.transform(grasp.grasp_pose, world.root).to_np()
+        standing_position = Pose(
+            position=Point3.from_iterable(world_T_grasp[:3, 3] - world_T_grasp[:3, 0]),
+            reference_frame=world.root,
+        )
+
+        action = OpenAction.from_handle(handle, arm, standing_position)
+
+        np.testing.assert_allclose(
+            action.grasp.grasp_pose.to_np(), grasp.grasp_pose.to_np(), atol=1e-9
+        )
+
+
 # %% backing off the handle
 
 
@@ -60,14 +95,20 @@ def test_gripper_backs_off_the_handle_after_letting_go(pr2_at_drawer, action_typ
     clearing it along the direction it approached from.
     """
     world, robot, context, handle = pr2_at_drawer
-    action = action_type(handle, left_or_only_arm(robot))
+    action = action_type(
+        GraspCandidate.from_body_origin(handle), left_or_only_arm(robot)
+    )
     sequential([action], context)
 
     motions = motions_of(action)
+    open_state = left_or_only_arm(robot).end_effector.get_joint_state_by_type(
+        GripperState.OPEN
+    )
     gripper_openings = [
         index
         for index, motion in enumerate(motions)
-        if isinstance(motion, MoveGripperMotion) and motion.motion is GripperState.OPEN
+        if isinstance(motion, MoveGripperMotion)
+        and motion.configuration.joint_state is open_state
     ]
     back_off = motions[-1]
 
@@ -89,7 +130,9 @@ def test_back_off_pose_clears_the_grasp_by_the_release_clearance(pr2_at_drawer):
     given and no further.
     """
     world, robot, context, handle = pr2_at_drawer
-    action = OpenAction(handle, left_or_only_arm(robot))
+    action = OpenAction(
+        GraspCandidate.from_body_origin(handle), left_or_only_arm(robot)
+    )
     sequential([action], context)
 
     end_effector = left_or_only_arm(robot).end_effector
@@ -116,7 +159,9 @@ def test_open_promises_the_container_is_open_rather_than_still_held(pr2_at_drawe
     an open container, not a handle still between the fingers.
     """
     world, robot, context, handle = pr2_at_drawer
-    action = OpenAction(handle, left_or_only_arm(robot))
+    action = OpenAction(
+        GraspCandidate.from_body_origin(handle), left_or_only_arm(robot)
+    )
     sequential([action], context)
     drawer = handle.root.get_first_parent_connection_of_type(ActiveConnection1DOF)
     drawer.position = 0.45

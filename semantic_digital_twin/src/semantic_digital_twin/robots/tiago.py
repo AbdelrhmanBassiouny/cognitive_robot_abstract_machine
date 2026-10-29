@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+# %% Imports
 import math
 import os
 from abc import ABC
@@ -8,7 +9,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from importlib.resources import files
 from pathlib import Path
-from typing import Self, List
+from typing_extensions import Self
 
 from krrood.ormatic.utils import classproperty
 from semantic_digital_twin.adapters.mjcf import MJCFParser
@@ -19,6 +20,7 @@ from semantic_digital_twin.collision_checking.collision_rules import (
     SelfCollisionMatrixRule,
 )
 from semantic_digital_twin.datastructures.definitions import (
+    JointName,
     GripperState,
     StaticJointState,
     TorsoState,
@@ -39,20 +41,21 @@ from semantic_digital_twin.robots.robot_part_mixins import (
 )
 from semantic_digital_twin.robots.robot_parts import (
     AbstractRobot,
-    AbstractRobotPart,
+    ServoedRobotPart,
     Arm,
-    Camera,
+    RobotCamera,
     Finger,
     MobileBase,
     Neck,
     Torso,
     EndEffector,
 )
+from semantic_digital_twin.datastructures.camera_model import FieldOfViewCameraModel
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
-from semantic_digital_twin.spatial_types import Vector3
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Vector3
 from semantic_digital_twin.world_description.connection_properties import (
     DriveServos,
-    JointServo,
+    JointDrive,
     ServoGains,
     VelocityServoGains,
 )
@@ -65,8 +68,10 @@ from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
 
+# %% Robot parts
 
-class TiagoJoint(StrEnum):
+
+class TiagoJoint(JointName):
     """
     Names of the Tiago's commandable connections, as spelled in its URDF.
 
@@ -106,7 +111,7 @@ class TiagoLeftThumb(Finger):
     def setup_hardware_interfaces(self):
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @classmethod
@@ -129,7 +134,7 @@ class TiagoLeftIndexFinger(Finger):
     def setup_hardware_interfaces(self):
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @classmethod
@@ -152,7 +157,7 @@ class TiagoRightThumb(Finger):
     def setup_hardware_interfaces(self):
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @classmethod
@@ -175,7 +180,7 @@ class TiagoRightIndexFinger(Finger):
     def setup_hardware_interfaces(self):
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @classmethod
@@ -207,7 +212,7 @@ class TiagoLeftGripper(
             )
             connection.has_hardware_interface = True
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         gripper_joints = self.active_connections
 
         gripper_open = JointState.from_mapping(
@@ -261,7 +266,7 @@ class TiagoRightGripper(
             )
             connection.has_hardware_interface = True
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         gripper_joints = self.active_connections
 
         gripper_open = JointState.from_mapping(
@@ -319,7 +324,7 @@ class TiagoLeftArm(Arm[TiagoLeftGripper]):
             )
             connection.has_hardware_interface = True
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         arm_park = JointState.from_mapping(
             name=PrefixedName("left_arm_park", prefix=self.name.name),
             mapping=dict(
@@ -365,7 +370,7 @@ class TiagoRightArm(Arm[TiagoRightGripper]):
             )
             connection.has_hardware_interface = True
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         arm_park = JointState.from_mapping(
             name=PrefixedName("right_arm_park", prefix=self.name.name),
             mapping=dict(
@@ -393,30 +398,39 @@ class TiagoRightArm(Arm[TiagoRightGripper]):
 
 
 @dataclass(eq=False)
-class TiagoCamera(Camera):
-
-    @property
-    def forward_facing_axis(self) -> Vector3:
-        return Vector3.Z(reference_frame=self.root)
+class TiagoCamera(RobotCamera[FieldOfViewCameraModel]):
+    """
+    Camera attached to its robot model's optical frame.
+    """
 
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(
         cls, robot_root: KinematicStructureEntity
     ) -> Self:
+        """
+        Attach the camera to the optical frame below the supplied robot root.
+
+        :param robot_root: Root of the robot branch containing the optical frame.
+        :return: Camera configured for the model's optical frame.
+        """
         return cls(
             root=robot_root._world.get_body_in_branch_by_name(
                 robot_root, "head_front_camera_optical_frame"
             ),
-            field_of_view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049),
+            camera_model=FieldOfViewCameraModel(
+                angular_extent=FieldOfView(
+                    horizontal_angle=0.99483, vertical_angle=0.75049
+                )
+            ),
             minimal_height=1.0665,
             maximal_height=1.4165,
             default_camera=True,
         )
 
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
 
@@ -434,7 +448,7 @@ class TiagoNeck(Neck[TiagoCamera]):
             )
             connection.has_hardware_interface = True
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @classmethod
@@ -464,7 +478,7 @@ class TiagoTorso(
             )
             connection.has_hardware_interface = True
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         torso_joint = self.active_connections
         torso_low = JointState.from_mapping(
             name=PrefixedName("torso_low", prefix=self.name.name),
@@ -544,7 +558,7 @@ class TiagoMobileBase(
     def setup_hardware_interfaces(self):
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @classmethod
@@ -603,7 +617,7 @@ class Tiago(AbstractRobot, HasMobileBase[TiagoMobileBase]):
 # %% names in MuJoCo's own model of the robot
 
 
-class TiagoMujocoFingerJoint(StrEnum):
+class TiagoMujocoFingerJoint(JointName):
     """
     Names of the sliding finger joints of MuJoCo's own model of the Tiago, which has
     them in place of the URDF's linkage; its other joints are named as in
@@ -641,14 +655,14 @@ class TiagoMujocoBody(StrEnum):
 
 
 @dataclass(eq=False)
-class ServoedByItsMujocoModel(AbstractRobotPart, ABC):
+class ServoedByItsMujocoModel(ServoedRobotPart, ABC):
     """
     A part of the MuJoCo Tiago whose joints are driven in a physical simulation by the
-    servos of :attr:`servo_of_each_joint`.
+    drives of :attr:`drive_of_each_model_joint`.
     """
 
     @classproperty
-    def servo_of_each_joint(cls) -> dict[str, JointServo]:
+    def drive_of_each_model_joint(cls) -> dict[str, JointDrive]:
         """
         What drives every servoed joint of the MuJoCo description, by the name that
         description gives it: the stiffness and force limit of the position actuators
@@ -656,79 +670,82 @@ class ServoedByItsMujocoModel(AbstractRobotPart, ABC):
         ratio of 1 they state.
         """
         return {
-            TiagoJoint.TORSO_LIFT: JointServo(
+            TiagoJoint.TORSO_LIFT: JointDrive(
                 gains=ServoGains(stiffness=50000.0, damping=2361.08, torque_limit=500.0)
             ),
-            TiagoJoint.HEAD_1: JointServo(
+            TiagoJoint.HEAD_1: JointDrive(
                 gains=ServoGains(stiffness=20.0, damping=0.83, torque_limit=5.197)
             ),
-            TiagoJoint.HEAD_2: JointServo(
+            TiagoJoint.HEAD_2: JointDrive(
                 gains=ServoGains(stiffness=20.0, damping=0.87, torque_limit=5.197)
             ),
-            TiagoJoint.LEFT_ARM_1: JointServo(
+            TiagoJoint.LEFT_ARM_1: JointDrive(
                 gains=ServoGains(stiffness=250.0, damping=48.53, torque_limit=43.0)
             ),
-            TiagoJoint.LEFT_ARM_2: JointServo(
+            TiagoJoint.LEFT_ARM_2: JointDrive(
                 gains=ServoGains(stiffness=1500.0, damping=94.28, torque_limit=43.0)
             ),
-            TiagoJoint.LEFT_ARM_3: JointServo(
+            TiagoJoint.LEFT_ARM_3: JointDrive(
                 gains=ServoGains(stiffness=600.0, damping=4.36, torque_limit=26.0)
             ),
-            TiagoJoint.LEFT_ARM_4: JointServo(
+            TiagoJoint.LEFT_ARM_4: JointDrive(
                 gains=ServoGains(stiffness=1000.0, damping=35.38, torque_limit=26.0)
             ),
-            TiagoJoint.LEFT_ARM_5: JointServo(
+            TiagoJoint.LEFT_ARM_5: JointDrive(
                 gains=ServoGains(stiffness=80.0, damping=0.97, torque_limit=3.0)
             ),
-            TiagoJoint.LEFT_ARM_6: JointServo(
+            TiagoJoint.LEFT_ARM_6: JointDrive(
                 gains=ServoGains(stiffness=80.0, damping=2.57, torque_limit=6.6)
             ),
-            TiagoJoint.LEFT_ARM_7: JointServo(
+            TiagoJoint.LEFT_ARM_7: JointDrive(
                 gains=ServoGains(stiffness=80.0, damping=0.54, torque_limit=6.6)
             ),
-            TiagoJoint.RIGHT_ARM_1: JointServo(
+            TiagoJoint.RIGHT_ARM_1: JointDrive(
                 gains=ServoGains(stiffness=250.0, damping=45.14, torque_limit=43.0)
             ),
-            TiagoJoint.RIGHT_ARM_2: JointServo(
+            TiagoJoint.RIGHT_ARM_2: JointDrive(
                 gains=ServoGains(stiffness=1500.0, damping=87.68, torque_limit=43.0)
             ),
-            TiagoJoint.RIGHT_ARM_3: JointServo(
+            TiagoJoint.RIGHT_ARM_3: JointDrive(
                 gains=ServoGains(stiffness=600.0, damping=3.90, torque_limit=26.0)
             ),
-            TiagoJoint.RIGHT_ARM_4: JointServo(
+            TiagoJoint.RIGHT_ARM_4: JointDrive(
                 gains=ServoGains(stiffness=1000.0, damping=33.51, torque_limit=26.0)
             ),
-            TiagoJoint.RIGHT_ARM_5: JointServo(
+            TiagoJoint.RIGHT_ARM_5: JointDrive(
                 gains=ServoGains(stiffness=80.0, damping=0.66, torque_limit=3.0)
             ),
-            TiagoJoint.RIGHT_ARM_6: JointServo(
+            TiagoJoint.RIGHT_ARM_6: JointDrive(
                 gains=ServoGains(stiffness=80.0, damping=2.56, torque_limit=6.6)
             ),
-            TiagoJoint.RIGHT_ARM_7: JointServo(
+            TiagoJoint.RIGHT_ARM_7: JointDrive(
                 gains=ServoGains(stiffness=80.0, damping=0.53, torque_limit=6.6)
             ),
-            TiagoMujocoFingerJoint.LEFT_GRIPPER_LEFT_FINGER: JointServo(
+            TiagoMujocoFingerJoint.LEFT_GRIPPER_LEFT_FINGER: JointDrive(
                 gains=ServoGains(stiffness=500.0, damping=14.63, torque_limit=5.197)
             ),
-            TiagoMujocoFingerJoint.LEFT_GRIPPER_RIGHT_FINGER: JointServo(
+            TiagoMujocoFingerJoint.LEFT_GRIPPER_RIGHT_FINGER: JointDrive(
                 gains=ServoGains(stiffness=500.0, damping=14.63, torque_limit=5.197)
             ),
-            TiagoMujocoFingerJoint.RIGHT_GRIPPER_LEFT_FINGER: JointServo(
+            TiagoMujocoFingerJoint.RIGHT_GRIPPER_LEFT_FINGER: JointDrive(
                 gains=ServoGains(stiffness=500.0, damping=14.63, torque_limit=5.197)
             ),
-            TiagoMujocoFingerJoint.RIGHT_GRIPPER_RIGHT_FINGER: JointServo(
+            TiagoMujocoFingerJoint.RIGHT_GRIPPER_RIGHT_FINGER: JointDrive(
                 gains=ServoGains(stiffness=500.0, damping=14.63, torque_limit=5.197)
             ),
         }
 
-    def _setup_servos(self) -> None:
-        for connection in self.active_connections:
-            if not isinstance(connection, ActiveConnection1DOF):
-                continue
-            self._declare_servo(
-                connection, self.servo_of_each_joint[connection.name.name]
-            )
-        self._compensate_gravity()
+    @classproperty
+    def holds_its_own_weight(cls) -> bool:
+        return True
+
+    @property
+    def drive_of_each_joint(self) -> dict[str, JointDrive]:
+        return {
+            connection.name.name: self.drive_of_each_model_joint[connection.name.name]
+            for connection in self.active_connections
+            if isinstance(connection, ActiveConnection1DOF)
+        }
 
 
 @dataclass(eq=False)
@@ -737,7 +754,7 @@ class TiagoMujocoLeftThumb(Finger):
     def setup_hardware_interfaces(self):
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @classmethod
@@ -760,7 +777,7 @@ class TiagoMujocoLeftIndexFinger(Finger):
     def setup_hardware_interfaces(self):
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @classmethod
@@ -783,7 +800,7 @@ class TiagoMujocoRightThumb(Finger):
     def setup_hardware_interfaces(self):
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @classmethod
@@ -806,7 +823,7 @@ class TiagoMujocoRightIndexFinger(Finger):
     def setup_hardware_interfaces(self):
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @classmethod
@@ -833,7 +850,7 @@ class TiagoMujocoLeftGripper(
     def setup_hardware_interfaces(self):
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         """
         The hand opens and closes to the ends of its fingers' travel.
         """
@@ -888,7 +905,7 @@ class TiagoMujocoRightGripper(
     def setup_hardware_interfaces(self):
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         """
         The hand opens and closes to the ends of its fingers' travel.
         """
@@ -939,7 +956,7 @@ class TiagoMujocoLeftArm(Arm[TiagoMujocoLeftGripper], ServoedByItsMujocoModel):
     def setup_hardware_interfaces(self):
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         arm_park = JointState.from_mapping(
             name=PrefixedName("left_arm_park", prefix=self.name.name),
             mapping=dict(
@@ -972,7 +989,7 @@ class TiagoMujocoRightArm(Arm[TiagoMujocoRightGripper], ServoedByItsMujocoModel)
     def setup_hardware_interfaces(self):
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         arm_park = JointState.from_mapping(
             name=PrefixedName("right_arm_park", prefix=self.name.name),
             mapping=dict(
@@ -999,36 +1016,48 @@ class TiagoMujocoRightArm(Arm[TiagoMujocoRightGripper], ServoedByItsMujocoModel)
         )
 
 
-@dataclass(eq=False)
-class TiagoMujocoCamera(Camera):
-    """
-    Tiago's head camera, rooted in the head, since the MuJoCo model has no optical
-    frame: the field of view is the camera's, while its origin sits a few centimetres
-    behind and below the lens.
-    """
+# %% MuJoCo camera
 
-    @property
-    def forward_facing_axis(self) -> Vector3:
-        return Vector3.X(reference_frame=self.root)
+
+@dataclass(eq=False)
+class TiagoMujocoCamera(RobotCamera[FieldOfViewCameraModel]):
+    """
+    Head-mounted camera with optical forward aligned to the head's positive X axis.
+    """
 
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(
         cls, robot_root: KinematicStructureEntity
     ) -> Self:
+        """
+        Attach an optical frame to the head below the supplied robot root.
+
+        :param robot_root: Root of the robot branch containing the head.
+        :return: Camera configured for the head's mounting frame.
+        """
         return cls(
-            root=robot_root._world.get_body_in_branch_by_name(
-                robot_root, TiagoMujocoBody.HEAD
+            root=cls.create_optical_body(
+                robot_root._world.get_body_in_branch_by_name(
+                    robot_root, TiagoMujocoBody.HEAD
+                ),
+                HomogeneousTransformationMatrix(
+                    data=[[0, 0, 1, 0], [-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 0, 1]]
+                ),
             ),
-            field_of_view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049),
+            camera_model=FieldOfViewCameraModel(
+                angular_extent=FieldOfView(
+                    horizontal_angle=0.99483, vertical_angle=0.75049
+                )
+            ),
             minimal_height=1.0665,
             maximal_height=1.4165,
             default_camera=True,
         )
 
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
 
@@ -1038,7 +1067,7 @@ class TiagoMujocoNeck(Neck[TiagoMujocoCamera], ServoedByItsMujocoModel):
     def setup_hardware_interfaces(self):
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @classmethod
@@ -1066,7 +1095,7 @@ class TiagoMujocoTorso(
     def setup_hardware_interfaces(self):
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         torso_joint = self.active_connections
         torso_low = JointState.from_mapping(
             name=PrefixedName("torso_low", prefix=self.name.name),
@@ -1109,7 +1138,7 @@ class TiagoMujocoMobileBase(MobileBase[DifferentialDrive], HasTorso[TiagoMujocoT
     def setup_hardware_interfaces(self):
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @property

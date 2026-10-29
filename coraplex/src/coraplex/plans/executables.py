@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import time
 from contextlib import AbstractContextManager, ExitStack, nullcontext
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 
-from typing_extensions import Callable, List, Dict, ClassVar, Optional, TYPE_CHECKING
+from typing_extensions import Callable, ClassVar, TYPE_CHECKING
 
 from coraplex.datastructures.enums import ExecutionType
 from coraplex.exceptions import (
@@ -42,6 +43,7 @@ from giskardpy.ros_executor import Ros2Executor
 from krrood.entity_query_language.factories import evaluate_condition
 from krrood.ormatic.utils import classproperty
 from krrood.symbolic_math.symbolic_math import Scalar, trinary_logic_not
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world_description.world_entity import Body
 
 if TYPE_CHECKING:
@@ -160,7 +162,7 @@ class Executable:
     Base class for executable units.
     """
 
-    execution_list: List[Executable] = field(default_factory=list)
+    execution_list: list[Executable] = field(default_factory=list)
     """
     List of executables that comprises this executable.
     """
@@ -171,7 +173,7 @@ class Executable:
     """
 
     @property
-    def giskard_executables(self) -> List[GiskardExecutable]:
+    def giskard_executables(self) -> list[GiskardExecutable]:
         """
         :return: The giskard executables this unit is made of, in execution order.
         """
@@ -212,13 +214,13 @@ class GiskardExecutable(Executable):
     binds its updaters to the state arrays that adding a node would replace.
     """
 
-    motion_mappings: Dict[MotionNode, Task] = field(default_factory=dict, kw_only=True)
+    motion_mappings: dict[MotionNode, Task] = field(default_factory=dict, kw_only=True)
     """
     Mapping from the motion nodes of the plan to their giskard tasks, in execution
     order.
     """
 
-    pre_condition_node: Optional[ConditionNode] = field(default=None, kw_only=True)
+    pre_condition_node: ConditionNode | None = field(default=None, kw_only=True)
     """
     Optional pre-condition of the action this executable belongs to.
 
@@ -226,7 +228,7 @@ class GiskardExecutable(Executable):
     :meth:`_add_condition_monitors`.
     """
 
-    post_condition_node: Optional[ConditionNode] = field(default=None, kw_only=True)
+    post_condition_node: ConditionNode | None = field(default=None, kw_only=True)
     """
     Optional post-condition of the action this executable belongs to.
 
@@ -234,32 +236,31 @@ class GiskardExecutable(Executable):
     :meth:`_add_condition_monitors`.
     """
 
-    execution_type: ClassVar[Optional[ExecutionType]] = None
+    execution_type: ClassVar[ExecutionType | None] = None
     """
     The execution type used for all giskard executables, managed by
-    :py:class:`pycram.motion_executor.ExecutionEnvironment`.
+    :py:class:`~coraplex.execution_environment.ExecutionEnvironment`.
     """
 
     collision_avoidance: ClassVar[bool] = False
+    """
+    Whether the robot of the context avoids colliding with its surroundings and with
+    itself, managed by :py:class:`~coraplex.execution_environment.ExecutionEnvironment`.
 
-    simulation: ClassVar[Optional[MujocoSim]] = None
+    Adds an
+    :class:`~giskardpy.motion_statechart.goals.collision_avoidance.ExternalCollisionAvoidance`
+    and a
+    :class:`~giskardpy.motion_statechart.goals.collision_avoidance.SelfCollisionAvoidance`
+    for that robot to the motion state chart.
+    """
+
+    simulation: ClassVar[MujocoSim | None] = None
     """
     The physically simulated world a plan is performed in, when the execution type is
     :attr:`~coraplex.datastructures.enums.ExecutionType.PHYSICALLY_SIMULATED`.
 
     Shared the way :attr:`execution_type` is, and set by entering a
     :class:`~coraplex.execution_environment.PhysicallySimulatedRobot`.
-    """
-
-    """
-    Whether the robot avoids colliding with its surroundings and with itself, managed by
-    :py:class:`pycram.motion_executor.ExecutionEnvironment`.
-
-    Adds an
-    :class:`~giskardpy.motion_statechart.goals.collision_avoidance.ExternalCollisionAvoidance`
-    and a
-    :class:`~giskardpy.motion_statechart.goals.collision_avoidance.SelfCollisionAvoidance`
-    to the motion state chart.
     """
 
     @classproperty
@@ -271,7 +272,7 @@ class GiskardExecutable(Executable):
         return timedelta(minutes=2)
 
     @property
-    def giskard_executables(self) -> List[GiskardExecutable]:
+    def giskard_executables(self) -> list[GiskardExecutable]:
         """
         :return: This executable, which is the only giskard executable it is made of.
         """
@@ -281,7 +282,8 @@ class GiskardExecutable(Executable):
         """
         Extend the motion state chart with the nodes that terminate it: one that cancels
         the motion once it reaches its goal, and one that gives up on it once it stops
-        approaching one.
+        approaching one. When :attr:`collision_avoidance` is asked for, add the
+        collision avoidance of the robot of the context as well.
 
         This runs just before compilation rather than during parsing, because the
         execution type is only known once an
@@ -289,8 +291,9 @@ class GiskardExecutable(Executable):
         """
         end_trigger = self.root_node.goal_reached
         if GiskardExecutable.collision_avoidance:
-            self.motion_state_chart.add_node(ExternalCollisionAvoidance())
-            self.motion_state_chart.add_node(SelfCollisionAvoidance())
+            robot = self.context.robot
+            self.motion_state_chart.add_node(ExternalCollisionAvoidance(robot=robot))
+            self.motion_state_chart.add_node(SelfCollisionAvoidance(robot=robot))
 
         end_motion = EndMotion()
         end_motion.start_condition = end_trigger
@@ -390,7 +393,7 @@ class GiskardExecutable(Executable):
                     | ExecutionType.PHYSICALLY_SIMULATED
                 ):
                     self._execute_simulation()
-                case ExecutionType.REAL:
+                case ExecutionType.REAL | ExecutionType.SEMI_REAL:
                     self._execute_real()
                 case _:
                     raise UnknownExecutionType(GiskardExecutable.execution_type)
@@ -542,6 +545,17 @@ class MoveBranchExecutable(Executable):
     The new parent to which the branch is moved.
     """
 
+    giskard_idle_settle_delta: timedelta = field(
+        default=timedelta(seconds=0.3), kw_only=True
+    )
+    """
+    Time to wait after publishing the model change on the real robot.
+
+    Giskard only applies buffered world updates, and only republishes tf, while its
+    behavior tree is idle between goals; this delay gives it a few idle ticks to catch
+    up before the next motion goal is sent.
+    """
+
     execution_scope: Callable[[], AbstractContextManager[None]] = field(
         default=nullcontext, kw_only=True, repr=False, compare=False
     )
@@ -551,10 +565,12 @@ class MoveBranchExecutable(Executable):
         Move the branch, unless a physically simulated world is holding the body by
         contact already, in which case it is left where the physics puts it.
         """
-        if GiskardExecutable.execution_type == ExecutionType.PHYSICALLY_SIMULATED:
-            return
         with self.execution_scope():
+            if GiskardExecutable.execution_type == ExecutionType.PHYSICALLY_SIMULATED:
+                return
             self.context.world.move_branch(self.body, self.new_parent)
+        if GiskardExecutable.execution_type == ExecutionType.REAL:
+            time.sleep(self.giskard_idle_settle_delta.total_seconds())
 
 
 @dataclass

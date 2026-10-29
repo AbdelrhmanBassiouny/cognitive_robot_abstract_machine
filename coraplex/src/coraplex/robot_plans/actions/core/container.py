@@ -3,18 +3,26 @@ from __future__ import annotations
 from abc import abstractmethod
 from dataclasses import dataclass
 
-from typing_extensions import Any, Dict
-
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.factories import (
-    variable_from,
     ConditionType,
+    variable_from,
 )
+from semantic_digital_twin.datastructures.definitions import GripperState
+from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
+from semantic_digital_twin.robots.robot_parts import Arm, EndEffector
+from semantic_digital_twin.semantic_annotations.semantic_annotations import (
+    Handle,
+)
+from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
+from typing_extensions import Any
+
 from coraplex.datastructures.dataclasses import Context
 from coraplex.plans.factories import sequential
 from coraplex.plans.plan_node import PlanNode
-from coraplex.querying.predicates import GripperIsFree
+from coraplex.querying.predicates import GripperIsFree, IsAmongTheClosestGraspsTo
 from coraplex.robot_plans.actions.base import ActionDescription
 from coraplex.robot_plans.actions.core.pick_up import GraspingAction
 from coraplex.robot_plans.mixins import HasApproachesGraspPoses
@@ -24,14 +32,6 @@ from coraplex.robot_plans.motions.gripper import (
     MoveGripperMotion,
     MoveToolCenterPointMotion,
 )
-from semantic_digital_twin.datastructures.definitions import GripperState
-from semantic_digital_twin.robots.robot_parts import Arm, EndEffector
-from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
-from semantic_digital_twin.semantic_annotations.semantic_annotations import (
-    Handle,
-)
-from semantic_digital_twin.spatial_types.spatial_types import Pose
-from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
 
 
 @dataclass
@@ -44,9 +44,9 @@ class ContainerAction(ActionDescription, HasApproachesGraspPoses):
     differs.
     """
 
-    handle: Handle
+    grasp: GraspCandidate
     """
-    The handle of the container that should be moved.
+    The grasp on the handle of the container that should be moved.
     """
 
     arm: Arm
@@ -79,24 +79,43 @@ class ContainerAction(ActionDescription, HasApproachesGraspPoses):
         """
         return self.pre_grasp_pose(grasp_pose, end_effector, self.release_clearance)
 
+    @classmethod
+    def from_handle(cls, handle: Handle, arm: Arm, standing_position: Pose) -> Self:
+        """
+        :param handle: The handle of the container.
+        :param arm: The arm that takes hold of the handle.
+        :param standing_position: Where the robot stands while it takes hold.
+        :return: This action, taking `handle` by its grasp closest to
+            `standing_position`.
+        """
+        grasps = handle.grasp_candidates()
+        [closest_grasp] = [
+            grasp
+            for grasp in grasps
+            if IsAmongTheClosestGraspsTo(
+                grasp, standing_position, grasps, number_of_grasps=1
+            )()
+        ]
+        return cls(grasp=closest_grasp, arm=arm)
+
     @property
     def _action_plan(self) -> PlanNode:
-        handle_grasp = GraspCandidate.from_body_origin(self.handle)
         return sequential(
             [
                 GraspingAction(
-                    handle_grasp,
+                    self.grasp,
                     self.arm,
                     approach_clearance=self.approach_clearance,
                 ),
                 self._mechanism_motion,
                 MoveGripperMotion(
-                    GripperState.OPEN,
-                    self.arm.end_effector,
+                    configuration=self.arm.end_effector.default_configuration(
+                        GripperState.OPEN
+                    ),
                     allow_gripper_collision=True,
                 ),
                 MoveToolCenterPointMotion(
-                    self.back_off_pose(handle_grasp.grasp_pose, self.arm.end_effector),
+                    self.back_off_pose(self.grasp.grasp_pose, self.arm.end_effector),
                     self.arm,
                     allow_gripper_collision=True,
                 ),
@@ -112,11 +131,11 @@ class OpenAction(ContainerAction):
 
     @property
     def _mechanism_motion(self) -> BaseMotion:
-        return OpeningMotion(self.handle.root, self.arm)
+        return OpeningMotion(self.grasp.graspable.root, self.arm)
 
     @staticmethod
     def pre_condition(
-        variables: Dict[str, Variable], context: Context, kwargs: Dict[str, Any]
+        variables: dict[str, Variable], context: Context, kwargs: dict[str, Any]
     ) -> ConditionType:
         """
         The gripper with which to open the container has to be free.
@@ -125,7 +144,7 @@ class OpenAction(ContainerAction):
 
     @staticmethod
     def post_condition(
-        variables: Dict[str, Variable], context: Context, kwargs: Dict[str, Any]
+        variables: dict[str, Variable], context: Context, kwargs: dict[str, Any]
     ) -> ConditionType:
         """
         The container has to be open.
@@ -133,7 +152,8 @@ class OpenAction(ContainerAction):
         The gripper is clear of the handle by then, so what it holds says nothing about
         whether the container was opened.
         """
-        open_connection = kwargs["handle"].root.get_first_parent_connection_of_type(
+        handle_body = kwargs["grasp"].graspable.root
+        open_connection = handle_body.get_first_parent_connection_of_type(
             ActiveConnection1DOF
         )
 
@@ -148,16 +168,17 @@ class CloseAction(ContainerAction):
 
     @property
     def _mechanism_motion(self) -> BaseMotion:
-        return ClosingMotion(self.handle.root, self.arm)
+        return ClosingMotion(self.grasp.graspable.root, self.arm)
 
     @staticmethod
     def post_condition(
-        variables: Dict[str, Variable], context: Context, kwargs: Dict[str, Any]
+        variables: dict[str, Variable], context: Context, kwargs: dict[str, Any]
     ) -> SymbolicExpression | bool:
         """
         The container has to be closed.
         """
-        close_connection = kwargs["handle"].root.get_first_parent_connection_of_type(
+        handle_body = kwargs["grasp"].graspable.root
+        close_connection = handle_body.get_first_parent_connection_of_type(
             ActiveConnection1DOF
         )
 

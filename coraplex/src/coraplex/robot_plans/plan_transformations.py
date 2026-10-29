@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC
 from dataclasses import dataclass
 
-from typing_extensions import TYPE_CHECKING, Generic, List, Optional, cast
+from typing_extensions import TYPE_CHECKING, Generic, cast
 
 from coraplex.datastructures.enums import (
     DetectionTechnique,
@@ -21,6 +21,7 @@ from coraplex.plans.plan_transformation import (
     PlanTransformation,
 )
 from coraplex.plans.executables import GiskardExecutable
+from coraplex.querying.predicates import IsAmongTheClosestGraspsTo
 from coraplex.robot_plans import MoveToolCenterPointMotion
 from coraplex.robot_plans.motions.gripper import (
     MoveFingersToWidthMotion,
@@ -102,7 +103,7 @@ class DetectBeforeGrasp(InsertionTransformation[ReachAction]):
     def anchor(self, plan_node: ActionNode) -> PlanNode:
         return self.final_approach(plan_node)
 
-    def nodes_to_insert(self, plan_node: ActionNode) -> List[ActionLike]:
+    def nodes_to_insert(self, plan_node: ActionNode) -> list[ActionLike]:
         reach = cast(ReachAction, plan_node.action)
         return [
             LookAtAction(self.final_approach(plan_node).motion.target),
@@ -144,7 +145,7 @@ class DrawerOpening(
 
     def _closed_drawers_containing(
         self, annotation: HasRootBody, world: World
-    ) -> List[Drawer]:
+    ) -> list[Drawer]:
         """
         :param annotation: The object to locate
         :param world: The world the object and the drawers belong to
@@ -161,14 +162,16 @@ class DrawerOpening(
 
     def opening_nodes(
         self, drawer: Drawer, arm: Arm, context: Context
-    ) -> List[ActionLike]:
+    ) -> list[ActionLike]:
         """
         :param drawer: The drawer to open
         :param arm: The arm that opens it
         :param context: The context the standing pose is sampled in
-        :return: The opening, from a standing pose tried together with it.
+        :return: The opening, from a standing pose tried together with it, taking the
+            handle by its grasp closest to that pose.
         """
         handle_pose = Pose(reference_frame=drawer.handle.root)
+        grasps = drawer.handle.grasp_candidates()
         open_the_drawer = a(MoveAndOpenAction)(
             navigate=a(NavigateAction)(
                 target_location=variable(
@@ -182,9 +185,20 @@ class DrawerOpening(
                 face_at=a(FaceAtAction)(target=handle_pose),
                 look_at=a(LookAtAction)(target=handle_pose),
             ),
-            open_container=a(OpenAction)(handle=drawer.handle, arm=arm),
+            open_container=a(OpenAction)(
+                grasp=variable(GraspCandidate, domain=grasps), arm=arm
+            ),
         )
-        return [open_the_drawer]
+        return [
+            open_the_drawer.where(
+                IsAmongTheClosestGraspsTo(
+                    open_the_drawer.open_container.grasp,
+                    open_the_drawer.navigate.target_location,
+                    grasps,
+                    number_of_grasps=1,
+                )
+            )
+        ]
 
     def anchor(self, plan_node: PlanNode) -> PlanNode:
         return plan_node
@@ -207,7 +221,7 @@ class OpenDrawerBeforePickUp(DrawerOpening[PickUpAction]):
             self._closed_drawers_containing(pick_up.grasp.graspable, pick_up.world)
         )
 
-    def nodes_to_insert(self, plan_node: ActionNode) -> List[ActionLike]:
+    def nodes_to_insert(self, plan_node: ActionNode) -> list[ActionLike]:
         pick_up = cast(PickUpAction, plan_node.action)
         graspable = pick_up.grasp.graspable
         nodes = []
@@ -271,7 +285,7 @@ class OpenDrawerBeforeMoveAndPickUp(DrawerOpening[MoveAndPickUpAction]):
 
     def nodes_to_insert(
         self, plan_node: ActionNode | UnderspecifiedNode
-    ) -> List[ActionLike]:
+    ) -> list[ActionLike]:
         target = self._pick_up_target(plan_node)
         nodes = []
         for drawer in self._closed_drawers_containing(
@@ -286,7 +300,7 @@ class OpenDrawerBeforeMoveAndPickUp(DrawerOpening[MoveAndPickUpAction]):
 
     def _pick_up_target(
         self, plan_node: ActionNode | UnderspecifiedNode
-    ) -> Optional[PickUpTarget]:
+    ) -> PickUpTarget | None:
         """
         :param plan_node: A node this matches.
         :return: What the move-and-pick-up picks up and with which arm, or ``None`` if
@@ -302,7 +316,7 @@ class OpenDrawerBeforeMoveAndPickUp(DrawerOpening[MoveAndPickUpAction]):
     @staticmethod
     def _pick_up_target_shared_by_candidates_of(
         move_and_pick_up: Match[MoveAndPickUpAction],
-    ) -> Optional[PickUpTarget]:
+    ) -> PickUpTarget | None:
         """
         :param move_and_pick_up: A move-and-pick-up still to be grounded.
         :return: The object and arm every one of its candidates picks up with, or
@@ -382,7 +396,7 @@ class ParkArmsBeforeFirstAction(InsertionTransformation[ActionNode]):
     def anchor(self, plan_node: PlanNode) -> PlanNode:
         return plan_node
 
-    def nodes_to_insert(self, plan_node: PlanNode) -> List[ActionLike]:
+    def nodes_to_insert(self, plan_node: PlanNode) -> list[ActionLike]:
         return [ParkArmsAction(plan_node.action.robot.all_arms)]
 
 
@@ -446,7 +460,7 @@ class CloseFingersToObjectWidth(PlanTransformation[GraspingAction]):
             for node in plan_node.descendants
             if isinstance(node, MotionNode)
             and isinstance(node.motion, MoveGripperMotion)
-            and node.motion.motion is GripperState.CLOSE
+            and node.motion.configuration.joint_state.state_type is GripperState.CLOSE
         ]
         if not motions:
             raise GraspHasNoClosingMotion(plan_node)

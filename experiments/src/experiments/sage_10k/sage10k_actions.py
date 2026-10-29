@@ -8,6 +8,7 @@ from coraplex.plans.plan_node import PlanNode
 from coraplex.robot_plans.actions.base import ActionDescription
 from coraplex.robot_plans.actions.core.container import OpenAction
 from coraplex.robot_plans.actions.core.misc import MoveToReach
+from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.robots.robot_parts import EndEffector
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Door
 from semantic_digital_twin.spatial_types import Point2, Pose2D, Pose
@@ -88,6 +89,8 @@ class Sage10kOpenDoor(ActionDescription):
         reach_query._where_conditions_.append(free_space_condition)
         reach_action = reach_query
 
-        open_action = OpenAction(handle=self.door.handle, arm=arm)
+        open_action = OpenAction(
+            grasp=GraspCandidate.from_body_origin(self.door.handle), arm=arm
+        )
 
         return sequential([reach_action, open_action])

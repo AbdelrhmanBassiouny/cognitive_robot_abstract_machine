@@ -130,7 +130,8 @@ with kinematically_simulated_robot:
 
 ## Set Gripper
 
-As the name implies, this action designator is used to open or close the gripper.
+As the name implies, this action designator is used to open or close the gripper. The gripper configuration is described
+by a gripper configuration, which the end effector of the arm builds from one of its declared states.
 
 The procedure is similar to the last time, but this time we will shorten it a bit.
 
@@ -139,11 +140,10 @@ from coraplex.execution_environment import kinematically_simulated_robot
 from coraplex.robot_plans.actions.core.robot_body import SetGripperAction
 from semantic_digital_twin.datastructures.definitions import GripperState
 
-gripper = pr2.right_arm.end_effector
-motion = GripperState.OPEN
+configuration = pr2.left_arm.end_effector.default_configuration(GripperState.OPEN)
 
 with kinematically_simulated_robot:
-    execute_single(SetGripperAction(gripper=gripper, motion=motion), context=context).perform()
+    execute_single(SetGripperAction(configuration=configuration), context=context).perform()
 ```
 
 ## Park Arms
@@ -270,8 +270,8 @@ with kinematically_simulated_robot:
 
 ## Opening
 
-Opening allows the robot to open a drawer, the drawer is identified by an ObjectPart designator which describes the
-handle of the drawer that should be grasped.
+Opening allows the robot to open a drawer, grabbing the drawer's handle by a grasp. Here the handle is grasped at its own
+origin; `OpenAction.from_handle` instead picks the handle's grasp closest to where the robot stands.
 
 For the moment this designator works only in the apartment environment, therefore we remove the kitchen and spawn the
 apartment.
@@ -281,6 +281,7 @@ from coraplex.robot_plans import *
 from coraplex.execution_environment import kinematically_simulated_robot
 from semantic_digital_twin.datastructures.definitions import TorsoState
 from coraplex.robot_plans.actions.core.container import OpenAction
+from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Handle
 
 # Opening reaches for a handle, so it is named by the handle's annotation rather than by
@@ -297,13 +298,12 @@ with kinematically_simulated_robot:
         NavigateAction(Pose.from_xyz_quaternion(1.7074915981292725, 2.6873629093170166, 0.0,
                                                 -0.0, 0.0, 0.5253598267689507, -0.850880163370435,
                                                 reference_frame=world.root)),
-        OpenAction(handle, pr2.right_arm)], context=context).perform()
+        OpenAction(GraspCandidate.from_body_origin(handle), pr2.right_arm)], context=context).perform()
 ```
 
 ## Closing
 
-Closing lets the robot close an open drawer, like opening the drawer is identified by an ObjectPart designator
-describing the handle to be grasped.
+Closing lets the robot close an open drawer, taking its handle by a grasp just like opening does.
 
 This action designator only works in the apartment environment for the moment, therefore we remove the kitchen and spawn
 the apartment. Additionally, we open the drawer such that we can close it with the action designator.
@@ -319,5 +319,5 @@ with kinematically_simulated_robot:
         NavigateAction(Pose.from_xyz_quaternion(1.72, 2.65, 0.0,
                                                 -0.0, 0.0, 0.5253598267689507, -0.850880163370435,
                                                 reference_frame=world.root)),
-        CloseAction(handle, pr2.right_arm)], context=context).perform()
+        CloseAction(GraspCandidate.from_body_origin(handle), pr2.right_arm)], context=context).perform()
 ```

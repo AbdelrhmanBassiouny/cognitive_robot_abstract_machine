@@ -2,24 +2,31 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import Any, Dict, List, Tuple
-
-from coraplex.plans.attachment_nodes import ReAttachNode
-from coraplex.plans.plan_node import PlanNode
 from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.factories import (
-    or_,
-    not_,
-    and_,
-    variable_from,
     ConditionType,
+    and_,
+    not_,
+    or_,
+    variable_from,
 )
+from semantic_digital_twin.datastructures.definitions import GripperState
+from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
+from semantic_digital_twin.reasoning.predicates import allclose
+from semantic_digital_twin.reasoning.robot_predicates import is_body_gripped
+from semantic_digital_twin.robots.robot_parts import Arm
+from semantic_digital_twin.semantic_annotations.mixins import HasGraspCandidates
+from semantic_digital_twin.spatial_types.spatial_types import Pose
+from typing_extensions import Any
+
 from coraplex.datastructures.dataclasses import Context
 from coraplex.exceptions import ObjectIsNotHeld
-from coraplex.querying.predicates import GripperHolds
+from coraplex.plans.attachment_nodes import ReAttachNode
 from coraplex.plans.factories import sequential
-from coraplex.robot_plans.actions.core.pick_up import PickUpAction
+from coraplex.plans.plan_node import PlanNode
+from coraplex.querying.predicates import GripperHolds
 from coraplex.robot_plans.actions.base import ActionDescription
+from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.robot_plans.mixins import (
     HasApproachesGraspPoses,
     HasGraspDetectionThreshold,
@@ -30,13 +37,6 @@ from coraplex.robot_plans.motions.gripper import (
     MoveGripperMotion,
     MoveToolCenterPointMotion,
 )
-from semantic_digital_twin.datastructures.definitions import GripperState
-from semantic_digital_twin.reasoning.predicates import allclose
-from semantic_digital_twin.reasoning.robot_predicates import is_body_gripped
-from semantic_digital_twin.robots.robot_parts import Arm
-from semantic_digital_twin.spatial_types.spatial_types import Pose
-from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
-from semantic_digital_twin.semantic_annotations.mixins import HasGraspCandidates
 
 
 @dataclass
@@ -95,10 +95,11 @@ class PlaceAction(
                     orientation_threshold=self.orientation_threshold,
                 ),
                 MoveGripperMotion(
-                    GripperState.OPEN,
-                    arm.end_effector,
+                    configuration=arm.end_effector.default_configuration(
+                        GripperState.OPEN,
+                        finger_velocity=self.release_opening_velocity,
+                    ),
                     allow_gripper_collision=True,
-                    finger_velocity=self.release_opening_velocity,
                 ),
                 ReAttachNode(
                     body=self.object_designator.root, new_parent=self.world.root
@@ -114,7 +115,7 @@ class PlaceAction(
             self.context,
         )
 
-    def _holding_arm_and_grasp(self) -> Tuple[Arm, GraspCandidate]:
+    def _holding_arm_and_grasp(self) -> tuple[Arm, GraspCandidate]:
         """
         The arm that holds :attr:`object_designator`, and the grasp it holds it by.
 
@@ -148,7 +149,7 @@ class PlaceAction(
 
     @staticmethod
     def pre_condition(
-        variables: Dict[str, Variable], context: Context, kwargs: Dict[str, Any]
+        variables: dict[str, Variable], context: Context, kwargs: dict[str, Any]
     ) -> ConditionType:
         """
         An arm of the robot needs to hold the object, whether the object hangs off its
@@ -170,7 +171,7 @@ class PlaceAction(
 
     @staticmethod
     def post_condition(
-        variables: Dict[str, Variable], context: Context, kwargs: Dict[str, Any]
+        variables: dict[str, Variable], context: Context, kwargs: dict[str, Any]
     ) -> ConditionType:
         """
         No arm may hold the object any more and it needs to be at the target location.
@@ -191,8 +192,8 @@ class PlaceAction(
 
     @staticmethod
     def _grips_of_every_arm(
-        context: Context, kwargs: Dict[str, Any], threshold: float
-    ) -> List[ConditionType]:
+        context: Context, kwargs: dict[str, Any], threshold: float
+    ) -> list[ConditionType]:
         """
         :param threshold: The fraction of rays between the fingers that has to hit the
             object for it to count as gripped.
