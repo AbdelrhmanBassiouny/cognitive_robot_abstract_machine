@@ -580,7 +580,7 @@ def test_mesh_in_frame_in_the_shapes_own_frame_matches_its_local_mesh():
         Box(scale=Scale(1.0, 2.0, 3.0)),
         Box(
             scale=Scale(1.0, 1.0, 1.0),
-            color=Color(0.1, 0.2, 0.3, 0.4),
+            color=Color.from_rgba(red=0.1, green=0.2, blue=0.3, opacity=0.4),
             texture=Texture(file_path="/textures/wood.png"),
         ),
     ],

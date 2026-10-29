@@ -904,7 +904,7 @@ def test_looking_motion_pointing_parameters(pr2_apartment_context):
     assert pointing.root_link is view.get_torso().root
     assert pointing.tip_link is camera.root
     assert np.array_equal(
-        pointing.pointing_axis.to_np(), camera.forward_facing_axis.to_np()
+        pointing.pointing_axis.to_np(), camera.viewing_direction.to_np()
     )
     assert pointing.pointing_axis.reference_frame is camera.root
     assert pointing.goal_point.reference_frame is world.root
@@ -1273,9 +1273,9 @@ class TestDAiSyFlexGripMotion:
         open_state = end_effector.get_joint_state_by_type(GripperState.OPEN)
         for connection, target in chart.goal_state.items():
             expected = dict(open_state.items())[connection]
-            assert (
-                abs(target - expected) < 0.001
-            ), f"Expected open state {expected}, got {target}"
+            assert abs(target - expected) < 0.001, (
+                f"Expected open state {expected}, got {target}"
+            )
 
     def test_semi_real_full_close_maps_to_the_close_state(self, immutable_daisy_world):
         """
@@ -1295,9 +1295,9 @@ class TestDAiSyFlexGripMotion:
         close_state = end_effector.get_joint_state_by_type(GripperState.CLOSE)
         for connection, target in chart.goal_state.items():
             expected = dict(close_state.items())[connection]
-            assert (
-                abs(target - expected) < 0.001
-            ), f"Expected close state {expected}, got {target}"
+            assert abs(target - expected) < 0.001, (
+                f"Expected close state {expected}, got {target}"
+            )
 
     def test_real_returns_griplink_action_server_task(self, immutable_daisy_world):
         motion = self._flex_motion(immutable_daisy_world)

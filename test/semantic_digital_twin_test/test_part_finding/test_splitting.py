@@ -249,7 +249,7 @@ def test_a_part_is_split_off_a_single_body_without_annotating_it():
 
 def test_the_pieces_keep_the_color_of_the_shape():
     annotation = annotated_mug()
-    red = Color(1.0, 0.0, 0.0, 1.0)
+    red = Color.from_rgba(red=1.0, green=0.0, blue=0.0, opacity=1.0)
     annotation.root.visual.dye_shapes(red)
 
     handle = split_handle(annotation)

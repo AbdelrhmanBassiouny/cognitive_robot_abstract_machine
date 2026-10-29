@@ -225,9 +225,9 @@ class InertialConverter:
     def __post_init__(self):
         assert self.mass > 0, "Mass must be positive."
         assert len(self.diagonal_inertia) == 3, "Diagonal inertia must have 3 elements."
-        assert all(
-            i >= 0 for i in self.diagonal_inertia
-        ), "Inertia values must be non-negative."
+        assert all(i >= 0 for i in self.diagonal_inertia), (
+            "Inertia values must be non-negative."
+        )
 
     @staticmethod
     def _update_quaternion(
@@ -305,7 +305,10 @@ class EntityConverter(ABC):
 
     @abstractmethod
     def _post_convert(
-        self, entity: entity_type, entity_props: dict[str, Any], **kwargs  # type: ignore
+        self,
+        entity: entity_type,
+        entity_props: dict[str, Any],
+        **kwargs,  # type: ignore
     ) -> dict[str, Any]:
         """
         Post-processes the converted entity properties. This method can be overridden by subclasses to update the properties after conversion.
@@ -1236,7 +1239,9 @@ class MujocoTendon(SimulatorAdditionalProperty):
     Range of allowed tendon lengths.
     """
 
-    rgba: Color = field(default_factory=lambda: Color(0.5, 0.5, 0.5, 1))
+    rgba: Color = field(
+        default_factory=lambda: Color.from_rgba(red=0.5, green=0.5, blue=0.5, opacity=1)
+    )
     """
     Color and transparency of the tendon.
     """
@@ -2133,7 +2138,6 @@ class MujocoActuatorConverter(ActuatorConverter, ABC):
 
 @dataclass
 class MujocoGeneralActuatorConverter(MujocoActuatorConverter, ActuatorConverter):
-
     def _post_convert(
         self, entity: Actuator, actuator_props: dict[str, Any], **kwargs
     ) -> dict[str, Any]:
@@ -2177,7 +2181,6 @@ class MujocoVelocityServoConverter(MujocoActuatorConverter):
 
 @dataclass
 class MujocoCameraConverter(CameraConverter, ABC):
-
     entity_type: ClassVar[type[MujocoCamera]] = MujocoCamera
 
     def _post_convert(
@@ -2207,7 +2210,6 @@ class MujocoCameraConverter(CameraConverter, ABC):
 
 @dataclass
 class MujocoLightConverter(LightConverter, ABC):
-
     entity_type: ClassVar[type[MujocoLight]] = MujocoLight
 
     def _post_convert(
@@ -4350,9 +4352,9 @@ class MultiSim(ABC):
 
         :param constraints: The constraints to apply to the simulation.
         """
-        assert (
-            self.simulator.state != SimulatorState.RUNNING
-        ), "Simulation is already running."
+        assert self.simulator.state != SimulatorState.RUNNING, (
+            "Simulation is already running."
+        )
         self.simulator.start(constraints=constraints)
 
     def stop_simulation(self):

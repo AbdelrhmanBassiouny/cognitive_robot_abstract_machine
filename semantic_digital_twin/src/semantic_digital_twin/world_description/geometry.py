@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import itertools
+from colorsys import hsv_to_rgb, rgb_to_hsv
 import logging
 import math
 import os
@@ -20,10 +21,11 @@ import trimesh.exchange.stl
 from PIL import Image
 from plyfile import PlyData
 from trimesh.visual.texture import TextureVisuals, SimpleMaterial
-from typing_extensions import Any, Self, TYPE_CHECKING, TypeVar
+from typing_extensions import Any, Self, TYPE_CHECKING, TypeVar, Sequence
 
 from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json, from_json
 from krrood.bounds import Bounds, BoundsInterface
+from krrood.ormatic.utils import classproperty
 from random_events.interval import SimpleInterval, Bound, closed
 from random_events.product_algebra import SimpleEvent
 from semantic_digital_twin.datastructures.variables import SpatialVariables
@@ -36,6 +38,7 @@ from semantic_digital_twin.spatial_types import (
     Point3,
     Vector3,
 )
+from semantic_digital_twin.world_description.exceptions import InvalidColorChannelCount
 from semantic_digital_twin.world_description.mesh_file_storage import (
     MeshFileSources,
     MeshFileStorage,
@@ -54,140 +57,146 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# %% Color representation
 
-@dataclass
+
+@dataclass(unsafe_hash=True)
 class Color:
     """
-    Dataclass for storing rgba_color as an RGBA value.
+    A color stored in HSV with RGB channel access and independent opacity.
 
-    The values are stored as floats between 0 and 1. The default rgba_color is white.
-    """
-
-    R: float = 1.0
-    """
-    Red value of the color.
+    Channel values are normalized from zero to one. The default color is opaque white.
+    Equality and hashing compare the stored hue, saturation, value, and opacity.
     """
 
-    G: float = 1.0
+    hue: float = 0.0
     """
-    Green value of the color.
-    """
-
-    B: float = 1.0
-    """
-    Blue value of the color.
+    Position around the hue wheel, from zero inclusive to one exclusive.
     """
 
-    A: float = 1.0
+    saturation: float = 0.0
     """
-    Opacity of the color.
+    Color saturation from zero to one inclusive.
     """
 
-    def __post_init__(self):
+    value: float = 1.0
+    """
+    Color value from zero to one inclusive.
+    """
+
+    opacity: float = 1.0
+    """
+    Opacity from zero to one inclusive.
+    """
+
+    def set_rgb(self, red: float, green: float, blue: float) -> None:
         """
-        Make sure the color values are floats, because ros2 sucks.
+        Replace the color's RGB channels while preserving opacity.
         """
-        self.R = float(self.R)
-        self.G = float(self.G)
-        self.B = float(self.B)
-        self.A = float(self.A)
+        self.hue, self.saturation, self.value = rgb_to_hsv(
+            float(red), float(green), float(blue)
+        )
 
-    def __hash__(self):
-        return hash((self.R, self.G, self.B, self.A))
+    @property
+    def R(self) -> float:
+        """
+        Red intensity in the RGB representation.
+        """
+        return self.to_rgb()[0]
+
+    @property
+    def G(self) -> float:
+        """
+        Green intensity in the RGB representation.
+        """
+        return self.to_rgb()[1]
+
+    @property
+    def B(self) -> float:
+        """
+        Blue intensity in the RGB representation.
+        """
+        return self.to_rgb()[2]
+
+    @property
+    def A(self) -> float:
+        """
+        Opacity of the color.
+        """
+        return self.opacity
 
     def to_rgba(self) -> tuple[float, float, float, float]:
-        return (self.R, self.G, self.B, self.A)
+        """
+        Return RGB channels followed by opacity.
+        """
+        return (*self.to_rgb(), self.opacity)
 
     def to_rgb(self) -> tuple[float, float, float]:
-        return (self.R, self.G, self.B)
+        """
+        Return RGB channels converted from the stored HSV coordinates.
+        """
+        return hsv_to_rgb(self.hue, self.saturation, self.value)
+
+    @classproperty
+    def opencv_maximum_channel_value(cls) -> int:
+        """Largest channel value in an 8-bit OpenCV HSV_FULL image."""
+        return np.iinfo(np.uint8).max
+
+    @classproperty
+    def opencv_hue_channel_count(cls) -> int:
+        """Number of hue steps in one turn of an 8-bit OpenCV HSV_FULL image."""
+        return cls.opencv_maximum_channel_value + 1
+
+    @classmethod
+    def from_opencv_hue_saturation_value_full(
+        cls, hue: int, saturation: int, value: int
+    ) -> Self:
+        """Create a color from OpenCV's 8-bit HSV_FULL channels."""
+        return cls(
+            hue=hue / cls.opencv_hue_channel_count,
+            saturation=saturation / cls.opencv_maximum_channel_value,
+            value=value / cls.opencv_maximum_channel_value,
+        )
+
+    def to_opencv_hue_saturation_value_full(self) -> tuple[int, int, int]:
+        """Return OpenCV's 8-bit HSV_FULL channels, excluding opacity."""
+        return (
+            int(self.hue * self.opencv_hue_channel_count),
+            round(self.saturation * self.opencv_maximum_channel_value),
+            round(self.value * self.opencv_maximum_channel_value),
+        )
 
     def to_hex(self, prefix: str = "#") -> str:
         """
-        :param prefix: The characters the digits are written behind.
-        :return: The color written as ``#RRGGBB``, two hex digits per channel.
-
-        ..note:: The opacity is not part of it, the same way it is not part of
-            :meth:`to_rgb`.
+        Return two hexadecimal digits per RGB channel, excluding opacity.
         """
         return prefix + "".join(
             f"{round(channel * 255):02X}" for channel in self.to_rgb()
         )
 
     @classmethod
-    def RED(self):
-        return Color(1, 0, 0)
-
-    @classmethod
-    def YELLOW(self):
-        return Color(1, 1, 0)
-
-    @classmethod
-    def GREEN(self):
-        return Color(0, 1, 0)
-
-    @classmethod
-    def CYAN(self):
-        return Color(0, 1, 1)
-
-    @classmethod
-    def BLUE(self):
-        return Color(0, 0, 1)
-
-    @classmethod
-    def MAGENTA(self):
-        return Color(1, 0, 1)
-
-    @classmethod
-    def WHITE(self):
-        return Color(1, 1, 1)
-
-    @classmethod
-    def BLACK(self):
-        return Color(0, 0, 0)
-
-    @classmethod
-    def GRAY(self):
-        return Color(0.498, 0.498, 0.498)
-
-    @classmethod
-    def BEIGE(self):
-        return Color(1, 0.827, 0.6078)
-
-    @classmethod
-    def ORANGE(self):
-        return Color(1, 0.647, 0)
-
-    @classmethod
-    def from_list(cls, color: list[float]):
+    def from_list(cls, color: Sequence[float]) -> Self:
         """
-        Set the rgba_color from a list of RGBA values.
-
-        :param color: The list of RGBA values
+        Create a color from three RGB or four RGBA channels.
         """
-        if len(color) == 3:
-            return cls.from_rgb(color)
-        elif len(color) == 4:
-            return cls.from_rgba(color)
-        else:
-            raise ValueError("Color list must have 3 or 4 elements")
+        if len(color) not in (3, 4):
+            raise InvalidColorChannelCount(channel_count=len(color))
+        return cls.from_rgba(*color)
 
     @classmethod
-    def from_rgb(cls, rgb: list[float]):
+    def from_rgba(
+        cls,
+        red: float = 1.0,
+        green: float = 1.0,
+        blue: float = 1.0,
+        opacity: float = 1.0,
+    ) -> Self:
         """
-        Set the rgba_color from a list of RGB values.
-
-        :param rgb: The list of RGB values
+        Create a color from normalized RGB channels and independent opacity.
         """
-        return cls(*rgb, 1)
-
-    @classmethod
-    def from_rgba(cls, rgba: list[float]):
-        """
-        Set the rgba_color from a list of RGBA values.
-
-        :param rgba: The list of RGBA values
-        """
-        return cls(*rgba)
+        color = cls(opacity=float(opacity))
+        color.set_rgb(red, green, blue)
+        return color
 
     @classmethod
     def from_hex(
@@ -197,17 +206,9 @@ class Color:
         pattern: str = "(?:[0-9a-fA-F]{2}){3,4}",
     ) -> Self:
         """
-        Read a color written as two hex digits per channel, red first.
+        Read RGB or RGBA hexadecimal pairs, with an optional prefix.
 
-        A fourth pair of digits sets the opacity; without it the color is fully opaque.
-
-        :param hex_color: The color, optionally preceded by a ``#`` and written in
-            either case.
-        :param prefix: The characters the digits may be written behind.
-        :param pattern: What the digits have to look like, by default three or four
-            channels of two hex digits each.
-        :raises MalformedHexColor: If the string is not written that way.
-        :return: The color it names.
+        :raises MalformedHexColor: If the supplied text is not hexadecimal color data.
         """
         digits = hex_color.removeprefix(prefix)
         if re.fullmatch(pattern, digits) is None:
@@ -221,43 +222,94 @@ class Color:
 
     @classmethod
     def PINK(cls) -> Self:
-        return cls(1, 0, 1, 1)
+        """
+        Create an opaque pink color.
+        """
+        return cls.from_rgba(red=1, green=0, blue=1, opacity=1)
 
     @classmethod
     def BLACK(cls) -> Self:
-        return cls(0, 0, 0, 1)
+        """
+        Create an opaque black color.
+        """
+        return cls.from_rgba(red=0, green=0, blue=0, opacity=1)
 
     @classmethod
     def WHITE(cls) -> Self:
-        return cls(1, 1, 1, 1)
+        """
+        Create an opaque white color.
+        """
+        return cls.from_rgba(red=1, green=1, blue=1, opacity=1)
 
     @classmethod
     def RED(cls) -> Self:
-        return cls(1, 0, 0, 1)
+        """
+        Create an opaque red color.
+        """
+        return cls.from_rgba(red=1, green=0, blue=0, opacity=1)
 
     @classmethod
     def GREEN(cls) -> Self:
-        return cls(0, 1, 0, 1)
+        """
+        Create an opaque green color.
+        """
+        return cls.from_rgba(red=0, green=1, blue=0, opacity=1)
 
     @classmethod
     def BLUE(cls) -> Self:
-        return cls(0, 0, 1, 1)
+        """
+        Create an opaque blue color.
+        """
+        return cls.from_rgba(red=0, green=0, blue=1, opacity=1)
 
     @classmethod
     def YELLOW(cls) -> Self:
-        return cls(1, 1, 0, 1)
+        """
+        Create an opaque yellow color.
+        """
+        return cls.from_rgba(red=1, green=1, blue=0, opacity=1)
 
     @classmethod
     def CYAN(cls) -> Self:
-        return cls(0, 1, 1, 1)
+        """
+        Create an opaque cyan color.
+        """
+        return cls.from_rgba(red=0, green=1, blue=1, opacity=1)
 
     @classmethod
     def MAGENTA(cls) -> Self:
-        return cls(1, 0, 1, 1)
+        """
+        Create an opaque magenta color.
+        """
+        return cls.from_rgba(red=1, green=0, blue=1, opacity=1)
 
     @classmethod
     def GREY(cls) -> Self:
-        return cls(0.5, 0.5, 0.5, 1)
+        """
+        Create an opaque middle gray color.
+        """
+        return cls.from_rgba(red=0.5, green=0.5, blue=0.5, opacity=1)
+
+    @classmethod
+    def GRAY(cls) -> Self:
+        """
+        Create an opaque gray color.
+        """
+        return cls.from_rgba(red=0.498, green=0.498, blue=0.498, opacity=1)
+
+    @classmethod
+    def BEIGE(cls) -> Self:
+        """
+        Create an opaque beige color.
+        """
+        return cls.from_rgba(red=1, green=0.827, blue=0.6078, opacity=1)
+
+    @classmethod
+    def ORANGE(cls) -> Self:
+        """
+        Create an opaque orange color.
+        """
+        return cls.from_rgba(red=1, green=0.647, blue=0, opacity=1)
 
 
 @dataclass
@@ -1083,9 +1135,9 @@ class Mesh(Shape):
         """
         points = np.asarray([point.to_np()[:3] for point in points_3d], dtype=float)
         points = np.unique(points, axis=0)
-        assert (
-            len(points) >= 3
-        ), "At least 4 unique points are required to define a 3D region."
+        assert len(points) >= 3, (
+            "At least 4 unique points are required to define a 3D region."
+        )
 
         centered_points = points - points.mean(axis=0, keepdims=True)
         assert np.any(centered_points), "Points must not be all identical."
@@ -1833,9 +1885,9 @@ class VolumetricBoundingBox(AxisAlignedBox[Point3]):
         :param min_point: The minimum point
         :param max_point: The maximum point
         """
-        assert (
-            min_point.reference_frame == max_point.reference_frame
-        ), "The reference frames of the minimum and maximum points must be the same."
+        assert min_point.reference_frame == max_point.reference_frame, (
+            "The reference frames of the minimum and maximum points must be the same."
+        )
         return cls(*min_point.to_np()[:3], *max_point.to_np()[:3], origin=origin)
 
     def as_shape(self) -> Box:
