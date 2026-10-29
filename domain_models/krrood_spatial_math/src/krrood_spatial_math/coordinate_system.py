@@ -7,7 +7,7 @@ from typing_extensions import Generic, Self, TypeVar
 from krrood.adapters.object_reference import IdentifiedObject
 from krrood.patterns.interface import Interface
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
-from krrood_spatial_math.space import Space
+from krrood_spatial_math.space import EuclideanSpace, Space
 
 # %% what coordinates are given in
 
@@ -31,6 +31,32 @@ class CoordinateSystem(
     space: SpaceT | None
     """
     The space this coordinate system charts; ``None`` where it is not known.
+    """
+
+
+# %% frames: coordinate systems with straight axes
+
+
+class AffineFrame(CoordinateSystem[SpaceT], Interface):
+    """
+    A coordinate system given by an origin and linearly independent, straight axes; the
+    coordinates of a point are its amounts along the axes from the origin.
+
+    The axes may differ in length and need not be perpendicular, as the axes of an
+    image's pixels may.
+    """
+
+
+EuclideanSpaceT = TypeVar("EuclideanSpaceT", bound=EuclideanSpace)
+"""
+The kind of Euclidean space a Cartesian frame charts.
+"""
+
+
+class CartesianFrame(AffineFrame[EuclideanSpaceT], Interface):
+    """
+    An affine frame whose axes are perpendicular and one unit of its Euclidean space
+    long.
     """
 
 
@@ -101,18 +127,31 @@ class CoordinateChange(Generic[CoordinateSystemT], SubClassSafeGeneric, Interfac
         """
 
 
-class AffineCoordinateChange(CoordinateChange[CoordinateSystemT], Interface):
+AffineFrameT = TypeVar("AffineFrameT", bound=AffineFrame)
+"""
+The kind of affine frame coordinates are given in.
+"""
+
+
+class AffineCoordinateChange(CoordinateChange[AffineFrameT], Interface):
     """
-    A coordinate change that scales, shears, rotates or reflects the axes and shifts the
-    origin.
+    A coordinate change between two affine frames, which scales, shears, rotates or
+    reflects the axes and shifts the origin.
 
     It keeps straight lines, parallel lines and ratios of lengths along one line.
     """
 
 
-class RigidCoordinateChange(AffineCoordinateChange[CoordinateSystemT], Interface):
+CartesianFrameT = TypeVar("CartesianFrameT", bound=CartesianFrame)
+"""
+The kind of Cartesian frame coordinates are given in.
+"""
+
+
+class RigidCoordinateChange(AffineCoordinateChange[CartesianFrameT], Interface):
     """
-    An affine coordinate change that only rotates the axes and shifts the origin.
+    An affine coordinate change between two Cartesian frames, which only rotates the
+    axes and shifts the origin.
 
     It also keeps distances and angles.
     """

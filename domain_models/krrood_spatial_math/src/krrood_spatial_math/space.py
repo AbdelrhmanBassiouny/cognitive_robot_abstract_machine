@@ -16,6 +16,6 @@ class Space(Interface):
 
 class EuclideanSpace(Space, Interface):
     """
-    Physical space, in metres; its coordinate systems are reference frames, related by
-    rigid transforms, which keep distances and angles.
+    Physical space, in metres; its Cartesian frames are related by rigid coordinate
+    changes, which keep distances and angles.
     """

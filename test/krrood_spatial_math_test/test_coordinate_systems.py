@@ -5,20 +5,24 @@ from dataclasses import fields
 import pytest
 
 from krrood.patterns.exceptions import InterfaceInstantiationError
+from krrood_spatial_math.cartesian_frame_3d import CartesianFrame3D
 from krrood_spatial_math.coordinate_system import (
     AffineCoordinateChange,
+    AffineFrame,
+    AffineFrameT,
+    CartesianFrame,
+    CartesianFrameT,
     CoordinateChange,
     CoordinateRepresentation,
     CoordinateSystem,
-    CoordinateSystemT,
     RigidCoordinateChange,
     SpaceT,
 )
-from krrood_spatial_math.reference_frame import ReferenceFrame
 from krrood_spatial_math.space import EuclideanSpace, Space
 
 from .dataset.spaces import (
-    ScalablePlaneCoordinateSystem,
+    ScalablePlane,
+    ScalablePlaneFrame,
     StoredFrameChange,
     StoredScalingChange,
 )
@@ -39,13 +43,29 @@ def test_physical_space_is_a_space():
 # %% coordinate systems on spaces
 
 
-def test_a_coordinate_system_cannot_be_instantiated():
+@pytest.mark.parametrize(
+    "coordinate_system_kind", [CoordinateSystem, AffineFrame, CartesianFrame]
+)
+def test_a_coordinate_system_interface_cannot_be_instantiated(coordinate_system_kind):
     with pytest.raises(InterfaceInstantiationError):
-        CoordinateSystem()
+        coordinate_system_kind()
 
 
-def test_a_reference_frame_charts_physical_space():
-    assert ReferenceFrame.get_type_of_generic_parameter(SpaceT) is EuclideanSpace
+def test_an_affine_frame_is_a_coordinate_system():
+    assert issubclass(AffineFrame, CoordinateSystem)
+
+
+def test_a_cartesian_frame_is_an_affine_frame():
+    assert issubclass(CartesianFrame, AffineFrame)
+
+
+def test_an_affine_frame_need_not_be_cartesian():
+    assert issubclass(ScalablePlaneFrame, AffineFrame)
+    assert not issubclass(ScalablePlaneFrame, CartesianFrame)
+
+
+def test_an_affine_frame_reports_the_space_it_charts():
+    assert ScalablePlaneFrame.get_type_of_generic_parameter(SpaceT) is ScalablePlane
 
 
 # %% values given in a coordinate system
@@ -88,27 +108,35 @@ def test_an_affine_change_need_not_be_rigid():
     assert not issubclass(StoredScalingChange, RigidCoordinateChange)
 
 
-def test_a_rigid_change_reports_the_kind_of_coordinate_system_it_changes():
+def test_an_affine_change_changes_between_affine_frames():
+    assert AffineFrameT.__bound__ is AffineFrame
+
+
+def test_a_rigid_change_changes_between_cartesian_frames():
+    assert CartesianFrameT.__bound__ is CartesianFrame
+
+
+def test_a_rigid_change_reports_the_kind_of_frame_it_changes():
     assert (
-        StoredFrameChange.get_type_of_generic_parameter(CoordinateSystemT)
-        is ReferenceFrame
+        StoredFrameChange.get_type_of_generic_parameter(CartesianFrameT)
+        is CartesianFrame3D
     )
 
 
-def test_a_coordinate_change_reports_the_kind_of_coordinate_system_it_changes():
+def test_an_affine_change_reports_the_kind_of_frame_it_changes():
     assert (
-        StoredScalingChange.get_type_of_generic_parameter(CoordinateSystemT)
-        is ScalablePlaneCoordinateSystem
+        StoredScalingChange.get_type_of_generic_parameter(AffineFrameT)
+        is ScalablePlaneFrame
     )
 
 
-def test_a_coordinate_changes_coordinate_systems_are_narrowed_to_the_bound_kind():
-    coordinate_system_types = {
+def test_a_coordinate_changes_frames_are_narrowed_to_the_bound_kind():
+    frame_types = {
         change_field.name: change_field.type
         for change_field in fields(StoredScalingChange)
     }
 
-    assert coordinate_system_types == {
-        "source_coordinate_system": ScalablePlaneCoordinateSystem | None,
-        "target_coordinate_system": ScalablePlaneCoordinateSystem | None,
+    assert frame_types == {
+        "source_coordinate_system": ScalablePlaneFrame | None,
+        "target_coordinate_system": ScalablePlaneFrame | None,
     }

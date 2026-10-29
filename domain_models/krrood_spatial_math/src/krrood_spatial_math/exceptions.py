@@ -14,29 +14,30 @@ class SpatialTypesError(DataclassException):
     """
 
 
-# %% serialized reference frames
+# %% serialized Cartesian frames
 
 
 @dataclass
-class MissingReferenceFrameResolver(SpatialTypesError):
+class MissingCartesianFrame3DResolver(SpatialTypesError):
     """
-    Raised when a serialized spatial type refers to a reference frame, but nothing was
-    given to deserialize it with that finds the frame.
+    Raised when a serialized coordinate representation refers to a three-dimensional
+    Cartesian frame, but nothing was given to deserialize it with that finds the frame.
     """
 
     frame_id_key: str
     """
-    Where the identifier of the frame sits in the serialized spatial type.
+    Where the identifier of the frame sits in the serialized coordinate representation.
     """
 
     def error_message(self) -> str:
         return (
-            f"The serialized spatial type refers to a frame by '{self.frame_id_key}', "
-            f"but the keyword arguments of from_json carry no ReferenceFrameResolver."
+            f"The serialized coordinate representation refers to a frame by "
+            f"'{self.frame_id_key}', but the keyword arguments of from_json carry no "
+            f"CartesianFrame3DResolver."
         )
 
     def suggest_correction(self) -> str:
         return (
-            "pass the keyword arguments of a ReferenceFrameResolver that knows the frame, "
-            "e.g. **resolver.create_kwargs(), to from_json."
+            "pass the keyword arguments of a CartesianFrame3DResolver that knows the "
+            "frame, e.g. **resolver.create_kwargs(), to from_json."
         )

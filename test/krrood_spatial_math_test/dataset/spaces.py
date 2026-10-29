@@ -5,29 +5,29 @@ from dataclasses import dataclass
 from typing_extensions import Self
 
 from krrood.patterns.interface import Interface
+from krrood_spatial_math.affine_point import AffinePoint2D, CoordinateT
+from krrood_spatial_math.cartesian_frame_3d import CartesianFrame3D
 from krrood_spatial_math.coordinate_system import (
     AffineCoordinateChange,
-    CoordinateSystem,
-    CoordinateSystemT,
+    AffineFrame,
+    AffineFrameT,
     RigidCoordinateChange,
 )
-from krrood_spatial_math.planar_point import CoordinateT, PlanarPoint
-from krrood_spatial_math.reference_frame import ReferenceFrame
 from krrood_spatial_math.space import Space
 
-# %% a plane whose coordinate systems differ by scaling each axis
+# %% a plane whose frames differ by scaling each axis
 
 
 class ScalablePlane(Space, Interface):
     """
-    A plane whose coordinate systems differ by scaling and shifting each axis, so its
-    coordinate changes are affine but not rigid.
+    A plane whose frames differ by scaling and shifting each axis, so its coordinate
+    changes are affine but not rigid.
     """
 
 
-class ScalablePlaneCoordinateSystem(CoordinateSystem[ScalablePlane], Interface):
+class ScalablePlaneFrame(AffineFrame[ScalablePlane], Interface):
     """
-    A coordinate system on a :class:`ScalablePlane`.
+    An affine frame on a :class:`ScalablePlane`.
     """
 
 
@@ -35,9 +35,9 @@ class ScalablePlaneCoordinateSystem(CoordinateSystem[ScalablePlane], Interface):
 
 
 @dataclass
-class StoredPlanarPoint(PlanarPoint[CoordinateSystemT, CoordinateT]):
+class StoredAffinePoint2D(AffinePoint2D[AffineFrameT, CoordinateT]):
     """
-    A point that stores its coordinates and coordinate system as given.
+    A point that stores its coordinates and frame as given.
     """
 
     x: CoordinateT
@@ -50,37 +50,36 @@ class StoredPlanarPoint(PlanarPoint[CoordinateSystemT, CoordinateT]):
     The second coordinate.
     """
 
-    coordinate_system: CoordinateSystemT | None
+    coordinate_system: AffineFrameT | None
     """
-    The coordinate system the coordinates are given in.
+    The frame the coordinates are given in.
     """
 
 
 @dataclass
-class StoredScalablePlanePoint(StoredPlanarPoint[ScalablePlaneCoordinateSystem, float]):
+class StoredScalablePlanePoint(StoredAffinePoint2D[ScalablePlaneFrame, float]):
     """
     A point on a scalable plane that stores its coordinates as given.
     """
 
 
-# %% coordinate changes that store their coordinate systems
+# %% coordinate changes that store their frames
 
 
 @dataclass
-class StoredCoordinateChange(AffineCoordinateChange[CoordinateSystemT]):
+class StoredCoordinateChange(AffineCoordinateChange[AffineFrameT]):
     """
-    An affine coordinate change that only stores the coordinate systems it changes
-    between.
-    """
-
-    source_coordinate_system: CoordinateSystemT | None
-    """
-    The coordinate system the coordinates are given in.
+    An affine coordinate change that only stores the frames it changes between.
     """
 
-    target_coordinate_system: CoordinateSystemT | None
+    source_coordinate_system: AffineFrameT | None
     """
-    The coordinate system the coordinates are changed into.
+    The frame the coordinates are given in.
+    """
+
+    target_coordinate_system: AffineFrameT | None
+    """
+    The frame the coordinates are changed into.
     """
 
     def inverse(self) -> Self:
@@ -91,16 +90,16 @@ class StoredCoordinateChange(AffineCoordinateChange[CoordinateSystemT]):
 
 
 @dataclass
-class StoredScalingChange(StoredCoordinateChange[ScalablePlaneCoordinateSystem]):
+class StoredScalingChange(StoredCoordinateChange[ScalablePlaneFrame]):
     """
-    A change between two coordinate systems of one scalable plane.
+    A change between two frames of one scalable plane.
     """
 
 
 @dataclass
 class StoredFrameChange(
-    StoredCoordinateChange[ReferenceFrame], RigidCoordinateChange[ReferenceFrame]
+    StoredCoordinateChange[CartesianFrame3D], RigidCoordinateChange[CartesianFrame3D]
 ):
     """
-    A rigid change between two reference frames, such as from a gripper to the table.
+    A rigid change between two Cartesian frames, such as from a gripper to the table.
     """

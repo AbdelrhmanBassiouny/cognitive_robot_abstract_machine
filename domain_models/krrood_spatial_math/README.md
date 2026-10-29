@@ -3,41 +3,30 @@
 Points in the spaces they belong to, and the coordinate systems their coordinates are
 given in.
 
-- `krrood_spatial_math.space`: `Space`, a set of points with a geometry, and `EuclideanSpace`,
-  physical space in metres.
-- `krrood_spatial_math.coordinate_system`: `CoordinateSystem`, what coordinates on one space are
-  given in; `CoordinateRepresentation`, a point, direction or orientation given by its
+- `krrood_spatial_math.space`: `Space`, a set of points with a geometry, and
+  `EuclideanSpace`, physical space in metres.
+- `krrood_spatial_math.coordinate_system`: `CoordinateSystem`, what coordinates on one
+  space are given in; `AffineFrame`, one with an origin and straight axes, and
+  `CartesianFrame`, an affine frame whose axes are perpendicular and of unit length;
+  `CoordinateRepresentation`, a point, direction or orientation given by its
   coordinates in a coordinate system;
   `CoordinateChange`, between two coordinate systems of the same space, which can be
-  inverted and composed; `AffineCoordinateChange`, one that keeps straight lines; and
-  `RigidCoordinateChange`, an affine one that also keeps distances and angles.
-- `krrood_spatial_math.reference_frame`: `ReferenceFrame`, the coordinate system of physical
-  space that positions and directions are expressed in, and how serialized values refer
-  to one.
-- `krrood_spatial_math.planar_point`: `PlanarPoint`, a coordinate representation of a point by
-  two coordinates. Each implementation binds the kind of coordinate system and what
+  inverted and composed; `AffineCoordinateChange`, between affine frames, which keeps
+  straight lines; and `RigidCoordinateChange`, between Cartesian frames, which also
+  keeps distances and angles.
+- `krrood_spatial_math.cartesian_frame_3d`: `CartesianFrame3D`, the right-handed
+  Cartesian frame of physical space that positions and directions are expressed in,
+  and how serialized values refer to one.
+- `krrood_spatial_math.affine_point`: `AffinePoint2D`, a point given by its two
+  coordinates in an affine frame. Each implementation binds the kind of frame and what
   its coordinates are stored as.
 
-| Space | Coordinate system | Coordinate change | Kept by the change |
+| Space | Frame | Coordinate change | Kept by the change |
 |---|---|---|---|
-| `EuclideanSpace` | `ReferenceFrame`, metres | `RigidCoordinateChange` | distances, angles |
+| `EuclideanSpace` | `CartesianFrame3D`, metres | `RigidCoordinateChange` | distances, angles |
 
 Other domain models add their own spaces on these interfaces; `krrimage`, for example,
-adds image planes, whose coordinate systems are related by affine changes.
+adds image planes, whose pixel frames are affine and related by affine changes.
 
 Points of two spaces, such as a body and an image of it, relate only through a map
 between the spaces, such as a camera, never through a coordinate change.
-
-```python
-from dataclasses import dataclass
-
-from krrood_spatial_math.planar_point import PlanarPoint
-from krrood_spatial_math.reference_frame import ReferenceFrame
-
-
-@dataclass
-class PositionOnTable(PlanarPoint[ReferenceFrame, float]):
-    x: float
-    y: float
-    coordinate_system: ReferenceFrame
-```

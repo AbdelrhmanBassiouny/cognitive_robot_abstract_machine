@@ -4,7 +4,7 @@ import pytest
 
 from .dataset.frames import NamedFrame
 
-# %% reference frames
+# %% Cartesian frames
 
 
 @pytest.fixture

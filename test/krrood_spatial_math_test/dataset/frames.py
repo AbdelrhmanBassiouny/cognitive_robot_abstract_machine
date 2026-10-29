@@ -6,16 +6,19 @@ from uuid import UUID, uuid4
 from typing_extensions import Any
 
 from krrood.adapters.deserialized_object_tracker import DeserializedObjectTracker
-from krrood_spatial_math.reference_frame import ReferenceFrame, ReferenceFrameResolver
+from krrood_spatial_math.cartesian_frame_3d import (
+    CartesianFrame3D,
+    CartesianFrame3DResolver,
+)
 from krrood_spatial_math.space import EuclideanSpace
 
 # %% frames told apart by name
 
 
 @dataclass(eq=False)
-class NamedFrame(ReferenceFrame):
+class NamedFrame(CartesianFrame3D):
     """
-    A reference frame that only has a name.
+    A Cartesian frame that only has a name.
     """
 
     name: str
@@ -30,7 +33,7 @@ class NamedFrame(ReferenceFrame):
 
     id: UUID = field(default_factory=uuid4)
     """
-    The identifier serialized spatial types refer to the frame with.
+    The identifier serialized coordinate representations refer to the frame with.
     """
 
 
@@ -38,7 +41,9 @@ class NamedFrame(ReferenceFrame):
 
 
 @dataclass
-class KnownFrames(DeserializedObjectTracker[UUID, NamedFrame], ReferenceFrameResolver):
+class KnownFrames(
+    DeserializedObjectTracker[UUID, NamedFrame], CartesianFrame3DResolver
+):
     """
     The frames the reader of a document already has.
     """
