@@ -11,6 +11,7 @@ from giskardpy.data_types.exceptions import (
     SetupException,
 )
 from semantic_digital_twin.adapters.ros.messages import MetaData
+from semantic_digital_twin.world_description.connections import WheeledDrive
 
 
 @dataclass
@@ -109,6 +110,28 @@ class ControllersNotActiveError(SetupException):
 
     def suggest_correction(self) -> str:
         return "Activate the controllers or remove them from the whitelist."
+
+
+@dataclass
+class NoUniqueDriveError(SetupException):
+    """
+    Raised when Giskard is told to command the drive of a world without being told which
+    drive, and the world does not hold exactly one.
+    """
+
+    drives: list[WheeledDrive]
+    """
+    The drives the world holds.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"Expected exactly one drive to command, but the world holds "
+            f"{[str(drive.name) for drive in self.drives]}."
+        )
+
+    def suggest_correction(self) -> str:
+        return "Name the drive to command."
 
 
 @dataclass
