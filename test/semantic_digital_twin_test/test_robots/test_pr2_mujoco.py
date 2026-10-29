@@ -23,6 +23,7 @@ from semantic_digital_twin.adapters.multi_sim import (
     MujocoFixedConnectionJoints,
     MujocoOmniDriveJoints,
     MujocoSim,
+    SimulatorModelNames,
 )
 from semantic_digital_twin.datastructures.definitions import (
     GripperState,
@@ -213,10 +214,19 @@ def test_each_connection_is_built_by_the_realisation_for_its_type(pr2):
         if isinstance(connection, FixedConnection)
     )
 
-    assert type(MujocoConnectionJoints.of(pr2.drive, world)) is MujocoOmniDriveJoints
-    assert type(MujocoConnectionJoints.of(revolute, world)) is MujocoConnectionJoint
-    assert type(MujocoConnectionJoints.of(fixed, world)) is (
-        MujocoFixedConnectionJoints
+    element_names = SimulatorModelNames()
+
+    assert (
+        type(MujocoConnectionJoints.of(pr2.drive, world, element_names))
+        is MujocoOmniDriveJoints
+    )
+    assert (
+        type(MujocoConnectionJoints.of(revolute, world, element_names))
+        is MujocoConnectionJoint
+    )
+    assert (
+        type(MujocoConnectionJoints.of(fixed, world, element_names))
+        is MujocoFixedConnectionJoints
     )
 
 

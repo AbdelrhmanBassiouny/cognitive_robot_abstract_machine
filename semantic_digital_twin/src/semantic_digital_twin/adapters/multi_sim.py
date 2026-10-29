@@ -15,7 +15,7 @@ import trimesh
 import PIL.ImageFile
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from enum import IntEnum, IntFlag
+from enum import IntEnum, IntFlag, StrEnum
 from types import NoneType
 
 import numpy
@@ -117,6 +117,49 @@ def cas_pose_to_list(pose: HomogeneousTransformationMatrix) -> list[float]:
     except Exception as e:
         raise QuaternionConversionError(rotation_matrix, str(e))
     return [pos[0], pos[1], pos[2], quat[0], quat[1], quat[2], quat[3]]
+
+
+class MujocoElementType(StrEnum):
+    """
+    A kind of element of a MuJoCo model that an entity of the world is added to a running
+    simulation as.
+    """
+
+    BODY = "body"
+    """
+    A body, which a kinematic structure entity becomes.
+    """
+
+    JOINT = "joint"
+    """
+    A joint, which a connection becomes.
+    """
+
+    GEOM = "geom"
+    """
+    A geometry attached to a body, which a shape becomes.
+    """
+
+    ACTUATOR = "actuator"
+    """
+    An actuator, which an actuator of the world becomes.
+    """
+
+
+class MujocoActuatorProperty(StrEnum):
+    """
+    A property of a MuJoCo actuator that says what the actuator drives.
+    """
+
+    TARGET = "target"
+    """
+    The name of the joint or tendon the actuator drives.
+    """
+
+    TRANSMISSION_TYPE = "trntype"
+    """
+    Whether :attr:`TARGET` names a joint or a tendon.
+    """
 
 
 class GeomVisibilityAndCollisionType(IntEnum):
@@ -2924,7 +2967,10 @@ class MujocoBuilder(MultiSimBuilder):
         self._add_actuator(
             actuator,
             name,
-            {"target": joint_name, "trntype": mujoco.mjtTrn.mjTRN_JOINT},
+            {
+                MujocoActuatorProperty.TARGET: joint_name,
+                MujocoActuatorProperty.TRANSMISSION_TYPE: mujoco.mjtTrn.mjTRN_JOINT,
+            },
         )
 
     def _add_actuator(
@@ -2958,16 +3004,16 @@ class MujocoBuilder(MultiSimBuilder):
         """
         connection = next(
             (
-                conn
-                for conn in self.world.connections
-                if any(dof.id == degree_of_freedom.id for dof in conn.dofs)
+                candidate
+                for candidate in self.world.connections
+                if any(dof.id == degree_of_freedom.id for dof in candidate.dofs)
             ),
             None,
         )
         if connection is None:
             return {
-                "target": degree_of_freedom.name.name,
-                "trntype": mujoco.mjtTrn.mjTRN_TENDON,
+                MujocoActuatorProperty.TARGET: degree_of_freedom.name.name,
+                MujocoActuatorProperty.TRANSMISSION_TYPE: mujoco.mjtTrn.mjTRN_TENDON,
             }
         joint_name = MujocoConnectionJoints.of(
             connection, self.world, self.element_names
@@ -2980,7 +3026,10 @@ class MujocoBuilder(MultiSimBuilder):
                 entity_name=joint_name,
                 entity_type=mujoco.mjtObj.mjOBJ_JOINT,
             )
-        return {"target": joint_spec.name, "trntype": mujoco.mjtTrn.mjTRN_JOINT}
+        return {
+            MujocoActuatorProperty.TARGET: joint_spec.name,
+            MujocoActuatorProperty.TRANSMISSION_TYPE: mujoco.mjtTrn.mjTRN_JOINT,
+        }
 
     def _build_camera(self, camera: MultiSimCamera):
         camera_name = camera.name
@@ -3506,7 +3555,7 @@ class MujocoEntitySpawner(EntitySpawner, ABC):
         self,
         simulator: MujocoSimulator,
         entity: KinematicStructureEntity | Connection | Actuator,
-        element_type: str,
+        element_type: MujocoElementType,
         properties: dict[str, Any],
         parent: KinematicStructureEntity | None = None,
     ) -> bool:
@@ -3551,7 +3600,7 @@ class MujocoKinematicStructureEntitySpawner(
         return self._add_to_simulator(
             simulator,
             entity,
-            "body",
+            MujocoElementType.BODY,
             kinematic_structure_entity_props,
             parent=entity.parent_connection.parent,
         )
@@ -3570,7 +3619,7 @@ class MujocoKinematicStructureEntitySpawner(
         shape_name = shape_props.pop("name")
         result = simulator.add_entity(
             entity_name=shape_name,
-            entity_type="geom",
+            entity_type=MujocoElementType.GEOM,
             entity_properties=shape_props,
             parent_name=self.element_names.of(parent),
         )
@@ -3612,7 +3661,11 @@ class MujocoConnectionSpawner(MujocoEntitySpawner, ConnectionSpawner):
         joint_props = Mujoco1DOFJointConverter.convert(connection)
         del joint_props["name"]
         return self._add_to_simulator(
-            simulator, connection, "joint", joint_props, parent=connection.child
+            simulator,
+            connection,
+            MujocoElementType.JOINT,
+            joint_props,
+            parent=connection.child,
         )
 
 
@@ -3662,7 +3715,7 @@ class MujocoFreejointSpawner(MujocoEntitySpawner, Connection6DOFSpawner):
         return self._add_to_simulator(
             simulator,
             connection,
-            "joint",
+            MujocoElementType.JOINT,
             {"type": mujoco.mjtJoint.mjJNT_FREE},
             parent=connection.child,
         )
@@ -3681,9 +3734,9 @@ class MujocoActuatorSpawner(MujocoEntitySpawner, ActuatorSpawner):
         [degree_of_freedom] = actuator.dofs
         connection = next(
             (
-                conn
-                for conn in actuator._world.connections
-                if degree_of_freedom in conn.dofs
+                candidate
+                for candidate in actuator._world.connections
+                if degree_of_freedom in candidate.dofs
             ),
             None,
         )
@@ -3701,9 +3754,13 @@ class MujocoActuatorSpawner(MujocoEntitySpawner, ActuatorSpawner):
                 entity_name=joint_name,
                 entity_type=mujoco.mjtObj.mjOBJ_JOINT,
             )
-        actuator_props["target"] = joint_spec.name
-        actuator_props["trntype"] = mujoco.mjtTrn.mjTRN_JOINT
-        return self._add_to_simulator(simulator, actuator, "actuator", actuator_props)
+        actuator_props[MujocoActuatorProperty.TARGET] = joint_spec.name
+        actuator_props[MujocoActuatorProperty.TRANSMISSION_TYPE] = (
+            mujoco.mjtTrn.mjTRN_JOINT
+        )
+        return self._add_to_simulator(
+            simulator, actuator, MujocoElementType.ACTUATOR, actuator_props
+        )
 
 
 @dataclass(eq=False)
