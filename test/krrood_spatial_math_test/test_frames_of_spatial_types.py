@@ -161,7 +161,7 @@ def test_a_spatial_value_is_given_in_its_reference_frame(spatial_type, table_fra
 # %% a point on a frame's plane as a planar point
 
 
-def test_a_point2_is_a_planar_point_of_a_reference_frame():
+def test_a_point2_is_an_affine_point_of_a_cartesian_frame():
     assert Point2.get_type_of_generic_parameter(CoordinateSystemT) is CartesianFrame3D
 
 
