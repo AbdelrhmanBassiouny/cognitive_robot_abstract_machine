@@ -253,6 +253,19 @@ class Dishwasher(HasCaseAsRootBody, HasDoors, HasDrawers):
 
 
 @dataclass(eq=False)
+class WashingMachine(HasCaseAsRootBody, HasDoors, HasDrawers):
+    """
+    A washing machine is a household appliance that washes laundry in a drum.
+
+    It typically has a front door to load the drum and a pull-out detergent drawer.
+    """
+
+    @classproperty
+    def _hole_direction_axis(cls) -> Vector3:
+        return Vector3.NEGATIVE_X()
+
+
+@dataclass(eq=False)
 class Aperture(HasRootRegion):
     """
     An opening in a physical entity.
@@ -699,6 +712,19 @@ class Cabinet(Furniture, HasCaseAsRootBody, HasDoors, HasDrawers):
 
 @dataclass(eq=False)
 class Fridge(Cabinet): ...
+
+
+@dataclass(eq=False)
+class TumbleDryer(HasCaseAsRootBody, HasDoors, HasDrawers):
+    """
+    A tumble dryer is a household appliance that dries laundry in a rotating drum.
+
+    It typically has a front door to load the drum and a pull-out water tank.
+    """
+
+    @classproperty
+    def _hole_direction_axis(cls) -> Vector3:
+        return Vector3.NEGATIVE_X()
 
 
 @dataclass(eq=False)
@@ -1285,7 +1311,7 @@ class Desk(Table, HasLegs):
 
 
 @dataclass(eq=False)
-class Chair(Furniture):
+class Chair(Furniture, HasRootBody):
     """
     Abstract class for chairs.
     """
