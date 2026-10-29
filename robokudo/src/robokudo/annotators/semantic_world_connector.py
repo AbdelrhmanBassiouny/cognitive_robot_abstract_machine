@@ -128,6 +128,9 @@ class SemanticDigitalTwinConnector(ThreadedAnnotator):
     ) -> None:
         """
         Add world-frame stamped poses to hypotheses when a camera pose is available.
+
+        :param object_hypotheses: Hypotheses receiving world-frame pose annotations.
+        :param cas: Camera observation supplying the pose transform and timestamp.
         """
         observation = cas.camera_observation
         if observation is None or observation.world_T_camera is None:

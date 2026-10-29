@@ -647,6 +647,14 @@ class CASViewCodecRegistry:
     ) -> dict[str, Any] | None:
         """
         Encode a single CAS view into a storage document.
+
+        :param view_name: Name identifying the view in the stored document.
+        :param value: View contents to serialize.
+        :param strict: Whether a missing codec raises an exception instead of skipping
+            the view.
+        :return: Encoded view document, or ``None`` if skipped without a matching codec.
+        :raises CASViewCodecMissing: If no codec accepts the value and strict mode is
+            enabled.
         """
         codec = self._find_encoder(value)
         if codec is None:

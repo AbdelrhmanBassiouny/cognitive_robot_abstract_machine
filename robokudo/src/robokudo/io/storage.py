@@ -196,6 +196,11 @@ class Storage:
     def encode_view_document(view_name: str, view_value: Any) -> dict[str, Any]:
         """
         Encode one CAS view value into a serializable view document.
+
+        :param view_name: Name identifying the view in the stored document.
+        :param view_value: View contents to serialize.
+        :return: Encoded view document.
+        :raises CASViewCodecMissing: If no codec accepts the view contents.
         """
         document = Storage.cas_view_codecs.encode_view(
             view_name=view_name,
@@ -279,6 +284,11 @@ class Storage:
     ) -> dict[str, Any]:
         """
         Fetch one CAS view document referenced by a recorded frame.
+
+        :param cas_document: Recorded frame containing references to stored views.
+        :param view_name: Name of the view to retrieve.
+        :return: Stored document referenced by the frame for the requested view.
+        :raises RecordedViewMissing: If the referenced view document does not exist.
         """
         view_id = cas_document[StorageDocumentField.VIEW_IDS][view_name]
         document = self.db[Storage.VIEW_COLLECTION_NAME].find_one({"_id": view_id})

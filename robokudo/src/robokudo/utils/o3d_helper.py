@@ -143,6 +143,12 @@ def project_points_to_image(
 ) -> tuple[npt.NDArray, npt.NDArray]:
     """
     Project 3D camera-frame points to 2D image pixels and validity mask.
+
+    :param cas: Point cloud calibration and color-to-depth image scale.
+    :param points_camera: Point coordinates in the point cloud camera frame, one per
+        row.
+    :return: Color image pixel coordinates for valid points and a validity mask over all
+        input points.
     """
     pointcloud_camera_model = cas.pointcloud_camera_model
     k = pointcloud_camera_model.intrinsic_matrix

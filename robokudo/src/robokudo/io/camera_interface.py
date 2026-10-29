@@ -212,6 +212,9 @@ class CameraInterface(object):
     ) -> HomogeneousTransformationMatrix | None:
         """
         Return the configured static camera pose bound to the runtime world.
+
+        :param camera_frame: Optical frame identifying the camera in the runtime world.
+        :return: Camera pose in the configured world frame, or ``None`` if disabled.
         """
         if not self.camera_config.static_camera_transform_enabled:
             return None

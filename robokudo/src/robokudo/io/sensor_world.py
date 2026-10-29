@@ -131,6 +131,11 @@ class RecordedCameraWorld:
     def install(self, reasoning_world: World) -> Camera:
         """
         Merge the sensor context and bind the camera to its merged root body.
+
+        :param reasoning_world: Destination world receiving the recorded sensor context.
+        :return: Recorded camera bound to its root body in the destination world.
+        :raises InvalidCameraObservation: If the merged camera or root has an invalid
+            type.
         """
         reasoning_world.merge_world(self.project())
         camera = reasoning_world.get_semantic_annotation_by_id(
@@ -151,6 +156,12 @@ class RecordedCameraWorld:
     def apply_pose(world: World, observation: CameraObservation) -> None:
         """
         Apply the sampled optical pose directly to the camera root.
+
+        :param world: World containing the camera connection to update.
+        :param observation: Recorded camera observation supplying the pose and its child
+            frame.
+        :raises InvalidCameraObservation: If the pose child is not connected to its
+            reference frame.
         """
         pose = observation.world_T_camera
         pose_child = observation.pose_child

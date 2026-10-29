@@ -210,6 +210,10 @@ class StorageReaderInterface(CameraInterface):
     def _restore_world(snapshot: str, target_world: World) -> RestoredWorld:
         """
         Apply a recorded snapshot into the supplied world.
+
+        :param snapshot: JSON snapshot of the recorded world.
+        :param target_world: World receiving the recorded state.
+        :return: Entity tracker and elapsed duration of the restoration.
         """
         started = perf_counter()
         tracker = WorldEntityWithIDKwargsTracker.from_world(target_world)
@@ -223,6 +227,8 @@ class StorageReaderInterface(CameraInterface):
     def _restore_full_world(self, cas_frame: dict[str, Any]) -> None:
         """
         Replace reasoning state with the complete recorded frame world.
+
+        :param cas_frame: Recorded frame containing the complete world snapshot.
         """
         rk_world.init_world_with_entity_tracker()
         reasoning_world = rk_world.world_instance()
