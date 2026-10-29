@@ -1,15 +1,16 @@
+# %% Imports
 from __future__ import annotations
 
 import logging
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing_extensions import Iterator
 
 import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import NDArray
 from matplotlib import colors
 from skimage.measure import label
+from typing_extensions import Iterator
 
 from coraplex.locations.base import Location
 from krrood.entity_query_language.exceptions import NonPositiveLimitValue
@@ -29,6 +30,7 @@ from semantic_digital_twin.world_description.world_entity import Body
 logger = logging.getLogger("coraplex")
 
 
+# %% Costmaps
 @dataclass
 class Costmap(Location):
     """
@@ -298,7 +300,7 @@ class Costmap(Location):
                     self.world.root,
                 )
 
-    def segment_map(self) -> list[np.ndarray]:
+    def segment_map(self) -> list[NDArray[np.float64]]:
         """
         Finds partitions in the locations and isolates them, a partition is a number of entries in the locations which are
         neighbours. Returns a list of numpy arrays with one partition per array.
@@ -355,7 +357,7 @@ class OccupancyCostmap(Costmap):
         )
         self.map = self._create_from_world()
 
-    def create_ray_mask_around_origin(self):
+    def create_ray_mask_around_origin(self) -> np.ndarray:
         """
         Determines the occupied space around the origin position using ray testing. A
         ray is cast from the robot's base height straight down to the ground and if it
@@ -392,7 +394,9 @@ class OccupancyCostmap(Costmap):
         free_space_mask = np.ones(len(rays))
 
         ray_tracer = RayTracer(self.world)
-        _, hit_ray_indices, hit_bodies = ray_tracer.ray_test(rays[:, 0], rays[:, 1])
+        ray_intersections = ray_tracer.ray_test(rays[:, 0], rays[:, 1])
+        hit_ray_indices = ray_intersections.ray_indices
+        hit_bodies = ray_intersections.bodies
 
         unoccupied_entities = self._floor_bodies
         if self.robot_view:

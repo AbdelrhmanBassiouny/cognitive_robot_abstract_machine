@@ -468,7 +468,7 @@ class MJCFParser(WorldModelParser):
         for i in range(len(size)):
             if numpy.isclose(size[i], 0.0):
                 size[i] = 100.0  # Handle infinite size
-        color = Color(*mujoco_geom.rgba)
+        color = Color.from_rgba(*mujoco_geom.rgba)
         match mujoco_geom.type:
             case mujoco.mjtGeom.mjGEOM_PLANE:
                 return Box(
@@ -529,7 +529,7 @@ class MJCFParser(WorldModelParser):
                     texture_name = mujoco_material.textures[1]
                     mujoco_texture: mujoco.MjsTexture = self.spec.texture(texture_name)
                     if mujoco_texture is None:
-                        color = Color(*mujoco_material.rgba)
+                        color = Color.from_rgba(*mujoco_material.rgba)
                         return Mesh(
                             filename=filename,
                             origin=origin_transform,
@@ -723,9 +723,9 @@ class MJCFParser(WorldModelParser):
             joint_name = mujoco_actuator.target
             connection = self.world.get_connection_by_name(joint_name)
             dofs = list(connection.dofs)
-            assert (
-                len(dofs) == 1
-            ), f"Actuator {actuator_name} is associated with joint {joint_name} which has {len(connection.dofs)} DOFs, but only single-DOF joints are supported for actuators."
+            assert len(dofs) == 1, (
+                f"Actuator {actuator_name} is associated with joint {joint_name} which has {len(connection.dofs)} DOFs, but only single-DOF joints are supported for actuators."
+            )
             actuator.add_dof(dofs[0])
         else:
             actuator.add_dof(
@@ -912,7 +912,7 @@ class MJCFParser(WorldModelParser):
                     margin=tendon.margin,
                     material=tendon.material,
                     range=tendon.range.tolist(),
-                    rgba=Color(*tendon.rgba),
+                    rgba=Color.from_rgba(*tendon.rgba),
                     solver_impedance_friction=tendon.solimp_friction.tolist(),
                     solver_impedance_limit=tendon.solimp_limit.tolist(),
                     solver_reference_friction=tendon.solref_friction.tolist(),

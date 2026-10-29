@@ -109,7 +109,7 @@ class LookAtAction(ParallelAction):
             root_link=self.robot.get_torso().root,
             tip_link=camera.root,
             goal_point=self._world_P_target(),
-            pointing_axis=camera.forward_facing_axis,
+            pointing_axis=camera.viewing_direction,
         )
         return [pointing, *self.keep_base_still()]
 

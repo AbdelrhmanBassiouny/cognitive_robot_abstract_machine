@@ -1318,6 +1318,26 @@ def test_look_at_points_the_default_camera(multiple_robot_apartment_context):
     assert pointing.tip_link == robot.get_default_camera().root
 
 
+def test_look_at_points_along_the_optical_viewing_direction(
+    multiple_robot_apartment_context,
+):
+    """
+    Looking somewhere aims the camera's optical viewing direction, expressed in the
+    camera's optical root.
+    """
+    _, robot, extensions = multiple_robot_apartment_context
+    camera = robot.get_default_camera()
+    action = LookAtAction(target=Pose())
+
+    expand(action, extensions)
+
+    [pointing] = nodes_of_type(action, Pointing)
+    assert np.array_equal(
+        pointing.pointing_axis.to_np(), camera.viewing_direction.to_np()
+    )
+    assert pointing.pointing_axis.reference_frame is camera.root
+
+
 def test_following_a_path_runs_one_goal_per_waypoint(
     multiple_robot_apartment_context,
 ):

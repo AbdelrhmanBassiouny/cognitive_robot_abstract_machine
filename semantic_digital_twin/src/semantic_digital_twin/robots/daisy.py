@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+# %% Imports
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -22,6 +23,7 @@ from semantic_digital_twin.datastructures.definitions import (
     GripperState,
     StaticJointState,
 )
+from semantic_digital_twin.datastructures.camera_model import FieldOfViewCameraModel
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -36,14 +38,16 @@ from semantic_digital_twin.robots.robot_part_mixins import (
 from semantic_digital_twin.robots.robot_parts import (
     AbstractRobot,
     Arm,
-    Camera,
     EndEffector,
     Finger,
+    RobotCamera,
 )
-from semantic_digital_twin.spatial_types import Vector3
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Vector3
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
+
+# %% Robot parts
 
 
 class DAiSyController(StrEnum):
@@ -406,7 +410,8 @@ class DAiSyRightArm(Arm[DAiSyRightGripper]):
         )
 
 
-class DAiSyCamera(Camera):
+@dataclass(eq=False)
+class DAiSyCamera(RobotCamera[FieldOfViewCameraModel]):
     """
     DAiSy does not currently have a dedicated camera.
 
@@ -419,19 +424,18 @@ class DAiSyCamera(Camera):
     def setup_joint_states(self) -> list[JointState]:
         return []
 
-    @property
-    def forward_facing_axis(self) -> Vector3:
-        return Vector3.Z(reference_frame=self.root)
-
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(
         cls, robot_root: KinematicStructureEntity
     ) -> Self:
         return cls(
-            root=robot_root._world.get_body_in_branch_by_name(
-                robot_root, "camera_link"
+            root=cls.create_optical_body(
+                robot_root._world.get_body_in_branch_by_name(robot_root, "camera_link"),
+                HomogeneousTransformationMatrix(),
             ),
-            field_of_view=FieldOfView(horizontal_angle=1.047, vertical_angle=0.785),
+            camera_model=FieldOfViewCameraModel(
+                angular_extent=FieldOfView(horizontal_angle=1.047, vertical_angle=0.785)
+            ),
             minimal_height=1.4,
             maximal_height=1.4,
             default_camera=True,
