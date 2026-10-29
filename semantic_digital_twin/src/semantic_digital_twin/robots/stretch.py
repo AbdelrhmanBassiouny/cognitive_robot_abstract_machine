@@ -47,7 +47,10 @@ from semantic_digital_twin.robots.robot_parts import (
     EndEffector,
 )
 from semantic_digital_twin.spatial_types import Vector3
-from semantic_digital_twin.world_description.connections import DifferentialDrive
+from semantic_digital_twin.world_description.connections import (
+    ActiveConnection,
+    DifferentialDrive,
+)
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
@@ -99,7 +102,6 @@ class StretchJoint(JointName):
 
 @dataclass(eq=False)
 class StretchLeftFinger(Finger):
-
     def setup_hardware_interfaces(self):
         pass
 
@@ -122,7 +124,6 @@ class StretchLeftFinger(Finger):
 
 @dataclass(eq=False)
 class StretchRightFinger(Finger):
-
     def setup_hardware_interfaces(self):
         pass
 
@@ -145,6 +146,9 @@ class StretchRightFinger(Finger):
 
 @dataclass(eq=False)
 class StretchGripper(EndEffector, HasTwoFingers[StretchLeftFinger, StretchRightFinger]):
+    @classproperty
+    def fingers_are_modelled_like_the_real_ones(cls) -> bool:
+        return False
 
     def setup_hardware_interfaces(self):
         self._setup_hardware_interfaces_for_active_connections()
@@ -190,7 +194,6 @@ class StretchGripper(EndEffector, HasTwoFingers[StretchLeftFinger, StretchRightF
 
 @dataclass(eq=False)
 class StretchArm(Arm[StretchGripper]):
-
     def setup_hardware_interfaces(self):
         self._setup_hardware_interfaces_for_active_connections()
 
@@ -375,7 +378,6 @@ class StretchNeck(
         StretchCameraInfra2,
     ],
 ):
-
     def setup_hardware_interfaces(self):
         self._setup_hardware_interfaces_for_active_connections()
 
@@ -396,7 +398,6 @@ class StretchNeck(
 
 @dataclass(eq=False)
 class StretchTorso(Torso, HasNeck[StretchNeck], HasOneArm[StretchArm]):
-
     def setup_hardware_interfaces(self):
         self._setup_hardware_interfaces_for_active_connections()
 
@@ -478,7 +479,11 @@ class StretchMobileBase(
         return Vector3.NEGATIVE_Y()
 
     def setup_hardware_interfaces(self):
-        pass
+        for joint_name in (StretchJoint.RIGHT_WHEEL, StretchJoint.LEFT_WHEEL):
+            connection: ActiveConnection = self._world.get_connection_by_name(
+                joint_name
+            )
+            connection.has_hardware_interface = True
 
     def setup_joint_states(self) -> list[JointState]:
         return []

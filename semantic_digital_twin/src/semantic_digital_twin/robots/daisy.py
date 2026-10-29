@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 from importlib.resources import files
 from pathlib import Path
 from typing_extensions import Self
@@ -47,6 +48,22 @@ from semantic_digital_twin.world_description.world_entity import (
 )
 
 # %% Robot parts
+
+
+class DAiSyController(StrEnum):
+    """
+    The ros2_control controllers of the DAiSy, as its controller manager names them.
+    """
+
+    LEFT_FORWARD_VELOCITY = "left_forward_velocity_controller"
+    """
+    Commands the joint velocities of the left arm.
+    """
+
+    RIGHT_FORWARD_VELOCITY = "right_forward_velocity_controller"
+    """
+    Commands the joint velocities of the right arm.
+    """
 
 
 class DAiSyJoint(JointName):
@@ -194,6 +211,11 @@ class DAiSyLeftGripper(
         self._setup_hardware_interfaces_for_active_connections()
 
     def setup_joint_states(self) -> list[JointState]:
+        """
+        The gripper stands open with its fingers at the start of their travel and closed
+        where the facing surfaces of their tips meet, 28 mm along it; further travel
+        carries the fingers past each other.
+        """
         left_gripper_joints = [
             self._world.get_connection_by_name(DAiSyJoint.LEFT_GRIPPER_FINGER),
         ]
@@ -206,25 +228,18 @@ class DAiSyLeftGripper(
 
         gripper_close = JointState.from_mapping(
             name=PrefixedName("left_gripper_close", prefix=self.name.name),
-            mapping=dict(
-                zip(
-                    left_gripper_joints,
-                    [
-                        0.04,
-                    ],
-                )
-            ),
+            mapping=dict(zip(left_gripper_joints, [0.028])),
             state_type=GripperState.CLOSE,
         )
         return [gripper_open, gripper_close]
 
     @property
     def approach_axis(self) -> Vector3:
-        return Vector3.X(reference_frame=self.tool_frame)
+        return Vector3.Z(reference_frame=self.tool_frame)
 
     @property
     def closing_axis(self) -> Vector3:
-        return Vector3.Y(reference_frame=self.tool_frame)
+        return Vector3.X(reference_frame=self.tool_frame)
 
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(
@@ -270,6 +285,11 @@ class DAiSyRightGripper(
         self._setup_hardware_interfaces_for_active_connections()
 
     def setup_joint_states(self) -> list[JointState]:
+        """
+        The gripper stands open with its fingers at the start of their travel and closed
+        where the facing surfaces of their tips meet, 28 mm along it; further travel
+        carries the fingers past each other.
+        """
         right_gripper_joints = [
             self._world.get_connection_by_name(DAiSyJoint.RIGHT_GRIPPER_FINGER),
         ]
@@ -282,7 +302,7 @@ class DAiSyRightGripper(
 
         gripper_close = JointState.from_mapping(
             name=PrefixedName("right_gripper_close", prefix=self.name.name),
-            mapping=dict(zip(right_gripper_joints, [0.04])),
+            mapping=dict(zip(right_gripper_joints, [0.028])),
             state_type=GripperState.CLOSE,
         )
 
@@ -290,11 +310,11 @@ class DAiSyRightGripper(
 
     @property
     def approach_axis(self) -> Vector3:
-        return Vector3.X(reference_frame=self.tool_frame)
+        return Vector3.Z(reference_frame=self.tool_frame)
 
     @property
     def closing_axis(self) -> Vector3:
-        return Vector3.Y(reference_frame=self.tool_frame)
+        return Vector3.X(reference_frame=self.tool_frame)
 
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(

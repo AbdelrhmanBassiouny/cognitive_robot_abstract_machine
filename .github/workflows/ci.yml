@@ -36,6 +36,7 @@ jobs:
       matrix:
         include:
           - lib: giskardpy
+          - lib: cramph
           - lib: krrood
           - lib: semantic_digital_twin
           - lib: coraplex

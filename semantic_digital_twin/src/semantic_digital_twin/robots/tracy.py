@@ -63,6 +63,26 @@ class TracyTopic(StrEnum):
     RIGHT_GRIPPER_JOINT_STATES = "right_gripper/joint_states"
 
 
+class TracyControllerManager(StrEnum):
+    """
+    The ros2_control controller managers of the Tracy, one per arm.
+    """
+
+    LEFT_ARM = "left_arm/controller_manager"
+    RIGHT_ARM = "right_arm/controller_manager"
+
+
+class TracyController(StrEnum):
+    """
+    The ros2_control controllers of the Tracy, as its controller managers name them.
+    """
+
+    FORWARD_VELOCITY = "forward_velocity_controller"
+    """
+    Commands the joint velocities of one arm; each arm's controller manager loads one.
+    """
+
+
 class TracyJoint(JointName):
     """
     Names of the Tracy's commandable connections, as spelled in its URDF.
@@ -95,7 +115,6 @@ class TracyJoint(JointName):
 
 @dataclass(eq=False)
 class TracyLeftGripperLeftFinger(Finger):
-
     @classproperty
     def topic_name(cls) -> str:
         """
@@ -125,7 +144,6 @@ class TracyLeftGripperLeftFinger(Finger):
 
 @dataclass(eq=False)
 class TracyLeftGripperRightFinger(Finger):
-
     @classproperty
     def topic_name(cls) -> str:
         """
@@ -155,7 +173,6 @@ class TracyLeftGripperRightFinger(Finger):
 
 @dataclass(eq=False)
 class TracyRightGripperLeftFinger(Finger):
-
     @classproperty
     def topic_name(cls) -> str:
         """
@@ -185,7 +202,6 @@ class TracyRightGripperLeftFinger(Finger):
 
 @dataclass(eq=False)
 class TracyRightGripperRightFinger(Finger):
-
     @classproperty
     def topic_name(cls) -> str:
         """
@@ -217,7 +233,6 @@ class TracyRightGripperRightFinger(Finger):
 class TracyLeftGripper(
     Robotiq85Gripper[TracyLeftGripperLeftFinger, TracyLeftGripperRightFinger]
 ):
-
     def setup_hardware_interfaces(self) -> None:
         self._setup_hardware_interfaces_for_active_connections()
 
@@ -274,7 +289,6 @@ class TracyLeftGripper(
 class TracyRightGripper(
     Robotiq85Gripper[TracyRightGripperLeftFinger, TracyRightGripperRightFinger]
 ):
-
     def setup_hardware_interfaces(self) -> None:
         self._setup_hardware_interfaces_for_active_connections()
 
@@ -322,7 +336,6 @@ class TracyRightGripper(
 
 @dataclass(eq=False)
 class TracyLeftArm(UR10eArm[TracyLeftGripper]):
-
     @classproperty
     def topic_name(cls) -> str:
         """
@@ -356,7 +369,6 @@ class TracyLeftArm(UR10eArm[TracyLeftGripper]):
 
 @dataclass(eq=False)
 class TracyRightArm(UR10eArm[TracyRightGripper]):
-
     @classproperty
     def topic_name(cls) -> str:
         """

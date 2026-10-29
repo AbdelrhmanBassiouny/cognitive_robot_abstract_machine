@@ -34,7 +34,7 @@ from PyQt5.QtWidgets import (
     QScrollArea,
 )
 
-from giskardpy.middleware.ros2 import rospy
+from semantic_digital_twin.adapters.ros import rospy
 from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
     VizMarkerPublisher,
     ShapeSource,

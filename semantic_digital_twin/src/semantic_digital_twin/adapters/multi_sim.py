@@ -73,6 +73,7 @@ from semantic_digital_twin.world_description.geometry import (
     Sphere,
     Shape,
     Mesh,
+    MeshFileFormat,
     Color,
 )
 from semantic_digital_twin.world_description.contact import ContactParameters
@@ -2570,6 +2571,24 @@ class MultiSimBuilder(ABC):
 
 
 @dataclass
+class WavefrontCopy:
+    """
+    An .obj copy of a mesh file MuJoCo cannot read.
+    """
+
+    mesh_file_path: str
+    """
+    The copy.
+    """
+
+    texture_file_path: str | None
+    """
+    The image the copy is textured with, written beside it, or ``None`` for an
+    untextured mesh.
+    """
+
+
+@dataclass
 class MujocoBuilder(MultiSimBuilder):
     """
     A builder to build a world in the Mujoco simulator.
@@ -2602,6 +2621,14 @@ class MujocoBuilder(MultiSimBuilder):
     Memoizes :meth:`_thicken_if_near_planar` by input path, so a mesh referenced by
     many geoms (e.g. a screw reused across a whole object) is only loaded and checked
     once instead of once per reference.
+    """
+
+    _wavefront_copies: dict[str, WavefrontCopy] = field(
+        default_factory=dict, init=False, repr=False
+    )
+    """
+    Memoizes :meth:`_wavefront_copy_of` by input path, so a mesh referenced by many
+    geoms is copied, and its texture registered, once.
     """
 
     def _start_build(self, file_path: str):
@@ -2743,6 +2770,39 @@ class MujocoBuilder(MultiSimBuilder):
 
         trimesh_mesh.export(stl_file_path)
 
+    def _wavefront_copy_of(self, mesh_file_path: str) -> WavefrontCopy:
+        """
+        Writes an .obj copy of a mesh file MuJoCo cannot read into the asset folder,
+        with its material and texture image beside it.
+
+        :param mesh_file_path: The mesh file to copy.
+        :return: The copy.
+        """
+        if mesh_file_path in self._wavefront_copies:
+            return self._wavefront_copies[mesh_file_path]
+        copy_file_path = Path(
+            self._asset_file_path_for(mesh_file_path, suffix=f".{MeshFileFormat.OBJ}")
+        )
+        text, resources = trimesh.exchange.obj.export_obj(
+            trimesh.load(mesh_file_path, force="mesh"),
+            return_texture=True,
+            mtl_name=copy_file_path.with_suffix(".mtl").name,
+        )
+        copy_file_path.write_text(text)
+        for resource_name, content in resources.items():
+            (copy_file_path.parent / resource_name).write_bytes(content)
+        images = [
+            str(copy_file_path.parent / resource_name)
+            for resource_name in resources
+            if not resource_name.endswith(".mtl")
+        ]
+        copy = WavefrontCopy(
+            mesh_file_path=str(copy_file_path),
+            texture_file_path=images[0] if images else None,
+        )
+        self._wavefront_copies[mesh_file_path] = copy
+        return copy
+
     def _asset_file_path_for(self, source_file_path: str, suffix: str) -> str:
         """
         The path in the asset folder that a file derived from a source mesh is written
@@ -2864,21 +2924,27 @@ class MujocoBuilder(MultiSimBuilder):
             raise NotImplementedError(
                 f"Mesh type {type(mesh_entity)} not supported in Mujoco."
             )
-        mesh_ext = os.path.splitext(mesh_file_path)[1].lower()
-        if mesh_ext == ".dae":
-            stl_file_path = self._asset_file_path_for(mesh_file_path, suffix=".stl")
+        mesh_file_format = Path(mesh_file_path).suffix.removeprefix(".").lower()
+        if mesh_file_format == MeshFileFormat.DAE:
+            stl_file_path = self._asset_file_path_for(
+                mesh_file_path, suffix=f".{MeshFileFormat.STL}"
+            )
             # create a .stl mesh from the original .dae mesh, as a replacement. If it not already exists.
             if not os.path.exists(stl_file_path):
                 self._create_stl_from_dae_mesh(
                     original_mesh_file_path=mesh_file_path, stl_file_path=stl_file_path
                 )
             mesh_file_path = stl_file_path
+        texture_file_path = geom_props.pop("texture_file_path", None)
+        if mesh_file_format == MeshFileFormat.GLB:
+            wavefront_copy = self._wavefront_copy_of(mesh_file_path)
+            mesh_file_path = wavefront_copy.mesh_file_path
+            texture_file_path = wavefront_copy.texture_file_path
 
         mesh_file_path = self._thicken_if_near_planar(mesh_file_path)
 
         mesh_scale = [mesh_entity.scale.x, mesh_entity.scale.y, mesh_entity.scale.z]
         geom_props["meshname"] = self._mesh_name_for(mesh_file_path, mesh_scale)
-        texture_file_path = geom_props.pop("texture_file_path", None)
         if isinstance(texture_file_path, str):
             geom_props["material"] = self._register_texture_material(
                 texture_file_path=texture_file_path

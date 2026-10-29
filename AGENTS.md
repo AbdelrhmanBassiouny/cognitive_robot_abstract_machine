@@ -161,6 +161,12 @@
 - When you work in a fork, never push to the upstream repository - no branch, no tag, whatever the reason. Push only to the fork; work reaches upstream only through a pull request opened from the fork. Before any push, read the full, untruncated `git remote -v` output and confirm the target remote is the fork
 - Never comment on or modify pull requests on the upstream repository unless the user has explicitly allowed it - through existing personal notes or instructions, or by accepting when you ask
 
+# Cramph isolation
+<!-- from CramphIsolationRules in agent_rules.py -->
+- `cramph`, including its tests under `test/cramph_test`, imports only `krrood` and `semantic_digital_twin` among the workspace packages - in particular not `giskardpy`, `coraplex`, `segmind`, `physics_simulators`, `robokudo` or `experiments`
+- ROS is a soft dependency of `cramph`: only a tool that needs it, such as the statechart inspector, imports ROS packages, and nothing else in `cramph` imports that tool
+- Generic statechart behaviour (life cycles, transition conditions, ticking, composite nodes, generic monitors, plotting) belongs in `cramph`; motion-specific behaviour (QP constraints, tasks, world and robot monitors) belongs in `giskardpy`, built on top of `cramph`
+
 # Domain specific conventions
 <!-- from DomainSpecificConventionsRules in agent_rules.py -->
 - For spatial types and connections, follow `semantic_digital_twin/doc/style_guide.md`
