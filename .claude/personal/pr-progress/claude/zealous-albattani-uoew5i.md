@@ -1,12 +1,11 @@
-PR #535, plan item eql-planning/fluent-state-overlay (auto mode). Draft.
+PR #535, plan item eql-planning/fluent-state-overlay. Draft.
 
 Plan:
-- EQL reads attributes through EvaluationContext.attribute_reader (AttributeReader interface); new default contexts inherit the current reader.
-- krrood.planning.state: Fluent (by identity) and a frozen State(AttributeReader) with with_assignments, eq/hash and as_current().
+- Fluents are EQL ground terms (attribute, index, call, predicate/symbolic function class); every EQL value path reads through EvaluationContext.term_reader; State implements TermReader.
 
 Done:
-- Implemented; 11 tests in test/krrood_test/test_planning; the EQL, RDR and ontomatic suites pass locally (2 object-diagram failures: no graphviz binary here).
-- PR description lists the open points: plain-Python reads bypass the overlay; only Attribute is hooked; no normalization of no-op assignments.
+- ground_term.py (symbols, GroundTerm with normalized arguments, TermReader); State over ground terms; 32 tests; main merged; EQL/RDR/ORM suites pass locally.
 
 Next:
-- Check CI on the PR; owner review, then mark ready.
+- Owner decides how Python bodies of predicates/symbolic functions see the state (arguments, proxies, or mutate-and-undo; see PR).
+- Owner review; mark ready only when told.
