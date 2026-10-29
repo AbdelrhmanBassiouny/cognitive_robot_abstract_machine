@@ -40,6 +40,7 @@ from semantic_digital_twin.world_description.geometry import (
     Color,
     Cylinder,
     Mesh,
+    MeshFileFormat,
     Texture,
 )
 from semantic_digital_twin.world_description.inertial_properties import Inertial
@@ -1770,6 +1771,60 @@ def test_prebuilt_world_multiple_free_bodies_start_at_authored_poses():
             )
     finally:
         stop_multisim_if_running(multi_sim)
+
+
+# %% meshes written as glb
+
+
+def _textured_tetrahedron_as_glb(directory, texture_color: tuple[int, int, int]) -> str:
+    """
+    Writes a tetrahedron painted with a one-coloured texture as a GLB file.
+
+    :param directory: The directory to write the mesh and its texture into.
+    :param texture_color: The colour of the texture image.
+    :return: The path of the written mesh.
+    """
+    texture_file = directory / "wood.png"
+    Image.new("RGB", (4, 4), color=texture_color).save(texture_file)
+    tetrahedron = trimesh.Trimesh(
+        vertices=[[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]],
+        faces=[[0, 1, 2], [0, 1, 3], [0, 2, 3], [1, 2, 3]],
+        process=False,
+    )
+    corner_uv = numpy.tile([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], (4, 1))
+    return Mesh.from_trimesh(
+        mesh=tetrahedron,
+        uv=corner_uv,
+        texture_file_path=str(texture_file),
+        directory=directory,
+        file_type=MeshFileFormat.GLB,
+    ).filename
+
+
+def test_meshes_written_as_glb_compile(tmp_path):
+    box = trimesh.creation.box(extents=(1.0, 1.0, 1.0))
+    glb_file = Mesh.from_trimesh(
+        mesh=box, directory=tmp_path, file_type=MeshFileFormat.GLB
+    ).filename
+    world = _world_with_meshes(visual_file=glb_file, collision_file=glb_file)
+    builder = MujocoBuilder()
+    builder.build_world(world=world, file_path=str(tmp_path / "scene.xml"))
+
+    model = builder.spec.compile()
+
+    assert model.nmesh == len(builder.spec.meshes)
+
+
+def test_a_textured_mesh_written_as_glb_keeps_its_texture(tmp_path):
+    texture_color = (120, 60, 20)
+    glb_file = _textured_tetrahedron_as_glb(tmp_path, texture_color=texture_color)
+    world = _world_with_meshes(visual_file=glb_file, collision_file=glb_file)
+    builder = MujocoBuilder()
+
+    builder.build_world(world=world, file_path=str(tmp_path / "scene.xml"))
+
+    [texture] = builder.spec.textures
+    assert Image.open(texture.file).convert("RGB").getpixel((0, 0)) == texture_color
 
 
 # %% stepped simulation

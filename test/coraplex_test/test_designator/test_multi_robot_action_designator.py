@@ -891,7 +891,8 @@ def test_gcs_navigation_plans_on_the_floor_the_robot_stands_on(
     ).bounding_box()
     assert floor_box.min_x <= float(base_pose.x) <= floor_box.max_x
     assert floor_box.min_y <= float(base_pose.y) <= floor_box.max_y
-    assert floor_box.max_z == pytest.approx(float(base_pose.z))
+    # Mesh files store positions as 32-bit floats.
+    assert floor_box.max_z == pytest.approx(float(base_pose.z), abs=1e-6)
 
     waypoints = action._waypoints()
     assert [waypoint.reference_frame for waypoint in waypoints] == [floor.root] * len(
