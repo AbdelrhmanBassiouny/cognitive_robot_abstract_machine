@@ -25,3 +25,8 @@ class RepositoryFile(PathEnumeration):
     """
     The labels set automatically on a pull request from the files it changes.
     """
+
+    API_BREAK_CHECK_WORKFLOW = Path(".github") / "workflows" / "pr_api_break_check.yml"
+    """
+    The workflow that finds the public signatures a pull request breaks.
+    """

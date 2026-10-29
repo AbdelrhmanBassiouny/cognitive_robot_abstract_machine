@@ -32,7 +32,7 @@ class ChangeKindLabel(StrEnum):
 
     DOCUMENTATION = "documentation"
     """
-    The change is made for its documentation.
+    The change modifies documentation files.
     """
 
     DEV_TOOLS = "dev-tools"

@@ -188,11 +188,10 @@
   - `api-break`: the change can break code that already uses it - it removes or renames a public module, class, method, field or parameter, changes a signature incompatibly, changes the documented behaviour or return value of a public method, or changes an ORM schema or a serialized format
   - `new-feature`: the change adds public API or user-visible behaviour without breaking existing users
   - `bug-fix`: the change makes existing behaviour match its documented or intended contract
-  - `documentation`: documentation is the purpose of the change, not only an accompaniment of a code change
-  - `dev-tools`: the change modifies the tools contributors work with - scripts, formatters, pre-commit hooks, CI workflows, agent rules
   - `maintenance`: the change modifies code without changing its behaviour or API - refactoring, cleanup, dependency updates
 - Apply `api-break` whenever any part of the change breaks existing users, however small that part is
-- Never set or suggest framework labels: the labeler sets them on every pull request from the files it changes, as `.github/labeler.yml` maps them
+- The workflow `.github/workflows/pr_api_break_check.yml` adds `api-break` when a public signature breaks; look for the breaks it cannot see: changed documented behaviour or return values, ORM schemas and serialized formats
+- Never set or suggest framework labels, `documentation` or `dev-tools`: the labeler sets them on every pull request from the files it changes, as `.github/labeler.yml` maps them
 - Before review is requested on an `api-break` pull request:
   - its description states what breaks and how users migrate
   - tell the user to discuss the break with the code owners of the affected frameworks, listed in `.github/CODEOWNERS`, or in the Cramgineers channel

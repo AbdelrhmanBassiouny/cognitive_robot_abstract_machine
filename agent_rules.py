@@ -133,15 +133,6 @@ class PullRequestLabelsRules(Section):
                 "match its documented or intended contract"
             ),
             (
-                f"`{ChangeKindLabel.DOCUMENTATION}`: documentation is the purpose of "
-                "the change, not only an accompaniment of a code change"
-            ),
-            (
-                f"`{ChangeKindLabel.DEV_TOOLS}`: the change modifies the tools "
-                "contributors work with - scripts, formatters, pre-commit hooks, CI "
-                "workflows, agent rules"
-            ),
-            (
                 f"`{ChangeKindLabel.MAINTENANCE}`: the change modifies code without "
                 "changing its behaviour or API - refactoring, cleanup, dependency "
                 "updates"
@@ -154,10 +145,18 @@ class PullRequestLabelsRules(Section):
         "existing users, however small that part is"
     )
 
-    LEAVE_FRAMEWORK_LABELS_TO_THE_LABELER = (
-        "Never set or suggest framework labels: the labeler sets them on every pull "
-        f"request from the files it changes, as `{RepositoryFile.LABELER_CONFIGURATION}` "
-        "maps them"
+    FIND_THE_API_BREAKS_THE_CHECK_MISSES = (
+        f"The workflow `{RepositoryFile.API_BREAK_CHECK_WORKFLOW}` adds "
+        f"`{ChangeKindLabel.API_BREAK}` when a public signature breaks; look for the "
+        "breaks it cannot see: changed documented behaviour or return values, ORM "
+        "schemas and serialized formats"
+    )
+
+    LEAVE_PATH_LABELS_TO_THE_LABELER = (
+        f"Never set or suggest framework labels, `{ChangeKindLabel.DOCUMENTATION}` or "
+        f"`{ChangeKindLabel.DEV_TOOLS}`: the labeler sets them on every pull request "
+        f"from the files it changes, as `{RepositoryFile.LABELER_CONFIGURATION}` maps "
+        "them"
     )
 
     DISCUSS_API_BREAKS_BEFORE_REVIEW = (
