@@ -12,7 +12,7 @@ from krrood_spatial_math.cartesian_frame_3d import (
     CoordinateRepresentationT,
 )
 from krrood_spatial_math.exceptions import ReferenceFrameMismatchError
-from krrood_spatial_math.space import EuclideanSpace
+from krrood_spatial_math.space import EuclideanSpace3D
 
 # %% frames told apart by name
 
@@ -29,7 +29,7 @@ class NamedFrame(CartesianFrame3D):
     What the frame is called.
     """
 
-    space: EuclideanSpace | None = None
+    space: EuclideanSpace3D | None = None
     """
     The space the frame charts.
     """

@@ -18,7 +18,7 @@ from krrood_spatial_math.coordinate_system import (
     RigidCoordinateChange,
     SpaceT,
 )
-from krrood_spatial_math.space import EuclideanSpace, Space
+from krrood_spatial_math.space import EuclideanSpace, EuclideanSpace3D, Space
 
 from .dataset.spaces import (
     ScalablePlane,
@@ -30,14 +30,18 @@ from .dataset.spaces import (
 # %% spaces
 
 
-@pytest.mark.parametrize("space_kind", [Space, EuclideanSpace])
+@pytest.mark.parametrize("space_kind", [Space, EuclideanSpace, EuclideanSpace3D])
 def test_a_space_cannot_be_instantiated(space_kind):
     with pytest.raises(InterfaceInstantiationError):
         space_kind()
 
 
-def test_physical_space_is_a_space():
+def test_euclidean_space_is_a_space():
     assert issubclass(EuclideanSpace, Space)
+
+
+def test_three_dimensional_euclidean_space_is_a_euclidean_space():
+    assert issubclass(EuclideanSpace3D, EuclideanSpace)
 
 
 # %% coordinate systems on spaces

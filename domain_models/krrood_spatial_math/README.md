@@ -1,10 +1,14 @@
 # krrood_spatial_math
 
-Points in the spaces they belong to, and the coordinate systems their coordinates are
-given in.
+The spatial mathematics that robot and image packages share. It models a space, such as
+the physical space a robot moves in or the plane an image lies on, separately from the
+coordinate systems on it, so that a value always says which coordinate system its
+coordinates are given in, and coordinates are only combined after changing them into one
+coordinate system. Its base depends on `krrood` alone.
 
-- `krrood_spatial_math.space`: `Space`, a set of points with a geometry, and
-  `EuclideanSpace`, physical space in metres.
+- `krrood_spatial_math.space`: `Space`, a set of points with a geometry;
+  `EuclideanSpace`, one with distances and angles; and `EuclideanSpace3D`, such as the
+  physical space a robot's bodies are in.
 - `krrood_spatial_math.coordinate_system`: `CoordinateSystem`, what coordinates on one
   space are given in; `AffineFrame`, one with an origin and straight axes, and
   `CartesianFrame`, an affine frame whose axes are perpendicular and of unit length;
@@ -27,10 +31,10 @@ given in.
 
 | Space | Frame | Coordinate change | Kept by the change |
 |---|---|---|---|
-| `EuclideanSpace` | `CartesianFrame3D`, metres | `RigidCoordinateChange` | distances, angles |
+| `EuclideanSpace3D` | `CartesianFrame3D`, metres | `RigidCoordinateChange` | distances, angles |
 
-Other domain models add their own spaces on these interfaces; `krrimage`, for example,
-adds image planes, whose pixel frames are affine and related by affine changes.
+Other domain models add their own spaces on these interfaces; `krrood_image`, for
+example, adds image planes, whose pixel frames are affine and related by affine changes.
 
 Points of two spaces, such as a body and an image of it, relate only through a map
 between the spaces, such as a camera, never through a coordinate change.

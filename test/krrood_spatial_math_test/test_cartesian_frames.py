@@ -9,7 +9,7 @@ from krrood_spatial_math.cartesian_frame_3d import (
 )
 from krrood_spatial_math.coordinate_system import CartesianFrame, SpaceT
 from krrood_spatial_math.exceptions import MissingCartesianFrame3DResolver
-from krrood_spatial_math.space import EuclideanSpace
+from krrood_spatial_math.space import EuclideanSpace3D
 
 from .dataset.frames import KnownFrames
 
@@ -25,8 +25,8 @@ def test_a_three_dimensional_cartesian_frame_is_a_cartesian_frame():
     assert issubclass(CartesianFrame3D, CartesianFrame)
 
 
-def test_a_three_dimensional_cartesian_frame_charts_euclidean_space():
-    assert CartesianFrame3D.get_type_of_generic_parameter(SpaceT) is EuclideanSpace
+def test_a_three_dimensional_cartesian_frame_charts_three_dimensional_euclidean_space():
+    assert CartesianFrame3D.get_type_of_generic_parameter(SpaceT) is EuclideanSpace3D
 
 
 def test_a_three_dimensional_cartesian_frame_declares_expressing_values_in_it():

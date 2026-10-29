@@ -14,7 +14,7 @@ from krrood_spatial_math.coordinate_system import (
     CoordinateRepresentation,
 )
 from krrood_spatial_math.exceptions import MissingCartesianFrame3DResolver
-from krrood_spatial_math.space import EuclideanSpace
+from krrood_spatial_math.space import EuclideanSpace3D
 
 # %% frames that positions and directions are expressed in
 
@@ -26,7 +26,7 @@ The kind of value a Cartesian frame expresses.
 """
 
 
-class CartesianFrame3D(CartesianFrame[EuclideanSpace], Interface):
+class CartesianFrame3D(CartesianFrame[EuclideanSpace3D], Interface):
     """
     A right-handed Cartesian frame on a three-dimensional Euclidean space, in metres,
     such as the frame of a robot's body.
