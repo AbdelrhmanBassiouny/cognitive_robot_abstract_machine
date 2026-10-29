@@ -1,13 +1,12 @@
-PR #534 (draft, base `claude/festive-pascal-g09gl3` = #517). No upstream PR yet.
+PR #534 (draft, base `main`). Upstream: cram2#826 (approved by Tigul, sunava, LucaKro).
 
 Plan
-- Top-level `PullRequestLabelsRules` in `agent_rules.py` (#517's agents layout), regenerated `AGENTS.md`.
-- Labels and the CODEOWNERS path come from enums in the root package: `cognitive_robot_abstract_machine/pull_request_labels.py` (`PullRequestLabel` base, `ChangeKindLabel`, `FrameworkLabel` named by directory, value = label text) and `repository_files.py` (`RepositoryFile.CODE_OWNERS`).
+- Top-level `PullRequestLabelsRules` in `agent_rules.py`, regenerated `AGENTS.md`: kind-of-change labels only; framework labels left to upstream's `.github/labeler.yml`.
+- Enums in the root package: `pull_request_labels.py` (`ChangeKindLabel`) and `repository_files.py` (`RepositoryFile.CODE_OWNERS`, `.LABELER_CONFIGURATION`); kept out of `agent_rules.py` because `RuleModule.import_from` caches `agent_rules` by bare name.
 
 Done
-- Merged #517 head (ddf666cb94); review thread (suggest labels on PRs not opened) fixed, resolved.
-- 85235f3b9: StrEnum/PathEnumeration review threads (3) fixed, replied, resolved. Enums kept out of `agent_rules.py` because `RuleModule.import_from` caches `agent_rules` by bare name per process (a test importing it broke krrood's `test_agents_instructions` in a shared run). AGENTS.md byte-identical.
+- b0b2b07cc: merged main (cramera removed upstream, labeler added in 611d45f73); dropped `FrameworkLabel`, the member-less `PullRequestLabel` base and their test; new rule never to set/suggest framework labels. Answers LucaKro's "combine with jonas' labeler".
 
 Next
-- Re-merge #517 when it moves; retarget to `main` once it merges; `dev-tools` label upstream on promotion.
-- Possible follow-up: basstler promotion links pass `labels=`; Basstler could import `PullRequestLabel` once it depends on krrood/this package.
+- User: update cram2#826 title/description to the fork PR's, reply to LucaKro, add `dev-tools`/`new-feature`.
+- Possible follow-up: basstler promotion links pass `labels=`.
