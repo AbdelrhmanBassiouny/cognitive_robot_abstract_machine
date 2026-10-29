@@ -4,19 +4,10 @@ from dataclasses import dataclass, field, Field
 from datetime import timedelta
 from http import HTTPStatus
 from pathlib import Path
-from typing import Dict, Set
+from typing_extensions import TYPE_CHECKING, Callable, Any
 from uuid import UUID
 
 import mujoco
-from typing_extensions import (
-    Optional,
-    List,
-    Type,
-    TYPE_CHECKING,
-    Callable,
-    Union,
-    Any,
-)
 
 from krrood.adapters.exceptions import UntrackedObjectError
 from krrood.exceptions import DataclassException
@@ -105,7 +96,7 @@ class UnknownWorldModification(DataclassException):
     """
 
     call: Callable
-    kwargs: Dict[str, Any]
+    kwargs: dict[str, Any]
 
     def error_message(self) -> str:
         call_name = getattr(self.call, "__name__", repr(self.call))
@@ -126,7 +117,7 @@ class MismatchingIDsInWorldModification(DataclassException):
     with the UUIDs assigned during initialization.
     """
 
-    modification_type: Type[WorldModification]
+    modification_type: type[WorldModification]
 
     original_uuids: list[UUID]
     """
@@ -166,7 +157,7 @@ class NegativeConnectionVelocity(DataclassException):
     An error that happens when a negative velocity limit is provided for a connection.
     """
 
-    connection_name: Union[str, PrefixedName]
+    connection_name: str | PrefixedName
     """
     The name of the connection for which the velocity limit is negative.
     """
@@ -358,7 +349,7 @@ class BrokenWorldModificationHistoryError(WorldValidationError):
     Raised when the world's modification history was detected to be broken.
     """
 
-    potential_cause: Optional[DataclassException] = None
+    potential_cause: DataclassException | None = None
     """
     The exception that was thrown and caused the world's modification history to be
     broken.
@@ -435,7 +426,7 @@ class WorldContainsOrphanedDegreeOfFreedom(WorldValidationError):
     freedom during validation.
     """
 
-    actual_dofs: Set[DegreeOfFreedom]
+    actual_dofs: set[DegreeOfFreedom]
     """
     The actual degrees of freedom used in connections.
     """
@@ -482,6 +473,99 @@ class WorldEntityWithIDBelongsToAnotherWorld(WorldValidationError):
 
 
 @dataclass
+class WorldHasNoUniqueRootError(WorldValidationError):
+    """
+    Raised when a non-empty world has none or more than one root.
+    """
+
+    possible_roots: list[KinematicStructureEntity]
+    """
+    The kinematic structure entities without incoming connections that were found.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"A world must have exactly one root, but found {len(self.possible_roots)}: "
+            f"{self.possible_roots}."
+        )
+
+    def suggest_correction(self) -> str:
+        return ""
+
+
+@dataclass
+class CopiedWorldDiffersFromOriginalError(WorldValidationError):
+    """
+    Raised when deepcopying a world does not reproduce the original world's entities.
+    """
+
+    differing_entity_hashes: list[int]
+    """
+    Hashes of the entities that are only in the original world or only in the copy.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"Deepcopying the world changed its entity set; "
+            f"{len(self.differing_entity_hashes)} entities differ between the original "
+            f"and the copy (hashes: {self.differing_entity_hashes})."
+        )
+
+    def suggest_correction(self) -> str:
+        return ""
+
+
+@dataclass
+class NoControlledConnectionInChainError(UsageError):
+    """
+    Raised when the kinematic chain between two entities contains no controlled
+    connection.
+    """
+
+    root: KinematicStructureEntity
+    """
+    The start of the chain.
+    """
+
+    tip: KinematicStructureEntity
+    """
+    The end of the chain.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The chain between {self.root} and {self.tip} contains no controlled "
+            f"connection."
+        )
+
+    def suggest_correction(self) -> str:
+        return ""
+
+
+@dataclass
+class RobotPartBelongsToAnotherRobotError(UsageError):
+    """
+    Raised when a robot part refers to a robot other than the one that holds it.
+    """
+
+    robot_part: AbstractRobotPart
+    """
+    The robot part whose robot reference was checked.
+    """
+
+    robot: AbstractRobot
+    """
+    The robot that holds the part but is not referred to by it.
+    """
+
+    def error_message(self) -> str:
+        return f"Robot part {self.robot_part} does not refer to robot {self.robot}."
+
+    def suggest_correction(self) -> str:
+        return ""
+
+
+@dataclass
 class InvalidConnectionLimits(UsageError):
     """
     Raised when the lower limit is not less than the upper limit for a degree of
@@ -506,12 +590,39 @@ class InvalidConnectionLimits(UsageError):
 
 
 @dataclass
+class MissingPositionLimits(UsageError):
+    """
+    Raised when a target position must be derived from the limits of a degree of freedom
+    that declares no position limits.
+    """
+
+    name: PrefixedName
+    """
+    The name of the degree of freedom.
+    """
+
+    limits: DegreeOfFreedomLimits
+    """
+    The limits without positions.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"Degree of freedom {self.name} must declare position limits. "
+            f"Given limits: {self.limits}."
+        )
+
+    def suggest_correction(self) -> str:
+        return ""
+
+
+@dataclass
 class MissingConnectionParentError(UsageError):
     """
     Raised when a connection is spawned without a parent kinematic structure entity.
     """
 
-    connection_name: Optional[str]
+    connection_name: str | None
     """
     The name of the connection specification that was spawned without a parent.
     """
@@ -545,6 +656,49 @@ class MissingConnectionAxisError(UsageError):
 
     def suggest_correction(self) -> str:
         return "pass a movement axis via the 'axis' keyword argument."
+
+
+@dataclass
+class MissingURDFJointAxisError(UsageError):
+    """
+    Raised when a movable URDF joint declares no axis to move along.
+    """
+
+    joint_name: str
+    """
+    The name of the joint that declares no axis.
+    """
+
+    joint_type: str
+    """
+    The URDF type of the joint.
+    """
+
+    def error_message(self) -> str:
+        return f"The {self.joint_type} URDF joint '{self.joint_name}' declares no axis."
+
+    def suggest_correction(self) -> str:
+        return (
+            'declare the axis the joint moves along with an <axis xyz="..."/> element.'
+        )
+
+
+@dataclass
+class ZeroLengthURDFJointAxisError(UsageError):
+    """
+    Raised when a URDF joint declares an axis of zero length, which names no direction.
+    """
+
+    joint_name: str
+    """
+    The name of the joint whose axis has zero length.
+    """
+
+    def error_message(self) -> str:
+        return f"The URDF joint '{self.joint_name}' declares an axis of zero length."
+
+    def suggest_correction(self) -> str:
+        return "declare a non-zero axis for the joint."
 
 
 @dataclass
@@ -645,7 +799,7 @@ class AmbiguousPart(UsageError):
     The part that could not be unambiguously added.
     """
 
-    fields: List[Field]
+    fields: list[Field]
     """
     The names of the part-whole relationship fields whose element type accepts the part.
     """
@@ -659,8 +813,8 @@ class AmbiguousPart(UsageError):
 
     def suggest_correction(self) -> str:
         return (
-            f"consider if its practical to use the 'field_name' keyword argument for the `add` method to"
-            f" disambiguate the matching cases."
+            "consider if its practical to use the 'field_name' keyword argument for the `add` method to"
+            " disambiguate the matching cases."
         )
 
 
@@ -671,7 +825,7 @@ class UnknownPartWholeRelationshipField(UsageError):
     relationship field of the annotation.
     """
 
-    annotation: Type[HasRootBody]
+    annotation: type[HasRootBody]
     """
     The annotation type the part was being added to.
     """
@@ -682,7 +836,7 @@ class UnknownPartWholeRelationshipField(UsageError):
     field.
     """
 
-    available_fields: List[str]
+    available_fields: list[str]
     """
     The names of the annotation's part-whole relationship fields.
     """
@@ -695,8 +849,7 @@ class UnknownPartWholeRelationshipField(UsageError):
 
     def suggest_correction(self) -> str:
         return (
-            f"the available fields are:"
-            f" {', '.join(self.available_fields) or '(none)'}"
+            f"the available fields are: {', '.join(self.available_fields) or '(none)'}"
         )
 
 
@@ -733,17 +886,17 @@ class NoSinglePartWholeRelationshipField(UsageError):
     type alone, but not exactly one field of the annotation holds parts of that type.
     """
 
-    annotation: Type[HasRootBody]
+    annotation: type[HasRootBody]
     """
     The annotation type the part is for.
     """
 
-    part_type: Type[HasRootBody]
+    part_type: type[HasRootBody]
     """
     The type of the part.
     """
 
-    matching_fields: List[str]
+    matching_fields: list[str]
     """
     The names of the annotation's part-whole relationship fields that hold parts of that
     type.
@@ -804,7 +957,7 @@ class PartWholeFieldInAnnotationKwargs(UsageError):
     The name of the annotation type the keyword arguments were meant for.
     """
 
-    field_names: List[str]
+    field_names: list[str]
     """
     The offending ``annotation_kwargs`` keys that name part-whole relationship fields.
     """
@@ -820,12 +973,42 @@ class PartWholeFieldInAnnotationKwargs(UsageError):
 
 
 @dataclass
+class MechanicalJointAlreadyMounted(UsageError):
+    """
+    Raised when a mechanical joint that already connects a child is mounted onto a
+    different whole.
+
+    If you think a single Mechanical Joint should be able to have multiple children,
+    contact @LucaKro.
+    """
+
+    joint: SemanticAnnotation
+    """
+    The mechanical joint being mounted.
+    """
+
+    main_has_root_body_annotation: SemanticAnnotation
+    """
+    The annotation (the whole) the joint was being mounted onto.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{type(self.joint).__name__} already connects a child and cannot be mounted onto "
+            f"{type(self.main_has_root_body_annotation).__name__}: a mechanical joint connects exactly one child."
+        )
+
+    def suggest_correction(self) -> str:
+        return "if you think that you found a case where this error does not apply, please contact @LucaKro"
+
+
+@dataclass
 class SemanticAnnotationCircularDependencyError(UsageError):
     """
     Raised when a circular dependency between semantic annotations is detected.
     """
 
-    semantic_annotations: List[SemanticAnnotation]
+    semantic_annotations: list[SemanticAnnotation]
     """
     The list of semantic annotations that in which a circular dependency is detected.
     """
@@ -868,12 +1051,12 @@ class MissingSemanticAnnotationError(UsageError):
     Raised when a semantic annotation is required but missing.
     """
 
-    semantic_annotation_class: Type[SemanticAnnotation]
+    semantic_annotation_class: type[SemanticAnnotation]
     """
     The semantic annotation class that requires another semantic annotation.
     """
 
-    missing_semantic_annotation_class: Type[SemanticAnnotation]
+    missing_semantic_annotation_class: type[SemanticAnnotation]
     """
     The missing semantic annotation class.
     """
@@ -899,7 +1082,7 @@ class InvalidPlaneDimensions(UsageError):
     The scale of the plane.
     """
 
-    clazz: Type
+    clazz: type
     """
     The class for which the dimensions are invalid.
     """
@@ -909,6 +1092,30 @@ class InvalidPlaneDimensions(UsageError):
 
     def suggest_correction(self) -> str:
         return ""
+
+
+@dataclass
+class HandleWiderThanLong(UsageError):
+    """
+    Raised when a handle scale is wider (y) than it is long (z).
+    """
+
+    scale: Scale
+    """
+    The scale the handle geometry was requested with.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The handle scale {self.scale} is wider (y={self.scale.y}) than it is "
+            f"long (z={self.scale.z})."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "pass the length of the handle as z and its width as y, and roll the "
+            "handle pose to lay the bar along the front it is mounted on."
+        )
 
 
 @dataclass
@@ -1014,7 +1221,7 @@ class MismatchingPublishChangesAttribute(UsageError):
 
 @dataclass
 class MissingPublishChangesKWARG(UsageError):
-    kwargs: Dict[str, Any]
+    kwargs: dict[str, Any]
 
     def error_message(self) -> str:
         return (
@@ -1037,7 +1244,7 @@ class StateUpdateContainsUnknownDegreesOfFreedomError(UsageError):
     rather than silently ignored.
     """
 
-    unknown_identifiers: List[UUID]
+    unknown_identifiers: list[UUID]
     """
     List of unknown DOF UUIDs that were attempted to update the state of.
     """
@@ -1119,7 +1326,7 @@ class WorldUpdateReferencesUnknownEntityError(UsageError):
     Only its id is known, because the update that created it never arrived.
     """
 
-    entity_name: Optional[PrefixedName]
+    entity_name: PrefixedName | None
     """
     The name the update calls that entity, or ``None`` where it carries none.
     """
@@ -1214,7 +1421,7 @@ class ApplyMissedMessagesWhileWorldIsBeingModifiedError(UsageError):
 
 @dataclass
 class DuplicateWorldEntityError(UsageError):
-    world_entities: List[WorldEntity]
+    world_entities: list[WorldEntity]
 
     def error_message(self) -> str:
         names = [str(world_entity.name) for world_entity in self.world_entities]
@@ -1265,9 +1472,9 @@ class InsufficientVectorsError(SpatialTypesError):
     Raised when a rotation matrix is constructed from fewer than two vectors.
     """
 
-    x: Optional[Vector3]
-    y: Optional[Vector3]
-    z: Optional[Vector3]
+    x: Vector3 | None
+    y: Vector3 | None
+    z: Vector3 | None
 
     def error_message(self) -> str:
         return (
@@ -1284,17 +1491,17 @@ class InsufficientVectorsError(SpatialTypesError):
 
 @dataclass
 class ReferenceFrameMismatchError(SpatialTypesError):
-    expected_frame: KinematicStructureEntity
+    expected_frame: KinematicStructureEntity | None
     """
-    The frame the operation requires.
-    """
-
-    actual_frame: KinematicStructureEntity
-    """
-    The frame that was found instead.
+    The frame the operation requires, or ``None`` if it requires no frame.
     """
 
-    context: Optional[str] = None
+    actual_frame: KinematicStructureEntity | None
+    """
+    The frame that was found instead, or ``None`` if the value has no frame.
+    """
+
+    context: str | None = None
     """
     Description of the value whose frame was checked, e.g. the argument name.
     """
@@ -1302,9 +1509,20 @@ class ReferenceFrameMismatchError(SpatialTypesError):
     def error_message(self) -> str:
         checked_value = self.context or "the given value"
         return (
-            f"Expected {checked_value} to be expressed in frame '{self.expected_frame.name}', "
-            f"but it is expressed in frame '{self.actual_frame.name}'."
+            f"Expected {checked_value} to be expressed in "
+            f"{self._describe(self.expected_frame)}, "
+            f"but it is expressed in {self._describe(self.actual_frame)}."
         )
+
+    @staticmethod
+    def _describe(frame: KinematicStructureEntity | None) -> str:
+        """
+        :param frame: The frame to describe.
+        :return: The frame as it reads in the error message.
+        """
+        if frame is None:
+            return "no frame"
+        return f"frame '{frame.name}'"
 
     def suggest_correction(self) -> str:
         return (
@@ -1338,7 +1556,7 @@ class ParsingError(DataclassException, Exception):
     An error that happens during parsing of files.
     """
 
-    file_path: Optional[str] = None
+    file_path: str | None = None
 
     def error_message(self) -> str:
         return f"Error parsing file {self.file_path}."
@@ -1358,7 +1576,7 @@ class PackageResolutionError(ParsingError):
     The package name that could not be resolved.
     """
 
-    details: Optional[str] = field(kw_only=True, default=None)
+    details: str | None = field(kw_only=True, default=None)
     """
     Details about why the resolution failed.
     """
@@ -1384,7 +1602,7 @@ class PathResolutionError(ParsingError):
     The URI that could not be resolved.
     """
 
-    details: Optional[str] = field(kw_only=True, default=None)
+    details: str | None = field(kw_only=True, default=None)
     """
     Details about why the resolution failed.
     """
@@ -1430,9 +1648,9 @@ class DatasetServerError(ParsingError):
 
 @dataclass
 class WorldEntityNotFoundError(UsageError):
-    name_or_hash: Union[str, PrefixedName, int]
+    name_or_hash: str | PrefixedName | int
 
-    suggestions: List[Union[str, PrefixedName]] = field(default_factory=list)
+    suggestions: list[str | PrefixedName] = field(default_factory=list)
     """
     Names of existing world entities that closely match the searched name.
     """
@@ -1458,7 +1676,7 @@ class MissingDefaultCameraError(UsageError):
     default camera.
     """
 
-    robot: Type[AbstractRobot]
+    robot: type[AbstractRobot]
     """
     The robot that does not have a default camera.
     """
@@ -1543,7 +1761,7 @@ class UnboundMessageTypeError(UsageError):
     Raised when a topic subscriber does not name the type of its messages.
     """
 
-    subscriber_type: Type
+    subscriber_type: type
     """
     The subscriber whose message type is unknown.
     """
@@ -1655,7 +1873,7 @@ class WorldEntityWithIDNotFoundError(WorldEntityNotFoundError):
 @dataclass
 class AlreadyBelongsToAWorldError(UsageError):
     world: World
-    type_trying_to_add: Type[WorldEntity]
+    type_trying_to_add: type[WorldEntity]
 
     def error_message(self) -> str:
         return (
@@ -1702,7 +1920,7 @@ class WorldEntityWithIDNotInKwargs(UntrackedObjectError):
     The id of the world entity the document refers to.
     """
 
-    world_entity_name: Optional[PrefixedName] = None
+    world_entity_name: PrefixedName | None = None
     """
     The name the reference to that entity went by when it was written.
 
@@ -1742,7 +1960,7 @@ class RootNodeNotFoundError(DataclassException):
     Raised when the root node cannot be found or is ambiguous in a scene graph.
     """
 
-    candidates: List[str]
+    candidates: list[str]
     """
     The candidate node names that were considered as potential roots.
     """
@@ -2058,6 +2276,37 @@ class MergedRobotAnnotationNotFound(UsageError):
 
 
 @dataclass
+class ConnectionsOutsideEndEffector(UsageError):
+    """
+    Raised when a gripper specification's joint state moves connections that do not
+    belong to the specification's end effector.
+    """
+
+    end_effector: EndEffector
+    """
+    The end effector the specification was built for.
+    """
+
+    foreign_connection_names: list[str]
+    """
+    The names of the connections in the joint state that are not active connections of
+    the end effector.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The joint state moves connections that do not belong to the end effector "
+            f"'{self.end_effector.name}': {self.foreign_connection_names}."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "build the specification from a joint state whose connections are all "
+            "active connections of the same end effector."
+        )
+
+
+@dataclass
 class ExerciseVerificationFailed(UsageError):
     """
     Raised when a solution written in a self-assessment exercise does not satisfy one of
@@ -2220,7 +2469,7 @@ class MoreThanOneBodyHeld(UsageError):
     The end effector whose tool frame carries them.
     """
 
-    held_bodies: List[KinematicStructureEntity]
+    held_bodies: list[KinematicStructureEntity]
     """
     The entities attached to that tool frame.
     """
@@ -2271,7 +2520,7 @@ class DuplicateSimulatorPropertyError(UsageError):
     simulator reads exactly one.
     """
 
-    property_type: Type
+    property_type: type
     """
     The type of property attached more than once.
     """

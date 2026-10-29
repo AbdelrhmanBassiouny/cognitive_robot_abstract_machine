@@ -1,6 +1,5 @@
 from dataclasses import field, dataclass
 from itertools import combinations
-from typing import Optional
 
 import krrood.symbolic_math.symbolic_math as sm
 from giskardpy.motion_statechart.context import MotionStatechartContext
@@ -279,7 +278,7 @@ class _CancelBecauseExternalCollisionViolated(_CancelBecauseCollisionViolated):
             )
         return NodeArtifacts()
 
-    def on_tick(self, context: MotionStatechartContext) -> Optional[float]:
+    def on_tick(self, context: MotionStatechartContext) -> float | None:
         violated_tasks = [
             task
             for task in self.tasks
@@ -668,7 +667,7 @@ class _CancelBecauseSelfCollisionViolated(_CancelBecauseCollisionViolated):
             )
         return NodeArtifacts()
 
-    def on_tick(self, context: MotionStatechartContext) -> Optional[float]:
+    def on_tick(self, context: MotionStatechartContext) -> float | None:
         violated_tasks = [
             task
             for task in self.tasks
@@ -677,14 +676,19 @@ class _CancelBecauseSelfCollisionViolated(_CancelBecauseCollisionViolated):
         collisions = []
         thresholds = []
         for task in violated_tasks:
-            collision = context.self_collision_manager.last_closest_contacts[
-                task.collision_group_a, task.collision_group_b
-            ][0]
-            collisions.append(collision)
+            closest_contacts = context.self_collision_manager.last_closest_contacts.get(
+                (task.collision_group_a, task.collision_group_b)
+            )
+            if not closest_contacts:
+                # The collision manager has not recorded contacts for this pair yet,
+                # e.g. before its first computation, so there is nothing to report.
+                continue
+            collisions.append(closest_contacts[0])
             thresholds.append(task.violated_distance.evaluate()[0])
-        raise CollisionViolatedError(
-            violated_collisions=collisions, thresholds=thresholds
-        )
+        if len(collisions) > 0:
+            raise CollisionViolatedError(
+                violated_collisions=collisions, thresholds=thresholds
+            )
 
 
 @dataclass(eq=False, repr=False)

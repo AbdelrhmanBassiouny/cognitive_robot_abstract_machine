@@ -5,7 +5,6 @@ from time import sleep
 import pytest
 from rclpy.duration import Duration
 from rclpy.time import Time
-from typing_extensions import List, Set, Tuple
 from visualization_msgs.msg import MarkerArray, Marker
 
 from .test_tf_publisher import publisher_ignoring_existing_frames
@@ -143,13 +142,16 @@ def test_visualization_marker_tracy(rclpy_node, tracy_world, ros_publishers):
     else:
         assert False, "Callback timed out"
 
-    # table has no texture, so white should be used
+    # table has no texture, so the color its URDF material gives it should be used
+    table = tracy_world.get_body_by_name("table")
+    table_color = table.visual.shapes[0].color
+    assert table_color != Color()
     for marker in callback.last_msg.markers:
-        if marker.ns == str(tracy_world.get_body_by_name("table").name):
-            assert marker.color.r == 1.0
-            assert marker.color.g == 1.0
-            assert marker.color.b == 1.0
-            assert marker.color.a == 1.0
+        if marker.ns == str(table.name):
+            assert marker.color.r == pytest.approx(table_color.R)
+            assert marker.color.g == pytest.approx(table_color.G)
+            assert marker.color.b == pytest.approx(table_color.B)
+            assert marker.color.a == pytest.approx(table_color.A)
             break
     else:
         assert False, "Marker not found"
@@ -245,7 +247,7 @@ def test_trimesh(rclpy_node):
 # %% marker frames
 
 
-def world_with_visible_bodies(*names: str) -> Tuple[World, List[Body]]:
+def world_with_visible_bodies(*names: str) -> tuple[World, list[Body]]:
     """
     Build a world whose root carries one body with a visual shape per given name.
     """
@@ -265,7 +267,7 @@ def world_with_visible_bodies(*names: str) -> Tuple[World, List[Body]]:
     return world, bodies
 
 
-def published_child_frames(tf_publisher: TFPublisher) -> Set[str]:
+def published_child_frames(tf_publisher: TFPublisher) -> set[str]:
     """
     The tf frames the publisher broadcasts a transform for.
     """
@@ -275,7 +277,7 @@ def published_child_frames(tf_publisher: TFPublisher) -> Set[str]:
     }
 
 
-def marker_frames(viz: VizMarkerPublisher) -> Set[str]:
+def marker_frames(viz: VizMarkerPublisher) -> set[str]:
     """
     The tf frames the markers are positioned in.
     """

@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Tuple, List
+from typing_extensions import Any
 
-from typing_extensions import Optional, Dict, Any
 
 from coraplex.plans.plan_node import PlanNode
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
@@ -18,18 +17,19 @@ from semantic_digital_twin.spatial_types.spatial_types import Pose
 
 from coraplex.datastructures.trajectory import PoseTrajectory
 from coraplex.plans.factories import execute_single
-from coraplex.robot_plans.actions.base import ActionDescription, DescriptionType
+from coraplex.robot_plans.actions.base import ActionDescription
 from coraplex.robot_plans.mixins import HasMaxJointVelocity, HasTcpGoalThresholds
 from coraplex.robot_plans.motions.gripper import (
     MoveGripperMotion,
     MoveTCPWaypointsMotion,
 )
 from coraplex.robot_plans.motions.robot_body import MoveJointsMotion
-from coraplex.validation.goal_validator import create_multiple_joint_goal_validator
 from semantic_digital_twin.datastructures.definitions import (
     TorsoState,
-    GripperState,
     StaticJointState,
+)
+from semantic_digital_twin.datastructures.robots.gripper_configuration import (
+    GripperConfiguration,
 )
 
 
@@ -56,7 +56,7 @@ class MoveTorsoAction(ActionDescription):
 
     @staticmethod
     def post_condition(
-        variables: Dict[str, Variable], context: Context, kwargs: Dict[str, Any]
+        variables: dict[str, Variable], context: Context, kwargs: dict[str, Any]
     ) -> SymbolicExpression | bool:
         """
         The target joint state for the torso needs to be achieved.
@@ -70,24 +70,26 @@ class MoveTorsoAction(ActionDescription):
 @dataclass
 class SetGripperAction(ActionDescription):
     """
-    Set the gripper state of the robot.
+    Moves a gripper to the given configuration.
     """
 
-    gripper: EndEffector
+    configuration: GripperConfiguration
     """
-    The gripper that should be set.
-    """
-
-    motion: GripperState
-    """
-    The motion that should be set on the gripper.
+    The gripper configuration, given from outside, that the gripper should reach.
     """
 
     @property
     def _action_plan(self) -> PlanNode:
-        return execute_single(
-            MoveGripperMotion(gripper=self.gripper, motion=self.motion)
-        )
+        return execute_single(MoveGripperMotion(configuration=self.configuration))
+
+    @staticmethod
+    def post_condition(
+        variables: dict[str, Variable], context: Context, kwargs: dict[str, Any]
+    ) -> SymbolicExpression:
+        """
+        The gripper's target joint state needs to be achieved.
+        """
+        return variable_from(kwargs["configuration"].joint_state).is_achieved()
 
 
 @dataclass
@@ -96,7 +98,7 @@ class ParkArmsAction(ActionDescription, HasMaxJointVelocity):
     Park the arms of the robot.
     """
 
-    arms: List[Arm]
+    arms: list[Arm]
     """
     The arms that should be parked.
     """
@@ -113,7 +115,7 @@ class ParkArmsAction(ActionDescription, HasMaxJointVelocity):
             )
         )
 
-    def get_joint_poses(self) -> Tuple[List[str], List[float]]:
+    def get_joint_poses(self) -> tuple[list[str], list[float]]:
         """
         :return: The joint positions that should be set for the arm to be in the park position.
         """
@@ -159,7 +161,7 @@ class FollowToolCenterPointPathAction(ActionDescription, HasTcpGoalThresholds):
 
     def validate(
         self,
-        result: Optional[Any] = None,
+        result: Any | None = None,
         max_wait_time: timedelta = timedelta(seconds=2),
     ):
         pass
@@ -200,7 +202,7 @@ class MoveManipulatorAction(ActionDescription, HasTcpGoalThresholds):
 
     @staticmethod
     def post_condition(
-        variables: Dict[str, Variable], context: Context, kwargs: Dict[str, Any]
+        variables: dict[str, Variable], context: Context, kwargs: dict[str, Any]
     ) -> SymbolicExpression:
         end_effector = variables["end_effector"]
         target_pose = variables["target_pose"]

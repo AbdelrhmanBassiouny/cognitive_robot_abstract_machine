@@ -3,7 +3,6 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from enum import StrEnum
 from time import sleep
-from typing import Optional
 from uuid import UUID
 
 from geometry_msgs.msg import TransformStamped
@@ -216,7 +215,7 @@ class TFPublisher(StateChangeCallback, HasROS2Node):
     The tf frame name of every entity this publisher publishes.
     """
 
-    root_link_pub: Optional[Publisher] = field(init=False, default=None)
+    root_link_pub: Publisher | None = field(init=False, default=None)
     """
     Publisher of the static transform joining a prefixed tree to the unprefixed one,
     kept for as long as this publisher lives so the transform stays latched.
