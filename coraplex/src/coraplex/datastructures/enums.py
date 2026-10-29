@@ -567,3 +567,8 @@ class NodeDetailNotation(StrEnum):
     """
     How a number is written: without the digits that carry nothing.
     """
+
+    SEQUENCE_FORMAT = "[{}]"
+    """
+    How the items of a list or tuple are written: in brackets.
+    """

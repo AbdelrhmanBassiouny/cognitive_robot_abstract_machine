@@ -206,7 +206,7 @@ class TextDetailRule(NodeDetailRule[str]):
 
 class SequenceDetailRule(NodeDetailRule[list | tuple]):
     """
-    A list or tuple that is no enumeration member reads as its items.
+    A list or tuple that is no enumeration member reads as its items in brackets.
     """
 
     @classmethod
@@ -217,8 +217,10 @@ class SequenceDetailRule(NodeDetailRule[list | tuple]):
     def render(
         cls, value: list | tuple, nested: bool, renderer: NodeDetailRenderer
     ) -> str:
-        return NodeDetailNotation.PART_SEPARATOR.join(
-            renderer.render(item, nested) for item in value
+        return NodeDetailNotation.SEQUENCE_FORMAT.format(
+            NodeDetailNotation.PART_SEPARATOR.join(
+                renderer.render(item, nested) for item in value
+            )
         )
 
 

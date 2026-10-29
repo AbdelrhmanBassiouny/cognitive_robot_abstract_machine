@@ -146,14 +146,16 @@ def test_a_text_is_shown_as_it_is():
     assert NodeDetailRenderer().render("handle") == "handle"
 
 
-def test_a_list_is_shown_by_its_items():
+def test_a_list_is_shown_by_its_items_in_brackets():
     """
-    A list reads as its items, each shown readably.
+    A list reads as its items in brackets, each shown readably.
     """
     assert NodeDetailRenderer().render(
         [TorsoState.HIGH, TorsoState.LOW]
-    ) == NodeDetailNotation.PART_SEPARATOR.join(
-        [TorsoState.HIGH.name, TorsoState.LOW.name]
+    ) == NodeDetailNotation.SEQUENCE_FORMAT.format(
+        NodeDetailNotation.PART_SEPARATOR.join(
+            [TorsoState.HIGH.name, TorsoState.LOW.name]
+        )
     )
 
 
