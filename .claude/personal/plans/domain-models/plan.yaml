@@ -68,10 +68,10 @@ items:
   - planar-point-interface
   session: https://claude.ai/code/session_01J17aVY3vyQM8goACbkHkcp
   notes: '#524 on #527: krrood_image.coordinates owns ImagePlane and ImageCoordinateSystem, which becomes
-    an AffineFrame once #527 adds it; ImagePoint implements Point2D[ImageCoordinateSystem, float] (Point2D
-    was PlanarPoint); Pixel stays a grid cell. Pushed a4e9bbdb. Rename krrimage to krrood_image here once
-    #527''s rename is merged in. cram2#761 rewrites SemDT''s Color: #524 lands after it and moves Color
-    as #761 left it; ask before dropping the setters. Whichever of #524 and the adopt PR lands second
+    an AffineFrame once #527 adds it; ImagePoint implements AffinePoint2D[ImageCoordinateSystem, float]
+    (was PlanarPoint); Pixel stays a grid cell. Pushed a4e9bbdb. Rename krrimage to krrood_image here
+    once #527''s rename is merged in. cram2#761 rewrites SemDT''s Color: #524 lands after it and moves
+    Color as #761 left it; ask before dropping the setters. Whichever of #524 and the adopt PR lands second
     merges the README entries.'
 - id: image-extensions
   title: Depth and segmentation images, camera intrinsics, SemDT's CameraResolution and VideoResolution
@@ -138,8 +138,8 @@ items:
   - spatial-math-adopt
   notes: 'EuclideanSpace gets a dimension classproperty, with EuclideanSpace3D and EuclideanSpace2D. A
     CartesianFrame2D is the x-y plane of a CartesianFrame3D and charts a EuclideanSpace2D; Point2 and
-    Pose2D move onto it. A Point3D interface beside Point2D replaces the abstract Point (Simon''s #526
-    review). SE(2) is RigidCoordinateChange[CartesianFrame2D], only between frames sharing one plane.
+    Pose2D move onto it. An AffinePoint3D interface beside AffinePoint2D replaces the abstract Point (Simon''s
+    #526 review). SE(2) is RigidCoordinateChange[CartesianFrame2D], only between frames sharing one plane.
     A Pose projects to a Pose2D by the angle of its x-axis projected onto the plane, atan2(r21, r11) (equal
     to the ZYX yaw), raising a custom exception when that axis is normal to the plane.'
 - id: spatial-math-imports
@@ -169,19 +169,19 @@ items:
     capture projected onto the apartment walls while it works.'
 - id: planar-point-interface
   title: 'krrood_spatial_math''s casadi-free base: Space (EuclideanSpace), CoordinateSystem[SpaceT] (AffineFrame,
-    CartesianFrame, CartesianFrame3D), CoordinateChange (affine, rigid), Point2D (was PlanarPoint)'
+    CartesianFrame, CartesianFrame3D), CoordinateChange (affine, rigid), AffinePoint2D (was PlanarPoint)'
   branch: claude/krrspatial-interfaces
   pull_request_number: 527
   track: spatial
   status: in_progress
   depends_on: []
   session: https://claude.ai/code/session_018wfiv7nbshkp1Yenu79fsh
-  notes: '#527 on main, user-marked ready, at 5af267fe. Follow https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS.
-    Next on #527: package krrspatial to krrood_spatial_math (directory, CI, pyproject); ReferenceFrame
-    to CartesianFrame3D, with CartesianFrame3DResolver, CartesianFrame3DReference, MissingCartesianFrame3DResolver
-    and the test mimics; PlanarPoint to Point2D; AffineFrame and CartesianFrame under CoordinateSystem,
-    change classes generic over them; the docstrings and replies in the doc''s #527 table, CoordinateT
-    kept. Then resolve those threads and merge #527 into #524 and #526.'
+  notes: '#527 on main, user-marked ready. Follow https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS. Next
+    on #527: package krrspatial to krrood_spatial_math; ReferenceFrame to CartesianFrame3D, with CartesianFrame3DResolver,
+    CartesianFrame3DReference, MissingCartesianFrame3DResolver and the test mimics; PlanarPoint to AffinePoint2D,
+    bound to AffineFrame; AffineFrame and CartesianFrame under CoordinateSystem, change classes generic
+    over them; the docstrings and replies in the doc''s #527 table, CoordinateT kept. Then resolve those
+    threads and merge #527 into #524 and #526.'
 - id: image-coordinate-change
   title: krrood_image's ImageCoordinateChange (scale and shift per axis) for crops and resizes, with cv2
     resampling
