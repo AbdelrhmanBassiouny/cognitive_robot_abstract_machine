@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from datetime import timedelta
 from functools import cached_property
 
 import numpy as np
@@ -47,9 +48,10 @@ from coraplex.robot_plans.actions.base import (
     TryAllAction,
 )
 from coraplex.robot_plans.mixins import MovesToolCenterPoint
-from cramph.composites import Parallel
+from cramph.composites import Parallel, PausedUntilTrue
 from giskardpy.motion_statechart.weights import DefaultWeights
 from giskardpy.motion_statechart.monitors.cartesian_monitors import PositionReached
+from giskardpy.motion_statechart.monitors.progress_monitors import Stalled
 from giskardpy.motion_statechart.tasks.align_planes import AlignPlanes
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPositionTrajectory,
@@ -327,8 +329,17 @@ class WipingAction(ToolMotionAction, TryAllAction):
 
     final_waypoint_success_tolerance: float = 0.08
     """
-    Accept an unfinished motion as successful if the tool ends up within this distance
-    in meters of the final waypoint.
+    Accept a stalled motion as successful if the tool ended up within this distance in
+    meters of the final waypoint.
+    """
+
+    stall_timeout: timedelta = timedelta(seconds=2)
+    """
+    How long the tool may make no progress along its path before the wipe is checked for
+    having reached the final waypoint.
+
+    .. note:: Has to be shorter than the stall timeout of the executor, which otherwise
+        aborts the plan first.
     """
 
     def __post_init__(self):
@@ -384,17 +395,22 @@ class WipingAction(ToolMotionAction, TryAllAction):
     def create_steps(self) -> list[StatechartNode]:
         """
         :return: The goal moving the tool along the sampled waypoints, and as an
-            alternative to it, the tool having reached the final waypoint, since the
-            last stretch of a wipe often stalls against the surface.
+            alternative to it, the tool having reached the final waypoint once that
+            motion stalled, since the last stretch of a wipe often stalls against the
+            surface.
         """
+        tool_path = Parallel(nodes=self._tool_path_steps())
         return [
-            Parallel(nodes=self._tool_path_steps()),
-            PositionReached(
-                name=f"{self.name}/final waypoint reached",
-                root_link=self.world.root,
-                tip_link=self.tool.root,
-                goal_point=self._waypoints[-1],
-                threshold=self.final_waypoint_success_tolerance,
+            tool_path,
+            PausedUntilTrue(
+                monitor=Stalled(monitored_node=tool_path, timeout=self.stall_timeout),
+                monitored_node=PositionReached(
+                    name=f"{self.name}/final waypoint reached",
+                    root_link=self.world.root,
+                    tip_link=self.tool.root,
+                    goal_point=self._waypoints[-1],
+                    threshold=self.final_waypoint_success_tolerance,
+                ),
             ),
         ]
 

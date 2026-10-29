@@ -46,7 +46,10 @@ class NoMonitoredTaskApproachingItsGoal(EndedByOwner, MotionStatechartNode):
     A task that has reached its goal counts as not approaching too: its error can keep
     moving within the threshold for as long as it holds the goal, as a grip held while
     something else moves does, and that movement is not progress. Counting it would keep
-    a motion whose other tasks are stuck from ever being given up on.
+    a motion whose other tasks are stuck from ever being given up on. For the same
+    reason, a task that leaves its goal again approaches it only once its error falls
+    below the error it last made progress at, so a task cycling through its goal does not
+    count as approaching.
 
     One node watches every task, rather than one node per task, because a plan holds
     dozens of converging tasks, most of which do not run at any one time.
@@ -266,15 +269,26 @@ class NoMonitoredTaskApproachingItsGoal(EndedByOwner, MotionStatechartNode):
         )
         self.context.float_variable_data.bind_argument(self._compiled_errors, 1)
 
+    def _running(self) -> NDArray[np.bool_]:
+        """
+        :return: Per monitored task, whether it runs.
+        """
+        return np.array(
+            [
+                task.life_cycle_state == LifeCycleValues.RUNNING
+                for task in self.monitored_tasks
+            ],
+            dtype=bool,
+        )
+
     def _judged(self) -> NDArray[np.bool_]:
         """
         :return: Per monitored task, whether it runs and has not reached its goal, the
             only tasks whose progress is judged.
         """
-        return np.array(
+        return self._running() & np.array(
             [
-                task.life_cycle_state == LifeCycleValues.RUNNING
-                and task.observation_state != ObservationStateValues.TRUE
+                task.observation_state != ObservationStateValues.TRUE
                 for task in self.monitored_tasks
             ],
             dtype=bool,
@@ -287,7 +301,8 @@ class NoMonitoredTaskApproachingItsGoal(EndedByOwner, MotionStatechartNode):
     def on_tick(self) -> None:
         """
         Move each task's error at the last progress forward once it made progress on the
-        previous control cycle, and count the time while it did not.
+        previous control cycle, count the time while it did not, and forget both for the
+        tasks that no longer run.
 
         A tick calls this before it observes anything, so what it reads of the monitored
         tasks is how the previous control cycle ended, and the errors that cycle judged
@@ -304,7 +319,7 @@ class NoMonitoredTaskApproachingItsGoal(EndedByOwner, MotionStatechartNode):
         self._errors_at_last_progress[approached] = previous_errors[approached]
         self._seconds_since_last_progress[approached] = 0.0
         self._seconds_since_last_progress[stalled] += self._control_dt
-        self._forget_progress(~still_judged)
+        self._forget_progress(~self._running())
         self._store_progress()
         return None
 

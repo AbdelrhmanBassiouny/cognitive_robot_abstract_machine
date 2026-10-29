@@ -723,6 +723,27 @@ class TestConvergenceRule:
             ObservationStateValues.FALSE
         ]
 
+    def test_a_task_cycling_through_its_goal_makes_no_progress(
+        self, cylinder_bot_world: World
+    ) -> None:
+        """
+        A task that falls into its goal, is pushed back out and falls in again, over and
+        over, gets no closer than it already was, so it cannot hide that another task is
+        stuck.
+        """
+        run = ScriptedErrorRun(cylinder_bot_world, goal_xs=[GOAL_X, 0.0])
+        threshold_of_the_cycling_task = run.tasks[1].threshold
+        cycle = [
+            3 * threshold_of_the_cycling_task,
+            2 * threshold_of_the_cycling_task,
+            threshold_of_the_cycling_task / 2,
+        ]
+
+        run.observations_while_the_bot_is_at(cycle)
+        later_cycles = run.observations_while_the_bot_is_at(cycle + cycle)
+
+        assert later_cycles == [ObservationStateValues.TRUE] * len(later_cycles)
+
     def test_several_tasks_are_stalled_only_while_none_of_them_approaches(
         self, cylinder_bot_world: World
     ) -> None:
