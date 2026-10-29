@@ -48,6 +48,9 @@ items:
   session: https://claude.ai/code/session_018wfiv8DAzFwDhYuFjpMtRY
   depends_on: []
   status: in progress
+  notes: 'Open decision for the owner: a predicate or symbolic function whose Python body reads
+    obj.attribute sees the live value, not the state''s, unless the value comes in as an EQL
+    argument. Options are listed on the PR.'
 - id: action-schema-progression
   branch: eql-planning/action-schema-progression
   title: ActionSchema with an EQL precondition and assignment effects, applied to a State
