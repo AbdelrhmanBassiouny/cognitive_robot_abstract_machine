@@ -7,3 +7,4 @@
 - EQL gives the meaning; search runs on a compiled integer state, not on EQL per step. Native planner first, the unified-planning backend after it.
 - The robot side is eql-planning-robots (#522); keep the API it builds on (State, ActionSchema, PlanningBackend) stable once it starts on Nov 16.
 - Core by Nov 13; trajectory constraints and the Fast Downward comparison in January. AAMAS 2027 rebuttal Nov 20-24.
+- EQL depends only on the AttributeReader interface in its evaluation context; krrood.planning implements it and EQL never imports the planner.
