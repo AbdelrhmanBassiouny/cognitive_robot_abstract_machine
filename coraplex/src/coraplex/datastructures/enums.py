@@ -520,3 +520,55 @@ class NodeDetail(StrEnum):
     """
     The class of that designator.
     """
+
+
+class NodeDetailNotation(StrEnum):
+    """
+    The text a plan node's details are written with when they are shown for reading.
+    """
+
+    PART_SEPARATOR = ", "
+    """
+    Joins the parts of a value that has several, such as a pose's coordinates or the
+    items of a list.
+    """
+
+    FIELD_SEPARATOR = "\n"
+    """
+    Joins the fields of a description or a match, so each field starts a line of its own.
+    """
+
+    MATCH_SEPARATOR = ": "
+    """
+    Separates the class a match matches from what it states about the class's fields.
+    """
+
+    OPEN_VALUE = "any"
+    """
+    Precedes the type of a value a designator leaves open, to be found when it runs.
+    """
+
+    SWITCHED_ON = "on"
+    """
+    How a true boolean reads.
+    """
+
+    SWITCHED_OFF = "off"
+    """
+    How a false boolean reads.
+    """
+
+    COORDINATE_FORMAT = "{:.3f}"
+    """
+    How a coordinate of a pose in metres is written: to the millimetre.
+    """
+
+    NUMBER_FORMAT = "{:g}"
+    """
+    How a number is written: without the digits that carry nothing.
+    """
+
+    SEQUENCE_FORMAT = "[{}]"
+    """
+    How the items of a list or tuple are written: in brackets.
+    """
