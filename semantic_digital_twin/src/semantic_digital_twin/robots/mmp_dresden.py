@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+# %% Imports
 from abc import ABC
 
 import numpy as np
@@ -27,17 +28,20 @@ from semantic_digital_twin.world_description.connections import OmniDrive
 from semantic_digital_twin.robots.robot_parts import (
     AbstractRobot,
     Arm,
-    Camera,
+    RobotCamera,
     Finger,
     Torso,
     MobileBase,
     EndEffector,
 )
+from semantic_digital_twin.datastructures.camera_model import FieldOfViewCameraModel
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.spatial_types import Vector3
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
+
+# %% Robot parts
 
 
 class MMPDresdenJoint(JointName):
@@ -154,11 +158,7 @@ class MMPDresdenGripper(
 
 
 @dataclass(eq=False)
-class MMPDresdenCamera(Camera):
-
-    @property
-    def forward_facing_axis(self) -> Vector3:
-        return Vector3.Z(reference_frame=self.root)
+class MMPDresdenCamera(RobotCamera[FieldOfViewCameraModel]):
 
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(
@@ -166,9 +166,11 @@ class MMPDresdenCamera(Camera):
     ) -> Self:
         return cls(
             root=robot_root._world.get_body_in_branch_by_name(
-                robot_root, "pan_and_tilt_camera_link"
+                robot_root, "pan_and_tilt_camera_color_optical_frame"
             ),
-            field_of_view=FieldOfView(horizontal_angle=1.047, vertical_angle=0.785),
+            camera_model=FieldOfViewCameraModel(
+                angular_extent=FieldOfView(horizontal_angle=1.047, vertical_angle=0.785)
+            ),
             minimal_height=0.8,
             maximal_height=1.7,
             default_camera=True,

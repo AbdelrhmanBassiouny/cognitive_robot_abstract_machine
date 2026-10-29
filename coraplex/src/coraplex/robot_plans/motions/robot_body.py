@@ -2,7 +2,6 @@ from __future__ import annotations
 
 # %% Imports
 from dataclasses import dataclass
-from typing_extensions import List, Optional
 
 
 from giskardpy.motion_statechart.goals.templates import Parallel
@@ -83,10 +82,11 @@ class MoveJointsMotion(BaseMotion, HasMaxJointVelocity):
         )
 
 
+# %% Camera pointing
 @dataclass
 class LookingMotion(BaseMotion):
     """
-    Lets the robot look at a point.
+    Align the camera's optical forward direction with the target.
     """
 
     target: Pose
@@ -103,12 +103,12 @@ class LookingMotion(BaseMotion):
         return
 
     @property
-    def _motion_chart(self):
+    def _motion_chart(self) -> Pointing | Parallel:
         task = Pointing(
             root_link=self.robot.get_torso().root,
             tip_link=self.camera.root,
             goal_point=self.target.position,
-            pointing_axis=self.camera.forward_facing_axis,
+            pointing_axis=self.camera.viewing_direction,
         )
         hold_base = self.keep_base_still()
         if not hold_base:

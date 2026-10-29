@@ -788,7 +788,7 @@ def test_a_move_and_open_from_a_standing_position_opens_the_given_handle(
     )
 
     assert move_and_open.navigate.target_location is standing_position
-    assert move_and_open.open_container.handle is handle
+    assert move_and_open.open_container.grasp.graspable is handle
     assert move_and_open.open_container.arm is context.robot.left_arm
 
 
@@ -925,7 +925,7 @@ def test_facing_and_looking_at_a_target_turns_the_base_and_the_camera_towards_it
     _assert_base_faces(robot, target.position)
     camera = robot.get_default_camera()
     camera_P_target = world.transform(target.position, camera.root).to_np()[:3]
-    camera_V_forward = camera.forward_facing_axis.to_np()[:3]
+    camera_V_forward = camera.viewing_direction.to_np()[:3]
     np.testing.assert_allclose(
         camera_P_target / np.linalg.norm(camera_P_target),
         camera_V_forward / np.linalg.norm(camera_V_forward),
