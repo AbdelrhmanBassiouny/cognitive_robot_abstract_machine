@@ -24,7 +24,7 @@ from coraplex.robot_plans.actions.core.robot_body import (
 )
 from cramph.composites import Parallel, Sequence
 from cramph.context import StatechartContext
-from cramph.monitors import CountSeconds, Print
+from cramph.monitors import CountSimulationTimeSeconds, Print
 from cramph.node import StatechartNode
 from experiments.daisy_gripper_demo.demo import (
     DAiSyGripperDemonstration,
@@ -128,7 +128,11 @@ def test_every_gripper_step_announces_its_motion_and_waits_after_it(
         (type(announcement), type(wait), wait.seconds)
         for announcement, _, wait in steps
     ] == [
-        (Print, CountSeconds, demonstration.pause_after_motion.total_seconds())
+        (
+            Print,
+            CountSimulationTimeSeconds,
+            demonstration.pause_after_motion.total_seconds(),
+        )
     ] * len(steps)
 
 

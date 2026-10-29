@@ -45,7 +45,7 @@ from coraplex.robot_plans.actions.core.robot_body import (
 )
 from cramph.composites import Parallel, Sequence
 from cramph.context import ContextExtension, StatechartContext
-from cramph.monitors import CountSeconds, Print
+from cramph.monitors import CountSimulationTimeSeconds, Print
 from cramph.node import StatechartNode
 from cramph.statechart import Statechart
 from krrood.entity_query_language.verbalization.morphology import present_participle
@@ -183,7 +183,7 @@ class DAiSyGripperDemonstration(RobotDemonstration):
         return [
             Print(message=self.announcement(subject, state)),
             moves[0] if len(moves) == 1 else Parallel(nodes=moves),
-            CountSeconds(seconds=self.pause_after_motion.total_seconds()),
+            CountSimulationTimeSeconds(seconds=self.pause_after_motion.total_seconds()),
         ]
 
     @staticmethod
