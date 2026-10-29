@@ -1,8 +1,8 @@
 {
-  "request_identifier": "7e7c613b937403df",
+  "request_identifier": "7842ca64e7d3f881",
   "upstream": "cram2/cognitive_robot_abstract_machine",
   "fork_owner": "AbdelrhmanBassiouny",
   "pull_request": null,
-  "branch": "ccr-71afa316-7pquvw",
+  "branch": "claude/krrspatial-interfaces",
   "failure_logs": false
 }
