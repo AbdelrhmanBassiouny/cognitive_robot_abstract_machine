@@ -6,8 +6,8 @@ Plan
 
 Done
 - 6f126b5d4: griffe check + label workflows, rules aligned with the labeler, `RepositoryFile.API_BREAK_CHECK_WORKFLOW`. Dry run vs main~30 works (~30 s).
+- 2ebf8403f: merged main (342 commits); kept main's `CramphIsolationRules` before `PullRequestLabelsRules`.
 
 Next
 - User: copy fork PR title/description to cram2#826, reply to LucaKro, add `new-feature`; approvals may need re-requesting.
 - Unverified on GitHub: actionlint not run here; label job only runs after merge to default branch.
-
