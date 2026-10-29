@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-from typing import List, Optional
 
 from giskardpy.middleware.ros2.robot_interface_config import (
     StandAloneRobotInterfaceConfig,
@@ -47,7 +46,7 @@ class DAiSyVelocityInterface(RobotInterfaceConfig):
 
 
 @dataclass
-class WorldWithDaisyConfig(WorldWithFixedRobot):
+class WorldWithDAiSyConfig(WorldWithFixedRobot):
     """
     A world containing only DAiSy, whose base is fixed to the world root.
     """
@@ -62,18 +61,18 @@ class WorldWithDaisyConfig(WorldWithFixedRobot):
     Semantic view that is applied to the parsed urdf.
     """
 
-    def setup_world(self, robot_name: Optional[str] = None) -> None:
+    def setup_world(self, robot_name: str | None = None) -> None:
         super().setup_world()
         self.robot = self.world.get_semantic_annotations_by_type(DAiSy)[0]
 
 
 @dataclass
-class DaisyStandAloneRobotInterfaceConfig(StandAloneRobotInterfaceConfig):
+class DAiSyStandAloneRobotInterfaceConfig(StandAloneRobotInterfaceConfig):
     """
     Simulates both arms and both grippers of DAiSy without talking to hardware.
     """
 
-    joint_names: List[str] = field(
+    joint_names: list[str] = field(
         init=False,
         default_factory=lambda: [
             DAiSyJoint.LEFT_SHOULDER_PAN,

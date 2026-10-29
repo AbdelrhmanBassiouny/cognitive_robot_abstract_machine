@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC
 from dataclasses import dataclass
-from typing_extensions import Optional, TYPE_CHECKING, Type
+from typing_extensions import TYPE_CHECKING
 
 from krrood.entity_query_language.factories import ConditionType, get_false_statements
 from krrood.exceptions import DataclassException
@@ -17,7 +17,12 @@ if TYPE_CHECKING:
     from coraplex.plans.designator import Designator
     from coraplex.plans.plan_node import PlanNode
     from coraplex.robot_plans.actions.base import ActionDescription
-    from semantic_digital_twin.robots.robot_parts import AbstractRobot, Arm
+    from semantic_digital_twin.datastructures.definitions import GripperState
+    from semantic_digital_twin.robots.robot_parts import (
+        AbstractRobot,
+        Arm,
+        EndEffector,
+    )
     from semantic_digital_twin.semantic_annotations.mixins import HasGraspCandidates
     from semantic_digital_twin.world_description.world_entity import (
         SemanticAnnotation,
@@ -110,12 +115,12 @@ class CannotMatchOnType(DataclassException):
     a designator, leaving no rule by which it could select the nodes it rewrites.
     """
 
-    transformation: Type
+    transformation: type
     """
     The transformation class that carries the binding.
     """
 
-    matched_type: Type
+    matched_type: type
     """
     The type it is bound to.
     """
@@ -271,7 +276,7 @@ class MissingToolFrame(DataclassException):
 class ConditionNotSatisfied(PlanFailure):
 
     pre_condition: bool
-    action: Type[ActionDescription]
+    action: type[ActionDescription]
     condition: ConditionType
 
     def error_message(self) -> str:
@@ -311,7 +316,7 @@ class FingerWidthNeedsPhysics(DataclassException):
     simulated.
     """
 
-    execution_type: Optional[ExecutionType]
+    execution_type: ExecutionType | None
     """
     The execution type the motion was performed under.
     """
@@ -350,6 +355,35 @@ class UnknownExecutionType(DataclassException):
 
 
 @dataclass
+class NoGriplinkEndpoint(DataclassException):
+    """
+    Raised when a gripper state has no griplink action server endpoint to command it on.
+    """
+
+    end_effector: EndEffector
+    """
+    The gripper whose state is to be commanded.
+    """
+
+    state_type: GripperState
+    """
+    The gripper state no griplink endpoint serves.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The gripper '{self.end_effector.name}' has no griplink endpoint to "
+            f"command the state {self.state_type.name}."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "command a gripper state the motion's endpoint table declares, or add an "
+            "endpoint for this gripper and state."
+        )
+
+
+@dataclass
 class PerceptionException(DataclassException, ABC):
     """
     Represents a custom exception specific to perception-related errors.
@@ -362,7 +396,7 @@ class PerceptionExceptionWithSemanticAnnotation(PerceptionException, ABC):
     For PerceptionExceptions that name the annotation the perception was about.
     """
 
-    semantic_annotation: Type[SemanticAnnotation]
+    semantic_annotation: type[SemanticAnnotation]
     """
     The annotation the perception was about.
     """

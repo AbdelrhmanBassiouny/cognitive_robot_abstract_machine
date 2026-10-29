@@ -5,6 +5,10 @@ from dataclasses import dataclass, field
 from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.motion_statechart.data_types import ObservationStateValues
 from giskardpy.motion_statechart.graph_node import NodeArtifacts, Task
+from giskardpy.motion_statechart.monitors.payload_monitors import (
+    CountSimulationTimeSeconds,
+    Print,
+)
 from giskardpy.motion_statechart.ros_context import RosContextExtension
 from typing_extensions import Optional
 
@@ -35,7 +39,7 @@ class PerceptionTask(Task):
     What to look for and where.
     """
 
-    execution_type: Optional[ExecutionType] = field(kw_only=True)
+    execution_type: ExecutionType | None = field(kw_only=True)
     """
     Which source answers the query.
 
@@ -45,7 +49,7 @@ class PerceptionTask(Task):
     rejects.
     """
 
-    perception_source: Optional[PerceptionInterface] = field(init=False, default=None)
+    perception_source: PerceptionInterface | None = field(init=False, default=None)
     """
     The source answering the query, resolved during :meth:`build`.
     """
@@ -75,7 +79,7 @@ class PerceptionTask(Task):
 
     def on_tick(
         self, context: MotionStatechartContext
-    ) -> Optional[ObservationStateValues]:
+    ) -> ObservationStateValues | None:
         if self._detections_applied:
             return ObservationStateValues.TRUE
         detection = self.perception_source.detect(
@@ -117,3 +121,39 @@ class DetectingMotion(BaseMotion):
             execution_type=GiskardExecutable.execution_type,
             accept_first_if_multiple=self.accept_first_if_multiple,
         )
+
+
+# %% reporting and waiting inside the motion chart
+
+
+@dataclass
+class PrintMotion(BaseMotion):
+    """
+    Prints a message when the motion chart reaches it, between the surrounding motions.
+    """
+
+    message: str
+    """
+    The message to print.
+    """
+
+    @property
+    def _motion_chart(self) -> Print:
+        return Print(message=self.message)
+
+
+@dataclass
+class WaitMotion(BaseMotion):
+    """
+    Lets the motion chart wait before it continues with the next motion.
+    """
+
+    seconds: float
+    """
+    How long to wait, in seconds of control time: the control cycles that pass, times
+    the control period.
+    """
+
+    @property
+    def _motion_chart(self) -> CountSimulationTimeSeconds:
+        return CountSimulationTimeSeconds(seconds=self.seconds)

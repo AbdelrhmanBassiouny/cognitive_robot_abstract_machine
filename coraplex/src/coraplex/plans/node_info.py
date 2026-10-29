@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, is_dataclass
 from enum import Enum
 
-from typing_extensions import Any, Dict, Generic, List, TypeVar
+from typing_extensions import Any, Generic, TypeVar
 
 from coraplex.datastructures.enums import NodeDetailNotation
 from krrood.class_diagrams.attribute_introspector import DataclassOnlyIntrospector
@@ -302,18 +302,18 @@ class NodeInfo:
     The details of a plan node, shown when it is clicked in the plan visualization.
     """
 
-    sections: List[NodeInfoSection] = field(default_factory=list)
+    sections: list[NodeInfoSection] = field(default_factory=list)
     """
     The groups of details, in the order they are shown.
     """
 
-    def to_dict(self) -> Dict[str, Dict[str, Any]]:
+    def to_dict(self) -> dict[str, dict[str, Any]]:
         """
         :return: The details of each section, keyed by the heading of that section.
         """
         return {section.heading: section.entries for section in self.sections}
 
-    def to_lines(self) -> List[str]:
+    def to_lines(self) -> list[str]:
         """
         :return: All sections rendered as the lines the visualization displays.
         """

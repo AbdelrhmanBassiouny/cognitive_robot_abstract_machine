@@ -1,10 +1,13 @@
 """
-Tests for the motion state chart a ``GiskardExecutable`` owns (see
+Tests for the REAL/SIMULATED/SEMI_REAL branches of ``GiskardExecutable`` (see
 ``coraplex/src/coraplex/plans/executables.py``).
 
 The chart is created once while the plan is parsed and only extended afterwards: parsing
 adds a goal per plan node and a task per motion, and ``prepare_for_execution`` adds the
-nodes that terminate the chart, which depend on the execution type.
+nodes that terminate the chart, which depend on the execution type. On the real robot
+and in semi-real mode, tasks are wrapped in a single ``Sequence`` + ``EndMotion``; in
+simulation, tasks are added individually and get pause/interrupt monitors and pre-/post-
+condition monitors wired in.
 """
 
 from copy import deepcopy
@@ -12,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 
 import pytest
-from typing_extensions import List
+from unittest.mock import patch
 
 from giskardpy.motion_statechart.goals.collision_avoidance import (
     ExternalCollisionAvoidance,
@@ -52,6 +55,7 @@ from coraplex.execution_environment import (
     ExecutionEnvironment,
     PhysicallySimulatedRobot,
     real_robot,
+    semi_real_robot,
     kinematically_simulated_robot,
 )
 from coraplex.exceptions import ConditionNotSatisfied
@@ -69,7 +73,7 @@ class SimulationThatCountsItsSteps:
     Stands in for a started simulation, counting the physics steps asked of it.
     """
 
-    steps: List[timedelta] = field(default_factory=list)
+    steps: list[timedelta] = field(default_factory=list)
     """
     Every period the physics was asked to advance by.
     """
@@ -118,7 +122,7 @@ def test_motion_state_chart_is_created_once(reach_action_executable):
     )
 
 
-def _nodes_below(goal: Goal) -> List[MotionStatechartNode]:
+def _nodes_below(goal: Goal) -> list[MotionStatechartNode]:
     """
     :return: Every node held by `goal` or by a goal below it.
     """
@@ -286,6 +290,47 @@ def test_prepare_for_execution_leaves_out_collision_avoidance_when_not_asked_for
     chart = reach_action_executable.motion_state_chart
     assert chart.get_nodes_by_type(ExternalCollisionAvoidance) == []
     assert chart.get_nodes_by_type(SelfCollisionAvoidance) == []
+
+
+def test_motion_state_chart_semi_real_execution_wraps_tasks_in_sequence(
+    reach_action_executable,
+):
+    tasks = list(reach_action_executable.motion_mappings.values())
+
+    with semi_real_robot:
+        chart = reach_action_executable.motion_state_chart
+        reach_action_executable.prepare_for_execution()
+
+    sequences = chart.get_nodes_by_type(Sequence)
+    assert len(sequences) == 1
+    # the plan's sequence goal holds the tasks in order
+    [root_sequence] = sequences
+    [sequential_goal] = root_sequence.nodes
+    assert sequential_goal.nodes == tasks
+    assert len(chart.get_nodes_by_type(EndMotion)) == 1
+    # simulation-only machinery must not be present
+    for task in tasks:
+        assert task not in chart.nodes
+
+
+def test_execute_semi_real_maps_to_execute_real(reach_action_executable):
+    with (
+        semi_real_robot,
+        patch.object(reach_action_executable, "_execute_real") as mock_execute_real,
+    ):
+        reach_action_executable.execute()
+
+    mock_execute_real.assert_called_once()
+
+
+def test_execute_with_empty_motion_mappings_is_noop(reach_action_executable):
+    original_mappings = reach_action_executable.motion_mappings
+    reach_action_executable.motion_mappings = {}
+    try:
+        with semi_real_robot:
+            reach_action_executable.execute()  # must not raise
+    finally:
+        reach_action_executable.motion_mappings = original_mappings
 
 
 @pytest.mark.parametrize("holds_a_body", [False, True])
