@@ -24,7 +24,6 @@ from random_events.variable import (
 )
 
 from krrood.class_diagrams.utils import get_type_hints_of_object
-from krrood.entity_query_language.attribute_reader import LiveAttributeReader
 from krrood.entity_query_language.core.base_expressions import (
     UnaryExpression,
     Bindings,
@@ -34,7 +33,8 @@ from krrood.entity_query_language.core.base_expressions import (
     SymbolicExpression,
     UnificationDict,
 )
-from krrood.entity_query_language.evaluation_context import get_evaluation_context
+from krrood.entity_query_language.evaluation_context import values_in_current_context
+from krrood.entity_query_language.ground_term import GroundTerm
 from krrood.entity_query_language.exceptions import (
     MultipleValuesAlongAccessPath,
     NoValueAlongAccessPath,
@@ -633,15 +633,9 @@ class Attribute(SingleValueMapping[T]):
     def _apply_mapping_(
         self, value: Any, sources: OperationResult | None = None
     ) -> Iterable[T]:
-        """
-        Read the attribute through the current evaluation context's :attr:`~krrood.entit
-        y_query_language.evaluation_context.EvaluationContext.attribute_reader`, or from
-        *value* itself outside an evaluation.
-        """
-        evaluation_context = get_evaluation_context()
-        if evaluation_context is None:
-            return LiveAttributeReader().read(value, self._attribute_name_)
-        return evaluation_context.attribute_reader.read(value, self._attribute_name_)
+        return values_in_current_context(
+            GroundTerm.attribute(value, self._attribute_name_)
+        )
 
     def _rebuild_on_(self, child: CanBehaveLikeAVariable) -> MappedVariable:
         return child._get_mapped_variable_(
@@ -733,10 +727,7 @@ class IndexByValue(Index[T], SingleValueMapping[T]):
     def _apply_mapping_(
         self, value: Any, sources: OperationResult | None = None
     ) -> Iterable[T]:
-        try:
-            yield value[self._key_]
-        except IndexError:  # break iterator if the key does not exist
-            return
+        return values_in_current_context(GroundTerm.index(value, self._key_))
 
     def _rebuild_on_(self, child: CanBehaveLikeAVariable) -> MappedVariable:
         return child._get_mapped_variable_(IndexByValue, _key_=self._key_)
@@ -758,14 +749,11 @@ class IndexByExpression(Index[T]):
     def _apply_mapping_(
         self, value: Any, sources: OperationResult | None = None
     ) -> Iterable[T]:
-        try:
-            if isinstance(value, UnificationDict) and self._key_ in value:
-                yield value[self._key_]
-                return
-            for key in self._key_._evaluate_(sources):
-                yield value[key.value]
-        except IndexError:  # break iterator if the key does not exist
+        if isinstance(value, UnificationDict) and self._key_ in value:
+            yield value[self._key_]
             return
+        for key in self._key_._evaluate_(sources):
+            yield from values_in_current_context(GroundTerm.index(value, key.value))
 
     def _rebuild_on_(self, child: CanBehaveLikeAVariable) -> MappedVariable:
         return child._get_mapped_variable_(IndexByExpression, _key_=self._key_)
@@ -790,10 +778,9 @@ class Call(SingleValueMapping[T]):
     def _apply_mapping_(
         self, value: Any, sources: OperationResult | None = None
     ) -> Iterable[T]:
-        if len(self._args_) > 0 or len(self._kwargs_) > 0:
-            yield value(*self._args_, **self._kwargs_)
-        else:
-            yield value()
+        return values_in_current_context(
+            GroundTerm.call(value, *self._args_, **self._kwargs_)
+        )
 
     def _rebuild_on_(self, child: CanBehaveLikeAVariable) -> MappedVariable:
         return child._get_mapped_variable_(

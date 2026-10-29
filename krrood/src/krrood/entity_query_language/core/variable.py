@@ -8,7 +8,6 @@ variables that are instantiated from other expressions.
 
 from __future__ import annotations
 
-import inspect
 from abc import ABC
 from dataclasses import dataclass, field
 from functools import cached_property
@@ -22,7 +21,8 @@ from krrood.entity_query_language.core.base_expressions import (
     Selectable,
 )
 from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
-from krrood.entity_query_language.core.bound_value import HasBoundValue
+from krrood.entity_query_language.evaluation_context import values_in_current_context
+from krrood.entity_query_language.ground_term import GroundTerm
 from krrood.entity_query_language.cache_data import ReEnterableLazyIterable
 from krrood.entity_query_language.enums import DomainSource
 from krrood.entity_query_language.exceptions import NoChildToReplace
@@ -250,17 +250,9 @@ class InstantiatedVariable(
                 for name, child in self._child_variables_.items()
                 if child._id_ in child_result.bindings
             }
-            # A callable class (Predicate / SymbolicFunction) implements HasBoundValue -- it binds the
-            # constructed instance, or, for a value operation, its constructed-and-called value -- the
-            # class-form counterpart of a @symbolic_function being called. A plain function/type does
-            # not, so it binds the direct call result.
-            bind = (
-                self._type_._bound_value_
-                if inspect.isclass(self._type_)
-                and issubclass(self._type_, HasBoundValue)
-                else self._type_
+            (instance,) = values_in_current_context(
+                GroundTerm.call(self._type_, **arguments)
             )
-            instance = bind(**arguments)
 
             bindings = {self._id_: instance} | child_result.bindings
             result = self._build_operation_result_(bindings, child_result)

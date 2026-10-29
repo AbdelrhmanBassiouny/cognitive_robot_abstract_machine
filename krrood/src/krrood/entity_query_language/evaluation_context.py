@@ -18,9 +18,10 @@ from dataclasses import dataclass, field
 from ordered_set import OrderedSet
 from typing_extensions import Any, Callable, Iterator, TYPE_CHECKING
 
-from krrood.entity_query_language.attribute_reader import (
-    AttributeReader,
-    LiveAttributeReader,
+from krrood.entity_query_language.ground_term import (
+    GroundTerm,
+    LiveTermReader,
+    TermReader,
 )
 
 if TYPE_CHECKING:
@@ -52,6 +53,19 @@ def set_evaluation_context(
         :meth:`contextvars.ContextVar.reset` to restore the previous value.
     """
     return _evaluation_context_var.set(evaluation_context)
+
+
+def values_in_current_context(term: GroundTerm) -> Iterator[Any]:
+    """
+    :param term: The ground term to read.
+    :return: The value of *term* as the current evaluation context's
+        :attr:`EvaluationContext.term_reader` reads it, or its live value outside an
+        evaluation.
+    """
+    evaluation_context = get_evaluation_context()
+    if evaluation_context is None:
+        return term.live_values()
+    return evaluation_context.term_reader.values_of(term)
 
 
 class EvaluationObserver(ABC):
@@ -346,9 +360,10 @@ class EvaluationContext:
     Caches each nested subquery's result stream for the current evaluation pass.
     """
 
-    attribute_reader: AttributeReader = field(default_factory=LiveAttributeReader)
+    term_reader: TermReader = field(default_factory=LiveTermReader)
     """
-    Reads the attributes of the instances the evaluation ranges over.
+    Reads the value of every attribute, index, call and symbolic function application
+    the evaluation reaches.
     """
 
     has_running_evaluation: bool = field(default=False, init=False)
