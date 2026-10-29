@@ -64,6 +64,10 @@ items:
   pull_request_number: 524
   track: image
   status: in_progress
+  blockers:
+    - >-
+      #527's merge (with main) conflicts in geometry.py: main has #761's HSV Color, krrimage.color
+      the old one. Re-move Color as #761 left it, then merge #527.
   depends_on:
   - planar-point-interface
   session: https://claude.ai/code/session_01J17aVY3vyQM8goACbkHkcp
