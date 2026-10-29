@@ -237,13 +237,13 @@ class GiskardExecutable(Executable):
     execution_type: ClassVar[ExecutionType | None] = None
     """
     The execution type used for all giskard executables, managed by
-    :py:class:`pycram.motion_executor.ExecutionEnvironment`.
+    :py:class:`~coraplex.execution_environment.ExecutionEnvironment`.
     """
 
     collision_avoidance: ClassVar[bool] = False
     """
     Whether the robot of the context avoids colliding with its surroundings and with
-    itself, managed by :py:class:`pycram.motion_executor.ExecutionEnvironment`.
+    itself, managed by :py:class:`~coraplex.execution_environment.ExecutionEnvironment`.
 
     Adds an
     :class:`~giskardpy.motion_statechart.goals.collision_avoidance.ExternalCollisionAvoidance`
