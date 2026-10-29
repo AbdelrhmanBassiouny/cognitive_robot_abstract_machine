@@ -7,7 +7,7 @@ from typing_extensions import Generic, Self, TypeVar
 from krrood.adapters.object_reference import IdentifiedObject
 from krrood.patterns.interface import Interface
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
-from krrspatial.space import Space
+from krrood_spatial_math.space import Space
 
 # %% what coordinates are given in
 

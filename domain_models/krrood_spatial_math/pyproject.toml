@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "krrspatial"
+name = "krrood_spatial_math"
 authors = [
     { name = "Simon Stelter", email = "stelter@uni-bremen.de" },
 ]
@@ -32,7 +32,7 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["krrspatial*"]
+include = ["krrood_spatial_math*"]
 
 [tool.setuptools.dynamic]
-version = { attr = "krrspatial._version.__version__" }
+version = { attr = "krrood_spatial_math._version.__version__" }

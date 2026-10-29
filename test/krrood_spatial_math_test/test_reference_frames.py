@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 
 from krrood.patterns.exceptions import InterfaceInstantiationError
-from krrspatial.exceptions import MissingReferenceFrameResolver
-from krrspatial.reference_frame import ReferenceFrame, ReferenceFrameReference
+from krrood_spatial_math.exceptions import MissingReferenceFrameResolver
+from krrood_spatial_math.reference_frame import ReferenceFrame, ReferenceFrameReference
 
 from .dataset.frames import KnownFrames
 

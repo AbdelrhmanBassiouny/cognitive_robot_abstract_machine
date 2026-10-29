@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing_extensions import Generic, TypeVar
 
 from krrood.patterns.interface import Interface
-from krrspatial.coordinate_system import CoordinateRepresentation, CoordinateSystemT
+from krrood_spatial_math.coordinate_system import CoordinateRepresentation, CoordinateSystemT
 
 # %% points given by two coordinates
 

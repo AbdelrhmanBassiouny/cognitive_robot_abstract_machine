@@ -9,9 +9,9 @@ from typing_extensions import Any
 from krrood.adapters.json_serializer import from_json
 from krrood.adapters.object_reference import ObjectReference
 from krrood.patterns.interface import Interface
-from krrspatial.coordinate_system import CoordinateSystem
-from krrspatial.exceptions import MissingReferenceFrameResolver
-from krrspatial.space import EuclideanSpace
+from krrood_spatial_math.coordinate_system import CoordinateSystem
+from krrood_spatial_math.exceptions import MissingReferenceFrameResolver
+from krrood_spatial_math.space import EuclideanSpace
 
 # %% frames that positions and directions are expressed in
 

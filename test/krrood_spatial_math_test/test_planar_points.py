@@ -5,8 +5,8 @@ from dataclasses import fields
 import pytest
 
 from krrood.patterns.exceptions import InterfaceInstantiationError
-from krrspatial.coordinate_system import CoordinateRepresentation, CoordinateSystemT
-from krrspatial.planar_point import CoordinateT, PlanarPoint
+from krrood_spatial_math.coordinate_system import CoordinateRepresentation, CoordinateSystemT
+from krrood_spatial_math.planar_point import CoordinateT, PlanarPoint
 
 from .dataset.spaces import ScalablePlaneCoordinateSystem, StoredScalablePlanePoint
 

@@ -5,15 +5,15 @@ from dataclasses import dataclass
 from typing_extensions import Self
 
 from krrood.patterns.interface import Interface
-from krrspatial.coordinate_system import (
+from krrood_spatial_math.coordinate_system import (
     AffineCoordinateChange,
     CoordinateSystem,
     CoordinateSystemT,
     RigidCoordinateChange,
 )
-from krrspatial.planar_point import CoordinateT, PlanarPoint
-from krrspatial.reference_frame import ReferenceFrame
-from krrspatial.space import Space
+from krrood_spatial_math.planar_point import CoordinateT, PlanarPoint
+from krrood_spatial_math.reference_frame import ReferenceFrame
+from krrood_spatial_math.space import Space
 
 # %% a plane whose coordinate systems differ by scaling each axis
 

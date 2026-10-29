@@ -5,7 +5,7 @@ from dataclasses import fields
 import pytest
 
 from krrood.patterns.exceptions import InterfaceInstantiationError
-from krrspatial.coordinate_system import (
+from krrood_spatial_math.coordinate_system import (
     AffineCoordinateChange,
     CoordinateChange,
     CoordinateRepresentation,
@@ -14,8 +14,8 @@ from krrspatial.coordinate_system import (
     RigidCoordinateChange,
     SpaceT,
 )
-from krrspatial.reference_frame import ReferenceFrame
-from krrspatial.space import EuclideanSpace, Space
+from krrood_spatial_math.reference_frame import ReferenceFrame
+from krrood_spatial_math.space import EuclideanSpace, Space
 
 from .dataset.spaces import (
     ScalablePlaneCoordinateSystem,

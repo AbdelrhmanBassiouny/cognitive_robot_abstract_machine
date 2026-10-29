@@ -6,8 +6,8 @@ from uuid import UUID, uuid4
 from typing_extensions import Any
 
 from krrood.adapters.deserialized_object_tracker import DeserializedObjectTracker
-from krrspatial.reference_frame import ReferenceFrame, ReferenceFrameResolver
-from krrspatial.space import EuclideanSpace
+from krrood_spatial_math.reference_frame import ReferenceFrame, ReferenceFrameResolver
+from krrood_spatial_math.space import EuclideanSpace
 
 # %% frames told apart by name
 
