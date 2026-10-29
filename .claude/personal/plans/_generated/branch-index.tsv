@@ -33,7 +33,7 @@ claude/split-performatives-prs-xbluus	eql-performatives
 claude/performatives-clean	eql-performatives
 claude/eql-performatives-unify	eql-performatives
 eql-planning/state-aware-predicate-cache	eql-planning
-eql-planning/fluent-state-overlay	eql-planning
+claude/zealous-albattani-uoew5i	eql-planning
 eql-planning/action-schema-progression	eql-planning
 eql-planning/planning-backend-search	eql-planning
 eql-planning/regression-and-explanation	eql-planning
