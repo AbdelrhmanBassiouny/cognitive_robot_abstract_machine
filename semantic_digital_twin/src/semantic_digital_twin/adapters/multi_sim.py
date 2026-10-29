@@ -2803,8 +2803,8 @@ class MujocoBuilder(MultiSimBuilder):
             raise NotImplementedError(
                 f"Mesh type {type(mesh_entity)} not supported in Mujoco."
             )
-        mesh_ext = os.path.splitext(mesh_file_path)[1].lower()
-        if mesh_ext == f".{MeshFileFormat.DAE}":
+        mesh_file_format = Path(mesh_file_path).suffix.removeprefix(".").lower()
+        if mesh_file_format == MeshFileFormat.DAE:
             stl_file_path = self._asset_file_path_for(
                 mesh_file_path, suffix=f".{MeshFileFormat.STL}"
             )
@@ -2815,7 +2815,7 @@ class MujocoBuilder(MultiSimBuilder):
                 )
             mesh_file_path = stl_file_path
         texture_file_path = geom_props.pop("texture_file_path", None)
-        if mesh_ext == f".{MeshFileFormat.GLB}":
+        if mesh_file_format == MeshFileFormat.GLB:
             wavefront_copy = self._wavefront_copy_of(mesh_file_path)
             mesh_file_path = wavefront_copy.mesh_file_path
             texture_file_path = wavefront_copy.texture_file_path

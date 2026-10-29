@@ -458,11 +458,11 @@ class ExternalClassJSONSerializer(HasGeneric[T], ABC):
     """
 
     @classmethod
-    def to_json(cls, obj: Any, **kwargs) -> dict[str, Any]:
+    def to_json(cls, instance: Any, **kwargs) -> dict[str, Any]:
         """
         Convert an object to a JSON serializable dictionary.
 
-        :param obj: The object to convert.
+        :param instance: The object to convert.
         :param kwargs: Keyword arguments to hand on to the ``to_json`` calls for the
             values the object holds.
         :return: The JSON serializable dictionary.
@@ -544,10 +544,10 @@ class UUIDJSONKey(enum.StrEnum):
 class UUIDJSONSerializer(ExternalClassJSONSerializer[uuid.UUID]):
 
     @classmethod
-    def to_json(cls, obj: uuid.UUID, **kwargs) -> dict[str, Any]:
+    def to_json(cls, instance: uuid.UUID, **kwargs) -> dict[str, Any]:
         return {
-            JSONField.TYPE: get_full_class_name(type(obj)),
-            UUIDJSONKey.VALUE: str(obj),
+            JSONField.TYPE: get_full_class_name(type(instance)),
+            UUIDJSONKey.VALUE: str(instance),
         }
 
     @classmethod
@@ -588,12 +588,12 @@ class TimedeltaJSONSerializer(ExternalClassJSONSerializer[timedelta]):
     """
 
     @classmethod
-    def to_json(cls, obj: timedelta, **kwargs) -> dict[str, Any]:
+    def to_json(cls, instance: timedelta, **kwargs) -> dict[str, Any]:
         return {
-            JSONField.TYPE: get_full_class_name(type(obj)),
-            TimedeltaJSONKey.DAYS: obj.days,
-            TimedeltaJSONKey.SECONDS: obj.seconds,
-            TimedeltaJSONKey.MICROSECONDS: obj.microseconds,
+            JSONField.TYPE: get_full_class_name(type(instance)),
+            TimedeltaJSONKey.DAYS: instance.days,
+            TimedeltaJSONKey.SECONDS: instance.seconds,
+            TimedeltaJSONKey.MICROSECONDS: instance.microseconds,
         }
 
     @classmethod
@@ -631,10 +631,10 @@ class TimezoneJSONSerializer(ExternalClassJSONSerializer[timezone]):
     """
 
     @classmethod
-    def to_json(cls, obj: timezone, **kwargs) -> dict[str, Any]:
-        offset, *name = obj.__getinitargs__()
+    def to_json(cls, instance: timezone, **kwargs) -> dict[str, Any]:
+        offset, *name = instance.__getinitargs__()
         return {
-            JSONField.TYPE: get_full_class_name(type(obj)),
+            JSONField.TYPE: get_full_class_name(type(instance)),
             TimezoneJSONKey.OFFSET: to_json(offset, **kwargs),
             TimezoneJSONKey.NAME: name[0] if name else None,
         }
@@ -668,10 +668,10 @@ class PurePathJSONSerializer(ExternalClassJSONSerializer[pathlib.PurePath]):
     """
 
     @classmethod
-    def to_json(cls, obj: pathlib.PurePath, **kwargs) -> dict[str, Any]:
+    def to_json(cls, instance: pathlib.PurePath, **kwargs) -> dict[str, Any]:
         return {
-            JSONField.TYPE: get_full_class_name(type(obj)),
-            PurePathJSONKey.PATH: str(obj),
+            JSONField.TYPE: get_full_class_name(type(instance)),
+            PurePathJSONKey.PATH: str(instance),
         }
 
     @classmethod
@@ -709,12 +709,12 @@ class RangeJSONSerializer(ExternalClassJSONSerializer[range]):
     """
 
     @classmethod
-    def to_json(cls, obj: range, **kwargs) -> dict[str, Any]:
+    def to_json(cls, instance: range, **kwargs) -> dict[str, Any]:
         return {
-            JSONField.TYPE: get_full_class_name(type(obj)),
-            RangeJSONKey.START: obj.start,
-            RangeJSONKey.STOP: obj.stop,
-            RangeJSONKey.STEP: obj.step,
+            JSONField.TYPE: get_full_class_name(type(instance)),
+            RangeJSONKey.START: instance.start,
+            RangeJSONKey.STOP: instance.stop,
+            RangeJSONKey.STEP: instance.step,
         }
 
     @classmethod
@@ -732,12 +732,12 @@ class SliceJSONSerializer(ExternalClassJSONSerializer[slice]):
     """
 
     @classmethod
-    def to_json(cls, obj: slice, **kwargs) -> dict[str, Any]:
+    def to_json(cls, instance: slice, **kwargs) -> dict[str, Any]:
         return {
-            JSONField.TYPE: get_full_class_name(type(obj)),
-            RangeJSONKey.START: to_json(obj.start, **kwargs),
-            RangeJSONKey.STOP: to_json(obj.stop, **kwargs),
-            RangeJSONKey.STEP: to_json(obj.step, **kwargs),
+            JSONField.TYPE: get_full_class_name(type(instance)),
+            RangeJSONKey.START: to_json(instance.start, **kwargs),
+            RangeJSONKey.STOP: to_json(instance.stop, **kwargs),
+            RangeJSONKey.STEP: to_json(instance.step, **kwargs),
         }
 
     @classmethod
@@ -772,11 +772,11 @@ class PatternJSONSerializer(ExternalClassJSONSerializer[re.Pattern]):
     """
 
     @classmethod
-    def to_json(cls, obj: re.Pattern, **kwargs) -> dict[str, Any]:
+    def to_json(cls, instance: re.Pattern, **kwargs) -> dict[str, Any]:
         return {
-            JSONField.TYPE: get_full_class_name(type(obj)),
-            PatternJSONKey.PATTERN: obj.pattern,
-            PatternJSONKey.FLAGS: obj.flags,
+            JSONField.TYPE: get_full_class_name(type(instance)),
+            PatternJSONKey.PATTERN: instance.pattern,
+            PatternJSONKey.FLAGS: instance.flags,
         }
 
     @classmethod
@@ -794,16 +794,16 @@ class ClassJSONSerializer(ExternalClassJSONSerializer[None]):
     """
 
     @classmethod
-    def to_json(cls, obj: type, **kwargs) -> dict[str, Any]:
+    def to_json(cls, instance: type, **kwargs) -> dict[str, Any]:
         """
         This is a special case because we need to remember that the type of the class is
         a class, not a type.
 
-        .. note:: We can't do type(obj) because that often returns just `type`.
+        .. note:: We can't do type(instance) because that often returns just `type`.
         """
         return {
-            JSONField.TYPE: get_full_class_name(obj),
-            JSONField.IS_CLASS: inspect.isclass(obj),
+            JSONField.TYPE: get_full_class_name(instance),
+            JSONField.IS_CLASS: inspect.isclass(instance),
         }
 
     @classmethod
@@ -826,10 +826,10 @@ class EnumJSONKey(enum.StrEnum):
 class EnumJSONSerializer(ExternalClassJSONSerializer[enum.Enum]):
 
     @classmethod
-    def to_json(cls, obj: enum.Enum, **kwargs) -> dict[str, Any]:
+    def to_json(cls, instance: enum.Enum, **kwargs) -> dict[str, Any]:
         return {
-            JSONField.TYPE: get_full_class_name(type(obj)),
-            EnumJSONKey.MEMBER_NAME: obj.name,
+            JSONField.TYPE: get_full_class_name(type(instance)),
+            EnumJSONKey.MEMBER_NAME: instance.name,
         }
 
     @classmethod
@@ -853,10 +853,10 @@ class ExceptionJSONKey(enum.StrEnum):
 @dataclass
 class ExceptionJSONSerializer(ExternalClassJSONSerializer[Exception]):
     @classmethod
-    def to_json(cls, obj: Exception, **kwargs) -> dict[str, Any]:
+    def to_json(cls, instance: Exception, **kwargs) -> dict[str, Any]:
         return {
-            JSONField.TYPE: get_full_class_name(type(obj)),
-            ExceptionJSONKey.MESSAGE: str(obj),
+            JSONField.TYPE: get_full_class_name(type(instance)),
+            ExceptionJSONKey.MESSAGE: str(instance),
         }
 
     @classmethod
@@ -895,21 +895,21 @@ class NumpyNDarrayJSONSerializer(ExternalClassJSONSerializer[np.ndarray]):
     """
 
     @classmethod
-    def to_json(cls, obj: np.ndarray, **kwargs) -> dict[str, Any]:
+    def to_json(cls, instance: np.ndarray, **kwargs) -> dict[str, Any]:
         """
         :raises ObjectArraySerializationError: If the array holds Python objects.
         :raises StructuredArraySerializationError: If the array holds records.
         """
-        if obj.dtype.hasobject:
-            raise ObjectArraySerializationError(element_type=obj.dtype)
-        if obj.dtype.fields is not None:
-            raise StructuredArraySerializationError(element_type=obj.dtype)
+        if instance.dtype.hasobject:
+            raise ObjectArraySerializationError(element_type=instance.dtype)
+        if instance.dtype.fields is not None:
+            raise StructuredArraySerializationError(element_type=instance.dtype)
         return {
-            JSONField.TYPE: get_full_class_name(type(obj)),
-            NumpyArrayJSONKey.ELEMENT_TYPE: obj.dtype.str,
-            NumpyArrayJSONKey.SHAPE: list(obj.shape),
+            JSONField.TYPE: get_full_class_name(type(instance)),
+            NumpyArrayJSONKey.ELEMENT_TYPE: instance.dtype.str,
+            NumpyArrayJSONKey.SHAPE: list(instance.shape),
             NumpyArrayJSONKey.ELEMENTS: base64.b64encode(
-                np.require(obj, requirements="C")
+                np.require(instance, requirements="C")
             ).decode("ascii"),
         }
 
@@ -958,13 +958,13 @@ class CoordinateSparseArrayJSONSerializer(ExternalClassJSONSerializer[coo_array]
     """
 
     @classmethod
-    def to_json(cls, obj: coo_array, **kwargs) -> dict[str, Any]:
+    def to_json(cls, instance: coo_array, **kwargs) -> dict[str, Any]:
         return {
-            JSONField.TYPE: get_full_class_name(type(obj)),
-            CoordinateSparseArrayJSONKey.DATA: to_json(obj.data, **kwargs),
-            CoordinateSparseArrayJSONKey.ROWS: to_json(obj.row, **kwargs),
-            CoordinateSparseArrayJSONKey.COLUMNS: to_json(obj.col, **kwargs),
-            CoordinateSparseArrayJSONKey.SHAPE: list(obj.shape),
+            JSONField.TYPE: get_full_class_name(type(instance)),
+            CoordinateSparseArrayJSONKey.DATA: to_json(instance.data, **kwargs),
+            CoordinateSparseArrayJSONKey.ROWS: to_json(instance.row, **kwargs),
+            CoordinateSparseArrayJSONKey.COLUMNS: to_json(instance.col, **kwargs),
+            CoordinateSparseArrayJSONKey.SHAPE: list(instance.shape),
         }
 
     @classmethod
@@ -992,10 +992,10 @@ class CompressedSparseRowArrayJSONSerializer(ExternalClassJSONSerializer[csr_arr
     """
 
     @classmethod
-    def to_json(cls, obj: csr_array, **kwargs) -> dict[str, Any]:
+    def to_json(cls, instance: csr_array, **kwargs) -> dict[str, Any]:
         return {
-            **CoordinateSparseArrayJSONSerializer.to_json(obj.tocoo(), **kwargs),
-            JSONField.TYPE: get_full_class_name(type(obj)),
+            **CoordinateSparseArrayJSONSerializer.to_json(instance.tocoo(), **kwargs),
+            JSONField.TYPE: get_full_class_name(type(instance)),
         }
 
     @classmethod
@@ -1021,11 +1021,11 @@ class DataclassJSONSerializer(ExternalClassJSONSerializer[None]):
     """
 
     @classmethod
-    def to_json(cls, obj, **kwargs) -> dict[str, Any]:
-        result = {JSONField.TYPE: get_full_class_name(type(obj))}
+    def to_json(cls, instance: Any, **kwargs) -> dict[str, Any]:
+        result = {JSONField.TYPE: get_full_class_name(type(instance))}
         introspector = DataclassOnlyIntrospector()
-        for field_ in introspector.discover(obj.__class__):
-            value = getattr(obj, field_.public_name)
+        for field_ in introspector.discover(instance.__class__):
+            value = getattr(instance, field_.public_name)
 
             if isinstance(value, list_like_classes):
                 current_result = {
@@ -1117,10 +1117,10 @@ class NumpyFloatJSONSerializer(ExternalClassJSONSerializer[np.float32]):
     """
 
     @classmethod
-    def to_json(cls, obj: np.float32, **kwargs) -> dict[str, Any]:
+    def to_json(cls, instance: np.float32, **kwargs) -> dict[str, Any]:
         return {
-            JSONField.TYPE: get_full_class_name(type(obj)),
-            NumpyFloatJSONKey.VALUE: float(obj),
+            JSONField.TYPE: get_full_class_name(type(instance)),
+            NumpyFloatJSONKey.VALUE: float(instance),
         }
 
     @classmethod
