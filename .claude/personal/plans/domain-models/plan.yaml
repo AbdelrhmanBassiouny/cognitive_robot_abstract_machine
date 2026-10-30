@@ -178,16 +178,14 @@ items:
   pull_request_number: 527
   track: spatial
   status: in_progress
-  blockers:
-    - ""
   depends_on: []
   session: https://claude.ai/code/session_018wfiv7QQPnFryjMtQLmPcK
   notes: >
     #527 (draft, on main) holds krrood_spatial_math's casadi-free base per
-    https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS: EuclideanSpace2D/3D with dimension,
-    AffineFrame, CartesianFrame, CartesianFrame3D (and Resolver, Reference), AffinePoint2D, changes
-    generic over frame types. Merged into #526. HasID/HasName mixins replace IdentifiedObject. Open:
-    CI waits on the fixed CI image (#536); promotion before #526/#524.
+    https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS. HasID/HasName are krrood Interfaces, and a
+    concrete class missing a declared attribute fails at definition (api-break). Merged into #526.
+    Review threads all resolved. Next: CI green (an experiments ROS timeout is being re-run), the
+    user's review and the api-break talk with krrood code owners, then promotion before #526/#524.
 - id: image-coordinate-change
   title: krrood_image's ImageCoordinateChange (scale and shift per axis) for crops and resizes, with cv2
     resampling
@@ -213,7 +211,7 @@ items:
     wraps an existing __new__ instead of refusing it (approved). CoordinateSystem.space becomes an abstract
     property returning SpaceT | None; KinematicStructureEntity returns _world, never raising. express
     is a template method: raises for no frame, a frame not in a space, or frames of different spaces,
-    then calls an abstract hook. If a world ever holds unrelated parts, switch to has-a.'
+    then calls an abstract hook. #526 gives KinematicStructureEntity a space property returning None; this item makes it return _world. If a world ever holds unrelated parts, switch to has-a.'
 - id: perception-typed-images
   title: SemDT's ray tracer renders, and RoboKudo's CAS holds, krrood_image images instead of bare arrays
   branch: claude/perception-typed-images
