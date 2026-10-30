@@ -1,13 +1,12 @@
-PR #537 (draft, base claude/krrspatial-interfaces = #527), plan domain-models item spatial-math-move.
+PR #537 (draft, base main), plan domain-models item spatial-math-move, first in the stack; #527 is stacked on it.
 
 Plan:
-- Move SemDT spatial_types.py to krrood_spatial_math.spatial_types behind [casadi]; old module re-exports.
-- Only what the move needs (user asked for minimal): imports, KSE->CartesianFrame3D, CartesianFrame3DReference, express (generic ValueT); KSE is a CartesianFrame3D, tracker a CartesianFrame3DResolver; 2 exceptions moved verbatim.
-- Adopt PR (#526 re-applied): CoordinateRepresentation/RigidCoordinateChange/AffinePoint2D, HasName/HasID on WorldEntity, ObjectReference, docstring fixes.
+- On main: package skeleton + [casadi] extra, CartesianFrame3D(HasName, HasID) declaring express, resolver/reference on krrood's ObjectReference (WorldEntityReference too), move with only necessary edits; old module is the package spatial_types/spatial_types/ re-exporting (GitHub shows rename).
 
 Done:
-- Trimmed in 023a7d7c (force-push refused; squash on merge). Re-export now spatial_types/spatial_types/__init__.py so GitHub shows the module as renamed (~137-line diff), 27d35cec.
-- Local: krrood_spatial_math_test 51 pass; SemDT test_spatial_types 373, test_json_parsing 44 (ROS fixtures left to CI).
+- Rebuilt on main (6c0ea740, force-pushed with the user's go-ahead), base main. #537 merged into #527's branch (74b550ab), #527 base -> this branch. Plan reordered + adopt folded into planar-point-interface; #525 comment.
+- Local: krrood_spatial_math_test 16, test_object_reference 8, SemDT test_spatial_types 373, test_json_parsing 44 (ROS fixtures left to CI).
 
 Next:
 - CI on #537; user review; api-break talk with SemDT/krrood code owners.
+- #524 still needs its own restack (krrspatial rename, Color/ORM conflicts with main).
