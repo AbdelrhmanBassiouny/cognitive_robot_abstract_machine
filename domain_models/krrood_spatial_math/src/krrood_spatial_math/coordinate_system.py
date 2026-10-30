@@ -17,7 +17,7 @@ The kind of space a coordinate system charts.
 """
 
 
-class CoordinateSystem(Generic[SpaceT], SubClassSafeGeneric, HasID, HasName, Interface):
+class CoordinateSystem(Generic[SpaceT], SubClassSafeGeneric, HasName, HasID, Interface):
     """
     What the coordinates of a point are given in: an origin, axes and a unit on one
     space.

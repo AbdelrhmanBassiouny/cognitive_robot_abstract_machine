@@ -11,7 +11,7 @@ from krrood_spatial_math.coordinate_system import CartesianFrame, SpaceT
 from krrood_spatial_math.exceptions import MissingCartesianFrame3DResolver
 from krrood_spatial_math.space import EuclideanSpace3D
 
-from .dataset.frames import KnownFrames
+from .dataset.frames import KnownFrames, ThingFrame
 
 # %% the frame interface
 
@@ -27,6 +27,10 @@ def test_a_three_dimensional_cartesian_frame_is_a_cartesian_frame():
 
 def test_a_three_dimensional_cartesian_frame_charts_three_dimensional_euclidean_space():
     assert CartesianFrame3D.get_type_of_generic_parameter(SpaceT) is EuclideanSpace3D
+
+
+def test_a_frame_can_extend_an_object_named_before_it_is_identified():
+    assert issubclass(ThingFrame, CartesianFrame3D)
 
 
 # %% referring to a frame in a serialized value
