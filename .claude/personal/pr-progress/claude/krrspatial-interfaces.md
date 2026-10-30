@@ -10,6 +10,7 @@ Done
 - Review 2: EuclideanSpace3D under CartesianFrame3D, EuclideanSpace and README/pyproject wording, krrood_image (c3b514c7; 36 pass); six threads resolved; merged into #526 (4dee7cdb, 61 + 355 pass).
 - Review 3: dimension classproperty and EuclideanSpace2D (10b3b7b2, 40 pass), with main's Docker import fix merged; into #526 (85b67b09, 65 pass).
 - StoredFrames test mixin, so each mimic names one change kind (81241f19); into #526 (3eccd14c).
+- IdentifiedObject split into krrood HasID/HasName mixins; ObjectReference writes the name only for a HasName; CoordinateSystem lists HasName before HasID for SemDT's MRO (e0e8a747, 9162e580); SemDT WorldEntity/WorldEntityWithID on the mixins (#526 78c3dbfe). Thread resolved.
 - Not carried into #524: its merge hits main's HSV Color in geometry.py, which #524 has to re-move first.
 
 Next
