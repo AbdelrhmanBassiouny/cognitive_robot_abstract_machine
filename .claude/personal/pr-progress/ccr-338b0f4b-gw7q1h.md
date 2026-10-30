@@ -8,5 +8,5 @@ Done:
 - Local: krrood_spatial_math_test 16, test_object_reference 8, SemDT test_spatial_types 373, test_json_parsing 44 (ROS fixtures left to CI).
 
 Next:
-- CI on #537; api-break talk with SemDT/krrood code owners.
+- Upstream PR to open from https://github.com/cram2/cognitive_robot_abstract_machine/compare/main...AbdelrhmanBassiouny:ccr-338b0f4b-gw7q1h?expand=1 (title prefilled; body from #537 with fork refs qualified); api-break talk with SemDT/krrood code owners.
 - #524 still needs its own restack (krrspatial rename, Color/ORM conflicts with main).
