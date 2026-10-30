@@ -324,6 +324,20 @@ def test_symbolic_function_receives_assigned_attribute_as_argument(two_towers):
     assert result == [two_towers.a]
 
 
+def test_python_body_reads_live_values_it_does_not_receive_as_arguments(two_towers):
+    """
+    :class:`IsOn` reads ``self.block.support`` in Python, so it sees ``b`` on the table
+    although the state puts ``b`` on ``c``.
+    """
+    state = State().with_assignments({two_towers.b_on_c: two_towers.c})
+    block = variable(Block, two_towers.blocks)
+
+    with state.as_current():
+        result = an(entity(block).where(IsOn(block, two_towers.c))).tolist()
+
+    assert result == []
+
+
 def test_flattening_an_assigned_collection_ranges_over_its_new_elements(two_towers):
     state = State().with_assignments(
         {GroundTerm.attribute(two_towers.shelf, "slots"): [two_towers.c]}

@@ -32,6 +32,11 @@ class State(TermReader):
     :meth:`as_current` read the assigned value of every assigned fluent, and the live
     value of every other. The live objects are never changed.
 
+    .. note:: An unassigned derived fluent follows the state only where its value comes
+        from EQL: a body that is itself an EQL query, or inputs passed to it as EQL
+        arguments, as in ``is_table(block.support)``. A Python body that reads an
+        attribute directly, such as ``self.block.support``, reads the live value.
+
     .. warning:: An assigned fluent keeps its value even where it is derived from other
         fluents, so assigning a predicate overrides what it would compute from the
         fluents it reads, also after those change.
