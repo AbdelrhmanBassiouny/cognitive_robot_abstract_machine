@@ -44,6 +44,9 @@ eql-planning/trajectory-constraints	eql-planning
 eql-planning/unified-planning-backend	eql-planning
 eql-planning-robots/montessori-planning-domain	eql-planning-robots
 eql-planning-robots/planner-as-showcase-backend	eql-planning-robots
+eql-planning-robots/blocking-restores-world-state	eql-planning-robots
+eql-planning-robots/relational-predicates-in-eql	eql-planning-robots
+eql-planning-robots/geometric-attachments	eql-planning-robots
 eql-planning-robots/coraplex-action-effects	eql-planning-robots
 eql-planning-robots/cramph-achieve-node	eql-planning-robots
 eql-planning-robots/robocasa-goals	eql-planning-robots

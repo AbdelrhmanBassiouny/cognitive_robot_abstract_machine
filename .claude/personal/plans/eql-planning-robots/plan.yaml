@@ -1,11 +1,10 @@
 schema_version: 1
 id: eql-planning-robots
 title: 'EQL planning on robots: Montessori sorting, cramph Achieve nodes and RoboCasa'
-description: 'The planner from eql-planning (#513) put to work on robots: Montessori sorting
-  as a planning domain and #511''s fifth backend, effects for the coraplex actions, a cramph
-  Achieve(goal) node that plans and replans, RoboCasa goals read from the tasks'' success
-  checks, and 5-10 RoboCasa tasks end to end. Feature freeze 2026-12-18; IROS 2027 experiments
-  in January.'
+description: 'The planner from eql-planning (#513) put to work on robots: Montessori sorting as a
+  planning domain and #511''s fifth backend, effects for the coraplex actions, a cramph Achieve(goal)
+  node that plans and replans, RoboCasa goals read from the tasks'' success checks, and 5-10 RoboCasa
+  tasks end to end. Feature freeze 2026-12-18; IROS 2027 experiments in January.'
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 522
 waves:
@@ -30,8 +29,7 @@ tracks:
 items:
 - id: montessori-planning-domain
   branch: eql-planning-robots/montessori-planning-domain
-  title: 'Montessori sorting as a planning domain: SortPieceAction effects and the for_all
-    goal'
+  title: 'Montessori sorting as a planning domain: SortPieceAction effects and the for_all goal'
   track: montessori
   status: not_started
   notes: 'SortPieceAction exists only on the unlanded showcase PR #511.'
@@ -41,13 +39,49 @@ items:
   - eql-planning/planning-backend-search
 - id: planner-as-showcase-backend
   branch: eql-planning-robots/planner-as-showcase-backend
-  title: 'The planner answers the plan''s open steps as #511''s fifth backend, through the
-    Achieve act'
+  title: 'The planner answers the plan''s open steps as #511''s fifth backend, through the Achieve
+    act'
   track: montessori
   depends_on:
   - montessori-planning-domain
   - eql-performatives/giskardpy-acts
   status: not_started
+- id: blocking-restores-world-state
+  branch: eql-planning-robots/blocking-restores-world-state
+  title: blocking leaves its IK solution in the live world state
+  track: cram-robocasa
+  status: not_started
+  notes: 'semantic_digital_twin reasoning/robot_predicates.py: blocking writes the IK result into
+    world.state inside modify_world() and never restores it. Bug-fix PR off main with the bug label;
+    failing test first.'
+- id: relational-predicates-in-eql
+  branch: eql-planning-robots/relational-predicates-in-eql
+  title: Robot relational predicates the planner reasons through (GripperHolds, IsPartOfARobot) as
+    EQL bodies
+  track: cram-robocasa
+  status: not_started
+  depends_on:
+  - eql-planning/state-objects-and-domains
+  notes: 12 of the 57 workspace predicates and symbolic functions are relational; the inventory is
+    in https://claude.ai/artifact/3zhr45pHQ9P9mdqxtJs5L5
+  blockers:
+  - 'Owner decision: internal relational questions are Python for speed. The design argues the planner
+    compiles EQL bodies, so per-step speed doesn''t apply; revisit for bodies that pass the three-part
+    rule.'
+- id: geometric-attachments
+  branch: eql-planning-robots/geometric-attachments
+  title: Geometric predicates as attachments that receive the state and declare what they read
+  track: cram-robocasa
+  status: not_started
+  depends_on:
+  - eql-planning/fluent-state-overlay
+  - eql-planning/state-objects-and-domains
+  notes: 27 geometric bodies (inventory in the design). A SemDT world puts itself into a state only
+    for code that reads it implicitly, through a reset_state_context() variant that doesn't notify
+    observers.
+  blockers:
+  - 'Owner decision: the opaque-code contract (attachments declaring input terms, the world put into
+    the state, or both), and the eql-planning roadmap rule that a State never mutates live objects.'
 - id: coraplex-action-effects
   branch: eql-planning-robots/coraplex-action-effects
   title: Effects for pick, place, open, close and navigate, separate from post_condition monitors
@@ -58,6 +92,9 @@ items:
   - icra-upstream/coraplex-actions-on-cramph
   - concept-theory/contact-and-support
   - concept-theory/holds-estimator
+  - eql-planning/state-objects-and-domains
+  notes: Attaching a body removes a Connection and adds a FixedConnection, so pick and place need
+    objects in a state.
 - id: cramph-achieve-node
   branch: eql-planning-robots/cramph-achieve-node
   title: A cramph Achieve(goal) node that plans when expanded and replans when a step fails
@@ -73,9 +110,8 @@ items:
   title: RoboCasa task goals as EQL conditions, read from the tasks' success checks
   track: cram-robocasa
   status: not_started
-  notes: 'Builds on Tom Schierenbeck''s RoboCasa condition survey (#523, on main) and the
-    semantic_digital_twin RoboCasa loader; its predicates are also the transfer-domain estimators
-    of concept-theory/robocasa-transfer.'
+  notes: Builds on Tom Schierenbeck's RoboCasa condition survey (#523, on main) and the semantic_digital_twin
+    RoboCasa loader; its predicates are also the transfer-domain estimators of concept-theory/robocasa-transfer.
 - id: robocasa-slice
   branch: eql-planning-robots/robocasa-slice
   title: '5-10 RoboCasa tasks end to end on the #261 scenario harness'
@@ -84,6 +120,7 @@ items:
   - cramph-achieve-node
   - coraplex-action-effects
   - robocasa-goals
+  - geometric-attachments
   status: not_started
   notes: Feature freeze 2026-12-18.
 - id: iros-experiments
