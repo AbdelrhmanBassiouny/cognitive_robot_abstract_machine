@@ -14,7 +14,6 @@ concept-theory/robocasa-transfer	concept-theory
 concept-theory/paper	concept-theory
 claude/symbolic-expression-stack-refactor-ridull	dag-facade-hardening
 ccr-338b0f4b-gw7q1h	domain-models
-claude/krrspatial	domain-models
 claude/crollywood-refactor-shared-classes-e8jtm9	domain-models
 claude/krrood-image-depth-segmentation	domain-models
 claude/krrood-spatial-math-projection-interface	domain-models

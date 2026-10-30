@@ -34,32 +34,17 @@ tracks:
 items:
 - id: spatial-math-move
   title: SemDT's spatial_types module moves unchanged into krrood_spatial_math.spatial_types behind its
-    casadi extra
+    casadi extra, first in the stack
   branch: ccr-338b0f4b-gw7q1h
   track: spatial
   status: in progress
   pull_request_number: 537
   session: https://claude.ai/code/session_01JxHGiMQfiXWTZTVT53R7fS
-  depends_on:
-  - planar-point-interface
-  notes: 'First half of splitting #526, opened only after the #526 preview is reviewed: SemDT''s spatial
-    types moved unchanged to krrood_spatial_math.spatial_types behind the [casadi] extra, based on #527,
-    the old module re-exporting them, so the adopt PR''s diff shows only the interface work.'
-- id: spatial-math-adopt
-  title: SemDT's spatial types implement krrood_spatial_math's frame and change interfaces
-  branch: claude/krrspatial
-  track: spatial
-  status: in_progress
-  depends_on:
-  - spatial-math-move
-  session: https://claude.ai/code/session_01GoHMif2Xa7Mnqzz9mKFpTT
-  notes: 'Follow https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS. Next, on #526 as a preview: merge
-    #527''s renames; HomogeneousTransformationMatrix only a RigidCoordinateChange[CartesianFrame3D] (SpatialType
-    split so it keeps reference_frame and child_frame), Pose its value; RotationMatrix stays a value;
-    remove translation_matrix; handedness in docstrings only; Point2 keeps sm.Scalar. Reply on its threads
-    as the doc''s #526 table says. Once the user and Simon have reviewed it, a new adopt PR on spatial-math-move
-    re-applies it and #526 is closed with links to both.'
-  pull_request_number: 526
+  depends_on: []
+  notes: '#537 (draft, on main) creates krrood_spatial_math with SemDT''s spatial types moved behind
+    [casadi] (GitHub shows the module as renamed), a CartesianFrame3D(HasName, HasID) declaring only express,
+    CartesianFrame3DReference on krrood''s new ObjectReference, and the old module re-exporting every name.
+    #527 is stacked on it. Next: CI, the user''s review, the api-break talk with SemDT/krrood code owners.'
 - id: krrimage
   title: domain_models/krrood_image (images, colours, pixels) with Color moved out of SemDT
   branch: claude/crollywood-refactor-shared-classes-e8jtm9
@@ -102,7 +87,7 @@ items:
   track: spatial
   status: not_started
   depends_on:
-  - spatial-math-adopt
+  - planar-point-interface
   notes: A SpaceMap goes from one space to another and is never a CoordinateChange. OrthogonalProjection
     (E3 to E2) implements it now; krrood_image's PerspectiveProjection, the camera P = K[R|t], later.
     unproject(p, t) is the point at t on projection_line(p); generic in image and preimage types; Ray3
@@ -114,7 +99,7 @@ items:
   track: spatial
   status: not_started
   depends_on:
-  - spatial-math-adopt
+  - planar-point-interface
   notes: 'Subtracting points in different frames is silently accepted today; raise ReferenceFrameMismatchError
     (ask whether it is renamed with CartesianFrame3D). HomogeneousTransformationMatrix.dot should raise
     when child_frame and the operand''s reference_frame are both set and differ; written but held out
@@ -127,7 +112,7 @@ items:
   track: spatial
   status: not_started
   depends_on:
-  - spatial-math-adopt
+  - planar-point-interface
   - planar-coordinate-system
   notes: 'A change acts on values of its own coordinate-system kind and keeps their type: a point by R
     p + t, a vector by R v, an orientation by composition. Each value implements the action (double dispatch)
@@ -141,7 +126,7 @@ items:
   track: spatial
   status: not_started
   depends_on:
-  - spatial-math-adopt
+  - planar-point-interface
   notes: 'EuclideanSpace gets a dimension classproperty, with EuclideanSpace3D and EuclideanSpace2D. A
     CartesianFrame2D is the x-y plane of a CartesianFrame3D and charts a EuclideanSpace2D; Point2 and
     Pose2D move onto it. An AffinePoint3D interface beside AffinePoint2D replaces the abstract Point (Simon''s
@@ -155,7 +140,7 @@ items:
   track: spatial
   status: not_started
   depends_on:
-  - spatial-math-adopt
+  - planar-point-interface
   notes: Its own PR after the adopt PR. About 334 files (SemDT, giskardpy, coraplex, robokudo, cramera,
     segmind, experiments, tests) import semantic_digital_twin.spatial_types.spatial_types; the re-export
     module stays so JSON type names and outside code keep resolving. Renames Point3 to CartesianPoint3D,
@@ -175,19 +160,22 @@ items:
     capture projected onto the apartment walls while it works.'
 - id: planar-point-interface
   title: 'krrood_spatial_math''s casadi-free base: Space (EuclideanSpace), CoordinateSystem[SpaceT] (AffineFrame,
-    CartesianFrame, CartesianFrame3D), CoordinateChange (affine, rigid), AffinePoint2D (was PlanarPoint)'
+    CartesianFrame, CartesianFrame3D), CoordinateChange (affine, rigid), AffinePoint2D (was PlanarPoint),
+    and SemDT''s spatial types implementing them'
   branch: claude/krrspatial-interfaces
   pull_request_number: 527
   track: spatial
   status: in_progress
-  depends_on: []
+  depends_on:
+  - spatial-math-move
   session: https://claude.ai/code/session_018wfiv7QQPnFryjMtQLmPcK
   notes: >
-    #527 (draft, on main) holds krrood_spatial_math's casadi-free base per
-    https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS. HasID/HasName are krrood Interfaces, and a
-    concrete class missing a declared attribute fails at definition (api-break). Merged into #526.
-    Review threads all resolved. Next: CI green (an experiments ROS timeout is being re-run), the
-    user's review and the api-break talk with krrood code owners, then promotion before #526/#524.
+    #527 (on #537) holds the casadi-free base per https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS,
+    re-basing #537's CartesianFrame3D onto CartesianFrame (api-break: missing declared attributes fail
+    at definition). Takes over spatial-math-adopt. Next: re-apply #526's preview here
+    (HomogeneousTransformationMatrix only a RigidCoordinateChange, Pose its value, RotationMatrix a
+    value, no translation_matrix, SpatialType a CoordinateRepresentation), answer #526's threads, close
+    #526 linking here; then CI and review.
 - id: image-coordinate-change
   title: krrood_image's ImageCoordinateChange (scale and shift per axis) for crops and resizes, with cv2
     resampling
@@ -208,7 +196,7 @@ items:
   track: spatial
   status: not_started
   depends_on:
-  - spatial-math-adopt
+  - planar-point-interface
   notes: 'World implements EuclideanSpace3D (one world, one space; copies and merges follow). test/living_worlds.py
     wraps an existing __new__ instead of refusing it (approved). CoordinateSystem.space becomes an abstract
     property returning SpaceT | None; KinematicStructureEntity returns _world, never raising. express
