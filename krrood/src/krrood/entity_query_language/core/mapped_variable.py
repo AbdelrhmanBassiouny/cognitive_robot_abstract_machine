@@ -13,7 +13,15 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from functools import cached_property
 from inspect import isclass
-from typing_extensions import TYPE_CHECKING, Generic, Iterable, Any, get_args, Self
+from typing_extensions import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Generic,
+    Iterable,
+    Self,
+    get_args,
+)
 
 
 from random_events.variable import (
@@ -34,7 +42,8 @@ from krrood.entity_query_language.core.base_expressions import (
     UnificationDict,
 )
 from krrood.entity_query_language.evaluation_context import values_in_current_context
-from krrood.entity_query_language.ground_term import GroundTerm
+from krrood.entity_query_language.function_symbols import AttributeSymbol, IndexSymbol
+from krrood.entity_query_language.ground_term import GroundTerm, GroundTermExpression
 from krrood.entity_query_language.exceptions import (
     MultipleValuesAlongAccessPath,
     NoValueAlongAccessPath,
@@ -581,7 +590,7 @@ class MappedVariable(UnaryExpression, CanBehaveLikeAVariable[T], ABC):
 
 
 @dataclass(eq=False, repr=False)
-class SingleValueMapping(MappedVariable[T], ABC):
+class SingleValueMapping(MappedVariable[T], GroundTermExpression, ABC):
     """
     A mapping that reaches a single value, fully determined by the expression it is
     applied to and its own arguments.
@@ -594,6 +603,15 @@ class SingleValueMapping(MappedVariable[T], ABC):
         instance does not have that attribute, and an index by a value reaches no value
         when nothing is stored under that key.
     """
+
+    @property
+    def _ground_term_operands_(self) -> tuple[SymbolicExpression, ...]:
+        return (self._child_,)
+
+    def _apply_mapping_(
+        self, value: Any, sources: OperationResult | None = None
+    ) -> Iterable[T]:
+        return values_in_current_context(self._ground_term_(value))
 
     def _apply_mapping_on_external_value_(self, value: Any) -> Iterable[T]:
         """
@@ -630,12 +648,8 @@ class Attribute(SingleValueMapping[T]):
         """
         self._type_ = get_field_type_endpoint(self._owner_class_, self._attribute_name_)
 
-    def _apply_mapping_(
-        self, value: Any, sources: OperationResult | None = None
-    ) -> Iterable[T]:
-        return values_in_current_context(
-            GroundTerm.attribute(value, self._attribute_name_)
-        )
+    def _ground_term_(self, instance: Any) -> GroundTerm:
+        return GroundTerm(AttributeSymbol(self._attribute_name_), (instance,))
 
     def _rebuild_on_(self, child: CanBehaveLikeAVariable) -> MappedVariable:
         return child._get_mapped_variable_(
@@ -724,10 +738,8 @@ class IndexByValue(Index[T], SingleValueMapping[T]):
     it.
     """
 
-    def _apply_mapping_(
-        self, value: Any, sources: OperationResult | None = None
-    ) -> Iterable[T]:
-        return values_in_current_context(GroundTerm.index(value, self._key_))
+    def _ground_term_(self, container: Any) -> GroundTerm:
+        return GroundTerm(IndexSymbol(), (container, self._key_))
 
     def _rebuild_on_(self, child: CanBehaveLikeAVariable) -> MappedVariable:
         return child._get_mapped_variable_(IndexByValue, _key_=self._key_)
@@ -737,7 +749,7 @@ class IndexByValue(Index[T], SingleValueMapping[T]):
 
 
 @dataclass(eq=False, repr=False)
-class IndexByExpression(Index[T]):
+class IndexByExpression(Index[T], GroundTermExpression):
     """
     Indexing by a key that is itself an expression, which reaches one element per value
     that expression takes.
@@ -746,6 +758,13 @@ class IndexByExpression(Index[T]):
     indexing it by one of them reaches the single value bound to it.
     """
 
+    @property
+    def _ground_term_operands_(self) -> tuple[SymbolicExpression, ...]:
+        return self._child_, self._key_
+
+    def _ground_term_(self, container: Any, key: Any) -> GroundTerm:
+        return GroundTerm(IndexSymbol(), (container, key))
+
     def _apply_mapping_(
         self, value: Any, sources: OperationResult | None = None
     ) -> Iterable[T]:
@@ -753,7 +772,7 @@ class IndexByExpression(Index[T]):
             yield value[self._key_]
             return
         for key in self._key_._evaluate_(sources):
-            yield from values_in_current_context(GroundTerm.index(value, key.value))
+            yield from values_in_current_context(self._ground_term_(value, key.value))
 
     def _rebuild_on_(self, child: CanBehaveLikeAVariable) -> MappedVariable:
         return child._get_mapped_variable_(IndexByExpression, _key_=self._key_)
@@ -775,12 +794,8 @@ class Call(SingleValueMapping[T]):
     The keyword arguments to call the method with.
     """
 
-    def _apply_mapping_(
-        self, value: Any, sources: OperationResult | None = None
-    ) -> Iterable[T]:
-        return values_in_current_context(
-            GroundTerm.call(value, *self._args_, **self._kwargs_)
-        )
+    def _ground_term_(self, callee: Callable[..., Any]) -> GroundTerm:
+        return GroundTerm.call(callee, *self._args_, **self._kwargs_)
 
     def _rebuild_on_(self, child: CanBehaveLikeAVariable) -> MappedVariable:
         return child._get_mapped_variable_(

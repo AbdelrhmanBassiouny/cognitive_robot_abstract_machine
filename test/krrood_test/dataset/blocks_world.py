@@ -12,6 +12,7 @@ from krrood.entity_query_language.predicate import (
     SymbolicFunction,
     symbolic_function,
 )
+from krrood.entity_query_language.verbalization.vocabulary.english import Prepositions
 from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
     FunctionVerbalizationTemplates,
     Noun,
@@ -130,7 +131,12 @@ class IsOn(Predicate):
 
     @classmethod
     def _verbalization_fragment_(cls, fields):
-        return clause(Noun(fields["block"]), Verb("rest on"), Noun(fields["support"]))
+        return clause(
+            Noun(fields["block"]),
+            Verb("rest"),
+            Prepositions.ON,
+            Noun(fields["support"]),
+        )
 
 
 @dataclass(eq=False)

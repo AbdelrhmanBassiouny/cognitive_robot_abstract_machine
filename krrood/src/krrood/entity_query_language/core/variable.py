@@ -22,7 +22,7 @@ from krrood.entity_query_language.core.base_expressions import (
 )
 from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
 from krrood.entity_query_language.evaluation_context import values_in_current_context
-from krrood.entity_query_language.ground_term import GroundTerm
+from krrood.entity_query_language.ground_term import GroundTerm, GroundTermExpression
 from krrood.entity_query_language.cache_data import ReEnterableLazyIterable
 from krrood.entity_query_language.enums import DomainSource
 from krrood.entity_query_language.exceptions import NoChildToReplace
@@ -180,7 +180,9 @@ class Literal(Variable[T]):
 @monitored
 @dataclass(eq=False, repr=False)
 class InstantiatedVariable(
-    MultiArityExpressionThatPerformsACartesianProduct, CanHaveDomainSource[T]
+    MultiArityExpressionThatPerformsACartesianProduct,
+    CanHaveDomainSource[T],
+    GroundTermExpression,
 ):
     """
     A variable which does not have an explicit domain, but creates new
@@ -229,6 +231,15 @@ class InstantiatedVariable(
         """
         for name, value in self._kwargs_.items():
             self._child_variables_[name] = SymbolicExpression._as_operand_(value, name)
+
+    @property
+    def _ground_term_operands_(self) -> tuple[SymbolicExpression, ...]:
+        return tuple(self._child_variables_.values())
+
+    def _ground_term_(self, *operand_values: Any) -> GroundTerm:
+        return GroundTerm.call(
+            self._type_, **dict(zip(self._child_variables_, operand_values))
+        )
 
     def _evaluate__(
         self,
