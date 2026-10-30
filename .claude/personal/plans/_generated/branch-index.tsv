@@ -35,6 +35,7 @@ claude/performatives-clean	eql-performatives
 claude/eql-performatives-unify	eql-performatives
 eql-planning/state-aware-predicate-cache	eql-planning
 claude/zealous-albattani-uoew5i	eql-planning
+eql-planning/state-objects-and-domains	eql-planning
 eql-planning/action-schema-progression	eql-planning
 eql-planning/planning-backend-search	eql-planning
 eql-planning/regression-and-explanation	eql-planning

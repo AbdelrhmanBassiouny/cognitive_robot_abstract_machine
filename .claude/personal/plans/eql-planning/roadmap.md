@@ -8,3 +8,4 @@
 - The robot side is eql-planning-robots (#522); keep the API it builds on (State, ActionSchema, PlanningBackend) stable once it starts on Nov 16.
 - Core by Nov 13; trajectory constraints and the Fast Downward comparison in January. AAMAS 2027 rebuttal Nov 20-24.
 - A fluent is any EQL ground term (attribute, index, call, predicate or symbolic function applied to concrete arguments); EQL reads every one through the TermReader in its evaluation context, which krrood.planning's State implements, and EQL never imports the planner.
+- Hypothetical states (Python bodies, objects in a state, domains): https://claude.ai/artifact/3zhr45pHQ9P9mdqxtJs5L5. A derived fact follows a State only when its body is EQL or its inputs arrive as EQL arguments; nothing intercepts Python bodies at runtime.

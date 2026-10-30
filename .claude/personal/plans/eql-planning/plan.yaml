@@ -1,11 +1,10 @@
 schema_version: 1
 id: eql-planning
 title: 'EQL planning: goals as EQL conditions, planners as EQL backends'
-description: 'Domain-agnostic planning over EQL in krrood: fluents and a State overlay, action
-  schemas with assignment effects, and a PlanningBackend that answers a goal query with plans,
-  with compiled heuristic search, regression-based explanation, trajectory constraints and
-  a unified-planning backend. Its robot use is eql-planning-robots (#522). Core by Nov 13;
-  target IROS 2027.'
+description: 'Domain-agnostic planning over EQL in krrood: fluents and a State overlay, action schemas
+  with assignment effects, and a PlanningBackend that answers a goal query with plans, with compiled
+  heuristic search, regression-based explanation, trajectory constraints and a unified-planning backend.
+  Its robot use is eql-planning-robots (#522). Core by Nov 13; target IROS 2027.'
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 513
 waves:
@@ -38,8 +37,8 @@ items:
   - ontomatic-port/eql-predicate-call-memo
   status: deferred
   notes: 'Changes the per-argument cache (ontomatic-port eql-predicate-call-memo, commit 08f9178dd
-    on aamas27-unification-revision): fold into whichever PR lands that cache. Keys on the
-    State that fluent-state-overlay introduces. Deferred at kickoff on 2026-10-20.'
+    on aamas27-unification-revision): fold into whichever PR lands that cache. Keys on the State
+    that fluent-state-overlay introduces. Deferred at kickoff on 2026-10-20.'
 - id: fluent-state-overlay
   branch: claude/zealous-albattani-uoew5i
   title: Fluents and a State overlay that EQL queries are evaluated against
@@ -48,16 +47,33 @@ items:
   session: https://claude.ai/code/session_018wfiv8DAzFwDhYuFjpMtRY
   depends_on: []
   status: in progress
-  notes: 'Open decision for the owner: a predicate or symbolic function whose Python body reads
-    obj.attribute sees the live value, not the state''s, unless the value comes in as an EQL
-    argument. Options are listed on the PR.'
+  notes: 'Scope per the hypothetical-states design (https://claude.ai/artifact/3zhr45pHQ9P9mdqxtJs5L5):
+    the value overlay only. Document in #535 that a derived fact follows the state when its body
+    is EQL or its inputs arrive as EQL arguments; add no runtime interception of Python bodies. Objects
+    in a state is state-objects-and-domains. Owner to confirm this scope.'
+- id: state-objects-and-domains
+  branch: eql-planning/state-objects-and-domains
+  title: 'Objects in a State: a state adds and removes objects, and default EQL domains come from
+    it'
+  track: planning-core
+  depends_on:
+  - fluent-state-overlay
+  status: not_started
+  notes: A variable without a domain ranges over the state's objects, not the global SymbolGraph.
+    A world's collection (world.connections) becomes an EQL expression read through the context;
+    test that variable_from with a Selectable domain follows the state. Until then a list captured
+    at build time is filtered by the state's objects, never an error. Values (poses) stay as given.
+    Needed because SemDT attach replaces Connection objects.
 - id: action-schema-progression
   branch: eql-planning/action-schema-progression
   title: ActionSchema with an EQL precondition and assignment effects, applied to a State
   track: planning-core
   depends_on:
   - fluent-state-overlay
+  - state-objects-and-domains
   status: not_started
+  notes: Effects can create and remove objects (state-objects-and-domains). Field types of the class
+    diagram type-check effects.
 - id: planning-backend-search
   branch: eql-planning/planning-backend-search
   title: PlanningBackend answers a goal query with plans; breadth-first search on test domains
@@ -66,6 +82,8 @@ items:
   - action-schema-progression
   - eql-existential-semantics/correlated-quantifiers
   status: not_started
+  notes: Test domains write each derived fact that passes the three-part rule (changes during a plan,
+    used by a goal or precondition, relational) as an EQL body, not Python.
 - id: regression-and-explanation
   branch: eql-planning/regression-and-explanation
   title: Successor state axioms generated from effects; regression explains each step
@@ -75,13 +93,15 @@ items:
   status: not_started
 - id: compiled-search-ff
   branch: eql-planning/compiled-search-ff
-  title: Grounding through EQL, compiled integer state, greedy best-first and A* with the
-    FF heuristic
+  title: Grounding through EQL, compiled integer state, greedy best-first and A* with the FF heuristic
   track: planning-core
   depends_on:
   - planning-backend-search
   - state-aware-predicate-cache
   status: not_started
+  notes: 'Grounding, finite-domain variables and h_add/h_FF need each condition''s read set before
+    search: they see through EQL bodies only; Python bodies are attachments. Field types give grounding
+    and finite domains.'
 - id: trajectory-constraints
   branch: eql-planning/trajectory-constraints
   title: Trajectory constraints (PDDL3 subset) checked in search and monitored during execution
@@ -91,8 +111,7 @@ items:
   status: not_started
 - id: unified-planning-backend
   branch: eql-planning/unified-planning-backend
-  title: Compile EQL domains to unified-planning; cross-check against Fast Downward on IPC
-    domains
+  title: Compile EQL domains to unified-planning; cross-check against Fast Downward on IPC domains
   track: evaluation
   depends_on:
   - planning-backend-search
