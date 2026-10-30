@@ -4,7 +4,7 @@ from abc import abstractmethod
 
 from typing_extensions import Generic, Self, TypeVar
 
-from krrood.adapters.object_reference import IdentifiedObject
+from krrood.patterns.identifier_and_name import HasID, HasName
 from krrood.patterns.interface import Interface
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood_spatial_math.space import EuclideanSpace, Space
@@ -17,9 +17,7 @@ The kind of space a coordinate system charts.
 """
 
 
-class CoordinateSystem(
-    Generic[SpaceT], SubClassSafeGeneric, IdentifiedObject, Interface
-):
+class CoordinateSystem(Generic[SpaceT], SubClassSafeGeneric, HasID, HasName, Interface):
     """
     What the coordinates of a point are given in: an origin, axes and a unit on one
     space.
