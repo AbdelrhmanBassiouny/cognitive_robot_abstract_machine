@@ -8,6 +8,5 @@ Done:
 - Local: krrood_spatial_math_test 16, test_object_reference 8, SemDT test_spatial_types 373, test_json_parsing 44 (ROS fixtures left to CI).
 
 Next:
-- User decides on review thread r4426472629 (shim stays; import migration as a follow-up item?); add the item if agreed.
 - CI on #537; api-break talk with SemDT/krrood code owners.
 - #524 still needs its own restack (krrspatial rename, Color/ORM conflicts with main).
