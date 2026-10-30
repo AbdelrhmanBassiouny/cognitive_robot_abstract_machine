@@ -47,9 +47,10 @@ items:
   session: https://claude.ai/code/session_018wfiv8DAzFwDhYuFjpMtRY
   depends_on: []
   status: in progress
-  notes: 'Owner confirmed the scope (Oct 30): the value overlay only, per https://claude.ai/artifact/3zhr45pHQ9P9mdqxtJs5L5.
-    Docstrings state that a derived fact follows the state when its body is EQL or its inputs arrive
-    as EQL arguments; nothing intercepts Python bodies. Objects in a state is state-objects-and-domains.'
+  notes: 'Review round 1 addressed (Oct 30): State.with_facts takes EQL conditions on literal-, variable-
+    or match-rooted expressions (lifted facts); GroundTerm is internal, built by the expressions
+    (GroundTermExpression). Merges bug PR #538 (match arguments in predicates). Open: whether symbols
+    get a typed link to their expression class.'
 - id: state-objects-and-domains
   branch: eql-planning/state-objects-and-domains
   title: 'Objects in a State: a state adds and removes objects, and default EQL domains come from
@@ -73,7 +74,8 @@ items:
   - state-objects-and-domains
   status: not_started
   notes: Effects can create and remove objects (state-objects-and-domains). Field types of the class
-    diagram type-check effects.
+    diagram type-check effects. Effects are facts (State.with_facts) whose value may depend on the
+    binding (x.support := y); #535 accepts only constant values.
 - id: planning-backend-search
   branch: eql-planning/planning-backend-search
   title: PlanningBackend answers a goal query with plans; breadth-first search on test domains
