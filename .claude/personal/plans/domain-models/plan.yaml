@@ -184,10 +184,10 @@ items:
   session: https://claude.ai/code/session_018wfiv7QQPnFryjMtQLmPcK
   notes: >
     #527 (draft, on main) holds krrood_spatial_math's casadi-free base per
-    https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS: EuclideanSpace3D, AffineFrame,
-    CartesianFrame, CartesianFrame3D (and Resolver, Reference), AffinePoint2D, changes generic over
-    frame types. Merged into #526. Open: owner's IdentifiedObject and StoredFrameChange threads; CI
-    waits on the fixed CI image (#536); promotion before #526/#524.
+    https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS: EuclideanSpace2D/3D with dimension,
+    AffineFrame, CartesianFrame, CartesianFrame3D (and Resolver, Reference), AffinePoint2D, changes
+    generic over frame types. Merged into #526. Open: owner's IdentifiedObject and StoredFrameChange
+    threads; CI waits on the fixed CI image (#536); promotion before #526/#524.
 - id: image-coordinate-change
   title: krrood_image's ImageCoordinateChange (scale and shift per axis) for crops and resizes, with cv2
     resampling
