@@ -330,12 +330,14 @@ class HasTwoFingers(
         return True
 
     @classproperty
-    def squeeze(cls) -> float | None:
+    def squeeze(cls) -> float:
         """
-        How far past the width of what it grasps each finger is sent, in metres, so the
-        fingers grip it; None where whoever closes the fingers decides.
+        How far past the width of what it grasps each finger is sent in a physical
+        simulation, in metres: a servo grips only with the position error it is left
+        with, so fingers sent no further than the object's surface touch it without
+        holding it.
         """
-        return None
+        return 0.005
 
     @property
     def finger(self) -> TGenericLeftFinger | TGenericRightFinger:

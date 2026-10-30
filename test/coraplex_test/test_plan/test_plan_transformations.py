@@ -1684,7 +1684,7 @@ def test_the_squeeze_is_handed_on_to_the_fingers(pr2_apartment_context):
     assert [action.squeeze for action in width_actions_of(plan)] == [squeeze]
 
 
-def test_a_gripper_that_names_its_own_squeeze_is_squeezed_by_it(hsr_apartment_context):
+def test_the_hsr_hand_is_sent_shut_in_a_physical_simulation(hsr_apartment_context):
     world, view, extensions = hsr_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
 
@@ -1696,6 +1696,31 @@ def test_a_gripper_that_names_its_own_squeeze_is_squeezed_by_it(hsr_apartment_co
 
     assert [action.squeeze for action in width_actions_of(plan)] == [
         HSRBGripper.squeeze
+    ]
+
+
+def test_the_real_hsr_hand_is_squeezed_as_its_executor_says(hsr_apartment_context):
+    world, view, extensions = hsr_apartment_context
+    milk = world.get_semantic_annotations_by_type(Milk)[0]
+    executors = []
+
+    def kept_robot_executor(extensions):
+        executors.append(robot_executor(extensions))
+        return executors[-1]
+
+    plan = rewritten(
+        GraspingAction(grasp=grasp_of(milk), arm=left_or_only_arm(view)),
+        extensions,
+        executor_for=kept_robot_executor,
+    )
+
+    [width_close] = [
+        adaptation
+        for adaptation in executors[0].plan_adaptations
+        if isinstance(adaptation, CloseFingersToObjectWidth)
+    ]
+    assert [action.squeeze for action in width_actions_of(plan)] == [
+        width_close.squeeze
     ]
 
 
