@@ -6,6 +6,7 @@ import pytest
 
 from krrood.adapters.json_serializer import to_json
 from krrood.patterns.identifier_and_name import HasID, HasName
+from krrood.patterns.interface import Interface
 from krrood.patterns.mixin import Mixin
 
 from ..dataset.identified_objects import (
@@ -21,6 +22,11 @@ from ..dataset.identified_objects import (
 @pytest.mark.parametrize("trait", [HasID, HasName])
 def test_an_identifier_and_a_name_are_mixins(trait):
     assert issubclass(trait, Mixin)
+
+
+@pytest.mark.parametrize("trait", [HasID, HasName])
+def test_an_identifier_and_a_name_are_interfaces(trait):
+    assert Interface.is_interface(trait)
 
 
 def test_an_identifier_does_not_require_a_name():
