@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import fields
-
 import pytest
 
 from krrood.patterns.exceptions import InterfaceInstantiationError
@@ -26,10 +24,10 @@ from krrood_spatial_math.space import (
 )
 
 from .dataset.spaces import (
+    CartesianFrame3DChange,
     ScalablePlane,
     ScalablePlaneFrame,
-    StoredFrameChange,
-    StoredScalingChange,
+    ScalingChange,
 )
 
 # %% spaces
@@ -124,8 +122,8 @@ def test_an_affine_change_is_a_coordinate_change():
 
 
 def test_an_affine_change_need_not_be_rigid():
-    assert issubclass(StoredScalingChange, AffineCoordinateChange)
-    assert not issubclass(StoredScalingChange, RigidCoordinateChange)
+    assert issubclass(ScalingChange, AffineCoordinateChange)
+    assert not issubclass(ScalingChange, RigidCoordinateChange)
 
 
 def test_an_affine_change_changes_between_affine_frames():
@@ -138,25 +136,12 @@ def test_a_rigid_change_changes_between_cartesian_frames():
 
 def test_a_rigid_change_reports_the_kind_of_frame_it_changes():
     assert (
-        StoredFrameChange.get_type_of_generic_parameter(CartesianFrameT)
+        CartesianFrame3DChange.get_type_of_generic_parameter(CartesianFrameT)
         is CartesianFrame3D
     )
 
 
 def test_an_affine_change_reports_the_kind_of_frame_it_changes():
     assert (
-        StoredScalingChange.get_type_of_generic_parameter(AffineFrameT)
-        is ScalablePlaneFrame
+        ScalingChange.get_type_of_generic_parameter(AffineFrameT) is ScalablePlaneFrame
     )
-
-
-def test_a_coordinate_changes_frames_are_narrowed_to_the_bound_kind():
-    frame_types = {
-        change_field.name: change_field.type
-        for change_field in fields(StoredScalingChange)
-    }
-
-    assert frame_types == {
-        "source_coordinate_system": ScalablePlaneFrame | None,
-        "target_coordinate_system": ScalablePlaneFrame | None,
-    }
