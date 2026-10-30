@@ -190,3 +190,33 @@ class InterfaceInstantiationError(DataclassException, TypeError):
 
     def suggest_correction(self) -> str:
         return f"Instantiate a subclass that implements {self.interface.__name__}."
+
+
+@dataclass
+class MissingInterfaceAttributesError(DataclassException, TypeError):
+    """
+    Raised when a class that implements all of its abstract methods is defined without
+    providing every attribute its interfaces declare.
+    """
+
+    implementation: type
+    """
+    The class that was defined.
+    """
+
+    attributes: tuple[str, ...]
+    """
+    The declared attributes the class does not provide.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.implementation.__name__} does not provide the attributes "
+            f"{', '.join(self.attributes)} that its interfaces declare."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            f"Declare {', '.join(self.attributes)} on "
+            f"{self.implementation.__name__} as fields or properties."
+        )

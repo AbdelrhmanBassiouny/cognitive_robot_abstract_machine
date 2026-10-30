@@ -8,9 +8,10 @@ from typing_extensions import Any, TypeVar
 
 from krrood.adapters.json_serializer import from_json
 from krrood.adapters.object_reference import ObjectReference
-from krrood.patterns.identifier_and_name import HasID, HasName
 from krrood.patterns.interface import Interface
+from krrood_spatial_math.coordinate_system import CartesianFrame
 from krrood_spatial_math.exceptions import MissingCartesianFrame3DResolver
+from krrood_spatial_math.space import EuclideanSpace3D
 
 # %% frames that positions and directions are expressed in
 
@@ -20,24 +21,25 @@ The kind of value a Cartesian frame expresses.
 """
 
 
-class CartesianFrame3D(HasName, HasID, Interface):
+class CartesianFrame3D(CartesianFrame[EuclideanSpace3D], Interface):
     """
-    A right-handed Cartesian frame in three dimensions, in metres, such as the frame of
-    a robot's body.
+    A right-handed Cartesian frame on a three-dimensional Euclidean space, in metres,
+    such as the frame of a robot's body.
     """
 
     @abstractmethod
     def express(self, value: ValueT) -> ValueT:
         """
-        :param value: A value given in this frame or in another frame it is related to.
+        :param value: A value given in this frame or in another frame of the same
+            space.
         :return: The same value, given in this frame.
         """
 
 
 class CartesianFrame3DResolver(Interface):
     """
-    Finds the Cartesian frames serialized spatial types refer to, while one JSON
-    document is deserialized.
+    Finds the Cartesian frames serialized coordinate representations refer to, while one
+    JSON document is deserialized.
 
     It travels through nested ``from_json`` calls in their keyword arguments.
     """
@@ -52,13 +54,13 @@ class CartesianFrame3DResolver(Interface):
         """
 
 
-# %% referring to a frame in a serialized spatial type
+# %% referring to a frame in a serialized coordinate representation
 
 
 @dataclass
 class CartesianFrame3DReference(ObjectReference):
     """
-    How a serialized spatial type points at a :class:`CartesianFrame3D`.
+    How a serialized coordinate representation points at a :class:`CartesianFrame3D`.
     """
 
     def resolve(self, data: dict[str, Any], **kwargs) -> CartesianFrame3D:

@@ -3,14 +3,15 @@ from __future__ import annotations
 import pytest
 
 from krrood.patterns.exceptions import InterfaceInstantiationError
-from krrood.patterns.identifier_and_name import HasID, HasName
 from krrood_spatial_math.cartesian_frame_3d import (
     CartesianFrame3D,
     CartesianFrame3DReference,
 )
+from krrood_spatial_math.coordinate_system import CartesianFrame, SpaceT
 from krrood_spatial_math.exceptions import MissingCartesianFrame3DResolver
+from krrood_spatial_math.space import EuclideanSpace3D
 
-from .dataset.frames import KnownFrames
+from .dataset.frames import KnownFrames, ThingFrame
 
 # %% the frame interface
 
@@ -20,13 +21,20 @@ def test_a_three_dimensional_cartesian_frame_cannot_be_instantiated():
         CartesianFrame3D()
 
 
-@pytest.mark.parametrize("trait", [HasID, HasName])
-def test_a_three_dimensional_cartesian_frame_is_identified_and_named(trait):
-    assert issubclass(CartesianFrame3D, trait)
+def test_a_three_dimensional_cartesian_frame_is_a_cartesian_frame():
+    assert issubclass(CartesianFrame3D, CartesianFrame)
+
+
+def test_a_three_dimensional_cartesian_frame_charts_three_dimensional_euclidean_space():
+    assert CartesianFrame3D.get_type_of_generic_parameter(SpaceT) is EuclideanSpace3D
 
 
 def test_a_three_dimensional_cartesian_frame_declares_expressing_values_in_it():
     assert CartesianFrame3D.__abstractmethods__ == {CartesianFrame3D.express.__name__}
+
+
+def test_a_frame_can_extend_an_object_named_before_it_is_identified():
+    assert issubclass(ThingFrame, CartesianFrame3D)
 
 
 # %% referring to a frame in a serialized value
