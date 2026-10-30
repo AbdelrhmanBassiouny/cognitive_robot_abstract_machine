@@ -1,3 +1,4 @@
+from abc import abstractmethod
 from dataclasses import dataclass
 
 import pytest
@@ -26,9 +27,13 @@ class Ruler(Measurable):
         return 1.0
 
 
-@dataclass
-class Unmeasured(Measurable):
-    label: str = ""
+class MeasuringTool(Measurable):
+    """
+    An abstract implementation that leaves the length to its subclasses.
+    """
+
+    @abstractmethod
+    def calibrate(self) -> None: ...
 
 
 # %% instantiation
@@ -51,8 +56,15 @@ def test_a_property_provides_a_declared_attribute():
 # %% attributes an implementation leaves out
 
 
-def test_a_class_leaving_out_a_declared_attribute_cannot_be_instantiated():
+def test_a_class_leaving_out_a_declared_attribute_cannot_be_defined():
     with pytest.raises(MissingInterfaceAttributesError) as error:
-        Unmeasured()
+
+        @dataclass
+        class Unmeasured(Measurable):
+            label: str = ""
 
     assert error.value.attributes == ("length",)
+
+
+def test_an_abstract_class_may_leave_a_declared_attribute_to_its_subclasses():
+    assert Interface.missing_attributes(MeasuringTool) == ("length",)

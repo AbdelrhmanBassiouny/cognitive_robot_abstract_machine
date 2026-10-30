@@ -66,19 +66,37 @@ class KnownFrames(
 # %% frames that extend objects named before they are identified
 
 
+@dataclass(eq=False)
 class NamedThing(HasName):
     """
     An object that is named whether or not it has an identifier.
     """
 
+    name: str
+    """
+    What the object is called.
+    """
 
+
+@dataclass(eq=False)
 class IdentifiedNamedThing(NamedThing, HasID):
     """
     A named object that also has an identifier, given after its name.
     """
 
+    id: UUID = field(default_factory=uuid4)
+    """
+    The identifier given after the name.
+    """
 
+
+@dataclass(eq=False)
 class ThingFrame(IdentifiedNamedThing, CartesianFrame3D):
     """
     A Cartesian frame that extends an object named before it is identified.
+    """
+
+    space: EuclideanSpace3D | None = None
+    """
+    The space the frame charts.
     """
