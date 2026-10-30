@@ -25,13 +25,14 @@ from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.robot_plans.actions.core.placing import PlaceAction
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction, ParkArmsAction
+from coraplex.robot_plans.plan_transformations import CloseFingersToObjectWidth
 from cramph.composites import Sequence
 from cramph.context import ContextExtension, StatechartContext
 from cramph.statechart import Statechart
 from semantic_digital_twin.adapters.multi_sim import MujocoSim
 from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
-from semantic_digital_twin.robots.hsrb import HSRB
+from semantic_digital_twin.robots.hsrb import HSRB, HSRBGripper
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
@@ -77,6 +78,30 @@ class SceneBody(StrEnum):
     MILK = "milk"
 
 
+# %% shutting the hand
+
+
+@dataclass
+class HandShuttingPlanExecutor(PhysicallySimulatedPlanExecutor):
+    """
+    Performs the plan in MuJoCo with every grasp of the HSR's hand closing its fingers
+    all the way onto what it holds: the hand grips only with the force its motor builds
+    up from how far it is sent past what it holds.
+    """
+
+    def __post_init__(self) -> None:
+        [hand] = self.context.world.get_semantic_annotations_by_type(HSRBGripper)
+        self.plan_adaptations = [
+            (
+                CloseFingersToObjectWidth(squeeze=hand.separation_when_open / 2)
+                if isinstance(adaptation, CloseFingersToObjectWidth)
+                else adaptation
+            )
+            for adaptation in self.plan_adaptations
+        ]
+        super().__post_init__()
+
+
 # %% the demonstration
 
 
@@ -90,7 +115,7 @@ class MilkTransportDemonstration(RobotDemonstration):
 
     ros_node_name: str = "hsr_milk_transport_demo"
 
-    executor_type: type[PlanExecutor] = PhysicallySimulatedPlanExecutor
+    executor_type: type[PlanExecutor] = HandShuttingPlanExecutor
 
     floor: BodySpecification = field(
         default_factory=lambda: BodySpecification.box(
