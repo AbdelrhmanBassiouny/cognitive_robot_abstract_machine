@@ -522,8 +522,7 @@ class WorldDescriptorLoadError(WorldDescriptorError, RuntimeError):
 
     def error_message(self) -> str:
         return (
-            f"Failed to load world descriptor "
-            f"'{self.ros_package}.{self.module_name}'."
+            f"Failed to load world descriptor '{self.ros_package}.{self.module_name}'."
         )
 
     def suggest_correction(self) -> str:

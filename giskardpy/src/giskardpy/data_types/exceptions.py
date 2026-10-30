@@ -140,8 +140,6 @@ class NoControlledJointsError(SetupException):
 
 
 @dataclass
-
-
 @dataclass
 class MaxTrajectoryLengthException(PlanningException):
     """

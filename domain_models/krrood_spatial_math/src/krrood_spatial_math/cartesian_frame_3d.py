@@ -4,16 +4,26 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from uuid import UUID
 
-from typing_extensions import Any
+from typing_extensions import Any, TypeVar
 
 from krrood.adapters.json_serializer import from_json
 from krrood.adapters.object_reference import ObjectReference
 from krrood.patterns.interface import Interface
-from krrood_spatial_math.coordinate_system import CartesianFrame
+from krrood_spatial_math.coordinate_system import (
+    CartesianFrame,
+    CoordinateRepresentation,
+)
 from krrood_spatial_math.exceptions import MissingCartesianFrame3DResolver
 from krrood_spatial_math.space import EuclideanSpace3D
 
 # %% frames that positions and directions are expressed in
+
+CoordinateRepresentationT = TypeVar(
+    "CoordinateRepresentationT", bound=CoordinateRepresentation
+)
+"""
+The kind of value a Cartesian frame expresses.
+"""
 
 
 class CartesianFrame3D(CartesianFrame[EuclideanSpace3D], Interface):
@@ -21,6 +31,14 @@ class CartesianFrame3D(CartesianFrame[EuclideanSpace3D], Interface):
     A right-handed Cartesian frame on a three-dimensional Euclidean space, in metres,
     such as the frame of a robot's body.
     """
+
+    @abstractmethod
+    def express(self, value: CoordinateRepresentationT) -> CoordinateRepresentationT:
+        """
+        :param value: A value given in this frame or in another frame of the same
+            space.
+        :return: The same value, given in this frame.
+        """
 
 
 class CartesianFrame3DResolver(Interface):

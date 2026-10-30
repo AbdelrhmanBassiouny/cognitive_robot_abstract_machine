@@ -30,6 +30,7 @@ class SingletonABCMeta(SingletonMeta, ABCMeta):
 class EpisodePlayer(PropagatingThread, ABC, metaclass=SingletonABCMeta):
     """
     The EpisodePlayer class is a base class for all episode players.
+
     It provides common functionality and properties for episode players.
     """
 
@@ -172,8 +173,8 @@ class EpisodePlayer(PropagatingThread, ABC, metaclass=SingletonABCMeta):
     @classmethod
     def pause_resume_with_condition(cls, condition: Callable[[Any], bool]) -> Callable:
         """
-        A decorator that pauses the player before the decorated function call if
-        the condition is met, then resumes it afterward.
+        A decorator that pauses the player before the decorated function call if the
+        condition is met, then resumes it afterward.
 
         :param condition: The condition to check before pausing the player.
         :return: The wrapped callable.
@@ -202,8 +203,8 @@ class EpisodePlayer(PropagatingThread, ABC, metaclass=SingletonABCMeta):
     @classmethod
     def pause_resume(cls, func: Callable) -> Callable:
         """
-        A decorator that unconditionally pauses the player before the decorated
-        function call and resumes it afterward.
+        A decorator that unconditionally pauses the player before the decorated function
+        call and resumes it afterward.
 
         :param func: The callable to wrap.
         :return: The wrapped callable.
@@ -212,7 +213,8 @@ class EpisodePlayer(PropagatingThread, ABC, metaclass=SingletonABCMeta):
 
     def _join(self, timeout=None):
         """
-        Joins the episode player thread and removes the instance from the singleton dictionary.
+        Joins the episode player thread and removes the instance from the singleton
+        dictionary.
 
         :param timeout: The timeout.
         """

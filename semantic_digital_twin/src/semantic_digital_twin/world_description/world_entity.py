@@ -36,16 +36,18 @@ from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
 )
 from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.exceptions import (
-    AlreadyBelongsToAWorldError,
-    ReferenceFrameMismatchError,
-)
+from krrood.patterns.identifier_and_name import HasID, HasName
+from krrood_spatial_math.exceptions import ReferenceFrameMismatchError
+from krrood_spatial_math.cartesian_frame_3d import CartesianFrame3D
+from krrood_spatial_math.space import EuclideanSpace3D
+from semantic_digital_twin.exceptions import AlreadyBelongsToAWorldError
 from semantic_digital_twin.mixin import HasSimulatorProperties, UniqueSimulatorProperty
 from semantic_digital_twin.world_description.connection_properties import (
     ServoGains,
     VelocityServoGains,
 )
-from semantic_digital_twin.spatial_types.spatial_types import (
+from krrood_spatial_math.spatial_types import (
+    GenericSpatialType,
     HomogeneousTransformationMatrix,
     Point3,
     Pose,
@@ -69,7 +71,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(eq=False)
-class WorldEntity(Symbol):
+class WorldEntity(Symbol, HasName):
     """
     A class representing an entity in the world.
 
@@ -91,7 +93,7 @@ class WorldEntity(Symbol):
 
     name: PrefixedName = field(default=None, kw_only=True, hash=False)
     """
-    The identifier for this world entity.
+    What this world entity is called.
     """
 
     def __post_init__(self):
@@ -140,7 +142,7 @@ class WorldEntity(Symbol):
 
 
 @dataclass(eq=False)
-class WorldEntityWithID(WorldEntity, SubclassJSONSerializer):
+class WorldEntityWithID(WorldEntity, SubclassJSONSerializer, HasID):
     """
     A WorldEntity that has a unique identifier.
 
@@ -368,7 +370,9 @@ class WorldEntityWithSimulatorProperties(WorldEntityWithID, HasSimulatorProperti
 
 
 @dataclass(eq=False)
-class KinematicStructureEntity(ABC, WorldEntityWithSimulatorProperties):
+class KinematicStructureEntity(
+    WorldEntityWithSimulatorProperties, CartesianFrame3D, ABC
+):
     """
     An entity that is part of the kinematic structure of the world.
     """
@@ -387,6 +391,16 @@ class KinematicStructureEntity(ABC, WorldEntityWithSimulatorProperties):
     def remove_from_world(self):
         super().remove_from_world()
         self.index = None
+
+    @property
+    def space(self) -> EuclideanSpace3D | None:
+        """
+        Always ``None``: the space the bodies of a world chart is not modelled yet.
+        """
+        return None
+
+    def express(self, value: GenericSpatialType) -> GenericSpatialType:
+        return self._world.transform(value, self)
 
     @property
     @abstractmethod
@@ -1186,7 +1200,9 @@ class Connection(WorldEntityWithSimulatorProperties, ABC):
             connection.
         """
 
-    def _find_references_in_world(self, world: World) -> tuple[
+    def _find_references_in_world(
+        self, world: World
+    ) -> tuple[
         KinematicStructureEntity,
         KinematicStructureEntity,
         HomogeneousTransformationMatrix,

@@ -112,9 +112,9 @@ class TestUtilsO3DHelper(object):
         assert np.all(
             target_bounding_box.center[:2] == adjusted_bounding_box.center[:2]
         ), "x and y were not adjusted correctly"
-        assert (
-            adjusted_bounding_box.center[2] == expected_z
-        ), "z was not adjusted correctly"
+        assert adjusted_bounding_box.center[2] == expected_z, (
+            "z was not adjusted correctly"
+        )
 
     def test_position_bounding_box_relative_to_target_rotation(self):
         input_bounding_box = open3d.geometry.OrientedBoundingBox(

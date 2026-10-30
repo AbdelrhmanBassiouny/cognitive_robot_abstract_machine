@@ -25,7 +25,7 @@ dependencies = [
   "physics_simulators",
   "experiments",
   "segmind",
-  "krrood_spatial_math",
+  "krrood_spatial_math[casadi]",
   "ipykernel>=7.2.0",
   "lark-parser>=0.12.0",
   "tqdm"

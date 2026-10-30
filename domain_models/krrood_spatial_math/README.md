@@ -25,6 +25,10 @@ coordinate system. Its base depends on `krrood` alone.
 - `krrood_spatial_math.affine_point`: `AffinePoint2D`, a point given by its two
   coordinates in an affine frame. Each implementation binds the kind of frame and what
   its coordinates are stored as.
+- `krrood_spatial_math.spatial_types`, with the extra `krrood_spatial_math[casadi]`:
+  `Point2`, `Point3`, `Vector3`, `RotationMatrix`, `Quaternion`, `AxisAngle`,
+  `HomogeneousTransformationMatrix`, `Pose` and `Pose2D`, as symbolic expressions that
+  can also hold plain numbers.
 
 | Space | Frame | Coordinate change | Kept by the change |
 |---|---|---|---|
@@ -35,3 +39,10 @@ example, adds image planes, whose pixel frames are affine and related by affine 
 
 Points of two spaces, such as a body and an image of it, relate only through a map
 between the spaces, such as a camera, never through a coordinate change.
+
+```python
+from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Point3
+
+table_T_cup = HomogeneousTransformationMatrix.from_xyz_rpy(x=1.0, yaw=0.5)
+cup_in_table = table_T_cup @ Point3(0.1, 0.0, 0.2)
+```

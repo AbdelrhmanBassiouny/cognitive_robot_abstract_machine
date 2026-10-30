@@ -571,9 +571,9 @@ class TestRotationMatrix:
         for r in operations_to_test:
             rotation_part = r[:3, :3]
             det = rotation_part.det()
-            assert np.allclose(
-                det, 1.0, atol=1e-10
-            ), f"Determinant {det} != 1.0 for operation"
+            assert np.allclose(det, 1.0, atol=1e-10), (
+                f"Determinant {det} != 1.0 for operation"
+            )
 
     def test_deepcopy_of_default_constructed_matrix(self):
         """
@@ -2134,7 +2134,6 @@ class TestTransformationMatrix:
 
 
 class TestQuaternion:
-
     def test_from_iterable_copies_a_symbolic_math_type_input(self):
         """
         `from_iterable` must not alias a SymbolicMathType input's casadi_sx: the result

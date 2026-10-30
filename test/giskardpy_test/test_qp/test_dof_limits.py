@@ -342,12 +342,12 @@ def test_directional_velocity_bounds_mirror_at_center(prismatic_bot):
 def test_directional_velocity_bound_reduced_near_upper_limit(prismatic_bot):
     lower_bound, upper_bound = _directional_bounds_at(_profiler(), prismatic_bot, 0.9)
 
-    assert (
-        upper_bound[0] < 0.9
-    ), "Upper bound must brake when approaching the upper limit"
-    assert np.isclose(
-        lower_bound[0], -VELOCITY_LIMIT, atol=1e-3
-    ), "Lower bound is unconstrained moving away from the upper limit"
+    assert upper_bound[0] < 0.9, (
+        "Upper bound must brake when approaching the upper limit"
+    )
+    assert np.isclose(lower_bound[0], -VELOCITY_LIMIT, atol=1e-3), (
+        "Lower bound is unconstrained moving away from the upper limit"
+    )
 
 
 def test_relax_jerk_on_initial_steps_relaxes_only_when_needed():

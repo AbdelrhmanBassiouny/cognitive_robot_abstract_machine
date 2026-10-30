@@ -542,7 +542,6 @@ class UUIDJSONKey(enum.StrEnum):
 
 @dataclass
 class UUIDJSONSerializer(ExternalClassJSONSerializer[uuid.UUID]):
-
     @classmethod
     def to_json(cls, instance: uuid.UUID, **kwargs) -> dict[str, Any]:
         return {
@@ -824,7 +823,6 @@ class EnumJSONKey(enum.StrEnum):
 
 @dataclass
 class EnumJSONSerializer(ExternalClassJSONSerializer[enum.Enum]):
-
     @classmethod
     def to_json(cls, instance: enum.Enum, **kwargs) -> dict[str, Any]:
         return {

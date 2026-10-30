@@ -494,8 +494,9 @@ def test_camera_observation_creates_standalone_camera_without_world_pose(
     assert cameras == [cas.camera_observation.camera]
     assert cas.camera_observation.camera.root.name.name == camera_info.header.frame_id
     assert cas.camera_observation.world_T_camera is None
-    assert cas.camera_observation.effective_camera_model.distortion.to_ordered_coefficients() == tuple(
-        camera_info.d
+    assert (
+        cas.camera_observation.effective_camera_model.distortion.to_ordered_coefficients()
+        == tuple(camera_info.d)
     )
 
 

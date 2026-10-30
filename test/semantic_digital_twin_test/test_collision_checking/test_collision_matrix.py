@@ -589,7 +589,6 @@ class TestCollisionRules:
 
 
 class TestCollisionGroups:
-
     @dataclass
     class MockCollisionGroupConsumer(CollisionGroupConsumer):
         def on_compute_collisions(self, collision_results: CollisionCheckingResult): ...
@@ -642,9 +641,9 @@ class TestCollisionGroups:
             parent = group.root.parent_connection.parent
             assert group.root.parent_connection.is_controlled or body_to_robot.get(
                 parent
-            ) != body_to_robot.get(
-                group.root
-            ), f"group root {group.root.name} does not have a controlled parent connection and is not an ownership boundary"
+            ) != body_to_robot.get(group.root), (
+                f"group root {group.root.name} does not have a controlled parent connection and is not an ownership boundary"
+            )
 
         # no group body should be in another group body
         for group1, group2 in combinations(
@@ -1252,8 +1251,8 @@ class TestRolledBackCollisionRules:
                 id="external",
             ),
             pytest.param(
-                lambda collision_manager, robot: collision_manager.add_ignore_collision_rule(
-                    AllowAllCollisions()
+                lambda collision_manager, robot: (
+                    collision_manager.add_ignore_collision_rule(AllowAllCollisions())
                 ),
                 id="ignore_all",
             ),
