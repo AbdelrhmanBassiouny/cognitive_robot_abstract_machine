@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import inspect
-from abc import ABC
-from functools import lru_cache
+from abc import ABC, update_abstractmethods
 
 from typing_extensions import Any, Self
 
@@ -17,8 +16,9 @@ from krrood.patterns.exceptions import (
 class Interface(ABC):
     """
     A class that only declares the typed attributes and methods its subclasses provide,
-    as fields or properties. It cannot be instantiated, and neither can a class that
-    does not provide every attribute its interfaces declare.
+    as fields or properties. It cannot be instantiated, and a class that implements all
+    of its abstract methods cannot be defined without providing every attribute its
+    interfaces declare.
 
     .. note::
         Never make an interface a dataclass, which turns its declarations into fields.
@@ -29,10 +29,15 @@ class Interface(ABC):
     def __new__(cls, *args: Any, **kwargs: Any) -> Self:
         if Interface.is_interface(cls):
             raise InterfaceInstantiationError(cls)
+        return super().__new__(cls)
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        if Interface.is_interface(cls) or Interface.is_abstract(cls):
+            return
         missing_attributes = Interface.missing_attributes(cls)
         if missing_attributes:
             raise MissingInterfaceAttributesError(cls, missing_attributes)
-        return super().__new__(cls)
 
     @staticmethod
     def is_interface(class_: type) -> bool:
@@ -43,7 +48,18 @@ class Interface(ABC):
         return Interface in class_.__bases__
 
     @staticmethod
-    @lru_cache(maxsize=None)
+    def is_abstract(class_: type) -> bool:
+        """
+        :param class_: A class that is being created.
+        :return: Whether the class leaves an abstract method unimplemented.
+        """
+        # abc finds the abstract methods only once the class is created, and
+        # update_abstractmethods only updates a class that already has them
+        class_.__abstractmethods__ = frozenset()
+        update_abstractmethods(class_)
+        return inspect.isabstract(class_)
+
+    @staticmethod
     def missing_attributes(class_: type) -> tuple[str, ...]:
         """
         :param class_: A class implementing interfaces.

@@ -195,13 +195,13 @@ class InterfaceInstantiationError(DataclassException, TypeError):
 @dataclass
 class MissingInterfaceAttributesError(DataclassException, TypeError):
     """
-    Raised when a class is instantiated that does not provide every attribute its
-    interfaces declare.
+    Raised when a class that implements all of its abstract methods is defined without
+    providing every attribute its interfaces declare.
     """
 
     implementation: type
     """
-    The class that was instantiated.
+    The class that was defined.
     """
 
     attributes: tuple[str, ...]
