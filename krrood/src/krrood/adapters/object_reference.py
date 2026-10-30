@@ -2,40 +2,22 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from uuid import UUID
 
 from typing_extensions import Any
 
 from krrood.adapters.json_serializer import to_json
-from krrood.patterns.interface import Interface
+from krrood.patterns.identifier_and_name import HasID, HasName
 
 # %% objects a serialized object refers to
-
-
-class IdentifiedObject(Interface):
-    """
-    An object that serialized objects refer to by its identifier instead of holding a
-    copy of it.
-    """
-
-    id: UUID
-    """
-    The identifier serialized objects refer to the object with.
-    """
-
-    name: Any
-    """
-    What the object is called, which says which object was meant where it cannot be
-    found.
-    """
 
 
 @dataclass
 class ObjectReference(ABC):
     """
-    How a serialized object points at an :class:`IdentifiedObject`: by its identifier,
-    and by the name it went by, which says which object was meant where it cannot be
-    found.
+    How a serialized object points at an object it does not contain: by the object's
+    :class:`~krrood.patterns.identifier_and_name.HasID` identifier and, where it has
+    one, its :class:`~krrood.patterns.identifier_and_name.HasName` name, which says
+    which object was meant where it cannot be found.
 
     The name is never looked up with, so two objects sharing one name stay apart.
     """
@@ -55,11 +37,11 @@ class ObjectReference(ABC):
     @property
     def name_key(self) -> str:
         """
-        Where the name of the object sits in the serialized object.
+        Where the name of the object sits in the serialized object, if it has one.
         """
         return f"{self.subject}_name"
 
-    def write(self, data: dict[str, Any], identified_object: IdentifiedObject) -> None:
+    def write(self, data: dict[str, Any], identified_object: HasID) -> None:
         """
         Put the reference to an object into a serialized object.
 
@@ -67,10 +49,12 @@ class ObjectReference(ABC):
         :param identified_object: The object it refers to.
         """
         data[self.id_key] = to_json(identified_object.id)
+        if not isinstance(identified_object, HasName):
+            return
         data[self.name_key] = to_json(identified_object.name)
 
     @abstractmethod
-    def resolve(self, data: dict[str, Any], **kwargs) -> IdentifiedObject:
+    def resolve(self, data: dict[str, Any], **kwargs) -> HasID:
         """
         The object a serialized object refers to.
 

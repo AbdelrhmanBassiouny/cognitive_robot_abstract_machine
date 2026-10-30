@@ -7,15 +7,16 @@ from typing_extensions import Any
 
 from krrood.adapters.deserialized_object_tracker import DeserializedObjectTracker
 from krrood.adapters.json_serializer import from_json
-from krrood.adapters.object_reference import IdentifiedObject, ObjectReference
+from krrood.adapters.object_reference import ObjectReference
+from krrood.patterns.identifier_and_name import HasID, HasName
 
 # %% objects referred to by identifier
 
 
 @dataclass
-class Landmark(IdentifiedObject):
+class Landmark(HasID, HasName):
     """
-    An object that documents refer to instead of containing it.
+    A named object that documents refer to instead of containing it.
     """
 
     name: str
@@ -30,6 +31,18 @@ class Landmark(IdentifiedObject):
 
 
 @dataclass
+class UnnamedMarker(HasID):
+    """
+    An object that documents refer to by its identifier alone, having no name.
+    """
+
+    id: UUID = field(default_factory=uuid4)
+    """
+    The identifier documents refer to the marker with.
+    """
+
+
+@dataclass
 class LandmarkTracker(DeserializedObjectTracker[UUID, Landmark]):
     """
     The landmarks the reader of a document already has.
@@ -39,7 +52,7 @@ class LandmarkTracker(DeserializedObjectTracker[UUID, Landmark]):
 @dataclass
 class LandmarkReference(ObjectReference):
     """
-    How a document points at a :class:`Landmark`.
+    How a document points at a :class:`Landmark` or an :class:`UnnamedMarker`.
     """
 
     def resolve(self, data: dict[str, Any], **kwargs) -> Landmark:

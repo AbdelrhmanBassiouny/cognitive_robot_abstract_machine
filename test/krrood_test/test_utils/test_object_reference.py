@@ -5,10 +5,27 @@ import json
 import pytest
 
 from krrood.adapters.json_serializer import to_json
-from krrood.adapters.object_reference import IdentifiedObject
-from krrood.patterns.exceptions import InterfaceInstantiationError
+from krrood.patterns.identifier_and_name import HasID, HasName
+from krrood.patterns.mixin import Mixin
 
-from ..dataset.identified_objects import Landmark, LandmarkReference, LandmarkTracker
+from ..dataset.identified_objects import (
+    Landmark,
+    LandmarkReference,
+    LandmarkTracker,
+    UnnamedMarker,
+)
+
+# %% having an identifier and a name
+
+
+@pytest.mark.parametrize("trait", [HasID, HasName])
+def test_an_identifier_and_a_name_are_mixins(trait):
+    assert issubclass(trait, Mixin)
+
+
+def test_an_identifier_does_not_require_a_name():
+    assert not issubclass(HasID, HasName)
+
 
 # %% writing and resolving references
 
@@ -16,11 +33,6 @@ from ..dataset.identified_objects import Landmark, LandmarkReference, LandmarkTr
 @pytest.fixture
 def lighthouse() -> Landmark:
     return Landmark(name="lighthouse")
-
-
-def test_an_identified_object_cannot_be_instantiated():
-    with pytest.raises(InterfaceInstantiationError):
-        IdentifiedObject()
 
 
 def test_a_reference_carries_the_identifier_and_name_under_its_subject(lighthouse):
@@ -32,6 +44,15 @@ def test_a_reference_carries_the_identifier_and_name_under_its_subject(lighthous
         "harbour_id": to_json(lighthouse.id),
         "harbour_name": lighthouse.name,
     }
+
+
+def test_a_reference_to_an_unnamed_object_carries_only_its_identifier():
+    marker = UnnamedMarker()
+    data = {}
+
+    LandmarkReference("harbour").write(data, marker)
+
+    assert data == {"harbour_id": to_json(marker.id)}
 
 
 def test_a_written_reference_resolves_to_the_object_it_names(lighthouse):
