@@ -6,7 +6,7 @@ Plan:
 - Adopt PR (#526 re-applied): CoordinateRepresentation/RigidCoordinateChange/AffinePoint2D, HasName/HasID on WorldEntity, ObjectReference, docstring fixes.
 
 Done:
-- Trimmed in 023a7d7c (force-push to rebuild history was refused; squash on merge). PR description current.
+- Trimmed in 023a7d7c (force-push refused; squash on merge). Re-export now spatial_types/spatial_types/__init__.py so GitHub shows the module as renamed (~137-line diff), 27d35cec.
 - Local: krrood_spatial_math_test 51 pass; SemDT test_spatial_types 373, test_json_parsing 44 (ROS fixtures left to CI).
 
 Next:
