@@ -37,7 +37,7 @@ items:
     casadi extra, first in the stack
   branch: ccr-338b0f4b-gw7q1h
   track: spatial
-  status: in progress
+  status: in_progress
   pull_request_number: 537
   session: https://claude.ai/code/session_01JxHGiMQfiXWTZTVT53R7fS
   depends_on: []
@@ -141,11 +141,12 @@ items:
   status: not_started
   depends_on:
   - planar-point-interface
-  notes: Its own PR after the adopt PR. About 334 files (SemDT, giskardpy, coraplex, robokudo, cramera,
-    segmind, experiments, tests) import semantic_digital_twin.spatial_types.spatial_types; the re-export
-    module stays so JSON type names and outside code keep resolving. Renames Point3 to CartesianPoint3D,
-    Point2 to CartesianPoint2D, Vector3, Line3 and Pose to Vector3D, Line3D, Pose3D (decided 2026-10-29);
-    3D-only types such as RotationMatrix keep their names. Ask whether the old names stay importable.
+  notes: 'Its own PR once #527 lands, so the stack never conflicts on import lines (agreed on #537''s review).
+    About 334 files (SemDT, giskardpy, coraplex, robokudo, cramera, segmind, experiments, tests) import
+    semantic_digital_twin.spatial_types.spatial_types; that module stays so JSON type names and outside
+    code keep resolving, and gains a DeprecationWarning. Renames Point3 to CartesianPoint3D, Point2 to
+    CartesianPoint2D, Vector3, Line3 and Pose to Vector3D, Line3D, Pose3D (decided 2026-10-29); 3D-only
+    types such as RotationMatrix keep their names. Ask whether the old names stay importable.'
 - id: video-on-a-plane
   title: Show a video on a plane of the world (a wall, a table top) in a camera image or through a projector
   branch: claude/krrood-image-video-on-a-plane
