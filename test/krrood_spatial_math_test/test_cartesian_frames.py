@@ -29,6 +29,10 @@ def test_a_three_dimensional_cartesian_frame_charts_three_dimensional_euclidean_
     assert CartesianFrame3D.get_type_of_generic_parameter(SpaceT) is EuclideanSpace3D
 
 
+def test_a_three_dimensional_cartesian_frame_declares_expressing_values_in_it():
+    assert CartesianFrame3D.__abstractmethods__ == {CartesianFrame3D.express.__name__}
+
+
 def test_a_frame_can_extend_an_object_named_before_it_is_identified():
     assert issubclass(ThingFrame, CartesianFrame3D)
 

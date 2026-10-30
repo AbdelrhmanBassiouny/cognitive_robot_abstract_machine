@@ -10,7 +10,9 @@ from krrood.patterns.identifier_and_name import HasID, HasName
 from krrood_spatial_math.cartesian_frame_3d import (
     CartesianFrame3D,
     CartesianFrame3DResolver,
+    ValueT,
 )
+from krrood_spatial_math.exceptions import ReferenceFrameMismatchError
 from krrood_spatial_math.space import EuclideanSpace3D
 
 # %% frames told apart by name
@@ -19,7 +21,8 @@ from krrood_spatial_math.space import EuclideanSpace3D
 @dataclass(eq=False)
 class NamedFrame(CartesianFrame3D):
     """
-    A Cartesian frame that only has a name.
+    A Cartesian frame that only has a name, so it knows no change to any other frame and
+    expresses only values already given in it.
     """
 
     name: str
@@ -36,6 +39,13 @@ class NamedFrame(CartesianFrame3D):
     """
     The identifier serialized coordinate representations refer to the frame with.
     """
+
+    def express(self, value: ValueT) -> ValueT:
+        if value.reference_frame is not self:
+            raise ReferenceFrameMismatchError(
+                expected_frame=self, actual_frame=value.reference_frame
+            )
+        return value
 
 
 # %% finding frames while deserializing
