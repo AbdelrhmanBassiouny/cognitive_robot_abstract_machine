@@ -35,9 +35,11 @@ items:
 - id: spatial-math-move
   title: SemDT's spatial_types module moves unchanged into krrood_spatial_math.spatial_types behind its
     casadi extra
-  branch: claude/krrood-spatial-math-move
+  branch: ccr-338b0f4b-gw7q1h
   track: spatial
-  status: not_started
+  status: in progress
+  pull_request_number: 537
+  session: https://claude.ai/code/session_01JxHGiMQfiXWTZTVT53R7fS
   depends_on:
   - planar-point-interface
   notes: 'First half of splitting #526, opened only after the #526 preview is reviewed: SemDT''s spatial
