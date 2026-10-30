@@ -7,4 +7,4 @@
 - Depends on Jonas Dech's cramph (Tigul/plan-cramp-second-iter) and #511 (SortPieceAction); icra-upstream lands coraplex onto cramph.
 - Montessori Nov 16 - Dec 2 (the AAMAS rebuttal Nov 20-24 falls inside it), cramph and RoboCasa Dec 3-18, feature freeze Dec 18, IROS experiments and writing in January.
 - Working paper claims: one EQL expression serves as goal, precondition, constraint, monitor and explanation; planning inside statecharts with replanning; RoboCasa goals from success checks as the evaluation.
-- Geometry stays Python, as attachments that receive the State and declare what they read; it is never translated to EQL. Design: https://claude.ai/artifact/3zhr45pHQ9P9mdqxtJs5L5
+- Geometry stays Python, as attachments that receive the State and declare the terms they read; it is never translated to EQL. Relational predicates the planner reasons through are EQL bodies. World-scoped domains are EQL expressions, never lists captured at build time. Design: https://claude.ai/artifact/3zhr45pHQ9P9mdqxtJs5L5

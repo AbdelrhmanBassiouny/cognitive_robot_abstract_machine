@@ -54,6 +54,17 @@ items:
   notes: 'semantic_digital_twin reasoning/robot_predicates.py: blocking writes the IK result into
     world.state inside modify_world() and never restores it. Bug-fix PR off main with the bug label;
     failing test first.'
+- id: world-collections-as-expressions
+  branch: eql-planning-robots/world-collections-as-expressions
+  title: World-scoped EQL domains (world.connections, world.semantic_annotations) written as expressions
+    that follow the state
+  track: cram-robocasa
+  status: not_started
+  depends_on:
+  - eql-planning/state-objects-and-domains
+  notes: 23 sites, mostly semantic_digital_twin world_rdr/rules.py, plus robot_predicates.py, queries.py,
+    robot_parts.py and coraplex training_environment.py. Mechanical once variable(Type, expression)
+    evaluates its expression.
 - id: relational-predicates-in-eql
   branch: eql-planning-robots/relational-predicates-in-eql
   title: Robot relational predicates the planner reasons through (GripperHolds, IsPartOfARobot) as
@@ -72,12 +83,10 @@ items:
   depends_on:
   - eql-planning/fluent-state-overlay
   - eql-planning/state-objects-and-domains
-  notes: 27 geometric bodies (inventory in the design). A SemDT world puts itself into a state only
-    for code that reads it implicitly, through a reset_state_context() variant that doesn't notify
-    observers.
-  blockers:
-  - 'Owner decision: the opaque-code contract (attachments declaring input terms, the world put into
-    the state, or both), and the eql-planning roadmap rule that a State never mutates live objects.'
+  notes: 'Owner decided (Oct 30): an attachment declares the terms it reads (coarse at first, e.g.
+    the joint positions of these bodies). SemDT meets it by putting its world into the state inside
+    the attachment, scoped, restored and without notifying observers. 27 geometric bodies, inventory
+    in the design.'
 - id: coraplex-action-effects
   branch: eql-planning-robots/coraplex-action-effects
   title: Effects for pick, place, open, close and navigate, separate from post_condition monitors
@@ -89,6 +98,7 @@ items:
   - concept-theory/contact-and-support
   - concept-theory/holds-estimator
   - eql-planning/state-objects-and-domains
+  - world-collections-as-expressions
   notes: Attaching a body removes a Connection and adds a FixedConnection, so pick and place need
     objects in a state.
 - id: cramph-achieve-node
