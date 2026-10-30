@@ -39,6 +39,7 @@ from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from krrood.patterns.identifier_and_name import HasID, HasName
 from krrood_spatial_math.exceptions import ReferenceFrameMismatchError
 from krrood_spatial_math.cartesian_frame_3d import CartesianFrame3D
+from krrood_spatial_math.space import EuclideanSpace3D
 from semantic_digital_twin.exceptions import AlreadyBelongsToAWorldError
 from semantic_digital_twin.mixin import HasSimulatorProperties, UniqueSimulatorProperty
 from semantic_digital_twin.world_description.connection_properties import (
@@ -390,6 +391,13 @@ class KinematicStructureEntity(
     def remove_from_world(self):
         super().remove_from_world()
         self.index = None
+
+    @property
+    def space(self) -> EuclideanSpace3D | None:
+        """
+        Always ``None``: the space the bodies of a world chart is not modelled yet.
+        """
+        return None
 
     def express(self, value: GenericSpatialType) -> GenericSpatialType:
         return self._world.transform(value, self)
