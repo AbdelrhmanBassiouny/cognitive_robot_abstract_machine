@@ -36,7 +36,7 @@ from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
 )
 from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from krrood.adapters.object_reference import IdentifiedObject
+from krrood.patterns.identifier_and_name import HasID, HasName
 from krrood_spatial_math.exceptions import ReferenceFrameMismatchError
 from krrood_spatial_math.cartesian_frame_3d import CartesianFrame3D
 from semantic_digital_twin.exceptions import AlreadyBelongsToAWorldError
@@ -70,7 +70,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(eq=False)
-class WorldEntity(Symbol):
+class WorldEntity(Symbol, HasName):
     """
     A class representing an entity in the world.
 
@@ -92,7 +92,7 @@ class WorldEntity(Symbol):
 
     name: PrefixedName = field(default=None, kw_only=True, hash=False)
     """
-    The identifier for this world entity.
+    What this world entity is called.
     """
 
     def __post_init__(self):
@@ -141,7 +141,7 @@ class WorldEntity(Symbol):
 
 
 @dataclass(eq=False)
-class WorldEntityWithID(WorldEntity, SubclassJSONSerializer, IdentifiedObject):
+class WorldEntityWithID(WorldEntity, SubclassJSONSerializer, HasID):
     """
     A WorldEntity that has a unique identifier.
 
