@@ -2,7 +2,7 @@
 
 - A goal is an EQL condition and a planner is an EQL backend that answers it with plans. Design and concepts: https://claude.ai/code/artifact/559b21dc-0e6c-41ce-9843-b06cb69fe62e (the Readings tab maps readings to items).
 - The planner lives in krrood.planning, stays domain-agnostic and imports no other workspace package. The core fits the light install; continuous and probabilistic parts go behind krrood[all].
-- State is a valuation of fluents. A State overlay stores only changed fluents and is read through EQL's evaluation context; it never mutates live objects or the SymbolGraph.
+- State is a valuation of fluents. A State overlay stores only changed fluents and is read through EQL's evaluation context. The planner never mutates live objects or the SymbolGraph; only inside an attachment may a domain put its own world into a state, scoped, restored and without notifying observers. Objects in a state are a diff over the base SymbolGraph.
 - Effects are assignments (obj.attribute := value, optionally conditional); fluents nobody assigns persist. Derived facts are EQL rules or symbolic functions and never appear in effects.
 - EQL gives the meaning; search runs on a compiled integer state, not on EQL per step. Native planner first, the unified-planning backend after it.
 - The robot side is eql-planning-robots (#522); keep the API it builds on (State, ActionSchema, PlanningBackend) stable once it starts on Nov 16.

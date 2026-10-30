@@ -47,10 +47,9 @@ items:
   session: https://claude.ai/code/session_018wfiv8DAzFwDhYuFjpMtRY
   depends_on: []
   status: in progress
-  notes: 'Scope per the hypothetical-states design (https://claude.ai/artifact/3zhr45pHQ9P9mdqxtJs5L5):
-    the value overlay only. Document in #535 that a derived fact follows the state when its body
-    is EQL or its inputs arrive as EQL arguments; add no runtime interception of Python bodies. Objects
-    in a state is state-objects-and-domains. Owner to confirm this scope.'
+  notes: 'Owner confirmed the scope (Oct 30): the value overlay only, per https://claude.ai/artifact/3zhr45pHQ9P9mdqxtJs5L5.
+    Docstrings state that a derived fact follows the state when its body is EQL or its inputs arrive
+    as EQL arguments; nothing intercepts Python bodies. Objects in a state is state-objects-and-domains.'
 - id: state-objects-and-domains
   branch: eql-planning/state-objects-and-domains
   title: 'Objects in a State: a state adds and removes objects, and default EQL domains come from
@@ -59,11 +58,12 @@ items:
   depends_on:
   - fluent-state-overlay
   status: not_started
-  notes: A variable without a domain ranges over the state's objects, not the global SymbolGraph.
-    A world's collection (world.connections) becomes an EQL expression read through the context;
-    test that variable_from with a Selectable domain follows the state. Until then a list captured
-    at build time is filtered by the state's objects, never an error. Values (poses) stay as given.
-    Needed because SemDT attach replaces Connection objects.
+  notes: 'A variable without a domain ranges over the state''s objects, not the global SymbolGraph.
+    A world''s collection is an EQL expression (variable(Type, world.connections) on a world variable),
+    read through the state like any fluent; effects that add or remove objects assign it. No filtering
+    fallback. variable(Type, expression) and variable_from(expression) must evaluate the expression
+    per binding, flattened and type-filtered: on main they yield the expression itself. Values stay
+    as given.'
 - id: action-schema-progression
   branch: eql-planning/action-schema-progression
   title: ActionSchema with an EQL precondition and assignment effects, applied to a State
