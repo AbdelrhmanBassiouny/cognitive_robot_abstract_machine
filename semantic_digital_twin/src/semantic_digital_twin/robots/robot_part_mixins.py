@@ -329,6 +329,14 @@ class HasTwoFingers(
         """
         return True
 
+    @classproperty
+    def squeeze(cls) -> float | None:
+        """
+        How far past the width of what it grasps each finger is sent, in metres, so the
+        fingers grip it; None where whoever closes the fingers decides.
+        """
+        return None
+
     @property
     def finger(self) -> TGenericLeftFinger | TGenericRightFinger:
         concrete_thumb_class = get_generic_type_parameters(self, HasFingers)[0]

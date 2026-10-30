@@ -72,6 +72,7 @@ from krrood.entity_query_language.query.match import Match
 from krrood.exceptions import UnboundGenericParameter
 from semantic_digital_twin.datastructures.definitions import GripperState, TorsoState
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
+from semantic_digital_twin.robots.hsrb import HSRBGripper
 from semantic_digital_twin.robots.robot_parts import Arm, EndEffector
 from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
@@ -1681,6 +1682,21 @@ def test_the_squeeze_is_handed_on_to_the_fingers(pr2_apartment_context):
     )
 
     assert [action.squeeze for action in width_actions_of(plan)] == [squeeze]
+
+
+def test_a_gripper_that_names_its_own_squeeze_is_squeezed_by_it(hsr_apartment_context):
+    world, view, extensions = hsr_apartment_context
+    milk = world.get_semantic_annotations_by_type(Milk)[0]
+
+    plan = rewritten(
+        GraspingAction(grasp=grasp_of(milk), arm=left_or_only_arm(view)),
+        extensions,
+        executor_for=physically_simulated_executor,
+    )
+
+    assert [action.squeeze for action in width_actions_of(plan)] == [
+        HSRBGripper.squeeze
+    ]
 
 
 def test_an_object_without_collision_is_still_held_by_shutting_the_gripper(

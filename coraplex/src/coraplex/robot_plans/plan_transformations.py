@@ -442,7 +442,8 @@ class CloseFingersToObjectWidth(PlanTransformation[GraspingAction]):
     squeeze: float = 0.0
     """
     How far past the object's width each finger is sent, in metres, so the fingers press
-    into it rather than merely touching it.
+    into it rather than merely touching it, unless the gripper names its own
+    :attr:`~semantic_digital_twin.robots.robot_part_mixins.HasTwoFingers.squeeze`.
     """
 
     def is_applicable(self, plan_node: GraspingAction) -> bool:
@@ -455,14 +456,17 @@ class CloseFingersToObjectWidth(PlanTransformation[GraspingAction]):
         )
 
     def apply(self, plan_node: GraspingAction) -> None:
+        gripper = plan_node.arm.end_effector
         closing_step = self.closing_step(plan_node)
         plan_node.statechart.replace(
             closing_step,
             plan_node.closing_step(
                 MoveFingersToWidthAction(
-                    gripper=plan_node.arm.end_effector,
+                    gripper=gripper,
                     width=plan_node.grasp.width_along_closing_axis,
-                    squeeze=self.squeeze,
+                    squeeze=(
+                        self.squeeze if gripper.squeeze is None else gripper.squeeze
+                    ),
                 )
             ),
         )
