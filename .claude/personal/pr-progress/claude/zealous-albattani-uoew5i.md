@@ -1,10 +1,10 @@
-PR #535, plan item eql-planning/fluent-state-overlay. Draft.
+PR #535, plan item eql-planning/fluent-state-overlay. Draft. Merges bug PR #538 (off main).
 
 Plan:
-- Value overlay only (owner confirmed Oct 30): ground-term fluents read through EvaluationContext.term_reader; State implements TermReader. Objects in a state is the separate item state-objects-and-domains.
+- Value overlay; facts are EQL conditions on literal/variable/match-rooted expressions (State.with_facts); GroundTerm internal, built by GroundTermExpression.
 
 Done:
-- ground_term.py, State, 33 tests; main merged (3bf731b5b9); contract for derived fluents documented on State and tested; test_planning and test_eql pass locally.
+- Review round 1 (6d18abb0ea): 11 of 12 threads replied and resolved; 36 planning tests; test_eql passes.
 
 Next:
-- Owner review; mark ready only when told.
+- Owner: decide the open thread (typed link symbol <-> expression class); mark ready only when told.
