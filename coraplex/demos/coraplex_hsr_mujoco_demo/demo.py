@@ -32,7 +32,7 @@ from cramph.statechart import Statechart
 from semantic_digital_twin.adapters.multi_sim import MujocoSim
 from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
-from semantic_digital_twin.robots.hsrb import HSRB, HSRBGripper
+from semantic_digital_twin.robots.hsrb import HSRB
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
@@ -90,10 +90,12 @@ class HandShuttingPlanExecutor(PhysicallySimulatedPlanExecutor):
     """
 
     def __post_init__(self) -> None:
-        [hand] = self.context.world.get_semantic_annotations_by_type(HSRBGripper)
+        [arm] = self.context.require_extension(RobotAccess).robot.all_arms
         self.plan_adaptations = [
             (
-                CloseFingersToObjectWidth(squeeze=hand.separation_when_open / 2)
+                CloseFingersToObjectWidth(
+                    squeeze=arm.end_effector.separation_when_open / 2
+                )
                 if isinstance(adaptation, CloseFingersToObjectWidth)
                 else adaptation
             )
