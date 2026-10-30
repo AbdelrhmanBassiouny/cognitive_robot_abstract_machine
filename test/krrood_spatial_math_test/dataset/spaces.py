@@ -2,17 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import Generic, Self
-
 from krrood.patterns.interface import Interface
-from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood_spatial_math.affine_point import AffinePoint2D, CoordinateT
 from krrood_spatial_math.cartesian_frame_3d import CartesianFrame3D
 from krrood_spatial_math.coordinate_system import (
     AffineCoordinateChange,
     AffineFrame,
     AffineFrameT,
-    CoordinateSystemT,
     RigidCoordinateChange,
 )
 from krrood_spatial_math.space import Space
@@ -65,46 +61,18 @@ class StoredScalablePlanePoint(StoredAffinePoint2D[ScalablePlaneFrame, float]):
     """
 
 
-# %% coordinate changes that store their frames
+# %% coordinate changes of one kind each
 
 
 @dataclass
-class StoredFrames(Generic[CoordinateSystemT], SubClassSafeGeneric):
-    """
-    Implements a coordinate change by only storing the coordinate systems it changes
-    between; mixed into a change kind, it is no change on its own.
-    """
-
-    source_coordinate_system: CoordinateSystemT | None
-    """
-    The coordinate system the coordinates are given in.
-    """
-
-    target_coordinate_system: CoordinateSystemT | None
-    """
-    The coordinate system the coordinates are changed into.
-    """
-
-    def inverse(self) -> Self:
-        return type(self)(self.target_coordinate_system, self.source_coordinate_system)
-
-    def __matmul__(self, other: Self) -> Self:
-        return type(self)(other.source_coordinate_system, self.target_coordinate_system)
-
-
-@dataclass
-class StoredScalingChange(
-    StoredFrames[ScalablePlaneFrame], AffineCoordinateChange[ScalablePlaneFrame]
-):
+class ScalingChange(AffineCoordinateChange[ScalablePlaneFrame]):
     """
     An affine change between two frames of one scalable plane.
     """
 
 
 @dataclass
-class StoredFrameChange(
-    StoredFrames[CartesianFrame3D], RigidCoordinateChange[CartesianFrame3D]
-):
+class CartesianFrame3DChange(RigidCoordinateChange[CartesianFrame3D]):
     """
     A rigid change between two Cartesian frames, such as from a gripper to the table.
     """
