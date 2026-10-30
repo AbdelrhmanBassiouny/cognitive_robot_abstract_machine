@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 from typing_extensions import Any
 
 from krrood.adapters.deserialized_object_tracker import DeserializedObjectTracker
+from krrood.patterns.identifier_and_name import HasID, HasName
 from krrood_spatial_math.cartesian_frame_3d import (
     CartesianFrame3D,
     CartesianFrame3DResolver,
@@ -60,3 +61,24 @@ class KnownFrames(
 
     def get(self, key: UUID, name: Any = None) -> NamedFrame:
         return super().get(key)
+
+
+# %% frames that extend objects named before they are identified
+
+
+class NamedThing(HasName):
+    """
+    An object that is named whether or not it has an identifier.
+    """
+
+
+class IdentifiedNamedThing(NamedThing, HasID):
+    """
+    A named object that also has an identifier, given after its name.
+    """
+
+
+class ThingFrame(IdentifiedNamedThing, CartesianFrame3D):
+    """
+    A Cartesian frame that extends an object named before it is identified.
+    """
