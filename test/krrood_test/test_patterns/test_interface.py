@@ -2,10 +2,13 @@ from dataclasses import dataclass
 
 import pytest
 
-from krrood.patterns.exceptions import InterfaceInstantiationError
+from krrood.patterns.exceptions import (
+    InterfaceInstantiationError,
+    MissingInterfaceAttributesError,
+)
 from krrood.patterns.interface import Interface
 
-# %% an interface and the class implementing it
+# %% an interface and the classes implementing it
 
 
 class Measurable(Interface):
@@ -15,6 +18,17 @@ class Measurable(Interface):
 @dataclass
 class Rod(Measurable):
     length: float
+
+
+class Ruler(Measurable):
+    @property
+    def length(self) -> float:
+        return 1.0
+
+
+@dataclass
+class Unmeasured(Measurable):
+    label: str = ""
 
 
 # %% instantiation
@@ -28,3 +42,17 @@ def test_an_interface_cannot_be_instantiated():
 def test_a_class_implementing_an_interface_can_be_instantiated():
     length = 2.0
     assert Rod(length).length == length
+
+
+def test_a_property_provides_a_declared_attribute():
+    assert Ruler().length == 1.0
+
+
+# %% attributes an implementation leaves out
+
+
+def test_a_class_leaving_out_a_declared_attribute_cannot_be_instantiated():
+    with pytest.raises(MissingInterfaceAttributesError) as error:
+        Unmeasured()
+
+    assert error.value.attributes == ("length",)
