@@ -44,7 +44,7 @@ items:
   notes: '#537 (draft, on main) creates krrood_spatial_math with SemDT''s spatial types moved behind
     [casadi] (GitHub shows the module as renamed), a CartesianFrame3D(HasName, HasID) declaring only express,
     CartesianFrame3DReference on krrood''s new ObjectReference, and the old module re-exporting every name.
-    #527 is stacked on it. Next: CI, the user''s review, the api-break talk with SemDT/krrood code owners.'
+    #527 is stacked on it. Marked ready; promotion link built, upstream PR not yet opened. Next: open it, the api-break talk with SemDT/krrood code owners.'
 - id: krrimage
   title: domain_models/krrood_image (images, colours, pixels) with Color moved out of SemDT
   branch: claude/crollywood-refactor-shared-classes-e8jtm9
