@@ -7,8 +7,9 @@ coordinates are given in, and coordinates are only combined after changing them 
 coordinate system. Its base depends on `krrood` alone.
 
 - `krrood_spatial_math.space`: `Space`, a set of points with a geometry;
-  `EuclideanSpace`, one with distances and angles; and `EuclideanSpace3D`, such as the
-  physical space a robot's bodies are in.
+  `EuclideanSpace`, one with distances and angles, whose `dimension` each subclass
+  fixes; `EuclideanSpace2D`, such as the floor a robot drives on; and
+  `EuclideanSpace3D`, such as the physical space a robot's bodies are in.
 - `krrood_spatial_math.coordinate_system`: `CoordinateSystem`, what coordinates on one
   space are given in; `AffineFrame`, one with an origin and straight axes, and
   `CartesianFrame`, an affine frame whose axes are perpendicular and of unit length;
