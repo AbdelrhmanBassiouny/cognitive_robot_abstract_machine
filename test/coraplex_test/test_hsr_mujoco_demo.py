@@ -5,6 +5,9 @@ held by friction alone.
 
 from __future__ import annotations
 
+import importlib.util
+import sys
+from pathlib import Path
 from types import ModuleType
 
 import pytest
@@ -12,7 +15,6 @@ import pytest
 from semantic_digital_twin.robots.hsrb import HSRB
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
 
-from ..demo_folders import DemoFolder
 from ..pytest_environment import runs_in_continuous_integration
 
 pytestmark = [
@@ -25,13 +27,29 @@ pytestmark = [
     ),
 ]
 
+# %% the demo, loaded from its folder
+
 
 @pytest.fixture(scope="module")
 def hsr_demo() -> ModuleType:
     """
-    The HSR demo's ``demo`` module.
+    The HSR demo's ``demo`` module, its folder put on the path for the modules it imports.
     """
-    return DemoFolder.HSR_MUJOCO.load_module("demo")
+    folder = (
+        Path(__file__).parents[2] / "coraplex" / "demos" / "coraplex_hsr_mujoco_demo"
+    )
+    with pytest.MonkeyPatch.context() as patch:
+        patch.syspath_prepend(str(folder))
+        specification = importlib.util.spec_from_file_location(
+            "hsr_mujoco_demo", folder / "demo.py"
+        )
+        module = importlib.util.module_from_spec(specification)
+        patch.setitem(sys.modules, specification.name, module)
+        specification.loader.exec_module(module)
+    return module
+
+
+# %% carrying the milk
 
 
 def test_the_milk_ends_where_it_is_set_down_on_the_table(hsr_demo):
