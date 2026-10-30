@@ -2,15 +2,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import Self
+from typing_extensions import Generic, Self
 
 from krrood.patterns.interface import Interface
+from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood_spatial_math.affine_point import AffinePoint2D, CoordinateT
 from krrood_spatial_math.cartesian_frame_3d import CartesianFrame3D
 from krrood_spatial_math.coordinate_system import (
     AffineCoordinateChange,
     AffineFrame,
     AffineFrameT,
+    CoordinateSystemT,
     RigidCoordinateChange,
 )
 from krrood_spatial_math.space import Space
@@ -67,19 +69,20 @@ class StoredScalablePlanePoint(StoredAffinePoint2D[ScalablePlaneFrame, float]):
 
 
 @dataclass
-class StoredCoordinateChange(AffineCoordinateChange[AffineFrameT]):
+class StoredFrames(Generic[CoordinateSystemT], SubClassSafeGeneric):
     """
-    An affine coordinate change that only stores the frames it changes between.
-    """
-
-    source_coordinate_system: AffineFrameT | None
-    """
-    The frame the coordinates are given in.
+    Implements a coordinate change by only storing the coordinate systems it changes
+    between; mixed into a change kind, it is no change on its own.
     """
 
-    target_coordinate_system: AffineFrameT | None
+    source_coordinate_system: CoordinateSystemT | None
     """
-    The frame the coordinates are changed into.
+    The coordinate system the coordinates are given in.
+    """
+
+    target_coordinate_system: CoordinateSystemT | None
+    """
+    The coordinate system the coordinates are changed into.
     """
 
     def inverse(self) -> Self:
@@ -90,15 +93,17 @@ class StoredCoordinateChange(AffineCoordinateChange[AffineFrameT]):
 
 
 @dataclass
-class StoredScalingChange(StoredCoordinateChange[ScalablePlaneFrame]):
+class StoredScalingChange(
+    StoredFrames[ScalablePlaneFrame], AffineCoordinateChange[ScalablePlaneFrame]
+):
     """
-    A change between two frames of one scalable plane.
+    An affine change between two frames of one scalable plane.
     """
 
 
 @dataclass
 class StoredFrameChange(
-    StoredCoordinateChange[CartesianFrame3D], RigidCoordinateChange[CartesianFrame3D]
+    StoredFrames[CartesianFrame3D], RigidCoordinateChange[CartesianFrame3D]
 ):
     """
     A rigid change between two Cartesian frames, such as from a gripper to the table.
