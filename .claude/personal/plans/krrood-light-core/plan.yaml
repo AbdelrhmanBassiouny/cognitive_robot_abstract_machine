@@ -31,7 +31,7 @@ items:
 - id: symbol-graph-without-matplotlib
   title: Importing the symbol graph loads no optional dependency
   branch: claude/symbol-graph-without-matplotlib
-  status: in_progress
+  status: done
   track: optional-imports
   depends_on: []
   pull_request_number: 509
@@ -61,11 +61,9 @@ items:
     User-chosen fix: check importlib.util.find_spec and skip missing modules (no try/except).'
 - id: core-boundary-guard
   title: One guard over every core module, with import-linter and a shrinking offender list
-  branch: claude/keen-feynman-4xcf4m
-  status: in progress
+  branch: null
+  status: not_started
   track: guards
-  pull_request_number: 546
-  session: https://claude.ai/code/session_01JxHGiNxUAghACotuu2UKYp
   depends_on: [symbol-graph-without-matplotlib]
   notes: 'Core subpackages declared once. A test walks every core module (pkgutil), imports each in a
     fresh interpreter (#509 -X importtime pattern) and fails on any package outside stdlib and core''s declared
