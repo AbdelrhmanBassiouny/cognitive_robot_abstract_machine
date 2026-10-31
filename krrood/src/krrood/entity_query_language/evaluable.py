@@ -12,10 +12,12 @@ from abc import ABC, abstractmethod
 
 from typing_extensions import Iterator, TYPE_CHECKING
 
+from krrood.entity_query_language.evaluation_context import EvaluationContext
 from krrood.entity_query_language.utils import make_list
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.backends import QueryBackend
+    from krrood.entity_query_language.ground_term import TermReader
 
 
 class Evaluable(ABC):
@@ -36,35 +38,45 @@ class Evaluable(ABC):
         """
         ...
 
-    def evaluate(self, backend: QueryBackend | None = None) -> Iterator:
+    def evaluate(
+        self, backend: QueryBackend | None = None, state: TermReader | None = None
+    ) -> Iterator:
         """
         Evaluate using the given backend, returning an iterator over the results.
 
         :param backend: The query backend to evaluate with. Defaults to the
             ``EntityQueryLanguageBackend`` (native in-process evaluation / generation).
+        :param state: What the evaluation reads the values of attributes, indexes, calls
+            and predicates from; their live values when omitted.
         :return: An iterator over the results.
         """
         if backend is None:
             from krrood.entity_query_language.backends import EntityQueryLanguageBackend
 
             backend = EntityQueryLanguageBackend()
-        return backend.evaluate(self)
+        return EvaluationContext.iterate_reading_from(state, backend.evaluate(self))
 
-    def tolist(self, backend: QueryBackend | None = None) -> list:
+    def tolist(
+        self, backend: QueryBackend | None = None, state: TermReader | None = None
+    ) -> list:
         """
         Evaluate and return the results as a list.
 
         :param backend: The query backend to evaluate with; forwarded to
             :meth:`evaluate`.
+        :param state: Forwarded to :meth:`evaluate`.
         """
-        return make_list(self.evaluate(backend=backend))
+        return make_list(self.evaluate(backend=backend, state=state))
 
-    def first(self, backend: QueryBackend | None = None):
+    def first(
+        self, backend: QueryBackend | None = None, state: TermReader | None = None
+    ):
         """
         Evaluate and return the first result.
 
         :param backend: The query backend to evaluate with; forwarded to
             :meth:`evaluate`.
+        :param state: Forwarded to :meth:`evaluate`.
         :raises StopIteration: If no results are found.
         """
-        return next(self.evaluate(backend=backend))
+        return next(self.evaluate(backend=backend, state=state))
