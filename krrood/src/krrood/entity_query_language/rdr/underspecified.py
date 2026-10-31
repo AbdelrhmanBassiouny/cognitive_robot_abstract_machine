@@ -38,25 +38,7 @@ from krrood.entity_query_language.rdr.exceptions import (
     NoInferenceTarget,
     UnsupportedInferenceTarget,
 )
-
-#: Generic origins whose instances are unbounded iterables we cannot conclude as one value.
-_UNBOUNDED_ITERABLE_ORIGINS = (list, set, frozenset, tuple, dict)
-
-
-def is_ellipsis_target(attribute_match: AttributeMatch) -> bool:
-    """:return: Whether ``attribute_match`` assigns ``...`` (i.e. is an inference target)."""
-    return getattr(attribute_match.assigned_variable, "_value_", None) is ...
-
-
-def _is_unbounded_iterable(annotation: Any) -> bool:
-    """:return: Whether ``annotation`` denotes a collection type (``Optional`` unwrapped)."""
-    if is_union_annotation(annotation):
-        return any(
-            _is_unbounded_iterable(arg)
-            for arg in get_args(annotation)
-            if arg is not type(None)
-        )
-    return get_origin(annotation) in _UNBOUNDED_ITERABLE_ORIGINS
+from krrood.ormatic.utils import classproperty
 
 
 @dataclass
@@ -64,12 +46,43 @@ class RDRMatchParser:
     """Reads an underspecified :class:`Match` for RDR-based attribute inference."""
 
     match: Match
+    """
+    The underspecified query whose ``...`` attributes are inferred.
+    """
 
     def __post_init__(self) -> None:
         # Callers hand in a freshly built, unresolved template (e.g. an(Animal)(species=...));
         # every property below reads match._type_/._variable_/._matches_with_variables_, which only
         # exist once resolved. Match.resolve() is idempotent, so this is safe if already resolved.
         self.match.resolve()
+
+    @classproperty
+    def unbounded_iterable_origins(cls) -> tuple[type, ...]:
+        """
+        The generic origins whose instances are collections, which cannot be concluded as
+        one value.
+        """
+        return list, set, frozenset, tuple, dict
+
+    @staticmethod
+    def is_ellipsis_target(attribute_match: AttributeMatch) -> bool:
+        """
+        :return: Whether ``attribute_match`` assigns ``...``, i.e. is an inference target.
+        """
+        return attribute_match.assigned_value is ...
+
+    @classmethod
+    def is_unbounded_iterable(cls, annotation: Any) -> bool:
+        """
+        :return: Whether ``annotation`` denotes a collection type, ``Optional`` unwrapped.
+        """
+        if is_union_annotation(annotation):
+            return any(
+                cls.is_unbounded_iterable(argument)
+                for argument in get_args(annotation)
+                if argument is not type(None)
+            )
+        return get_origin(annotation) in cls.unbounded_iterable_origins
 
     @property
     def case_type(self) -> Type:
@@ -87,7 +100,7 @@ class RDRMatchParser:
         targets = [
             attribute_match
             for attribute_match in self.match._matches_with_variables_
-            if is_ellipsis_target(attribute_match)
+            if self.is_ellipsis_target(attribute_match)
         ]
         for target in targets:
             self._guard_single_valued(target)
@@ -122,7 +135,7 @@ class RDRMatchParser:
         """Fresh comparator nodes for the concrete attribute constraints (``...`` dropped)."""
         conditions: List[Any] = []
         for leaf in self.match._matches_with_variables_:
-            if is_ellipsis_target(leaf):
+            if self.is_ellipsis_target(leaf):
                 continue
             attribute = getattr(self.variable, leaf.attribute_name)
             conditions.append(attribute == leaf.assigned_variable._value_)
@@ -131,5 +144,5 @@ class RDRMatchParser:
     def _guard_single_valued(self, target: AttributeMatch) -> None:
         name = target.attribute_name
         annotation = get_type_hints_of_object(self.case_type).get(name)
-        if annotation is not None and _is_unbounded_iterable(annotation):
+        if annotation is not None and self.is_unbounded_iterable(annotation):
             raise UnsupportedInferenceTarget(self.case_type, name)
