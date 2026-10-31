@@ -50,9 +50,11 @@ items:
     and ORMatic loads no matplotlib.'
 - id: type-hint-resolver-skips-missing-modules
   title: Type-hint resolution skips modules that are not installed
-  branch: null
-  status: not_started
+  branch: claude/relaxed-wozniak-eu4gdv
+  status: in progress
   track: optional-imports
+  pull_request_number: 545
+  session: https://claude.ai/code/session_01JxHGiMzkomLaQ42NXK331R
   depends_on: []
   notes: 'class_diagrams.utils / krrood.utils.get_scope_from_imports import every module a source file
     names, TYPE_CHECKING blocks included, so a core module naming an `all` module fails on a core install.
