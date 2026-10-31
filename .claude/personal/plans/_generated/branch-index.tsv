@@ -33,7 +33,7 @@ claude/split-performatives-prs-xbluus	eql-performatives
 claude/performatives-clean	eql-performatives
 claude/eql-performatives-unify	eql-performatives
 eql-planning/state-aware-predicate-cache	eql-planning
-eql-planning/instantiated-variable-type-and-factory	eql-planning
+claude/eql-planning-instantiated-variable-cue1io	eql-planning
 eql-planning/mapped-variable-cache-unhashable-arguments	eql-planning
 claude/zealous-albattani-uoew5i	eql-planning
 ccr-b32c8432-18ncpi	eql-planning

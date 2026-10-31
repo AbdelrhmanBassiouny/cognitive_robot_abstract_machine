@@ -40,11 +40,13 @@ items:
     on aamas27-unification-revision): fold into whichever PR lands that cache. Keys on the State
     that fluent-state-overlay introduces. Deferred at kickoff on 2026-10-20.'
 - id: instantiated-variable-type-and-factory
-  branch: eql-planning/instantiated-variable-type-and-factory
+  branch: claude/eql-planning-instantiated-variable-cue1io
   title: InstantiatedVariable separates its result type from the factory that builds it
   track: eql-prerequisites
+  pull_request_number: 542
+  session: https://claude.ai/code/session_01JxHGiP3v6stSw2szCFHrHB
   depends_on: []
-  status: not_started
+  status: in progress
   notes: 'Bug-style PR off main, merged into #535 like #538 (review thread on krrood/planning/fact.py).
     One field for the result type, always a type; a factory field that defaults to the type and may
     be a factory method. Afterwards Fact drops its isinstance(_type_, type) guard.'
