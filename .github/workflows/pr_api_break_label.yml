@@ -25,7 +25,8 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # like the labeler, this only adds the label, never removes it
+      # Like the labeler, this only adds the label, never removes it, and goes through the REST
+      # endpoint, which creates the label when the repository does not have it yet.
       - name: Add the api-break label
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -38,4 +39,6 @@ jobs:
             echo "No open pull request has head commit $HEAD_SHA"
             exit 0
           fi
-          gh pr edit "$pull_request_number" --repo "${{ github.repository }}" --add-label api-break
+          gh api --method POST \
+            "repos/${{ github.repository }}/issues/$pull_request_number/labels" \
+            -f "labels[]=api-break"
