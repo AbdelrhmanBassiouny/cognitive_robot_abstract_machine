@@ -22,7 +22,9 @@ items:
     pull_request_number: 544
     track: match
     depends_on: []
-    status: in progress
+    status: blocked
+    blockers:
+      - "Review on #544: keep ... as backend-supplied (this PR), keep it strictly predict and close (recommended), or add a selective wildcard."
     session: https://claude.ai/code/session_01JxHGiPWncpagnYrmFUYhX3
     notes: >
       api-break. The lowered query of Match omits attribute == ... comparisons, and
