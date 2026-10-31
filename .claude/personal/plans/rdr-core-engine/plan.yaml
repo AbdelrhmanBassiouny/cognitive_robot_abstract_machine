@@ -40,8 +40,8 @@ items:
   session: https://claude.ai/code/session_018wfiv8uSfijGho9G4ZS6Qz
   blockers:
     - >-
-      Open review thread on WrappedField.holds_collection (non-dataclass case types no
-      longer guarded) awaits the user; then fork CI on 59ff6d560 and drop integration-conflict.
+      All review threads resolved; awaits green fork CI on 0edfbb883, then drop
+      integration-conflict.
   depends_on: []
   status: in_progress
   notes: '2026-08-12 steward cascade: restacked onto its cascaded base, which now carries main be377fdf
