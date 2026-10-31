@@ -11,7 +11,7 @@ match-query-ergonomics: https://claude.ai/artifact/QtDAdbkefvNjYDz2TJkHJC
 montessori-eql-stack: https://claude.ai/artifact/HKoq2xGZbr7ajMS36x6EAe
 montessori-perception-split: https://claude.ai/artifact/MqLLspu1xA641B3fQZdzs3
 probabilistic-knowledge-perception: https://claude.ai/artifact/BTc8kjqRkbmDHFUPM94QxA
-rdr-core-engine: https://claude.ai/artifact/H4cfQtVuKNEkUQmrzPeZJs
+rdr-core-engine: https://claude.ai/artifact/YcA2TobxAhbF9YpYnDcj5J
 rdr-engine-extensions: https://claude.ai/artifact/LYf2SL5cqwCok5KSAB6mfG
 rdr-expert-framework: https://claude.ai/artifact/9aUn8TXY3UhSdw972EwtJN
 rdr-explanation: https://claude.ai/artifact/KWD11rpoo8c5AiZBD79nhS
@@ -32,3 +32,4 @@ _content_digests:
   montessori-perception-split: 64037762af72ce79cd933abbb7a1a7da3f1e3cd8469cc67a972bc4a1cc368507
   domain-models: 8e505c13f9812e98a95212f6e193375bbdb0654561b75a5a4eb3fff59ba60214
   eql-planning: b68727a025711013e0fab2d84cd0840c8af1af22267719332b6a891af4c5ba7c
+  rdr-core-engine: 5762c62c1b4c5954d641c5c3ccd0a5a855c5c053dd7c69f415e21ca9d2031f5a
