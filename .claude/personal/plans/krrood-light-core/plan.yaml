@@ -10,7 +10,8 @@ tracking_issue: 510
 waves:
 - id: decoupling
   name: Core stops importing heavy modules
-  description: Each item cuts one import edge from core into a heavy dependency, with a fresh-interpreter test.
+  description: Each item cuts one import edge from core into a heavy dependency, with a fresh-interpreter
+    test.
 - id: extras
   name: The extras exist
   description: pyproject split, workspace packages switched, core-only CI job.
@@ -28,26 +29,16 @@ tracks:
   name: Packaging and CI
   wave: extras
 items:
-- id: symbol-graph-without-matplotlib
-  title: Importing the symbol graph loads no optional dependency
-  branch: claude/symbol-graph-without-matplotlib
-  status: done
-  track: optional-imports
-  depends_on: []
-  pull_request_number: 509
-  session: https://claude.ai/code/session_01FWkFPeHmYEXAemAcshyJAx
-  notes: 'Bug PR, base main: removed the unused RWXNode import from class_diagram.py. Adds the
-    fresh-interpreter test pattern (python -X importtime) later items reuse.'
 - id: matplotlib-optional
   title: matplotlib is imported only when drawing
   branch: null
   status: not_started
   track: optional-imports
-  depends_on: [symbol-graph-without-matplotlib]
-  notes: 'User-approved option 1: graph_visualizer.py and RDR import matplotlib inside the drawing
-    methods after check_dependencies() raises a custom exception naming the extra. Adds the AGENTS.md
-    exception for optional-extra imports. Stacked on #509 for its test pattern; test that importing EQL factories
-    and ORMatic loads no matplotlib.'
+  depends_on: []
+  notes: 'User-approved option 1: graph_visualizer.py and RDR import matplotlib inside the
+    drawing methods after check_dependencies() raises a custom exception naming the extra.
+    Adds the AGENTS.md exception for optional-extra imports. Stacked on #509 for its test
+    pattern; test that importing EQL factories and ORMatic loads no matplotlib.'
 - id: type-hint-resolver-skips-missing-modules
   title: Type-hint resolution skips modules that are not installed
   branch: claude/relaxed-wozniak-eu4gdv
@@ -56,68 +47,84 @@ items:
   pull_request_number: 545
   session: https://claude.ai/code/session_01JxHGiMzkomLaQ42NXK331R
   depends_on: []
-  notes: 'class_diagrams.utils / krrood.utils.get_scope_from_imports import every module a source file
-    names, TYPE_CHECKING blocks included, so a core module naming an `all` module fails on a core install.
-    User-chosen fix: check importlib.util.find_spec and skip missing modules (no try/except).'
+  notes: 'class_diagrams.utils / krrood.utils.get_scope_from_imports import every module a
+    source file names, TYPE_CHECKING blocks included, so a core module naming an `all` module
+    fails on a core install. User-chosen fix: check importlib.util.find_spec and skip missing
+    modules (no try/except).'
 - id: core-boundary-guard
   title: One guard over every core module, with import-linter and a shrinking offender list
   branch: null
-  status: not_started
+  status: in progress
   track: guards
-  depends_on: [symbol-graph-without-matplotlib]
-  notes: 'Core subpackages declared once. A test walks every core module (pkgutil), imports each in a
-    fresh interpreter (#509 -X importtime pattern) and fails on any package outside stdlib and core''s declared
-    dependencies (importlib.metadata, transitive). import-linter (user-approved dev dependency) forbids
-    core importing `all` modules; option-1 method-local imports listed as exceptions. Both start with a
-    list of today''s offenders that items 4-6 shrink and nothing may grow.'
+  depends_on: []
+  notes: Core subpackages declared once. A test walks every core module (pkgutil), imports
+    each in a fresh interpreter (#509 -X importtime pattern) and fails on any package outside
+    stdlib and core's declared dependencies (importlib.metadata, transitive). import-linter
+    (user-approved dev dependency) forbids core importing `all` modules; option-1 method-local
+    imports listed as exceptions. Both start with a list of today's offenders that items 4-6
+    shrink and nothing may grow.
 - id: serializer-without-heavy-dependencies
   title: JSON serializer and symbol graph import no sqlalchemy, scipy or casadi
   branch: null
   status: not_started
   track: core-boundaries
-  depends_on: [type-hint-resolver-skips-missing-modules, core-boundary-guard]
-  notes: 'HasGeneric moves from ormatic.data_access_objects.base into patterns; the scipy sparse-array
-    support moves to its own serializer module; numpy array support stays core (rustworkx already
-    requires numpy, import ~0.07 s); symbol_graph.helpers stops importing symbolic_math (casadi) at
-    import. Reuse #506 (closed) for what it extracted. Removes its entries from the guard ratchet.'
+  depends_on:
+  - type-hint-resolver-skips-missing-modules
+  - core-boundary-guard
+  notes: 'HasGeneric moves from ormatic.data_access_objects.base into patterns; the scipy
+    sparse-array support moves to its own serializer module; numpy array support stays core
+    (rustworkx already requires numpy, import ~0.07 s); symbol_graph.helpers stops importing
+    symbolic_math (casadi) at import. Reuse #506 (closed) for what it extracted. Removes its
+    entries from the guard ratchet.'
 - id: eql-probabilistic-split
   title: Core EQL imports no random_events or probabilistic_model
   branch: null
   status: not_started
   track: core-boundaries
-  depends_on: [type-hint-resolver-skips-missing-modules, core-boundary-guard]
-  notes: 'Split operators/causal.py: Cause/Confounder/CausesEffect stay core, the random_events dataclasses
-    move out; probabilistic_queries.py and backends.py are `all`. number_like_field (user-approved cleanest):
-    plain check, int/float subclass and not bool/Enum, matching random_events today. aggregators interval
-    stays method-local.'
+  depends_on:
+  - type-hint-resolver-skips-missing-modules
+  - core-boundary-guard
+  notes: 'Split operators/causal.py: Cause/Confounder/CausesEffect stay core, the random_events
+    dataclasses move out; probabilistic_queries.py and backends.py are `all`. number_like_field
+    (user-approved cleanest): plain check, int/float subclass and not bool/Enum, matching
+    random_events today. aggregators interval stays method-local.'
 - id: verbalization-realization-split
   title: Verbalization vocabulary stays core, realization moves to all
   branch: null
   status: not_started
   track: core-boundaries
-  depends_on: [type-hint-resolver-skips-missing-modules, core-boundary-guard]
+  depends_on:
+  - type-hint-resolver-skips-missing-modules
+  - core-boundary-guard
   notes: 'User-approved: _verbalization_fragment_ stays abstract and unchanged. The vocabulary
-    (clause, Noun, Verb, fragments) is declarative; only morphology (inflect ~1.7 s, lemminflect, typeguard)
-    and the pipeline (jinja2, IPython) move to `all`. Needs navigation_path and parts_of_speech to stop
-    calling morphology while building a clause (cardinal, verb_lemma become fragments realized later).'
+    (clause, Noun, Verb, fragments) is declarative; only morphology (inflect ~1.7 s, lemminflect,
+    typeguard) and the pipeline (jinja2, IPython) move to `all`. Needs navigation_path and
+    parts_of_speech to stop calling morphology while building a clause (cardinal, verb_lemma
+    become fragments realized later).'
 - id: krrood-core-and-all-extras
   title: pyproject core and all extras, workspace packages switched, core-only CI job
   branch: null
   status: not_started
   track: packaging
-  depends_on: [matplotlib-optional, core-boundary-guard, serializer-without-heavy-dependencies, eql-probabilistic-split, verbalization-realization-split]
-  notes: 'Breaking for outside users: pip has no default extras. Every workspace package that lists krrood
-    switches to krrood[all]. Core-only CI job on Linux and Windows runs the guard and core tests; the
-    guard''s offender lists must be empty. basstler (basstler#12, item basstler-krrood-dependency in
-    basstler''s notes) then depends on plain krrood.'
+  depends_on:
+  - matplotlib-optional
+  - core-boundary-guard
+  - serializer-without-heavy-dependencies
+  - eql-probabilistic-split
+  - verbalization-realization-split
+  notes: 'Breaking for outside users: pip has no default extras. Every workspace package that
+    lists krrood switches to krrood[all]. Core-only CI job on Linux and Windows runs the guard
+    and core tests; the guard''s offender lists must be empty. basstler (basstler#12, item
+    basstler-krrood-dependency in basstler''s notes) then depends on plain krrood.'
 - id: core-weight-regression-check
   title: CI compares core install size and import time against the base branch
   branch: null
   status: not_started
   track: packaging
-  depends_on: [krrood-core-and-all-extras]
-  notes: 'One CI job, only when krrood or its pyproject changes: installs core krrood from base and head
-    into empty environments and compares installed size and distribution count (deterministic), then
-    median import time over alternating runs on the same runner. Fails only past a relative and an
-    absolute threshold, both named settings; prints both numbers in the job summary. Catches a heavy
-    package added to core''s own dependencies.'
+  depends_on:
+  - krrood-core-and-all-extras
+  notes: 'One CI job, only when krrood or its pyproject changes: installs core krrood from
+    base and head into empty environments and compares installed size and distribution count
+    (deterministic), then median import time over alternating runs on the same runner. Fails
+    only past a relative and an absolute threshold, both named settings; prints both numbers
+    in the job summary. Catches a heavy package added to core''s own dependencies.'

@@ -5,3 +5,4 @@
 - A library from `all` is imported inside the method that needs it, after `check_dependencies()` raises a custom exception naming the extra. This is the AGENTS.md exception the user approved (option 1); everywhere else imports stay at the top.
 - Each decoupling item removes its modules from the core-boundary guard's offender lists (runtime test and import-linter); nothing is ever added to them.
 - Never reimplement what the heavy library does to keep a feature in core; move the feature to `all` instead, unless the check is a plain stdlib type test (number_like_field).
+- Core's subpackages, its dependencies and both offender lists are declared once, in krrood/pyproject.toml (the import-linter contract and [tool.krrood.core-boundary]); no other file restates them.
