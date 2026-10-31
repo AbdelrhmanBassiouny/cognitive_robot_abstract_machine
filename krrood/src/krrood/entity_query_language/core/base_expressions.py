@@ -38,6 +38,7 @@ from krrood.adapters.json_serializer import list_like_classes
 from krrood.entity_query_language.evaluation_context import (
     EvaluationContext,
     get_evaluation_context,
+    iterate_reading_from,
 )
 from krrood.entity_query_language.exceptions import NoExpressionFoundForGivenID
 from krrood.entity_query_language.utils import make_list, T, make_set, is_iterable
@@ -49,6 +50,8 @@ if TYPE_CHECKING:
     from krrood.entity_query_language.core.mapped_variable import MappedVariable
     from krrood.entity_query_language.core.variable import Variable
     from krrood.entity_query_language.query.query import Query
+    from krrood.entity_query_language.backends import QueryBackend
+    from krrood.entity_query_language.ground_term import TermReader
 
 Bindings: TypeAlias = Dict[uuid.UUID, Any]
 """
@@ -292,28 +295,36 @@ class SymbolicExpression(
 
     def tolist(
         self,
-        backend=None,
+        backend: QueryBackend | None = None,
+        state: TermReader | None = None,
     ) -> list[T | dict[T | SymbolicExpression, T]]:
         """
         Evaluate and return the results as a list.
 
         :param backend: Optional query backend; forwarded to :py:meth:`evaluate`.
+        :param state: Forwarded to :py:meth:`evaluate`.
         """
-        return make_list(self.evaluate(backend=backend))
+        return make_list(self.evaluate(backend=backend, state=state))
 
-    def first(self, backend=None) -> T | dict[T | SymbolicExpression, T]:
+    def first(
+        self,
+        backend: QueryBackend | None = None,
+        state: TermReader | None = None,
+    ) -> T | dict[T | SymbolicExpression, T]:
         """
         Evaluate and return the first result of the query object descriptor.
 
         :param backend: Optional query backend; forwarded to :py:meth:`evaluate`.
+        :param state: Forwarded to :py:meth:`evaluate`.
         :return: The first result of the query object descriptor.
         :raises StopIteration: If no results are found.
         """
-        return next(self.evaluate(backend=backend))
+        return next(self.evaluate(backend=backend, state=state))
 
     def evaluate(
         self,
-        backend=None,
+        backend: QueryBackend | None = None,
+        state: TermReader | None = None,
     ) -> Iterator[T | dict[T | SymbolicExpression, T]]:
         """
         Evaluate the query and map the results to the correct output data structure.
@@ -322,6 +333,15 @@ class SymbolicExpression(
         :param backend: Accepted for interface uniformity with ``Query``/``Match``; the
             base symbolic-expression engine always evaluates natively and ignores this
             argument.
+        :param state: What the evaluation reads the values of attributes, indexes,
+            calls and predicates from; their live values when omitted.
+        """
+        return iterate_reading_from(state, self._processed_results_())
+
+    def _processed_results_(self) -> Iterator[T | dict[T | SymbolicExpression, T]]:
+        """
+        :return: The results of a new evaluation, mapped to the output data structure
+            and limited to :attr:`_limit_`.
         """
         SymbolGraph().remove_dead_instances()
         results = (self._process_result_(res) for res in self._true_results_())

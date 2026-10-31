@@ -16,7 +16,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 
 from ordered_set import OrderedSet
-from typing_extensions import Any, Callable, Iterator, TYPE_CHECKING
+from typing_extensions import Any, Callable, Iterator, TYPE_CHECKING, TypeVar
 
 from krrood.entity_query_language.ground_term import (
     GroundTerm,
@@ -33,6 +33,8 @@ if TYPE_CHECKING:
 _evaluation_context_var: ContextVar[EvaluationContext | None] = ContextVar(
     "_evaluation_context", default=None
 )
+
+ResultType = TypeVar("ResultType")
 
 
 def get_evaluation_context() -> EvaluationContext | None:
@@ -66,6 +68,21 @@ def values_in_current_context(term: GroundTerm) -> Iterator[Any]:
     if evaluation_context is None:
         return term.live_values()
     return evaluation_context.term_reader.values_of(term)
+
+
+def iterate_reading_from(
+    term_reader: TermReader | None, results: Iterator[ResultType]
+) -> Iterator[ResultType]:
+    """
+    :param term_reader: What the evaluation producing *results* reads ground terms
+        with, or ``None`` to read them as the current evaluation context does.
+    :param results: The results of an evaluation that has not started yet.
+    :return: The same results. The evaluation, and every evaluation it starts, reads
+        ground terms with *term_reader*.
+    """
+    if term_reader is None:
+        return results
+    return EvaluationContext(term_reader=term_reader).iterate_as_current(results)
 
 
 class EvaluationObserver(ABC):
@@ -392,9 +409,7 @@ class EvaluationContext:
         finally:
             _evaluation_context_var.reset(context_token)
 
-    def iterate_as_current(
-        self, results: Iterator[OperationResult]
-    ) -> Iterator[OperationResult]:
+    def iterate_as_current(self, results: Iterator[ResultType]) -> Iterator[ResultType]:
         """
         Iterate the given results with this context as the current evaluation context
         while each of them is produced, and while they are closed.

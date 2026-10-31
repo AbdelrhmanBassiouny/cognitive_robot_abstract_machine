@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing_extensions import Any
 
 from krrood.entity_query_language.ground_term import GroundTerm
+from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.exceptions import DataclassException
 
 # %% facts
@@ -32,6 +33,32 @@ class ConditionIsNotAFact(DataclassException):
         return (
             "State a fact as 'expression == value' for an attribute, index or call, as a "
             "predicate for it to hold, or as not_(predicate) for it not to hold."
+        )
+
+
+@dataclass
+class ComparisonIsNotAnEquality(ConditionIsNotAFact):
+    """
+    A fact compares a fluent by other than equality, which constrains its value without
+    fixing it.
+    """
+
+    condition: Comparator
+    """
+    The comparison that was given.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.condition} compares with '{self.condition._name_}', which does not "
+            "fix the value of the fluent; only '==' does."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Compare the fluent with '==' to give it a value. To state that the "
+            "comparison holds, write it as the body of a predicate and state the "
+            "predicate: that assigns the predicate itself, not the values it compares."
         )
 
 
@@ -66,10 +93,7 @@ class MissingFluent(DataclassException):
     """
 
     def error_message(self) -> str:
-        return (
-            f"{self.term.symbol} has no value for the arguments {self.term.arguments}, "
-            "so a fact cannot assign it."
-        )
+        return f"{self.term} has no value, so a fact cannot assign it."
 
     def suggest_correction(self) -> str:
         return "Assign only attributes the instance has and keys the container stores."

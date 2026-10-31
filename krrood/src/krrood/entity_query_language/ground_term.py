@@ -1,23 +1,30 @@
 """
-Ground terms - a function symbol applied to concrete arguments - the expressions that
-read them, and how an evaluation reads their values.
+Ground terms - a function applied to concrete arguments - the expressions that read
+them, and how an evaluation reads their values.
 """
 
 from __future__ import annotations
 
 import inspect
+import operator
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from functools import cached_property
 
-from typing_extensions import TYPE_CHECKING, Any, Callable, Hashable, Iterator
+from typing_extensions import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Generic,
+    Hashable,
+    Iterator,
+    Mapping,
+    Sequence,
+    TypeVar,
+)
 
 from krrood.entity_query_language.core.bound_value import HasBoundValue
-from krrood.entity_query_language.function_symbols import (
-    CallableClassSymbol,
-    CallableSymbol,
-    FunctionSymbol,
-)
+from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood.utils import ensure_hashable
 
 if TYPE_CHECKING:
@@ -27,36 +34,175 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True, eq=False)
-class GroundTerm:
+class GroundTerm(ABC):
     """
-    A function symbol applied to concrete arguments, such as the attribute ``support``
-    of one block or a predicate applied to two objects.
+    A function applied to concrete arguments, such as the attribute ``support`` of one
+    block or a predicate applied to two objects.
 
-    Two ground terms are equal when they apply the same symbol to the same arguments,
+    Two ground terms are equal when they apply the same function to the same arguments,
     however the arguments were passed and including defaults that were left out.
     Hashable arguments are compared by value and all others by identity, so two objects
     that compare equal but cannot be hashed are different arguments.
     """
 
-    symbol: FunctionSymbol
+    @property
+    @abstractmethod
+    def function(self) -> Hashable:
+        """
+        :return: What this ground term applies to its arguments, the same for every
+            argument it is applied to.
+        """
+
+    @property
+    @abstractmethod
+    def normalized_arguments(self) -> tuple[Hashable, ...]:
+        """
+        :return: The arguments of the application, the same for every way of writing
+            it.
+        """
+
+    @cached_property
+    def function_key(self) -> tuple[type[GroundTerm], Hashable]:
+        """
+        :return: What identifies the function of this ground term, independently of its
+            arguments.
+        """
+        return type(self), self.function
+
+    @cached_property
+    def _key_(self) -> tuple[Hashable, ...]:
+        """
+        :return: What identifies this ground term, independently of how its arguments
+            were passed.
+        """
+        return *self.function_key, self.normalized_arguments
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, GroundTerm) and self._key_ == other._key_
+
+    def __hash__(self) -> int:
+        return hash(self._key_)
+
+    def has_live_value(self) -> bool:
+        """
+        :return: Whether this ground term currently has a value.
+        """
+        return True
+
+    @abstractmethod
+    def live_value(self) -> Any:
+        """
+        :return: The value this ground term currently has, where
+            :meth:`has_live_value` holds.
+        """
+
+    def live_values(self) -> Iterator[Any]:
+        """
+        :return: The value this ground term currently has, or nothing when it has none.
+        """
+        if self.has_live_value():
+            yield self.live_value()
+
+
+@dataclass(frozen=True, eq=False)
+class AttributeTerm(GroundTerm):
     """
-    What is applied to the arguments.
+    One attribute of an instance.
+    """
+
+    instance: Any
+    """
+    The instance whose attribute this is.
+    """
+
+    attribute_name: str
+    """
+    The name of the attribute.
+    """
+
+    @property
+    def function(self) -> str:
+        return self.attribute_name
+
+    @property
+    def normalized_arguments(self) -> tuple[Hashable, ...]:
+        return (ensure_hashable(self.instance),)
+
+    def has_live_value(self) -> bool:
+        return hasattr(self.instance, self.attribute_name)
+
+    def live_value(self) -> Any:
+        return getattr(self.instance, self.attribute_name)
+
+
+@dataclass(frozen=True, eq=False)
+class IndexTerm(GroundTerm):
+    """
+    The element a container stores under a key.
+    """
+
+    container: Any
+    """
+    The container that stores the element.
+    """
+
+    key: Any
+    """
+    The key the element is stored under.
+    """
+
+    @property
+    def function(self) -> Callable[[Any, Any], Any]:
+        return operator.getitem
+
+    @property
+    def normalized_arguments(self) -> tuple[Hashable, ...]:
+        return ensure_hashable(self.container), ensure_hashable(self.key)
+
+    def has_live_value(self) -> bool:
+        """
+        A container that is neither a mapping nor a sequence is assumed to store every
+        key.
+        """
+        if isinstance(self.container, Mapping):
+            return self.key in self.container
+        if isinstance(self.container, Sequence) and isinstance(self.key, int):
+            return -len(self.container) <= self.key < len(self.container)
+        return True
+
+    def live_value(self) -> Any:
+        return self.container[self.key]
+
+
+@dataclass(frozen=True, eq=False)
+class CallTerm(GroundTerm):
+    """
+    The result of calling a function, method or class.
+
+    A bound method is its function called with the receiver first, and a function
+    decorated with :func:`~krrood.entity_query_language.predicate.symbolic_function` is
+    the function it wraps.
+    """
+
+    callee: Callable[..., Any]
+    """
+    What is called.
     """
 
     arguments: tuple[Any, ...] = ()
     """
-    The positional arguments of the application.
+    The positional arguments of the call.
     """
 
     keyword_arguments: dict[str, Any] = field(default_factory=dict)
     """
-    The keyword arguments of the application.
+    The keyword arguments of the call.
     """
 
     @classmethod
-    def call(
+    def from_call(
         cls, callee: Callable[..., Any], *arguments: Any, **keyword_arguments: Any
-    ) -> GroundTerm:
+    ) -> CallTerm:
         """
         :param callee: A function, a bound method, a class, or a function decorated
             with :func:`~krrood.entity_query_language.predicate.symbolic_function`.
@@ -69,56 +215,63 @@ class GroundTerm:
             arguments = (callee.__self__, *arguments)
             callee = callee.__func__
         if inspect.isclass(callee) and issubclass(callee, HasBoundValue):
-            symbol = CallableClassSymbol(callee)
-        else:
-            symbol = CallableSymbol(inspect.unwrap(callee))
-        return cls(symbol, arguments, keyword_arguments)
+            return BoundValueTerm(callee, arguments, keyword_arguments)
+        return CallTerm(inspect.unwrap(callee), arguments, keyword_arguments)
 
-    @cached_property
-    def _key_(self) -> tuple[Hashable, ...]:
+    @property
+    def function(self) -> Hashable:
+        return ensure_hashable(self.callee)
+
+    @property
+    def normalized_arguments(self) -> tuple[Hashable, ...]:
         """
-        :return: What identifies this ground term, independently of how its arguments
-            were passed.
+        Passing an argument by position or by name, or leaving out one that has a
+        default, gives the same arguments.
         """
-        arguments, keyword_arguments = self.symbol.normalized_arguments(
-            self.arguments, self.keyword_arguments
+        bound_arguments = inspect.signature(self.callee).bind(
+            *self.arguments, **self.keyword_arguments
         )
-        return (
-            self.symbol,
-            tuple(ensure_hashable(argument) for argument in arguments),
+        bound_arguments.apply_defaults()
+        return tuple(ensure_hashable(argument) for argument in bound_arguments.args) + (
             tuple(
                 (name, ensure_hashable(value))
-                for name, value in sorted(keyword_arguments.items())
+                for name, value in sorted(bound_arguments.kwargs.items())
             ),
         )
 
-    def __eq__(self, other: object) -> bool:
-        return isinstance(other, GroundTerm) and self._key_ == other._key_
+    def live_value(self) -> Any:
+        return self.callee(*self.arguments, **self.keyword_arguments)
 
-    def __hash__(self) -> int:
-        return hash(self._key_)
 
-    def has_live_value(self) -> bool:
-        """
-        :return: Whether this ground term currently has a value.
-        """
-        return self.symbol.has_live_value(self.arguments, self.keyword_arguments)
+@dataclass(frozen=True, eq=False)
+class BoundValueTerm(CallTerm):
+    """
+    The bound value of applying a
+    :class:`~krrood.entity_query_language.core.bound_value.HasBoundValue` class, such as a
+    predicate or a symbolic function class.
+    """
 
-    def live_values(self) -> Iterator[Any]:
-        """
-        :return: The value this ground term currently has, or nothing when it has none.
-        """
-        if self.has_live_value():
-            yield self.symbol.live_value(self.arguments, self.keyword_arguments)
+    callee: type[HasBoundValue]
+    """
+    The class that is applied.
+    """
+
+    def live_value(self) -> Any:
+        bound_arguments = inspect.signature(self.callee).bind(
+            *self.arguments, **self.keyword_arguments
+        )
+        return self.callee._bound_value_(**bound_arguments.arguments)
 
 
 # %% expressions that read ground terms
 
+GroundTermType = TypeVar("GroundTermType", bound=GroundTerm)
 
-class GroundTermExpression(ABC):
+
+class GroundTermExpression(Generic[GroundTermType], SubClassSafeGeneric):
     """
     An expression whose value, for each binding of its operands, is the value of one
-    ground term.
+    ground term of the bound type.
     """
 
     @property
@@ -129,7 +282,7 @@ class GroundTermExpression(ABC):
         """
 
     @abstractmethod
-    def _ground_term_(self, *operand_values: Any) -> GroundTerm:
+    def _ground_term_(self, *operand_values: Any) -> GroundTermType:
         """
         :param operand_values: One value of each of :attr:`_ground_term_operands_`, in
             the same order.

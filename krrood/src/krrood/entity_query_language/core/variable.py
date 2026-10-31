@@ -22,7 +22,7 @@ from krrood.entity_query_language.core.base_expressions import (
 )
 from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
 from krrood.entity_query_language.evaluation_context import values_in_current_context
-from krrood.entity_query_language.ground_term import GroundTerm, GroundTermExpression
+from krrood.entity_query_language.ground_term import CallTerm, GroundTermExpression
 from krrood.entity_query_language.cache_data import ReEnterableLazyIterable
 from krrood.entity_query_language.enums import DomainSource
 from krrood.entity_query_language.exceptions import NoChildToReplace
@@ -182,7 +182,7 @@ class Literal(Variable[T]):
 class InstantiatedVariable(
     MultiArityExpressionThatPerformsACartesianProduct,
     CanHaveDomainSource[T],
-    GroundTermExpression,
+    GroundTermExpression[CallTerm],
 ):
     """
     A variable which does not have an explicit domain, but creates new
@@ -236,8 +236,8 @@ class InstantiatedVariable(
     def _ground_term_operands_(self) -> tuple[SymbolicExpression, ...]:
         return tuple(self._child_variables_.values())
 
-    def _ground_term_(self, *operand_values: Any) -> GroundTerm:
-        return GroundTerm.call(
+    def _ground_term_(self, *operand_values: Any) -> CallTerm:
+        return CallTerm.from_call(
             self._type_, **dict(zip(self._child_variables_, operand_values))
         )
 
@@ -262,7 +262,7 @@ class InstantiatedVariable(
                 if child._id_ in child_result.bindings
             }
             (instance,) = values_in_current_context(
-                GroundTerm.call(self._type_, **arguments)
+                CallTerm.from_call(self._type_, **arguments)
             )
 
             bindings = {self._id_: instance} | child_result.bindings

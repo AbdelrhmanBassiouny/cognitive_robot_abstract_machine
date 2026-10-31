@@ -1,8 +1,8 @@
 """
-Tests that queries evaluated against a :class:`~krrood.planning.state.State` read the.
+Tests for evaluating queries with a :class:`~krrood.planning.state.State`.
 
-values its facts give fluents - attributes, indexed elements, calls, symbolic functions
-and predicates - and live values for every other fluent.
+A query reads the values the state's facts give fluents - attributes, indexed elements,
+calls, symbolic functions and predicates - and live values for every other fluent.
 """
 
 from __future__ import annotations
@@ -16,10 +16,12 @@ from krrood.entity_query_language.factories import (
     flat_variable,
     literal,
     not_,
+    the,
     variable,
 )
 from krrood.entity_query_language.predicate import symbolic_function
 from krrood.planning.exceptions import (
+    ComparisonIsNotAnEquality,
     ConditionIsNotAFact,
     FactValueIsNotConstant,
     MissingFluent,
@@ -99,35 +101,35 @@ def two_towers() -> TwoTowers:
     )
 
 
-def blocks_on(blocks: list[Block], support: Block | Table) -> list[Block]:
+def blocks_on(
+    blocks: list[Block], support: Block | Table, state: State | None = None
+) -> list[Block]:
     """
     :param blocks: The blocks to query over.
     :param support: The block or table the selected blocks rest on.
-    :return: The blocks resting on *support*, evaluated in the current context.
+    :param state: The state to evaluate in, or ``None`` for the live values.
+    :return: The blocks resting on *support*.
     """
-    return a(Block)(support=support).from_(blocks).tolist()
+    return a(Block)(support=support).from_(blocks).tolist(state=state)
 
 
 # %% reading assigned and unassigned attributes
 
 
 def test_query_under_state_reads_assigned_value(two_towers):
-    with two_towers.b_on_c.as_current():
-        result = blocks_on(two_towers.blocks, two_towers.c)
+    result = blocks_on(two_towers.blocks, two_towers.c, two_towers.b_on_c)
 
     assert result == [two_towers.b]
 
 
 def test_unassigned_fluents_keep_their_live_values(two_towers):
-    with two_towers.b_on_c.as_current():
-        result = blocks_on(two_towers.blocks, two_towers.table)
+    result = blocks_on(two_towers.blocks, two_towers.table, two_towers.b_on_c)
 
     assert result == [two_towers.a]
 
 
 def test_state_never_changes_live_objects(two_towers):
-    with two_towers.b_on_c.as_current():
-        blocks_on(two_towers.blocks, two_towers.c)
+    blocks_on(two_towers.blocks, two_towers.c, two_towers.b_on_c)
 
     assert two_towers.b.support is two_towers.table
 
@@ -144,8 +146,7 @@ def test_query_outside_state_reads_live_values(two_towers):
 def test_query_reads_assigned_indexed_element(two_towers):
     state = State().with_facts(literal(two_towers.shelf).slots[0] == two_towers.c)
 
-    with state.as_current():
-        result = a(a(Shelf).from_([two_towers.shelf]).slots[0]).tolist()
+    result = a(Shelf).from_([two_towers.shelf]).slots[0].tolist(state=state)
 
     assert result == [two_towers.c]
 
@@ -154,8 +155,7 @@ def test_index_by_expression_reads_the_same_fluent_as_index_by_value(two_towers)
     state = State().with_facts(literal(two_towers.shelf).slots[0] == two_towers.c)
     slot = variable(int, [0, 1])
 
-    with state.as_current():
-        result = a(a(Shelf).from_([two_towers.shelf]).slots[slot]).tolist()
+    result = a(Shelf).from_([two_towers.shelf]).slots[slot].tolist(state=state)
 
     assert result == [two_towers.c, two_towers.b]
 
@@ -164,20 +164,22 @@ def test_query_reads_assigned_method_call(two_towers):
     state = State().with_facts(
         literal(two_towers.a).rests_on(two_towers.table) == False
     )
-    block = a(Block).from_(two_towers.blocks)
-
-    with state.as_current():
-        result = block.where(block.rests_on(two_towers.table)).tolist()
+    result = (
+        (block := a(Block).from_(two_towers.blocks))
+        .where(block.rests_on(two_towers.table))
+        .tolist(state=state)
+    )
 
     assert result == [two_towers.b]
 
 
 def test_query_reads_assigned_symbolic_function(two_towers):
     state = State().with_facts(tower_height(literal(two_towers.b)) == 3)
-    block = a(Block).from_(two_towers.blocks)
-
-    with state.as_current():
-        result = block.where(tower_height(block) == 3).tolist()
+    result = (
+        (block := a(Block).from_(two_towers.blocks))
+        .where(tower_height(block) == 3)
+        .tolist(state=state)
+    )
 
     assert result == [two_towers.b]
 
@@ -186,20 +188,22 @@ def test_query_reads_assigned_predicate(two_towers):
     state = State().with_facts(
         not_(IsOn(literal(two_towers.a), literal(two_towers.table)))
     )
-    block = a(Block).from_(two_towers.blocks)
-
-    with state.as_current():
-        result = block.where(IsOn(block, two_towers.table)).tolist()
+    result = (
+        (block := a(Block).from_(two_towers.blocks))
+        .where(IsOn(block, two_towers.table))
+        .tolist(state=state)
+    )
 
     assert result == [two_towers.b]
 
 
 def test_query_reads_assigned_symbolic_function_class(two_towers):
     state = State().with_facts(SupportName(literal(two_towers.b)) == "a")
-    block = a(Block).from_(two_towers.blocks)
-
-    with state.as_current():
-        result = block.where(SupportName(block) == "a").tolist()
+    result = (
+        (block := a(Block).from_(two_towers.blocks))
+        .where(SupportName(block) == "a")
+        .tolist(state=state)
+    )
 
     assert result == [two_towers.b, two_towers.c]
 
@@ -212,8 +216,7 @@ def test_fact_about_a_variable_assigns_the_fluent_of_each_of_its_values(two_towe
         variable(Block, [two_towers.a, two_towers.b]).support == two_towers.c
     )
 
-    with state.as_current():
-        result = blocks_on(two_towers.blocks, two_towers.c)
+    result = blocks_on(two_towers.blocks, two_towers.c, state)
 
     assert result == [two_towers.a, two_towers.b]
 
@@ -224,8 +227,7 @@ def test_fact_about_a_match_assigns_only_the_fluents_of_its_matches(two_towers):
         == two_towers.c
     )
 
-    with state.as_current():
-        result = blocks_on(two_towers.blocks, two_towers.c)
+    result = blocks_on(two_towers.blocks, two_towers.c, state)
 
     assert result == [two_towers.a, two_towers.b]
 
@@ -237,8 +239,7 @@ def test_fact_with_an_expression_index_assigns_every_element_it_reaches(two_towe
 
     slot = variable(int, [0, 1])
 
-    with state.as_current():
-        result = a(a(Shelf).from_([two_towers.shelf]).slots[slot]).tolist()
+    result = a(Shelf).from_([two_towers.shelf]).slots[slot].tolist(state=state)
 
     assert result == [two_towers.c, two_towers.c]
 
@@ -257,8 +258,13 @@ def test_assigning_an_element_the_container_lacks_is_rejected(two_towers):
 
 
 def test_a_comparison_other_than_equality_is_not_a_fact(two_towers):
-    with pytest.raises(ConditionIsNotAFact):
+    with pytest.raises(ComparisonIsNotAnEquality):
         State().with_facts(tower_height(literal(two_towers.b)) > 3)
+
+
+def test_negating_a_fact_that_is_not_a_predicate_is_not_a_fact(two_towers):
+    with pytest.raises(ConditionIsNotAFact):
+        State().with_facts(not_(literal(two_towers.b).support == two_towers.c))
 
 
 def test_a_fact_cannot_take_its_value_from_an_expression(two_towers):
@@ -294,12 +300,27 @@ def test_assignment_by_keyword_is_read_by_a_positional_call(two_towers):
     state = State().with_facts(
         literal(two_towers.a).rests_on(support=two_towers.table) == False
     )
-    block = a(Block).from_(two_towers.blocks)
-
-    with state.as_current():
-        result = block.where(block.rests_on(two_towers.table)).tolist()
+    result = (
+        (block := a(Block).from_(two_towers.blocks))
+        .where(block.rests_on(two_towers.table))
+        .tolist(state=state)
+    )
 
     assert result == [two_towers.b]
+
+
+def test_fluent_reached_through_another_object_is_the_same_fluent(two_towers):
+    direct = State().with_facts(
+        literal(two_towers.a).rests_on(two_towers.table) == False
+    )
+    through_literal = State().with_facts(
+        literal(two_towers).a.rests_on(two_towers.table) == False
+    )
+    through_match = State().with_facts(
+        the(TwoTowers).from_([two_towers]).a.rests_on(two_towers.table) == False
+    )
+
+    assert direct == through_literal == through_match
 
 
 # %% how arguments are compared
@@ -314,8 +335,7 @@ def test_fluents_identify_unhashable_instances_by_identity(two_towers):
     second = Block("d", two_towers.table)
     state = State().with_facts(literal(first).support == two_towers.c)
 
-    with state.as_current():
-        result = blocks_on([first, second], two_towers.table)
+    result = blocks_on([first, second], two_towers.table, state)
 
     assert result == [second]
 
@@ -334,17 +354,19 @@ def test_fluents_compare_hashable_arguments_by_value(two_towers):
 
 
 def test_attribute_of_an_assigned_attribute_reads_the_new_value(two_towers):
-    with two_towers.b_on_c.as_current():
-        result = a(a(Block).from_([two_towers.b]).support.support).tolist()
+    result = (
+        a(Block).from_([two_towers.b]).support.support.tolist(state=two_towers.b_on_c)
+    )
 
     assert result == [two_towers.a]
 
 
 def test_symbolic_function_receives_assigned_attribute_as_argument(two_towers):
-    block = a(Block).from_(two_towers.blocks)
-
-    with two_towers.b_on_c.as_current():
-        result = block.where(is_table(block.support)).tolist()
+    result = (
+        (block := a(Block).from_(two_towers.blocks))
+        .where(is_table(block.support))
+        .tolist(state=two_towers.b_on_c)
+    )
 
     assert result == [two_towers.a]
 
@@ -354,10 +376,11 @@ def test_python_body_reads_live_values_it_does_not_receive_as_arguments(two_towe
     :class:`IsOn` reads ``self.block.support`` in Python, so it sees ``b`` on the table
     although the state puts ``b`` on ``c``.
     """
-    block = a(Block).from_(two_towers.blocks)
-
-    with two_towers.b_on_c.as_current():
-        result = block.where(IsOn(block, two_towers.c)).tolist()
+    result = (
+        (block := a(Block).from_(two_towers.blocks))
+        .where(IsOn(block, two_towers.c))
+        .tolist(state=two_towers.b_on_c)
+    )
 
     assert result == []
 
@@ -365,8 +388,7 @@ def test_python_body_reads_live_values_it_does_not_receive_as_arguments(two_towe
 def test_flattening_an_assigned_collection_ranges_over_its_new_elements(two_towers):
     state = State().with_facts(literal(two_towers.shelf).slots == [two_towers.c])
 
-    with state.as_current():
-        result = a(flat_variable(a(Shelf).from_([two_towers.shelf]).slots)).tolist()
+    result = flat_variable(a(Shelf).from_([two_towers.shelf]).slots).tolist(state=state)
 
     assert result == [two_towers.c]
 
@@ -374,8 +396,7 @@ def test_flattening_an_assigned_collection_ranges_over_its_new_elements(two_towe
 def test_index_into_an_assigned_collection_reads_its_new_elements(two_towers):
     state = State().with_facts(literal(two_towers.shelf).slots == [two_towers.c])
 
-    with state.as_current():
-        result = a(a(Shelf).from_([two_towers.shelf]).slots[0]).tolist()
+    result = a(Shelf).from_([two_towers.shelf]).slots[0].tolist(state=state)
 
     assert result == [two_towers.c]
 
@@ -390,10 +411,11 @@ def test_assigned_predicate_overrides_what_it_derives(two_towers):
     ``c`` rests on ``a``, yet the state says it rests on the table.
     """
     state = State().with_facts(IsOn(literal(two_towers.c), literal(two_towers.table)))
-    block = a(Block).from_(two_towers.blocks)
-
-    with state.as_current():
-        result = block.where(IsOn(block, two_towers.table)).tolist()
+    result = (
+        (block := a(Block).from_(two_towers.blocks))
+        .where(IsOn(block, two_towers.table))
+        .tolist(state=state)
+    )
 
     assert result == two_towers.blocks
 
@@ -407,10 +429,9 @@ def test_assigned_call_is_never_computed(two_towers):
         return tower_height(block)
 
     state = State().with_facts(height_counting_calls(literal(two_towers.b)) == 5)
-    block = a(Block).from_(two_towers.blocks)
-
-    with state.as_current():
-        block.where(height_counting_calls(block) > 0).tolist()
+    (block := a(Block).from_(two_towers.blocks)).where(
+        height_counting_calls(block) > 0
+    ).tolist(state=state)
 
     assert two_towers.b not in computed_for
 
@@ -418,12 +439,36 @@ def test_assigned_call_is_never_computed(two_towers):
 # %% evaluations under a state
 
 
-def test_every_query_under_state_reads_it(two_towers):
-    with two_towers.b_on_c.as_current():
-        on_c = blocks_on(two_towers.blocks, two_towers.c)
-        on_table = blocks_on(two_towers.blocks, two_towers.table)
+def test_results_read_the_state_wherever_they_are_consumed(two_towers):
+    results = (
+        a(Block)(support=two_towers.c)
+        .from_(two_towers.blocks)
+        .evaluate(state=two_towers.b_on_c)
+    )
 
-    assert (on_c, on_table) == ([two_towers.b], [two_towers.a])
+    assert list(results) == [two_towers.b]
+
+
+def test_state_reaches_only_the_evaluation_it_is_given_to(two_towers):
+    """
+    A query evaluated while an evaluation under a state is part way through reads the
+    live values.
+    """
+    supports = (
+        a(Block)
+        .from_([two_towers.b, two_towers.c])
+        .support.evaluate(state=two_towers.b_on_c)
+    )
+
+    first_support = next(supports)
+    live_blocks_on_c = blocks_on(two_towers.blocks, two_towers.c)
+    second_support = next(supports)
+
+    assert (first_support, live_blocks_on_c, second_support) == (
+        two_towers.c,
+        [],
+        two_towers.a,
+    )
 
 
 def test_query_started_during_another_evaluation_reads_state(two_towers):
@@ -436,10 +481,11 @@ def test_query_started_during_another_evaluation_reads_state(two_towers):
     def is_covered(candidate: Block) -> bool:
         return blocks_on(two_towers.blocks, candidate) != []
 
-    block = a(Block).from_(two_towers.blocks)
-
-    with two_towers.b_on_c.as_current():
-        result = block.where(is_covered(block)).tolist()
+    result = (
+        (block := a(Block).from_(two_towers.blocks))
+        .where(is_covered(block))
+        .tolist(state=two_towers.b_on_c)
+    )
 
     assert result == [two_towers.a, two_towers.c]
 

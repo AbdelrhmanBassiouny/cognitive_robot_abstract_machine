@@ -17,6 +17,7 @@ from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.operators.core_logical_operators import Not
 from krrood.entity_query_language.predicate import Predicate
 from krrood.planning.exceptions import (
+    ComparisonIsNotAnEquality,
     ConditionIsNotAFact,
     FactValueIsNotConstant,
     MissingFluent,
@@ -49,6 +50,8 @@ class Fact:
             :func:`~krrood.entity_query_language.factories.not_` of a predicate, which
             does not.
         :return: The fact *condition* states.
+        :raises ComparisonIsNotAnEquality: If *condition* compares a fluent by other
+            than equality.
         :raises ConditionIsNotAFact: If *condition* has none of these forms.
         :raises FactValueIsNotConstant: If *condition* compares with an expression
             instead of a value.
@@ -59,10 +62,11 @@ class Fact:
             return cls(condition._child_, False)
         if not (
             isinstance(condition, Comparator)
-            and condition.operation is operator.eq
             and isinstance(condition.left, GroundTermExpression)
         ):
             raise ConditionIsNotAFact(condition)
+        if condition.operation is not operator.eq:
+            raise ComparisonIsNotAnEquality(condition)
         if not isinstance(condition.right, Literal):
             raise FactValueIsNotConstant(condition)
         return cls(condition.left, condition.right._value_)
