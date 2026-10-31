@@ -11,3 +11,4 @@
 - Facts and effects are EQL conditions on expressions rooted at literal(), a variable or a match (expression == value, a predicate, not_(predicate)); never GroundTerm directly. A variable root states the fact for every binding.
 - Hypothetical states (Python bodies, objects in a state, domains): https://claude.ai/artifact/3zhr45pHQ9P9mdqxtJs5L5. A derived fact follows a State only when its body is EQL or its inputs arrive as EQL arguments; nothing intercepts Python bodies at runtime.
 - A query reads a State only when it is passed to evaluate/tolist/first as state=; there is no ambient state. Queries an evaluation starts inherit it.
+- A state never runs a setter, __setattr__ or __setitem__. Whatever such code changes besides the stored value is modelled as derived fluents or explicit effects; facts on fluents set through code are rejected (AssignmentBypassesSetter) unless their implications are declared.

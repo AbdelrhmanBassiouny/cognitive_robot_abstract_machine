@@ -48,6 +48,16 @@ items:
   notes: 'Bug-style PR off main, merged into #535 like #538 (review thread on krrood/planning/fact.py).
     One field for the result type, always a type; a factory field that defaults to the type and may
     be a factory method. Afterwards Fact drops its isinstance(_type_, type) guard.'
+- id: call-arguments-normalization
+  branch: eql-planning/mapped-variable-cache-unhashable-arguments
+  title: A query calling a method accepts unhashable arguments, compared through CallArguments
+  track: eql-prerequisites
+  pull_request_number: 540
+  session: https://claude.ai/code/session_01JxHGiMbWLBgK8nT2DHNmxJ
+  depends_on: []
+  status: in progress
+  notes: 'Bug PR off main, merged into #535 like #538. CallArguments binds arguments to the signature;
+    the node cache compares containers by contents, CallTerm (#535) everything unhashable by identity.'
 - id: fluent-state-overlay
   branch: claude/zealous-albattani-uoew5i
   title: Fluents and a State overlay that EQL queries are evaluated against
@@ -56,9 +66,11 @@ items:
   session: https://claude.ai/code/session_01JxHGiMbWLBgK8nT2DHNmxJ
   depends_on:
   - instantiated-variable-type-and-factory
+  - call-arguments-normalization
   status: in progress
-  notes: 'Review round 4 (Oct 31, b16a10a88): function key is a FunctionKey dataclass. No review
-    threads open. Merges bug PR #538 and, once open, instantiated-variable-type-and-factory.'
+  notes: 'Oct 31 (86eb30b38): Fact raises AssignmentBypassesSetter for fluents set through a property
+    setter, __setattr__ or __setitem__; CallTerm uses CallArguments. Merges #538, #540 and, once open,
+    instantiated-variable-type-and-factory.'
 - id: state-objects-and-domains
   branch: eql-planning/state-objects-and-domains
   title: 'Objects in a State: a state adds and removes objects, and default EQL domains come from
@@ -85,6 +97,17 @@ items:
     diagram type-check effects. Effects are facts (State.with_facts) whose value may depend on the
     binding (x.support := y); #535 accepts only constant values. Appending to a collection is an effect
     here, not a fact (#535 review): a fact only fixes an existing fluent.'
+- id: declared-setter-implications
+  branch: eql-planning/declared-setter-implications
+  title: Assignments follow the implications a setter declares, such as ontomatic inverse properties
+  track: planning-core
+  depends_on:
+  - action-schema-progression
+  status: not_started
+  notes: 'ontomatic PropertyDescriptor.__set__ applies inverse, super-property and transitive implications;
+    a state assigning one side must assign the implied ones too, from the declared structure. Lets
+    a domain declare how its setter''s effects are modelled, lifting AssignmentBypassesSetter (#535)
+    for it.'
 - id: planning-backend-search
   branch: eql-planning/planning-backend-search
   title: PlanningBackend answers a goal query with plans; breadth-first search on test domains

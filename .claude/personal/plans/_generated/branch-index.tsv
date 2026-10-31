@@ -34,9 +34,11 @@ claude/performatives-clean	eql-performatives
 claude/eql-performatives-unify	eql-performatives
 eql-planning/state-aware-predicate-cache	eql-planning
 eql-planning/instantiated-variable-type-and-factory	eql-planning
+eql-planning/mapped-variable-cache-unhashable-arguments	eql-planning
 claude/zealous-albattani-uoew5i	eql-planning
 eql-planning/state-objects-and-domains	eql-planning
 eql-planning/action-schema-progression	eql-planning
+eql-planning/declared-setter-implications	eql-planning
 eql-planning/planning-backend-search	eql-planning
 eql-planning/regression-and-explanation	eql-planning
 eql-planning/compiled-search-ff	eql-planning
