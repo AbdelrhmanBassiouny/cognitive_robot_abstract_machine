@@ -19,6 +19,7 @@ items:
   - id: ellipsis-unconstrained-in-selective
     title: "... is no constraint in selective queries"
     branch: claude/clever-gates-85wad2
+    pull_request_number: 544
     track: match
     depends_on: []
     status: in progress
