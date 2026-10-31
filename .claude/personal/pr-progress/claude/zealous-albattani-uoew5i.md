@@ -4,8 +4,8 @@ Plan:
 - Value overlay; facts are EQL conditions (State.with_facts); typed value terms built by GroundTermExpression[TermT]; queries take state=.
 
 Done:
-- Review round 2 (d52af4309): 12 threads resolved, 6 replied and left open; 39 planning tests; test_eql passes.
+- Review round 3 (a357071dd): EvaluationContext.iterate_reading_from, doctest examples; append recorded under action-schema-progression.
 
 Next:
-- Separate PR off main: InstantiatedVariable type field (always a type) plus factory field; merge into #535.
-- Owner: answer the 6 open threads (try-except, list append, predicate-wrapped inequality, State(f1, ...), the(b) facts, type/factory); mark ready only when told.
+- Plan item instantiated-variable-type-and-factory: PR off main, merge into #535.
+- Owner: answer 5 open threads (assigned_functions frozenset, ResultType bound, GroundTerm __eq__, predicate-wrapped inequality); mark ready only when told.
