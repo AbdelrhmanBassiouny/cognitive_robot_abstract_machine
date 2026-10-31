@@ -83,12 +83,11 @@ items:
   depends_on:
   - fluent-state-overlay
   status: in progress
-  notes: 'A variable without a domain ranges over the state''s objects, not the global SymbolGraph.
-    A world''s collection is an EQL expression (variable(Type, world.connections) on a world variable),
-    read through the state like any fluent; effects that add or remove objects assign it. No filtering
-    fallback. variable(Type, expression) and variable_from(expression) must evaluate the expression
-    per binding, flattened and type-filtered: on main they yield the expression itself. Values stay
-    as given.'
+  notes: 'Implemented in #541 (draft, stacked on #535, merged into latest main since the maintenance
+    pass could not run): State.with_objects_added/removed, TermReader.instances_of, default domains
+    read per evaluation, ExpressionDomainVariable for variable(Type, expression)/variable_from(expression).
+    Open for review: constructing a Symbol still registers it live, so creating unregistered objects
+    is left to action-schema-progression.'
 - id: action-schema-progression
   branch: eql-planning/action-schema-progression
   title: ActionSchema with an EQL precondition and assignment effects, applied to a State
