@@ -16,6 +16,6 @@ concurrency:
 
 jobs:
   read:
-    uses: AbdelrhmanBassiouny/basstler/.github/workflows/upstream-reviews-action.yml@v2.7.0
+    uses: AbdelrhmanBassiouny/basstler/.github/workflows/upstream-reviews-action.yml@v2.10.4
     with:
-      basstler_branch_or_tag: v2.7.0
+      basstler_branch_or_tag: v2.10.4
