@@ -33,6 +33,24 @@ if TYPE_CHECKING:
 # %% ground terms
 
 
+@dataclass(frozen=True)
+class FunctionKey:
+    """
+    What identifies the function of a ground term, independently of its arguments.
+    """
+
+    term_type: type[GroundTerm]
+    """
+    The class of the ground term, which tells apart an attribute, an index and a call of
+    the same function.
+    """
+
+    function: Hashable
+    """
+    What the ground term applies to its arguments.
+    """
+
+
 @dataclass(frozen=True, eq=False)
 class GroundTerm(ABC):
     """
@@ -68,12 +86,12 @@ class GroundTerm(ABC):
         """
 
     @cached_property
-    def function_key(self) -> tuple[type[GroundTerm], Hashable]:
+    def function_key(self) -> FunctionKey:
         """
         :return: What identifies the function of this ground term, independently of its
             arguments.
         """
-        return type(self), self.function
+        return FunctionKey(type(self), self.function)
 
     @cached_property
     def _key_(self) -> tuple[Hashable, ...]:
@@ -81,7 +99,7 @@ class GroundTerm(ABC):
         :return: What identifies this ground term, independently of how its arguments
             were passed.
         """
-        return *self.function_key, self.normalized_arguments
+        return self.function_key, self.normalized_arguments
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, GroundTerm) and self._key_ == other._key_

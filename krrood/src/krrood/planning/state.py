@@ -7,10 +7,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from functools import cached_property
 
-from typing_extensions import Any, Hashable, Iterator
+from typing_extensions import Any, Iterator
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
-from krrood.entity_query_language.ground_term import GroundTerm, TermReader
+from krrood.entity_query_language.ground_term import (
+    FunctionKey,
+    GroundTerm,
+    TermReader,
+)
 from krrood.planning.fact import Fact
 
 # %% states
@@ -61,7 +65,7 @@ class State(TermReader):
         return hash(frozenset(self.assignments))
 
     @cached_property
-    def assigned_functions(self) -> frozenset[tuple[type[GroundTerm], Hashable]]:
+    def assigned_functions(self) -> frozenset[FunctionKey]:
         """
         :return: The :attr:`~krrood.entity_query_language.ground_term.GroundTerm.function_key`
             of every fluent this state assigns.
