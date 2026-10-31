@@ -13,7 +13,15 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from functools import cached_property
 from inspect import isclass
-from typing_extensions import TYPE_CHECKING, Generic, Iterable, Any, get_args, Self
+from typing_extensions import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Generic,
+    Iterable,
+    Self,
+    get_args,
+)
 
 
 from random_events.variable import (
@@ -24,6 +32,7 @@ from random_events.variable import (
 )
 
 from krrood.class_diagrams.utils import get_type_hints_of_object
+from krrood.entity_query_language.call_arguments import CallArguments
 from krrood.entity_query_language.core.base_expressions import (
     UnaryExpression,
     Bindings,
@@ -32,6 +41,14 @@ from krrood.entity_query_language.core.base_expressions import (
     Selectable,
     SymbolicExpression,
     UnificationDict,
+)
+from krrood.entity_query_language.evaluation_context import values_in_current_context
+from krrood.entity_query_language.ground_term import (
+    AttributeTerm,
+    CallTerm,
+    GroundTermExpression,
+    GroundTermType,
+    IndexTerm,
 )
 from krrood.entity_query_language.exceptions import (
     MultipleValuesAlongAccessPath,
@@ -42,11 +59,7 @@ from krrood.entity_query_language.exceptions import (
 )
 from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.operators.math_operations import MathOperator
-from krrood.entity_query_language.utils import (
-    T,
-    merge_args_and_kwargs,
-    convert_args_and_kwargs_into_hashable_key,
-)
+from krrood.entity_query_language.utils import T
 from krrood.patterns.factory_and_kwargs import HasFactoryAndKwargs
 from krrood.symbol_graph.helpers import (
     get_field_type_endpoint,
@@ -314,27 +327,14 @@ class CanBehaveLikeAVariable(Selectable[T], HasSymbolicOperations[T], ABC):
         :param kwargs: Keyword arguments to pass to the MappedVariable constructor.
         :return: The retrieved or created MappedVariable instance.
         """
-        cache_item = MappedVariableCacheItem(type_, self, args, kwargs)
+        cache_item = MappedVariableCacheItem(
+            type_, CallArguments.bound_to(type_, (self, *args), kwargs)
+        )
         if cache_item in self._known_mapped_variables_:
             return self._known_mapped_variables_[cache_item]
-        else:
-            instance = type_(**cache_item.all_kwargs)
-            self._known_mapped_variables_[cache_item] = instance
-            return instance
-
-    def _get_mapped_variable_key_(self, type_: type[MappedVariable], *args, **kwargs):
-        """
-        Generates a hashable key for the given type and arguments.
-
-        :param type_: The type of the mapped variable to generate a key for, e.g.,
-            Attribute, Index, etc.
-        :param args: Positional arguments to pass to the MappedVariable constructor.
-        :param kwargs: Keyword arguments to pass to the MappedVariable constructor.
-        :return: The generated hashable key.
-        """
-        args = (self,) + args
-        all_kwargs = merge_args_and_kwargs(type_, args, kwargs, ignore_first=True)
-        return convert_args_and_kwargs_into_hashable_key(all_kwargs)
+        instance = type_(self, *args, **kwargs)
+        self._known_mapped_variables_[cache_item] = instance
+        return instance
 
 
 @dataclass(eq=False, repr=False)
@@ -579,7 +579,7 @@ class MappedVariable(UnaryExpression, CanBehaveLikeAVariable[T], ABC):
 
 
 @dataclass(eq=False, repr=False)
-class SingleValueMapping(MappedVariable[T], ABC):
+class SingleValueMapping(MappedVariable[T], GroundTermExpression[GroundTermType], ABC):
     """
     A mapping that reaches a single value, fully determined by the expression it is
     applied to and its own arguments.
@@ -593,6 +593,15 @@ class SingleValueMapping(MappedVariable[T], ABC):
         when nothing is stored under that key.
     """
 
+    @property
+    def _ground_term_operands_(self) -> tuple[SymbolicExpression, ...]:
+        return (self._child_,)
+
+    def _apply_mapping_(
+        self, value: Any, sources: OperationResult | None = None
+    ) -> Iterable[T]:
+        return values_in_current_context(self._ground_term_(value))
+
     def _apply_mapping_on_external_value_(self, value: Any) -> Iterable[T]:
         """
         :param value: A value outside query evaluation.
@@ -602,7 +611,7 @@ class SingleValueMapping(MappedVariable[T], ABC):
 
 
 @dataclass(eq=False, repr=False)
-class Attribute(SingleValueMapping[T]):
+class Attribute(SingleValueMapping[T, AttributeTerm]):
     """
     A symbolic attribute that can be used to access attributes of symbolic variables.
 
@@ -628,11 +637,8 @@ class Attribute(SingleValueMapping[T]):
         """
         self._type_ = get_field_type_endpoint(self._owner_class_, self._attribute_name_)
 
-    def _apply_mapping_(
-        self, value: Any, sources: OperationResult | None = None
-    ) -> Iterable[T]:
-        if hasattr(value, self._attribute_name_):
-            yield getattr(value, self._attribute_name_)
+    def _ground_term_(self, instance: Any) -> AttributeTerm:
+        return AttributeTerm(instance, self._attribute_name_)
 
     def _rebuild_on_(self, child: CanBehaveLikeAVariable) -> MappedVariable:
         return child._get_mapped_variable_(
@@ -715,19 +721,14 @@ class Index(MappedVariable[T], ABC):
 
 
 @dataclass(eq=False, repr=False)
-class IndexByValue(Index[T], SingleValueMapping[T]):
+class IndexByValue(Index[T], SingleValueMapping[T, IndexTerm]):
     """
     Indexing by a key that is a plain value, which reaches the one element stored under
     it.
     """
 
-    def _apply_mapping_(
-        self, value: Any, sources: OperationResult | None = None
-    ) -> Iterable[T]:
-        try:
-            yield value[self._key_]
-        except IndexError:  # break iterator if the key does not exist
-            return
+    def _ground_term_(self, container: Any) -> IndexTerm:
+        return IndexTerm(container, self._key_)
 
     def _rebuild_on_(self, child: CanBehaveLikeAVariable) -> MappedVariable:
         return child._get_mapped_variable_(IndexByValue, _key_=self._key_)
@@ -737,7 +738,7 @@ class IndexByValue(Index[T], SingleValueMapping[T]):
 
 
 @dataclass(eq=False, repr=False)
-class IndexByExpression(Index[T]):
+class IndexByExpression(Index[T], GroundTermExpression[IndexTerm]):
     """
     Indexing by a key that is itself an expression, which reaches one element per value
     that expression takes.
@@ -746,24 +747,28 @@ class IndexByExpression(Index[T]):
     indexing it by one of them reaches the single value bound to it.
     """
 
+    @property
+    def _ground_term_operands_(self) -> tuple[SymbolicExpression, ...]:
+        return self._child_, self._key_
+
+    def _ground_term_(self, container: Any, key: Any) -> IndexTerm:
+        return IndexTerm(container, key)
+
     def _apply_mapping_(
         self, value: Any, sources: OperationResult | None = None
     ) -> Iterable[T]:
-        try:
-            if isinstance(value, UnificationDict) and self._key_ in value:
-                yield value[self._key_]
-                return
-            for key in self._key_._evaluate_(sources):
-                yield value[key.value]
-        except IndexError:  # break iterator if the key does not exist
+        if isinstance(value, UnificationDict) and self._key_ in value:
+            yield value[self._key_]
             return
+        for key in self._key_._evaluate_(sources):
+            yield from values_in_current_context(self._ground_term_(value, key.value))
 
     def _rebuild_on_(self, child: CanBehaveLikeAVariable) -> MappedVariable:
         return child._get_mapped_variable_(IndexByExpression, _key_=self._key_)
 
 
 @dataclass(eq=False, repr=False)
-class Call(SingleValueMapping[T]):
+class Call(SingleValueMapping[T, CallTerm]):
     """
     A variable created through a function call operation on its child variable.
     """
@@ -778,13 +783,8 @@ class Call(SingleValueMapping[T]):
     The keyword arguments to call the method with.
     """
 
-    def _apply_mapping_(
-        self, value: Any, sources: OperationResult | None = None
-    ) -> Iterable[T]:
-        if len(self._args_) > 0 or len(self._kwargs_) > 0:
-            yield value(*self._args_, **self._kwargs_)
-        else:
-            yield value()
+    def _ground_term_(self, callee: Callable[..., Any]) -> CallTerm:
+        return CallTerm.from_call(callee, *self._args_, **self._kwargs_)
 
     def _rebuild_on_(self, child: CanBehaveLikeAVariable) -> MappedVariable:
         return child._get_mapped_variable_(
@@ -854,55 +854,19 @@ class FlatVariable(MappedVariable[T]):
         return f"Flatten({self._child_._name_})"
 
 
-@dataclass
+@dataclass(frozen=True)
 class MappedVariableCacheItem:
     """
-    A cache item for mapped variable creation.
-
-    To prevent recreating same mapped variable multiple times, mapping instances are
-    stored in a dictionary with a hashable key. This class is used to generate the key
-    for the dictionary  that stores the mapped variable instances.
+    What identifies a mapped variable among those taken from one variable: two writings
+    of the same mapping give equal cache items.
     """
 
-    type: type[MappedVariable]
+    mapping_type: type[MappedVariable]
     """
-    The mapping type to create, e.g., Attribute, Index, etc.
-    """
-
-    child: CanBehaveLikeAVariable
-    """
-    The child of the mapping (i.e. the original variable on which the mapping is
-    applied).
+    The mapping to create, e.g. :class:`Attribute` or :class:`Call`.
     """
 
-    args: tuple[Any, ...] = field(default_factory=tuple)
+    constructor_arguments: CallArguments
     """
-    Positional arguments to pass to the mapping constructor.
+    The arguments the mapping is constructed with, its child first.
     """
-
-    kwargs: dict[str, Any] = field(default_factory=dict)
-    """
-    Keyword arguments to pass to the mapping constructor.
-    """
-
-    def __post_init__(self):
-        self.args = (self.child,) + self.args
-
-    @cached_property
-    def all_kwargs(self):
-        return merge_args_and_kwargs(
-            self.type, self.args, self.kwargs, ignore_first=True
-        )
-
-    @cached_property
-    def hashable_key(self):
-        return (self.type,) + convert_args_and_kwargs_into_hashable_key(self.all_kwargs)
-
-    def __hash__(self):
-        return hash(self.hashable_key)
-
-    def __eq__(self, other):
-        return (
-            isinstance(other, MappedVariableCacheItem)
-            and self.hashable_key == other.hashable_key
-        )
