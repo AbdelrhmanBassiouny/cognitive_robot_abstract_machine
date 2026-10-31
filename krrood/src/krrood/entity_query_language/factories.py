@@ -32,6 +32,7 @@ from krrood.entity_query_language.operators.causal import (
 )
 from krrood.entity_query_language.core.helpers import _resolve_domain
 from krrood.entity_query_language.core.mapped_variable import (
+    ExpressionDomainVariable,
     FlatVariable,
     CanBehaveLikeAVariable,
     HasSymbolicOperations,
@@ -193,7 +194,7 @@ def probability_of(
 
 def variable(
     type_: type[T],
-    domain: DomainType | None = None,
+    domain: DomainType | HasSymbolicOperations | None = None,
 ) -> Union[T, Selectable[T], Variable[T]]:
     """
     Declare a symbolic variable that can be used inside queries.
@@ -202,15 +203,23 @@ def variable(
 
     .. warning::
 
-        If no domain is provided, and the type_ is a Symbol type, then the domain will be inferred from the SymbolGraph,
-         which may contain unnecessarily many elements.
+        If no domain is provided, and the type_ is a Symbol type, then the domain is
+        every instance of the type in the evaluation: the SymbolGraph's, which may
+        contain unnecessarily many elements, or a state's objects when the query is
+        evaluated with a state.
 
     :param type_: The type of variable.
-    :param domain: Iterable of potential values for the variable or None.
-     If None, the domain will be inferred from the SymbolGraph for Symbol types, else should not be evaluated by EQL
-      but by another evaluator (e.g., EQL To SQL converter in Ormatic).
+    :param domain: Iterable of potential values for the variable, an expression whose
+        value, for each of its bindings, holds them, or None. If None, the domain is
+        every instance of a Symbol type in the evaluation; for other types the variable
+        should not be evaluated by EQL but by another evaluator (e.g., EQL To SQL
+        converter in Ormatic).
     :return: A Variable that can be queried for.
     """
+    if isinstance(domain, HasSymbolicOperations):
+        return ExpressionDomainVariable(
+            domain._symbolic_expression_, _element_type_=type_
+        )
     return Variable(
         _type_=type_,
         _domain_=_resolve_domain(type_, domain),
@@ -240,14 +249,18 @@ def deduced_variable(
 
 
 def variable_from(
-    domain: Union[Iterable[T], Selectable[T], T],
+    domain: Union[Iterable[T], HasSymbolicOperations, T],
 ) -> Union[T, Variable[T]]:
     """
     Create a variable from a given domain.
 
-    :param domain: An iterable or selectable expression to use as the variable's domain.
+    :param domain: An iterable to use as the variable's domain, or an expression whose
+        value, for each of its bindings, is the domain: the elements of a collection, or
+        the value itself otherwise.
     :return: A variable that can be queried for.
     """
+    if isinstance(domain, HasSymbolicOperations):
+        return ExpressionDomainVariable(domain._symbolic_expression_)
     return Variable(_domain_=domain)
 
 

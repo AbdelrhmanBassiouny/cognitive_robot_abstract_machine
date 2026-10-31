@@ -1,5 +1,6 @@
 """
-States that assign values to fluents without changing live objects.
+States that assign values to fluents, and add and remove objects, without changing live
+objects.
 """
 
 from __future__ import annotations
@@ -7,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from functools import cached_property
 
-from typing_extensions import Any, Iterator
+from typing_extensions import Any, Iterable, Iterator
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.ground_term import (
@@ -15,6 +16,7 @@ from krrood.entity_query_language.ground_term import (
     GroundTerm,
     TermReader,
 )
+from krrood.entity_query_language.utils import T
 from krrood.planning.fact import Fact
 
 # %% states
@@ -44,6 +46,11 @@ class State(TermReader):
     >>> box.color
     'red'
 
+    A state also adds and removes objects, as a difference from the live symbol graph.
+    A variable without a domain ranges over the objects of the state the query is
+    evaluated with; explicit domains and the values of fluents are never filtered by
+    them.
+
     .. note:: An unassigned derived fluent follows the state only where its value comes
         from EQL: a body that is itself an EQL query, or inputs passed to it as EQL
         arguments, as in ``is_table(block.support)``. A Python body that reads an
@@ -61,8 +68,30 @@ class State(TermReader):
     Never mutated; a changed state is a new :class:`State`.
     """
 
+    added_objects: dict[int, Any] = field(default_factory=dict)
+    """
+    The objects this state adds to the live symbol graph's instances, keyed by their
+    :func:`id`.
+
+    Never mutated; a changed state is a new :class:`State`.
+    """
+
+    removed_objects: dict[int, Any] = field(default_factory=dict)
+    """
+    The objects this state removes from the live symbol graph's instances, keyed by
+    their :func:`id`.
+
+    Never mutated; a changed state is a new :class:`State`.
+    """
+
     def __hash__(self) -> int:
-        return hash(frozenset(self.assignments))
+        return hash(
+            (
+                frozenset(self.assignments),
+                frozenset(self.added_objects),
+                frozenset(self.removed_objects),
+            )
+        )
 
     @cached_property
     def assigned_functions(self) -> frozenset[FunctionKey]:
@@ -83,10 +112,68 @@ class State(TermReader):
         assignments = dict(self.assignments)
         for fact in facts:
             assignments |= Fact.from_condition(fact).assignments()
-        return State(assignments=assignments)
+        return State(
+            assignments=assignments,
+            added_objects=self.added_objects,
+            removed_objects=self.removed_objects,
+        )
+
+    def with_objects_added(self, *objects: Any) -> State:
+        """
+        :param objects: The objects to add.
+        :return: A new state in which *objects* exist, whether this state removed them
+            or never had them.
+        """
+        added_ids = {id(added) for added in objects}
+        return State(
+            assignments=self.assignments,
+            added_objects=self.added_objects | {id(added): added for added in objects},
+            removed_objects={
+                identifier: removed
+                for identifier, removed in self.removed_objects.items()
+                if identifier not in added_ids
+            },
+        )
+
+    def with_objects_removed(self, *objects: Any) -> State:
+        """
+        :param objects: The objects to remove.
+        :return: A new state in which *objects* do not exist, whether they are live or
+            this state added them.
+        """
+        removed_ids = {id(removed) for removed in objects}
+        return State(
+            assignments=self.assignments,
+            added_objects={
+                identifier: added
+                for identifier, added in self.added_objects.items()
+                if identifier not in removed_ids
+            },
+            removed_objects=self.removed_objects
+            | {id(removed): removed for removed in objects},
+        )
 
     def values_of(self, term: GroundTerm) -> Iterator[Any]:
         if term.function_key in self.assigned_functions and term in self.assignments:
             yield self.assignments[term]
             return
         yield from term.live_values()
+
+    def instances_of(self, type_: type[T], live_instances: Iterable[T]) -> Iterator[T]:
+        """
+        :param type_: The type whose instances to read.
+        :param live_instances: The instances of *type_* the live symbol graph holds.
+        :return: The live instances this state does not remove, in their order, then
+            the instances of *type_* it adds that are not live, in the order they were
+            added.
+        """
+        live_ids = set()
+        for instance in live_instances:
+            live_ids.add(id(instance))
+            if id(instance) not in self.removed_objects:
+                yield instance
+        yield from (
+            added
+            for identifier, added in self.added_objects.items()
+            if identifier not in live_ids and isinstance(added, type_)
+        )
