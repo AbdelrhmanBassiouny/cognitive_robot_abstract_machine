@@ -21,6 +21,7 @@ from krrood.entity_query_language.factories import (
 )
 from krrood.entity_query_language.predicate import symbolic_function
 from krrood.planning.exceptions import (
+    AssignmentBypassesSetter,
     ComparisonIsNotAnEquality,
     ConditionIsNotAFact,
     FactValueIsNotConstant,
@@ -28,6 +29,14 @@ from krrood.planning.exceptions import (
 )
 from krrood.planning.state import State
 
+from ..dataset.setting_with_side_effects import (
+    AttributeReadThroughProperty,
+    AttributeSetThroughProperty,
+    AttributesSetThroughSetattr,
+    ElementsSetThroughSetitem,
+    FrozenAttributes,
+    SlottedAttributes,
+)
 from ..dataset.blocks_world import (
     Block,
     IsOn,
@@ -35,6 +44,7 @@ from ..dataset.blocks_world import (
     SupportName,
     Table,
     is_table,
+    tallest_tower,
     tower_height,
 )
 
@@ -257,6 +267,36 @@ def test_assigning_an_element_the_container_lacks_is_rejected(two_towers):
         State().with_facts(literal(two_towers.shelf).slots[5] == two_towers.c)
 
 
+@pytest.mark.parametrize(
+    "fluent",
+    [
+        lambda: literal(AttributeSetThroughProperty()).is_lit,
+        lambda: literal(AttributesSetThroughSetattr()).status,
+        lambda: literal(ElementsSetThroughSetitem(lit=False))["lit"],
+    ],
+    ids=["property setter", "__setattr__", "__setitem__"],
+)
+def test_assigning_a_fluent_whose_setting_runs_code_is_rejected(fluent):
+    with pytest.raises(AssignmentBypassesSetter):
+        State().with_facts(fluent() == True)
+
+
+@pytest.mark.parametrize(
+    "fluent",
+    [
+        lambda: literal(SlottedAttributes(1.0)).coordinate,
+        lambda: literal(FrozenAttributes(1.0)).coordinate,
+        lambda: literal(AttributeReadThroughProperty(1.0)).diameter,
+    ],
+    ids=["slot", "frozen dataclass", "read-only property"],
+)
+def test_assigning_a_fluent_that_is_only_stored_is_accepted(fluent):
+    expression = fluent()
+    state = State().with_facts(expression == 5.0)
+
+    assert expression.tolist(state=state) == [5.0]
+
+
 def test_a_comparison_other_than_equality_is_not_a_fact(two_towers):
     with pytest.raises(ComparisonIsNotAnEquality):
         State().with_facts(tower_height(literal(two_towers.b)) > 3)
@@ -338,6 +378,22 @@ def test_fluents_identify_unhashable_instances_by_identity(two_towers):
     result = blocks_on([first, second], two_towers.table, state)
 
     assert result == [second]
+
+
+def test_fluents_identify_list_arguments_by_identity(two_towers):
+    """
+    Two lists with the same elements are still different objects, so assigning a fluent
+    called with one never assigns the fluent called with the other.
+    """
+    first = [two_towers.b]
+    second = [two_towers.b]
+    state = State().with_facts(tallest_tower(literal(first)) == 7)
+
+    heights = [
+        tallest_tower(literal(tops)).tolist(state=state) for tops in (first, second)
+    ]
+
+    assert heights == [[7], [tallest_tower(second)]]
 
 
 def test_fluents_compare_hashable_arguments_by_value(two_towers):

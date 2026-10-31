@@ -97,3 +97,28 @@ class MissingFluent(DataclassException):
 
     def suggest_correction(self) -> str:
         return "Assign only attributes the instance has and keys the container stores."
+
+
+@dataclass
+class AssignmentBypassesSetter(DataclassException):
+    """
+    A fact gives a value to a fluent that live objects set through code of their own
+    class, such as a property setter, which a state never runs.
+    """
+
+    term: GroundTerm
+    """
+    The fluent whose setting runs code.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"Setting {self.term} on a live object runs code of its class, which may "
+            "change more than this fluent; a state would only store the value."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Assign the plain fields the setter stores, and state what else it changes "
+            "as derived fluents (EQL rules or symbolic functions) or as further facts."
+        )

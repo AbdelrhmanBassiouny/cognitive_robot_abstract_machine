@@ -8,8 +8,9 @@ from __future__ import annotations
 import inspect
 import operator
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, is_dataclass
 from functools import cached_property
+from types import MemberDescriptorType, WrapperDescriptorType
 
 from typing_extensions import (
     TYPE_CHECKING,
@@ -23,6 +24,7 @@ from typing_extensions import (
     TypeVar,
 )
 
+from krrood.entity_query_language.call_arguments import CallArguments
 from krrood.entity_query_language.core.bound_value import HasBoundValue
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood.utils import ensure_hashable
@@ -113,6 +115,13 @@ class GroundTerm(ABC):
         """
         return True
 
+    def setting_runs_code(self) -> bool:
+        """
+        :return: Whether setting this ground term on a live object runs code of the
+            object's class, which may change more than this ground term.
+        """
+        return False
+
     @abstractmethod
     def live_value(self) -> Any:
         """
@@ -155,6 +164,23 @@ class AttributeTerm(GroundTerm):
     def has_live_value(self) -> bool:
         return hasattr(self.instance, self.attribute_name)
 
+    def setting_runs_code(self) -> bool:
+        """
+        Setting runs code where the class overrides :meth:`object.__setattr__`, other
+        than to freeze a dataclass, or where the attribute is a descriptor with a setter
+        that is neither a slot nor a read-only property.
+        """
+        owner = type(self.instance)
+        is_frozen_dataclass = is_dataclass(owner) and owner.__dataclass_params__.frozen
+        if owner.__setattr__ is not object.__setattr__ and not is_frozen_dataclass:
+            return True
+        descriptor = inspect.getattr_static(owner, self.attribute_name, None)
+        if isinstance(descriptor, MemberDescriptorType):
+            return False
+        if isinstance(descriptor, property):
+            return descriptor.fset is not None
+        return hasattr(type(descriptor), "__set__")
+
     def live_value(self) -> Any:
         return getattr(self.instance, self.attribute_name)
 
@@ -182,6 +208,13 @@ class IndexTerm(GroundTerm):
     @property
     def normalized_arguments(self) -> tuple[Hashable, ...]:
         return ensure_hashable(self.container), ensure_hashable(self.key)
+
+    def setting_runs_code(self) -> bool:
+        """
+        Setting runs code where the container's class defines its own item assignment
+        instead of inheriting a builtin one.
+        """
+        return not isinstance(type(self.container).__setitem__, WrapperDescriptorType)
 
     def has_live_value(self) -> bool:
         """
@@ -252,16 +285,9 @@ class CallTerm(GroundTerm):
         Passing an argument by position or by name, or leaving out one that has a
         default, gives the same arguments.
         """
-        bound_arguments = inspect.signature(self.callee).bind(
-            *self.arguments, **self.keyword_arguments
-        )
-        bound_arguments.apply_defaults()
-        return tuple(ensure_hashable(argument) for argument in bound_arguments.args) + (
-            tuple(
-                (name, ensure_hashable(value))
-                for name, value in sorted(bound_arguments.kwargs.items())
-            ),
-        )
+        return CallArguments.bound_to(
+            self.callee, self.arguments, self.keyword_arguments
+        ).key_by(ensure_hashable)
 
     def live_value(self) -> Any:
         return self.callee(*self.arguments, **self.keyword_arguments)
@@ -281,7 +307,7 @@ class BoundValueTerm(CallTerm):
     """
 
     def live_value(self) -> Any:
-        bound_arguments = inspect.signature(self.callee).bind(
+        bound_arguments = CallArguments.signature_of(self.callee).bind(
             *self.arguments, **self.keyword_arguments
         )
         return self.callee._bound_value_(**bound_arguments.arguments)

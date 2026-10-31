@@ -102,6 +102,15 @@ def tower_height(block: Block) -> int:
 
 
 @symbolic_function
+def tallest_tower(tops: list[Block]) -> int:
+    """
+    :param tops: The top blocks of some towers.
+    :return: The height of the tallest of those towers.
+    """
+    return max(tower_height(top) for top in tops)
+
+
+@symbolic_function
 def is_table(support: Block | Table) -> bool:
     """
     :param support: What a block rests on.

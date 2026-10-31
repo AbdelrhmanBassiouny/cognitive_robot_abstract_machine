@@ -17,6 +17,7 @@ from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.operators.core_logical_operators import Not
 from krrood.entity_query_language.predicate import Predicate
 from krrood.planning.exceptions import (
+    AssignmentBypassesSetter,
     ComparisonIsNotAnEquality,
     ConditionIsNotAFact,
     FactValueIsNotConstant,
@@ -88,6 +89,8 @@ class Fact:
         :return: :attr:`value` for the ground term :attr:`expression` reads under each
             binding of its operands.
         :raises MissingFluent: If one of these ground terms does not exist.
+        :raises AssignmentBypassesSetter: If live objects set one of these ground terms
+            through code of their own class.
         """
         operands = self.expression._ground_term_operands_
         assignments = {}
@@ -97,5 +100,7 @@ class Fact:
             )
             if not term.has_live_value():
                 raise MissingFluent(term)
+            if term.setting_runs_code():
+                raise AssignmentBypassesSetter(term)
             assignments[term] = self.value
         return assignments
