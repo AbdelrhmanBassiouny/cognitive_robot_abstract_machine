@@ -44,13 +44,13 @@ items:
   title: Fluents and a State overlay that EQL queries are evaluated against
   track: planning-core
   pull_request_number: 535
-  session: https://claude.ai/code/session_018wfiv8DAzFwDhYuFjpMtRY
+  session: https://claude.ai/code/session_01JxHGiMbWLBgK8nT2DHNmxJ
   depends_on: []
   status: in progress
-  notes: 'Review round 1 addressed (Oct 30): State.with_facts takes EQL conditions on literal-, variable-
-    or match-rooted expressions (lifted facts); GroundTerm is internal, built by the expressions
-    (GroundTermExpression). Merges bug PR #538 (match arguments in predicates). Open: whether symbols
-    get a typed link to their expression class.'
+  notes: 'Review round 2 addressed (Oct 31, d52af4309): typed value terms (AttributeTerm, IndexTerm,
+    CallTerm) bound per expression via GroundTermExpression[TermT]; queries take state= and State.as_current
+    is gone. Merges bug PR #538. Next: separate PR off main splitting InstantiatedVariable type and factory,
+    merged here; 6 review threads await the owner.'
 - id: state-objects-and-domains
   branch: eql-planning/state-objects-and-domains
   title: 'Objects in a State: a state adds and removes objects, and default EQL domains come from
