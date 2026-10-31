@@ -40,8 +40,8 @@ items:
   session: https://claude.ai/code/session_018wfiv8uSfijGho9G4ZS6Qz
   blockers:
     - >-
-      Awaiting fork CI on 67250a7d5, which adopts main's renamed Match properties
-      (_type_/_variable_/_matches_with_variables_). Then drop the integration-conflict label.
+      Awaiting fork CI on a89175571 (renamed Match properties adopted; review thread on
+      module-level helpers resolved). Then drop the integration-conflict label.
   depends_on: []
   status: in_progress
   notes: '2026-08-12 steward cascade: restacked onto its cascaded base, which now carries main be377fdf
