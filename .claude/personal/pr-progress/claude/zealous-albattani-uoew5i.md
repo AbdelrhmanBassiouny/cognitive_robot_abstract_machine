@@ -1,10 +1,11 @@
 PR #535, plan item eql-planning/fluent-state-overlay. Draft. Merges bug PR #538 (off main).
 
 Plan:
-- Value overlay; facts are EQL conditions on literal/variable/match-rooted expressions (State.with_facts); GroundTerm internal, built by GroundTermExpression.
+- Value overlay; facts are EQL conditions (State.with_facts); typed value terms built by GroundTermExpression[TermT]; queries take state=.
 
 Done:
-- Review round 1 (6d18abb0ea): 11 of 12 threads replied and resolved; 36 planning tests; test_eql passes.
+- Review round 2 (d52af4309): 12 threads resolved, 6 replied and left open; 39 planning tests; test_eql passes.
 
 Next:
-- Owner: decide the open thread (typed link symbol <-> expression class); mark ready only when told.
+- Separate PR off main: InstantiatedVariable type field (always a type) plus factory field; merge into #535.
+- Owner: answer the 6 open threads (try-except, list append, predicate-wrapped inequality, State(f1, ...), the(b) facts, type/factory); mark ready only when told.
