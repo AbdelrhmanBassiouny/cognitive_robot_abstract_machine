@@ -56,8 +56,8 @@ items:
   session: https://claude.ai/code/session_01JxHGiMbWLBgK8nT2DHNmxJ
   depends_on: []
   status: in progress
-  notes: 'Bug PR off main, merged into #535 like #538. CallArguments binds arguments to the signature;
-    the node cache compares containers by contents, CallTerm (#535) everything unhashable by identity.'
+  notes: 'Bug PR off main, merged into #535. Ready for review (owner); upstream promotion link recorded
+    in #540, not yet opened on cram2.'
 - id: fluent-state-overlay
   branch: claude/zealous-albattani-uoew5i
   title: Fluents and a State overlay that EQL queries are evaluated against
@@ -68,9 +68,9 @@ items:
   - instantiated-variable-type-and-factory
   - call-arguments-normalization
   status: in progress
-  notes: 'Oct 31 (86eb30b38): Fact raises AssignmentBypassesSetter for fluents set through a property
-    setter, __setattr__ or __setitem__; CallTerm uses CallArguments. Merges #538, #540 and, once open,
-    instantiated-variable-type-and-factory.'
+  notes: 'Ready for review (owner, Oct 31, 86eb30b38); upstream promotion link recorded in #535, not
+    yet opened on cram2. Includes #538 and #540, which should land upstream first. instantiated-variable-type-and-factory
+    not started.'
 - id: state-objects-and-domains
   branch: eql-planning/state-objects-and-domains
   title: 'Objects in a State: a state adds and removes objects, and default EQL domains come from
