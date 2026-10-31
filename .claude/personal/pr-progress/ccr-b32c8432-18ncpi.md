@@ -1,11 +1,9 @@
 ## Plan
-- variable(Type, expression) / variable_from(expression): evaluate per binding, flatten, type-filter
-- State: added/removed objects, a diff over the base SymbolGraph
-- Default domains read from the evaluation's TermReader per evaluation (State or live SymbolGraph)
-- No filtering of captured lists; values stay as given
+- State objects, default domains through TermReader.instances_of, expression domains (ExpressionDomainVariable)
 
 ## Done
-- Branch and draft PR #541, stacked on #535 (merged into latest main; no force push)
+- Implemented and pushed (5e8b29e45); 22 new tests; test_eql and other krrood suites green locally
+- PR #541 description and labels (new-feature, api-break) current
 
 ## Next
-- Tests first in test/krrood_test/test_planning and test_eql, then implementation
+- Owner review; restack once #535 is restacked onto main (maintenance pass needs cram2 API access)
