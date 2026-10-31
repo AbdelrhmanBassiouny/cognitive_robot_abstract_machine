@@ -57,14 +57,14 @@ def _animals():
 
 def test_is_ellipsis_target_true_for_an_ellipsis_assignment():
     match = an(Animal)(species=...).from_(_animals())
-    (attribute_match,) = match.matches_with_variables
+    (attribute_match,) = match._matches_with_variables_
 
     assert is_ellipsis_target(attribute_match) is True
 
 
 def test_is_ellipsis_target_false_for_a_concrete_assignment():
     match = an(Animal)(has_fur=True).from_(_animals())
-    (attribute_match,) = match.matches_with_variables
+    (attribute_match,) = match._matches_with_variables_
 
     assert is_ellipsis_target(attribute_match) is False
 
@@ -77,7 +77,7 @@ def test_case_type_and_variable_reflect_the_underlying_match():
     parser = RDRMatchParser(match)
 
     assert parser.case_type is Animal
-    assert parser.variable is match.variable
+    assert parser.variable is match._variable_
 
 
 # %% inference_targets / single_target / target_attribute_name
