@@ -8,12 +8,19 @@ variables that are instantiated from other expressions.
 
 from __future__ import annotations
 
-import inspect
+from inspect import isclass
 from abc import ABC
 from dataclasses import dataclass, field
 from functools import cached_property
 
-from typing_extensions import Any, Iterable, Union as TypingUnion, Callable, Iterator
+from typing_extensions import (
+    Any,
+    Iterable,
+    Union as TypingUnion,
+    Callable,
+    Iterator,
+    get_origin,
+)
 
 from krrood.entity_query_language.core.base_expressions import (
     Bindings,
@@ -25,7 +32,11 @@ from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVari
 from krrood.entity_query_language.core.bound_value import HasBoundValue
 from krrood.entity_query_language.cache_data import ReEnterableLazyIterable
 from krrood.entity_query_language.enums import DomainSource
-from krrood.entity_query_language.exceptions import NoChildToReplace
+from krrood.class_diagrams.utils import get_type_hints_of_object
+from krrood.entity_query_language.exceptions import (
+    NoChildToReplace,
+    ResultTypeIsNotAType,
+)
 from krrood.entity_query_language.operators.set_operations import (
     MultiArityExpressionThatPerformsACartesianProduct,
 )
@@ -183,8 +194,8 @@ class InstantiatedVariable(
     MultiArityExpressionThatPerformsACartesianProduct, CanHaveDomainSource[T]
 ):
     """
-    A variable which does not have an explicit domain, but creates new
-    instances using the `_type_` and `_kwargs_` that are provided.
+    A variable which does not have an explicit domain, but builds its values by
+    calling :attr:`_factory_` with the `_kwargs_` that are provided.
 
     The `_kwargs_` are variables that can be used to generate
     combinations of bindings to create instances for each combination.
@@ -192,11 +203,18 @@ class InstantiatedVariable(
     Predicates and symbolic functions.
     """
 
-    _type_: type[T] | Callable = field(kw_only=True)
+    _type_: type[T] | None = field(default=None, kw_only=True)
     """
-    The result type of the variable.
+    The type of the values this variable binds (the value of `T`), always a type.
 
-    (The value of `T`)
+    When not given, it is read from the return annotation of :attr:`_factory_` (see
+    :meth:`_return_type_of_`).
+    """
+
+    _factory_: Callable[..., T] | None = field(default=None, kw_only=True)
+    """
+    The callable that builds the values this variable binds, such as the type itself, a
+    factory method or a symbolic function. Defaults to :attr:`_type_`.
     """
 
     _kwargs_: dict[str, Any] = field(default_factory=dict)
@@ -218,10 +236,31 @@ class InstantiatedVariable(
     """
 
     def __post_init__(self):
+        if self._factory_ is None:
+            self._factory_ = self._type_
+        if self._type_ is None and self._factory_ is not None:
+            self._type_ = self._return_type_of_(self._factory_)
+        if not isinstance(self._type_, type):
+            raise ResultTypeIsNotAType(self._type_)
         self._update_child_variables_from_kwargs_()
         self._operation_children_ = tuple(self._child_variables_.values())
         # This is done here as it uses `_operation_children_`
         super().__post_init__()
+
+    @staticmethod
+    def _return_type_of_(function: Callable[..., Any]) -> type:
+        """
+        :param function: A function or method.
+        :return: The class its return annotation names, the origin of a parameterized
+            generic it names (``list`` for ``list[int]``), and :class:`object` when it has
+            no return annotation or the annotation names no class.
+        """
+        return_annotation = get_type_hints_of_object(function).get("return")
+        if isclass(return_annotation):
+            return return_annotation
+        if isclass(get_origin(return_annotation)):
+            return get_origin(return_annotation)
+        return object
 
     def _update_child_variables_from_kwargs_(self):
         """
@@ -255,10 +294,9 @@ class InstantiatedVariable(
             # class-form counterpart of a @symbolic_function being called. A plain function/type does
             # not, so it binds the direct call result.
             bind = (
-                self._type_._bound_value_
-                if inspect.isclass(self._type_)
-                and issubclass(self._type_, HasBoundValue)
-                else self._type_
+                self._factory_._bound_value_
+                if isclass(self._factory_) and issubclass(self._factory_, HasBoundValue)
+                else self._factory_
             )
             instance = bind(**arguments)
 
@@ -279,17 +317,17 @@ class InstantiatedVariable(
 
     @cached_property
     def _name_(self):
-        return self._type_.__name__
+        return self._factory_.__name__
 
     def apply_mapping_on_external_root(self, *args, **kwargs: dict[str, Any]) -> Any:
         """
-        Build an instance of this variable's type from the given arguments.
+        Build a value with this variable's factory from the given arguments.
 
-        :param args: Positional arguments for the type's constructor.
-        :param kwargs: Keyword arguments for the type's constructor.
-        :return: The constructed instance.
+        :param args: Positional arguments for the factory.
+        :param kwargs: Keyword arguments for the factory.
+        :return: The built value.
         """
-        return self._type_(*args, **kwargs)
+        return self._factory_(*args, **kwargs)
 
 
 @dataclass(eq=False, repr=False)
