@@ -1,14 +1,12 @@
 # D-core-underspecified (#64) — progress
 
 ## State (2026-10-31)
-- Merged latest `main` (`da32d106e`, clean).
-- `b4c15b9e8` answers the three 2026-10-31 review questions (`86b4c92c3` then renamed `is_unspecified` to `is_underspecified_single_value`, per review): `AttributeMatch.is_underspecified_single_value` replaces `is_ellipsis_target`, and `WrappedField.holds_collection`/`collection_types` replace the parser's own collection check (looked up via `get_wrapped_field`). Two threads resolved. The `holds_collection` thread stays open: it asks whether non-dataclass case types (no longer guarded) matter.
-- Tests: 172 in the touched suites, 1434 across eql/symbol_graph/class_diagrams.
-- Squashed on request into one commit `59ff6d560` on main `acad75674` (tree identical to `86b4c92c3`; local backup branch `backup/D-core-underspecified-pre-squash`). #65 re-merged it as `d6551c038` (tree unchanged, 61 passed), so its diff shows only its own 3 files.
-- Labelled `new-feature` (AGENTS.md labels rule).
-- The PR stays ready (promoted as cram2 #658).
+- One commit, `0edfbb883`, on main `acad75674` (pre-squash backup: local `backup/D-core-underspecified-pre-squash`).
+- All review threads resolved. The last one asked what to do when `get_wrapped_field` returns `None`; answered by raising the new `UndeclaredInferenceTarget(case_type, attribute_name)`, with two tests (non-dataclass case type, property target). The guard passes the stack tip's 265 RDR tests.
+- #65 merged it as `e98327a13` (63 passed); its diff still shows only its own 3 files.
+- Fork CI on `59ff6d560`: only `version` (runner out of disk) and robokudo `test_query` (ROS action timing) failed, neither touching krrood. Upstream cram2 #658: no reviews, no threads; a stale giskardpy failure.
+- Labelled `new-feature`. The PR stays ready (promoted as cram2 #658).
 
 ## Next
-- The user answers the open `holds_collection` thread.
-- Fork CI on `59ff6d560` green, then drop `integration-conflict`.
+- Fork CI on `0edfbb883` green (rerun the two infra jobs if they repeat), then drop `integration-conflict`.
 - #66, #67, #98, #159, #210 still need restacking onto main.
