@@ -38,7 +38,6 @@ from krrood.adapters.json_serializer import list_like_classes
 from krrood.entity_query_language.evaluation_context import (
     EvaluationContext,
     get_evaluation_context,
-    iterate_reading_from,
 )
 from krrood.entity_query_language.exceptions import NoExpressionFoundForGivenID
 from krrood.entity_query_language.utils import make_list, T, make_set, is_iterable
@@ -336,7 +335,7 @@ class SymbolicExpression(
         :param state: What the evaluation reads the values of attributes, indexes,
             calls and predicates from; their live values when omitted.
         """
-        return iterate_reading_from(state, self._processed_results_())
+        return EvaluationContext.iterate_reading_from(state, self._processed_results_())
 
     def _processed_results_(self) -> Iterator[T | dict[T | SymbolicExpression, T]]:
         """

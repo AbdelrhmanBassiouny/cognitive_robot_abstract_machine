@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 
 from typing_extensions import Iterator, TYPE_CHECKING
 
-from krrood.entity_query_language.evaluation_context import iterate_reading_from
+from krrood.entity_query_language.evaluation_context import EvaluationContext
 from krrood.entity_query_language.utils import make_list
 
 if TYPE_CHECKING:
@@ -54,7 +54,7 @@ class Evaluable(ABC):
             from krrood.entity_query_language.backends import EntityQueryLanguageBackend
 
             backend = EntityQueryLanguageBackend()
-        return iterate_reading_from(state, backend.evaluate(self))
+        return EvaluationContext.iterate_reading_from(state, backend.evaluate(self))
 
     def tolist(
         self, backend: QueryBackend | None = None, state: TermReader | None = None

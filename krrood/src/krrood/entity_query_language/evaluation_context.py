@@ -70,21 +70,6 @@ def values_in_current_context(term: GroundTerm) -> Iterator[Any]:
     return evaluation_context.term_reader.values_of(term)
 
 
-def iterate_reading_from(
-    term_reader: TermReader | None, results: Iterator[ResultType]
-) -> Iterator[ResultType]:
-    """
-    :param term_reader: What the evaluation producing *results* reads ground terms
-        with, or ``None`` to read them as the current evaluation context does.
-    :param results: The results of an evaluation that has not started yet.
-    :return: The same results. The evaluation, and every evaluation it starts, reads
-        ground terms with *term_reader*.
-    """
-    if term_reader is None:
-        return results
-    return EvaluationContext(term_reader=term_reader).iterate_as_current(results)
-
-
 class EvaluationObserver(ABC):
     """
     Observer for evaluation events in the EQL evaluation pipeline.
@@ -408,6 +393,21 @@ class EvaluationContext:
             yield
         finally:
             _evaluation_context_var.reset(context_token)
+
+    @classmethod
+    def iterate_reading_from(
+        cls, term_reader: TermReader | None, results: Iterator[ResultType]
+    ) -> Iterator[ResultType]:
+        """
+        :param term_reader: What the evaluation producing *results* reads ground terms
+            with, or ``None`` to read them as the current evaluation context does.
+        :param results: The results of an evaluation that has not started yet.
+        :return: The same results. The evaluation, and every evaluation it starts, reads
+            ground terms with *term_reader*.
+        """
+        if term_reader is None:
+            return results
+        return cls(term_reader=term_reader).iterate_as_current(results)
 
     def iterate_as_current(self, results: Iterator[ResultType]) -> Iterator[ResultType]:
         """

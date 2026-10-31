@@ -24,9 +24,21 @@ class State(TermReader):
 
     A fluent is a :class:`~krrood.entity_query_language.ground_term.GroundTerm`: an
     attribute of an instance, an indexed element, or the result of a call, a symbolic
-    function or a predicate for concrete arguments. A query evaluated with this state,
-    as in ``query.tolist(state=state)``, reads the assigned value of every assigned
-    fluent, and the live value of every other. The live objects are never changed.
+    function or a predicate for concrete arguments. A query evaluated with this state
+    reads the assigned value of every assigned fluent, and the live value of every
+    other. The live objects are never changed.
+
+    >>> from dataclasses import dataclass
+    >>> from krrood.entity_query_language.factories import a, literal
+    >>> @dataclass
+    ... class Box:
+    ...     color: str
+    >>> box = Box("red")
+    >>> state = State().with_facts(literal(box).color == "blue")
+    >>> a(Box).from_([box]).color.tolist(state=state)
+    ['blue']
+    >>> box.color
+    'red'
 
     .. note:: An unassigned derived fluent follows the state only where its value comes
         from EQL: a body that is itself an EQL query, or inputs passed to it as EQL

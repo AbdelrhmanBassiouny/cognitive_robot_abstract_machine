@@ -36,13 +36,19 @@ if TYPE_CHECKING:
 @dataclass(frozen=True, eq=False)
 class GroundTerm(ABC):
     """
-    A function applied to concrete arguments, such as the attribute ``support`` of one
-    block or a predicate applied to two objects.
+    A function applied to concrete arguments.
 
     Two ground terms are equal when they apply the same function to the same arguments,
     however the arguments were passed and including defaults that were left out.
     Hashable arguments are compared by value and all others by identity, so two objects
     that compare equal but cannot be hashed are different arguments.
+
+    >>> def area(width: float, height: float = 1.0) -> float:
+    ...     return width * height
+    >>> CallTerm(area, (2.0,)) == CallTerm(area, (), {"width": 2.0, "height": 1.0})
+    True
+    >>> CallTerm(area, (2.0,)).live_value()
+    2.0
     """
 
     @property
