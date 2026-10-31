@@ -59,7 +59,7 @@ from krrood.entity_query_language.exceptions import (
 )
 from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.operators.math_operations import MathOperator
-from krrood.entity_query_language.utils import T
+from krrood.entity_query_language.utils import T, is_iterable
 from krrood.patterns.factory_and_kwargs import HasFactoryAndKwargs
 from krrood.symbol_graph.helpers import (
     get_field_type_endpoint,
@@ -852,6 +852,53 @@ class FlatVariable(MappedVariable[T]):
     @cached_property
     def _name_(self) -> str:
         return f"Flatten({self._child_._name_})"
+
+
+@dataclass(eq=False, repr=False)
+class ExpressionDomainVariable(MappedVariable[T]):
+    """
+    A variable whose domain is the value of its child expression.
+
+    For each binding of the child, it ranges over the elements of the collection the
+    child evaluates to, or over the value itself when that is no collection, keeping
+    only the instances of :attr:`_element_type_`. The child's bindings are kept, so each
+    element stays bound with the binding it came from.
+
+    Each one written is a variable of its own, like a :class:`FlatVariable`.
+    """
+
+    _element_type_: type[T] | None = field(default=None, kw_only=True)
+    """
+    The type every value of this variable is an instance of, or ``None`` to keep every
+    element.
+    """
+
+    def _update_type_(self) -> None:
+        """
+        Set ``_type_`` to :attr:`_element_type_` rather than to the child's type, as
+        :meth:`MappedVariable._update_type_` does.
+        """
+        self._type_ = self._element_type_
+
+    def _apply_mapping_(
+        self, value: Any, sources: OperationResult | None = None
+    ) -> Iterable[T]:
+        elements = value if is_iterable(value) else (value,)
+        if self._element_type_ is None:
+            yield from elements
+            return
+        yield from (
+            element for element in elements if isinstance(element, self._element_type_)
+        )
+
+    def _rebuild_on_(self, child: CanBehaveLikeAVariable) -> MappedVariable:
+        return ExpressionDomainVariable(child, _element_type_=self._element_type_)
+
+    @cached_property
+    def _name_(self) -> str:
+        if self._element_type_ is not None:
+            return self._element_type_.__name__
+        return f"ElementOf({self._child_._name_})"
 
 
 @dataclass(frozen=True)

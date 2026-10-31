@@ -18,6 +18,7 @@ from typing_extensions import (
     Callable,
     Generic,
     Hashable,
+    Iterable,
     Iterator,
     Mapping,
     Sequence,
@@ -26,6 +27,7 @@ from typing_extensions import (
 
 from krrood.entity_query_language.call_arguments import CallArguments
 from krrood.entity_query_language.core.bound_value import HasBoundValue
+from krrood.entity_query_language.utils import T
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood.utils import ensure_hashable
 
@@ -345,7 +347,7 @@ class GroundTermExpression(Generic[GroundTermType], SubClassSafeGeneric):
 
 class TermReader(ABC):
     """
-    Reads the value of a ground term during an evaluation.
+    Reads the value of a ground term, and the instances of a type, during an evaluation.
     """
 
     @abstractmethod
@@ -353,6 +355,14 @@ class TermReader(ABC):
         """
         :param term: The ground term to read.
         :return: The value of *term*, or nothing when it has none.
+        """
+
+    @abstractmethod
+    def instances_of(self, type_: type[T], live_instances: Iterable[T]) -> Iterator[T]:
+        """
+        :param type_: The type whose instances to read.
+        :param live_instances: The instances of *type_* the live symbol graph holds.
+        :return: The instances of *type_* that exist in the evaluation.
         """
 
 
@@ -364,3 +374,6 @@ class LiveTermReader(TermReader):
 
     def values_of(self, term: GroundTerm) -> Iterator[Any]:
         return term.live_values()
+
+    def instances_of(self, type_: type[T], live_instances: Iterable[T]) -> Iterator[T]:
+        return iter(live_instances)
