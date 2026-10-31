@@ -41,7 +41,7 @@ items:
   blockers:
     - >-
       Open review thread on WrappedField.holds_collection (non-dataclass case types no
-      longer guarded) awaits the user; then fork CI on b4c15b9e8 and drop integration-conflict.
+      longer guarded) awaits the user; then fork CI on 86b4c92c3 and drop integration-conflict.
   depends_on: []
   status: in_progress
   notes: '2026-08-12 steward cascade: restacked onto its cascaded base, which now carries main be377fdf
