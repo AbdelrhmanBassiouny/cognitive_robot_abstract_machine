@@ -72,13 +72,15 @@ items:
     yet opened on cram2. Includes #538 and #540, which should land upstream first. instantiated-variable-type-and-factory
     not started.'
 - id: state-objects-and-domains
-  branch: eql-planning/state-objects-and-domains
+  branch: ccr-b32c8432-18ncpi
   title: 'Objects in a State: a state adds and removes objects, and default EQL domains come from
     it'
   track: planning-core
+  pull_request_number: 541
+  session: https://claude.ai/code/session_01JxHGiLiPY7vUZfdX8seUnN
   depends_on:
   - fluent-state-overlay
-  status: not_started
+  status: in progress
   notes: 'A variable without a domain ranges over the state''s objects, not the global SymbolGraph.
     A world''s collection is an EQL expression (variable(Type, world.connections) on a world variable),
     read through the state like any fluent; effects that add or remove objects assign it. No filtering
