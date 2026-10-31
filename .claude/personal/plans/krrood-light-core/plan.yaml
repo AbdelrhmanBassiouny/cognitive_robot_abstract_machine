@@ -53,9 +53,11 @@ items:
     modules (no try/except).'
 - id: core-boundary-guard
   title: One guard over every core module, with import-linter and a shrinking offender list
-  branch: null
+  branch: claude/keen-feynman-4xcf4m
   status: in progress
   track: guards
+  pull_request_number: 546
+  session: https://claude.ai/code/session_01JxHGiNxUAghACotuu2UKYp
   depends_on: []
   notes: Core subpackages declared once. A test walks every core module (pkgutil), imports
     each in a fresh interpreter (#509 -X importtime pattern) and fails on any package outside
