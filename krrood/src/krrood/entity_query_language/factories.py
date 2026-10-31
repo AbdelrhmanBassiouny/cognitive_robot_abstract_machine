@@ -627,16 +627,20 @@ def add(variable: Any, value: Any) -> None:
 
 def inference(
     type_: type[T],
-) -> Union[Callable[[], Union[T, InstantiatedVariable[T]]]]:
+    factory: Callable[..., T] | None = None,
+) -> Callable[..., InstantiatedVariable[T]]:
     """
     This returns a factory function that creates a new variable of the given type and
-    takes keyword arguments for the type constructor.
+    takes keyword arguments for the callable that builds its values.
 
-    :param type_: The type of the variable (i.e., The class you want to instantiate).
+    :param type_: The type of the values the variable binds.
+    :param factory: The callable that builds those values, such as a factory method;
+        *type_* itself when not given.
     :return: The factory function for creating a new variable.
     """
     return lambda **kwargs: InstantiatedVariable(
         _type_=type_,
+        _factory_=factory,
         _kwargs_=kwargs,
     )
 

@@ -1345,6 +1345,27 @@ class MatchTypeCannotBeDetermined(DataclassException):
 
 
 @dataclass
+class ResultTypeIsNotAType(DataclassException):
+    """
+    Raised when an instantiated variable is given a result type that is not a type.
+    """
+
+    result_type: Any
+    """
+    The value given as the result type.
+    """
+
+    def error_message(self) -> str:
+        return f"The result type of an instantiated variable must be a type, got {self.result_type!r}."
+
+    def suggest_correction(self) -> str:
+        return (
+            "Pass the type of the built value as the result type, and a function or factory "
+            "method that builds it as the factory."
+        )
+
+
+@dataclass
 class ModelingError(DataclassException):
     """
     Exception raised when there's an error in the model (classes, functions, etc.)
