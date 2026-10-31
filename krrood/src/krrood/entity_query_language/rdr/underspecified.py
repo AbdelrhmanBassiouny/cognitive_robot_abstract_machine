@@ -67,26 +67,26 @@ class RDRMatchParser:
 
     def __post_init__(self) -> None:
         # Callers hand in a freshly built, unresolved template (e.g. an(Animal)(species=...));
-        # every property below reads match.type/.variable/.matches_with_variables, which only
+        # every property below reads match._type_/._variable_/._matches_with_variables_, which only
         # exist once resolved. Match.resolve() is idempotent, so this is safe if already resolved.
         self.match.resolve()
 
     @property
     def case_type(self) -> Type:
         """The type whose instances are being completed (e.g. ``Animal``)."""
-        return self.match.type
+        return self.match._type_
 
     @property
     def variable(self) -> Variable:
         """The EQL variable the query ranges over."""
-        return self.match.variable
+        return self.match._variable_
 
     @cached_property
     def inference_targets(self) -> List[AttributeMatch]:
         """The ``...`` attribute leaves to infer (each validated as single-valued)."""
         targets = [
             attribute_match
-            for attribute_match in self.match.matches_with_variables
+            for attribute_match in self.match._matches_with_variables_
             if is_ellipsis_target(attribute_match)
         ]
         for target in targets:
@@ -121,7 +121,7 @@ class RDRMatchParser:
     def _concrete_conditions(self) -> List[Any]:
         """Fresh comparator nodes for the concrete attribute constraints (``...`` dropped)."""
         conditions: List[Any] = []
-        for leaf in self.match.matches_with_variables:
+        for leaf in self.match._matches_with_variables_:
             if is_ellipsis_target(leaf):
                 continue
             attribute = getattr(self.variable, leaf.attribute_name)
