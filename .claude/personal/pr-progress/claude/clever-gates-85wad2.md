@@ -1,9 +1,8 @@
-Plan (match-implicit-prediction / ellipsis-unconstrained-in-selective, draft PR #544, api-break):
-- `...` is no constraint in selective queries; a collection with `...` constrains its size and stated elements.
+Plan (draft PR #544, closed):
+- Was: `...` is no constraint in selective queries.
 
 Done:
-- Implemented and pushed; CI green so far. Review asked whether this breaks `...` = "predict"; options A/B/C posted on the PR (B recommended: close, keep rejection).
+- Closed after review chose option B: `...` stays "predict", selective keeps rejecting it.
 
 Next:
-- Await the decision. If B, close #544 and base infer-required-attributes on main, rechecking its "no query conditions" rule.
-- Still open: may Match._has_ellipsis_attributes_ (test-only) be removed?
+- Nothing on this PR. infer-required-attributes starts from main on its own branch.
