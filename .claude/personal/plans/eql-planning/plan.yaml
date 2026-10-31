@@ -39,18 +39,28 @@ items:
   notes: 'Changes the per-argument cache (ontomatic-port eql-predicate-call-memo, commit 08f9178dd
     on aamas27-unification-revision): fold into whichever PR lands that cache. Keys on the State
     that fluent-state-overlay introduces. Deferred at kickoff on 2026-10-20.'
+- id: instantiated-variable-type-and-factory
+  branch: eql-planning/instantiated-variable-type-and-factory
+  title: InstantiatedVariable separates its result type from the factory that builds it
+  track: eql-prerequisites
+  depends_on: []
+  status: not_started
+  notes: 'Bug-style PR off main, merged into #535 like #538 (review thread on krrood/planning/fact.py).
+    One field for the result type, always a type; a factory field that defaults to the type and may
+    be a factory method. Afterwards Fact drops its isinstance(_type_, type) guard.'
 - id: fluent-state-overlay
   branch: claude/zealous-albattani-uoew5i
   title: Fluents and a State overlay that EQL queries are evaluated against
   track: planning-core
   pull_request_number: 535
   session: https://claude.ai/code/session_01JxHGiMbWLBgK8nT2DHNmxJ
-  depends_on: []
+  depends_on:
+  - instantiated-variable-type-and-factory
   status: in progress
-  notes: 'Review round 2 addressed (Oct 31, d52af4309): typed value terms (AttributeTerm, IndexTerm,
-    CallTerm) bound per expression via GroundTermExpression[TermT]; queries take state= and State.as_current
-    is gone. Merges bug PR #538. Next: separate PR off main splitting InstantiatedVariable type and factory,
-    merged here; 6 review threads await the owner.'
+  notes: 'Review round 3 (Oct 31, a357071dd): iterate_reading_from moved onto EvaluationContext,
+    docstring examples as doctests. Merges bug PR #538 and, once open, instantiated-variable-type-and-factory.
+    Open threads await the owner: assigned_functions frozenset, ResultType bound, GroundTerm __eq__,
+    predicate-wrapped inequality.'
 - id: state-objects-and-domains
   branch: eql-planning/state-objects-and-domains
   title: 'Objects in a State: a state adds and removes objects, and default EQL domains come from
@@ -73,9 +83,10 @@ items:
   - fluent-state-overlay
   - state-objects-and-domains
   status: not_started
-  notes: Effects can create and remove objects (state-objects-and-domains). Field types of the class
+  notes: 'Effects can create and remove objects (state-objects-and-domains). Field types of the class
     diagram type-check effects. Effects are facts (State.with_facts) whose value may depend on the
-    binding (x.support := y); #535 accepts only constant values.
+    binding (x.support := y); #535 accepts only constant values. Appending to a collection is an effect
+    here, not a fact (#535 review): a fact only fixes an existing fluent.'
 - id: planning-backend-search
   branch: eql-planning/planning-backend-search
   title: PlanningBackend answers a goal query with plans; breadth-first search on test domains
