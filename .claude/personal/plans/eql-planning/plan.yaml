@@ -57,10 +57,8 @@ items:
   depends_on:
   - instantiated-variable-type-and-factory
   status: in progress
-  notes: 'Review round 3 (Oct 31, a357071dd): iterate_reading_from moved onto EvaluationContext,
-    docstring examples as doctests. Merges bug PR #538 and, once open, instantiated-variable-type-and-factory.
-    Open threads await the owner: assigned_functions frozenset, ResultType bound, GroundTerm __eq__,
-    predicate-wrapped inequality.'
+  notes: 'Review round 4 (Oct 31, b16a10a88): function key is a FunctionKey dataclass. No review
+    threads open. Merges bug PR #538 and, once open, instantiated-variable-type-and-factory.'
 - id: state-objects-and-domains
   branch: eql-planning/state-objects-and-domains
   title: 'Objects in a State: a state adds and removes objects, and default EQL domains come from
