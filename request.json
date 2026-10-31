@@ -1,8 +1,8 @@
 {
-  "request_identifier": "f9cdcb103f1b502c",
+  "request_identifier": "d773a75ff8a20048",
   "upstream": "cram2/cognitive_robot_abstract_machine",
   "fork_owner": "AbdelrhmanBassiouny",
   "pull_request": null,
-  "branch": "claude/zealous-albattani-uoew5i",
-  "failure_logs": false
+  "branch": "D-core-underspecified",
+  "failure_logs": true
 }
