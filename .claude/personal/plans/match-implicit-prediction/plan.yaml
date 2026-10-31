@@ -1,0 +1,44 @@
+schema_version: 1
+id: match-implicit-prediction
+title: Infer predicted attributes in underspecified matches
+description: >
+  Make an underspecified Match read like a normal EQL query. In selective queries an
+  attribute marked with ... is unconstrained instead of rejected. Generative backends
+  predict every unstated required field without ..., and expand required nested object
+  fields automatically. Optional fields are predicted only when marked with ...;
+  otherwise they keep their defaults.
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+waves:
+  - id: semantics
+    name: Unstated means free
+tracks:
+  - id: match
+    name: Match semantics
+    wave: semantics
+items:
+  - id: ellipsis-unconstrained-in-selective
+    title: "... is no constraint in selective queries"
+    branch: claude/clever-gates-85wad2
+    track: match
+    depends_on: []
+    status: in progress
+    session: https://claude.ai/code/session_01JxHGiPWncpagnYrmFUYhX3
+    notes: >
+      api-break. The lowered query of Match omits attribute == ... comparisons, and
+      _conditions_ stays as is because verbalization reads it. A literal list with ...
+      lowers to Length == len plus per-index equalities for the stated elements.
+      SelectiveBackend's guard and SelectiveBackendCannotResolveEllipsisMatch are
+      removed. The tests pinning the rejection are rewritten on purpose (user-approved).
+  - id: infer-required-attributes
+    title: Infer required fields and expand required nested objects in generative backends
+    track: match
+    depends_on: [ellipsis-unconstrained-in-selective]
+    status: not started
+    notes: >
+      new-feature, stacked on the selective item. GenerativeBackend.evaluate calls
+      Match._infer_required_attributes_() first. Each unstated required factory
+      parameter becomes ... if its type is compatible with random events, a recursively
+      inferred a(Type)() if it is a constructible class, and otherwise raises a new
+      RequiredAttributeCannotBeGenerated (references, unsized lists, recursive types).
+      Optional fields are never inferred. Also drop the redundant hip_rotation=... in
+      coraplex training_environment.py.
