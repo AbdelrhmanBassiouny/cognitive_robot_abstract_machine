@@ -101,6 +101,7 @@ claude/camera-pose-fitted-p2mk7d	knowledge-directed-requests
 claude/detector-consolidation-analysis-rgg3xg	knowledge-directed-requests
 claude/symbol-graph-without-matplotlib	krrood-light-core
 claude/clever-gates-85wad2	match-implicit-prediction
+infer-required-match-attributes	match-implicit-prediction
 krrood_eql_orm_fixes	montessori-eql-stack
 sdt_numeric_geometry_and_panda	montessori-eql-stack
 segmind_numeric_hole_events	montessori-eql-stack

@@ -30,6 +30,7 @@ items:
       SelectiveBackend's guard and SelectiveBackendCannotResolveEllipsisMatch are
       removed. The tests pinning the rejection are rewritten on purpose (user-approved).
   - id: infer-required-attributes
+    branch: infer-required-match-attributes
     title: Infer required fields and expand required nested objects in generative backends
     track: match
     depends_on: [ellipsis-unconstrained-in-selective]
