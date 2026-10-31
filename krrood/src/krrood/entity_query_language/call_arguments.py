@@ -75,12 +75,20 @@ class CallArguments:
     @cached_property
     def hashable_key(self) -> tuple[Hashable, ...]:
         """
-        :return: What identifies these arguments: the positional ones in order, followed
-            by the keyword ones sorted by name.
+        :return: What identifies these arguments, each compared by
+            :meth:`hashable_form`.
         """
-        return tuple(self.hashable_form(argument) for argument in self.positional) + (
+        return self.key_by(self.hashable_form)
+
+    def key_by(self, value_form: Callable[[Any], Hashable]) -> tuple[Hashable, ...]:
+        """
+        :param value_form: What one argument is compared by.
+        :return: The positional arguments in order, followed by the keyword arguments
+            sorted by name, each compared by *value_form*.
+        """
+        return tuple(value_form(argument) for argument in self.positional) + (
             tuple(
-                (name, self.hashable_form(value))
+                (name, value_form(value))
                 for name, value in sorted(self.keyword.items())
             ),
         )
