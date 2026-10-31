@@ -40,9 +40,8 @@ items:
   session: https://claude.ai/code/session_018wfiv8uSfijGho9G4ZS6Qz
   blockers:
     - >-
-      krrood CI red: main (#192 / cram2 #662) renamed Match.type/variable/matches_with_variables to
-      _type_/_variable_/_matches_with_variables_; this branch still reads the old names. Fix: adopt
-      them, per the 2026-09-19 triage comment.
+      Awaiting fork CI on 67250a7d5, which adopts main's renamed Match properties
+      (_type_/_variable_/_matches_with_variables_). Then drop the integration-conflict label.
   depends_on: []
   status: in_progress
   notes: '2026-08-12 steward cascade: restacked onto its cascaded base, which now carries main be377fdf
