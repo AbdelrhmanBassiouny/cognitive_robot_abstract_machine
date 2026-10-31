@@ -13,12 +13,14 @@ fields are reachable directly as symbolic attributes.
 
 from __future__ import annotations
 
+import operator
 import uuid
 from abc import ABC, abstractmethod
 from collections import deque
 from dataclasses import dataclass, field
 from functools import cached_property, lru_cache
 from inspect import ismethod, isfunction, isclass
+from types import EllipsisType
 from typing_extensions import (
     Callable,
     Generic,
@@ -63,7 +65,8 @@ from krrood.entity_query_language.exceptions import (
     NoAttributeWithAccessPathName,
     UnboundPatternVariable,
 )
-from krrood.entity_query_language.predicate import HasType
+from krrood.entity_query_language.operators.comparator import Comparator
+from krrood.entity_query_language.predicate import HasType, length
 from krrood.entity_query_language.query.quantifiers import An, ResultQuantifier
 from krrood.entity_query_language.query.query_modifiers import HasQueryModifiers
 from krrood.entity_query_language.utils import T
@@ -385,8 +388,8 @@ class Match(
         if not self._resolved_:
             self.resolve()
         entity_ = entity(self._variable_)
-        if self._conditions_:
-            entity_ = entity_.where(*self._conditions_)
+        if self._query_conditions_:
+            entity_ = entity_.where(*self._query_conditions_)
         entity_._quantify_(self._quantifier_type_)
         self._expression = entity_
         return entity_
@@ -637,6 +640,27 @@ class Match(
             for attribute_match in self._matches_with_variables_
         )
 
+    @property
+    def _query_conditions_(self) -> list[ConditionType]:
+        """
+        :return: The conditions of the query this match stands for: the pattern's
+            conditions, where an attribute left open with ``...`` is unconstrained and a
+            collection holding ``...`` constrains only its size and its stated elements.
+        """
+        conditions_on_stated_elements = {
+            condition._id_: attribute_match._conditions_on_stated_elements_
+            for attribute_match in self._descendants_
+            if self._is_or_contains_ellipsis(attribute_match.assigned_value)
+            for condition in attribute_match._conditions_
+        }
+        return [
+            query_condition
+            for condition in self._conditions_
+            for query_condition in conditions_on_stated_elements.get(
+                condition._id_, [condition]
+            )
+        ]
+
     @staticmethod
     def _is_or_contains_ellipsis(value: Any) -> bool:
         """
@@ -649,8 +673,8 @@ class Match(
             resolves or is tested against.
         """
         if isinstance(value, (list, tuple, set)):
-            return any(isinstance(element, type(Ellipsis)) for element in value)
-        return isinstance(value, type(Ellipsis))
+            return any(isinstance(element, EllipsisType) for element in value)
+        return isinstance(value, EllipsisType)
 
     @property
     def _has_cause_attributes_(self) -> bool:
@@ -977,6 +1001,30 @@ class AttributeMatch(AbstractMatchExpression[T]):
         ):
             raise UnboundPatternVariable(self)
         return next(self.assigned_variable._evaluate_(OperationResult(bindings))).value
+
+    @property
+    def _conditions_on_stated_elements_(self) -> list[ConditionType]:
+        """
+        :return: The conditions on what the pattern states for this attribute when it
+            holds ``...``: none for a bare ``...``; for a collection, its size and each
+            element other than ``...``, by position in a list or tuple and by membership
+            in a set.
+        """
+        value = self.assigned_value
+        if not isinstance(value, (list, tuple, set)):
+            return []
+        conditions = [length(self.attribute) == len(value)]
+        if isinstance(value, set):
+            return conditions + [
+                Comparator(self.attribute, element, operator.contains)
+                for element in value
+                if not isinstance(element, EllipsisType)
+            ]
+        return conditions + [
+            self.attribute[index] == element
+            for index, element in enumerate(value)
+            if not isinstance(element, EllipsisType)
+        ]
 
     @property
     def _stating_match_(self) -> Match:

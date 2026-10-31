@@ -64,7 +64,10 @@ The deterministic
 *enumerates*: concrete literals and `variable(..., domain=...)` are used directly, enum `...`
 fields are enumerated over their members, but a free `...` on a non-enum field cannot be enumerated
 and raises. Under the default *selective* evaluation (no generative backend), the same kwargs act
-as ordinary structural equality conditions over existing objects.
+as ordinary structural equality conditions over existing objects, and a `...` field is left
+unconstrained: `a(KRROODPosition)(x=..., y=1.0, z=2.0).from_(positions)` finds every position with
+`y == 1.0` and `z == 2.0`, whatever its `x`. A list such as `["a", ..., "c"]` constrains its
+length and its stated elements only.
 ```
 
 ### Ellipsis (`...`) — free variable

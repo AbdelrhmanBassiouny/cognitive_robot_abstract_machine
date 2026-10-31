@@ -952,29 +952,6 @@ class GenerativeBackendQueryIsNotUnderspecifiedVariable(DataclassException):
 
 
 @dataclass
-class SelectiveBackendCannotResolveEllipsisMatch(DataclassException):
-    """
-    Exception raised when a match with an ``...`` (Ellipsis) attribute is evaluated with
-    a selective backend.
-    """
-
-    match: Match
-    """
-    The match that has an Ellipsis attribute.
-    """
-
-    def error_message(self) -> str:
-        return (
-            f"{self.match} has an Ellipsis (...) attribute, so it cannot be resolved by a "
-            f"selective backend: selecting only finds existing instances, it cannot fill in an "
-            f"attribute left unspecified."
-        )
-
-    def suggest_correction(self) -> str:
-        return "Evaluate with a GenerativeBackend (or ProbabilisticBackend) instead."
-
-
-@dataclass
 class BackendCannotEvaluateCause(DataclassException):
     """
     Raised when a match with a :class:`~krrood.entity_query_language.operators.causal.Cause`

@@ -365,10 +365,9 @@ intervening on several of them together would.
 ### Selective backends and `EntityQueryLanguageGenerativeBackend`
 
 Neither has a notion of a causal graph. Rather than failing the whole query, they
-**warn** (via `krrood.logger`) and treat `cause` exactly like an ordinary
-unspecified field (`...`) -- a selective backend naturally selects nothing (nothing
-equals `cause`'s wrapped `Ellipsis`), and the generative backend enumerates it if the
-field is an enum, or raises the same
+**warn** (via `krrood.logger`) instead. A selective backend selects nothing, since no
+value equals the `cause` marker. The generative backend treats `cause` like an
+unspecified field (`...`): it enumerates it if the field is an enum, or raises the same
 {py:class}`~krrood.entity_query_language.exceptions.UnderspecifiedStatementInfeasibleForEntityQueryLanguageGeneration`
 a bare `...` on a non-enum field already raises. Pass
 `raise_on_unresolvable_cause=True` to a backend's constructor to fail loudly instead --

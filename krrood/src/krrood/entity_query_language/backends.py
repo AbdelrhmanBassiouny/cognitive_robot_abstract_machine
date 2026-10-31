@@ -36,7 +36,6 @@ from krrood.entity_query_language.exceptions import (
     NoCausesEffectConditionForCause,
     NoSolutionFound,
     GenerativeBackendQueryIsNotUnderspecifiedVariable,
-    SelectiveBackendCannotResolveEllipsisMatch,
     UnderspecifiedStatementInfeasibleForEntityQueryLanguageGeneration,
 )
 from krrood.entity_query_language.factories import set_of, variable
@@ -143,8 +142,6 @@ class SelectiveBackend(QueryBackend, ABC):
     """
 
     def evaluate(self, expression: Evaluable) -> Iterable[T]:
-        if isinstance(expression, Match) and expression._has_ellipsis_attributes_:
-            raise SelectiveBackendCannotResolveEllipsisMatch(expression)
         self._warn_or_raise_on_unresolved_cause_(expression)
         yield from self._evaluate(expression)
 
@@ -738,7 +735,6 @@ class ProbabilisticBackend(GenerativeBackend):
 
         narrowed = region.distribution.truncated(copy.deepcopy(effect_truncation_event))
         if narrowed.distribution is None or narrowed.probability <= 0.0:
-
             return None
         return ScoredIntervention(
             cause_variable, float(narrowed.probability), narrowed.distribution

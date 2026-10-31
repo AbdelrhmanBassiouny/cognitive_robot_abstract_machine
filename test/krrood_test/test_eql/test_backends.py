@@ -31,9 +31,6 @@ from krrood.entity_query_language.core.base_expressions import (
     ProbabilisticOperationResult,
 )
 from krrood.entity_query_language.core.variable import Literal
-from krrood.entity_query_language.exceptions import (
-    SelectiveBackendCannotResolveEllipsisMatch,
-)
 from krrood.entity_query_language.factories import (
     variable,
     entity,
@@ -300,28 +297,37 @@ def test_generative_backend_grounds_a_comparison_of_an_attribute_of_the_match_wi
     assert results == []
 
 
-def test_selective_backend_rejects_match_with_ellipsis_attribute():
-    q = a(KRROODPosition)(x=..., y=1.0, z=2.0)
-    with pytest.raises(SelectiveBackendCannotResolveEllipsisMatch):
-        list(q.evaluate(backend=EntityQueryLanguageBackend()))
+# %% an ellipsis leaves its attribute unconstrained in a selective query
 
 
-def test_selective_backend_rejects_match_with_nested_ellipsis_attribute():
+def test_selective_backend_leaves_an_ellipsis_attribute_unconstrained():
+    matching = KRROODPosition(5.0, 1.0, 2.0)
+    other_y = KRROODPosition(5.0, 3.0, 2.0)
+    q = a(KRROODPosition)(x=..., y=1.0, z=2.0).from_([matching, other_y])
+    assert list(q.evaluate(backend=EntityQueryLanguageBackend())) == [matching]
+
+
+def test_selective_backend_leaves_a_nested_ellipsis_attribute_unconstrained():
+    orientation = KRROODOrientation(x=0.0, y=0.0, z=0.0, w=1.0)
+    matching = KRROODPose(KRROODPosition(5.0, 1.0, 2.0), orientation)
+    other_z = KRROODPose(KRROODPosition(5.0, 1.0, 4.0), orientation)
     q = a(KRROODPose)(
         position=a(KRROODPosition)(x=..., y=1.0, z=2.0),
-        orientation=KRROODOrientation(x=0.0, y=0.0, z=0.0, w=1.0),
-    )
-    with pytest.raises(SelectiveBackendCannotResolveEllipsisMatch):
-        list(q.evaluate(backend=EntityQueryLanguageBackend()))
+        orientation=orientation,
+    ).from_([matching, other_z])
+    assert list(q.evaluate(backend=EntityQueryLanguageBackend())) == [matching]
 
 
-def test_selective_backend_rejects_match_with_ellipsis_element_in_plain_list():
+def test_selective_backend_constrains_only_the_stated_elements_of_a_plain_list():
+    positions = [KRROODPosition(1, 2, 3)]
+    matching = KRROODPositions(positions, ["a", "b", "c"])
+    other_last_element = KRROODPositions(positions, ["a", "b", "d"])
+    longer = KRROODPositions(positions, ["a", "b", "c", "d"])
     q = a(KRROODPositions)(
-        positions=[KRROODPosition(1, 2, 3)],
+        positions=positions,
         some_strings=["a", ..., "c"],
-    )
-    with pytest.raises(SelectiveBackendCannotResolveEllipsisMatch):
-        list(q.evaluate(backend=EntityQueryLanguageBackend()))
+    ).from_([matching, other_last_element, longer])
+    assert list(q.evaluate(backend=EntityQueryLanguageBackend())) == [matching]
 
 
 def test_selective_backend_accepts_match_without_ellipsis_attribute():

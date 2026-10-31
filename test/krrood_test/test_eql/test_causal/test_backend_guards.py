@@ -9,7 +9,6 @@ from krrood.entity_query_language.backends import (
 )
 from krrood.entity_query_language.exceptions import (
     BackendCannotEvaluateCause,
-    SelectiveBackendCannotResolveEllipsisMatch,
     UnderspecifiedStatementInfeasibleForEntityQueryLanguageGeneration,
 )
 from krrood.entity_query_language.factories import a, cause
@@ -45,10 +44,18 @@ def test_selective_backend_raises_when_configured_to_raise():
         list(match.evaluate(backend=backend))
 
 
-def test_selective_backend_still_rejects_a_plain_ellipsis_attribute():
-    match = a(Pick)(arm=..., grasped=True).from_([Pick(0.3, True)])
-    with pytest.raises(SelectiveBackendCannotResolveEllipsisMatch):
-        list(match.evaluate(backend=EntityQueryLanguageBackend()))
+def test_selective_backend_leaves_a_plain_ellipsis_attribute_unconstrained():
+    pick = Pick(0.3, True)
+    match = a(Pick)(arm=..., grasped=True).from_([pick, Pick(0.3, False)])
+    assert list(match.evaluate(backend=EntityQueryLanguageBackend())) == [pick]
+
+
+def test_selective_backend_still_raises_on_a_cause_beside_an_ellipsis():
+    match = a(Pick)(arm=cause, grasped=...).from_([Pick(0.3, True)])
+
+    backend = EntityQueryLanguageBackend(raise_on_unresolvable_cause=True)
+    with pytest.raises(BackendCannotEvaluateCause):
+        list(match.evaluate(backend=backend))
 
 
 # %% EntityQueryLanguageGenerativeBackend
