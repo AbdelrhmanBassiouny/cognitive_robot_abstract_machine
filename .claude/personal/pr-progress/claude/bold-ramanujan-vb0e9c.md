@@ -1,11 +1,9 @@
 ## Plan
-- OptionalModule/KrroodExtra in krrood/optional_modules.py, OptionalModuleNotInstalled in krrood/exceptions.py
-- graph_visualizer.py: check in render(), matplotlib imported locally
-- RDR rdr.py/utils.py: Figure under TYPE_CHECKING, check + local pyplot import
-- Tests: parametrized fresh-interpreter import test; replace the gv.mpl/np tests
+- OptionalModule/KrroodExtra + OptionalModuleNotInstalled; graph_visualizer and RDR import matplotlib inside drawing methods; AGENTS.md rule
 
 ## Done
-- Branch, draft PR #547, plan item recorded
+- Implemented and pushed; new tests + krrood suites green locally (krrood-only env, root conftest skipped)
 
 ## Next
-- Write failing tests, then implement
+- CI on #547; reconcile #546's offender lists with whichever lands second
+- krrood-core-and-all-extras: switch OptionalModule.MATPLOTLIB.extra to `all`
