@@ -23,14 +23,14 @@ eql-planning: https://claude.ai/artifact/FwHr19cquZda24BYjsc1nz
 icra-upstream: https://claude.ai/artifact/ByyCKBptVcgodxkJtLK361
 eql-planning-robots: https://claude.ai/artifact/HjwqqZVV8GPVQKbDtdDi4S
 ontomatic-port: https://claude.ai/artifact/Eb1ho3xB7qcbsgLKNsp19e
-domain-models: https://claude.ai/artifact/G1571Si2Rk6aZLQrBEaCWm
+domain-models: https://claude.ai/artifact/BDDt53kGDmkTPm7w6twxCC
 ontomatic-reasoning: https://claude.ai/artifact/8she6ETVf8mWVMjoMijqub
 concept-theory: https://claude.ai/artifact/KmS4YjGCEP89JqmE4vYE2y
 _content_digests:
   concept-theory: dc46e45022248c8d54a0fba844b1ca2d70b2e324185be0064529a95820c2cec1
   eql-planning-robots: f80f4847df4c43ffc3ddc00ce5f681c8c1a3062b776d89fb09134ecffe26deda
   montessori-perception-split: 64037762af72ce79cd933abbb7a1a7da3f1e3cd8469cc67a972bc4a1cc368507
-  domain-models: 8e505c13f9812e98a95212f6e193375bbdb0654561b75a5a4eb3fff59ba60214
+  domain-models: 78350c8bb1901818165fc4bd4f911477e2ede38e5a87c68cad4fdb00625fdbc7
   eql-planning: b68727a025711013e0fab2d84cd0840c8af1af22267719332b6a891af4c5ba7c
   rdr-core-engine: 9e91fb2798f59d23b839e7bea75757c3085417804733b770c33df547b749f2c4
   match-implicit-prediction: 3bfebbbef1b2e15c3bc55747a129324d29b8aac0f8e4924d10619f792b5f9879
