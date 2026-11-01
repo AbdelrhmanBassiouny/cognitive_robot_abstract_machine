@@ -42,12 +42,11 @@ items:
   session: https://claude.ai/code/session_01JxHGiQ4A18U589QipYJ2yk
   depends_on: []
   blockers:
-  - 'robokudo CI: its downloaded robokudo_test_data stores camera-model JSON typed as semantic_digital_twin.spatial_types.spatial_types; the robokudo team must rewrite it, then #537 bumps TestDataset.revision and checksum (owner''s call).'
   - 'cram2#835 waits on LucaKro''s re-review (changes requested); the owner''s inline replies are posted, the 3 open threads wait on reviewers.'
   notes: '#537 (on main, promoted as cram2#835) creates krrood_spatial_math with SemDT''s spatial types
     moved behind [casadi], a CartesianFrame3D[NameT](HasName, HasID) declaring express_in_own_frame, CartesianFrame3DReference
     on krrood''s ObjectReference. No re-export: every import names krrood_spatial_math; SemDT keeps no
-    spatial_types folder (Derivatives in world_description.derivatives, inverse_frame on HomogeneousTransformationMatrix).
+    spatial_types folder (Derivatives in world_description.derivatives, inverse_frame on HomogeneousTransformationMatrix). Robokudo test frames live in test/robokudo_test/dataset.
     Old-module JSON/ORM rows stop loading. #527 is stacked on it and has it merged.'
 - id: krrimage
   title: domain_models/krrood_image (images, colours, pixels) with Color moved out of SemDT
