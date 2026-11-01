@@ -49,10 +49,11 @@ items:
   pull_request_number: 545
   session: https://claude.ai/code/session_01JxHGiMzkomLaQ42NXK331R
   depends_on: []
-  notes: 'class_diagrams.utils / krrood.utils.get_scope_from_imports import every module a
-    source file names, TYPE_CHECKING blocks included, so a core module naming an `all` module
-    fails on a core install. User-chosen fix: check importlib.util.find_spec and skip missing
-    modules (no try/except).'
+  notes: 'Implemented in draft #545: get_scope_from_imports skips an import under TYPE_CHECKING
+    whose top-level package find_spec cannot find; runtime imports keep raising (user decision,
+    so RDR typos still fail at load). find_spec only catches packages not installed at all: a
+    plain TYPE_CHECKING import of an installed krrood module whose dependencies are missing
+    still raises, so later items should use from-imports there.'
 - id: core-boundary-guard
   title: One guard over every core module, with import-linter and a shrinking offender list
   branch: claude/keen-feynman-4xcf4m
