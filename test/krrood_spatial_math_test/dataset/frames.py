@@ -3,14 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from uuid import UUID, uuid4
 
-from typing_extensions import Any
-
 from krrood.adapters.deserialized_object_tracker import DeserializedObjectTracker
 from krrood.patterns.identifier_and_name import HasID, HasName
 from krrood_spatial_math.cartesian_frame_3d import (
     CartesianFrame3D,
     CartesianFrame3DResolver,
-    ValueT,
+    ValueInCartesianFrame3DT,
 )
 from krrood_spatial_math.exceptions import ReferenceFrameMismatchError
 from krrood_spatial_math.space import EuclideanSpace3D
@@ -19,7 +17,7 @@ from krrood_spatial_math.space import EuclideanSpace3D
 
 
 @dataclass(eq=False)
-class NamedFrame(CartesianFrame3D):
+class NamedFrame(CartesianFrame3D[str]):
     """
     A Cartesian frame that only has a name, so it knows no change to any other frame and
     expresses only values already given in it.
@@ -40,7 +38,9 @@ class NamedFrame(CartesianFrame3D):
     The identifier serialized coordinate representations refer to the frame with.
     """
 
-    def express(self, value: ValueT) -> ValueT:
+    def express_in_own_frame(
+        self, value: ValueInCartesianFrame3DT
+    ) -> ValueInCartesianFrame3DT:
         if value.reference_frame is not self:
             raise ReferenceFrameMismatchError(
                 expected_frame=self, actual_frame=value.reference_frame
@@ -59,15 +59,12 @@ class KnownFrames(
     The frames the reader of a document already has.
     """
 
-    def get(self, key: UUID, name: Any = None) -> NamedFrame:
-        return super().get(key)
-
 
 # %% frames that extend objects named before they are identified
 
 
 @dataclass(eq=False)
-class NamedThing(HasName):
+class NamedThing(HasName[str]):
     """
     An object that is named whether or not it has an identifier.
     """
@@ -91,7 +88,7 @@ class IdentifiedNamedThing(NamedThing, HasID):
 
 
 @dataclass(eq=False)
-class ThingFrame(IdentifiedNamedThing, CartesianFrame3D):
+class ThingFrame(IdentifiedNamedThing, CartesianFrame3D[str]):
     """
     A Cartesian frame that extends an object named before it is identified.
     """

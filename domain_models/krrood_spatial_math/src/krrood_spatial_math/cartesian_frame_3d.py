@@ -8,6 +8,7 @@ from typing_extensions import Any, TypeVar
 
 from krrood.adapters.json_serializer import from_json
 from krrood.adapters.object_reference import ObjectReference
+from krrood.patterns.identifier_and_name import HasName, NameT
 from krrood.patterns.interface import Interface
 from krrood_spatial_math.coordinate_system import CartesianFrame
 from krrood_spatial_math.exceptions import MissingCartesianFrame3DResolver
@@ -15,25 +16,41 @@ from krrood_spatial_math.space import EuclideanSpace3D
 
 # %% frames that positions and directions are expressed in
 
-ValueT = TypeVar("ValueT")
-"""
-The kind of value a Cartesian frame expresses.
-"""
 
-
-class CartesianFrame3D(CartesianFrame[EuclideanSpace3D], Interface):
+class CartesianFrame3D(CartesianFrame[EuclideanSpace3D], HasName[NameT], Interface):
     """
     A right-handed Cartesian frame on a three-dimensional Euclidean space, in metres,
     such as the frame of a robot's body.
     """
 
     @abstractmethod
-    def express(self, value: ValueT) -> ValueT:
+    def express_in_own_frame(
+        self, value: ValueInCartesianFrame3DT
+    ) -> ValueInCartesianFrame3DT:
         """
         :param value: A value given in this frame or in another frame of the same
             space.
         :return: The same value, given in this frame.
         """
+
+
+class ValueInCartesianFrame3D(Interface):
+    """
+    A value, such as a point or a pose, given in a :class:`CartesianFrame3D`.
+    """
+
+    reference_frame: CartesianFrame3D | None
+    """
+    The frame the value is given in, or *None* where the value is given in no frame.
+    """
+
+
+ValueInCartesianFrame3DT = TypeVar(
+    "ValueInCartesianFrame3DT", bound=ValueInCartesianFrame3D
+)
+"""
+The kind of value a Cartesian frame expresses.
+"""
 
 
 class CartesianFrame3DResolver(Interface):
@@ -65,6 +82,10 @@ class CartesianFrame3DReference(ObjectReference):
 
     def resolve(self, data: dict[str, Any], **kwargs) -> CartesianFrame3D:
         """
+        :param data: The serialized spatial type that refers to the frame.
+        :param kwargs: The keyword arguments of the ``from_json`` call, which carry the
+            :class:`CartesianFrame3DResolver` that finds the frame.
+        :return: The frame the serialized spatial type refers to.
         :raises MissingCartesianFrame3DResolver: If the kwargs carry no
             :class:`CartesianFrame3DResolver`.
         """

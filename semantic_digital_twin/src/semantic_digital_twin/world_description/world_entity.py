@@ -39,16 +39,14 @@ from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
 )
 from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.exceptions import (
-    AlreadyBelongsToAWorldError,
-    ReferenceFrameMismatchError,
-)
+from semantic_digital_twin.exceptions import AlreadyBelongsToAWorldError
+from krrood_spatial_math.exceptions import ReferenceFrameMismatchError
 from semantic_digital_twin.mixin import HasSimulatorProperties, UniqueSimulatorProperty
 from semantic_digital_twin.world_description.connection_properties import (
     ServoGains,
     VelocityServoGains,
 )
-from semantic_digital_twin.spatial_types.spatial_types import (
+from krrood_spatial_math.spatial_types import (
     GenericSpatialType,
     HomogeneousTransformationMatrix,
     Point3,
@@ -73,7 +71,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(eq=False)
-class WorldEntity(Symbol, HasName):
+class WorldEntity(Symbol, HasName[PrefixedName]):
     """
     A class representing an entity in the world.
 
@@ -373,7 +371,7 @@ class WorldEntityWithSimulatorProperties(WorldEntityWithID, HasSimulatorProperti
 
 @dataclass(eq=False)
 class KinematicStructureEntity(
-    WorldEntityWithSimulatorProperties, CartesianFrame3D, ABC
+    WorldEntityWithSimulatorProperties, CartesianFrame3D[PrefixedName], ABC
 ):
     """
     An entity that is part of the kinematic structure of the world.
@@ -401,7 +399,7 @@ class KinematicStructureEntity(
         """
         return None
 
-    def express(self, value: GenericSpatialType) -> GenericSpatialType:
+    def express_in_own_frame(self, value: GenericSpatialType) -> GenericSpatialType:
         return self._world.transform(value, self)
 
     @property
@@ -1202,7 +1200,9 @@ class Connection(WorldEntityWithSimulatorProperties, ABC):
             connection.
         """
 
-    def _find_references_in_world(self, world: World) -> tuple[
+    def _find_references_in_world(
+        self, world: World
+    ) -> tuple[
         KinematicStructureEntity,
         KinematicStructureEntity,
         HomogeneousTransformationMatrix,
