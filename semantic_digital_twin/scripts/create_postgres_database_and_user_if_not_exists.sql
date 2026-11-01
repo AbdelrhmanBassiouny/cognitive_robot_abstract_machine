@@ -1,6 +1,32 @@
 -- create_postgres_database_and_user_if_not_exists.sql (PostgreSQL, idempotent, psql-compatible)
--- Usage (as postgres superuser):
---   sudo -u postgres psql -f create_postgres_database_and_user_if_not_exists.sql -v db_name="semantic_digital_twin"  -v user_name="semantic_digital_twin" -v user_password="a_strong_password_here"
+--
+-- Must run as a PostgreSQL superuser: psql connects as the operating-system user by
+-- default, and that user normally has no database role ("FATAL: role ... does not
+-- exist"). Feed the script through standard input rather than -f, since the postgres
+-- system user usually cannot read a file inside another user's home directory.
+--
+-- Usage, from the workspace root:
+--   sudo -u postgres psql \
+--     -v db_name="semantic_digital_twin" \
+--     -v user_name="semantic_digital_twin" \
+--     -v user_password="a_strong_password_here" \
+--     < semantic_digital_twin/scripts/create_postgres_database_and_user_if_not_exists.sql
+--
+-- Every -v variable is optional; the defaults below are used for any that is not given.
+
+-- 0) Defaults for the variables the caller did not set
+\if :{?db_name}
+\else
+  \set db_name semantic_digital_twin
+\endif
+\if :{?user_name}
+\else
+  \set user_name semantic_digital_twin
+\endif
+\if :{?user_password}
+\else
+  \set user_password montessori
+\endif
 
 -- 1) Create database if it does not exist (PostgreSQL has no CREATE DATABASE IF NOT EXISTS)
 SELECT 'CREATE DATABASE ' || quote_ident(:'db_name')
