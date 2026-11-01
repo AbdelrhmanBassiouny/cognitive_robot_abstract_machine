@@ -1,12 +1,13 @@
-PR #537 (base main), promoted as cram2#835; plan domain-models item spatial-math-move, first in the stack; #527 is stacked on it.
+PR #537 (base main, ready), promoted as cram2#835; plan domain-models item spatial-math-move, first in the stack; #527 is stacked on it.
 
-Plan (resolving LucaKro's requested changes on cram2#835):
-- No re-export: delete semantic_digital_twin/spatial_types/spatial_types, drop moved names from semantic_digital_twin.spatial_types and .exceptions, migrate every import (code, tests, docs) to krrood_spatial_math; drop former-module tests; JSON/ORM naming the old module stops loading (owner's call).
-- CartesianFrame3D.express -> express_in_own_frame, ValueT bound to the spatial-type base; HasName generic in its name type.
-- Document CartesianFrame3DReference.resolve params; remove KnownFrames.get override need; exception suggestions free of SemDT and create_kwargs.
+Plan:
+- Resolve LucaKro's requested changes on cram2#835 (8 threads) without a re-export of the old module.
 
 Done:
-- Upstream review read; plan + roadmap rule updated (d0686e5d9a).
+- c36afc73: old module and moved re-exports deleted, ~360 files' imports migrated; express -> express_in_own_frame bound to ValueInCartesianFrame3D; HasName[NameT]; tracker get/_get_untracked take name; resolve() documented; exception suggestions SemDT-free. #537 description rewritten.
+- Merged into #527 (181d11bf; CoordinateSystem bases reordered for MRO).
+- Local: krrood_spatial_math_test 19, krrood utils/patterns/symbolic_math 540, SemDT spatial_types + json 398, worlds/adapters/connections/geometry 893 (ROS-only failures).
 
 Next:
-- Implement, test, push; merge into #527's branch; draft inline replies for the 8 cram2#835 threads for the user to post.
+- Owner posts the drafted inline replies on cram2#835's 8 threads, copies #537's description to cram2#835, asks LucaKro to re-review.
+- #526 (preview) and #524 still conflict, as before this resolve.
