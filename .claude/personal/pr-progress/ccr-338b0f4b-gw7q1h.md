@@ -9,6 +9,6 @@ Done:
 - 92d5a3d2: robokudo_test_data moved into test/robokudo_test/dataset (images + CupOnCounterRecording); data_downloader, pooch, filelock removed.
 
 Next:
-- Confirm robokudo CI is green on 92d5a3d2; carry it into #527 with the next restack.
+- Carry 92d5a3d2 into #527 with the next restack (robokudo CI green on it).
 - Decide Derivatives' home with the owner (discussion open); fix its docstring ("on spatial positions") either way.
 - LucaKro re-reviews cram2#835; 3 open threads wait on reviewers. #526 (preview) and #524 still conflict.
