@@ -1,10 +1,9 @@
 ## Plan
-- `_handle_import_node` / `_handle_import_from_node` skip an import whose top-level package `importlib.util.find_spec` cannot find (absolute imports only)
-- Dataset mimic: plain `import` of a missing module under `TYPE_CHECKING`; tests at scope and class-diagram type-hint level
+- Skip uninstalled top-level packages (find_spec) only for imports under `if TYPE_CHECKING:`; runtime imports keep raising (developer decision)
 
 ## Done
-- Branch, draft PR #545, plan item recorded
+- Implementation + tests pushed to #545 (draft); krrood test_utils, test_class_diagram green; RDR suite matches main
+- PR description, labels `bug-fix` + `bug`, plan notes updated
 
 ## Next
-- Confirm with developer: `test_get_scope_from_imports_invalid` asserts the old raising contract and must change
-- Write failing tests, implement, format via pre-commit, run krrood test_utils + test_class_diagram
+- Developer review of #545; CI result (local runs used --noconftest, no ROS/libEGL in container)
