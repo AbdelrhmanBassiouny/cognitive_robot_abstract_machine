@@ -2,7 +2,7 @@
 
 - Design decisions for spatial and image items live in https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS; read it before starting or resolving one, and record new decisions there.
 - A domain model depends on `krrood`, on other domain models and on libraries outside this repository.
-- Never duplicate a class to drop a dependency, and never keep two implementations of one concept (no numeric copy of the symbolic spatial types). Moved classes stay importable from their old module, so old imports and JSON type names keep resolving.
+- Never duplicate a class to drop a dependency, and never keep two implementations of one concept (no numeric copy of the symbolic spatial types). A move breaks the old imports: nothing is re-exported from the old module, and the same PR migrates every import in the workspace (cram2#835 review).
 - krrood_spatial_math (was krrspatial) is the one home of spatial types: its base holds the casadi-free interfaces (spaces, coordinate systems and frames, representations, changes, SpaceMap, the AffinePoint2D and AffinePoint3D interfaces); points, vectors, rotations and transforms sit behind its casadi extra. Image spaces are krrood_image's (was krrimage).
 - A space is a point set (EuclideanSpace, ImagePlane); values are CoordinateRepresentations of a CoordinateSystem on it, never of the space. A change within one space implements the CoordinateChange kind naming what it keeps; the frame type fixes it (affine between AffineFrames, rigid between CartesianFrames). A map between spaces is a SpaceMap, never a CoordinateChange.
 - A transform is only a change, never a value: HomogeneousTransformationMatrix is a RigidCoordinateChange, Pose its value. A rotation is a value (an orientation); a value never inherits from a part of it.
