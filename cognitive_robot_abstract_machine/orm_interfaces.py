@@ -452,7 +452,7 @@ WORKSPACE_ORM_INTERFACES = WorkspaceOrmInterfaces(
         OrmInterface("giskardpy", REPOSITORY_ROOT, ("cramph",)),
         OrmInterface("segmind", REPOSITORY_ROOT, ("semantic_digital_twin",)),
         OrmInterface("coraplex", REPOSITORY_ROOT, ("giskardpy",)),
-        OrmInterface("experiments", REPOSITORY_ROOT, ("coraplex",)),
+        OrmInterface("experiments", REPOSITORY_ROOT, ("coraplex", "segmind")),
     )
 )
 """
