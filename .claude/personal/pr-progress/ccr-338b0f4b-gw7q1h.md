@@ -6,8 +6,9 @@ Plan:
 Done:
 - b89b4d72: semantic_digital_twin/spatial_types deleted; Derivatives/DerivativeMap -> semantic_digital_twin.world_description.derivatives.
 - ed4b24cd: coraplex, giskardpy, robokudo, experiments, segmind declare krrood_spatial_math; gltf_loader's missed relative import fixed. Carried into #527.
+- 92d5a3d2: robokudo_test_data moved into test/robokudo_test/dataset (images + CupOnCounterRecording); data_downloader, pooch, filelock removed.
 
 Next:
-- robokudo CI: robokudo team rewrites robokudo_test_data's old spatial-type names; then bump TestDataset.revision/checksum in robokudo/utils/data_downloader.py.
+- Confirm robokudo CI is green on 92d5a3d2; carry it into #527 with the next restack.
 - Decide Derivatives' home with the owner (discussion open); fix its docstring ("on spatial positions") either way.
 - LucaKro re-reviews cram2#835; 3 open threads wait on reviewers. #526 (preview) and #524 still conflict.
