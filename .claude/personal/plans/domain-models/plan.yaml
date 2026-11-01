@@ -42,13 +42,13 @@ items:
   session: https://claude.ai/code/session_01JxHGiQ4A18U589QipYJ2yk
   depends_on: []
   blockers:
-  - 'cram2#835: LucaKro requested changes (8 threads): drop the re-export and break the old imports
-    (ichumuh agrees), rename express to express_in_own_frame, generic HasName, resolver/exception cleanups.'
+  - 'cram2#835 waits on LucaKro''s re-review (changes requested); the 8 threads need the owner''s inline replies
+    (drafted in the resolve session) and cram2#835''s description copied from #537.'
   notes: '#537 (on main, promoted as cram2#835) creates krrood_spatial_math with SemDT''s spatial types
-    moved behind [casadi], a CartesianFrame3D(HasName, HasID), CartesianFrame3DReference on krrood''s
-    ObjectReference. Per cram2#835 review it has no re-export: every workspace import moves to
-    krrood_spatial_math here, and JSON/ORM rows naming the old module stop loading (owner''s call).
-    #527 is stacked on it.'
+    moved behind [casadi], a CartesianFrame3D[NameT](HasName, HasID) declaring express_in_own_frame on a
+    ValueInCartesianFrame3D, CartesianFrame3DReference on krrood''s ObjectReference. Per cram2#835 review
+    there is no re-export: every workspace import names krrood_spatial_math (c36afc73), and JSON/ORM rows
+    naming the old module stop loading. #527 is stacked on it and has it merged.'
 - id: krrimage
   title: domain_models/krrood_image (images, colours, pixels) with Color moved out of SemDT
   branch: claude/crollywood-refactor-shared-classes-e8jtm9
