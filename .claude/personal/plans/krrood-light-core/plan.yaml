@@ -59,12 +59,11 @@ items:
   pull_request_number: 546
   session: https://claude.ai/code/session_01JxHGiNxUAghACotuu2UKYp
   depends_on: []
-  notes: Core subpackages declared once. A test walks every core module (pkgutil), imports
-    each in a fresh interpreter (#509 -X importtime pattern) and fails on any package outside
-    stdlib and core's declared dependencies (importlib.metadata, transitive). import-linter
-    (user-approved dev dependency) forbids core importing `all` modules; option-1 method-local
-    imports listed as exceptions. Both start with a list of today's offenders that items 4-6
-    shrink and nothing may grow.
+  notes: 'PR #546: core declared in krrood/pyproject.toml ([tool.importlinter] contract
+    core-imports-no-all-module + [tool.krrood.core-boundary]). Runtime test (fresh -X importtime
+    interpreter per core module, distributions outside core deps'' closure) and import-linter
+    test, both with exact offender lists (112 modules, 20 edges) that items 4-6 shrink. Offender
+    list measured in a krrood-only env; CI may need one adjustment.'
 - id: serializer-without-heavy-dependencies
   title: JSON serializer and symbol graph import no sqlalchemy, scipy or casadi
   branch: null
