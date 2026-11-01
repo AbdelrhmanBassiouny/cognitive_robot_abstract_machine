@@ -193,16 +193,16 @@ items:
     also yields the 2x3 matrix cv2.warpAffine takes. Pasting one image into another maps between two planes:
     a SpaceMap, not a change.'
 - id: world-as-euclidean-space
-  title: SemDT's World is the EuclideanSpace its bodies chart; CartesianFrame3D.express checks the space
+  title: SemDT's World is the EuclideanSpace its bodies chart; CartesianFrame3D.express_in_own_frame checks the space
     before changing coordinates
   branch: claude/world-as-euclidean-space
   track: spatial
   status: not_started
   depends_on:
   - planar-point-interface
-  notes: 'World implements EuclideanSpace3D (one world, one space; copies and merges follow). test/living_worlds.py
+  notes: 'World implements EuclideanSpace3D (one world, one space). test/living_worlds.py
     wraps an existing __new__ instead of refusing it (approved). CoordinateSystem.space becomes an abstract
-    property returning SpaceT | None; KinematicStructureEntity returns _world, never raising. express
+    property returning SpaceT | None; KinematicStructureEntity returns _world, never raising. express_in_own_frame
     is a template method: raises for no frame, a frame not in a space, or frames of different spaces,
     then calls an abstract hook. #526 gives KinematicStructureEntity a space property returning None; this item makes it return _world. If a world ever holds unrelated parts, switch to has-a.'
 - id: perception-typed-images
