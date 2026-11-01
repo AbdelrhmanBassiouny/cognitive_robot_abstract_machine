@@ -1,12 +1,12 @@
-PR #537 (draft, base main), plan domain-models item spatial-math-move, first in the stack; #527 is stacked on it.
+PR #537 (base main), promoted as cram2#835; plan domain-models item spatial-math-move, first in the stack; #527 is stacked on it.
 
-Plan:
-- On main: package skeleton + [casadi] extra, CartesianFrame3D(HasName, HasID) declaring express, resolver/reference on krrood's ObjectReference (WorldEntityReference too), move with only necessary edits; old module is the package spatial_types/spatial_types/ re-exporting (GitHub shows rename).
+Plan (resolving LucaKro's requested changes on cram2#835):
+- No re-export: delete semantic_digital_twin/spatial_types/spatial_types, drop moved names from semantic_digital_twin.spatial_types and .exceptions, migrate every import (code, tests, docs) to krrood_spatial_math; drop former-module tests; JSON/ORM naming the old module stops loading (owner's call).
+- CartesianFrame3D.express -> express_in_own_frame, ValueT bound to the spatial-type base; HasName generic in its name type.
+- Document CartesianFrame3DReference.resolve params; remove KnownFrames.get override need; exception suggestions free of SemDT and create_kwargs.
 
 Done:
-- Rebuilt on main (6c0ea740, force-pushed with the user's go-ahead), base main. #537 merged into #527's branch (74b550ab), #527 base -> this branch. Plan reordered + adopt folded into planar-point-interface; #525 comment.
-- Local: krrood_spatial_math_test 16, test_object_reference 8, SemDT test_spatial_types 373, test_json_parsing 44 (ROS fixtures left to CI).
+- Upstream review read; plan + roadmap rule updated (d0686e5d9a).
 
 Next:
-- Upstream PR to open from https://github.com/cram2/cognitive_robot_abstract_machine/compare/main...AbdelrhmanBassiouny:ccr-338b0f4b-gw7q1h?expand=1 (title prefilled; body from #537 with fork refs qualified); api-break talk with SemDT/krrood code owners.
-- #524 still needs its own restack (krrspatial rename, Color/ORM conflicts with main).
+- Implement, test, push; merge into #527's branch; draft inline replies for the 8 cram2#835 threads for the user to post.
