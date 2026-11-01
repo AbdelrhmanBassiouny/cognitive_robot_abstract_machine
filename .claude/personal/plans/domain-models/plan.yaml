@@ -42,8 +42,8 @@ items:
   session: https://claude.ai/code/session_01JxHGiQ4A18U589QipYJ2yk
   depends_on: []
   blockers:
-  - 'cram2#835 waits on LucaKro''s re-review (changes requested); the 8 threads need the owner''s inline
-    replies (drafted in the resolve session) and cram2#835''s description copied from #537.'
+  - 'robokudo CI: its downloaded robokudo_test_data stores camera-model JSON typed as semantic_digital_twin.spatial_types.spatial_types; the robokudo team must rewrite it, then #537 bumps TestDataset.revision and checksum (owner''s call).'
+  - 'cram2#835 waits on LucaKro''s re-review (changes requested); the owner''s inline replies are posted, the 3 open threads wait on reviewers.'
   notes: '#537 (on main, promoted as cram2#835) creates krrood_spatial_math with SemDT''s spatial types
     moved behind [casadi], a CartesianFrame3D[NameT](HasName, HasID) declaring express_in_own_frame, CartesianFrame3DReference
     on krrood''s ObjectReference. No re-export: every import names krrood_spatial_math; SemDT keeps no
