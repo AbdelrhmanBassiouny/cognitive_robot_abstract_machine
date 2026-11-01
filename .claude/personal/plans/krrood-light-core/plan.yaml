@@ -31,9 +31,11 @@ tracks:
 items:
 - id: matplotlib-optional
   title: matplotlib is imported only when drawing
-  branch: null
-  status: not_started
+  branch: claude/bold-ramanujan-vb0e9c
+  status: in progress
   track: optional-imports
+  pull_request_number: 547
+  session: https://claude.ai/code/session_01JxHGiMUhYaVsG6NkZNgzAC
   depends_on: []
   notes: 'User-approved option 1: graph_visualizer.py and RDR import matplotlib inside the
     drawing methods after check_dependencies() raises a custom exception naming the extra.
