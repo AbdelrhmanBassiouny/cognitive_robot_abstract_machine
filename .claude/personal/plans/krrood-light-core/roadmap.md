@@ -6,3 +6,4 @@
 - Each decoupling item removes its modules from the core-boundary guard's offender lists (runtime test and import-linter); nothing is ever added to them.
 - Never reimplement what the heavy library does to keep a feature in core; move the feature to `all` instead, unless the check is a plain stdlib type test (number_like_field).
 - Core's subpackages, its dependencies and both offender lists are declared once, in krrood/pyproject.toml (the import-linter contract and [tool.krrood.core-boundary]); no other file restates them.
+- An optional module is an OptionalModule member (krrood/optional_modules.py) naming the KrroodExtra that declares it; check it with ensure_installed(), which raises OptionalModuleNotInstalled.
