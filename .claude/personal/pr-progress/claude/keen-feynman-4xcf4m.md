@@ -1,11 +1,8 @@
 ## Plan
-- Declare core (import-linter forbidden contract + [tool.krrood.core-boundary]) in krrood/pyproject.toml.
-- Runtime test: every core module in a fresh -X importtime interpreter; allowed = stdlib + krrood + transitive core deps; offender list exact.
-- Static test: run the import-linter contract; offending edges in ignore_imports.
-- Add import-linter to krrood's dev extra.
+- Core declared in krrood/pyproject.toml (import-linter contract + [tool.krrood.core-boundary]); runtime + static guards with shrinking offender lists.
 
 ## Done
-- Branch, draft PR #546, plan item recorded in progress.
+- Declaration, 4 tests (198 pass locally, mutation-checked), import-linter in workspace dev extra; PR #546 description current.
 
 ## Next
-- Set up a uv environment, measure today's offenders, write tests first.
+- Check CI: the offender list was measured in a krrood-only env; adjust once if the full workspace env differs.
