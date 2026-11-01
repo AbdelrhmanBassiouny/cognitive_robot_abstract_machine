@@ -42,13 +42,13 @@ items:
   session: https://claude.ai/code/session_01JxHGiQ4A18U589QipYJ2yk
   depends_on: []
   blockers:
-  - 'cram2#835 waits on LucaKro''s re-review (changes requested); the 8 threads need the owner''s inline replies
-    (drafted in the resolve session) and cram2#835''s description copied from #537.'
+  - 'cram2#835 waits on LucaKro''s re-review (changes requested); the 8 threads need the owner''s inline
+    replies (drafted in the resolve session) and cram2#835''s description copied from #537.'
   notes: '#537 (on main, promoted as cram2#835) creates krrood_spatial_math with SemDT''s spatial types
-    moved behind [casadi], a CartesianFrame3D[NameT](HasName, HasID) declaring express_in_own_frame on a
-    ValueInCartesianFrame3D, CartesianFrame3DReference on krrood''s ObjectReference. Per cram2#835 review
-    there is no re-export: every workspace import names krrood_spatial_math (c36afc73), and JSON/ORM rows
-    naming the old module stop loading. #527 is stacked on it and has it merged.'
+    moved behind [casadi], a CartesianFrame3D[NameT](HasName, HasID) declaring express_in_own_frame, CartesianFrame3DReference
+    on krrood''s ObjectReference. No re-export: every import names krrood_spatial_math; SemDT keeps no
+    spatial_types folder (Derivatives in world_description.derivatives, inverse_frame on HomogeneousTransformationMatrix).
+    Old-module JSON/ORM rows stop loading. #527 is stacked on it and has it merged.'
 - id: krrimage
   title: domain_models/krrood_image (images, colours, pixels) with Color moved out of SemDT
   branch: claude/crollywood-refactor-shared-classes-e8jtm9
@@ -56,9 +56,8 @@ items:
   track: image
   status: in_progress
   blockers:
-    - >-
-      #527's merge (with main) conflicts in geometry.py: main has #761's HSV Color, krrimage.color
-      the old one. Re-move Color as #761 left it, then merge #527.
+  - '#527''s merge (with main) conflicts in geometry.py: main has #761''s HSV Color, krrimage.color the
+    old one. Re-move Color as #761 left it, then merge #527.'
   depends_on:
   - planar-point-interface
   session: https://claude.ai/code/session_01J17aVY3vyQM8goACbkHkcp
@@ -145,10 +144,10 @@ items:
   status: not_started
   depends_on:
   - planar-point-interface
-  notes: 'Renames Point3 to CartesianPoint3D, Point2 to CartesianPoint2D, Vector3, Line3 and Pose to
-    Vector3D, Line3D, Pose3D (decided 2026-10-29) across the workspace; 3D-only types such as RotationMatrix
-    keep their names. The import migration itself moved into spatial-math-move (cram2#835 review), so no
-    old names stay importable.'
+  notes: Renames Point3 to CartesianPoint3D, Point2 to CartesianPoint2D, Vector3, Line3 and Pose to Vector3D,
+    Line3D, Pose3D (decided 2026-10-29) across the workspace; 3D-only types such as RotationMatrix keep
+    their names. The import migration itself moved into spatial-math-move (cram2#835 review), so no old
+    names stay importable.
 - id: video-on-a-plane
   title: Show a video on a plane of the world (a wall, a table top) in a camera image or through a projector
   branch: claude/krrood-image-video-on-a-plane
@@ -172,13 +171,13 @@ items:
   depends_on:
   - spatial-math-move
   session: https://claude.ai/code/session_018wfiv7QQPnFryjMtQLmPcK
-  notes: >
-    #527 (on #537) holds the casadi-free base per https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS,
-    re-basing #537's CartesianFrame3D onto CartesianFrame (api-break: missing declared attributes fail
-    at definition). Takes over spatial-math-adopt. Next: re-apply #526's preview here
-    (HomogeneousTransformationMatrix only a RigidCoordinateChange, Pose its value, RotationMatrix a
-    value, no translation_matrix, SpatialType a CoordinateRepresentation), answer #526's threads, close
-    #526 linking here; then CI and review.
+  notes: '#527 (on #537) holds the casadi-free base per https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS,
+    re-basing #537''s CartesianFrame3D onto CartesianFrame (api-break: missing declared attributes fail
+    at definition). Takes over spatial-math-adopt. Next: re-apply #526''s preview here (HomogeneousTransformationMatrix
+    only a RigidCoordinateChange, Pose its value, RotationMatrix a value, no translation_matrix, SpatialType
+    a CoordinateRepresentation), answer #526''s threads, close #526 linking here; then CI and review.
+
+    '
 - id: image-coordinate-change
   title: krrood_image's ImageCoordinateChange (scale and shift per axis) for crops and resizes, with cv2
     resampling
@@ -193,18 +192,19 @@ items:
     also yields the 2x3 matrix cv2.warpAffine takes. Pasting one image into another maps between two planes:
     a SpaceMap, not a change.'
 - id: world-as-euclidean-space
-  title: SemDT's World is the EuclideanSpace its bodies chart; CartesianFrame3D.express_in_own_frame checks the space
-    before changing coordinates
+  title: SemDT's World is the EuclideanSpace its bodies chart; CartesianFrame3D.express_in_own_frame checks
+    the space before changing coordinates
   branch: claude/world-as-euclidean-space
   track: spatial
   status: not_started
   depends_on:
   - planar-point-interface
-  notes: 'World implements EuclideanSpace3D (one world, one space). test/living_worlds.py
-    wraps an existing __new__ instead of refusing it (approved). CoordinateSystem.space becomes an abstract
-    property returning SpaceT | None; KinematicStructureEntity returns _world, never raising. express_in_own_frame
-    is a template method: raises for no frame, a frame not in a space, or frames of different spaces,
-    then calls an abstract hook. #526 gives KinematicStructureEntity a space property returning None; this item makes it return _world. If a world ever holds unrelated parts, switch to has-a.'
+  notes: 'World implements EuclideanSpace3D (one world, one space). test/living_worlds.py wraps an existing
+    __new__ instead of refusing it (approved). CoordinateSystem.space becomes an abstract property returning
+    SpaceT | None; KinematicStructureEntity returns _world, never raising. express_in_own_frame is a template
+    method: raises for no frame, a frame not in a space, or frames of different spaces, then calls an
+    abstract hook. #526 gives KinematicStructureEntity a space property returning None; this item makes
+    it return _world. If a world ever holds unrelated parts, switch to has-a.'
 - id: perception-typed-images
   title: SemDT's ray tracer renders, and RoboKudo's CAS holds, krrood_image images instead of bare arrays
   branch: claude/perception-typed-images
