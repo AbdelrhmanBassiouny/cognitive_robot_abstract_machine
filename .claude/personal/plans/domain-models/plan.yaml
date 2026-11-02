@@ -42,7 +42,11 @@ items:
   session: https://claude.ai/code/session_01JxHGiQ4A18U589QipYJ2yk
   depends_on: []
   blockers:
-  - 'cram2#835 waits on LucaKro''s re-review (changes requested); the owner''s inline replies are posted, the 3 open threads wait on reviewers.'
+    - >-
+      cram2#835 has changes requested (LucaKro); 8a436f495 answers the one open thread that asked
+      for a change (frame value docstring). The red upstream check test_each_lib (experiments) shows
+      only "exit code 1" in its log, while the fork's run of the same job passed; cause not
+      identified.
   notes: '#537 (on main, promoted as cram2#835) creates krrood_spatial_math with SemDT''s spatial types
     moved behind [casadi], a CartesianFrame3D[NameT](HasName, HasID) declaring express_in_own_frame, CartesianFrame3DReference
     on krrood''s ObjectReference. No re-export: every import names krrood_spatial_math; SemDT keeps no
