@@ -91,15 +91,19 @@ items:
     it'
   track: planning-core
   pull_request_number: 541
-  session: https://claude.ai/code/session_01JxHGiLiPY7vUZfdX8seUnN
+  session: https://claude.ai/code/session_018wfiv5yasD7se5ZBXvUw5i
   depends_on:
   - fluent-state-overlay
   status: in progress
-  notes: 'Implemented in #541 (draft, stacked on #535, merged into latest main since the maintenance
-    pass could not run): State.with_objects_added/removed, TermReader.instances_of, default domains
-    read per evaluation, ExpressionDomainVariable for variable(Type, expression)/variable_from(expression).
-    Open for review: constructing a Symbol still registers it live, so creating unregistered objects
-    is left to action-schema-progression.'
+  notes: >
+    In #541 (draft, on #535): state objects, TermReader.instances_of, per-evaluation default
+    domains, expression domains as FlatVariable/InstanceFilteredFlatVariable (a(T).from_(expr) too).
+    First review addressed in fa1dc1af6e; the owner chose to filter removed objects out of
+    list/tuple/set fluent values, captured lists stay unfiltered.
+
+    Open: a thread asks for match syntax everywhere; the binding test keeps variable() since a match
+    in set_of does not correlate (correlated-quantifiers). Unregistered objects are left to
+    action-schema-progression.
 - id: action-schema-progression
   branch: eql-planning/action-schema-progression
   title: ActionSchema with an EQL precondition and assignment effects, applied to a State
