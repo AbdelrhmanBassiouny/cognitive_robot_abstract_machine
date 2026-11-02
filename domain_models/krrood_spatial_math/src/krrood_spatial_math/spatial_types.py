@@ -22,7 +22,7 @@ from krrood_spatial_math.cartesian_frame_3d import (
     ValueInCartesianFrame3D,
 )
 from krrood_spatial_math.coordinate_system import RigidCoordinateChange
-from krrood_spatial_math.affine_point import AffinePoint2D
+from krrood_spatial_math.affine_point import AffinePoint2D, AffinePoint3D
 from krrood_spatial_math.exceptions import (
     InsufficientVectorsError,
     ReferenceFrameMismatchError,
@@ -1129,7 +1129,7 @@ class Point(
 
 
 @dataclass(eq=False, init=False, repr=False)
-class Point3(Point):
+class Point3(Point, AffinePoint3D[CartesianFrame3D, sm.Scalar]):
     """
     Represents a 3D point with reference frame handling.
 

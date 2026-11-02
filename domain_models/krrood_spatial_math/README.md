@@ -22,8 +22,8 @@ coordinate system. Its base depends on `krrood` alone.
 - `krrood_spatial_math.cartesian_frame_3d`: `CartesianFrame3D`, the right-handed
   Cartesian frame of physical space that positions and directions are expressed in,
   and how serialized values refer to one.
-- `krrood_spatial_math.affine_point`: `AffinePoint2D`, a point given by its two
-  coordinates in an affine frame. Each implementation binds the kind of frame and what
+- `krrood_spatial_math.affine_point`: `AffinePoint2D` and `AffinePoint3D`, a point
+  given by its two or three coordinates in an affine frame. Each implementation binds the kind of frame and what
   its coordinates are stored as.
 - `krrood_spatial_math.spatial_types`, with the extra `krrood_spatial_math[casadi]`:
   `Point2`, `Point3`, `Vector3`, `RotationMatrix`, `Quaternion`, `AxisAngle`,

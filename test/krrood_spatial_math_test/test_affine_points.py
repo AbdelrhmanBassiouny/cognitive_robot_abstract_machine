@@ -5,25 +5,39 @@ from dataclasses import fields
 import pytest
 
 from krrood.patterns.exceptions import InterfaceInstantiationError
-from krrood_spatial_math.affine_point import AffinePoint2D, CoordinateT
+from krrood_spatial_math.affine_point import AffinePoint2D, AffinePoint3D, CoordinateT
 from krrood_spatial_math.coordinate_system import (
     AffineFrame,
     AffineFrameT,
     CoordinateRepresentation,
 )
 
-from .dataset.spaces import ScalablePlaneFrame, StoredScalablePlanePoint
+from .dataset.spaces import (
+    ScalablePlaneFrame,
+    ScalableSpaceFrame,
+    StoredScalablePlanePoint,
+    StoredScalableSpacePoint,
+)
 
 # %% points given in an affine frame
 
 
-def test_an_affine_point_cannot_be_instantiated():
+affine_points = [AffinePoint2D, AffinePoint3D]
+
+
+@pytest.mark.parametrize("affine_point", affine_points)
+def test_an_affine_point_cannot_be_instantiated(affine_point):
     with pytest.raises(InterfaceInstantiationError):
-        AffinePoint2D()
+        affine_point()
 
 
-def test_an_affine_point_is_a_coordinate_representation():
-    assert issubclass(AffinePoint2D, CoordinateRepresentation)
+@pytest.mark.parametrize("affine_point", affine_points)
+def test_an_affine_point_is_a_coordinate_representation(affine_point):
+    assert issubclass(affine_point, CoordinateRepresentation)
+
+
+def test_a_three_dimensional_affine_point_is_not_a_two_dimensional_one():
+    assert not issubclass(AffinePoint3D, AffinePoint2D)
 
 
 def test_an_affine_point_is_given_in_an_affine_frame():
@@ -51,4 +65,18 @@ def test_a_points_fields_are_narrowed_to_the_bound_types():
         "x": float,
         "y": float,
         "coordinate_system": ScalablePlaneFrame | None,
+    }
+
+
+def test_a_three_dimensional_points_fields_are_narrowed_to_the_bound_types():
+    point_types = {
+        point_field.name: point_field.type
+        for point_field in fields(StoredScalableSpacePoint)
+    }
+
+    assert point_types == {
+        "x": float,
+        "y": float,
+        "z": float,
+        "coordinate_system": ScalableSpaceFrame | None,
     }

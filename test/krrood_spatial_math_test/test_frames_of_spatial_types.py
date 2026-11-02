@@ -7,7 +7,7 @@ import pytest
 
 from krrood.adapters.json_serializer import from_json, to_json
 import krrood.symbolic_math.symbolic_math as sm
-from krrood_spatial_math.affine_point import AffinePoint2D, CoordinateT
+from krrood_spatial_math.affine_point import AffinePoint2D, AffinePoint3D, CoordinateT
 from krrood_spatial_math.cartesian_frame_3d import (
     CartesianFrame3D,
     ValueInCartesianFrame3D,
@@ -97,6 +97,18 @@ def test_a_point2_is_an_affine_point_of_a_cartesian_frame():
 
 def test_a_point2_stores_its_coordinates_as_symbolic_scalars():
     assert Point2.get_type_of_generic_parameter(CoordinateT) is sm.Scalar
+
+
+# %% a point in a frame's space as an affine point
+
+
+def test_a_point3_is_an_affine_point_of_a_cartesian_frame():
+    assert issubclass(Point3, AffinePoint3D)
+    assert Point3.get_type_of_generic_parameter(CoordinateSystemT) is CartesianFrame3D
+
+
+def test_a_point3_stores_its_coordinates_as_symbolic_scalars():
+    assert Point3.get_type_of_generic_parameter(CoordinateT) is sm.Scalar
 
 
 # %% a transformation as a change between two frames
