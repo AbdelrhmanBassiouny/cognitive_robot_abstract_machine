@@ -44,12 +44,21 @@ items:
   title: InstantiatedVariable separates its result type from the factory that builds it
   track: eql-prerequisites
   pull_request_number: 542
-  session: https://claude.ai/code/session_01JxHGiP3v6stSw2szCFHrHB
+  session: https://claude.ai/code/session_018wfiv9cZCFWHJx3AWcxpxT
+  blockers:
+    - >-
+      Waiting on the owner: three #542 review threads ask why plan_transformations.py,
+      task_conditions.py and instantiated/planner.py read _factory_ instead of _type_. Answered and
+      left open: for a SymbolicFunction class, _type_ is the return type of __call__, so only
+      _factory_ names the class.
   depends_on: []
   status: in progress
-  notes: 'Bug-style PR off main, merged into #535 like #538 (review thread on krrood/planning/fact.py).
+  notes: >
+    Bug-style PR off main, merged into #535 like #538 (review thread on krrood/planning/fact.py).
     One field for the result type, always a type; a factory field that defaults to the type and may
-    be a factory method. Afterwards Fact drops its isinstance(_type_, type) guard.'
+    be a factory method. Afterwards Fact drops its isinstance(_type_, type) guard.
+
+    InstantiatedVariable inherits HasFactoryAndKwargs, like Match.
 - id: call-arguments-normalization
   branch: eql-planning/mapped-variable-cache-unhashable-arguments
   title: A query calling a method accepts unhashable arguments, compared through CallArguments
