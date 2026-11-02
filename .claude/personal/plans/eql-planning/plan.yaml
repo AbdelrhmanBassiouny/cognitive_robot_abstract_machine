@@ -47,10 +47,9 @@ items:
   session: https://claude.ai/code/session_018wfiv9cZCFWHJx3AWcxpxT
   blockers:
     - >-
-      Waiting on the owner: three #542 review threads ask why plan_transformations.py,
-      task_conditions.py and instantiated/planner.py read _factory_ instead of _type_. Answered and
-      left open: for a SymbolicFunction class, _type_ is the return type of __call__, so only
-      _factory_ names the class.
+      CI on d6e043762c still to finish. The experiments job failed on 72aefdb9b2
+      (test_comparison_takes_its_kind_from_the_value_it_compares read the class off _type_). The
+      owner approved changing that test to read _factory_, and the fix is pushed.
   depends_on: []
   status: in progress
   notes: >
