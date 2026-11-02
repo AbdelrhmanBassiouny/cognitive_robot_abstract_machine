@@ -58,8 +58,12 @@ items:
   session: https://claude.ai/code/session_01JxHGiMbWLBgK8nT2DHNmxJ
   depends_on: []
   status: in progress
-  notes: 'Bug PR off main, merged into #535. Ready for review (owner); upstream promotion link recorded
-    in #540, not yet opened on cram2.'
+  notes: >
+    Bug PR off main, merged into #535. Promoted: cram2 PR #837 is open and under upstream review
+    (tomsch420 requested changes). The one actionable request, sharing the signature cache with
+    HasFactoryAndKwargs, is done. The other two threads (frozen MappedVariableCacheItem, purpose of
+    the mimic) are answered by the owner and wait for the reviewers. The fork checks failing on
+    1616d8d (random_events, segmind) were runner disk space, not the change.
 - id: fluent-state-overlay
   branch: claude/zealous-albattani-uoew5i
   title: Fluents and a State overlay that EQL queries are evaluated against
