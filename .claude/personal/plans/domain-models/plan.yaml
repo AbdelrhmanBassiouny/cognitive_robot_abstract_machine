@@ -173,14 +173,14 @@ items:
   status: in_progress
   depends_on:
   - spatial-math-move
-  session: https://claude.ai/code/session_018wfiv7QQPnFryjMtQLmPcK
-  notes: '#527 (on #537) holds the casadi-free base per https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS,
-    re-basing #537''s CartesianFrame3D onto CartesianFrame (api-break: missing declared attributes fail
-    at definition). Takes over spatial-math-adopt. Next: re-apply #526''s preview here (HomogeneousTransformationMatrix
-    only a RigidCoordinateChange, Pose its value, RotationMatrix a value, no translation_matrix, SpatialType
-    a CoordinateRepresentation), answer #526''s threads, close #526 linking here; then CI and review.
-
-    '
+  session: https://claude.ai/code/session_018wfiv624CCCGJiUfXd4nm7
+  notes: >
+    #527 (on main since #537 landed as cram2#835) holds the casadi-free base per
+    https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS (api-break: missing declared attributes fail
+    at definition) and SemDT's spatial types adopting it, from #526 (d5e65ab2): values are
+    ValueInCartesianFrame3D, a CoordinateRepresentation; HomogeneousTransformationMatrix only a
+    RigidCoordinateChange; Point2 an AffinePoint2D; no translation_matrix. #526 closed. Next: CI and
+    review, then promote.
 - id: image-coordinate-change
   title: krrood_image's ImageCoordinateChange (scale and shift per axis) for crops and resizes, with cv2
     resampling
