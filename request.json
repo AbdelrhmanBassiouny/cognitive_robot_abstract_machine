@@ -1,9 +1,6 @@
 {
-  "kind": "pull-request-report",
-  "request_identifier": "e4159ef90d67f6aa",
+  "kind": "open-pull-requests",
+  "request_identifier": "0354b83e8433f4b0",
   "upstream": "cram2/cognitive_robot_abstract_machine",
-  "fork_owner": "AbdelrhmanBassiouny",
-  "pull_request": null,
-  "branch": "eql-planning/mapped-variable-cache-unhashable-arguments",
-  "failure_logs": true
+  "fork": "AbdelrhmanBassiouny/cognitive_robot_abstract_machine"
 }
