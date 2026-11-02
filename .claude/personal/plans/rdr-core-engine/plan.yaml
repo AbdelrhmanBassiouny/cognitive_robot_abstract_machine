@@ -41,8 +41,9 @@ items:
   blockers:
     - >-
       cram2 #843 review round answered in bb4cccbad; its inline replies are not
-      posted yet (session cannot write upstream), and bb4cccbad is not carried
-      into #65 and above (#159/#210 need the RDRMatchParser rename).
+      posted yet (session cannot write upstream). bb4cccbad is carried into #65
+      and #66; #67 conflicts with main on core/base_expressions.py (its active-root
+      fix vs main's context restructure), handed back to the user.
     - >-
       Awaits green fork CI on bb4cccbad, then drop integration-conflict, whose
       #192 cause is resolved.
