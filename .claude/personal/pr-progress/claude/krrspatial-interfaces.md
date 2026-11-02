@@ -1,17 +1,12 @@
-PR #527 (draft, base main): krrood_spatial_math's casadi-free base (was krrspatial). Plan: domain-models, item planar-point-interface. Decisions: https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS
+PR #527 (ready, base main; #537 landed as cram2#835): krrood_spatial_math's casadi-free base plus SemDT's spatial types adopting it. Plan: domain-models, item planar-point-interface (took over spatial-math-adopt). Decisions: https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS
 
 Plan
-- Space > EuclideanSpace (dimension classproperty) > EuclideanSpace2D, EuclideanSpace3D; CoordinateSystem[SpaceT] > AffineFrame > CartesianFrame > CartesianFrame3D; CoordinateRepresentation (AffinePoint2D is one); CoordinateChange with AffineCoordinateChange[AffineFrameT] and RigidCoordinateChange[CartesianFrameT]. Image spaces are krrimage's.
+- Space > EuclideanSpace (dimension) > EuclideanSpace2D/3D; CoordinateSystem[SpaceT] > AffineFrame > CartesianFrame > CartesianFrame3D; CoordinateRepresentation (AffinePoint2D, ValueInCartesianFrame3D); CoordinateChange > AffineCoordinateChange[AffineFrameT] > RigidCoordinateChange[CartesianFrameT]. Image spaces are krrood_image's (#524).
 
 Done
-- ImagePlane and ImageCoordinateSystem moved to krrimage (5af267fe). IdentifiedObject keeps public id and name (owner's call).
-- Resolve 2026-10-29: merged main (fadbfe22; cramera is cramph now, main's dir= fix clears the krrood job). Renamed the package krrood_spatial_math (6583f4da). Frame types, CartesianFrame3D (+Resolver, Reference, MissingCartesianFrame3DResolver), AffinePoint2D, CoordinateT docstring (6c0cdb80). 34 tests pass. Answered and resolved Simon's four threads.
-- Carried into #526 (fa112d44, e6dae425): express, ReferenceFrameMismatchError and spatial types on the renamed modules; SemDT readers renamed. 59 krrood_spatial_math and 355 SemDT spatial-type tests pass locally.
-- Review 2: EuclideanSpace3D under CartesianFrame3D, EuclideanSpace and README/pyproject wording, krrood_image (c3b514c7; 36 pass); six threads resolved; merged into #526 (4dee7cdb, 61 + 355 pass).
-- Review 3: dimension classproperty and EuclideanSpace2D (10b3b7b2, 40 pass), with main's Docker import fix merged; into #526 (85b67b09, 65 pass).
-- StoredFrames test mixin, so each mimic names one change kind (81241f19); into #526 (3eccd14c).
-- IdentifiedObject split into krrood HasID/HasName mixins; ObjectReference writes the name only for a HasName; CoordinateSystem lists HasName before HasID for SemDT's MRO (e0e8a747, 9162e580); SemDT WorldEntity/WorldEntityWithID on the mixins (#526 78c3dbfe). Thread resolved.
-- Not carried into #524: its merge hits main's HSV Color in geometry.py, which #524 has to re-move first.
+- Base interfaces, krrood HasID/HasName, Interface attribute check at definition; all #527 review threads resolved.
+- 2026-11-02: reparented onto main, merged main (ae46737a). Re-applied #526's adoption (d5e65ab2): ValueInCartesianFrame3D is a CoordinateRepresentation[CartesianFrame3D] mixin on every spatial value; SpatialType stays the shared base (ORM, renderers, giskardpy read it) but is no value; HomogeneousTransformationMatrix only a RigidCoordinateChange; Point2 an AffinePoint2D[CartesianFrame3D, sm.Scalar]; translation_matrix removed. 76 + 352 tests pass locally (3 mini_world tests need ROS).
+- #526 threads answered (open ones carried by spatial-action, world-as-euclidean-space, the point item, Simon's Q2); #526 closed.
 
 Next
-- CI waits on the fixed CI image (#536). Owner resolves the IdentifiedObject thread. Promote before #526/#524.
+- CI on d5e65ab2 (ORM build, giskardpy, mini_world), then review and promote. #524 conflicts with main and needs its own resolve.
