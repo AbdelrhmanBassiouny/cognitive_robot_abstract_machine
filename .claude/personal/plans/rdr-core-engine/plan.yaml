@@ -37,11 +37,15 @@ items:
   branch: D-core-underspecified
   pull_request_number: 64
   track: engine-stack
-  session: https://claude.ai/code/session_018wfiv8uSfijGho9G4ZS6Qz
+  session: https://claude.ai/code/session_018wfiv55SKtSL7GKMsg99mh
   blockers:
     - >-
-      All review threads resolved; awaits green fork CI on 0edfbb883, then drop
-      integration-conflict.
+      cram2 #843 review round answered in bb4cccbad; its inline replies are not
+      posted yet (session cannot write upstream), and bb4cccbad is not carried
+      into #65 and above (#159/#210 need the RDRMatchParser rename).
+    - >-
+      Awaits green fork CI on bb4cccbad, then drop integration-conflict, whose
+      #192 cause is resolved.
   depends_on: []
   status: in_progress
   notes: '2026-08-12 steward cascade: restacked onto its cascaded base, which now carries main be377fdf
