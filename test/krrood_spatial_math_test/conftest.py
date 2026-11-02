@@ -15,3 +15,8 @@ def table_frame() -> NamedFrame:
 @pytest.fixture
 def camera_frame() -> NamedFrame:
     return NamedFrame("camera")
+
+
+@pytest.fixture
+def gripper_frame() -> NamedFrame:
+    return NamedFrame("gripper")

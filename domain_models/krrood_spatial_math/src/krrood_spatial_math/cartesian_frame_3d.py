@@ -10,7 +10,11 @@ from krrood.adapters.json_serializer import from_json
 from krrood.adapters.object_reference import ObjectReference
 from krrood.patterns.identifier_and_name import HasName, NameT
 from krrood.patterns.interface import Interface
-from krrood_spatial_math.coordinate_system import CartesianFrame
+from krrood.patterns.mixin import Mixin
+from krrood_spatial_math.coordinate_system import (
+    CartesianFrame,
+    CoordinateRepresentation,
+)
 from krrood_spatial_math.exceptions import MissingCartesianFrame3DResolver
 from krrood_spatial_math.space import EuclideanSpace3D
 
@@ -33,15 +37,20 @@ class CartesianFrame3D(CartesianFrame[EuclideanSpace3D], HasName[NameT], Interfa
         """
 
 
-class ValueInCartesianFrame3D(Interface):
+class ValueInCartesianFrame3D(CoordinateRepresentation[CartesianFrame3D], Mixin):
     """
-    A value, such as a point or a pose, given in a :class:`CartesianFrame3D`.
+    A value, such as a point or a pose, given in a :class:`CartesianFrame3D`, its
+    coordinate system.
     """
 
     reference_frame: CartesianFrame3D | None
     """
     The frame the value is given in, or *None* where the value is given in no frame.
     """
+
+    @property
+    def coordinate_system(self) -> CartesianFrame3D | None:
+        return self.reference_frame
 
 
 ValueInCartesianFrame3DT = TypeVar(

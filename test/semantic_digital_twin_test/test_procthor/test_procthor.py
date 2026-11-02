@@ -122,7 +122,7 @@ class ProcTHORTestCase(unittest.TestCase):
             procthor_room.world_T_room.rotation_matrix.to_np(), np.eye(4)
         )
         np.testing.assert_array_equal(
-            procthor_room.world_T_room.translation_matrix.to_np()[:3, 3],
+            procthor_room.world_T_room.position.to_np()[:3],
             np.array([1.5, -1.5, 0]),
         )
 
