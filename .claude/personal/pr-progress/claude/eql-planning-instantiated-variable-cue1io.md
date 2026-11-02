@@ -1,14 +1,10 @@
-# instantiated-variable-type-and-factory (#542)
-
 ## Plan
-- _type_ = result type (always a type), _factory_ = builder (defaults to _type_).
-- Callers: inference(type_, factory=None), @symbolic_function, SymbolicCallable._bound_value_type_.
-- Operation readers (verbalization, coraplex, experiments) read _factory_.
+- Answer the four #542 review threads (resolve session, auto mode).
 
 ## Done
-- Implemented and pushed (b0d12c688); 11 new tests; test_eql 1443 passed.
-- PR description lists decisions and migration.
+- InstantiatedVariable inherits HasFactoryAndKwargs (72aefdb9b2); the thread on core/variable.py is resolved.
+- Answered the three `_type_` threads (coraplex, experiments, planner.py) and left them open: for a SymbolicFunction class, `_type_` is the return type of `__call__`.
 
 ## Next
-- Owner review of the decisions (object fallback, generic origin, factory stays the class).
-- After merge into #535: drop Fact._is_predicate's isinstance(_type_, type) guard there.
+- The owner's answer on the three open threads. If `_type_` should stay the class for SymbolicFunctions, revisit `_bound_value_type_`.
+- #535 merges this branch, then drops Fact._is_predicate's isinstance guard.
