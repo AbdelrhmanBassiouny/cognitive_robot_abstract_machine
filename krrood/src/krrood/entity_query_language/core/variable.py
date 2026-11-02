@@ -1,9 +1,8 @@
 """
-This module defines variable and literal representations for the Entity Query
-Language.
+This module defines variable and literal representations for the Entity Query Language.
 
-It contains classes for simple variables, constant literals, and
-variables that are instantiated from other expressions.
+It contains classes for simple variables, constant literals, and variables that are
+instantiated from other expressions.
 """
 
 from __future__ import annotations
@@ -12,7 +11,13 @@ from abc import ABC
 from dataclasses import dataclass, field
 from functools import cached_property
 
-from typing_extensions import Any, Iterable, Union as TypingUnion, Callable, Iterator
+from typing_extensions import (
+    Any,
+    Callable,
+    Iterable,
+    Iterator,
+    Union as TypingUnion,
+)
 
 from krrood.entity_query_language.core.base_expressions import (
     Bindings,
@@ -20,10 +25,19 @@ from krrood.entity_query_language.core.base_expressions import (
     SymbolicExpression,
     Selectable,
 )
-from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
-from krrood.entity_query_language.evaluation_context import values_in_current_context
+from krrood.entity_query_language.core.mapped_variable import (
+    CanBehaveLikeAVariable,
+    HasSymbolicOperations,
+)
+from krrood.entity_query_language.evaluation_context import (
+    current_term_reader,
+    values_in_current_context,
+)
 from krrood.entity_query_language.ground_term import CallTerm, GroundTermExpression
-from krrood.entity_query_language.cache_data import ReEnterableLazyIterable
+from krrood.entity_query_language.cache_data import (
+    ReEnterableIterable,
+    ReEnterableLazyIterable,
+)
 from krrood.entity_query_language.enums import DomainSource
 from krrood.entity_query_language.exceptions import NoChildToReplace
 from krrood.entity_query_language.operators.set_operations import (
@@ -37,11 +51,46 @@ from krrood.entity_query_language.utils import (
 from krrood.entity_query_language._monitoring import (
     monitored,
 )
+from krrood.symbol_graph.symbol_graph import SymbolGraph
 
-DomainType = Iterable[T]
+DomainType = Iterable[T] | HasSymbolicOperations
 """
-The type of the domain used for the variable.
+The type of the domain used for the variable: its values, or an expression whose value,
+for each of its bindings, holds them.
 """
+
+# %% domains
+
+
+@dataclass
+class InstancesOfType(ReEnterableIterable[T]):
+    """
+    The domain of every instance of a type in the evaluation that iterates it: the
+    instances the evaluation's
+    :class:`~krrood.entity_query_language.ground_term.TermReader` reads, which outside a
+    state are those the live :class:`~krrood.symbol_graph.symbol_graph.SymbolGraph`
+    holds.
+    """
+
+    type_: type[T]
+    """
+    The type whose instances make up the domain.
+    """
+
+    live_instances: ReEnterableLazyIterable[T] = field(
+        init=False, default_factory=ReEnterableLazyIterable
+    )
+    """
+    The instances of :attr:`type_` the live symbol graph holds, read once and kept.
+    """
+
+    def __post_init__(self):
+        self.live_instances.set_iterable(
+            SymbolGraph().get_instances_of_type(self.type_)
+        )
+
+    def __iter__(self) -> Iterator[T]:
+        return current_term_reader().instances_of(self.type_, self.live_instances)
 
 
 @dataclass(eq=False, repr=False)
@@ -76,12 +125,12 @@ class Variable(CanHaveDomainSource[T]):
     It can be evaluated to yield values from its domain.
     """
 
-    _domain_: DomainType = field(default_factory=list)
+    _domain_: Iterable[T] = field(default_factory=list)
     """
     The original domain value.
     """
 
-    _re_enterable_domain_generator_: ReEnterableLazyIterable = field(
+    _re_enterable_domain_generator_: ReEnterableIterable[T] = field(
         init=False, default_factory=ReEnterableLazyIterable, repr=False
     )
     """
@@ -102,13 +151,18 @@ class Variable(CanHaveDomainSource[T]):
 
     def _update_domain_(self, domain):
         """
-        Set the domain and ensure it is a lazy re-enterable iterable.
+        Set the domain, keeping a :class:`ReEnterableIterable` as it is and wrapping any
+        other value in a :class:`ReEnterableLazyIterable`.
         """
-        if isinstance(domain, ReEnterableLazyIterable):
+        if isinstance(domain, ReEnterableIterable):
             self._re_enterable_domain_generator_ = domain
             return
         if not is_iterable(domain):
             domain = [domain]
+        if not isinstance(
+            self._re_enterable_domain_generator_, ReEnterableLazyIterable
+        ):
+            self._re_enterable_domain_generator_ = ReEnterableLazyIterable()
         self._re_enterable_domain_generator_.set_iterable(domain)
 
     def _evaluate__(
@@ -116,8 +170,7 @@ class Variable(CanHaveDomainSource[T]):
         sources: OperationResult,
     ) -> Iterable[OperationResult]:
         """
-        Fetch values from the domain values and yield an OperationResult for
-        each.
+        Fetch values from the domain values and yield an OperationResult for each.
         """
         for v in self._re_enterable_domain_generator_:
             bindings = sources.bindings | {self._id_: v}
@@ -142,8 +195,8 @@ class Variable(CanHaveDomainSource[T]):
 @dataclass(eq=False, repr=False)
 class Literal(Variable[T]):
     """
-    Literals are variables that do not necessarily have a type but they must
-    have a domain.
+    Literals are variables that do not necessarily have a type but they must have a
+    domain.
     """
 
     _value_: T = field(kw_only=True)
@@ -155,8 +208,7 @@ class Literal(Variable[T]):
     """
     The domain of the literal.
 
-    It is constructed from the `_value_` and is always a singleton
-    iterable.
+    It is constructed from the `_value_` and is always a singleton iterable.
     """
 
     _name__: str | None = field(default=None, kw_only=True)
@@ -185,13 +237,12 @@ class InstantiatedVariable(
     GroundTermExpression[CallTerm],
 ):
     """
-    A variable which does not have an explicit domain, but creates new
-    instances using the `_type_` and `_kwargs_` that are provided.
+    A variable which does not have an explicit domain, but creates new instances using
+    the `_type_` and `_kwargs_` that are provided.
 
-    The `_kwargs_` are variables that can be used to generate
-    combinations of bindings to create instances for each combination.
-    By definition this variable is inferred. It also represents
-    Predicates and symbolic functions.
+    The `_kwargs_` are variables that can be used to generate combinations of bindings
+    to create instances for each combination. By definition this variable is inferred.
+    It also represents Predicates and symbolic functions.
     """
 
     _type_: type[T] | Callable = field(kw_only=True)
@@ -210,8 +261,8 @@ class InstantiatedVariable(
         default_factory=dict, init=False, repr=False
     )
     """
-    A dictionary mapping child variable names to variables, these are from the
-    _kwargs_ dictionary.
+    A dictionary mapping child variable names to variables, these are from the _kwargs_
+    dictionary.
     """
 
     _domain_source_: DomainSource = field(init=False, default=DomainSource.DEDUCTION)
@@ -251,8 +302,8 @@ class InstantiatedVariable(
         self, sources: OperationResult
     ) -> Iterator[OperationResult]:
         """
-        Create new instances of the variable type and using as keyword
-        arguments the child variables values.
+        Create new instances of the variable type and using as keyword arguments the
+        child variables values.
         """
         for child_result in self._evaluate_product_(sources):
             # An argument without a binding is left out, so its default applies.
@@ -298,8 +349,8 @@ class InstantiatedVariable(
 @dataclass(eq=False, repr=False)
 class ExternallySetVariable(CanHaveDomainSource[T]):
     """
-    A variable that is externally set by another expression or another part of
-    the application and can be used in the query language.
+    A variable that is externally set by another expression or another part of the
+    application and can be used in the query language.
     """
 
     def _replace_child_field_(
@@ -309,12 +360,10 @@ class ExternallySetVariable(CanHaveDomainSource[T]):
 
     def _evaluate__(self, sources: OperationResult) -> Iterable[OperationResult]:
         """
-        As this variable is externally set, it does not produce any results on
-        its own, it just yields from an empty list to indicate that it has no
-        results.
+        As this variable is externally set, it does not produce any results on its own,
+        it just yields from an empty list to indicate that it has no results.
 
-        It's important to note that this function will only be called
-        when `_evaluate_` is called, and there's no value in the
-        bindings `sources` for this variable.
+        It's important to note that this function will only be called when `_evaluate_`
+        is called, and there's no value in the bindings `sources` for this variable.
         """
         yield from []

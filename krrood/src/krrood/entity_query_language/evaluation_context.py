@@ -57,17 +57,23 @@ def set_evaluation_context(
     return _evaluation_context_var.set(evaluation_context)
 
 
-def values_in_current_context(term: GroundTerm) -> Iterator[Any]:
+def current_term_reader() -> TermReader:
     """
-    :param term: The ground term to read.
-    :return: The value of *term* as the current evaluation context's
-        :attr:`EvaluationContext.term_reader` reads it, or its live value outside an
-        evaluation.
+    :return: The current evaluation context's :attr:`EvaluationContext.term_reader`, or
+        a :class:`LiveTermReader` outside an evaluation.
     """
     evaluation_context = get_evaluation_context()
     if evaluation_context is None:
-        return term.live_values()
-    return evaluation_context.term_reader.values_of(term)
+        return LiveTermReader()
+    return evaluation_context.term_reader
+
+
+def values_in_current_context(term: GroundTerm) -> Iterator[Any]:
+    """
+    :param term: The ground term to read.
+    :return: The value of *term* as :func:`current_term_reader` reads it.
+    """
+    return current_term_reader().values_of(term)
 
 
 class EvaluationObserver(ABC):

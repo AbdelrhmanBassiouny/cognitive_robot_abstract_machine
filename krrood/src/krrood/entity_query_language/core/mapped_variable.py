@@ -59,7 +59,7 @@ from krrood.entity_query_language.exceptions import (
 )
 from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.operators.math_operations import MathOperator
-from krrood.entity_query_language.utils import T
+from krrood.entity_query_language.utils import T, is_iterable
 from krrood.patterns.factory_and_kwargs import HasFactoryAndKwargs
 from krrood.symbol_graph.helpers import (
     get_field_type_endpoint,
@@ -827,8 +827,10 @@ class Call(SingleValueMapping[T, CallTerm]):
 class FlatVariable(MappedVariable[T]):
     """
     A variable that is created from its child through a flattening operation that
-     transforms the values of the child from an iterable-of-iterables into a single iterable of items.
-     Note: It only unwraps one level of nesting.
+    transforms the values of the child from an iterable-of-iterables into a single
+    iterable of items. A value of the child that is not a collection is taken as it is.
+
+    .. note:: It only unwraps one level of nesting.
 
     Given a child expression that evaluates to an iterable (e.g., Views.bodies), this mapping yields
     one solution per inner element while preserving the original bindings (e.g., the View instance),
@@ -840,9 +842,9 @@ class FlatVariable(MappedVariable[T]):
     """
 
     def _apply_mapping_(
-        self, value: Iterable[T], sources: OperationResult | None = None
+        self, value: Iterable[T] | T, sources: OperationResult | None = None
     ) -> Iterable[T]:
-        yield from value
+        yield from value if is_iterable(value) else (value,)
 
     def _rebuild_on_(self, child: CanBehaveLikeAVariable) -> MappedVariable:
         # Not routed through the mapped-variable cache: a flattening is an iteration
@@ -852,6 +854,42 @@ class FlatVariable(MappedVariable[T]):
     @cached_property
     def _name_(self) -> str:
         return f"Flatten({self._child_._name_})"
+
+
+@dataclass(eq=False, repr=False)
+class InstanceFilteredFlatVariable(FlatVariable[T]):
+    """
+    A :class:`FlatVariable` that keeps only the elements that are instances of
+    :attr:`_element_type_`.
+    """
+
+    _element_type_: type[T] = field(kw_only=True)
+    """
+    The type every value of this variable is an instance of.
+    """
+
+    def _update_type_(self) -> None:
+        """
+        Set ``_type_`` to :attr:`_element_type_` rather than to the child's type, as
+        :meth:`MappedVariable._update_type_` does.
+        """
+        self._type_ = self._element_type_
+
+    def _apply_mapping_(
+        self, value: Iterable[T] | T, sources: OperationResult | None = None
+    ) -> Iterable[T]:
+        yield from (
+            element
+            for element in super()._apply_mapping_(value, sources)
+            if isinstance(element, self._element_type_)
+        )
+
+    def _rebuild_on_(self, child: CanBehaveLikeAVariable) -> MappedVariable:
+        return InstanceFilteredFlatVariable(child, _element_type_=self._element_type_)
+
+    @cached_property
+    def _name_(self) -> str:
+        return self._element_type_.__name__
 
 
 @dataclass(frozen=True)
