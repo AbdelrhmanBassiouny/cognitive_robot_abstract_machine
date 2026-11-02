@@ -28,8 +28,7 @@ class CartesianFrame3D(CartesianFrame[EuclideanSpace3D], HasName[NameT], Interfa
         self, value: ValueInCartesianFrame3DT
     ) -> ValueInCartesianFrame3DT:
         """
-        :param value: A value given in this frame or in another frame of the same
-            space.
+        :param value: A value in the same space as this frame.
         :return: The same value, given in this frame.
         """
 
