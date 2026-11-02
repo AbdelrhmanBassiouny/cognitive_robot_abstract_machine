@@ -126,17 +126,17 @@ items:
     act on Point2 and Pose2D. Answers Simon''s #526 threads on transform and the dot mixin. Waits on his
     Q4 (Point3 in RotationMatrix.dot) and Q5 (AxisAngle) in https://claude.ai/artifact/UW7BdpNyW1r2sc63ktzA9T.'
 - id: planar-coordinate-system
-  title: Point2 and Pose2D are given in a CartesianFrame2D on a EuclideanSpace2D, with dimension on the
-    space and planar rigid changes
+  title: Point2 and Pose2D are given in a CartesianFrame2D on a EuclideanSpace2D, with planar rigid changes,
+    replacing the abstract Point
   branch: claude/krrood-spatial-math-planar-coordinate-system
   track: spatial
   status: not_started
   depends_on:
   - planar-point-interface
-  notes: 'EuclideanSpace gets a dimension classproperty, with EuclideanSpace3D and EuclideanSpace2D. A
-    CartesianFrame2D is the x-y plane of a CartesianFrame3D and charts a EuclideanSpace2D; Point2 and
-    Pose2D move onto it. An AffinePoint3D interface beside AffinePoint2D replaces the abstract Point (Simon''s
-    #526 review). SE(2) is RigidCoordinateChange[CartesianFrame2D], only between frames sharing one plane.
+  notes: 'A CartesianFrame2D is the x-y plane of a CartesianFrame3D and charts a EuclideanSpace2D;
+    Point2 and Pose2D move onto it. Remove the abstract Point (#526, #527 review); AffinePoint2D and AffinePoint3D
+    are on #527. Each SemDT caller (geometry.py, graph of convex sets) picks a 2D point, a 3D point or a
+    projection. SE(2) is RigidCoordinateChange[CartesianFrame2D], only between frames sharing one plane.
     A Pose projects to a Pose2D by the angle of its x-axis projected onto the plane, atan2(r21, r11) (equal
     to the ZYX yaw), raising a custom exception when that axis is normal to the plane.'
 - id: spatial-math-imports
@@ -149,8 +149,9 @@ items:
   - planar-point-interface
   notes: Renames Point3 to CartesianPoint3D, Point2 to CartesianPoint2D, Vector3, Line3 and Pose to Vector3D,
     Line3D, Pose3D (decided 2026-10-29) across the workspace; 3D-only types such as RotationMatrix keep
-    their names. The import migration itself moved into spatial-math-move (cram2#835 review), so no old
-    names stay importable.
+    their names. SpatialType becomes SymbolicSpatialType (#527 review), which changes the ORM schema.
+    The import migration itself moved into spatial-math-move (cram2#835 review), so no old names stay
+    importable.
 - id: video-on-a-plane
   title: Show a video on a plane of the world (a wall, a table top) in a camera image or through a projector
   branch: claude/krrood-image-video-on-a-plane
@@ -165,8 +166,8 @@ items:
     capture projected onto the apartment walls while it works.'
 - id: planar-point-interface
   title: 'krrood_spatial_math''s casadi-free base: Space (EuclideanSpace), CoordinateSystem[SpaceT] (AffineFrame,
-    CartesianFrame, CartesianFrame3D), CoordinateChange (affine, rigid), AffinePoint2D (was PlanarPoint),
-    and SemDT''s spatial types implementing them'
+    CartesianFrame, CartesianFrame3D), CoordinateChange (affine, rigid), AffinePoint2D (was PlanarPoint)
+    and AffinePoint3D, and SemDT''s spatial types implementing them'
   branch: claude/krrspatial-interfaces
   pull_request_number: 527
   track: spatial
@@ -179,8 +180,8 @@ items:
     https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS (api-break: missing declared attributes fail
     at definition) and SemDT's spatial types adopting it, from #526 (d5e65ab2): values are
     ValueInCartesianFrame3D, a CoordinateRepresentation; HomogeneousTransformationMatrix only a
-    RigidCoordinateChange; Point2 an AffinePoint2D; no translation_matrix. #526 closed. Next: CI and
-    review, then promote.
+    RigidCoordinateChange; Point2 an AffinePoint2D and Point3 an AffinePoint3D (f86b854c); frames
+    carry NameT; no translation_matrix. #526 closed. Next: CI and review, then promote.
 - id: image-coordinate-change
   title: krrood_image's ImageCoordinateChange (scale and shift per axis) for crops and resizes, with cv2
     resampling
