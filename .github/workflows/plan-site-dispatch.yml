@@ -1,0 +1,27 @@
+# Written by basstler's /setup-personal-notes (python -m basstler.plan_site.publication);
+# re-run that to update it rather than editing it here.
+name: Plan site dispatch
+
+# Every push to the notes branch starts the plan site's build in AbdelrhmanBassiouny/stack-board.
+on:
+  push:
+    branches: [claude/personal-notes]
+  workflow_dispatch: {}
+
+permissions: {}
+
+concurrency:
+  group: plan-site-dispatch
+  cancel-in-progress: true
+
+jobs:
+  dispatch:
+    name: Start the plan site build
+    if: github.repository == 'AbdelrhmanBassiouny/cognitive_robot_abstract_machine'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Start the build
+        env:
+          GH_TOKEN: ${{ secrets.PLAN_SITE_TOKEN }}
+        run: gh workflow run plan-site.yml --repo AbdelrhmanBassiouny/stack-board
