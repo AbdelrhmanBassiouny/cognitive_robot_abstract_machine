@@ -1,10 +1,7 @@
-PR #540, plan item eql-planning/call-arguments-normalization. Ready for review (owner), bug fix off main; merged into #535.
+## Resolve, Nov 2
 
-Plan:
-- CallArguments binds arguments to the signature; the mapped-variable cache compares builtin containers by contents and other unhashables by identity.
-
-Done:
-- Marked ready by owner; upstream promotion link recorded in the PR description.
-
-Next:
-- Owner opens the upstream PR; push nothing more.
+- Upstream cram2 PR #837: tomsch420 requested changes; checks pending.
+- Done: `HasFactoryAndKwargs` reads signatures through `CallArguments.signature_of` and drops its own `lru_cache` (owner chose this over storing `_kwargs_` as `CallArguments`, which would change a field `Match` reads). `test_patterns` and `test_eql/test_core`: 471 passed.
+- Open for reviewers: LucaKro's two threads (frozen cache item, purpose of the mimic) are answered by the owner.
+- Fork checks on 1616d8d: `random_events` failed on `No space left on device` while installing `pyarrow`; `segmind` failed in the same run (log not conclusive). Neither touches this change.
+- The pull request stays ready: its upstream review is still open.
