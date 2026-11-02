@@ -23,9 +23,9 @@ class ScalablePlane(Space, Interface):
     """
 
 
-class ScalablePlaneFrame(AffineFrame[ScalablePlane], Interface):
+class ScalablePlaneFrame(AffineFrame[ScalablePlane, str], Interface):
     """
-    An affine frame on a :class:`ScalablePlane`.
+    An affine frame on a :class:`ScalablePlane`, called by a plain name.
     """
 
 

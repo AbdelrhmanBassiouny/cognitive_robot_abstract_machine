@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from krrood.patterns.identifier_and_name import NameT
 from krrood.patterns.exceptions import InterfaceInstantiationError
 from krrood_spatial_math.cartesian_frame_3d import CartesianFrame3D
 from krrood_spatial_math.coordinate_system import (
@@ -84,6 +85,10 @@ def test_an_affine_frame_need_not_be_cartesian():
 
 def test_an_affine_frame_reports_the_space_it_charts():
     assert ScalablePlaneFrame.get_type_of_generic_parameter(SpaceT) is ScalablePlane
+
+
+def test_an_affine_frame_reports_the_kind_of_name_it_is_called_by():
+    assert ScalablePlaneFrame.get_type_of_generic_parameter(NameT) is str
 
 
 # %% values given in a coordinate system

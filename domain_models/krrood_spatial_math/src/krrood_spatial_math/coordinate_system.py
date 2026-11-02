@@ -4,7 +4,7 @@ from abc import abstractmethod
 
 from typing_extensions import Generic, Self, TypeVar
 
-from krrood.patterns.identifier_and_name import HasID, HasName
+from krrood.patterns.identifier_and_name import HasID, HasName, NameT
 from krrood.patterns.interface import Interface
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood_spatial_math.space import EuclideanSpace, Space
@@ -17,7 +17,9 @@ The kind of space a coordinate system charts.
 """
 
 
-class CoordinateSystem(HasName, Generic[SpaceT], HasID, Interface):
+class CoordinateSystem(
+    HasName[NameT], Generic[SpaceT, NameT], SubClassSafeGeneric, HasID, Interface
+):
     """
     What the coordinates of a point are given in: an origin, axes and a unit on one
     space.
@@ -35,7 +37,7 @@ class CoordinateSystem(HasName, Generic[SpaceT], HasID, Interface):
 # %% frames: coordinate systems with straight axes
 
 
-class AffineFrame(CoordinateSystem[SpaceT], Interface):
+class AffineFrame(CoordinateSystem[SpaceT, NameT], Interface):
     """
     A coordinate system given by an origin and linearly independent, straight axes; the
     coordinates of a point are its amounts along the axes from the origin.
@@ -51,7 +53,7 @@ The kind of Euclidean space a Cartesian frame charts.
 """
 
 
-class CartesianFrame(AffineFrame[EuclideanSpaceT], Interface):
+class CartesianFrame(AffineFrame[EuclideanSpaceT, NameT], Interface):
     """
     An affine frame whose axes are perpendicular and one unit of its Euclidean space
     long.
