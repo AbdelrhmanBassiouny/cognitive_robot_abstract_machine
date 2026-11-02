@@ -3,8 +3,8 @@ Plan
 
 Done
 - Port, tests, AGENTS.md; review rounds 1-2 addressed (69ca96a).
+- Back-port to basstler: AbdelrhmanBassiouny/basstler#128 (draft).
 
 Next
 - Thread r4444184151: user to answer whether ruff D100-D107 should share the docstring rule.
-- Open draft PR on cram2 (needs user acceptance); labels new-feature, api-break.
-- Add the "split off the checkable part" rule to basstler.
+- User opens cram2 PR via compare link; labels new-feature, api-break.
