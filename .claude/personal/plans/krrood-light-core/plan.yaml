@@ -41,11 +41,7 @@ items:
   session: https://claude.ai/code/session_01JxHGiMUhYaVsG6NkZNgzAC
   depends_on:
   - core-boundary-guard
-  notes: 'Stacked on #546. No enums or decorator: matplotlib is imported inside the functions
-    that draw. OptionalImportChecker (a CodeRuleChecker on the shipped import rule, run by `krrood
-    check`) reports module-level imports, in core modules, of distributions only an extra
-    requires; core is the import-linter contract that `core-contract` in [tool.krrood.core-boundary]
-    names. graph_visualizer and rxnode left #546''s offender list.'
+  notes: 'Stacked on #546. matplotlib imported inside the functions that draw; no enums or decorator. #546''s CoreBoundaryChecker enforces it; graph_visualizer and rxnode no longer cross the boundary.'
 - id: type-hint-resolver-skips-missing-modules
   title: Type-hint resolution skips modules that are not installed
   branch: claude/relaxed-wozniak-eu4gdv
@@ -67,11 +63,7 @@ items:
   pull_request_number: 546
   session: https://claude.ai/code/session_01JxHGiNxUAghACotuu2UKYp
   depends_on: []
-  notes: 'PR #546: core declared in krrood/pyproject.toml ([tool.importlinter] contract
-    core-imports-no-all-module + [tool.krrood.core-boundary]). Runtime test (fresh -X importtime
-    interpreter per core module, distributions outside core deps'' closure) and import-linter
-    test, both with exact offender lists (112 modules, 20 edges) that items 4-6 shrink. Offender
-    list measured in a krrood-only env; CI may need one adjustment.'
+  notes: 'PR #546 (reworked in the #547 review session): [tool.krrood.core-boundary] declares core and its dependencies once; CoreBoundaryChecker (shipped rule, `krrood check` pre-commit hook) checks the module-level import graph, chains included; one-interpreter runtime backstop test. No import-linter, no offender lists: `krrood check --all-lines` is the inventory.'
 - id: serializer-without-heavy-dependencies
   title: JSON serializer and symbol graph import no sqlalchemy, scipy or casadi
   branch: null
@@ -123,7 +115,7 @@ items:
   - verbalization-realization-split
   notes: 'Breaking for outside users: pip has no default extras. Every workspace package that
     lists krrood switches to krrood[all]. Core-only CI job on Linux and Windows runs the guard
-    and core tests; the guard''s offender lists must be empty. basstler (basstler#12, item
+    and core tests; `krrood check --all-lines` must report no core-boundary crossing. basstler (basstler#12, item
     basstler-krrood-dependency in basstler''s notes) then depends on plain krrood.'
 - id: core-weight-regression-check
   title: CI compares core install size and import time against the base branch
