@@ -14,7 +14,7 @@ from semantic_digital_twin.adapters.ros.msg_converter import (
 )
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Point3,
+    CartesianPoint3D,
     Vector3,
     Quaternion,
 )
@@ -98,9 +98,11 @@ class PoseToRos2Converter(SemDTToRos2Converter[Pose, geometry_msgs.Pose]):
 
 
 @dataclass
-class Point3ToRos2Converter(SemDTToRos2Converter[Point3, geometry_msgs.PointStamped]):
+class CartesianPoint3DToRos2Converter(
+    SemDTToRos2Converter[CartesianPoint3D, geometry_msgs.PointStamped]
+):
     @classmethod
-    def convert(cls, data: Point3) -> geometry_msgs.PointStamped:
+    def convert(cls, data: CartesianPoint3D) -> geometry_msgs.PointStamped:
         point_stamped = geometry_msgs.PointStamped()
         if data.reference_frame is not None:
             point_stamped.header.frame_id = str(data.reference_frame.name)

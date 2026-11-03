@@ -8,8 +8,8 @@ from krrood_spatial_math.exceptions import ReferenceFrameMismatchError
 from krrood_spatial_math.spatial_types import (
     Line3,
     OrthogonalProjection,
-    Point2,
-    Point3,
+    CartesianPoint2D,
+    CartesianPoint3D,
     Pose,
     Vector3,
 )
@@ -44,11 +44,11 @@ def tilted_world() -> World:
 class TestProject:
     def test_drops_height_in_the_plane_frame(self):
         frame = Body(name=PrefixedName("world"))
-        point = Point3(1.5, -2.5, 3.0, reference_frame=frame)
+        point = CartesianPoint3D(1.5, -2.5, 3.0, reference_frame=frame)
 
         projected = OrthogonalProjection(frame).project(point)
 
-        assert isinstance(projected, Point2)
+        assert isinstance(projected, CartesianPoint2D)
         assert projected.reference_frame is frame
         np.testing.assert_allclose(projected.to_np(), [1.5, -2.5])
 
@@ -56,7 +56,7 @@ class TestProject:
         self, tilted_world: World
     ):
         root, tip = tilted_world.root, tilted_world.bodies[1]
-        tip_P_point = Point3(1, 0, 2, reference_frame=tip)
+        tip_P_point = CartesianPoint3D(1, 0, 2, reference_frame=tip)
         root_P_point = tilted_world.transform(tip_P_point, root)
 
         projected = OrthogonalProjection(root).project(tip_P_point)
@@ -83,16 +83,16 @@ class TestProject:
 class TestUnproject:
     def test_default_height_is_the_plane(self):
         frame = Body(name=PrefixedName("world"))
-        point = Point2(1.0, 2.0, reference_frame=frame)
+        point = CartesianPoint2D(1.0, 2.0, reference_frame=frame)
 
         unprojected = OrthogonalProjection(frame).unproject(point)
 
-        assert isinstance(unprojected, Point3)
+        assert isinstance(unprojected, CartesianPoint3D)
         assert unprojected.reference_frame is frame
         np.testing.assert_allclose(unprojected.to_np()[:3], [1.0, 2.0, 0.0])
 
     def test_explicit_height(self):
-        point = Point2(1.0, 2.0)
+        point = CartesianPoint2D(1.0, 2.0)
 
         unprojected = OrthogonalProjection(None).unproject(point, height=5.0)
 
@@ -110,7 +110,7 @@ class TestInverseLaws:
 
     def test_project_after_unproject_restores_a_point_on_the_plane(self):
         frame = Body(name=PrefixedName("world"))
-        point = Point2(1.0, 2.0, reference_frame=frame)
+        point = CartesianPoint2D(1.0, 2.0, reference_frame=frame)
         projection = OrthogonalProjection(frame)
 
         round_trip = projection.project(projection.unproject(point, height=4.0))
@@ -120,7 +120,7 @@ class TestInverseLaws:
     def test_project_after_unproject_rejects_a_point_on_another_plane(self):
         frame = Body(name=PrefixedName("world"))
         other_frame = Body(name=PrefixedName("other"))
-        point = Point2(1.0, 2.0, reference_frame=other_frame)
+        point = CartesianPoint2D(1.0, 2.0, reference_frame=other_frame)
 
         with pytest.raises(ReferenceFrameMismatchError):
             OrthogonalProjection(frame).unproject(point)
@@ -128,7 +128,7 @@ class TestInverseLaws:
     def test_unproject_after_project_restores_a_point_at_the_unprojection_height(self):
         frame = Body(name=PrefixedName("world"))
         projection = OrthogonalProjection(frame)
-        point = Point3(1.0, 2.0, 4.0, reference_frame=frame)
+        point = CartesianPoint3D(1.0, 2.0, 4.0, reference_frame=frame)
 
         round_trip = projection.unproject(projection.project(point), height=4.0)
 
@@ -137,7 +137,7 @@ class TestInverseLaws:
     def test_unproject_after_project_moves_a_point_off_the_unprojection_height(self):
         frame = Body(name=PrefixedName("world"))
         projection = OrthogonalProjection(frame)
-        point = Point3(1.0, 2.0, 3.0, reference_frame=frame)
+        point = CartesianPoint3D(1.0, 2.0, 3.0, reference_frame=frame)
         height = 4.0
 
         round_trip = projection.unproject(projection.project(point), height=height)
@@ -155,7 +155,7 @@ class TestPlaneWithoutReferenceFrame:
     """
 
     def test_projects_a_point_without_reference_frame(self):
-        point = Point3(1.0, 2.0, 3.0)
+        point = CartesianPoint3D(1.0, 2.0, 3.0)
 
         projected = OrthogonalProjection(None).project(point)
 
@@ -163,13 +163,17 @@ class TestPlaneWithoutReferenceFrame:
         np.testing.assert_allclose(projected.to_np(), point.to_np()[:2])
 
     def test_rejects_projecting_a_point_with_reference_frame(self):
-        point = Point3(1.0, 2.0, 3.0, reference_frame=Body(name=PrefixedName("world")))
+        point = CartesianPoint3D(
+            1.0, 2.0, 3.0, reference_frame=Body(name=PrefixedName("world"))
+        )
 
         with pytest.raises(ReferenceFrameMismatchError):
             OrthogonalProjection(None).project(point)
 
     def test_rejects_unprojecting_a_point_with_reference_frame(self):
-        point = Point2(1.0, 2.0, reference_frame=Body(name=PrefixedName("world")))
+        point = CartesianPoint2D(
+            1.0, 2.0, reference_frame=Body(name=PrefixedName("world"))
+        )
 
         with pytest.raises(ReferenceFrameMismatchError):
             OrthogonalProjection(None).unproject(point)
@@ -178,13 +182,13 @@ class TestPlaneWithoutReferenceFrame:
         frame = Body(name=PrefixedName("world"))
 
         with pytest.raises(ReferenceFrameMismatchError):
-            OrthogonalProjection(frame).project(Point3(1.0, 2.0, 3.0))
+            OrthogonalProjection(frame).project(CartesianPoint3D(1.0, 2.0, 3.0))
 
     def test_plane_with_reference_frame_rejects_unprojecting_a_point_without_one(self):
         frame = Body(name=PrefixedName("world"))
 
         with pytest.raises(ReferenceFrameMismatchError):
-            OrthogonalProjection(frame).unproject(Point2(1.0, 2.0))
+            OrthogonalProjection(frame).unproject(CartesianPoint2D(1.0, 2.0))
 
 
 # %% projection_line
@@ -193,7 +197,7 @@ class TestPlaneWithoutReferenceFrame:
 class TestProjectionLine:
     def test_is_the_vertical_line_through_the_unprojected_point(self):
         frame = Body(name=PrefixedName("world"))
-        point = Point2(1.0, 2.0, reference_frame=frame)
+        point = CartesianPoint2D(1.0, 2.0, reference_frame=frame)
         projection = OrthogonalProjection(frame)
 
         line = projection.projection_line(point)
@@ -209,7 +213,7 @@ class TestProjectionLine:
 
     def test_every_point_of_the_line_projects_onto_the_point(self):
         frame = Body(name=PrefixedName("world"))
-        point = Point2(1.0, 2.0, reference_frame=frame)
+        point = CartesianPoint2D(1.0, 2.0, reference_frame=frame)
         projection = OrthogonalProjection(frame)
         line = projection.projection_line(point)
 

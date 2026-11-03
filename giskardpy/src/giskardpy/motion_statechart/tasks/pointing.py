@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from giskardpy.motion_statechart.graph_node import MotionNodeArtifacts
 from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianTask
-from krrood_spatial_math.spatial_types import Point3, Vector3
+from krrood_spatial_math.spatial_types import CartesianPoint3D, Vector3
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
@@ -16,7 +16,7 @@ class Pointing(CartesianTask):
     Will orient pointing_axis at goal_point.
     """
 
-    goal_point: Point3
+    goal_point: CartesianPoint3D
     """
     Where to point pointing_axis at.
     """
@@ -88,7 +88,7 @@ class PointingCone(CartesianTask):
     Will orient pointing_axis at goal_point with a cone-shaped tolerance region.
     """
 
-    goal_point: Point3
+    goal_point: CartesianPoint3D
     """
     Where to point pointing_axis at.
     """

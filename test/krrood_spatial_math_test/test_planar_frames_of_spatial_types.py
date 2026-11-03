@@ -5,7 +5,7 @@ import pytest
 
 import krrood.symbolic_math.symbolic_math as sm
 from krrood.adapters.json_serializer import from_json, to_json
-from krrood_spatial_math.affine_point import AffinePoint2D, CoordinateT
+from krrood_spatial_math.affine_point import AffinePoint2D, CartesianPoint, CoordinateT
 from krrood_spatial_math.cartesian_frame_2d import CartesianFrame2D
 from krrood_spatial_math.cartesian_frame_3d import ValueInCartesianFrame3D
 from krrood_spatial_math.coordinate_system import (
@@ -21,8 +21,8 @@ from krrood_spatial_math.space import EuclideanSpace2D
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     HomogeneousTransformationMatrix2D,
-    Point2,
-    Point3,
+    CartesianPoint2D,
+    CartesianPoint3D,
     Pose,
     Pose2D,
     XYPlane2D,
@@ -173,7 +173,7 @@ def test_a_plane_frame_is_told_apart_from_its_frame(floor_frame):
 
 # %% values on a frame's plane
 
-planar_values = [Point2, Pose2D]
+planar_values = [CartesianPoint2D, Pose2D]
 
 
 @pytest.mark.parametrize("planar_value", planar_values)
@@ -202,13 +202,27 @@ def test_a_planar_value_is_no_value_given_in_a_three_dimensional_frame(planar_va
     assert not issubclass(planar_value, ValueInCartesianFrame3D)
 
 
-def test_a_point2_is_an_affine_point_of_a_two_dimensional_cartesian_frame():
-    assert issubclass(Point2, AffinePoint2D)
-    assert Point2.get_type_of_generic_parameter(CoordinateSystemT) is CartesianFrame2D
+def test_a_two_dimensional_point_is_an_affine_point_of_a_two_dimensional_cartesian_frame():
+    assert issubclass(CartesianPoint2D, AffinePoint2D)
+    assert (
+        CartesianPoint2D.get_type_of_generic_parameter(CoordinateSystemT)
+        is CartesianFrame2D
+    )
 
 
-def test_a_point2_stores_its_coordinates_as_symbolic_scalars():
-    assert Point2.get_type_of_generic_parameter(CoordinateT) is sm.Scalar
+def test_a_two_dimensional_point_is_a_cartesian_point():
+    assert issubclass(CartesianPoint2D, CartesianPoint)
+
+
+def test_the_euclidean_distance_between_two_dimensional_points_is_measured_on_their_plane():
+    origin = CartesianPoint2D(1, 2)
+    other = CartesianPoint2D(4, 6)
+
+    assert float(origin.euclidean_distance(other)) == 5.0
+
+
+def test_a_two_dimensional_point_stores_its_coordinates_as_symbolic_scalars():
+    assert CartesianPoint2D.get_type_of_generic_parameter(CoordinateT) is sm.Scalar
 
 
 # %% rigid changes between frames on one plane
@@ -302,7 +316,9 @@ def test_a_planar_transformation_moves_a_point_into_its_reference_frame(
         child_frame=robot_base_frame,
     )
 
-    point_on_floor = floor_T_robot_base @ Point2(1, 0, reference_frame=robot_base_frame)
+    point_on_floor = floor_T_robot_base @ CartesianPoint2D(
+        1, 0, reference_frame=robot_base_frame
+    )
 
     assert point_on_floor.reference_frame is floor_frame
     assert np.allclose(coordinates(point_on_floor.x, point_on_floor.y), [1, 3])
@@ -356,7 +372,7 @@ def test_a_point_changed_there_and_back_on_a_plane_keeps_its_coordinates(
     floor_T_robot_base = HomogeneousTransformationMatrix2D.from_xy_yaw(
         x=1, y=2, yaw=0.5, reference_frame=floor_frame, child_frame=robot_base_frame
     )
-    point = Point2(3, 4, reference_frame=robot_base_frame)
+    point = CartesianPoint2D(3, 4, reference_frame=robot_base_frame)
 
     point_copy = floor_T_robot_base.inverse() @ (floor_T_robot_base @ point)
 
@@ -368,14 +384,16 @@ def test_a_planar_transformation_moves_a_point_as_its_change_does(
     floor_frame, robot_base_frame
 ):
     floor_T_robot_base = robot_base_frame.mount_T_self
-    point = Point2(3, 4, reference_frame=robot_base_frame)
+    point = CartesianPoint2D(3, 4, reference_frame=robot_base_frame)
 
     point_on_floor = (
         HomogeneousTransformationMatrix2D.from_transformation(floor_T_robot_base)
         @ point
     )
 
-    expected = Point2.from_point3(floor_T_robot_base @ point.to_point3())
+    expected = CartesianPoint2D.from_cartesian_point_3d(
+        floor_T_robot_base @ point.to_cartesian_point_3d()
+    )
     assert np.allclose(point_on_floor.to_np(), expected.to_np())
 
 

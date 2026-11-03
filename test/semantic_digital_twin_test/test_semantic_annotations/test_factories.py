@@ -55,7 +55,10 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Toaster,
     CoffeeMachine,
 )
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Point3
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    CartesianPoint3D,
+)
 from krrood_spatial_math.spatial_types import Vector3
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
@@ -647,7 +650,7 @@ class TestFactories(unittest.TestCase):
             surface = table.calculate_supporting_surface()
 
         self.assertIsNotNone(surface)
-        table_top = Point3(0.5, 0.3, 0.5, reference_frame=table.root)
+        table_top = CartesianPoint3D(0.5, 0.3, 0.5, reference_frame=table.root)
         expected = world.transform(table_top, world.root).to_np()[:3]
         np.testing.assert_allclose(
             surface.global_transform.position.to_np()[:3], expected, atol=1e-9
@@ -842,10 +845,10 @@ class TestFactories(unittest.TestCase):
         world = World()
         root = Body(name=PrefixedName("root"))
         points = [
-            Point3(0, 0, 0, reference_frame=root),
-            Point3(1, 0, 0, reference_frame=root),
-            Point3(1, 1, 0, reference_frame=root),
-            Point3(0, 1, 0, reference_frame=root),
+            CartesianPoint3D(0, 0, 0, reference_frame=root),
+            CartesianPoint3D(1, 0, 0, reference_frame=root),
+            CartesianPoint3D(1, 1, 0, reference_frame=root),
+            CartesianPoint3D(0, 1, 0, reference_frame=root),
         ]
         with world.modify_world():
             world.add_body(root)

@@ -77,7 +77,7 @@ from semantic_digital_twin.robots.daisy import DAiSy
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     Vector3,
-    Point3,
+    CartesianPoint3D,
     RotationMatrix,
 )
 from krrood_spatial_math.spatial_types import Pose
@@ -1333,7 +1333,9 @@ def test_collision_for_robot_with_static_base(
                 CartesianPosition(
                     root_link=world.root,
                     tip_link=tool_frame,
-                    goal_point=Point3(0.5, 0.5, 1, reference_frame=world.root),
+                    goal_point=CartesianPoint3D(
+                        0.5, 0.5, 1, reference_frame=world.root
+                    ),
                 ),
                 ExternalCollisionAvoidance(robot=robot),
                 SelfCollisionAvoidance(robot=robot),
@@ -1847,7 +1849,7 @@ def test_attached_two_items(
         # The boxes reach 0.2 m out of each gripper, so grippers 0.4 m apart would leave
         # them touching, which violates the collision before avoidance can act.
         goal_pose=HomogeneousTransformationMatrix.from_point_rotation_matrix(
-            point=Point3(x=0.42),
+            point=CartesianPoint3D(x=0.42),
             rotation_matrix=RotationMatrix(
                 [[-1, 0, 0, 0], [0, 1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1.0]]
             ),

@@ -20,7 +20,7 @@ from semantic_digital_twin.datastructures.lidar_reading import LidarReading
 from semantic_digital_twin.datastructures.scan_pattern import ScanPattern
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Point3,
+    CartesianPoint3D,
     Vector3,
     Quaternion,
 )
@@ -104,11 +104,11 @@ class PoseToSemDTConverter(Ros2ToSemDTConverter[geometry_msgs.Pose, Pose]):
 
 @dataclass
 class PointStampedToSemDTConverter(
-    Ros2ToSemDTConverter[geometry_msgs.PointStamped, Point3]
+    Ros2ToSemDTConverter[geometry_msgs.PointStamped, CartesianPoint3D]
 ):
     @classmethod
     def convert(cls, data: OutputType, world: World) -> InputType:
-        result = Point3(
+        result = CartesianPoint3D(
             data.point.x,
             data.point.y,
             data.point.z,

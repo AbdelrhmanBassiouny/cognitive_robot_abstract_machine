@@ -11,7 +11,10 @@ from semantic_digital_twin.exceptions import PointOccupiedError
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     SemanticEnvironmentAnnotation,
 )
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Point3
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    CartesianPoint3D,
+)
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import (
     Shape,
@@ -178,7 +181,9 @@ class IrisSeedingSettings:
     Options forwarded to every :func:`pydrake.geometry.optimization.Iris` call.
     """
 
-    def coverage_grid_seeds(self, lower: Point3, upper: Point3) -> list[Point3]:
+    def coverage_grid_seeds(
+        self, lower: CartesianPoint3D, upper: CartesianPoint3D
+    ) -> list[CartesianPoint3D]:
         """
         Build a regular grid of candidate seed points strictly inside the axis-aligned
         box spanned by ``lower`` and ``upper``.
@@ -199,13 +204,13 @@ class IrisSeedingSettings:
         ]
         grid = np.meshgrid(*axes, indexing="ij")
         return [
-            Point3(*point, reference_frame=reference_frame)
+            CartesianPoint3D(*point, reference_frame=reference_frame)
             for point in np.stack(grid, axis=-1).reshape(-1, 3)
         ]
 
 
 def _validate_and_convert_domain(
-    search_space: BoundingBoxCollection[VolumetricBoundingBox, Point3],
+    search_space: BoundingBoxCollection[VolumetricBoundingBox, CartesianPoint3D],
 ) -> HPolyhedron:
     """
     Convert a search space into the single, finite ``HPolyhedron`` domain IRIS grows
@@ -281,7 +286,9 @@ def _shape_to_convex_set(
 
 @dataclass
 class GraphOfConvexPolygons(
-    GraphOfConvexSets[Point3, BoundingBoxCollection[VolumetricBoundingBox, Point3]]
+    GraphOfConvexSets[
+        CartesianPoint3D, BoundingBoxCollection[VolumetricBoundingBox, CartesianPoint3D]
+    ]
 ):
     """
     A graph of convex sets whose regions are grown by Drake's IRIS algorithm and solved
@@ -345,10 +352,10 @@ class GraphOfConvexPolygons(
     def from_world(
         cls,
         world: World,
-        search_space: BoundingBoxCollection[VolumetricBoundingBox, Point3],
+        search_space: BoundingBoxCollection[VolumetricBoundingBox, CartesianPoint3D],
         bloat_obstacles: float = 0.0,
         seeding_settings: IrisSeedingSettings | None = None,
-        extra_seed_points: Sequence[Point3] = (),
+        extra_seed_points: Sequence[CartesianPoint3D] = (),
     ) -> GraphOfConvexPolygons:
         """
         Grow IRIS regions covering the free space of *world* within *search_space*.
@@ -403,7 +410,9 @@ class GraphOfConvexPolygons(
         result._trajectory_optimization.AddPathLengthCost()
         return result
 
-    def path_from_to(self, start: Point3, goal: Point3) -> list[Point3] | None:
+    def path_from_to(
+        self, start: CartesianPoint3D, goal: CartesianPoint3D
+    ) -> list[CartesianPoint3D] | None:
         """
         Calculate a connected path from a start pose to a goal pose.
 
@@ -440,7 +449,9 @@ class GraphOfConvexPolygons(
 
         breakpoints = trajectory.get_segment_times()
         interior_waypoints = [
-            Point3(*trajectory.value(t).flatten(), reference_frame=self.world.root)
+            CartesianPoint3D(
+                *trajectory.value(t).flatten(), reference_frame=self.world.root
+            )
             for t in breakpoints[1:-1]
         ]
         return [start] + interior_waypoints + [goal]

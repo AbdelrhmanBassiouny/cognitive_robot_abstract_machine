@@ -17,10 +17,10 @@ from krrood_spatial_math.spatial_types import (
     RotationMatrix,
     Quaternion,
     Vector3,
-    Point3,
+    CartesianPoint3D,
     HomogeneousTransformationMatrix,
 )
-from krrood_spatial_math.spatial_types import Pose, Point2, Pose2D
+from krrood_spatial_math.spatial_types import Pose, CartesianPoint2D, Pose2D
 from krrood_spatial_math.spatial_types import Pose, SpatialType
 from semantic_digital_twin.world_description.world_entity import Body
 from .reference_implementations import (
@@ -123,7 +123,7 @@ class TestRotationMatrix:
             sm.FloatVariable(name="s"),
             sm.Scalar(1),
             np.eye(3),
-            Point3(x=1, y=1, z=1),
+            CartesianPoint3D(x=1, y=1, z=1),
         ]
 
         for other in works:
@@ -585,65 +585,65 @@ class TestRotationMatrix:
         np.testing.assert_array_equal(rotation_copy.to_np(), rotation.to_np())
 
 
-class TestPoint3:
+class TestCartesianPoint3D:
     def test_the_midpoint_lies_halfway_between_both_points(self):
-        near = Point3(x=0, y=2, z=4)
-        far = Point3(x=2, y=6, z=-4)
+        near = CartesianPoint3D(x=0, y=2, z=4)
+        far = CartesianPoint3D(x=2, y=6, z=-4)
 
         np.testing.assert_allclose(
-            near.midpoint(far).to_np(), Point3(x=1, y=4, z=0).to_np()
+            near.midpoint(far).to_np(), CartesianPoint3D(x=1, y=4, z=0).to_np()
         )
 
     def test_the_midpoint_is_the_same_whichever_point_it_is_asked_of(self):
-        near = Point3(x=0, y=2, z=4)
-        far = Point3(x=2, y=6, z=-4)
+        near = CartesianPoint3D(x=0, y=2, z=4)
+        far = CartesianPoint3D(x=2, y=6, z=-4)
 
         np.testing.assert_allclose(
             near.midpoint(far).to_np(), far.midpoint(near).to_np()
         )
 
     def test_a_point_meets_itself_where_it_already_is(self):
-        point = Point3(x=1, y=-2, z=3)
+        point = CartesianPoint3D(x=1, y=-2, z=3)
 
         np.testing.assert_allclose(point.midpoint(point).to_np(), point.to_np())
 
     def test_the_midpoint_stays_in_the_frame_the_points_were_given_in(self):
         reference_frame = Body(name=PrefixedName("muh"))
-        near = Point3(x=0, y=0, z=0, reference_frame=reference_frame)
-        far = Point3(x=2, y=0, z=0, reference_frame=reference_frame)
+        near = CartesianPoint3D(x=0, y=0, z=0, reference_frame=reference_frame)
+        far = CartesianPoint3D(x=2, y=0, z=0, reference_frame=reference_frame)
 
         assert near.midpoint(far).reference_frame is reference_frame
 
     def test_distance_point_to_line_segment1(self):
-        p = Point3(x=0, y=0, z=0)
-        start = Point3(x=0, y=0, z=-1)
-        end = Point3(x=0, y=0, z=1)
+        p = CartesianPoint3D(x=0, y=0, z=0)
+        start = CartesianPoint3D(x=0, y=0, z=-1)
+        end = CartesianPoint3D(x=0, y=0, z=1)
         distance = p.distance_to_line_segment(start, end)[0]
         nearest = p.distance_to_line_segment(start, end)[1]
         assert np.allclose(distance, 0)
         assert np.allclose(nearest, p)
 
     def test_distance_point_to_line_segment2(self):
-        p = Point3(x=0, y=1, z=0.5)
-        start = Point3(x=0, y=0, z=0)
-        end = Point3(x=0, y=0, z=1)
+        p = CartesianPoint3D(x=0, y=1, z=0.5)
+        start = CartesianPoint3D(x=0, y=0, z=0)
+        end = CartesianPoint3D(x=0, y=0, z=1)
         distance = p.distance_to_line_segment(start, end)[0]
         nearest = p.distance_to_line_segment(start, end)[1]
         assert np.allclose(distance, 1)
-        assert np.allclose(nearest, Point3(x=0, y=0, z=0.5))
+        assert np.allclose(nearest, CartesianPoint3D(x=0, y=0, z=0.5))
 
     def test_distance_point_to_line_segment3(self):
-        p = Point3(x=0, y=1, z=2)
-        start = Point3(x=0, y=0, z=0)
-        end = Point3(x=0, y=0, z=1)
+        p = CartesianPoint3D(x=0, y=1, z=2)
+        start = CartesianPoint3D(x=0, y=0, z=0)
+        end = CartesianPoint3D(x=0, y=0, z=1)
         distance = p.distance_to_line_segment(start, end)[0]
         nearest = p.distance_to_line_segment(start, end)[1]
         assert np.allclose(distance, 1.4142135623730951)
-        assert np.allclose(nearest, Point3(x=0, y=0, z=1.0))
+        assert np.allclose(nearest, CartesianPoint3D(x=0, y=0, z=1.0))
 
     @pytest.mark.parametrize("v", [np.array([1, 2, 3.0]), [0, 0, 0.0], (-1, 0, 0.0)])
     def test_norm(self, v):
-        p = Point3.from_iterable(v)
+        p = CartesianPoint3D.from_iterable(v)
         actual = p.norm()
         expected = np.linalg.norm(v)
         assert np.allclose(actual, expected)
@@ -653,8 +653,8 @@ class TestPoint3:
         `from_iterable` must not alias a SymbolicMathType input's casadi_sx: the result
         must own an independent container from the source.
         """
-        source = Point3(x=1, y=2, z=3)
-        result = Point3.from_iterable(source)
+        source = CartesianPoint3D(x=1, y=2, z=3)
+        result = CartesianPoint3D.from_iterable(source)
         assert result.casadi_sx is not source.casadi_sx
 
     def test_from_iterable_copies_a_raw_casadi_sx_input(self):
@@ -662,8 +662,8 @@ class TestPoint3:
         `from_iterable` must not alias a raw casadi_sx input: the result must own its
         own container rather than the one passed in.
         """
-        source = Point3(x=1, y=2, z=3)
-        result = Point3.from_iterable(source.casadi_sx)
+        source = CartesianPoint3D(x=1, y=2, z=3)
+        result = CartesianPoint3D.from_iterable(source.casadi_sx)
         assert result.casadi_sx is not source.casadi_sx
 
     def test_init(self):
@@ -671,44 +671,44 @@ class TestPoint3:
         s = sm.FloatVariable(name="s")
         e = sm.Scalar(1)
         v = Vector3(x=1, y=1, z=1)
-        p = Point3(x=l[0], y=l[1], z=l[2])
+        p = CartesianPoint3D(x=l[0], y=l[1], z=l[2])
         r = RotationMatrix()
         q = Quaternion()
         t = HomogeneousTransformationMatrix()
 
-        Point3()
-        Point3(x=s, y=e, z=0)
+        CartesianPoint3D()
+        CartesianPoint3D(x=s, y=e, z=0)
         assert np.allclose(p[3], 1)
         assert np.allclose(p[:3], l)
 
-        Point3.from_iterable(v)
-        Point3.from_iterable(l)
+        CartesianPoint3D.from_iterable(v)
+        CartesianPoint3D.from_iterable(l)
         with pytest.raises(WrongDimensionsError):
-            Point3.from_iterable(r.to_np())
+            CartesianPoint3D.from_iterable(r.to_np())
         with pytest.raises(WrongDimensionsError):
-            Point3.from_iterable(t.to_np())
+            CartesianPoint3D.from_iterable(t.to_np())
         with pytest.raises(WrongDimensionsError):
-            Point3.from_iterable(t.to_np())
+            CartesianPoint3D.from_iterable(t.to_np())
 
     @pytest.mark.parametrize("condition", bool_values)
     def test_if_greater_zero(self, condition):
-        if_result, else_result = Point3(1, 2, 3), Point3(4, 5, 6)
+        if_result, else_result = CartesianPoint3D(1, 2, 3), CartesianPoint3D(4, 5, 6)
         actual = sm.if_greater_zero(condition, if_result, else_result)
         expected = if_result if condition > 0 else else_result
         assert np.allclose(actual, expected)
 
     def test_arithmetic_operations(self):
         """
-        Test all allowed arithmetic operations on Point3.
+        Test all allowed arithmetic operations on CartesianPoint3D.
         """
-        p1 = Point3(x=1, y=2, z=3)
-        p2 = Point3(x=4, y=5, z=6)
+        p1 = CartesianPoint3D(x=1, y=2, z=3)
+        p2 = CartesianPoint3D(x=4, y=5, z=6)
         v = Vector3(x=1, y=1, z=1)
         s = sm.FloatVariable(name="s")
 
         # Test Point + Vector = Point (translate point by vector)
         result = p1 + v
-        assert isinstance(result, Point3)
+        assert isinstance(result, CartesianPoint3D)
         assert result.x == 2 and result.y == 3 and result.z == 4
         assert result[3] == 1  # Homogeneous coordinate preserved
         assert result.reference_frame == p1.reference_frame
@@ -722,14 +722,14 @@ class TestPoint3:
 
         # Test Point - Vector = Point (translate point by negative vector)
         result3 = p2 - v
-        assert isinstance(result3, Point3)
+        assert isinstance(result3, CartesianPoint3D)
         assert result3.x == 3 and result3.y == 4 and result3.z == 5
         assert result3[3] == 1
         assert result3.reference_frame == p2.reference_frame
 
         # Test -Point = Point (negate all coordinates)
         result4 = -p1
-        assert isinstance(result4, Point3)
+        assert isinstance(result4, CartesianPoint3D)
         assert result4.x == -1 and result4.y == -2 and result4.z == -3
         assert result4[3] == 1
         assert result4.reference_frame == p1.reference_frame
@@ -742,9 +742,9 @@ class TestPoint3:
 
         # Test operations with symbolic expressions
         x = sm.FloatVariable(name="x")
-        p_symbolic = Point3(x, y=2, z=3)
+        p_symbolic = CartesianPoint3D(x, y=2, z=3)
         result6 = p_symbolic + v
-        assert isinstance(result6, Point3)
+        assert isinstance(result6, CartesianPoint3D)
         assert result6[3] == 1
 
         # Test property access
@@ -753,7 +753,7 @@ class TestPoint3:
         assert p1.z == 3
 
         # Test property assignment
-        p_copy = Point3(x=1, y=2, z=3)
+        p_copy = CartesianPoint3D(x=1, y=2, z=3)
         p_copy.x = 10
         p_copy.y = 20
         p_copy.z = 30
@@ -764,7 +764,7 @@ class TestPoint3:
         """
         Test x, y, z property getters and setters.
         """
-        p = Point3(x=1, y=2, z=3)
+        p = CartesianPoint3D(x=1, y=2, z=3)
 
         # Test getters
         assert p.x == 1
@@ -784,8 +784,8 @@ class TestPoint3:
         """
         Test geometric operations specific to points.
         """
-        p1 = Point3(x=0, y=0, z=0)  # Origin
-        p2 = Point3(x=3, y=4, z=0)  # Point on XY plane
+        p1 = CartesianPoint3D(x=0, y=0, z=0)  # Origin
+        p2 = CartesianPoint3D(x=3, y=4, z=0)  # Point on XY plane
 
         # Distance between points (via subtraction and norm)
         displacement = p2 - p1
@@ -795,7 +795,7 @@ class TestPoint3:
 
         # Midpoint calculation
         midpoint = p1 + (p2 - p1) * 0.5
-        assert isinstance(midpoint, Point3)
+        assert isinstance(midpoint, CartesianPoint3D)
         assert np.allclose(midpoint.x, 1.5)
         assert np.allclose(midpoint.y, 2.0)
         assert np.allclose(midpoint.z, 0.0)
@@ -804,7 +804,7 @@ class TestPoint3:
         """
         Test that reference frames are properly preserved through operations.
         """
-        p1 = Point3(x=1, y=2, z=3)  # reference_frame=some_frame
+        p1 = CartesianPoint3D(x=1, y=2, z=3)  # reference_frame=some_frame
         v = Vector3(x=1, y=1, z=1)
 
         # Operations should preserve the reference frame of the point
@@ -815,13 +815,13 @@ class TestPoint3:
         assert result.reference_frame == p1.reference_frame
 
         # Point - Point should preserve reference frame of left operand
-        p2 = Point3(x=4, y=5, z=6)
+        p2 = CartesianPoint3D(x=4, y=5, z=6)
         result = p1 - p2
         assert isinstance(result, Vector3)
         assert result.reference_frame == p1.reference_frame
 
     def test_invalid_add(self):
-        point = Point3()
+        point = CartesianPoint3D()
         does_not_work = [
             1.0,
             point,
@@ -837,7 +837,7 @@ class TestPoint3:
                 point + other
 
     def test_invalid_sub(self):
-        point = Point3()
+        point = CartesianPoint3D()
         does_not_work = [
             1.0,
             RotationMatrix(),
@@ -852,7 +852,7 @@ class TestPoint3:
                 point - other
 
     def test_invalid_multiplication(self):
-        point = Point3()
+        point = CartesianPoint3D()
         does_not_work = [
             1.0,
             RotationMatrix(),
@@ -867,7 +867,7 @@ class TestPoint3:
                 point * other
 
     def test_invalid_division(self):
-        point = Point3()
+        point = CartesianPoint3D()
         does_not_work = [
             1.0,
             RotationMatrix(),
@@ -882,7 +882,7 @@ class TestPoint3:
                 point / other
 
     def test_invalid_mat_mul(self):
-        point = Point3()
+        point = CartesianPoint3D()
         does_not_work = [
             1.0,
             RotationMatrix(),
@@ -899,8 +899,8 @@ class TestPoint3:
     @pytest.mark.parametrize("p1_data", points)
     @pytest.mark.parametrize("p2_data", points)
     def test_distance_property_based(self, p1_data, p2_data):
-        p1 = Point3.from_iterable(p1_data)
-        p2 = Point3.from_iterable(p2_data)
+        p1 = CartesianPoint3D.from_iterable(p1_data)
+        p2 = CartesianPoint3D.from_iterable(p2_data)
 
         # Distance via subtraction and norm
         displacement = p2 - p1
@@ -915,57 +915,57 @@ class TestPoint3:
         """
         Test transformation matrix operations with points.
         """
-        p = Point3(x=1, y=2, z=3)
+        p = CartesianPoint3D(x=1, y=2, z=3)
         t = HomogeneousTransformationMatrix()
 
         # Test matrix @ point = point (homogeneous transformation)
         result = t @ p
-        assert isinstance(result, Point3)
+        assert isinstance(result, CartesianPoint3D)
         assert result[3] == 1  # Homogeneous coordinate preserved
 
     def test_project_to_line(self):
-        point = Point3(x=1, y=2, z=3)
-        line_point = Point3(x=0, y=0, z=0)
+        point = CartesianPoint3D(x=1, y=2, z=3)
+        line_point = CartesianPoint3D(x=0, y=0, z=0)
         line_direction = Vector3(x=1, y=2, z=3)  # Point lies on this line
         point, distance = point.project_to_line(line_point, line_direction)
         assert np.allclose(distance, 0.0)
         assert np.allclose(point, np.array([1, 2, 3, 1]))
 
-        point = Point3(x=1, y=0, z=0)
-        line_point = Point3(x=0, y=0, z=0)
+        point = CartesianPoint3D(x=1, y=0, z=0)
+        line_point = CartesianPoint3D(x=0, y=0, z=0)
         line_direction = Vector3(x=0, y=1, z=0)  # Y-axis
         point, distance = point.project_to_line(line_point, line_direction)
         assert np.allclose(distance, 1.0)
         assert np.allclose(point, np.array([0, 0, 0, 1]))
 
-        point = Point3(x=0, y=0, z=5)
-        line_point = Point3(x=0, y=0, z=0)
+        point = CartesianPoint3D(x=0, y=0, z=5)
+        line_point = CartesianPoint3D(x=0, y=0, z=0)
         line_direction = Vector3(x=1, y=0, z=0)  # X-axis
         point, distance = point.project_to_line(line_point, line_direction)
         assert np.allclose(distance, 5.0)
         assert np.allclose(point, np.array([0, 0, 0, 1]))
 
     def test_project_to_plane(self):
-        p = Point3(x=0, y=0, z=1)
+        p = CartesianPoint3D(x=0, y=0, z=1)
         actual, distance = p.project_to_plane(
             frame_V_plane_vector1=Vector3.X(),
             frame_V_plane_vector2=Vector3.Y(),
         )
-        expected = Point3(x=0, y=0, z=0)
+        expected = CartesianPoint3D(x=0, y=0, z=0)
         assert np.allclose(actual, expected)
         assert np.allclose(distance, 1)
 
     def test_compilation_and_execution(self):
         """
-        Test that Point3 operations compile and execute correctly.
+        Test that CartesianPoint3D operations compile and execute correctly.
         """
         # Test point arithmetic compilation
-        compiled_add = Point3(x=1, y=2, z=3) + Vector3(x=1, y=1, z=1)
+        compiled_add = CartesianPoint3D(x=1, y=2, z=3) + Vector3(x=1, y=1, z=1)
         expected = np.array([2, 3, 4, 1])
         assert np.allclose(compiled_add, expected)
 
         # Test point subtraction compilation
-        compiled_sub = Point3(x=5, y=6, z=7) - Point3(x=1, y=2, z=3)
+        compiled_sub = CartesianPoint3D(x=5, y=6, z=7) - CartesianPoint3D(x=1, y=2, z=3)
         expected_vector = np.array([4, 4, 4, 0])  # Result is a Vector3
         assert np.allclose(compiled_sub, expected_vector)
 
@@ -974,24 +974,24 @@ class TestPoint3:
         Test edge cases and boundary conditions.
         """
         # Test with zero coordinates
-        p_zero = Point3(x=0, y=0, z=0)
+        p_zero = CartesianPoint3D(x=0, y=0, z=0)
         assert p_zero[0] == 0 and p_zero[1] == 0 and p_zero[2] == 0
         assert p_zero[3] == 1
 
         # Test with negative coordinates
-        p_neg = Point3(x=-1, y=-2, z=-3)
+        p_neg = CartesianPoint3D(x=-1, y=-2, z=-3)
         assert p_neg[0] == -1 and p_neg[1] == -2 and p_neg[2] == -3
         assert p_neg[3] == 1
 
         # Test very large coordinates
         large_val = 1e6
-        p_large = Point3(x=large_val, y=large_val, z=large_val)
+        p_large = CartesianPoint3D(x=large_val, y=large_val, z=large_val)
         assert p_large[0] == large_val
         assert p_large[3] == 1
 
         # Test very small coordinates
         small_val = 1e-6
-        p_small = Point3(x=small_val, y=small_val, z=small_val)
+        p_small = CartesianPoint3D(x=small_val, y=small_val, z=small_val)
         assert p_small[0] == small_val
         assert p_small[3] == 1
 
@@ -1000,12 +1000,12 @@ class TestPoint3:
         Test operations with symbolic expressions.
         """
         x, y, z = sm.create_float_variables(["x", "y", "z"])
-        p_symbolic = Point3(x=x, y=y, z=z)
-        p_numeric = Point3(x=1, y=2, z=3)
+        p_symbolic = CartesianPoint3D(x=x, y=y, z=z)
+        p_numeric = CartesianPoint3D(x=1, y=2, z=3)
 
         # Test symbolic point operations
         result = p_symbolic + Vector3(x=1, y=1, z=1)
-        assert isinstance(result, Point3)
+        assert isinstance(result, CartesianPoint3D)
         assert result[3] == 1
 
         # Test mixed symbolic/numeric operations
@@ -1033,7 +1033,7 @@ class TestVector3:
         s = sm.FloatVariable(name="s")
         e = sm.Scalar(1)
         v = Vector3(x=1, y=1, z=1)
-        p = Point3(x=1, y=1, z=1)
+        p = CartesianPoint3D(x=1, y=1, z=1)
         r = RotationMatrix()
         q = Quaternion()
         t = HomogeneousTransformationMatrix()
@@ -1047,7 +1047,7 @@ class TestVector3:
         assert v[3] == 0  # Vector3 has 0 in homogeneous coordinate
 
         Vector3.from_iterable(v)
-        Vector3.from_iterable(p)  # Can create Vector3 from Point3
+        Vector3.from_iterable(p)  # Can create Vector3 from CartesianPoint3D
         Vector3.from_iterable(v)
         Vector3.from_iterable(v.casadi_sx)
         Vector3.from_iterable(l)
@@ -1191,7 +1191,7 @@ class TestVector3:
         vector = Vector3()
         does_not_work = [
             1.0,
-            Point3(),
+            CartesianPoint3D(),
             RotationMatrix(),
             Quaternion(),
             HomogeneousTransformationMatrix(),
@@ -1207,7 +1207,7 @@ class TestVector3:
         vector = Vector3()
         does_not_work = [
             1.0,
-            Point3(),
+            CartesianPoint3D(),
             RotationMatrix(),
             Quaternion(),
             HomogeneousTransformationMatrix(),
@@ -1223,7 +1223,7 @@ class TestVector3:
         vector = Vector3()
         does_not_work = [
             vector,
-            Point3(),
+            CartesianPoint3D(),
             RotationMatrix(),
             Quaternion(),
             HomogeneousTransformationMatrix(),
@@ -1238,7 +1238,7 @@ class TestVector3:
         vector = Vector3()
         does_not_work = [
             vector,
-            Point3(),
+            CartesianPoint3D(),
             RotationMatrix(),
             Quaternion(),
             HomogeneousTransformationMatrix(),
@@ -1253,7 +1253,7 @@ class TestVector3:
         vector = Vector3()
         does_not_work = [
             1.0,
-            Point3(),
+            CartesianPoint3D(),
             RotationMatrix(),
             Quaternion(),
             HomogeneousTransformationMatrix(),
@@ -1370,7 +1370,7 @@ class TestTransformationMatrix:
             reference_frame=reference_frame2, child_frame=child_frame2
         )
 
-        p = Point3(reference_frame=reference_frame)
+        p = CartesianPoint3D(reference_frame=reference_frame)
         v = Vector3(reference_frame=reference_frame)
         r = RotationMatrix(reference_frame=reference_frame)
 
@@ -1383,7 +1383,7 @@ class TestTransformationMatrix:
 
         with pytest.raises(SpatialTypesError):
             t = HomogeneousTransformationMatrix.from_point_rotation_matrix(
-                Point3(reference_frame=reference_frame2), r
+                CartesianPoint3D(reference_frame=reference_frame2), r
             )
 
         t = HomogeneousTransformationMatrix.from_point_rotation_matrix(
@@ -1431,7 +1431,7 @@ class TestTransformationMatrix:
             transform,
             RotationMatrix(),
             Pose(),
-            Point3(x=1, y=1, z=1),
+            CartesianPoint3D(x=1, y=1, z=1),
             Quaternion(),
         ]
         # A 2D type is transformable, but multiplying a 4x4 by a 2- or 3-vector is not
@@ -1440,7 +1440,7 @@ class TestTransformationMatrix:
             sm.FloatVariable(name="s"),
             sm.Scalar(1),
             np.eye(4),
-            Point2(x=1, y=1),
+            CartesianPoint2D(x=1, y=1),
             Pose2D.from_xy_yaw(x=1, y=1, yaw=1),
         ]
 
@@ -1496,18 +1496,18 @@ class TestTransformationMatrix:
 
     def test_transforming_a_point_2d_projects_onto_the_target_plane(self):
         """
-        A Point2 carries no z, so it comes back as the transformed 3D point with its z
-        dropped.
+        A CartesianPoint2D carries no z, so it comes back as the transformed 3D point
+        with its z dropped.
         """
         transformation = self._transformation()
-        point = Point2(x=1, y=2)
+        point = CartesianPoint2D(x=1, y=2)
 
         transformed = point.transform(transformation)
 
-        assert isinstance(transformed, Point2)
+        assert isinstance(transformed, CartesianPoint2D)
         np.testing.assert_allclose(
             transformed.to_np(),
-            (transformation @ point.to_point3()).to_np()[:2],
+            (transformation @ point.to_cartesian_point_3d()).to_np()[:2],
             atol=1e-12,
         )
 
@@ -1562,7 +1562,7 @@ class TestTransformationMatrix:
         r2[1, 3] = y
         r2[2, 3] = z
         r = HomogeneousTransformationMatrix.from_point_rotation_matrix(
-            Point3(x, y, z),
+            CartesianPoint3D(x, y, z),
             RotationMatrix.from_axis_angle(
                 AxisAngle(Vector3.from_iterable(axis), angle)
             ),
@@ -1598,7 +1598,7 @@ class TestTransformationMatrix:
     def test_pos_of(self):
         x, y, z, qx, qy, qz, qw = 1, 2, 3, 1, 0, 0, 0
         r1 = HomogeneousTransformationMatrix.from_point_rotation_matrix(
-            Point3(x, y, z),
+            CartesianPoint3D(x, y, z),
             RotationMatrix.from_quaternion(Quaternion(qx, qy, qz, qw)),
         ).position
         r2 = [x, y, z, 1]
@@ -1705,7 +1705,7 @@ class TestTransformationMatrix:
         """
         Test construction from point and rotation matrix.
         """
-        p = Point3(x=1, y=2, z=3)
+        p = CartesianPoint3D(x=1, y=2, z=3)
         r = RotationMatrix.from_rpy(0.1, 0.2, 0.3)
 
         # From both point and rotation
@@ -1765,9 +1765,9 @@ class TestTransformationMatrix:
         assert isinstance(combined, HomogeneousTransformationMatrix)
 
         # Apply to origin point
-        origin = Point3(x=0, y=0, z=0)
+        origin = CartesianPoint3D(x=0, y=0, z=0)
         result = combined @ origin
-        assert isinstance(result, Point3)
+        assert isinstance(result, CartesianPoint3D)
         # Should be at (1, 1, 0) after both translations
         assert np.allclose(result.x, 1)
         assert np.allclose(result.y, 1)
@@ -1781,10 +1781,10 @@ class TestTransformationMatrix:
         t = HomogeneousTransformationMatrix.from_xyz_rpy(1, 2, 3, 0, 0, np.pi / 2)
 
         # Transform a point
-        p = Point3(x=1, y=0, z=0)
+        p = CartesianPoint3D(x=1, y=0, z=0)
         transformed = t @ p
 
-        assert isinstance(transformed, Point3)
+        assert isinstance(transformed, CartesianPoint3D)
         assert transformed[3] == 1  # Homogeneous coordinate preserved
 
         # Expected: rotation transforms (1,0,0) to (0,1,0), then translation adds (1,2,3)
@@ -1847,7 +1847,7 @@ class TestTransformationMatrix:
 
         # Extract position
         position = t.position
-        assert isinstance(position, Point3)
+        assert isinstance(position, CartesianPoint3D)
         assert position.x.to_np() == 1
         assert position.y.to_np() == 2
         assert position.z.to_np() == 3
@@ -2020,15 +2020,15 @@ class TestTransformationMatrix:
         )
 
         # Point in world coordinates
-        world_point = Point3(x=1, y=0, z=1)
+        world_point = CartesianPoint3D(x=1, y=0, z=1)
 
         # Transform to robot coordinates
         robot_point = world_T_robot.inverse() @ world_point
-        assert isinstance(robot_point, Point3)
+        assert isinstance(robot_point, CartesianPoint3D)
 
         # Transform back to world coordinates
         world_point_back = world_T_robot @ robot_point
-        assert isinstance(world_point_back, Point3)
+        assert isinstance(world_point_back, CartesianPoint3D)
 
         # Should get original point back
         assert np.allclose(world_point, world_point_back, atol=1e-10)
@@ -2039,7 +2039,7 @@ class TestTransformationMatrix:
         """
         # Identity transformation
         t_identity = HomogeneousTransformationMatrix()
-        point = Point3(x=1, y=2, z=3)
+        point = CartesianPoint3D(x=1, y=2, z=3)
         transformed = t_identity @ point
         assert np.allclose(point, transformed)
 
@@ -2089,7 +2089,7 @@ class TestTransformationMatrix:
     def test_homogeneous_properties(self):
         t = HomogeneousTransformationMatrix.from_xyz_rpy(1, 2, 3, 0.1, 0.2, 0.3)
 
-        point = Point3(x=4, y=5, z=6)
+        point = CartesianPoint3D(x=4, y=5, z=6)
         transformed_point = t @ point
         assert transformed_point[3] == 1
 
@@ -2305,7 +2305,7 @@ class TestTheReferenceFrameIsInheritedAsAField:
     """
 
     spatial_types = [
-        Point3,
+        CartesianPoint3D,
         Vector3,
         RotationMatrix,
         Quaternion,

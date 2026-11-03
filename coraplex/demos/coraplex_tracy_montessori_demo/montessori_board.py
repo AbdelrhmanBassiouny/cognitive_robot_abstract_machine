@@ -19,7 +19,10 @@ import trimesh
 from random_events.interval import Bound, SimpleInterval
 
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Point2
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    CartesianPoint2D,
+)
 from semantic_digital_twin.world_description.geometry import (
     Box,
     Color,
@@ -102,7 +105,7 @@ class HoleOutline:
         return float((x * np.roll(y, -1) - np.roll(x, -1) * y).sum() / 2)
 
     @property
-    def centroid(self) -> Point2:
+    def centroid(self) -> CartesianPoint2D:
         """
         The point the enclosed area balances about, which for a triangle is not the
         middle of its bounding box.
@@ -110,7 +113,7 @@ class HoleOutline:
         x, y = self.points[:, 0], self.points[:, 1]
         x_next, y_next = np.roll(x, -1), np.roll(y, -1)
         cross = x * y_next - x_next * y
-        return Point2(
+        return CartesianPoint2D(
             float(((x + x_next) * cross).sum() / (6 * self.signed_area)),
             float(((y + y_next) * cross).sum() / (6 * self.signed_area)),
         )
@@ -187,7 +190,7 @@ class BoardHole:
     What the hole is shaped like.
     """
 
-    center: Point2
+    center: CartesianPoint2D
     """
     Where the hole's area balances, which for the triangle is not the middle of its
     bounding box.

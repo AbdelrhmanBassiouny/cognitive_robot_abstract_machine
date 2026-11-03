@@ -62,7 +62,7 @@ def grasp_from_above(graspable) -> GraspCandidate:
     return GraspCandidate(
         graspable,
         Pose(
-            position=Vector3(0, 0, BOX_SCALE.z / 2).point3,
+            position=Vector3(0, 0, BOX_SCALE.z / 2).cartesian_point_3d,
             orientation=RotationMatrix.from_vectors(
                 x=Vector3.NEGATIVE_Z(), y=Vector3.X()
             ).quaternion,
@@ -164,7 +164,7 @@ def test_a_grasp_outside_the_body_is_approached_from_the_clearance_alone(
     in_front = GraspCandidate(
         graspable,
         Pose(
-            position=Vector3(-BOX_SCALE.x, 0, 0).point3,
+            position=Vector3(-BOX_SCALE.x, 0, 0).cartesian_point_3d,
             reference_frame=graspable.root,
         ),
     )

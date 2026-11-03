@@ -21,7 +21,7 @@ from semantic_digital_twin.robots.robot_parts import Camera, EndEffector
 from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
-from krrood_spatial_math.spatial_types import Point3, Vector3
+from krrood_spatial_math.spatial_types import CartesianPoint3D, Vector3
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection1DOF,
     FixedConnection,
@@ -292,7 +292,7 @@ def test_the_held_grasp_can_be_read_at_any_point_of_the_gripper(pr2_gripper):
     hold_body(pr2_gripper)
 
     body_T_grasp = pr2_gripper.held_body_T_grasp_at(
-        Point3(0.0, 0.0, 0.0, reference_frame=pr2_gripper.tool_frame)
+        CartesianPoint3D(0.0, 0.0, 0.0, reference_frame=pr2_gripper.tool_frame)
     )
 
     np.testing.assert_allclose(

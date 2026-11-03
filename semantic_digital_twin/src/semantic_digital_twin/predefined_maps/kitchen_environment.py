@@ -34,7 +34,10 @@ from semantic_digital_twin.specifications.connections import (
     PrismaticConnectionSpecification,
     RevoluteConnectionSpecification,
 )
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Point3
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    CartesianPoint3D,
+)
 from krrood_spatial_math.spatial_types import Vector3
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
@@ -1823,31 +1826,31 @@ class KitchenEnvironment(WorldSource):
 
         with world.modify_world():
             kitchen_floor_polytope = [
-                Point3(0, 0, 0),
-                Point3(0, 3.334, 0),
-                Point3(5.214, 3.334, 0),
-                Point3(5.214, 0, 0),
+                CartesianPoint3D(0, 0, 0),
+                CartesianPoint3D(0, 3.334, 0),
+                CartesianPoint3D(5.214, 3.334, 0),
+                CartesianPoint3D(5.214, 0, 0),
             ]
 
             living_room_floor_polytope = [
-                Point3(0, 0, 0),
-                Point3(0, 2.971, 0),
-                Point3(5.214, 2.971, 0),
-                Point3(5.214, 0, 0),
+                CartesianPoint3D(0, 0, 0),
+                CartesianPoint3D(0, 2.971, 0),
+                CartesianPoint3D(5.214, 2.971, 0),
+                CartesianPoint3D(5.214, 0, 0),
             ]
 
             bed_room_floor_polytope = [
-                Point3(0, 0, 0),
-                Point3(0, 2.67, 0.0),
-                Point3(2.50, 2.67, 0.0),
-                Point3(2.50, 0, 0.0),
+                CartesianPoint3D(0, 0, 0),
+                CartesianPoint3D(0, 2.67, 0.0),
+                CartesianPoint3D(2.50, 2.67, 0.0),
+                CartesianPoint3D(2.50, 0, 0.0),
             ]
 
             office_floor_polytope = [
-                Point3(0, 0, 0),
-                Point3(0, 2.67, 0),
-                Point3(2.71, 2.67, 0),
-                Point3(2.71, 0, 0),
+                CartesianPoint3D(0, 0, 0),
+                CartesianPoint3D(0, 2.67, 0),
+                CartesianPoint3D(2.71, 2.67, 0),
+                CartesianPoint3D(2.71, 0, 0),
             ]
 
             kitchen_floor = Floor.create_with_new_body_from_polytope_in_world(

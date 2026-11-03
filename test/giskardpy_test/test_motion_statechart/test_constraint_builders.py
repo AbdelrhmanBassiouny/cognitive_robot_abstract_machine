@@ -1,4 +1,9 @@
-from krrood_spatial_math.spatial_types import AxisAngle, Point3, RotationMatrix, Vector3
+from krrood_spatial_math.spatial_types import (
+    AxisAngle,
+    CartesianPoint3D,
+    RotationMatrix,
+    Vector3,
+)
 
 from giskardpy.motion_statechart.constraint_builders import GeometricConstraintBuilder
 from giskardpy.motion_statechart.graph_node import MotionNodeArtifacts
@@ -9,8 +14,8 @@ def test_point_goal_writes_three_equality_constraints():
     collection = ConstraintCollection()
     builder = GeometricConstraintBuilder(collection)
     builder.add_point_goal_constraints(
-        frame_P_current=Point3(0.0, 0.0, 0.0),
-        frame_P_goal=Point3(1.0, 2.0, 3.0),
+        frame_P_current=CartesianPoint3D(0.0, 0.0, 0.0),
+        frame_P_goal=CartesianPoint3D(1.0, 2.0, 3.0),
         reference_velocity=0.1,
         quadratic_weight=1.0,
         name="goal",
@@ -50,8 +55,8 @@ def test_yaw_goal_writes_one_equality_constraint():
 def test_node_artifacts_geometry_writes_into_its_constraints():
     artifacts = MotionNodeArtifacts()
     artifacts.geometry.add_point_goal_constraints(
-        frame_P_current=Point3(0.0, 0.0, 0.0),
-        frame_P_goal=Point3(1.0, 2.0, 3.0),
+        frame_P_current=CartesianPoint3D(0.0, 0.0, 0.0),
+        frame_P_goal=CartesianPoint3D(1.0, 2.0, 3.0),
         reference_velocity=0.1,
         quadratic_weight=1.0,
         name="goal",

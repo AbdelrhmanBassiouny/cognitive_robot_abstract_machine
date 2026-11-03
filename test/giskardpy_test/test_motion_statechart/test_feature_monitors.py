@@ -15,7 +15,7 @@ from giskardpy.motion_statechart.tasks.feature_functions import (
     AngleGoal,
     AlignPerpendicular,
 )
-from krrood_spatial_math.spatial_types import Point3, Vector3
+from krrood_spatial_math.spatial_types import CartesianPoint3D, Vector3
 from semantic_digital_twin.world import World
 from giskardpy.motion_control import MotionControl
 from cramph.context import StatechartContext
@@ -46,8 +46,8 @@ def test_height_monitor(pr2_world_state_reset: World):
     root = pr2_world_state_reset.get_kinematic_structure_entity_by_name(
         "base_footprint"
     )
-    tip_point = Point3(0, 0, 0, reference_frame=tip)
-    reference_point = Point3(0, 0, 0, reference_frame=root)
+    tip_point = CartesianPoint3D(0, 0, 0, reference_frame=tip)
+    reference_point = CartesianPoint3D(0, 0, 0, reference_frame=root)
     lower_limit, upper_limit = 0.3, 0.5
 
     executor = _create_executor(pr2_world_state_reset)
@@ -83,8 +83,8 @@ def test_distance_monitor(pr2_world_state_reset: World):
     root = pr2_world_state_reset.get_kinematic_structure_entity_by_name(
         "base_footprint"
     )
-    tip_point = Point3(0, 0, 0, reference_frame=tip)
-    reference_point = Point3(0, 0, 0, reference_frame=root)
+    tip_point = CartesianPoint3D(0, 0, 0, reference_frame=tip)
+    reference_point = CartesianPoint3D(0, 0, 0, reference_frame=root)
     lower_limit, upper_limit = 0.4, 0.6
 
     executor = _create_executor(pr2_world_state_reset)

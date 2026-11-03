@@ -46,7 +46,7 @@ from semantic_digital_twin.reasoning.world_reasoner import WorldReasoner
 from semantic_digital_twin.robots.garmi import Garmi
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Bowl, Spoon
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
-from krrood_spatial_math.spatial_types import Point3, Pose
+from krrood_spatial_math.spatial_types import CartesianPoint3D, Pose
 from semantic_digital_twin.world import World
 
 # %% what the scene is built from
@@ -144,11 +144,11 @@ class ScenePlacement:
         )
 
     @property
-    def position(self) -> Point3:
+    def position(self) -> CartesianPoint3D:
         """
         :return: Where the placement is, without its heading.
         """
-        return Point3.from_iterable([self.x, self.y, self.z])
+        return CartesianPoint3D.from_iterable([self.x, self.y, self.z])
 
 
 class ScenePose(Enum):

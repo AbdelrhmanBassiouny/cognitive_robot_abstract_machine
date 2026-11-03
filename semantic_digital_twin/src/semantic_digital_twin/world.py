@@ -66,7 +66,10 @@ from semantic_digital_twin.spatial_computations.forward_kinematics import (
 )
 from semantic_digital_twin.spatial_computations.ik_solver import InverseKinematicsSolver
 from semantic_digital_twin.spatial_computations.raytracer import RayTracer
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Point3
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    CartesianPoint3D,
+)
 from semantic_digital_twin.world_description.derivatives import Derivatives
 from semantic_digital_twin.world_description.connections import (
     Connection6DoF,
@@ -1434,7 +1437,7 @@ class World(HasSimulatorProperties):
         return self._get_world_entity_by_name_from_iterable(name, self.bodies)
 
     def get_bodies_by_global_position(
-        self, world_P_body: Point3, maximum_distance: float = 1e-6
+        self, world_P_body: CartesianPoint3D, maximum_distance: float = 1e-6
     ) -> list[Body]:
         return [
             body

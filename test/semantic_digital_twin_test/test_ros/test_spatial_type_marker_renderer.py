@@ -13,7 +13,7 @@ from semantic_digital_twin.adapters.ros.visualization.spatial_type_marker_render
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Point3,
+    CartesianPoint3D,
     Quaternion,
     Vector3,
 )
@@ -30,7 +30,7 @@ def render(spatial_type: SpatialType, **kwargs) -> list[Marker]:
 
 def test_point_renders_single_sphere():
     frame = Body(name=PrefixedName("frame"))
-    point = Point3(1, 2, 3, reference_frame=frame)
+    point = CartesianPoint3D(1, 2, 3, reference_frame=frame)
 
     markers = render(point)
 
@@ -47,7 +47,7 @@ def test_point_renders_single_sphere():
 
 
 def test_point_without_reference_frame_uses_root():
-    markers = render(Point3(0, 0, 0))
+    markers = render(CartesianPoint3D(0, 0, 0))
 
     assert markers[0].header.frame_id == ROOT_FRAME_NAME
 
@@ -123,7 +123,9 @@ def test_unsupported_spatial_type_raises():
 
 
 def test_namespace_and_id_offset_propagate():
-    markers = render(Point3(0, 0, 0), namespace="debug/point", marker_id_offset=10)
+    markers = render(
+        CartesianPoint3D(0, 0, 0), namespace="debug/point", marker_id_offset=10
+    )
 
     assert markers[0].ns == "debug/point"
     assert markers[0].id == 10

@@ -15,7 +15,10 @@ from typing_extensions import TYPE_CHECKING
 from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json, from_json
 from random_events.product_algebra import Event, SimpleEvent
 from semantic_digital_twin.exceptions import MismatchingWorld
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Point3
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    CartesianPoint3D,
+)
 from semantic_digital_twin.world_description.geometry import (
     Shape,
     AxisAlignedBox,
@@ -204,8 +207,8 @@ class ShapeCollection(SubclassJSONSerializer):
     @classmethod
     def _from_json(cls, data: dict[str, Any], **kwargs) -> Self:
         """
-        The collection belongs to the frame all its shapes are expressed in, which is the
-        entity it was written from, such as a body whose shapes are replaced.
+        The collection belongs to the frame all its shapes are expressed in, which is
+        the entity it was written from, such as a body whose shapes are replaced.
         """
         shapes = [from_json(d, **kwargs) for d in data["shapes"]]
         frames = {
@@ -215,14 +218,14 @@ class ShapeCollection(SubclassJSONSerializer):
         reference_frame = next(iter(frames.values())) if len(frames) == 1 else None
         return cls(shapes=shapes, reference_frame=reference_frame)
 
-    def center_of_mass_in_world(self) -> Point3:
+    def center_of_mass_in_world(self) -> CartesianPoint3D:
         """
         :return: The center of mass of this shape collection in the world coordinate frame.
         """
         # Center of mass in the body's local frame (collision geometry)
         com_local: np.ndarray[np.float64] = self.combined_mesh.center_mass  # (3,)
         # Transform to world frame using the body's global pose
-        com = Point3(
+        com = CartesianPoint3D(
             x=com_local[0],
             y=com_local[1],
             z=com_local[2],
@@ -241,14 +244,16 @@ class ShapeCollection(SubclassJSONSerializer):
         )
 
     @property
-    def min_point(self) -> Point3:
-        return Point3.from_iterable(
+    def min_point(self) -> CartesianPoint3D:
+        return CartesianPoint3D.from_iterable(
             self.combined_mesh.bounds[0], reference_frame=self.reference_frame
         )
 
     @property
-    def max_point(self) -> Point3:
-        return Point3.from_iterable(self.combined_mesh.bounds[1], self.reference_frame)
+    def max_point(self) -> CartesianPoint3D:
+        return CartesianPoint3D.from_iterable(
+            self.combined_mesh.bounds[1], self.reference_frame
+        )
 
 
 @dataclass
@@ -370,7 +375,7 @@ class BoundingBoxCollection(Generic[BoxT, PointT], ShapeCollection):
                 - origin_coordinates
             )
             origin = HomogeneousTransformationMatrix.from_point_rotation_matrix(
-                point=Point3.from_iterable(_padded_to_3d(origin_coordinates)),
+                point=CartesianPoint3D.from_iterable(_padded_to_3d(origin_coordinates)),
                 reference_frame=reference_frame,
             )
             box = box_type.from_array_bounds(lower, upper, origin)

@@ -7,7 +7,7 @@ from krrood.symbolic_math.symbolic_math import FloatVariable
 from krrood_spatial_math.spatial_types import (
     AxisAngle,
     HomogeneousTransformationMatrix,
-    Point3,
+    CartesianPoint3D,
     Pose,
     Quaternion,
     RotationMatrix,
@@ -47,7 +47,7 @@ def test_features_of_a_pose_are_read_from_the_pose_itself():
 @pytest.mark.parametrize(
     "instance",
     [
-        Point3(1.0, 2.0, 3.0),
+        CartesianPoint3D(1.0, 2.0, 3.0),
         Vector3(1.0, 2.0, 3.0),
         Quaternion(0.0, 0.0, 0.0, 1.0),
         AxisAngle(axis=Vector3(0.0, 1.0, 0.0), angle=0.4),
@@ -75,7 +75,7 @@ def test_features_of_a_domain_object_match_those_of_its_data_access_object(insta
 
 
 def test_a_symbolic_expression_with_free_variables_is_not_a_feature():
-    point = Point3(FloatVariable(name="x"), 2.0, 3.0)
+    point = CartesianPoint3D(FloatVariable(name="x"), 2.0, 3.0)
 
     extractor = FeatureExtractor.from_instances([point])
 

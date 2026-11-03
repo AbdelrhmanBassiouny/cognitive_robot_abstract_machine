@@ -19,7 +19,10 @@ from giskardpy.motion_statechart.debug_expression_trajectory import (
 )
 from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPosition
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Point3
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    CartesianPoint3D,
+)
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.world_entity import Body
@@ -71,7 +74,7 @@ def _position_goal(world: World, tip: Body, name: str) -> CartesianPosition:
     return CartesianPosition(
         root_link=world.root,
         tip_link=tip,
-        goal_point=Point3(x=5, reference_frame=world.root),
+        goal_point=CartesianPoint3D(x=5, reference_frame=world.root),
         name=name,
     )
 

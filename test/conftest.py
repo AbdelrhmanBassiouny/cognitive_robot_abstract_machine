@@ -105,7 +105,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     Vector3,
-    Point3,
+    CartesianPoint3D,
 )
 from semantic_digital_twin.utils import (
     rclpy_installed,
@@ -767,7 +767,7 @@ def _elevator_world_setup():
                 name=f"{name.name}_door{i}",
                 world=world,
                 world_root_T_self=HomogeneousTransformationMatrix.from_point_rotation_matrix(
-                    Point3(-scale.x / 2, door_y, 0),
+                    CartesianPoint3D(-scale.x / 2, door_y, 0),
                     reference_frame=world.root,
                 ),
                 parent_connection_specification=PrismaticConnectionSpecification(

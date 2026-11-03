@@ -12,7 +12,10 @@ from typing_extensions import Generic, TypeVar
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.datastructures.variables import SpatialVariables
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Point3
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    CartesianPoint3D,
+)
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import (
@@ -100,7 +103,7 @@ class GraphOfConvexSets(Generic[PointT, SearchSpaceT], SubClassSafeGeneric, ABC)
 
 def translate_event_to(
     event: Event,
-    position: Point3,
+    position: CartesianPoint3D,
 ) -> Event:
     """
     Translates an event by a given position.

@@ -72,7 +72,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
 )
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Point3,
+    CartesianPoint3D,
     Vector3,
 )
 from semantic_digital_twin.semantic_annotations.mixins import (
@@ -420,7 +420,12 @@ def test_from_event_constructor_spawns(empty_world):
         ),
         lambda pose: BodySpecification.from_3d_points(
             "shape",
-            [Point3(0, 0, 0), Point3(1, 0, 0), Point3(0, 1, 0), Point3(1, 1, 1)],
+            [
+                CartesianPoint3D(0, 0, 0),
+                CartesianPoint3D(1, 0, 0),
+                CartesianPoint3D(0, 1, 0),
+                CartesianPoint3D(1, 1, 1),
+            ],
             parent_T_self=pose,
         ),
         lambda pose: RegionSpecification.box(
@@ -439,7 +444,12 @@ def test_body_specification_from_3d_points_matches_direct_construction():
     """
     ``from_3d_points`` mirrors :meth:`Body.from_3d_points`.
     """
-    points = [Point3(0, 0, 0), Point3(1, 0, 0), Point3(0, 1, 0), Point3(1, 1, 1)]
+    points = [
+        CartesianPoint3D(0, 0, 0),
+        CartesianPoint3D(1, 0, 0),
+        CartesianPoint3D(0, 1, 0),
+        CartesianPoint3D(1, 1, 1),
+    ]
     name = "polytope"
 
     materialized = BodySpecification.from_3d_points(name, points).to_domain_object(name)
@@ -1840,7 +1850,7 @@ def test_factories_have_no_shared_mutable_spatial_defaults():
         f"{owner.__name__}.{method_name}({parameter.name})"
         for owner, method_name, signature in _factory_overrides()
         for parameter in signature.parameters.values()
-        if isinstance(parameter.default, (Vector3, Point3, Scale))
+        if isinstance(parameter.default, (Vector3, CartesianPoint3D, Scale))
     ]
     assert not offenders, f"shared mutable defaults: {offenders}"
 
