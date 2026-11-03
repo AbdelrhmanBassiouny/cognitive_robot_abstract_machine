@@ -40,9 +40,9 @@ items:
   session: https://claude.ai/code/session_018wfiv55SKtSL7GKMsg99mh
   blockers:
     - >-
-      cram2 #843 awaits tomsch420's re-review of 20cf059d5; inline replies are not
-      posted (session cannot write upstream). integration-conflict is still on #64
-      though its #192 cause is resolved; suggest api-break.
+      cram2 #843 is approved and green; 4 outdated threads await resolving by the
+      reviewers (session cannot write upstream). integration-conflict label is
+      stale (#192 cause fixed): clear it after an integration pass.
     - >-
       #67 conflicts with main on core/base_expressions.py, handed to the user; #98,
       #159, #210 and the engine cannot take 20cf059d5 until then.
