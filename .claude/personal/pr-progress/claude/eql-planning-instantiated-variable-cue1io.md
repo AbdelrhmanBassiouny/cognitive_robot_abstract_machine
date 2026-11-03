@@ -1,10 +1,10 @@
 ## Plan
-- Owner answers the three open threads (plan_transformations.py:334, task_conditions.py:477, planner.py:118) on why `_factory_` and not `_type_`.
+- Keep the contract: for a SymbolicFunction class, `_type_` is what `__call__` returns and the class is `_factory_`.
 
 ## Done
-- Every review ask is implemented. CI is green on d6e043762c (all 18 checks).
-- An upstream link has been recorded under `## Promote`, and no upstream PR exists yet.
+- `inference(factory)` takes only the factory. `HasFactoryAndKwargs._type_built_by_` infers the type for Match and InstantiatedVariable, and a Match on a classmethod now gets the class it returns (9a50802221).
+- The plan no longer says #542 merges into #535. #535 stacks on it if it needs it.
 
 ## Next
-- Once confirmed, resolve the three threads. If the owner says so, switch those readers to `_type_` and reverse the "one result-type field" contract.
-- After this merges, #535 drops `Fact._is_predicate`'s `isinstance(_type_, type)` guard.
+- Wait for CI on 9a50802221.
+- Owner answers the three `_type_` threads.
