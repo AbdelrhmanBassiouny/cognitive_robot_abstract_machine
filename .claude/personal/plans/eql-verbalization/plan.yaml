@@ -98,3 +98,10 @@ items:
     the same silent-symbolic read the aggregate one did, and the signature cannot tell two
     chains apart when only that step differs. Measured on main 2b44f1e5: order.lines[0].price
     and order.lines[1].price get equal signatures.'
+
+- id: article-agreement-check
+  title: "A check that a or an agrees with the entity it quantifies, correcting it where it can"
+  branch: null
+  track: framework-migration
+  depends_on: []
+  status: not started
