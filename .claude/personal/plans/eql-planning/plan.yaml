@@ -48,7 +48,7 @@ items:
   blockers:
     - >-
       Owner to answer the three open #542 threads asking why _factory_, not _type_
-      (plan_transformations.py:334, task_conditions.py:477, planner.py:118). CI on d019c307c7 to
+      (plan_transformations.py:334, task_conditions.py:477, planner.py:118). CI on 9b073d07f3 to
       finish.
   depends_on: []
   status: in progress
