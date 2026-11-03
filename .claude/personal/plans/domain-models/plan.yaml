@@ -126,8 +126,8 @@ items:
     act on Point2 and Pose2D. Answers Simon''s #526 threads on transform and the dot mixin. Waits on his
     Q4 (Point3 in RotationMatrix.dot) and Q5 (AxisAngle) in https://claude.ai/artifact/UW7BdpNyW1r2sc63ktzA9T.'
 - id: planar-coordinate-system
-  title: Point2 and Pose2D are given in a CartesianFrame2D on a EuclideanSpace2D, with planar rigid changes,
-    replacing the abstract Point
+  title: CartesianPoint2D and Pose2D are given in a CartesianFrame2D on a EuclideanSpace2D, with planar rigid
+    changes; points of either dimension are typed CartesianPoint
   branch: ccr-8eec00ba-u65ka7
   track: spatial
   status: in progress
@@ -135,21 +135,21 @@ items:
   session: https://claude.ai/code/session_01JxHGiKd33nT4CBHmpcAYJ7
   depends_on:
   - planar-point-interface
-  notes: 'A CartesianFrame2D is the x-y plane of a CartesianFrame3D and charts a EuclideanSpace2D;
-    Point2 and Pose2D move onto it. Remove the abstract Point (#526, #527 review). Each SemDT caller (geometry.py, graph of convex sets) picks a 2D point, a 3D point or a
-    projection. SE(2) is RigidCoordinateChange[CartesianFrame2D], only between frames sharing one plane with z-axes pointing the same way.
-    A Pose projects to a Pose2D by the angle of its x-axis projected onto the plane, atan2(r21, r11) (equal
-    to the ZYX yaw), raising a custom exception when that axis is normal to the plane.'
+  notes: 'Implemented in #549, which merges main and needs ORMatic fixes #550 and #551 to land first. Adds
+    the dimension-free AffinePoint and CartesianPoint interfaces, renames Point2 and Point3 to CartesianPoint2D
+    and CartesianPoint3D (taken over from spatial-math-imports), types SemDT callers of either dimension
+    as CartesianPoint and stores them through an abstract CartesianPointMapping. Next: CI; owner to decide
+    whether CartesianPoint2D/Pose2D.transform refuse frames on other planes.'
 - id: spatial-math-imports
-  title: The workspace imports spatial types from krrood_spatial_math, with the decided class names (CartesianPoint3D,
-    CartesianPoint2D, Vector3D, Line3D, Pose3D)
+  title: The workspace imports spatial types from krrood_spatial_math, with the decided class names (Vector3D,
+    Line3D, Pose3D)
   branch: claude/krrood-spatial-math-imports
   track: spatial
   status: not_started
   depends_on:
   - planar-point-interface
-  notes: Renames Point3 to CartesianPoint3D, Point2 to CartesianPoint2D, Vector3, Line3 and Pose to Vector3D,
-    Line3D, Pose3D (decided 2026-10-29) across the workspace; 3D-only types such as RotationMatrix keep
+  notes: Renames Vector3, Line3 and Pose to Vector3D, Line3D, Pose3D (decided 2026-10-29; the points are
+    renamed in planar-coordinate-system) across the workspace; 3D-only types such as RotationMatrix keep
     their names. SpatialType becomes SymbolicSpatialType (#527 review), which changes the ORM schema.
     The import migration itself moved into spatial-math-move (cram2#835 review), so no old names stay
     importable.
