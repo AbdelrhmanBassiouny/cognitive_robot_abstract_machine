@@ -40,13 +40,12 @@ items:
   session: https://claude.ai/code/session_018wfiv55SKtSL7GKMsg99mh
   blockers:
     - >-
-      cram2 #843 review round answered in bb4cccbad; its inline replies are not
-      posted yet (session cannot write upstream). bb4cccbad is carried into #65
-      and #66; #67 conflicts with main on core/base_expressions.py (its active-root
-      fix vs main's context restructure), handed back to the user.
+      cram2 #843 awaits tomsch420's re-review of 20cf059d5; inline replies are not
+      posted (session cannot write upstream). integration-conflict is still on #64
+      though its #192 cause is resolved; suggest api-break.
     - >-
-      Awaits green fork CI on bb4cccbad, then drop integration-conflict, whose
-      #192 cause is resolved.
+      #67 conflicts with main on core/base_expressions.py, handed to the user; #98,
+      #159, #210 and the engine cannot take 20cf059d5 until then.
   depends_on: []
   status: in_progress
   notes: '2026-08-12 steward cascade: restacked onto its cascaded base, which now carries main be377fdf
