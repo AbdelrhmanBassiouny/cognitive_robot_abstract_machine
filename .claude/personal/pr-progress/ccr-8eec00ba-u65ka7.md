@@ -1,8 +1,9 @@
 Plan:
-- CartesianFrame2D interface (base); XYPlane2D, XYPlaneFrame2D, HomogeneousTransformationMatrix2D (casadi)
-- Point2/Pose2D given in the plane frame; Pose2D.from_pose by atan2(r21, r11), raising XAxisNormalToPlaneError
+- CartesianFrame2D (base); XYPlane2D, XYPlaneFrame2D, HomogeneousTransformationMatrix2D (casadi)
+- Point2/Pose2D given in the plane frame; Pose2D.from_pose by atan2(r21, r11)
 - Remove abstract Point; SemDT callers take Point2 | Point3
 Done:
-- Bootstrap, draft PR #549 on claude/krrspatial-interfaces
+- All of the plan, in b04dbd4f8d; krrood_spatial_math, SemDT spatial-type and geometry tests pass locally
 Next:
-- Tests first in test/krrood_spatial_math_test, then implement
+- Read CI on b04dbd4f8d (ORM build, graph-of-convex-sets and root-conftest tests were not run locally)
+- Owner: should Point2/Pose2D.transform refuse frames on other planes?
