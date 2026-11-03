@@ -13,6 +13,16 @@ from krrood_spatial_math.cartesian_frame_3d import (
 from krrood_spatial_math.exceptions import ReferenceFrameMismatchError
 from krrood_spatial_math.space import EuclideanSpace3D
 
+# %% a space frames chart
+
+
+@dataclass(eq=False)
+class Room(EuclideanSpace3D):
+    """
+    A three-dimensional Euclidean space, told apart from other rooms only by identity.
+    """
+
+
 # %% frames told apart by name
 
 

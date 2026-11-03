@@ -39,7 +39,7 @@ from matplotlib.lines import Line2D
 from matplotlib.patches import Rectangle
 from typing_extensions import Iterable, Sequence, Self
 
-from krrood_spatial_math.spatial_types import Point, Point3
+from krrood_spatial_math.spatial_types import Point2, Point3
 from semantic_digital_twin.world_description.geometry import (
     AxisAlignedBox,
 )
@@ -266,7 +266,7 @@ class NavigationPath:
     """
     A solved path through a graph of convex sets.
 
-    Kept as a class rather than a plain ``List[Point]``: :attr:`length`,
+    Kept as a class rather than a plain ``list[Point2 | Point3]``: :attr:`length`,
     :attr:`vertical_travel`, :attr:`coordinates` and :attr:`spatial_coordinates` are each
     read from panels in both this module and
     :mod:`~semantic_digital_twin.world_description.graph_of_convex_sets.volume_figure`,
@@ -274,7 +274,7 @@ class NavigationPath:
     instead of recomputing it from a bare list.
     """
 
-    waypoints: list[Point]
+    waypoints: list[Point2 | Point3]
     """
     The points to navigate to, starting at the query's start and ending at its goal.
     """
@@ -354,17 +354,17 @@ class ConvexSetAdjacency:
     convex set, through the portal the two sets share, to the center of the other.
     """
 
-    source_center: Point
+    source_center: Point2 | Point3
     """
     The center of the convex set the edge starts at.
     """
 
-    portal_center: Point
+    portal_center: Point2 | Point3
     """
     The center of the region where the two convex sets overlap.
     """
 
-    target_center: Point
+    target_center: Point2 | Point3
     """
     The center of the convex set the edge ends at.
     """
@@ -757,7 +757,7 @@ class EndpointsLayer(SceneLayer):
     def _draw_endpoint(
         self,
         axes: Axes,
-        endpoint: Point,
+        endpoint: Point2 | Point3,
         label: str,
         marker: str,
         color: str,

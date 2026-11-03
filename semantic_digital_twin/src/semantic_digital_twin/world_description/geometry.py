@@ -33,7 +33,6 @@ from semantic_digital_twin.exceptions import MalformedHexColor
 from semantic_digital_twin.mixin import HasSimulatorProperties
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Point,
     Point2,
     Point3,
     Vector3,
@@ -1421,7 +1420,7 @@ class CoordinateBounds(Bounds[npt.NDArray[np.float64]]):
         return SimpleInterval.from_data(t_min, t_max, Bound.CLOSED, Bound.CLOSED)
 
 
-PointT = TypeVar("PointT", bound=Point)
+PointT = TypeVar("PointT", bound=Point2 | Point3)
 """
 The point type an :class:`AxisAlignedBox` subclass is asked about --
 :class:`~krrood_spatial_math.spatial_types.Point3` for a box expressed over three

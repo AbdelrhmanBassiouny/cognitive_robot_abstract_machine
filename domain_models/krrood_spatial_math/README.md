@@ -22,17 +22,24 @@ coordinate system. Its base depends on `krrood` alone.
 - `krrood_spatial_math.cartesian_frame_3d`: `CartesianFrame3D`, the right-handed
   Cartesian frame of physical space that positions and directions are expressed in,
   and how serialized values refer to one.
+- `krrood_spatial_math.cartesian_frame_2d`: `CartesianFrame2D`, the right-handed
+  Cartesian frame that values on a plane, such as the x-y plane of a
+  `CartesianFrame3D`, are given in.
 - `krrood_spatial_math.affine_point`: `AffinePoint2D` and `AffinePoint3D`, a point
   given by its two or three coordinates in an affine frame. Each implementation binds the kind of frame and what
   its coordinates are stored as.
 - `krrood_spatial_math.spatial_types`, with the extra `krrood_spatial_math[casadi]`:
   `Point2`, `Point3`, `Vector3`, `RotationMatrix`, `Quaternion`, `AxisAngle`,
   `HomogeneousTransformationMatrix`, `Pose` and `Pose2D`, as symbolic expressions that
-  can also hold plain numbers.
+  can also hold plain numbers. `Point2` and `Pose2D` lie on the x-y plane of their
+  reference frame, an `XYPlane2D`, and are given in its `XYPlaneFrame2D`;
+  `HomogeneousTransformationMatrix2D` is the rigid change between two frames on one
+  plane.
 
 | Space | Frame | Coordinate change | Kept by the change |
 |---|---|---|---|
 | `EuclideanSpace3D` | `CartesianFrame3D`, metres | `RigidCoordinateChange` | distances, angles |
+| `EuclideanSpace2D` | `CartesianFrame2D`, metres | `RigidCoordinateChange` | distances, angles |
 
 Other domain models add their own spaces on these interfaces; `krrood_image`, for
 example, adds image planes, whose pixel frames are affine and related by affine changes.

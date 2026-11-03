@@ -7,7 +7,7 @@ import pytest
 
 from krrood.adapters.json_serializer import from_json, to_json
 import krrood.symbolic_math.symbolic_math as sm
-from krrood_spatial_math.affine_point import AffinePoint2D, AffinePoint3D, CoordinateT
+from krrood_spatial_math.affine_point import AffinePoint3D, CoordinateT
 from krrood_spatial_math.cartesian_frame_3d import (
     CartesianFrame3D,
     ValueInCartesianFrame3D,
@@ -25,7 +25,6 @@ from krrood_spatial_math.spatial_types import (
     AxisAngle,
     HomogeneousTransformationMatrix,
     OrthogonalProjection,
-    Point2,
     Point3,
     Pose,
     Pose2D,
@@ -54,14 +53,12 @@ def shelf_frame(table_frame) -> MountedFrame:
 
 
 spatial_values = [
-    Point2,
     Point3,
     Vector3,
     Quaternion,
     AxisAngle,
     RotationMatrix,
     Pose,
-    Pose2D,
 ]
 
 
@@ -85,18 +82,6 @@ def test_a_spatial_values_coordinates_are_given_in_its_reference_frame(
     value = spatial_value(reference_frame=table_frame)
 
     assert value.coordinate_system is table_frame
-
-
-# %% a point on a frame's plane as an affine point
-
-
-def test_a_point2_is_an_affine_point_of_a_cartesian_frame():
-    assert issubclass(Point2, AffinePoint2D)
-    assert Point2.get_type_of_generic_parameter(CoordinateSystemT) is CartesianFrame3D
-
-
-def test_a_point2_stores_its_coordinates_as_symbolic_scalars():
-    assert Point2.get_type_of_generic_parameter(CoordinateT) is sm.Scalar
 
 
 # %% a point in a frame's space as an affine point

@@ -1,0 +1,18 @@
+from __future__ import annotations
+
+from krrood.patterns.identifier_and_name import NameT
+from krrood.patterns.interface import Interface
+from krrood_spatial_math.coordinate_system import CartesianFrame
+from krrood_spatial_math.space import EuclideanSpace2D
+
+# %% frames that values on a plane are given in
+
+
+class CartesianFrame2D(CartesianFrame[EuclideanSpace2D, NameT], Interface):
+    """
+    A right-handed Cartesian frame on a two-dimensional Euclidean space, in metres, such
+    as the x-y plane of a
+    :class:`~krrood_spatial_math.cartesian_frame_3d.CartesianFrame3D`.
+
+    Right-handed means its y-axis is a quarter turn counterclockwise from its x-axis.
+    """
