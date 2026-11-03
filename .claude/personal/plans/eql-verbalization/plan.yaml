@@ -103,5 +103,13 @@ items:
   title: "A check that a or an agrees with the entity it quantifies, correcting it where it can"
   branch: null
   track: framework-migration
+  blockers:
+    - ""
+  notes: >
+    From #542's review of the krrood agent rule EntityQueryLanguageRules.ARTICLE_MATCHES_ITS_ENTITY:
+    check, in tooling, that a/an reads as correct English with the entity it quantifies
+    (`a(Drawer)`, `an(Interval.around)`), reusing the inflect article logic verbalization already
+    uses. Autocorrect where the fix is unambiguous; once it runs automatically, drop the agent rule.
+    Its own PR, off main.
   depends_on: []
   status: not started
