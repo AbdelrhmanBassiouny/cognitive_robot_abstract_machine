@@ -1,12 +1,10 @@
 ## Plan
-- Keep the contract: for a SymbolicFunction class, `_type_` is the type `__call__` returns, and the class is `_factory_` (owner confirmed).
+- Owner answers the three open threads (plan_transformations.py:334, task_conditions.py:477, planner.py:118) on why `_factory_` and not `_type_`.
 
 ## Done
-- InstantiatedVariable inherits HasFactoryAndKwargs (72aefdb9b2).
-- An `Any` return annotation gives the type `object` (1b09ff3302). The test compares variables by identity, not `==`.
-- The experiments test reads `_factory_` (d6e043762c, owner approved).
-- Threads: the mixin and `==` threads are resolved. The three `_type_` threads are answered and left open.
+- Every review ask is implemented. CI is green on d6e043762c (all 18 checks).
+- An upstream link has been recorded under `## Promote`, and no upstream PR exists yet.
 
 ## Next
-- CI on d6e043762c.
-- #535 merges this branch, then drops Fact._is_predicate's isinstance guard.
+- Once confirmed, resolve the three threads. If the owner says so, switch those readers to `_type_` and reverse the "one result-type field" contract.
+- After this merges, #535 drops `Fact._is_predicate`'s `isinstance(_type_, type)` guard.
