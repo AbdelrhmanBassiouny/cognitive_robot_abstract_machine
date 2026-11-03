@@ -44,12 +44,12 @@ items:
   title: InstantiatedVariable separates its result type from the factory that builds it
   track: eql-prerequisites
   pull_request_number: 542
-  session: https://claude.ai/code/session_018wfiv9cZCFWHJx3AWcxpxT
+  session: https://claude.ai/code/session_01JxHGiPsM8oqLSysqVaSFHa
   blockers:
     - >-
-      CI on d6e043762c still to finish. The experiments job failed on 72aefdb9b2
-      (test_comparison_takes_its_kind_from_the_value_it_compares read the class off _type_). The
-      owner approved changing that test to read _factory_, and the fix is pushed.
+      Owner to answer three open #542 threads (plan_transformations.py:334, task_conditions.py:477,
+      planner.py:118): why _factory_, not _type_. For a SymbolicFunction class _type_ is __call__'s
+      return type, so only _factory_ names the class. CI green on d6e043762c.
   depends_on: []
   status: in progress
   notes: >
