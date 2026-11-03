@@ -1,10 +1,8 @@
 Plan:
-- CartesianFrame2D (base); XYPlane2D, XYPlaneFrame2D, HomogeneousTransformationMatrix2D (casadi)
-- Point2/Pose2D given in the plane frame; Pose2D.from_pose by atan2(r21, r11)
-- Remove abstract Point; SemDT callers take Point2 | Point3
+- Planar frames and SE(2) (b04dbd4f8d); AffinePoint/CartesianPoint interfaces; Point2/3 renamed CartesianPoint2D/3D
+- CartesianPoint fields stored through abstract CartesianPointMapping; floor-plan panels project via OrthogonalProjection
 Done:
-- All of the plan, in b04dbd4f8d
+- All of the plan, in 5d79553f50 (merges main, #550 and #551)
 Next:
-- CI red: SemDT ORM build. ORMatic names a DAO after the union bound of PointT, drops the 7 Point2 | Point3 fields, and misses the krrood_spatial_math import
-- Owner chose a krrood ORMatic bug-fix PR off main; first settle whether Point2 and Point3 should share an affine-point interface
-- Owner: should Point2/Pose2D.transform refuse frames on other planes?
+- Read CI on #549; #550 and #551 must land first
+- Owner: should CartesianPoint2D/Pose2D.transform refuse frames on other planes?
