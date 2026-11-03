@@ -28,6 +28,9 @@ tracks:
 - id: packaging
   name: Packaging and CI
   wave: extras
+- id: command-line
+  name: krrood command line
+  wave: extras
 items:
 - id: matplotlib-optional
   title: matplotlib is imported only when drawing
@@ -36,11 +39,13 @@ items:
   track: optional-imports
   pull_request_number: 547
   session: https://claude.ai/code/session_01JxHGiMUhYaVsG6NkZNgzAC
-  depends_on: []
-  notes: 'Generic Extra/OptionalModule bases in krrood.patterns.optional_module; krrood
-    declares KrroodExtra/KrroodOptionalModule. Every function importing matplotlib carries
-    @KrroodOptionalModule.MATPLOTLIB.require; `krrood optional-imports` pre-commit check and the
-    shipped ImportsRules rule enforce it (review on #547). Other libraries adopt it in their own PRs.'
+  depends_on:
+  - core-boundary-guard
+  notes: 'Stacked on #546. No enums or decorator: matplotlib is imported inside the functions
+    that draw. OptionalImportChecker (a CodeRuleChecker on the shipped import rule, run by `krrood
+    check`) reports module-level imports, in core modules, of distributions only an extra
+    requires; core is the import-linter contract that `core-contract` in [tool.krrood.core-boundary]
+    names. graph_visualizer and rxnode left #546''s offender list.'
 - id: type-hint-resolver-skips-missing-modules
   title: Type-hint resolution skips modules that are not installed
   branch: claude/relaxed-wozniak-eu4gdv
@@ -132,3 +137,13 @@ items:
     (deterministic), then median import time over alternating runs on the same runner. Fails
     only past a relative and an absolute threshold, both named settings; prints both numbers
     in the job summary. Catches a heavy package added to core''s own dependencies.'
+
+- id: command-line-on-cyclopts
+  title: krrood's command line is built on cyclopts
+  branch: null
+  status: not_started
+  track: command-line
+  depends_on: []
+  notes: 'Asked in review of #547. Every `krrood` subcommand (format, agents-md, check) moves
+    from argparse to cyclopts, added to the development-tools extra; all at once, never one
+    subcommand alone.'
