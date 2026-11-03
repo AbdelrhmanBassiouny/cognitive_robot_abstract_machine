@@ -40,12 +40,12 @@ items:
   session: https://claude.ai/code/session_018wfiv55SKtSL7GKMsg99mh
   blockers:
     - >-
-      cram2 #843 is approved and green; 4 outdated threads await resolving by the
-      reviewers (session cannot write upstream). integration-conflict label is
-      stale (#192 cause fixed): clear it after an integration pass.
+      cram2 #843 approved, 4 outdated threads await the reviewers (no upstream write
+      here). 2026-11-03: main merged into #64, carried to #65 and #66. Clear
+      integration-conflict after an integration pass.
     - >-
-      #67 conflicts with main on core/base_expressions.py, handed to the user; #98,
-      #159, #210 and the engine cannot take 20cf059d5 until then.
+      #67 conflicts with the restacked #66 in core/base_expressions.py (evaluation
+      context restructure vs #67's own fix); needs a decision. #98 onward wait on it.
   depends_on: []
   status: in_progress
   notes: '2026-08-12 steward cascade: restacked onto its cascaded base, which now carries main be377fdf
