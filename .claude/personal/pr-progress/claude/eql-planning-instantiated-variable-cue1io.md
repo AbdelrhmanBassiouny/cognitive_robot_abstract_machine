@@ -7,5 +7,5 @@
 - Factory-class pattern -> plan krrood-patterns (#552); a/an checker -> eql-verbalization/article-agreement-check.
 
 ## Next
-- Wait for CI on d019c307c7.
+- Wait for CI on 9b073d07f3 (main merged in).
 - Owner answers: the three "why not `_type_`" threads.
