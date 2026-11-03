@@ -132,13 +132,12 @@ items:
   track: spatial
   status: in progress
   pull_request_number: 549
-  session: https://claude.ai/code/session_018wfiv7aAm9qWdXePDiHeBa
+  session: https://claude.ai/code/session_01JxHGiKd33nT4CBHmpcAYJ7
   depends_on:
   - planar-point-interface
   notes: 'A CartesianFrame2D is the x-y plane of a CartesianFrame3D and charts a EuclideanSpace2D;
-    Point2 and Pose2D move onto it. Remove the abstract Point (#526, #527 review); AffinePoint2D and AffinePoint3D
-    are on #527. Each SemDT caller (geometry.py, graph of convex sets) picks a 2D point, a 3D point or a
-    projection. SE(2) is RigidCoordinateChange[CartesianFrame2D], only between frames sharing one plane.
+    Point2 and Pose2D move onto it. Remove the abstract Point (#526, #527 review). Each SemDT caller (geometry.py, graph of convex sets) picks a 2D point, a 3D point or a
+    projection. SE(2) is RigidCoordinateChange[CartesianFrame2D], only between frames sharing one plane with z-axes pointing the same way.
     A Pose projects to a Pose2D by the angle of its x-axis projected onto the plane, atan2(r21, r11) (equal
     to the ZYX yaw), raising a custom exception when that axis is normal to the plane.'
 - id: spatial-math-imports
