@@ -37,10 +37,10 @@ items:
   pull_request_number: 547
   session: https://claude.ai/code/session_01JxHGiMUhYaVsG6NkZNgzAC
   depends_on: []
-  notes: 'User-approved option 1: graph_visualizer.py and RDR import matplotlib inside the
-    drawing methods after check_dependencies() raises a custom exception naming the extra.
-    Adds the AGENTS.md exception for optional-extra imports. Stacked on #509 for its test
-    pattern; test that importing EQL factories and ORMatic loads no matplotlib.'
+  notes: 'Generic Extra/OptionalModule bases in krrood.patterns.optional_module; krrood
+    declares KrroodExtra/KrroodOptionalModule. Every function importing matplotlib carries
+    @KrroodOptionalModule.MATPLOTLIB.require; `krrood optional-imports` pre-commit check and the
+    shipped ImportsRules rule enforce it (review on #547). Other libraries adopt it in their own PRs.'
 - id: type-hint-resolver-skips-missing-modules
   title: Type-hint resolution skips modules that are not installed
   branch: claude/relaxed-wozniak-eu4gdv
