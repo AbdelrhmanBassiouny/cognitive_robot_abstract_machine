@@ -1,0 +1,38 @@
+schema_version: 1
+id: krrood-patterns
+title: 'krrood patterns: factory classes that choose the type they build'
+description: 'Patterns that recur across cram and belong in krrood.patterns. First, factory
+  classes: a class that builds one of several types depending on its arguments (SymbolicCallable.__new__,
+  the @symbolic_function wrapper, an/a). Survey the sites, design the pattern, then migrate
+  the sites one item each.'
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 552
+waves:
+- id: wave-1
+  name: Wave 1 - factory classes
+  description: 'Survey and design; site migrations are added as items once the design lands.'
+tracks:
+- id: factory-classes
+  name: Factory classes
+  wave: wave-1
+items:
+- id: factory-class-survey
+  title: Survey where classes act as factories for other classes across cram
+  track: factory-classes
+  status: not started
+  depends_on: []
+  notes: 'From #542 review (predicate.py:213). List every site that picks the type it builds
+    from its arguments - known: SymbolicCallable.__new__ (InstantiatedVariable vs cls), the
+    @symbolic_function wrapper (InstantiatedVariable vs calling the function), an/a (quantifier
+    vs Match) - with the condition each uses, and how each relates to HasFactoryAndKwargs, which
+    holds one deferred build. Output: the survey on the PR and #552; no code change.'
+- id: factory-class-pattern
+  title: A krrood pattern where a factory class declares the types it builds and when
+  track: factory-classes
+  status: not started
+  depends_on:
+  - factory-class-survey
+  notes: 'From #542 review (predicate.py:213, :348). A krrood.patterns base where a factory
+    class declares each type it builds and the condition under which it is built, e.g. a classproperty
+    naming InstantiatedVariable so SymbolicCallable.__new__ reads it off cls instead of naming
+    InstantiatedVariable. Shape follows the survey. Off main; migrations become their own items.'
