@@ -47,18 +47,19 @@ items:
   session: https://claude.ai/code/session_01JxHGiPsM8oqLSysqVaSFHa
   blockers:
     - >-
-      Owner to answer five open #542 threads: the three "why _factory_, not _type_" ones; whether
-      the factory-class pattern (predicate.py:213/348) becomes a plan item; a field for the
-      decorated symbolic function. CI on f611cc5714 to finish.
+      Owner to answer the three open #542 threads asking why _factory_, not _type_
+      (plan_transformations.py:334, task_conditions.py:477, planner.py:118). CI on d019c307c7 to
+      finish.
   depends_on: []
   status: in progress
   notes: >
     Bug-style PR off main, landing on its own (#542). One field for the result type, always a type;
     inference takes only the factory and the type is inferred from it by HasFactoryAndKwargs, the
     same way Match infers its type. A factory with no usable return annotation raises; there is no
-    object fallback.
+    object fallback. A method annotated -> Self builds the class it is bound to.
 
-    InstantiatedVariable inherits HasFactoryAndKwargs, like Match.
+    InstantiatedVariable inherits HasFactoryAndKwargs, like Match; _declared_factory_ holds the
+    decorated symbolic function.
 - id: call-arguments-normalization
   branch: eql-planning/mapped-variable-cache-unhashable-arguments
   title: A query calling a method accepts unhashable arguments, compared through CallArguments
