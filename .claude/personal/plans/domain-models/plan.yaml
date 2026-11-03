@@ -128,9 +128,11 @@ items:
 - id: planar-coordinate-system
   title: Point2 and Pose2D are given in a CartesianFrame2D on a EuclideanSpace2D, with planar rigid changes,
     replacing the abstract Point
-  branch: claude/krrood-spatial-math-planar-coordinate-system
+  branch: ccr-8eec00ba-u65ka7
   track: spatial
-  status: not_started
+  status: in progress
+  pull_request_number: 549
+  session: https://claude.ai/code/session_018wfiv7aAm9qWdXePDiHeBa
   depends_on:
   - planar-point-interface
   notes: 'A CartesianFrame2D is the x-y plane of a CartesianFrame3D and charts a EuclideanSpace2D;
