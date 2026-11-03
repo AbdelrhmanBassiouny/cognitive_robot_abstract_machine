@@ -3,7 +3,8 @@ Plan:
 - Point2/Pose2D given in the plane frame; Pose2D.from_pose by atan2(r21, r11)
 - Remove abstract Point; SemDT callers take Point2 | Point3
 Done:
-- All of the plan, in b04dbd4f8d; krrood_spatial_math, SemDT spatial-type and geometry tests pass locally
+- All of the plan, in b04dbd4f8d
 Next:
-- Read CI on b04dbd4f8d (ORM build, graph-of-convex-sets and root-conftest tests were not run locally)
+- CI red: SemDT ORM build. ORMatic names a DAO after the union bound of PointT, drops the 7 Point2 | Point3 fields, and misses the krrood_spatial_math import
+- Owner chose a krrood ORMatic bug-fix PR off main; first settle whether Point2 and Point3 should share an affine-point interface
 - Owner: should Point2/Pose2D.transform refuse frames on other planes?
