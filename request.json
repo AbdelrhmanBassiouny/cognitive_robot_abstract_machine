@@ -1,6 +1,9 @@
 {
-  "kind": "open-pull-requests",
-  "request_identifier": "ccada5de89f400f7",
+  "kind": "pull-request-report",
+  "request_identifier": "a28b5410e21918c3",
   "upstream": "cram2/cognitive_robot_abstract_machine",
-  "fork": "AbdelrhmanBassiouny/cognitive_robot_abstract_machine"
+  "fork_owner": "AbdelrhmanBassiouny",
+  "pull_request": null,
+  "branch": "D-core-support",
+  "failure_logs": false
 }
