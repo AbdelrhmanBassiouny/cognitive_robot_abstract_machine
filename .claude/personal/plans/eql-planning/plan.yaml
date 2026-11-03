@@ -53,9 +53,9 @@ items:
   depends_on: []
   status: in progress
   notes: >
-    Bug-style PR off main, merged into #535 like #538 (review thread on krrood/planning/fact.py).
-    One field for the result type, always a type; a factory field that defaults to the type and may
-    be a factory method. Afterwards Fact drops its isinstance(_type_, type) guard.
+    Bug-style PR off main, landing on its own (#542). One field for the result type, always a type;
+    inference takes only the factory and the type is inferred from it by HasFactoryAndKwargs, the
+    same way Match infers its type.
 
     InstantiatedVariable inherits HasFactoryAndKwargs, like Match.
 - id: call-arguments-normalization
