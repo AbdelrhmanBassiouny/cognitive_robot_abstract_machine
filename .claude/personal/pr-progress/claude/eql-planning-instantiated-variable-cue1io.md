@@ -1,10 +1,11 @@
 ## Plan
-- Keep the contract: for a SymbolicFunction class, `_type_` is what `__call__` returns and the class is `_factory_`. No silent `object` fallback: an unannotated factory raises ResultTypeCannotBeDetermined.
+- Keep the contract: for a SymbolicFunction class, `_type_` is what `__call__` returns and the class is `_factory_`. An unannotated factory raises ResultTypeCannotBeDetermined; `-> Self` on a method gives the class it is bound to.
 
 ## Done
-- `inference(factory)`, shared `_type_built_by_`, Match on classmethods (9a50802221).
-- Nov 3 review: an() fix and krrood EQL agent rule (20b538ff1e); unannotated factories raise, callers annotated (f611cc5714).
+- `inference(factory)`, shared `_type_built_by_`, unannotated factories raise (to f611cc5714).
+- CI fixes: Self-returning factory methods, compute_euclidean_planar_distance annotated (d20cc9d808); `_declared_factory_` (d019c307c7).
+- Factory-class pattern -> plan krrood-patterns (#552); a/an checker -> eql-verbalization/article-agreement-check.
 
 ## Next
-- Wait for CI on f611cc5714.
-- Owner answers: three `_type_` threads; factory-class pattern as a plan item or #513 discussion; field for the decorated symbolic function.
+- Wait for CI on d019c307c7.
+- Owner answers: the three "why not `_type_`" threads.
