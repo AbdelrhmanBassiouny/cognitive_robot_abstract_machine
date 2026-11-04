@@ -132,14 +132,16 @@ items:
   track: spatial
   status: in progress
   pull_request_number: 549
-  session: https://claude.ai/code/session_01JxHGiKd33nT4CBHmpcAYJ7
+  session: https://claude.ai/code/session_01JxHGiQB6DyqQb7eMwuqgLF
   depends_on:
   - planar-point-interface
-  notes: 'Implemented in #549, which merges main and needs ORMatic fixes #550 and #551 to land first. Adds
-    the dimension-free AffinePoint and CartesianPoint interfaces, renames Point2 and Point3 to CartesianPoint2D
-    and CartesianPoint3D (taken over from spatial-math-imports), types SemDT callers of either dimension
-    as CartesianPoint and stores them through an abstract CartesianPointMapping. Next: CI; owner to decide
-    whether CartesianPoint2D/Pose2D.transform refuse frames on other planes.'
+  notes: >
+    Implemented in #549. Adds the dimension-free AffinePoint and CartesianPoint interfaces, renames
+    Point2 and Point3 to CartesianPoint2D and CartesianPoint3D (taken over from
+    spatial-math-imports), types SemDT callers of either dimension as CartesianPoint and stores them
+    through an abstract CartesianPointMapping. The ORMatic fixes it needed (#550, #551) have landed.
+    Next: CI; owner to decide whether CartesianPoint2D/Pose2D.transform refuse frames on other
+    planes.
 - id: spatial-math-imports
   title: The workspace imports spatial types from krrood_spatial_math, with the decided class names (Vector3D,
     Line3D, Pose3D)
