@@ -33,10 +33,11 @@ items:
   - eql-planning/fluent-state-overlay
   - symbol-graph-removal-by-identity
   status: in progress
-  notes: 'Source commit 08f9178dd2 on aamas27-unification-revision. Stacked on #535;
-    calls keyed by callee + CallArguments as passed (binding the signature cost more than
-    a cheap predicate). Needs #554: held predicate instances make SymbolGraph cleanup
-    quadratic. Draft, tests green; measurements in the PR.'
+  notes: 'Source commit 08f9178dd2 on aamas27-unification-revision. Stacked on #535 (merged
+    at 1351ca2f52); CallResults is a TermReader keyed by callee + CallArguments as passed,
+    predicate truth read as a __call__ call. Needs #554: held predicate instances make
+    SymbolGraph cleanup quadratic. Draft; local tests green at 33df10d098, CI unread; one
+    review thread (rule-conclusion dedup) open.'
 - id: ormatic-collection-translation
   branch: ormatic-collection-translation
   title: 'ORMatic: translate EQL over collection-valued attributes to SQL'
