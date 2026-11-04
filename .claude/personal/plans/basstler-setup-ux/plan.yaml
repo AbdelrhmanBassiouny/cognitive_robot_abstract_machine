@@ -1,0 +1,69 @@
+schema_version: 1
+id: basstler-setup-ux
+title: Smoother basstler setup
+description: 'The setup session for a fork asked many questions and ended with plan_site unverified although the clone''s own dispatch run succeeded. The check judges every repository on the site as one row, cannot tell an unreadable repository from a fault, and leaves steps to the user that the tooling could do. This plan makes the status per repository, treats a successful run as proof, and removes avoidable questions and steps.'
+default_repository: AbdelrhmanBassiouny/basstler
+waves:
+- id: reporting
+  name: Report status truthfully
+  description: Per-repository rows and proof by run, so a working setup is not reported as unverified.
+- id: fewer-steps
+  name: Fewer questions and steps
+  description: Remove answers and manual steps the tooling can settle itself.
+- id: research
+  name: Research
+  description: Analysis and a prototype only; no production change until the user decides.
+tracks:
+- id: status
+  name: plan_site status reporting
+  wave: reporting
+- id: setup-flow
+  name: Setup flow
+  wave: fewer-steps
+- id: token-free
+  name: Token-free publishing
+  wave: research
+items:
+- id: per-repo-status
+  title: plan_site check reports one row per repository
+  track: status
+  status: not started
+  notes: /setup-personal-notes judges only the clone's own repository; other repositories on the site are informational rows.
+- id: run-as-proof
+  title: A successful run after the last config change counts as proof
+  track: status
+  depends_on: [per-repo-status]
+  status: not started
+  notes: Judge by the latest run after the last configuration change, not by failure counts. A 403 on the secrets endpoint or an unreadable other repository must not leave the row unverified; separate "cannot read from this environment" from "unverified".
+- id: short-summary
+  title: One-line plan_site in the session-start summary
+  track: status
+  depends_on: [per-repo-status]
+  status: not started
+  notes: Details move to the skill; no raw 403 JSON in the summary.
+- id: fewer-questions
+  title: Reuse the recorded site repository and name needed attachments up front
+  track: setup-flow
+  status: not started
+  notes: Do not ask when the notes branch records the site repository. State which repositories need add_repo and with what access before asking; the session attached stack-board with push access and never needed it.
+- id: trigger-and-done
+  title: Start the dispatch without a no-op push and print done
+  track: setup-flow
+  depends_on: [run-as-proof]
+  status: not started
+  notes: Add workflow_dispatch to the dispatch workflow and a --trigger option on plan_site.publication that starts it and reports the result. Once a run succeeded, print done instead of repeating the token steps.
+- id: one-call-labels
+  title: List missing labels in one call
+  track: setup-flow
+  status: not started
+  notes: setup.steps lists missing labels, or a cached list is used, when the session has no token, instead of one get_label call per label.
+- id: fix-secret-loop
+  title: Space-separate repositories in the printed gh secret set loop
+  track: setup-flow
+  status: not started
+  notes: The printed loop is "for repository in A, B", which keeps the comma in the first name. Cover it with a test.
+- id: token-free-site
+  title: Analyse and prototype publishing without PLAN_SITE_TOKEN
+  track: token-free
+  status: not started
+  notes: Analysis, discussion with the user and a prototype on stack-board only. Cover pull by schedule or webhook, private notes repositories, latency, Actions usage and security trade-offs. No production change until the user decides.
