@@ -48,8 +48,11 @@ items:
   blockers:
     - >-
       Owner to answer the three open #542 threads asking why _factory_, not _type_
-      (plan_transformations.py:334, task_conditions.py:477, planner.py:118). CI on 9b073d07f3 to
-      finish.
+      (plan_transformations.py:334, task_conditions.py:477, planner.py:118). Upstream cram2#862 has
+      two approvals and no open threads.
+    - >-
+      CI on the merge of main at 9bd5951e46 was still running when read; not run locally (pyjpt
+      cannot be installed here).
   depends_on: []
   status: in progress
   notes: >
