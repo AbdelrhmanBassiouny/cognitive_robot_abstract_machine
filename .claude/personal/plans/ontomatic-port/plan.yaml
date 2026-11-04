@@ -30,9 +30,11 @@ items:
   pull_request_number: 553
   session: https://claude.ai/code/session_01JxHGiMEy4DjtkFbwQu2uRK
   depends_on:
-  - eql-existential-semantics/correlated-quantifiers
+  - eql-planning/fluent-state-overlay
   status: in progress
-  notes: Source commit 08f9178dd2 on aamas27-unification-revision.
+  notes: 'Source commit 08f9178dd2 on aamas27-unification-revision. Stacked on #535;
+    the memo is keyed on its CallTerm. correlated-quantifiers dropped from depends_on
+    (user, 2026-11-04): the memo does not use its semantics.'
 - id: ormatic-collection-translation
   branch: ormatic-collection-translation
   title: 'ORMatic: translate EQL over collection-valued attributes to SQL'
