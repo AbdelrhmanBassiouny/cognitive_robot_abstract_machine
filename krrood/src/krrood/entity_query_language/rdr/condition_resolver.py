@@ -62,7 +62,7 @@ class ResolvedCondition:
 
     expression: SymbolicExpression
     """The EQL condition expression to insert as the new rule's condition."""
-    resolver_type: Type[ConditionResolver]
+    resolver_type: type[ConditionResolver]
     """The concrete resolver class that produced this condition."""
 
 
@@ -206,7 +206,7 @@ class CornerCaseKnowledgeResolver(ConditionResolver):
 class ChainConditionResolver(ConditionResolver):
     """A Chain-of-Responsibility that tries each resolver in order, returning the first match."""
 
-    resolvers: List[ConditionResolver] = field(default_factory=list)
+    resolvers: list[ConditionResolver] = field(default_factory=list)
     """Ordered list of :class:`ConditionResolver` strategies to try, in priority order."""
 
     def _resolve_against_corner_case(
