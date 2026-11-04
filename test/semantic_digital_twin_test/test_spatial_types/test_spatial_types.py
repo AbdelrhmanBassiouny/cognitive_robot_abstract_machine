@@ -1504,7 +1504,6 @@ class TestTransformationMatrix:
         assert t1.inverse().child_frame == reference_frame
         assert t1.position.reference_frame == reference_frame
         assert t1.quaternion.reference_frame == reference_frame
-        assert t1.translation_matrix.reference_frame == reference_frame
         assert t1.rotation_matrix.reference_frame == reference_frame
 
         assert (t1 @ p).reference_frame == reference_frame
@@ -1691,18 +1690,6 @@ class TestTransformationMatrix:
         r2 = [x, y, z, 1]
         for i, e in enumerate(r2):
             assert np.allclose(r1[i], e)
-
-    def test_trans_of(self):
-        x, y, z, qx, qy, qz, qw = 1, 2, 3, 1, 0, 0, 0
-        r1 = HomogeneousTransformationMatrix.from_point_rotation_matrix(
-            point=Point3(x, y, z),
-            rotation_matrix=RotationMatrix.from_quaternion(Quaternion(qx, qy, qz, qw)),
-        ).translation_matrix
-        r2 = np.identity(4)
-        r2[0, 3] = x
-        r2[1, 3] = y
-        r2[2, 3] = z
-        assert np.allclose(r1, r2)
 
     def test_rot_of(self):
         x, y, z, qx, qy, qz, qw = 1, 2, 3, 1, 0, 0, 0
@@ -1959,17 +1946,6 @@ class TestTransformationMatrix:
         assert rotation[0, 3] == 0
         assert rotation[1, 3] == 0
         assert rotation[2, 3] == 0
-
-        # Extract translation (pure translation matrix)
-        translation = t.translation_matrix
-        assert isinstance(translation, HomogeneousTransformationMatrix)
-        # Should have identity rotation
-        rotation_part = translation[:3, :3]
-        assert np.allclose(rotation_part, np.eye(3))
-        # Should preserve translation
-        assert translation.x.to_np() == 1
-        assert translation.y.to_np() == 2
-        assert translation.z.to_np() == 3
 
         # Extract quaternion
         quaternion = t.quaternion

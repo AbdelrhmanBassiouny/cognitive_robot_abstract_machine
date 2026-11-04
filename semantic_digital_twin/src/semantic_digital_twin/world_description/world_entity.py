@@ -32,6 +32,7 @@ from krrood.symbolic_math.symbolic_math import Matrix
 from krrood.utils import get_full_class_name
 from krrood.patterns.identifier_and_name import HasID, HasName
 from krrood_spatial_math.cartesian_frame_3d import CartesianFrame3D
+from krrood_spatial_math.space import EuclideanSpace3D
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
     WorldEntityReference,
     WorldEntityWithIDKwargsTracker,
@@ -390,6 +391,13 @@ class KinematicStructureEntity(
     def remove_from_world(self):
         super().remove_from_world()
         self.index = None
+
+    @property
+    def space(self) -> EuclideanSpace3D | None:
+        """
+        Always ``None``: the space the bodies of a world chart is not modelled yet.
+        """
+        return None
 
     def express_in_own_frame(self, value: GenericSpatialType) -> GenericSpatialType:
         return self._world.transform(value, self)

@@ -4,12 +4,14 @@ from dataclasses import dataclass, field
 from uuid import UUID, uuid4
 
 from krrood.adapters.deserialized_object_tracker import DeserializedObjectTracker
+from krrood.patterns.identifier_and_name import HasID, HasName
 from krrood_spatial_math.cartesian_frame_3d import (
     CartesianFrame3D,
     CartesianFrame3DResolver,
     ValueInCartesianFrame3DT,
 )
 from krrood_spatial_math.exceptions import ReferenceFrameMismatchError
+from krrood_spatial_math.space import EuclideanSpace3D
 
 # %% frames told apart by name
 
@@ -26,9 +28,14 @@ class NamedFrame(CartesianFrame3D[str]):
     What the frame is called.
     """
 
+    space: EuclideanSpace3D | None = None
+    """
+    The space the frame charts.
+    """
+
     id: UUID = field(default_factory=uuid4)
     """
-    The identifier serialized spatial types refer to the frame with.
+    The identifier serialized coordinate representations refer to the frame with.
     """
 
     def express_in_own_frame(
@@ -50,4 +57,43 @@ class KnownFrames(
 ):
     """
     The frames the reader of a document already has.
+    """
+
+
+# %% frames that extend objects named before they are identified
+
+
+@dataclass(eq=False)
+class NamedThing(HasName[str]):
+    """
+    An object that is named whether or not it has an identifier.
+    """
+
+    name: str
+    """
+    What the object is called.
+    """
+
+
+@dataclass(eq=False)
+class IdentifiedNamedThing(NamedThing, HasID):
+    """
+    A named object that also has an identifier, given after its name.
+    """
+
+    id: UUID = field(default_factory=uuid4)
+    """
+    The identifier given after the name.
+    """
+
+
+@dataclass(eq=False)
+class ThingFrame(IdentifiedNamedThing, CartesianFrame3D[str]):
+    """
+    A Cartesian frame that extends an object named before it is identified.
+    """
+
+    space: EuclideanSpace3D | None = None
+    """
+    The space the frame charts.
     """

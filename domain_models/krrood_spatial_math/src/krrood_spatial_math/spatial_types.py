@@ -21,6 +21,8 @@ from krrood_spatial_math.cartesian_frame_3d import (
     CartesianFrame3DReference,
     ValueInCartesianFrame3D,
 )
+from krrood_spatial_math.coordinate_system import RigidCoordinateChange
+from krrood_spatial_math.affine_point import AffinePoint2D, AffinePoint3D
 from krrood_spatial_math.exceptions import (
     InsufficientVectorsError,
     ReferenceFrameMismatchError,
@@ -64,14 +66,11 @@ class SpatialFrameKey(StrEnum):
 
 
 @dataclass(eq=False, repr=False)
-class SpatialType(ValueInCartesianFrame3D, ABC):
+class SpatialType(ABC):
     """
-    Provides functionality to associate a reference frame with an object.
-
-    This mixin class allows the inclusion of a reference frame within objects that
-    require spatial or kinematic context. The reference frame is represented by a
-    `CartesianFrame3D`, which provides the necessary structural and spatial
-    information.
+    A symbolic matrix of spatial mathematics, given relative to a
+    :class:`~krrood_spatial_math.cartesian_frame_3d.CartesianFrame3D`: a value given in
+    that frame, or a change into it.
     """
 
     casadi_sx: ca.SX
@@ -250,7 +249,10 @@ class SpatialType(ValueInCartesianFrame3D, ABC):
 
 @dataclass(eq=False, init=False, repr=False)
 class HomogeneousTransformationMatrix(
-    sm.SymbolicMathType, SpatialType, SubclassJSONSerializer
+    sm.SymbolicMathType,
+    SpatialType,
+    SubclassJSONSerializer,
+    RigidCoordinateChange[CartesianFrame3D],
 ):
     """
     Represents a 4x4 transformation matrix used in kinematics and transformations.
@@ -259,6 +261,15 @@ class HomogeneousTransformationMatrix(
     system (reference frame) and a child coordinate system through rotation and
     translation. It provides utilities to derive transformations, compute dot products,
     and create transformations from various inputs such as Euler angles or quaternions.
+
+    It is only a change of coordinates from its :attr:`child_frame` into its
+    :attr:`reference_frame`, never a value given in a frame: the value it corresponds to
+    is a :class:`Pose`.
+
+    .. warning::
+        The matrix must be rigid: its upper left 3x3 block a rotation and its last row
+        ``[0, 0, 0, 1]``. :meth:`inverse` and the rotation it is composed of are wrong
+        for a matrix that scales or shears.
     """
 
     child_frame: CartesianFrame3D | None = field(kw_only=True, default=None)
@@ -285,6 +296,14 @@ class HomogeneousTransformationMatrix(
         else:
             self.casadi_sx = sm.to_sx(data)
         super().__post_init__()
+
+    @property
+    def source_coordinate_system(self) -> CartesianFrame3D | None:
+        return self.child_frame
+
+    @property
+    def target_coordinate_system(self) -> CartesianFrame3D | None:
+        return self.reference_frame
 
     def _verify_type(self):
         if self.shape != (4, 4):
@@ -618,19 +637,6 @@ class HomogeneousTransformationMatrix(
         return self.rotation_matrix.axis_angle
 
     @property
-    def translation_matrix(self) -> HomogeneousTransformationMatrix:
-        """
-        :return: This transformation with its rotation replaced by the identity.
-        """
-        r = HomogeneousTransformationMatrix()
-        r[0, 3] = self[0, 3]
-        r[1, 3] = self[1, 3]
-        r[2, 3] = self[2, 3]
-        return HomogeneousTransformationMatrix(
-            data=r, reference_frame=self.reference_frame, child_frame=None
-        )
-
-    @property
     def rotation_matrix(self) -> RotationMatrix:
         """
         :return: The rotation this transformation is composed of.
@@ -678,7 +684,9 @@ class HomogeneousTransformationMatrix(
 
 
 @dataclass(eq=False, init=False, repr=False)
-class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
+class RotationMatrix(
+    sm.SymbolicMathType, SpatialType, ValueInCartesianFrame3D, SubclassJSONSerializer
+):
     """
     Class to represent a 4x4 symbolic rotation matrix tied to kinematic references.
 
@@ -1081,7 +1089,13 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         return r_distance.angle
 
 
-class Point(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer, ABC):
+class Point(
+    sm.SymbolicMathType,
+    SpatialType,
+    ValueInCartesianFrame3D,
+    SubclassJSONSerializer,
+    ABC,
+):
     """
     Shared x/y coordinate access for 2D and 3D points.
 
@@ -1115,7 +1129,7 @@ class Point(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer, ABC):
 
 
 @dataclass(eq=False, init=False, repr=False)
-class Point3(Point):
+class Point3(Point, AffinePoint3D[CartesianFrame3D, sm.Scalar]):
     """
     Represents a 3D point with reference frame handling.
 
@@ -1366,7 +1380,7 @@ class Point3(Point):
 
 
 @dataclass(eq=False, init=False, repr=False)
-class Point2(Point):
+class Point2(Point, AffinePoint2D[CartesianFrame3D, sm.Scalar]):
     """
     Represents a 2D point with reference frame handling.
 
@@ -1567,7 +1581,9 @@ class OrthogonalProjection:
 
 
 @dataclass(eq=False, init=False, repr=False)
-class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
+class Vector3(
+    sm.SymbolicMathType, SpatialType, ValueInCartesianFrame3D, SubclassJSONSerializer
+):
     """
     Representation of a 3D vector with reference frame support for homogenous
     transformations.
@@ -1941,7 +1957,9 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
 
 @dataclass(eq=False, init=False, repr=False)
-class Quaternion(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
+class Quaternion(
+    sm.SymbolicMathType, SpatialType, ValueInCartesianFrame3D, SubclassJSONSerializer
+):
     """
     Represents a quaternion, which is a mathematical entity used to encode rotations in
     three-dimensional space.
@@ -2290,7 +2308,9 @@ class Quaternion(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
 
 @dataclass(eq=False, init=False, repr=False)
-class AxisAngle(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
+class AxisAngle(
+    sm.SymbolicMathType, SpatialType, ValueInCartesianFrame3D, SubclassJSONSerializer
+):
     """
     A rotation by an angle around a unit axis.
     """
@@ -2450,7 +2470,9 @@ class AxisAngle(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
 
 @dataclass(eq=False, init=False, repr=False)
-class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
+class Pose(
+    sm.SymbolicMathType, SpatialType, ValueInCartesianFrame3D, SubclassJSONSerializer
+):
     def __init__(
         self,
         position: Point3 | None = None,
@@ -2693,7 +2715,9 @@ class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
 
 @dataclass(eq=False, init=False, repr=False)
-class Pose2D(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
+class Pose2D(
+    sm.SymbolicMathType, SpatialType, ValueInCartesianFrame3D, SubclassJSONSerializer
+):
     """
     Represents a 2D pose consisting of an x coordinate, a y coordinate, and a yaw angle.
 
