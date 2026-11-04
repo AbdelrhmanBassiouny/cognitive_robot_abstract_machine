@@ -68,4 +68,9 @@ items:
   status: not started
   notes: Analysis, discussion with the user and a prototype on stack-board only. Cover pull by schedule or webhook, private notes repositories, latency, Actions usage and security trade-offs. No production change until the user decides.
 
+- id: retry-transient-errors
+  title: Retry transient GitHub server errors in the site build and dispatch
+  track: setup-flow
+  status: not started
+  notes: A GitHub 500 while reading a commit's check status failed the whole site build (stack-board run 107), and a 502 failed the dispatch step (run 76), so the plan page returned 404 until a manual rebuild. Retry 5xx with backoff in the GitHub client and the gh workflow run step; an unreadable check state degrades to unknown instead of failing the build.
 tracking_issue: 135
