@@ -31,10 +31,12 @@ items:
   session: https://claude.ai/code/session_01JxHGiMEy4DjtkFbwQu2uRK
   depends_on:
   - eql-planning/fluent-state-overlay
+  - symbol-graph-removal-by-identity
   status: in progress
   notes: 'Source commit 08f9178dd2 on aamas27-unification-revision. Stacked on #535;
-    the memo is keyed on its CallTerm. correlated-quantifiers dropped from depends_on
-    (user, 2026-11-04): the memo does not use its semantics.'
+    calls keyed by callee + CallArguments as passed (binding the signature cost more than
+    a cheap predicate). Needs #554: held predicate instances make SymbolGraph cleanup
+    quadratic. Draft, tests green; measurements in the PR.'
 - id: ormatic-collection-translation
   branch: ormatic-collection-translation
   title: 'ORMatic: translate EQL over collection-valued attributes to SQL'
@@ -122,3 +124,15 @@ items:
   - closure-verification
   status: not_started
   notes: From krrood_experiments aamas27-* and the supplement; large runs skipped in CI.
+
+- id: symbol-graph-removal-by-identity
+  branch: fix/symbol-graph-removal-by-identity
+  title: 'SymbolGraph: remove a wrapped instance by identity, not by equality'
+  track: paper-eql-ormatic
+  pull_request_number: 554
+  session: https://claude.ai/code/session_01JxHGiMEy4DjtkFbwQu2uRK
+  depends_on: []
+  status: in progress
+  notes: 'Bug fix off main, found measuring eql-predicate-call-memo. Draft, krrood_test
+    green apart from Graphviz tests. The stale _instance_index entry of a dead instance
+    is a separate root cause, not fixed here.'
