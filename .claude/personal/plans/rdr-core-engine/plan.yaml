@@ -92,11 +92,10 @@ items:
   depends_on:
   - D-core-serialization
   status: in_progress
-  notes: 'Restacked 2026-08-12 out of the six days it spent unmergeable, which was what stopped the whole
-    stack landing. Two resolutions outlive that round: `base_expressions.py` keeps main''s `set_active_root_if_not_set`
-    API at this branch''s own placement, hoisted out of the `owns_an_evaluation_context` branch so it
-    also runs under a pre-installed context; and the conclusion gate reads `if not is_active_root` now
-    that eql-truth-unification deleted `is_condition_false`.'
+  notes: 'Merged D-core-serialization into it 2026-11-04 (ff9a89984, merge probe clean). The one core-EQL
+    fix still needed sets the active conditions root in `_evaluate_within_`, for pre-installed contexts;
+    the gate fix is gone. Descendants restacked except `claude/rdr-why-answer-6fnw2o` (conflicts in
+    explanation.py, observer.py). CI after the push not read.'
 - id: d-core-expert
   title: 'RDR engine: Expert policy split'
   branch: D-core-expert
