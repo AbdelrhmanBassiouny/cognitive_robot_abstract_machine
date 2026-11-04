@@ -31,7 +31,7 @@ class AmbiguousBranchSemanticsError(DataclassException):
     selector: object
     """The conclusion selector node being dispatched when the collision occurred."""
 
-    candidates: List[Type]
+    candidates: list[type]
     """
     The equally-specific branch-semantics classes that collided.
     """
@@ -96,7 +96,9 @@ class NoInferenceTarget(DataclassException):
     """
 
     case_type: type
-    """The type whose instances were queried."""
+    """
+    The type whose instances were queried.
+    """
 
     def error_message(self) -> str:
         return f"{self.case_type.__name__} has no underspecified (`...`) attribute to infer."
@@ -112,7 +114,9 @@ class MultipleInferenceTargets(DataclassException):
     """
 
     attribute_names: list[str]
-    """The names of the attributes that were all marked with ``...``."""
+    """
+    The names of the attributes that were all marked with ``...``.
+    """
 
     def error_message(self) -> str:
         return (
@@ -135,7 +139,9 @@ class UnsupportedInferenceTarget(DataclassException):
     """
 
     case_type: type
-    """The type whose instances were queried."""
+    """
+    The type whose instances were queried.
+    """
 
     attribute_name: str
     """
@@ -152,6 +158,36 @@ class UnsupportedInferenceTarget(DataclassException):
         return "This will be supported by a future MultiClassRDR."
 
 
+@dataclass
+class UndeclaredInferenceTarget(DataclassException):
+    """
+    Raised when an ``...`` attribute is not a declared field of the case type, so the
+    shape of the value to infer is unknown.
+    """
+
+    case_type: type
+    """
+    The type whose instances were queried.
+    """
+
+    attribute_name: str
+    """
+    The name of the attribute that was marked with ``...``.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.case_type.__name__}.{self.attribute_name} is not a declared field of "
+            f"{self.case_type.__name__}, so the value to infer cannot be checked."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            f"Make {self.case_type.__name__} a dataclass that declares "
+            f"{self.attribute_name} as a field."
+        )
+
+
 # %% rule-tree serialization
 
 
@@ -163,7 +199,9 @@ class CaseNotSerializableError(DataclassException):
     """
 
     value: Any
-    """The field value that could not be serialized."""
+    """
+    The field value that could not be serialized.
+    """
 
     supported_types: Tuple[Type, ...]
     """
@@ -172,7 +210,9 @@ class CaseNotSerializableError(DataclassException):
     """
 
     def error_message(self) -> str:
-        type_names = ", ".join(t.__name__ for t in self.supported_types)
+        type_names = ", ".join(
+            supported_type.__name__ for supported_type in self.supported_types
+        )
         return (
             f"Cannot serialize value of type {type(self.value).__name__!r} to Python "
             f"constructor source. Only None, {type_names} members, and nested "
