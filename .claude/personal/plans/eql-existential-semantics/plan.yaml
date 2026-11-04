@@ -124,6 +124,7 @@ items:
   pull_request_number: 495
   track: quantifiers
   status: in_progress
+  session: https://claude.ai/code/session_01JxHGiLw14x2s6qUmLMbTjy
   notes: 'Already merged into aamas27-unification-revision. Source commits 3853c9b6d8, 1cd3425d67,
     c95bbfb41b, 3308cb252f on aamas27-fast-translation (ontomatic-port''s former eql-correlated-quantifiers).
     Overlaps exists-semijoin and negation-antijoin: settle which supersedes which before either
