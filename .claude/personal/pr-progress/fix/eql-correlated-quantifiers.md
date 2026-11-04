@@ -1,23 +1,19 @@
 # fix/eql-correlated-quantifiers — PR #495 (eql-existential-semantics / correlated-quantifiers)
 
 ## Done (2026-11-04)
-- Merged `origin/main` (merge `9a6210279d`) to resolve the conflicts the maintenance pass
-  kept reporting. The merge probe against cram2 `main` `f3c6df91` is CLEAN at that head.
-  The PR description's "Merge with main" section has the details.
-- Key change beyond the markers: main builds instances from bindings, which bypasses
-  `construct_instance`. `_construct_argument_from_bindings_` therefore applies
-  `_as_constructor_argument_`; without it, 16 construction tests fail.
-- Local runs: the PR's modules 116 passed; `test_eql` 1548 passed; the rest of
-  `krrood_test` passed apart from environment-only failures (docformatter, graphviz,
-  semantic_digital_twin).
+- Merged `origin/main` (`9a6210279d`); merge probe vs cram2 `main` `f3c6df91` CLEAN at that head.
+- Review round 1 (owner, 27 threads): fixed in `6c450180be` (scope found top-down from the
+  evaluated query, walk moved onto `QuantifiedConditional`, no `Literal` case, `flat_variable`
+  element typing for dict/tuple) and `60899651e6` (a/an, names, `role_taker`, join example).
+  23 threads replied + resolved. Local: `test_eql` + `test_class_diagram` 1647 passed.
 
 ## State
-- CI on `9a6210279d`: *not checked* yet.
-- No upstream PR yet. The owner confirmed the item is finished, so the PR stays ready and
-  is due for promotion on the next maintenance pass.
+- PR is ready (owner kept it ready). CI on `60899651e6`: *not checked*.
+- Branch is 25 commits behind `main` (not merged this round).
 
 ## Next
-- Read CI on `9a6210279d`. Once the next maintenance pass sees a clean merge, the
-  `needs-resolution` label clears.
-- Still open, not this PR's blocker: which of `exists-semijoin` / `negation-antijoin` this
-  item supersedes (see the item's notes).
+- Four open threads wait on the owner: element semantics in `match` (proposal: keep nested
+  patterns, raise for plain values); bag vs set semantics (repeated 10, recommend bag);
+  `flat_variable` automation (separate item, ask before `/add-plan-item`); performance (~4%).
+- Act on the `match` decision; it touches docs, three test modules and the construction wrap.
+- Still open: which of `exists-semijoin` / `negation-antijoin` this item supersedes.
