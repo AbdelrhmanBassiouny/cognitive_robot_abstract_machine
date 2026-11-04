@@ -85,11 +85,13 @@ items:
   - call-arguments-normalization
   status: in progress
   notes: >
-    Ready for review (owner, Oct 31, 86eb30b38); upstream promotion link recorded in #535, not yet
-    opened on cram2. Includes #538 and #540, which should land upstream first.
+    Ready for review; promoted as cram2#866 (open, checks green, no reviews yet). Includes #538 and
+    #540, which should land upstream first.
 
     #542 is not merged into #535. If #535 needs it, #535 is stacked on #542 and then drops
     Fact._is_predicate's isinstance(_type_, type) guard.
+
+    Fork main is behind cram2 main; the next maintenance pass fast-forwards it.
 - id: state-objects-and-domains
   branch: ccr-b32c8432-18ncpi
   title: 'Objects in a State: a state adds and removes objects, and default EQL domains come from
