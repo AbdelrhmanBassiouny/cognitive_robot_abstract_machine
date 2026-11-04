@@ -14,8 +14,8 @@ from krrood.entity_query_language.factories import (
     add,
 )
 from krrood.entity_query_language.core.variable import Literal
-from krrood.entity_query_language.core.base_expressions import (
-    OperationResult,
+from krrood.entity_query_language.core.base_expressions import OperationResult
+from krrood.entity_query_language.evaluation_context import (
     _evaluation_context_var,
     get_evaluation_context,
     set_evaluation_context,
@@ -940,12 +940,9 @@ def test_conclusions_fire_with_a_pre_installed_evaluation_context(
     A conclusion must still fire when an ``EvaluationContext`` is already active.
 
     Callers like RDR's ``classify_case``/``trace_case`` install an ``EvaluationContext``
-    before calling ``.evaluate()``, so ``_evaluate_``'s ``owns_an_evaluation_context``
-    is ``False`` for every node in that pass.
-    ``active_conditions_root.set_active_root_if_not_set()`` must still run in that case --
-    previously it was skipped entirely (nested inside the ``owns_an_evaluation_context``
-    branch), so the active conditions root was never set and conclusions never fired
-    under RDR classification.
+    before evaluating, so no node of the pass starts a context of its own. The active
+    conditions root must still be set in that case; otherwise no node is the active root
+    and no conclusion fires.
     """
     world = handles_and_containers_world
     container = variable(Container, domain=world.bodies)
