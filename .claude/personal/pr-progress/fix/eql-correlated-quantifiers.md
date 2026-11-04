@@ -4,11 +4,12 @@
 - Review round 1: 23 of 27 threads fixed and resolved (`6c450180be`, `60899651e6`).
 - `match` on collections, option A (`3a67fd6030`): reading by declared type, error for a value
   of neither type; lists/tuples `==` by order/length (also plain `==`); list of patterns needs
-  the same length. Local: `test_eql` + `test_class_diagram` 1659 passed.
+  the same length. Nested pattern's domain restricts its object (`fa89a33f60`; generative
+  backends still ignore it). Local: `test_eql` + `test_class_diagram` 1664 passed.
 - Shared doc for the vote: https://claude.ai/artifact/EjQU8z1th3N82LxWEdXNCT
 
 ## State
-- PR is ready (owner kept it ready). CI on `3a67fd6030`: *not checked*. Now `api-break`
+- PR is ready (owner kept it ready). CI on `fa89a33f60`: *not checked*. Now `api-break`
   (suggest the label; discuss with the krrood code owners).
 
 ## Next
