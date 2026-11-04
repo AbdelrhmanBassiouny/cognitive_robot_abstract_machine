@@ -47,11 +47,12 @@ items:
   status: not started
   notes: Do not ask when the notes branch records the site repository. State which repositories need add_repo and with what access before asking; the session attached stack-board with push access and never needed it.
 - id: trigger-and-done
-  title: Start the dispatch without a no-op push and print done
+  title: Start the site build without a no-op push and print done
   track: setup-flow
-  depends_on: [run-as-proof]
+  depends_on:
+  - run-as-proof
   status: not started
-  notes: Add workflow_dispatch to the dispatch workflow and a --trigger option on plan_site.publication that starts it and reports the result. Once a run succeeded, print done instead of repeating the token steps.
+  notes: The dispatch workflow already accepts workflow_dispatch. Add a --trigger option on plan_site.publication that starts the site workflow and reports the result. Once a run succeeded, print done instead of repeating the token steps.
 - id: one-call-labels
   title: List missing labels in one call
   track: setup-flow
@@ -69,8 +70,18 @@ items:
   notes: Analysis, discussion with the user and a prototype on stack-board only. Cover pull by schedule or webhook, private notes repositories, latency, Actions usage and security trade-offs. No production change until the user decides.
 
 - id: retry-transient-errors
-  title: Retry transient GitHub server errors in the site build and dispatch
+  title: Retry transient GitHub server errors when reading in the site build
+  track: setup-flow
+  status: in progress
+  notes: 'Done on the branch: reads asked again on a 5xx with 1, 2 and 4 second waits (RetryPolicy in github/client.py); writes never. Left: a check state still unreadable after the retries degrades to unknown instead of failing the build. Cause: one 5xx among the many commit-status reads failed builds 107-109 and 112-113 of stack-board.'
+  branch: fix-retry-transient-github-errors
+  repository: AbdelrhmanBassiouny/basstler
+  pull_request_number: 136
+  session: https://claude.ai/code/session_01JxHGiLLiodxFsvyywDM1YS
+
+- id: retry-dispatch-step
+  title: Retry the gh workflow run step of the dispatch workflow
   track: setup-flow
   status: not started
-  notes: A GitHub 500 while reading a commit's check status failed the whole site build (stack-board run 107), and a 502 failed the dispatch step (run 76), so the plan page returned 404 until a manual rebuild. Retry 5xx with backoff in the GitHub client and the gh workflow run step; an unreadable check state degrades to unknown instead of failing the build.
+  notes: Dispatch run 76 failed with a 502 from gh workflow run, so a notes push started no build. Retry the step with a growing wait in templates/plan_site_dispatch_workflow.yml. test_publication.py pins the step's command and must change with it; deployed workflows are rewritten at the next setup run.
 tracking_issue: 135
