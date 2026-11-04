@@ -37,7 +37,7 @@ from semantic_digital_twin.robots.hsrb import HSRB
 from semantic_digital_twin.robots.robot_parts import Arm
 from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
 from semantic_digital_twin.semantic_annotations.mixins import HasGraspCandidates
-from krrood_spatial_math.spatial_types import Point3, Pose, Vector3
+from krrood_spatial_math.spatial_types import CartesianPoint3D, Pose, Vector3
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
 from cramph.composites import Sequence
@@ -165,8 +165,8 @@ class Sage10kGymDemo(Sage10kAbstractDemoHSRB):
         return Pose.from_xyz_rpy(x=3, y=-7, z=0, reference_frame=self.world.root)
 
     @property
-    def world_P_object_of_interest(self) -> Point3:
-        return Point3(1.03, -0.716, 0.203, reference_frame=self.world.root)
+    def world_P_object_of_interest(self) -> CartesianPoint3D:
+        return CartesianPoint3D(1.03, -0.716, 0.203, reference_frame=self.world.root)
 
     @property
     def pickup_navigation_pose(self) -> Pose:
@@ -413,7 +413,7 @@ class Sage10kTropicalWarehouse(Sage10kAbstractDemoHSRB):
     def target_to_pick(self) -> NaturalLanguageWithTypeDescription:
 
         @symbolic_function
-        def planar_distance(point1: Point3, point2: Point3):
+        def planar_distance(point1: CartesianPoint3D, point2: CartesianPoint3D):
             return point1.euclidean_distance(point2)
 
         point_guess = Pose.from_xyz_rpy(
@@ -483,7 +483,7 @@ class Sage10kVaporwave(Sage10kAbstractDemoHSRB):
     def target_to_pick(self) -> NaturalLanguageWithTypeDescription:
 
         @symbolic_function
-        def planar_distance(point1: Point3, point2: Point3):
+        def planar_distance(point1: CartesianPoint3D, point2: CartesianPoint3D):
             return point1.euclidean_distance(point2)
 
         point_guess = Pose.from_xyz_rpy(
@@ -554,7 +554,7 @@ class Sage10kEclecticResidence(Sage10kAbstractDemoHSRB):
     def target_to_pick(self) -> NaturalLanguageWithTypeDescription:
 
         @symbolic_function
-        def planar_distance(point1: Point3, point2: Point3):
+        def planar_distance(point1: CartesianPoint3D, point2: CartesianPoint3D):
             return point1.euclidean_distance(point2)
 
         point_guess = Pose.from_xyz_rpy(
@@ -657,7 +657,7 @@ class Sage10kSouthwesternStoreDemo(Sage10kAbstractDemoHSRB):
     @property
     def object_of_interest(self) -> NaturalLanguageWithTypeDescription:
         @symbolic_function
-        def planar_distance(point1: Point3, point2: Point3):
+        def planar_distance(point1: CartesianPoint3D, point2: CartesianPoint3D):
             return point1.euclidean_distance(point2)
 
         near_pose = Pose.from_xyz_rpy(
@@ -766,7 +766,7 @@ class Sage10kBrutalistStoreDemo(Sage10kAbstractDemoHSRB):
     @property
     def object_of_interest(self) -> NaturalLanguageWithTypeDescription:
         @symbolic_function
-        def planar_distance(point1: Point3, point2: Point3):
+        def planar_distance(point1: CartesianPoint3D, point2: CartesianPoint3D):
             return point1.euclidean_distance(point2)
 
         near_pose = Pose.from_xyz_rpy(
@@ -859,7 +859,7 @@ class Sage10kAmericanBuffetDemo(Sage10kAbstractDemoHSRB):
     @property
     def object_of_interest(self) -> NaturalLanguageWithTypeDescription:
         @symbolic_function
-        def planar_distance(point1: Point3, point2: Point3):
+        def planar_distance(point1: CartesianPoint3D, point2: CartesianPoint3D):
             return point1.euclidean_distance(point2)
 
         pose = Pose.from_xyz_rpy(x=4.06, y=8.64, reference_frame=self.world.root)

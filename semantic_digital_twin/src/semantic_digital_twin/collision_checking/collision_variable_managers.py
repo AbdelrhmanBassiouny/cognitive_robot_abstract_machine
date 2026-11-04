@@ -18,7 +18,7 @@ from semantic_digital_twin.collision_checking.collision_groups import (
     CollisionGroup,
     CollisionGroupCombination,
 )
-from krrood_spatial_math.spatial_types import Vector3, Point3
+from krrood_spatial_math.spatial_types import Vector3, CartesianPoint3D
 from semantic_digital_twin.world_description.world_entity import Body
 
 # %% avoided contacts
@@ -388,14 +388,14 @@ class ExternalCollisionVariableManager(BaseCollisionVariableManager):
 
     def get_group_a_P_point_on_a_symbol(
         self, contact: AvoidedExternalContact
-    ) -> Point3:
+    ) -> CartesianPoint3D:
         """
         :return: The point of `contact` on its group, relative to the root of the group.
         """
         return self._get_cached_symbol(
             "get_group_a_P_point_on_a_symbol",
             (contact.group.root.name, contact.rank),
-            lambda: Point3.create_with_variables(
+            lambda: CartesianPoint3D.create_with_variables(
                 name=f"group_a_P_point_on_a({contact.group.root.name}, {contact.rank})",
             ),
         )
@@ -671,7 +671,9 @@ class SelfCollisionVariableManager(BaseCollisionVariableManager):
             self.get_buffer_distance_symbol(contact)
             self.get_violated_distance_symbol(contact)
 
-    def get_group_a_P_point_on_a_symbol(self, contact: AvoidedSelfContact) -> Point3:
+    def get_group_a_P_point_on_a_symbol(
+        self, contact: AvoidedSelfContact
+    ) -> CartesianPoint3D:
         """
         :return: The point of `contact` on its first group, relative to the root of
             that group.
@@ -681,12 +683,14 @@ class SelfCollisionVariableManager(BaseCollisionVariableManager):
         return self._get_cached_symbol(
             "get_group_a_P_point_on_a_symbol",
             (group_a.root.name, group_b.root.name, contact.rank),
-            lambda: Point3.create_with_variables(
+            lambda: CartesianPoint3D.create_with_variables(
                 name=f"group_a_P_point_on_a({group_a.root.name}, {group_b.root.name}, {contact.rank})",
             ),
         )
 
-    def get_group_b_P_point_on_b_symbol(self, contact: AvoidedSelfContact) -> Point3:
+    def get_group_b_P_point_on_b_symbol(
+        self, contact: AvoidedSelfContact
+    ) -> CartesianPoint3D:
         """
         :return: The point of `contact` on its second group, relative to the root of
             that group.
@@ -696,7 +700,7 @@ class SelfCollisionVariableManager(BaseCollisionVariableManager):
         return self._get_cached_symbol(
             "get_group_b_P_point_on_b_symbol",
             (group_a.root.name, group_b.root.name, contact.rank),
-            lambda: Point3.create_with_variables(
+            lambda: CartesianPoint3D.create_with_variables(
                 name=f"group_b_P_point_on_b({group_a.root.name}, {group_b.root.name}, {contact.rank})",
             ),
         )

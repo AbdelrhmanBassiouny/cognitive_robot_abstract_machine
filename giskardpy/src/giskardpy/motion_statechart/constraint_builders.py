@@ -11,7 +11,7 @@ from giskardpy.qp.constraint import LargeNumber
 from giskardpy.qp.constraint_collection import ConstraintCollection
 from krrood_spatial_math.spatial_types import (
     AxisAngle,
-    Point3,
+    CartesianPoint3D,
     Quaternion,
     Vector3,
     RotationMatrix,
@@ -43,8 +43,8 @@ class GeometricConstraintBuilder:
 
     def add_point_goal_constraints(
         self,
-        frame_P_current: Point3,
-        frame_P_goal: Point3,
+        frame_P_current: CartesianPoint3D,
+        frame_P_goal: CartesianPoint3D,
         reference_velocity: sm.ScalarData,
         quadratic_weight: sm.ScalarData,
         name: str | None = None,
@@ -236,7 +236,7 @@ class GeometricConstraintBuilder:
 
     def add_translational_velocity_limit(
         self,
-        frame_P_current: Point3,
+        frame_P_current: CartesianPoint3D,
         max_velocity: sm.ScalarData,
         quadratic_weight: sm.ScalarData,
         max_violation: sm.ScalarData = np.inf,

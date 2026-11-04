@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from copy import deepcopy, copy
 from dataclasses import dataclass, field
 from enum import Enum, StrEnum
+from uuid import UUID, uuid5
 
 import casadi as ca
 import numpy as np
@@ -11,23 +12,37 @@ from typing_extensions import Any, overload, Self, Callable, TypeVar
 
 import krrood.symbolic_math.symbolic_math as sm
 from krrood.adapters.json_serializer import SubclassJSONSerializer
+from krrood.patterns.identifier_and_name import NameT
+from krrood.patterns.mixin import Mixin
 from krrood.symbolic_math.exceptions import (
     WrongDimensionsError,
     UnsupportedOperationError,
 )
 from krrood.symbolic_math.symbolic_math import Matrix, to_sx
+from krrood_spatial_math.cartesian_frame_2d import CartesianFrame2D
 from krrood_spatial_math.cartesian_frame_3d import (
     CartesianFrame3D,
     CartesianFrame3DReference,
     ValueInCartesianFrame3D,
 )
-from krrood_spatial_math.coordinate_system import RigidCoordinateChange
-from krrood_spatial_math.affine_point import AffinePoint2D, AffinePoint3D
+from krrood_spatial_math.coordinate_system import (
+    CoordinateRepresentation,
+    RigidCoordinateChange,
+)
+from krrood_spatial_math.affine_point import (
+    AffinePoint2D,
+    AffinePoint3D,
+    CartesianPoint,
+)
 from krrood_spatial_math.exceptions import (
+    FramesOnDifferentPlanesError,
     InsufficientVectorsError,
+    MirroredPlaneFramesError,
     ReferenceFrameMismatchError,
     SpatialTypesError,
+    XAxisNormalToPlaneError,
 )
+from krrood_spatial_math.space import EuclideanSpace2D, EuclideanSpace3D
 
 
 class _ConstantMatrixParts(ca.SX, Enum):
@@ -247,10 +262,41 @@ class SpatialType(ABC):
         return result
 
 
+@dataclass(eq=False, repr=False)
+class SpatialChange(SpatialType, ABC):
+    """
+    A spatial type that changes coordinates given in its :attr:`child_frame` into its
+    :attr:`~SpatialType.reference_frame`.
+    """
+
+    child_frame: CartesianFrame3D | None = field(kw_only=True, default=None)
+    """
+    The frame the coordinates this change acts on are given in.
+    """
+
+    def _frames_to_json(self, data: dict[str, Any]) -> None:
+        super()._frames_to_json(data)
+        if self.child_frame is not None:
+            CartesianFrame3DReference(SpatialFrameKey.CHILD).write(
+                data, self.child_frame
+            )
+
+    def _frames_from_json(self, data: dict[str, Any], **kwargs) -> None:
+        super()._frames_from_json(data, **kwargs)
+        self.child_frame = self._parse_optional_frame_from_json(
+            data, frame=SpatialFrameKey.CHILD, **kwargs
+        )
+
+    def _copy_with_data(self, data: ca.SX) -> Self:
+        result = super()._copy_with_data(data)
+        result.child_frame = self.child_frame
+        return result
+
+
 @dataclass(eq=False, init=False, repr=False)
 class HomogeneousTransformationMatrix(
     sm.SymbolicMathType,
-    SpatialType,
+    SpatialChange,
     SubclassJSONSerializer,
     RigidCoordinateChange[CartesianFrame3D],
 ):
@@ -270,11 +316,6 @@ class HomogeneousTransformationMatrix(
         The matrix must be rigid: its upper left 3x3 block a rotation and its last row
         ``[0, 0, 0, 1]``. :meth:`inverse` and the rotation it is composed of are wrong
         for a matrix that scales or shears.
-    """
-
-    child_frame: CartesianFrame3D | None = field(kw_only=True, default=None)
-    """
-    child_frame of this transformation matrix.
     """
 
     def __init__(
@@ -354,19 +395,6 @@ class HomogeneousTransformationMatrix(
         transformation_matrix.append([0, 0, 0, 1])
         return cls(transformation_matrix)
 
-    def _frames_to_json(self, data: dict[str, Any]) -> None:
-        super()._frames_to_json(data)
-        if self.child_frame is not None:
-            CartesianFrame3DReference(SpatialFrameKey.CHILD).write(
-                data, self.child_frame
-            )
-
-    def _frames_from_json(self, data: dict[str, Any], **kwargs) -> None:
-        super()._frames_from_json(data, **kwargs)
-        self.child_frame = self._parse_optional_frame_from_json(
-            data, frame=SpatialFrameKey.CHILD, **kwargs
-        )
-
     def _constant_to_json(self) -> dict[str, Any]:
         return {
             "position": self.position.to_np().tolist(),
@@ -376,7 +404,7 @@ class HomogeneousTransformationMatrix(
     @classmethod
     def from_point_rotation_matrix(
         cls,
-        point: Point3 | None = None,
+        point: CartesianPoint3D | None = None,
         rotation_matrix: RotationMatrix | None = None,
         reference_frame: CartesianFrame3D | None = None,
         child_frame: CartesianFrame3D | None = None,
@@ -441,7 +469,7 @@ class HomogeneousTransformationMatrix(
         :return: A TransformationMatrix object created using the provided position and
             orientation values
         """
-        p = Point3(x=x, y=y, z=z)
+        p = CartesianPoint3D(x=x, y=y, z=z)
         r = RotationMatrix.from_rpy(roll, pitch, yaw)
         return cls.from_point_rotation_matrix(
             p, r, reference_frame=reference_frame, child_frame=child_frame
@@ -478,7 +506,7 @@ class HomogeneousTransformationMatrix(
         :param child_frame: Optional child frame for the transformation matrix.
         :return: A `TransformationMatrix` object constructed from the given parameters.
         """
-        p = Point3(x=pos_x, y=pos_y, z=pos_z)
+        p = CartesianPoint3D(x=pos_x, y=pos_y, z=pos_z)
         r = RotationMatrix.from_quaternion(
             quaternion=Quaternion(w=quat_w, x=quat_x, y=quat_y, z=quat_z)
         )
@@ -521,7 +549,7 @@ class HomogeneousTransformationMatrix(
         rotation_matrix = RotationMatrix.from_axis_angle(
             AxisAngle(axis=axis, angle=angle)
         )
-        point = Point3(x=x, y=y, z=z)
+        point = CartesianPoint3D(x=x, y=y, z=z)
         return cls.from_point_rotation_matrix(
             point=point,
             rotation_matrix=rotation_matrix,
@@ -574,7 +602,13 @@ class HomogeneousTransformationMatrix(
             return result
         if isinstance(
             other,
-            (Vector3, Point3, RotationMatrix, HomogeneousTransformationMatrix, Pose),
+            (
+                Vector3,
+                CartesianPoint3D,
+                RotationMatrix,
+                HomogeneousTransformationMatrix,
+                Pose,
+            ),
         ):
             result_sx = ca.mtimes(self.casadi_sx, other.casadi_sx)
             result = type(other).from_casadi_sx(casadi_sx=result_sx)
@@ -614,11 +648,11 @@ class HomogeneousTransformationMatrix(
         return f2_T_f1
 
     @property
-    def position(self) -> Point3:
+    def position(self) -> CartesianPoint3D:
         """
         :return: The translation this transformation is composed of.
         """
-        result = Point3.from_casadi_sx(self.casadi_sx[:4, 3])
+        result = CartesianPoint3D.from_casadi_sx(self.casadi_sx[:4, 3])
         result.reference_frame = self.reference_frame
         return result
 
@@ -650,11 +684,6 @@ class HomogeneousTransformationMatrix(
         """
         result = Pose.from_casadi_sx(casadi_sx=copy(self.casadi_sx))
         result.reference_frame = self.reference_frame
-        return result
-
-    def _copy_with_data(self, data: ca.SX) -> HomogeneousTransformationMatrix:
-        result = super()._copy_with_data(data)
-        result.child_frame = self.child_frame
         return result
 
     def copy_with_new_reference_frames(
@@ -1089,47 +1118,122 @@ class RotationMatrix(
         return r_distance.angle
 
 
-class Point(
+# %% the x-y plane of a frame
+
+
+@dataclass(eq=False)
+class XYPlane2D(EuclideanSpace2D):
+    """
+    The plane through the origin of a three-dimensional frame that the frame's x- and
+    y-axes span.
+
+    Two planes are equal when they lie in one space and hold the same points, whichever
+    frames span them. The plane of a frame in no known space is equal only to the planes
+    of that frame.
+
+    .. note::
+        Planes of two frames are compared through the constant coordinates of one
+        frame's origin and z-axis in the other frame.
+    """
+
+    frame_3d: CartesianFrame3D
+    """
+    The frame whose x- and y-axes span this plane.
+    """
+
+    @property
+    def ambient_space(self) -> EuclideanSpace3D | None:
+        """
+        The space this plane lies in, which is the space of :attr:`frame_3d`; ``None``
+        where it is not known.
+        """
+        return self.frame_3d.space
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, XYPlane2D):
+            return NotImplemented
+        if other.frame_3d == self.frame_3d:
+            return True
+        if self.ambient_space is None or self.ambient_space != other.ambient_space:
+            return False
+        other_origin = self.frame_3d.express_in_own_frame(
+            CartesianPoint3D(reference_frame=other.frame_3d)
+        )
+        other_z_axis = self.frame_3d.express_in_own_frame(
+            Vector3.Z(reference_frame=other.frame_3d)
+        )
+        return bool(
+            np.isclose(other_origin.z.to_np(), 0).all()
+            and np.allclose(other_z_axis.to_np()[:2], 0)
+        )
+
+    def __hash__(self) -> int:
+        if self.ambient_space is None:
+            return hash(self.frame_3d)
+        return hash(self.ambient_space)
+
+
+@dataclass(unsafe_hash=True)
+class XYPlaneFrame2D(CartesianFrame2D[NameT]):
+    """
+    The frame on the x-y plane of a three-dimensional frame that has that frame's
+    origin, x-axis and y-axis.
+
+    Seen from the side the z-axis of :attr:`frame_3d` points to, this frame is
+    right-handed, so frames on one plane are related by a rigid change only when the
+    z-axes of their three-dimensional frames point the same way.
+    """
+
+    frame_3d: CartesianFrame3D
+    """
+    The frame whose origin, x-axis and y-axis this frame has.
+    """
+
+    @property
+    def space(self) -> XYPlane2D:
+        return XYPlane2D(self.frame_3d)
+
+    @property
+    def name(self) -> NameT:
+        return self.frame_3d.name
+
+    @property
+    def id(self) -> UUID:
+        """
+        The identifier derived from that of :attr:`frame_3d`, so the frames on the
+        plane of one frame share it.
+        """
+        return uuid5(self.frame_3d.id, type(self).__name__)
+
+
+class ValueOnXYPlane2D(CoordinateRepresentation[CartesianFrame2D], Mixin):
+    """
+    A value, such as a point or a pose, on the x-y plane of its reference frame, given
+    in the :class:`XYPlaneFrame2D` of that frame.
+    """
+
+    reference_frame: CartesianFrame3D | None
+    """
+    The frame on whose x-y plane the value lies, or *None* where the value is given in
+    no frame.
+    """
+
+    @property
+    def coordinate_system(self) -> XYPlaneFrame2D | None:
+        if self.reference_frame is None:
+            return None
+        return XYPlaneFrame2D(self.reference_frame)
+
+
+@dataclass(eq=False, init=False, repr=False)
+class CartesianPoint3D(
     sm.SymbolicMathType,
     SpatialType,
     ValueInCartesianFrame3D,
     SubclassJSONSerializer,
-    ABC,
+    AffinePoint3D[CartesianFrame3D, sm.Scalar],
+    CartesianPoint[CartesianFrame3D, sm.Scalar],
 ):
-    """
-    Shared x/y coordinate access for 2D and 3D points.
-
-    :class:`Point2` and :class:`Point3` both subclass this directly -- a :class:`Point3`
-    is not a :class:`Point2` -- so that code which only needs the coordinates every
-    point has (e.g. path plotting) can accept either without a ``Union``. Only
-    :class:`Point3` has a ``z``: a 2D point has no height of its own, so :class:`Point2`
-    does not carry the attribute at all.
-
-    .. warning::
-        Reading :attr:`x` and :attr:`y` of a :class:`Point3` through this interface
-        ignores its height but is not a projection. Code that needs the 2D point a
-        :class:`Point3` corresponds to uses :meth:`OrthogonalProjection.project`.
-    """
-
-    @property
-    def x(self) -> sm.Scalar:
-        return self[0]
-
-    @x.setter
-    def x(self, value: sm.ScalarData):
-        self[0] = value
-
-    @property
-    def y(self) -> sm.Scalar:
-        return self[1]
-
-    @y.setter
-    def y(self, value: sm.ScalarData):
-        self[1] = value
-
-
-@dataclass(eq=False, init=False, repr=False)
-class Point3(Point, AffinePoint3D[CartesianFrame3D, sm.Scalar]):
     """
     Represents a 3D point with reference frame handling.
 
@@ -1175,23 +1279,23 @@ class Point3(Point, AffinePoint3D[CartesianFrame3D, sm.Scalar]):
         cls,
         data: sm.VectorData,
         reference_frame: CartesianFrame3D | None = None,
-    ) -> Point3:
+    ) -> CartesianPoint3D:
         """
-        Creates an instance of Point3 from provided iterable data.
+        Creates an instance of CartesianPoint3D from provided iterable data.
 
-        This class method is used to construct a Point3 object by processing the given
+        This class method is used to construct a CartesianPoint3D object by processing the given
         data and optionally assigning a reference frame. The data can represent
-        different array-like objects compatible with the desired format for a Point3
+        different array-like objects compatible with the desired format for a CartesianPoint3D
         instance. The provided iterable or array should follow a 1D structure to avoid
         raised errors.
 
         :param data: The array-like data or object such as a list, tuple, or numpy array
-            used to initialize the Point3 instance.
+            used to initialize the CartesianPoint3D instance.
         :param reference_frame: A reference to a `CartesianFrame3D` object,
-            representing the frame of reference for the Point3 instance. If the data has
+            representing the frame of reference for the CartesianPoint3D instance. If the data has
             a `reference_frame` attribute, and this parameter is not specified, it will
             be taken from the data.
-        :return: Returns an instance of Point3 initialized with the processed data and
+        :return: Returns an instance of CartesianPoint3D initialized with the processed data and
             an optional reference frame.
         """
         if isinstance(data, SpatialType) and reference_frame is None:
@@ -1245,6 +1349,22 @@ class Point3(Point, AffinePoint3D[CartesianFrame3D, sm.Scalar]):
         return sm.Scalar.from_casadi_sx(ca.norm_2(self[:3].casadi_sx))
 
     @property
+    def x(self) -> sm.Scalar:
+        return self[0]
+
+    @x.setter
+    def x(self, value: sm.ScalarData):
+        self[0] = value
+
+    @property
+    def y(self) -> sm.Scalar:
+        return self[1]
+
+    @y.setter
+    def y(self, value: sm.ScalarData):
+        self[1] = value
+
+    @property
     def z(self) -> sm.Scalar:
         return self[2]
 
@@ -1252,9 +1372,9 @@ class Point3(Point, AffinePoint3D[CartesianFrame3D, sm.Scalar]):
     def z(self, value: sm.ScalarData):
         self[2] = value
 
-    def __add__(self, other: Vector3) -> Point3:
+    def __add__(self, other: Vector3) -> CartesianPoint3D:
         if isinstance(other, Vector3):
-            result = Point3.from_casadi_sx(
+            result = CartesianPoint3D.from_casadi_sx(
                 ca.SX.binary(ca.OP_ADD, self.casadi_sx, other.casadi_sx)
             )
         else:
@@ -1263,18 +1383,18 @@ class Point3(Point, AffinePoint3D[CartesianFrame3D, sm.Scalar]):
         return result
 
     @overload
-    def __sub__(self, other: Point3) -> Vector3: ...
+    def __sub__(self, other: CartesianPoint3D) -> Vector3: ...
 
     @overload
-    def __sub__(self, other: Vector3) -> Point3: ...
+    def __sub__(self, other: Vector3) -> CartesianPoint3D: ...
 
     def __sub__(self, other):
-        if isinstance(other, Point3):
+        if isinstance(other, CartesianPoint3D):
             result = Vector3.from_casadi_sx(
                 ca.SX.binary(ca.OP_SUB, self.casadi_sx, other.casadi_sx)
             )
         elif isinstance(other, Vector3):
-            result = Point3.from_casadi_sx(
+            result = CartesianPoint3D.from_casadi_sx(
                 ca.SX.binary(ca.OP_SUB, self.casadi_sx, other.casadi_sx)
             )
         else:
@@ -1282,14 +1402,14 @@ class Point3(Point, AffinePoint3D[CartesianFrame3D, sm.Scalar]):
         result.reference_frame = self.reference_frame
         return result
 
-    def __neg__(self) -> Point3:
-        result = Point3.from_casadi_sx(ca.SX.unary(ca.OP_NEG, self.casadi_sx))
+    def __neg__(self) -> CartesianPoint3D:
+        result = CartesianPoint3D.from_casadi_sx(ca.SX.unary(ca.OP_NEG, self.casadi_sx))
         result.reference_frame = self.reference_frame
         return result
 
     def project_to_plane(
         self, frame_V_plane_vector1: Vector3, frame_V_plane_vector2: Vector3
-    ) -> tuple[Point3, sm.Scalar]:
+    ) -> tuple[CartesianPoint3D, sm.Scalar]:
         """
         Projects a point onto a plane defined by two vectors.
 
@@ -1310,8 +1430,8 @@ class Point3(Point, AffinePoint3D[CartesianFrame3D, sm.Scalar]):
         return projection, d
 
     def project_to_line(
-        self, line_point: Point3, line_direction: Vector3
-    ) -> tuple[Point3, sm.Scalar]:
+        self, line_point: CartesianPoint3D, line_direction: Vector3
+    ) -> tuple[CartesianPoint3D, sm.Scalar]:
         """
         :param line_point: a point that the line intersects, must have the same reference frame as self
         :param line_direction: the direction of the line, must have the same reference frame as self
@@ -1328,8 +1448,8 @@ class Point3(Point, AffinePoint3D[CartesianFrame3D, sm.Scalar]):
         return closest_point, distance
 
     def distance_to_line_segment(
-        self, line_start: Point3, line_end: Point3
-    ) -> tuple[sm.Scalar, Point3]:
+        self, line_start: CartesianPoint3D, line_end: CartesianPoint3D
+    ) -> tuple[sm.Scalar, CartesianPoint3D]:
         """
         All parameters must have the same reference frame as self.
 
@@ -1352,7 +1472,7 @@ class Point3(Point, AffinePoint3D[CartesianFrame3D, sm.Scalar]):
         frame_P_nearest = frame_P_line_start + frame_V_offset
         return dist, frame_P_nearest
 
-    def midpoint(self, other: Point3) -> Point3:
+    def midpoint(self, other: CartesianPoint3D) -> CartesianPoint3D:
         """
         :param other: The point to meet halfway.
         :return: The point midway between this one and ``other``.
@@ -1380,15 +1500,22 @@ class Point3(Point, AffinePoint3D[CartesianFrame3D, sm.Scalar]):
 
 
 @dataclass(eq=False, init=False, repr=False)
-class Point2(Point, AffinePoint2D[CartesianFrame3D, sm.Scalar]):
+class CartesianPoint2D(
+    sm.SymbolicMathType,
+    SpatialType,
+    ValueOnXYPlane2D,
+    SubclassJSONSerializer,
+    AffinePoint2D[CartesianFrame2D, sm.Scalar],
+    CartesianPoint[CartesianFrame2D, sm.Scalar],
+):
     """
     Represents a 2D point with reference frame handling.
 
     Stored as a bare 2×1 symbolic vector ``[x, y]``, with no homogeneous augmentation --
     the same convention :class:`Pose2D` uses. The point lies on its reference frame's
     own x-y plane and has no height; it relates to 3D space only through an
-    :class:`OrthogonalProjection` onto that plane, which :meth:`from_point3`,
-    :meth:`from_pose` and :meth:`to_point3` apply.
+    :class:`OrthogonalProjection` onto that plane, which :meth:`from_cartesian_point_3d`,
+    :meth:`from_pose` and :meth:`to_cartesian_point_3d` apply.
     """
 
     def __init__(
@@ -1406,6 +1533,22 @@ class Point2(Point, AffinePoint2D[CartesianFrame3D, sm.Scalar]):
         self.reference_frame = reference_frame
         super().__post_init__()
 
+    @property
+    def x(self) -> sm.Scalar:
+        return self[0]
+
+    @x.setter
+    def x(self, value: sm.ScalarData):
+        self[0] = value
+
+    @property
+    def y(self) -> sm.Scalar:
+        return self[1]
+
+    @y.setter
+    def y(self, value: sm.ScalarData):
+        self[1] = value
+
     def _verify_type(self):
         if self.shape != (2, 1):
             raise WrongDimensionsError(
@@ -1413,11 +1556,11 @@ class Point2(Point, AffinePoint2D[CartesianFrame3D, sm.Scalar]):
             )
 
     @classmethod
-    def from_point3(
+    def from_cartesian_point_3d(
         cls,
-        point: Point3,
+        point: CartesianPoint3D,
         plane_frame: CartesianFrame3D | None = None,
-    ) -> Point2:
+    ) -> CartesianPoint2D:
         """
         The :meth:`OrthogonalProjection.project` of ``point`` onto the x-y plane of
         ``plane_frame``.
@@ -1435,18 +1578,18 @@ class Point2(Point, AffinePoint2D[CartesianFrame3D, sm.Scalar]):
         cls,
         pose: Pose,
         plane_frame: CartesianFrame3D | None = None,
-    ) -> Point2:
+    ) -> CartesianPoint2D:
         """
-        The :meth:`from_point3` of ``pose``'s position.
+        The :meth:`from_cartesian_point_3d` of ``pose``'s position.
 
         :param pose: The pose whose position to project.
         :param plane_frame: The frame whose x-y plane to project onto. Defaults to
             ``pose``'s reference frame.
         :return: The point on the plane directly below or above ``pose``.
         """
-        return cls.from_point3(pose.position, plane_frame)
+        return cls.from_cartesian_point_3d(pose.position, plane_frame)
 
-    def to_point3(self, height: sm.ScalarData = 0) -> Point3:
+    def to_cartesian_point_3d(self, height: sm.ScalarData = 0) -> CartesianPoint3D:
         """
         The :meth:`OrthogonalProjection.unproject` of this point into its own reference
         frame.
@@ -1471,7 +1614,7 @@ class Point2(Point, AffinePoint2D[CartesianFrame3D, sm.Scalar]):
 
     def transform(
         self, target_frame_T_reference_frame: HomogeneousTransformationMatrix
-    ) -> Point2:
+    ) -> CartesianPoint2D:
         """
         This point re-expressed in ``target_frame_T_reference_frame``'s reference frame.
 
@@ -1485,7 +1628,14 @@ class Point2(Point, AffinePoint2D[CartesianFrame3D, sm.Scalar]):
             reference frame to the frame it should be expressed in.
         :return: The point in the transformation's reference frame.
         """
-        return Point2.from_point3(target_frame_T_reference_frame @ self.to_point3())
+        return CartesianPoint2D.from_cartesian_point_3d(
+            target_frame_T_reference_frame @ self.to_cartesian_point_3d()
+        )
+
+    def euclidean_distance(self, other: Self) -> sm.Scalar:
+        return sm.Vector.from_casadi_sx(self.casadi_sx).euclidean_distance(
+            sm.Vector.from_casadi_sx(other.casadi_sx)
+        )
 
     def __hash__(self):
         if self.is_constant():
@@ -1499,7 +1649,7 @@ class Line3:
     An infinite straight line in 3D space.
     """
 
-    point: Point3
+    point: CartesianPoint3D
     """
     A point the line passes through.
     """
@@ -1517,8 +1667,8 @@ class OrthogonalProjection:
     with its right inverse.
 
     :meth:`unproject` at any height is a right inverse of :meth:`project`: for every
-    :class:`Point2` ``p`` on the plane, ``project(unproject(p, h)) == p``. The reverse,
-    ``unproject(project(q), h) == q``, holds only for a :class:`Point3` ``q`` whose
+    :class:`CartesianPoint2D` ``p`` on the plane, ``project(unproject(p, h)) == p``. The reverse,
+    ``unproject(project(q), h) == q``, holds only for a :class:`CartesianPoint3D` ``q`` whose
     z-coordinate in :attr:`plane_frame` is ``h``.
     """
 
@@ -1531,7 +1681,7 @@ class OrthogonalProjection:
     reference frame to each other.
     """
 
-    def project(self, point: Point3) -> Point2:
+    def project(self, point: CartesianPoint3D) -> CartesianPoint2D:
         """
         :param point: A point in :attr:`plane_frame` or in any frame of its world.
         :return: The point on the plane directly below or above ``point``.
@@ -1543,12 +1693,14 @@ class OrthogonalProjection:
                 raise ReferenceFrameMismatchError(
                     expected_frame=self.plane_frame,
                     actual_frame=point.reference_frame,
-                    context="the projected Point3",
+                    context="the projected CartesianPoint3D",
                 )
             point = self.plane_frame.express_in_own_frame(point)
-        return Point2(point.x, point.y, reference_frame=self.plane_frame)
+        return CartesianPoint2D(point.x, point.y, reference_frame=self.plane_frame)
 
-    def unproject(self, point: Point2, height: sm.ScalarData = 0) -> Point3:
+    def unproject(
+        self, point: CartesianPoint2D, height: sm.ScalarData = 0
+    ) -> CartesianPoint3D:
         """
         The inverse of :meth:`project` at ``height``: the 3D point at ``height`` above
         ``point``.
@@ -1562,11 +1714,13 @@ class OrthogonalProjection:
             raise ReferenceFrameMismatchError(
                 expected_frame=self.plane_frame,
                 actual_frame=point.reference_frame,
-                context="the unprojected Point2",
+                context="the unprojected CartesianPoint2D",
             )
-        return Point3(point.x, point.y, height, reference_frame=self.plane_frame)
+        return CartesianPoint3D(
+            point.x, point.y, height, reference_frame=self.plane_frame
+        )
 
-    def projection_line(self, point: Point2) -> Line3:
+    def projection_line(self, point: CartesianPoint2D) -> Line3:
         """
         The vertical line through ``point`` along which :meth:`project` maps every point
         onto ``point``.
@@ -1947,11 +2101,11 @@ class Vector3(
         )
 
     @property
-    def point3(self) -> Point3:
+    def cartesian_point_3d(self) -> CartesianPoint3D:
         """
         :return: The point this vector reaches from the origin of the reference frame.
         """
-        result = Point3.from_casadi_sx(copy(self.casadi_sx))
+        result = CartesianPoint3D.from_casadi_sx(copy(self.casadi_sx))
         result.reference_frame = self.reference_frame
         return result
 
@@ -2475,7 +2629,7 @@ class Pose(
 ):
     def __init__(
         self,
-        position: Point3 | None = None,
+        position: CartesianPoint3D | None = None,
         orientation: Quaternion | None = None,
         reference_frame: CartesianFrame3D | None = None,
     ):
@@ -2483,7 +2637,7 @@ class Pose(
         Initialize a 3D point with orientation and a reference frame in a kinematic
         structure.
 
-        :param position: The 3D position of the point, represented as a Point3 object.
+        :param position: The 3D position of the point, represented as a CartesianPoint3D object.
             If None, a default position is assumed.
         :param orientation: The orientation of the point in 3D space represented as a
             Quaternion. If None, default orientation is assumed.
@@ -2492,7 +2646,7 @@ class Pose(
             not tied to any specific reference frame.
         """
         if position is None:
-            position = Point3()
+            position = CartesianPoint3D()
         if orientation is None:
             orientation = Quaternion()
         transformation_matrix = (
@@ -2554,7 +2708,7 @@ class Pose(
         :return: A Pose object created using the provided position and orientation
             values
         """
-        p = Point3(x=x, y=y, z=z)
+        p = CartesianPoint3D(x=x, y=y, z=z)
         r = Quaternion.from_rpy(roll, pitch, yaw)
         return cls(p, r, reference_frame=reference_frame)
 
@@ -2587,7 +2741,7 @@ class Pose(
         :param reference_frame: Optional reference frame for the transformation matrix.
         :return: A `Pose` object constructed from the given parameters.
         """
-        p = Point3(x=pos_x, y=pos_y, z=pos_z)
+        p = CartesianPoint3D(x=pos_x, y=pos_y, z=pos_z)
         r = Quaternion(w=quat_w, x=quat_x, y=quat_y, z=quat_z)
         return cls(p, r, reference_frame=reference_frame)
 
@@ -2622,7 +2776,7 @@ class Pose(
         elif not isinstance(axis, Vector3):
             axis = Vector3.from_iterable(axis)
         rotation_matrix = Quaternion.from_axis_angle(AxisAngle(axis=axis, angle=angle))
-        point = Point3(x=x, y=y, z=z)
+        point = CartesianPoint3D(x=x, y=y, z=z)
         return cls(
             position=point,
             orientation=rotation_matrix,
@@ -2666,8 +2820,8 @@ class Pose(
         self[2, 3] = value
 
     @property
-    def position(self) -> Point3:
-        result = Point3.from_casadi_sx(self.casadi_sx[:4, 3])
+    def position(self) -> CartesianPoint3D:
+        result = CartesianPoint3D.from_casadi_sx(self.casadi_sx[:4, 3])
         result.reference_frame = self.reference_frame
         return result
 
@@ -2716,7 +2870,7 @@ class Pose(
 
 @dataclass(eq=False, init=False, repr=False)
 class Pose2D(
-    sm.SymbolicMathType, SpatialType, ValueInCartesianFrame3D, SubclassJSONSerializer
+    sm.SymbolicMathType, SpatialType, ValueOnXYPlane2D, SubclassJSONSerializer
 ):
     """
     Represents a 2D pose consisting of an x coordinate, a y coordinate, and a yaw angle.
@@ -2729,7 +2883,7 @@ class Pose2D(
 
     def __init__(
         self,
-        position: Point2 | None = None,
+        position: CartesianPoint2D | None = None,
         yaw: sm.ScalarData = 0,
         reference_frame: CartesianFrame3D | None = None,
     ) -> None:
@@ -2739,7 +2893,7 @@ class Pose2D(
         :param reference_frame: The reference frame. Defaults to *position*'s.
         """
         if position is None:
-            position = Point2()
+            position = CartesianPoint2D()
         self.casadi_sx = sm.to_sx([position.x, position.y, yaw])
         self.reference_frame = (
             reference_frame if reference_frame is not None else position.reference_frame
@@ -2798,11 +2952,11 @@ class Pose2D(
     # %% Pose-like interface (delegates to pose)
 
     @property
-    def position(self) -> Point2:
+    def position(self) -> CartesianPoint2D:
         """
         :return: The position this pose is composed of, dropping the bearing.
         """
-        return Point2(self.x, self.y, reference_frame=self.reference_frame)
+        return CartesianPoint2D(self.x, self.y, reference_frame=self.reference_frame)
 
     @property
     def orientation(self) -> Quaternion:
@@ -2835,19 +2989,37 @@ class Pose2D(
         plane_frame: CartesianFrame3D | None = None,
     ) -> Pose2D:
         """
-        Extract a Pose2D from a 3D Pose by dropping z, roll, pitch.
+        Flatten a 3D Pose onto the x-y plane of a frame: its position is projected onto
+        the plane, and it faces the way its x-axis, projected onto the plane, points.
 
-        :param pose: The pose to extract from.
-        :param plane_frame: The frame whose x-y plane to express the result on.
+        That heading, ``atan2(r21, r11)`` of the pose's rotation matrix, equals the yaw
+        of its ZYX Euler angles.
+
+        :param pose: The pose to flatten.
+        :param plane_frame: The frame whose x-y plane to flatten the pose onto.
             Defaults to ``pose``'s reference frame; any other frame must belong to the
             same world as ``pose``'s.
         :return: The Pose2D on the x-y plane of ``plane_frame``.
+        :raises XAxisNormalToPlaneError: If the pose's x-axis is constant and normal to
+            the plane.
         """
         frame = plane_frame if plane_frame is not None else pose.reference_frame
         if frame is not pose.reference_frame:
             pose = frame.express_in_own_frame(pose)
-        _, _, yaw = pose.rotation_matrix.rpy
-        return cls.from_xy_yaw(x=pose.x, y=pose.y, yaw=yaw, reference_frame=frame)
+        rotation = pose.rotation_matrix
+        x_axis_x, x_axis_y = rotation[0, 0], rotation[1, 0]
+        if (
+            x_axis_x.is_constant()
+            and x_axis_y.is_constant()
+            and np.allclose([x_axis_x.to_np(), x_axis_y.to_np()], 0)
+        ):
+            raise XAxisNormalToPlaneError(pose=pose)
+        return cls.from_xy_yaw(
+            x=pose.x,
+            y=pose.y,
+            yaw=sm.atan2(x_axis_y, x_axis_x),
+            reference_frame=frame,
+        )
 
     def transform(
         self, target_frame_T_reference_frame: HomogeneousTransformationMatrix
@@ -2884,7 +3056,11 @@ class Pose2D(
         :param reference_frame: The reference frame.
         :return: The Pose2D instance.
         """
-        return cls(position=Point2(x=x, y=y), yaw=yaw, reference_frame=reference_frame)
+        return cls(
+            position=CartesianPoint2D(x=x, y=y),
+            yaw=yaw,
+            reference_frame=reference_frame,
+        )
 
     # %% JSON serialization
 
@@ -2903,6 +3079,241 @@ class Pose2D(
     def __hash__(self):
         if self.is_constant():
             return hash((*self.to_np().tolist(), self.reference_frame))
+        return super().__hash__()
+
+
+# %% rigid changes between frames on one plane
+
+
+@dataclass(eq=False, init=False, repr=False)
+class HomogeneousTransformationMatrix2D(
+    sm.SymbolicMathType,
+    SpatialChange,
+    SubclassJSONSerializer,
+    RigidCoordinateChange[CartesianFrame2D],
+):
+    """
+    A 3x3 homogeneous matrix of SE(2): the rigid change from the
+    :class:`XYPlaneFrame2D` of its :attr:`~SpatialChange.child_frame` into that of its
+    :attr:`~SpatialType.reference_frame`, two frames on one plane.
+
+    It is only a change of coordinates, never a value given in a frame: the value it
+    corresponds to is a :class:`Pose2D`.
+
+    .. warning::
+        The matrix must be rigid: its upper left 2x2 block a rotation and its last row
+        ``[0, 0, 1]``.
+    """
+
+    def __init__(
+        self,
+        data: sm.MatrixData | None = None,
+        reference_frame: CartesianFrame3D | None = None,
+        child_frame: CartesianFrame3D | None = None,
+    ):
+        """
+        :param data: A rigid 3x3 homogeneous matrix. Defaults to the identity.
+        :param reference_frame: The frame on whose plane the change ends.
+        :param child_frame: The frame on whose plane the change starts.
+        """
+        self.reference_frame = reference_frame
+        self.child_frame = child_frame
+        if data is None:
+            self._casadi_sx = ca.SX.eye(3)
+        else:
+            self.casadi_sx = sm.to_sx(data)
+        super().__post_init__()
+
+    def _verify_type(self):
+        if self.shape != (3, 3):
+            raise WrongDimensionsError(
+                expected_dimensions=(3, 3), actual_dimensions=self.shape
+            )
+        self[2, :] = [0, 0, 1]
+
+    @property
+    def source_coordinate_system(self) -> XYPlaneFrame2D | None:
+        if self.child_frame is None:
+            return None
+        return XYPlaneFrame2D(self.child_frame)
+
+    @property
+    def target_coordinate_system(self) -> XYPlaneFrame2D | None:
+        if self.reference_frame is None:
+            return None
+        return XYPlaneFrame2D(self.reference_frame)
+
+    # %% construction
+
+    @classmethod
+    def from_xy_yaw(
+        cls,
+        x: sm.ScalarData = 0,
+        y: sm.ScalarData = 0,
+        yaw: sm.ScalarData = 0,
+        reference_frame: CartesianFrame3D | None = None,
+        child_frame: CartesianFrame3D | None = None,
+    ) -> HomogeneousTransformationMatrix2D:
+        """
+        :param x: The x-coordinate of the child frame's origin in the reference frame.
+        :param y: The y-coordinate of the child frame's origin in the reference frame.
+        :param yaw: The angle from the reference frame's x-axis to the child frame's,
+            counterclockwise.
+        :param reference_frame: The frame on whose plane the change ends.
+        :param child_frame: The frame on whose plane the change starts.
+        :return: The change that rotates by ``yaw`` and then shifts by ``(x, y)``.
+        """
+        cosine, sine = sm.cos(yaw), sm.sin(yaw)
+        return cls(
+            [[cosine, -sine, x], [sine, cosine, y], [0, 0, 1]],
+            reference_frame=reference_frame,
+            child_frame=child_frame,
+        )
+
+    @classmethod
+    def from_transformation(
+        cls, transformation: HomogeneousTransformationMatrix
+    ) -> HomogeneousTransformationMatrix2D:
+        """
+        :param transformation: A change between two frames that span one x-y plane and
+            whose z-axes point the same way.
+        :return: The same change, between the frames on that plane.
+        :raises FramesOnDifferentPlanesError: If the transformation is constant and its
+            frames span different planes.
+        :raises MirroredPlaneFramesError: If the transformation is constant and its
+            frames span one plane with z-axes pointing in opposite directions.
+
+        .. note::
+            A transformation that is not constant is taken to be planar unchecked.
+        """
+        rotation = transformation.rotation_matrix
+        if transformation.is_constant():
+            child_z_axis = rotation.to_np()[:3, 2]
+            if not (
+                np.isclose(transformation.z.to_np(), 0).all()
+                and np.allclose(child_z_axis[:2], 0)
+            ):
+                raise FramesOnDifferentPlanesError(
+                    reference_frame=transformation.reference_frame,
+                    child_frame=transformation.child_frame,
+                )
+            if child_z_axis[2] < 0:
+                raise MirroredPlaneFramesError(
+                    reference_frame=transformation.reference_frame,
+                    child_frame=transformation.child_frame,
+                )
+        return cls.from_xy_yaw(
+            x=transformation.x,
+            y=transformation.y,
+            yaw=sm.atan2(rotation[1, 0], rotation[0, 0]),
+            reference_frame=transformation.reference_frame,
+            child_frame=transformation.child_frame,
+        )
+
+    # %% motion
+
+    @property
+    def x(self) -> sm.Scalar:
+        """
+        The x-coordinate of the child frame's origin in the reference frame.
+        """
+        return self[0, 2]
+
+    @property
+    def y(self) -> sm.Scalar:
+        """
+        The y-coordinate of the child frame's origin in the reference frame.
+        """
+        return self[1, 2]
+
+    @property
+    def yaw(self) -> sm.Scalar:
+        """
+        The angle from the reference frame's x-axis to the child frame's,
+        counterclockwise.
+        """
+        return sm.atan2(self[1, 0], self[0, 0])
+
+    @property
+    def pose(self) -> Pose2D:
+        """
+        :return: The pose this change moves its reference frame's plane frame to.
+        """
+        return Pose2D.from_xy_yaw(
+            x=self.x, y=self.y, yaw=self.yaw, reference_frame=self.reference_frame
+        )
+
+    # %% acting on values and changes
+
+    def __matmul__(
+        self,
+        other: HomogeneousTransformationMatrix2D | CartesianPoint2D | Pose2D,
+    ) -> HomogeneousTransformationMatrix2D | CartesianPoint2D | Pose2D:
+        """
+        :param other: A change into this change's child frame, or a point or pose given
+            in it.
+        :return: The change applied after ``other``, or the point or pose given in this
+            change's reference frame.
+        :raises UnsupportedOperationError: If ``other`` is none of these.
+        """
+        if isinstance(other, HomogeneousTransformationMatrix2D):
+            return HomogeneousTransformationMatrix2D(
+                ca.mtimes(self.casadi_sx, other.casadi_sx),
+                reference_frame=self.reference_frame,
+                child_frame=other.child_frame,
+            )
+        if isinstance(other, CartesianPoint2D):
+            moved = ca.mtimes(self.casadi_sx, ca.vertcat(other.casadi_sx, 1))
+            return CartesianPoint2D(
+                moved[0], moved[1], reference_frame=self.reference_frame
+            )
+        if isinstance(other, Pose2D):
+            moved = self @ HomogeneousTransformationMatrix2D.from_xy_yaw(
+                x=other.x, y=other.y, yaw=other.yaw
+            )
+            return moved.pose
+        raise UnsupportedOperationError("@", self, other)
+
+    def inverse(self) -> HomogeneousTransformationMatrix2D:
+        inverse = HomogeneousTransformationMatrix2D(
+            reference_frame=self.child_frame, child_frame=self.reference_frame
+        )
+        inverse[:2, :2] = self[:2, :2].T
+        inverse[:2, 2] = (-inverse[:2, :2]).dot(self[:2, 2])
+        return inverse
+
+    # %% JSON serialization
+
+    @classmethod
+    def _from_constant_json(cls, data: dict[str, Any], **kwargs) -> Self:
+        return cls.from_xy_yaw(
+            *data["data"],
+            reference_frame=cls._parse_optional_frame_from_json(
+                data, frame=SpatialFrameKey.REFERENCE, **kwargs
+            ),
+            child_frame=cls._parse_optional_frame_from_json(
+                data, frame=SpatialFrameKey.CHILD, **kwargs
+            ),
+        )
+
+    def _constant_to_json(self) -> dict[str, Any]:
+        return {
+            "data": [
+                float(self.x.to_np()[0]),
+                float(self.y.to_np()[0]),
+                float(self.yaw.to_np()[0]),
+            ]
+        }
+
+    def __hash__(self):
+        if self.is_constant():
+            return hash(
+                (
+                    *self.to_np().flatten().tolist(),
+                    self.reference_frame,
+                    self.child_frame,
+                )
+            )
         return super().__hash__()
 
 
@@ -2989,7 +3400,7 @@ GenericSpatialType = TypeVar(
 
 GenericHomogeneousSpatialType = TypeVar(
     "GenericHomogeneousSpatialType",
-    Point3,
+    CartesianPoint3D,
     Vector3,
     HomogeneousTransformationMatrix,
     RotationMatrix,

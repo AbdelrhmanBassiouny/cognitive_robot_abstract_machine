@@ -6,7 +6,7 @@ import krrood.symbolic_math.symbolic_math as sm
 from cramph.node import EndedByOwner
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from cramph.node import NodeArtifacts
-from krrood_spatial_math.spatial_types import Point3, Vector3
+from krrood_spatial_math.spatial_types import CartesianPoint3D, Vector3
 from semantic_digital_twin.world_description.world_entity import Body
 
 
@@ -21,9 +21,9 @@ class FeatureFunctionMonitor(EndedByOwner, MotionStatechartNode):
     """Link the controlled feature is attached to."""
     root_link: Body
     """Link the reference feature is attached to."""
-    reference_feature: Point3 | Vector3 = field(init=False)
+    reference_feature: CartesianPoint3D | Vector3 = field(init=False)
     """Reference feature, typically the target for `controlled_feature`."""
-    controlled_feature: Point3 | Vector3 = field(init=False)
+    controlled_feature: CartesianPoint3D | Vector3 = field(init=False)
     """Controlled feature, typically moved towards `reference_feature`."""
 
     def build_artifacts(self) -> NodeArtifacts:
@@ -41,12 +41,12 @@ class FeatureFunctionMonitor(EndedByOwner, MotionStatechartNode):
         root_T_tip = self.context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
         )
-        if isinstance(self.controlled_feature, Point3):
+        if isinstance(self.controlled_feature, CartesianPoint3D):
             self.root_P_controlled_feature = root_T_tip @ tip_controlled_feature
         elif isinstance(self.controlled_feature, Vector3):
             self.root_V_controlled_feature = root_T_tip @ tip_controlled_feature
 
-        if isinstance(self.reference_feature, Point3):
+        if isinstance(self.reference_feature, CartesianPoint3D):
             self.root_P_reference_feature = root_reference_feature
         if isinstance(self.reference_feature, Vector3):
             self.root_V_reference_feature = root_reference_feature
@@ -61,9 +61,9 @@ class HeightMonitor(FeatureFunctionMonitor):
     the root z-axis is within ``[lower_limit, upper_limit]``.
     """
 
-    reference_point: Point3
+    reference_point: CartesianPoint3D
     """Reference point to measure the height against."""
-    tip_point: Point3
+    tip_point: CartesianPoint3D
     """Controlled point whose height is checked."""
     lower_limit: float
     """Lower bound for the height difference in meters."""
@@ -116,9 +116,9 @@ class DistanceMonitor(FeatureFunctionMonitor):
     reference point is within ``[lower_limit, upper_limit]``.
     """
 
-    reference_point: Point3
+    reference_point: CartesianPoint3D
     """Reference point to measure the distance against."""
-    tip_point: Point3
+    tip_point: CartesianPoint3D
     """Controlled point whose distance is checked."""
     lower_limit: float
     """Lower bound for the distance in meters."""

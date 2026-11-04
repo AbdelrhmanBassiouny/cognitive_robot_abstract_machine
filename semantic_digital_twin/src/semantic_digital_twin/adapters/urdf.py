@@ -19,7 +19,7 @@ from semantic_digital_twin.exceptions import (
 )
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Point3,
+    CartesianPoint3D,
     RotationMatrix,
     Vector3,
 )
@@ -410,7 +410,7 @@ class URDFParser(WorldModelParser):
 
         return Inertial(
             mass=link.inertial.mass,
-            center_of_mass=Point3(*center_of_mass, reference_frame=body),
+            center_of_mass=CartesianPoint3D(*center_of_mass, reference_frame=body),
             inertia=inertia_in_link_frame,
         )
 

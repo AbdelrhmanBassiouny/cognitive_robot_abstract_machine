@@ -21,7 +21,7 @@ A `DebugExpression`
 (`giskardpy.motion_statechart.graph_node.DebugExpression`) wraps three things:
 
 - a `name`, used as the label in every debugging tool,
-- an `expression` — either a `Scalar` or a spatial type (`Point3`, `Vector3`, `Quaternion`,
+- an `expression` — either a `Scalar` or a spatial type (`CartesianPoint3D`, `Vector3`, `Quaternion`,
   `RotationMatrix`, `HomogeneousTransformationMatrix`, or `Pose`), and
 - a `color`, used when the expression is rendered.
 
@@ -103,7 +103,7 @@ show the target and actual end-effector pose side by side.
 ---
 width: 600px
 ---
-A `Point3` is drawn as a sphere — `CartesianPosition/goal` (green) and
+A `CartesianPoint3D` is drawn as a sphere — `CartesianPosition/goal` (green) and
 `CartesianPosition/current` (red).
 ```
 
@@ -149,7 +149,7 @@ The lifecycle is:
   `MissingExecutorExtensionError` if the executor has no `DebugExpressionRecording`.
 
 The plot has one subplot per expression and one line per scalar component, sharing a common time
-axis — for example a `Point3` produces four lines (its homogeneous `x, y, z, w` components). The
+axis — for example a `CartesianPoint3D` produces four lines (its homogeneous `x, y, z, w` components). The
 plotter exposes a few layout knobs: `subplot_height_in_cm`, `second_width_in_cm`, and `legend`.
 
 ```{figure} img/test_pointing_debug_expressions.png

@@ -39,7 +39,8 @@ from matplotlib.lines import Line2D
 from matplotlib.patches import Rectangle
 from typing_extensions import Iterable, Sequence, Self
 
-from krrood_spatial_math.spatial_types import Point, Point3
+from krrood_spatial_math.affine_point import CartesianPoint
+from krrood_spatial_math.spatial_types import CartesianPoint3D, OrthogonalProjection
 from semantic_digital_twin.world_description.geometry import (
     AxisAlignedBox,
 )
@@ -266,15 +267,15 @@ class NavigationPath:
     """
     A solved path through a graph of convex sets.
 
-    Kept as a class rather than a plain ``List[Point]``: :attr:`length`,
-    :attr:`vertical_travel`, :attr:`coordinates` and :attr:`spatial_coordinates` are each
-    read from panels in both this module and
+    Kept as a class rather than a plain ``list[CartesianPoint]``: :attr:`length`,
+    :attr:`vertical_travel` and :attr:`spatial_coordinates` are each read from panels
+    in both this module and
     :mod:`~semantic_digital_twin.world_description.graph_of_convex_sets.volume_figure`,
     so wrapping the waypoints once means every reader shares the same computation
     instead of recomputing it from a bare list.
     """
 
-    waypoints: list[Point]
+    waypoints: list[CartesianPoint]
     """
     The points to navigate to, starting at the query's start and ending at its goal.
     """
@@ -282,33 +283,18 @@ class NavigationPath:
     @property
     def _is_volumetric(self) -> bool:
         """
-        :return: Whether these waypoints carry a real z-coordinate (:class:`Point3`,
-            a 3D path) rather than lying flat on a floor plan (:class:`Point2`, which
-            has no ``z`` at all).
+        :return: Whether these waypoints carry a z-coordinate, so the path is planned in
+            3D rather than on a floor plan.
         """
-        return isinstance(self.waypoints[0], Point3)
+        return isinstance(self.waypoints[0], CartesianPoint3D)
 
     @property
     def length(self) -> float:
         """
         :return: The distance travelled along the path.
         """
-        if self._is_volumetric:
-            return sum(
-                float(
-                    (
-                        (following.x - current.x) ** 2
-                        + (following.y - current.y) ** 2
-                        + (following.z - current.z) ** 2
-                    )
-                    ** 0.5
-                )
-                for current, following in zip(self.waypoints, self.waypoints[1:])
-            )
         return sum(
-            float(
-                ((following.x - current.x) ** 2 + (following.y - current.y) ** 2) ** 0.5
-            )
+            float(current.euclidean_distance(following))
             for current, following in zip(self.waypoints, self.waypoints[1:])
         )
 
@@ -323,15 +309,6 @@ class NavigationPath:
         return sum(
             abs(float(following.z) - float(current.z))
             for current, following in zip(self.waypoints, self.waypoints[1:])
-        )
-
-    @property
-    def coordinates(self) -> np.ndarray:
-        """
-        :return: The waypoints as an array of x-y rows, in the order they are visited.
-        """
-        return np.array(
-            [[float(waypoint.x), float(waypoint.y)] for waypoint in self.waypoints]
         )
 
     @property
@@ -354,20 +331,28 @@ class ConvexSetAdjacency:
     convex set, through the portal the two sets share, to the center of the other.
     """
 
-    source_center: Point
+    source_center: CartesianPoint
     """
     The center of the convex set the edge starts at.
     """
 
-    portal_center: Point
+    portal_center: CartesianPoint
     """
     The center of the region where the two convex sets overlap.
     """
 
-    target_center: Point
+    target_center: CartesianPoint
     """
     The center of the convex set the edge ends at.
     """
+
+    @property
+    def points(self) -> tuple[CartesianPoint, CartesianPoint, CartesianPoint]:
+        """
+        :return: The points the edge is drawn through, from source through portal to
+            target.
+        """
+        return self.source_center, self.portal_center, self.target_center
 
     @property
     def spatial_coordinates(self) -> np.ndarray:
@@ -376,31 +361,37 @@ class ConvexSetAdjacency:
             target.
         """
         return np.array(
-            [
-                [float(point.x), float(point.y), float(point.z)]
-                for point in (
-                    self.source_center,
-                    self.portal_center,
-                    self.target_center,
-                )
-            ]
+            [[float(point.x), float(point.y), float(point.z)] for point in self.points]
         )
 
-    @property
-    def coordinates(self) -> np.ndarray:
+
+@dataclass(frozen=True)
+class FloorPlan:
+    """
+    The x-y plane of the search space's reference frame, which the top-down panels draw
+    on.
+    """
+
+    projection: OrthogonalProjection
+    """
+    The projection of 3D points onto the plane.
+    """
+
+    def coordinates(self, points: Iterable[CartesianPoint]) -> np.ndarray:
         """
-        :return: The edge as an array of x-y rows, from source through portal to target.
+        :param points: Points on the plane, or 3D points in any frame of its world.
+        :return: The points' coordinates on the plane as an array of x-y rows, in the
+            given order, each 3D point projected onto the plane first.
         """
-        return np.array(
-            [
-                [float(point.x), float(point.y)]
-                for point in (
-                    self.source_center,
-                    self.portal_center,
-                    self.target_center,
-                )
-            ]
-        )
+        points_on_plane = [
+            (
+                self.projection.project(point)
+                if isinstance(point, CartesianPoint3D)
+                else point
+            )
+            for point in points
+        ]
+        return np.array([[float(point.x), float(point.y)] for point in points_on_plane])
 
 
 @dataclass
@@ -462,6 +453,13 @@ class NavigationScene:
             panel is framed to.
         """
         return self.graph_of_convex_sets.search_space
+
+    @property
+    def floor_plan(self) -> FloorPlan:
+        """
+        :return: The plane the top-down panels draw on.
+        """
+        return FloorPlan(OrthogonalProjection(self.search_space.reference_frame))
 
     @property
     def extent(self) -> Footprint:
@@ -658,7 +656,7 @@ class AdjacencyLayer(SceneLayer):
         self, axes: Axes, scene: NavigationScene, palette: FigurePalette
     ) -> Sequence[LegendEntry]:
         for adjacency in scene.adjacencies:
-            coordinates = adjacency.coordinates
+            coordinates = scene.floor_plan.coordinates(adjacency.points)
             axes.plot(
                 coordinates[:, 0],
                 coordinates[:, 1],
@@ -668,11 +666,8 @@ class AdjacencyLayer(SceneLayer):
                 solid_joinstyle="round",
                 zorder=4,
             )
-        centers = np.array(
-            [
-                [float(convex_set.center.x), float(convex_set.center.y)]
-                for convex_set in scene.convex_sets
-            ]
+        centers = scene.floor_plan.coordinates(
+            convex_set.center for convex_set in scene.convex_sets
         )
         axes.plot(
             centers[:, 0],
@@ -705,7 +700,7 @@ class PathLayer(SceneLayer):
     def draw(
         self, axes: Axes, scene: NavigationScene, palette: FigurePalette
     ) -> Sequence[LegendEntry]:
-        coordinates = scene.path.coordinates
+        coordinates = scene.floor_plan.coordinates(scene.path.waypoints)
         line = axes.plot(
             coordinates[:, 0],
             coordinates[:, 1],
@@ -745,19 +740,16 @@ class EndpointsLayer(SceneLayer):
         self, axes: Axes, scene: NavigationScene, palette: FigurePalette
     ) -> Sequence[LegendEntry]:
         waypoints = scene.path.waypoints
+        start, goal = scene.floor_plan.coordinates([waypoints[0], waypoints[-1]])
         return [
-            self._draw_endpoint(
-                axes, waypoints[0], "start", "o", palette.start, palette
-            ),
-            self._draw_endpoint(
-                axes, waypoints[-1], "goal", "s", palette.goal, palette
-            ),
+            self._draw_endpoint(axes, start, "start", "o", palette.start, palette),
+            self._draw_endpoint(axes, goal, "goal", "s", palette.goal, palette),
         ]
 
     def _draw_endpoint(
         self,
         axes: Axes,
-        endpoint: Point,
+        endpoint: np.ndarray,
         label: str,
         marker: str,
         color: str,
@@ -765,14 +757,14 @@ class EndpointsLayer(SceneLayer):
     ) -> LegendEntry:
         """
         :param axes: The panel to draw into.
-        :param endpoint: The point to mark.
+        :param endpoint: The x-y coordinates of the point to mark on the floor plan.
         :param label: The name written beside the marker.
         :param marker: The matplotlib marker to draw.
         :param color: The color of the marker.
         :param palette: The colors of the figure.
         :return: The legend entry of this endpoint.
         """
-        x, y = float(endpoint.x), float(endpoint.y)
+        x, y = float(endpoint[0]), float(endpoint[1])
         drawn = axes.plot(
             [x],
             [y],

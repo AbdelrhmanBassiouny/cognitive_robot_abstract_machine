@@ -14,7 +14,7 @@ from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from cramph.node import NodeArtifacts
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from krrood_spatial_math.spatial_types import (
-    Point3,
+    CartesianPoint3D,
     Vector3,
     RotationMatrix,
     HomogeneousTransformationMatrix,
@@ -148,7 +148,7 @@ class PositionReached(RootRelativeGoalMonitor):
     Link that should reach the goal point.
     """
 
-    goal_point: Point3
+    goal_point: CartesianPoint3D
     """
     Target 3D point to reach.
     """
@@ -159,7 +159,7 @@ class PositionReached(RootRelativeGoalMonitor):
     """
 
     @property
-    def goal(self) -> Point3:
+    def goal(self) -> CartesianPoint3D:
         return self.goal_point
 
     def build_artifacts(self) -> NodeArtifacts:
@@ -220,7 +220,7 @@ class PointingAt(EndedByOwner, MotionStatechartNode):
     Link whose pointing axis is checked.
     """
 
-    goal_point: Point3
+    goal_point: CartesianPoint3D
     """
     Point the tip link should point at.
     """
@@ -329,7 +329,7 @@ class DistanceToLine(EndedByOwner, MotionStatechartNode):
     Link whose distance to the line is checked.
     """
 
-    center_point: Point3
+    center_point: CartesianPoint3D
     """
     Center of the line segment.
     """

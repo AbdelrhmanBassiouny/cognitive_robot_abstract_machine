@@ -21,7 +21,7 @@ from krrood.symbolic_math.symbolic_math import (
     Scalar,
 )
 from krrood_spatial_math.spatial_types import (
-    Point3,
+    CartesianPoint3D,
     Vector3,
     Quaternion,
     RotationMatrix,
@@ -52,7 +52,7 @@ class DebugExpression:
 
     expression: (
         Scalar
-        | Point3
+        | CartesianPoint3D
         | Vector3
         | Quaternion
         | RotationMatrix

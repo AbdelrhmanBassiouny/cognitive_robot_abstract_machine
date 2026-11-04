@@ -26,7 +26,7 @@ from semantic_digital_twin.adapters.ros.visualization.exceptions import (
 )
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Point3,
+    CartesianPoint3D,
     Pose,
     Pose2D,
     Quaternion,
@@ -198,7 +198,7 @@ class SpatialTypeMarkerRenderer(Generic[SpatialTypeInput], SubClassSafeGeneric, 
 
 
 @dataclass
-class Point3MarkerRenderer(SpatialTypeMarkerRenderer[Point3]):
+class CartesianPoint3DMarkerRenderer(SpatialTypeMarkerRenderer[CartesianPoint3D]):
     """Renders a point as a single sphere at its current position."""
 
     @classmethod

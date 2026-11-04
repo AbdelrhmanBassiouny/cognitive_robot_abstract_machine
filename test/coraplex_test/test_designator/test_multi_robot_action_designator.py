@@ -130,7 +130,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Point3,
+    CartesianPoint3D,
     Quaternion,
     Vector3,
 )
@@ -359,7 +359,7 @@ def test_navigate_multi(multiple_robot_apartment_context, rclpy_node):
 
     plan = NavigateAction(
         target_location=Pose(
-            Point3.from_iterable(target_position), reference_frame=world.root
+            CartesianPoint3D.from_iterable(target_position), reference_frame=world.root
         )
     )
 
@@ -611,7 +611,8 @@ def test_place_multi(multiple_robot_apartment_context):
             PlaceAction(
                 object_designator=world.get_semantic_annotations_by_type(Milk)[0],
                 target_location=Pose(
-                    Point3.from_iterable([1, -2.2, 0.6]), reference_frame=world.root
+                    CartesianPoint3D.from_iterable([1, -2.2, 0.6]),
+                    reference_frame=world.root,
                 ),
             ),
         ]
@@ -632,11 +633,15 @@ def test_place_multi(multiple_robot_apartment_context):
 def test_look_at(multiple_robot_apartment_context):
     world, robot_view, extensions = multiple_robot_apartment_context
     description = LookAtAction(
-        target=Pose(Point3.from_iterable([3, 0, 1]), reference_frame=world.root)
+        target=Pose(
+            CartesianPoint3D.from_iterable([3, 0, 1]), reference_frame=world.root
+        )
     )
     assert np.allclose(
         description.target.to_np(),
-        Pose(Point3.from_iterable([3, 0, 1]), reference_frame=world.root).to_np(),
+        Pose(
+            CartesianPoint3D.from_iterable([3, 0, 1]), reference_frame=world.root
+        ).to_np(),
         atol=1e-3,
     )
 
@@ -687,7 +692,7 @@ def test_open(multiple_robot_apartment_context):
             ParkArmsAction(arms=robot.all_arms),
             NavigateAction(
                 target_location=Pose(
-                    Point3.from_iterable([1.6, 1.9, 0]),
+                    CartesianPoint3D.from_iterable([1.6, 1.9, 0]),
                     Quaternion.from_iterable([0, 0, 0.3, 1]),
                     reference_frame=world.root,
                 )
@@ -762,7 +767,7 @@ def test_transport(multiple_robot_apartment_context, rclpy_node):
     description = TransportAction.from_graspable_by_closest_grasps(
         world.get_semantic_annotations_by_type(Milk)[0],
         Pose(
-            Point3.from_iterable([3.1, 2.2, 0.95]),
+            CartesianPoint3D.from_iterable([3.1, 2.2, 0.95]),
             Quaternion.from_iterable([0.0, 0.0, 1.0, 0.0]),
             reference_frame=world.root,
         ),

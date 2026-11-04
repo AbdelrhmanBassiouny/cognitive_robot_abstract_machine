@@ -34,7 +34,7 @@ from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
 from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from krrood_spatial_math.spatial_types import Vector3, HomogeneousTransformationMatrix
-from krrood_spatial_math.spatial_types import Point3, Pose
+from krrood_spatial_math.spatial_types import CartesianPoint3D, Pose
 from semantic_digital_twin.world_description.derivatives import DerivativeMap
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
@@ -87,7 +87,7 @@ def test_default_weight_survives_a_json_round_trip(mini_world: World) -> None:
     node = CartesianPositionStraight(
         root_link=root,
         tip_link=tip,
-        goal_point=Point3(1, 0, 0, reference_frame=root),
+        goal_point=CartesianPoint3D(1, 0, 0, reference_frame=root),
     )
     new_json_data = json.loads(json.dumps(to_json(node)))
     tracker = WorldEntityWithIDKwargsTracker.from_world(mini_world)

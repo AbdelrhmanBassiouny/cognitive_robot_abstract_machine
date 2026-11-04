@@ -8,7 +8,7 @@ from semantic_digital_twin.adapters.ros.visualization.spatial_type_marker_render
 from semantic_digital_twin.adapters.ros.visualization.spatial_type_publisher import (
     SpatialTypePublisher,
 )
-from krrood_spatial_math.spatial_types import Point3
+from krrood_spatial_math.spatial_types import CartesianPoint3D
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 
@@ -36,7 +36,7 @@ def first_moving_dof(world: World) -> DegreeOfFreedom:
 
 
 def test_publish_once_publishes_expected_markers(rclpy_node, cylinder_bot_world):
-    point = Point3(1, 2, 3, reference_frame=cylinder_bot_world.root)
+    point = CartesianPoint3D(1, 2, 3, reference_frame=cylinder_bot_world.root)
 
     publisher = SpatialTypePublisher.publish_once(
         spatial_type=point, node=rclpy_node, world=cylinder_bot_world
@@ -52,7 +52,9 @@ def test_publish_once_publishes_expected_markers(rclpy_node, cylinder_bot_world)
 
 def test_markers_update_on_state_change(rclpy_node, cylinder_bot_world):
     dof = first_moving_dof(cylinder_bot_world)
-    point = Point3(x=dof.variables.position, reference_frame=cylinder_bot_world.root)
+    point = CartesianPoint3D(
+        x=dof.variables.position, reference_frame=cylinder_bot_world.root
+    )
 
     publisher = SpatialTypePublisher(node=rclpy_node, _world=cylinder_bot_world)
     fake = capture(publisher)
@@ -70,7 +72,9 @@ def test_set_requests_replaces_previous(rclpy_node, cylinder_bot_world):
     publisher = SpatialTypePublisher(node=rclpy_node, _world=cylinder_bot_world)
     publisher.add(
         SpatialTypeVisualization(
-            spatial_type=Point3(0, 0, 0, reference_frame=cylinder_bot_world.root),
+            spatial_type=CartesianPoint3D(
+                0, 0, 0, reference_frame=cylinder_bot_world.root
+            ),
             namespace="a",
         )
     )
@@ -79,7 +83,9 @@ def test_set_requests_replaces_previous(rclpy_node, cylinder_bot_world):
     publisher.set_requests(
         [
             SpatialTypeVisualization(
-                spatial_type=Point3(1, 1, 1, reference_frame=cylinder_bot_world.root),
+                spatial_type=CartesianPoint3D(
+                    1, 1, 1, reference_frame=cylinder_bot_world.root
+                ),
                 namespace="b",
             )
         ]
@@ -99,11 +105,15 @@ def test_add_all_publishes_all_requests(rclpy_node, cylinder_bot_world):
     publisher.add_all(
         [
             SpatialTypeVisualization(
-                spatial_type=Point3(0, 0, 0, reference_frame=cylinder_bot_world.root),
+                spatial_type=CartesianPoint3D(
+                    0, 0, 0, reference_frame=cylinder_bot_world.root
+                ),
                 namespace="a",
             ),
             SpatialTypeVisualization(
-                spatial_type=Point3(1, 1, 1, reference_frame=cylinder_bot_world.root),
+                spatial_type=CartesianPoint3D(
+                    1, 1, 1, reference_frame=cylinder_bot_world.root
+                ),
                 namespace="b",
             ),
         ]
@@ -118,7 +128,9 @@ def test_clear_deletes_previously_published_markers(rclpy_node, cylinder_bot_wor
     fake = capture(publisher)
     publisher.add(
         SpatialTypeVisualization(
-            spatial_type=Point3(0, 0, 0, reference_frame=cylinder_bot_world.root)
+            spatial_type=CartesianPoint3D(
+                0, 0, 0, reference_frame=cylinder_bot_world.root
+            )
         )
     )
     published_identities = {
@@ -139,11 +151,15 @@ def test_publish_deletes_only_removed_request_markers(rclpy_node, cylinder_bot_w
     publisher.add_all(
         [
             SpatialTypeVisualization(
-                spatial_type=Point3(0, 0, 0, reference_frame=cylinder_bot_world.root),
+                spatial_type=CartesianPoint3D(
+                    0, 0, 0, reference_frame=cylinder_bot_world.root
+                ),
                 namespace="keep",
             ),
             SpatialTypeVisualization(
-                spatial_type=Point3(1, 1, 1, reference_frame=cylinder_bot_world.root),
+                spatial_type=CartesianPoint3D(
+                    1, 1, 1, reference_frame=cylinder_bot_world.root
+                ),
                 namespace="drop",
             ),
         ]
@@ -152,7 +168,9 @@ def test_publish_deletes_only_removed_request_markers(rclpy_node, cylinder_bot_w
     publisher.set_requests(
         [
             SpatialTypeVisualization(
-                spatial_type=Point3(0, 0, 0, reference_frame=cylinder_bot_world.root),
+                spatial_type=CartesianPoint3D(
+                    0, 0, 0, reference_frame=cylinder_bot_world.root
+                ),
                 namespace="keep",
             )
         ]

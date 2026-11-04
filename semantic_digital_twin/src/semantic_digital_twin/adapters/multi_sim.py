@@ -49,7 +49,7 @@ from semantic_digital_twin.exceptions import (
 )
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Point3,
+    CartesianPoint3D,
     Quaternion,
     RotationMatrix,
     Vector3,
@@ -251,7 +251,7 @@ class InertialConverter:
     The mass of the body.
     """
 
-    inertia_pos: Point3
+    inertia_pos: CartesianPoint3D
     """
     The position of the inertia frame relative to the body frame [x, y, z].
     """
@@ -1058,7 +1058,7 @@ class MujocoCamera(MultiSimCamera):
 
     @staticmethod
     def _look_at_rotation(
-        camera_position: Point3, target_position: Point3
+        camera_position: CartesianPoint3D, target_position: CartesianPoint3D
     ) -> RotationMatrix:
         """
         Computes the world-frame orientation of a camera at ``camera_position`` looking at
@@ -1096,8 +1096,8 @@ class MujocoCamera(MultiSimCamera):
         :param distance_factor: Multiplier applied to the box's bounding diagonal to place the camera.
         :return: The framing camera's world-frame pose.
         """
-        minimum = Point3.from_iterable(bounds[0])
-        maximum = Point3.from_iterable(bounds[1])
+        minimum = CartesianPoint3D.from_iterable(bounds[0])
+        maximum = CartesianPoint3D.from_iterable(bounds[1])
         diagonal_vector = maximum - minimum
         center = minimum + diagonal_vector * 0.5
         diagonal = float(diagonal_vector.norm().to_np().item())

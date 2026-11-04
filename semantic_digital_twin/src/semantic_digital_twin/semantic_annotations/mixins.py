@@ -65,7 +65,7 @@ from semantic_digital_twin.semantic_annotations.part_whole import (
     IsPartWholeRelationship,
 )
 from krrood_spatial_math.spatial_types import (
-    Point3,
+    CartesianPoint3D,
     HomogeneousTransformationMatrix,
     Vector3,
 )
@@ -185,9 +185,9 @@ class HasRootKinematicStructureEntity(
         )
 
     @property
-    def min_max_points(self) -> tuple[Point3, Point3]:
-        min = Point3.from_iterable(self.root.combined_mesh.bounds[0])
-        max = Point3.from_iterable(self.root.combined_mesh.bounds[1])
+    def min_max_points(self) -> tuple[CartesianPoint3D, CartesianPoint3D]:
+        min = CartesianPoint3D.from_iterable(self.root.combined_mesh.bounds[0])
+        max = CartesianPoint3D.from_iterable(self.root.combined_mesh.bounds[1])
         return min, max
 
     def __hash__(self):
@@ -1164,7 +1164,7 @@ class HasSupportingSurface(IsStorageSpace, Mixin):
         vertices = candidates_filtered.vertices
         self_P_supporting_surface = vertices.mean(axis=0)
         points_3d = [
-            Point3(
+            CartesianPoint3D(
                 x,
                 y,
                 z,
@@ -1232,7 +1232,7 @@ class HasSupportingSurface(IsStorageSpace, Mixin):
         body_to_sample_for: HasRootBody | None = None,
         category_of_interest: type[SemanticAnnotation] | None = None,
         amount: int = 100,
-    ) -> list[Point3]:
+    ) -> list[CartesianPoint3D]:
         """
         Samples points from a surface around the semantic annotation.
 
@@ -1282,9 +1282,13 @@ class HasSupportingSurface(IsStorageSpace, Mixin):
 
         if category_of_interest:
             return [
-                Point3(*s[1:], reference_frame=self.supporting_surface) for s in samples
+                CartesianPoint3D(*s[1:], reference_frame=self.supporting_surface)
+                for s in samples
             ]
-        return [Point3(*s, reference_frame=self.supporting_surface) for s in samples]
+        return [
+            CartesianPoint3D(*s, reference_frame=self.supporting_surface)
+            for s in samples
+        ]
 
     def _build_surface_sampler(
         self,
@@ -1417,7 +1421,7 @@ class HasSupportingSurface(IsStorageSpace, Mixin):
 
     def spawn_bounding_boxes_as_region(
         self,
-        boxes: BoundingBoxCollection[VolumetricBoundingBox, Point3],
+        boxes: BoundingBoxCollection[VolumetricBoundingBox, CartesianPoint3D],
         name: PrefixedName | None = None,
         color: Color | None = None,
     ) -> Region:

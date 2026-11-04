@@ -21,7 +21,7 @@ from krrood_spatial_math.spatial_types import (
     RotationMatrix,
     Vector3,
 )
-from krrood_spatial_math.spatial_types import Pose, Point3, Pose2D
+from krrood_spatial_math.spatial_types import Pose, CartesianPoint3D, Pose2D
 from semantic_digital_twin.robots.robot_parts import EndEffector
 from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
 from semantic_digital_twin.world_description.world_entity import SemanticAnnotation
@@ -202,7 +202,7 @@ class MoveToReach(MovesToolCenterPoint, SequentialAction, HasApproachesGraspPose
         ) @ RotationMatrix.from_rpy(yaw=self.hip_rotation)
 
         target_T_robot = HomogeneousTransformationMatrix.from_point_rotation_matrix(
-            point=Point3(
+            point=CartesianPoint3D(
                 x=self.target_pose_offset_robot.x,
                 y=self.target_pose_offset_robot.y,
             ),

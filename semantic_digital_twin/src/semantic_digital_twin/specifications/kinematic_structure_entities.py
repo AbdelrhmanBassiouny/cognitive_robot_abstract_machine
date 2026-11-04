@@ -13,7 +13,10 @@ from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood.utils import get_generic_type_parameters
 from random_events.product_algebra import Event
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Point3
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    CartesianPoint3D,
+)
 from semantic_digital_twin.specifications.base import SpawnSpecification
 from semantic_digital_twin.specifications.connections import (
     ConnectionSpecification,
@@ -421,7 +424,7 @@ class KinematicStructureEntitySpecification(
     def from_3d_points(
         cls,
         name: str,
-        points_3d: list[Point3],
+        points_3d: list[CartesianPoint3D],
         minimum_thickness: float = 0.005,
         singular_value_ratio_tolerance: float = 1e-7,
         parent_T_self: HomogeneousTransformationMatrix | None = None,
