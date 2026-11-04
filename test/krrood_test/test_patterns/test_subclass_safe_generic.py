@@ -23,6 +23,8 @@ from typing_extensions import (
 )
 
 from krrood.entity_query_language.factories import variable_from
+from krrood.exceptions import UnboundGenericParameter
+from krrood.patterns.interface import Interface
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood.utils import get_generic_type_parameters
 from ..dataset.classes_with_generic import (
@@ -47,6 +49,7 @@ from dataclasses import dataclass
 from typing_extensions import TypeVar
 
 from krrood.class_diagrams.class_diagram import ClassDiagram
+from krrood.patterns.interface import Interface
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 
 
@@ -723,3 +726,176 @@ def test_typevartuple_multiple_usage_in_fields():
     fields_by_name = {field.name: field for field in fields(Final)}
     assert fields_by_name["first"].type == Tuple[int, str]
     assert fields_by_name["second"].type == List[Tuple[int, str]]
+
+
+# %% reading back what a parameter is bound to
+
+
+def test_a_parameter_an_intermediate_class_bound_is_read_back():
+    """
+    Each parameter is read back by name, so a class that binds its own parameter still
+    reports what its bases bound theirs to.
+    """
+    ContentType = TypeVar("ContentType")
+    LabelType = TypeVar("LabelType")
+
+    @dataclass
+    class Container(Generic[ContentType], SubClassSafeGeneric):
+        content: ContentType
+
+    @dataclass
+    class LabelledContainer(Container[str], Generic[LabelType], SubClassSafeGeneric):
+        label: LabelType
+
+    @dataclass
+    class CountingContainer(LabelledContainer[int]):
+        pass
+
+    assert CountingContainer.get_type_of_generic_parameter(ContentType) is str
+    assert CountingContainer.get_type_of_generic_parameter(LabelType) is int
+
+
+def test_a_parameter_nothing_bound_is_rejected():
+    """
+    A parameter no class in the chain bound to a concrete type is an error, rather than
+    a silently wrong type.
+    """
+    ContentType = TypeVar("ContentType")
+
+    @dataclass
+    class Container(Generic[ContentType], SubClassSafeGeneric):
+        content: ContentType
+
+    with pytest.raises(UnboundGenericParameter):
+        Container.get_type_of_generic_parameter(ContentType)
+
+
+def test_a_parameter_only_renamed_by_a_subclass_is_rejected():
+    """
+    Passing a parameter on under another name binds nothing, so it is rejected like a
+    parameter that was never bound.
+    """
+    ContentType = TypeVar("ContentType")
+    OtherType = TypeVar("OtherType")
+
+    @dataclass
+    class Container(Generic[ContentType], SubClassSafeGeneric):
+        content: ContentType
+
+    @dataclass
+    class RenamingContainer(
+        Container[OtherType], Generic[OtherType], SubClassSafeGeneric
+    ):
+        pass
+
+    with pytest.raises(UnboundGenericParameter):
+        RenamingContainer.get_type_of_generic_parameter(ContentType)
+
+
+def test_sibling_classes_each_read_back_their_own_binding():
+    """
+    Two subclasses binding the same parameter to different types each report their own
+    type, however often either is asked.
+    """
+    ContentType = TypeVar("ContentType")
+
+    @dataclass
+    class Container(Generic[ContentType], SubClassSafeGeneric):
+        content: ContentType
+
+    @dataclass
+    class TextContainer(Container[str]):
+        pass
+
+    @dataclass
+    class NumberContainer(Container[int]):
+        pass
+
+    assert TextContainer.get_type_of_generic_parameter(ContentType) is str
+    assert NumberContainer.get_type_of_generic_parameter(ContentType) is int
+    assert TextContainer.get_type_of_generic_parameter(ContentType) is str
+
+
+def test_a_bound_type_is_looked_up_once_per_class_and_parameter(monkeypatch):
+    """
+    Reading a binding again returns the type found the first time, without resolving the
+    class's substitutions again.
+    """
+    ContentType = TypeVar("ContentType")
+
+    @dataclass
+    class Container(Generic[ContentType], SubClassSafeGeneric):
+        content: ContentType
+
+    @dataclass
+    class TextContainer(Container[str]):
+        pass
+
+    first_lookup = TextContainer.get_type_of_generic_parameter(ContentType)
+    monkeypatch.setattr(
+        TextContainer,
+        "_get_generic_type_substitutions",
+        classmethod(lambda cls: {}),
+    )
+
+    assert TextContainer.get_type_of_generic_parameter(ContentType) is first_lookup
+
+
+# %% attributes an interface declares
+
+
+def test_an_attribute_an_interface_declares_is_not_made_a_field():
+    """
+    A subclass that computes an attribute its interface declares keeps it a property
+    when a further subclass binds the parameter.
+    """
+    CornerType = TypeVar("CornerType")
+
+    class Region(Generic[CornerType], SubClassSafeGeneric, Interface):
+        lower: CornerType
+
+    @dataclass
+    class ShiftedRegion(Region[CornerType]):
+        @property
+        def lower(self) -> CornerType:
+            return self.offset
+
+    @dataclass
+    class IntegerShiftedRegion(ShiftedRegion[int]):
+        offset: int
+
+    shift = 3
+    assert [region_field.name for region_field in fields(IntegerShiftedRegion)] == [
+        "offset"
+    ]
+    assert IntegerShiftedRegion(shift).lower == shift
+
+
+def test_a_field_redeclaring_an_interface_attribute_is_narrowed():
+    CornerType = TypeVar("CornerType")
+
+    class Region(Generic[CornerType], SubClassSafeGeneric, Interface):
+        lower: CornerType
+
+    @dataclass
+    class StoredRegion(Region[CornerType]):
+        lower: CornerType
+
+    @dataclass
+    class IntegerStoredRegion(StoredRegion[int]): ...
+
+    [lower_field] = fields(IntegerStoredRegion)
+    assert lower_field.type is int
+
+
+# %% identity of classes that keep identity comparison
+
+
+def test_a_subclass_compared_by_identity_is_not_equal_to_another_instance():
+    assert CombinedClass() != CombinedClass()
+
+
+def test_a_subclass_compared_by_identity_is_hashable():
+    instance = CombinedClass()
+
+    assert instance in {instance}
