@@ -1,7 +1,7 @@
 Plan:
-- Memo on #535: CallResults keyed by CallAsPassed; truth by predicate identity
+- Memo on #535 as a TermReader (CallResults in ground_term.py); predicate truth read as a call
 Done:
-- Draft PR #553 (new-feature); tests green; measurements in PR
-- SymbolGraph cleanup split out as #554; depends_on updated, posted on #507
+- Merged #535 at 1351ca2f52; review threads answered, 6 resolved, rule-conclusion one open
+- Draft PR #553; local tests green at 33df10d098
 Next:
-- Re-measure once #554 lands; merge main via #535 when its owner updates it
+- Answer the rule-conclusion thread's follow-up; read CI on 33df10d098; land after #554
