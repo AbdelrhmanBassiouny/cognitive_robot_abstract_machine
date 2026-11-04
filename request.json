@@ -1,6 +1,9 @@
 {
-  "kind": "open-pull-requests",
-  "request_identifier": "60c50258e8943ca6",
+  "kind": "pull-request-report",
+  "request_identifier": "d7692a03bba51e6a",
   "upstream": "cram2/cognitive_robot_abstract_machine",
-  "fork": "AbdelrhmanBassiouny/cognitive_robot_abstract_machine"
+  "fork_owner": "AbdelrhmanBassiouny",
+  "pull_request": null,
+  "branch": "claude/eql-planning-instantiated-variable-cue1io",
+  "failure_logs": false
 }
