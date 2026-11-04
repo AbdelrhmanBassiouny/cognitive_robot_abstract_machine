@@ -1,20 +1,14 @@
 # fix/eql-correlated-quantifiers — PR #495 (eql-existential-semantics / correlated-quantifiers)
 
 ## Done (2026-11-04)
-- Review round 1: 23 of 27 threads fixed and resolved (`6c450180be`, `60899651e6`).
-- `match` on collections, option A (`3a67fd6030`): reading by declared type, error for a value
-  of neither type; lists/tuples `==` by order/length (also plain `==`); list of patterns needs
-  the same length. Nested pattern's domain restricts its object (`fa89a33f60`), and generative
-  backends pick from it (`fee20b2900`); `...`/`cause` inside it raise (`6d65dd5a51`, `693d2e3cc3`);
-  completion planned as `match-implicit-prediction/complete-domain-objects`. Local: `test_eql` + `test_class_diagram` 1676 passed.
-- Shared doc for the vote: https://claude.ai/artifact/EjQU8z1th3N82LxWEdXNCT
+- Split: quantifiers only now (`661a3d92f2`); base is #555. Match moved to #556/#557.
+- Review round 1 fixes in `6c450180be`, `60899651e6`. Local at `36c1619306`: 1583 passed.
 
 ## State
-- PR is ready (owner kept it ready). CI on `693d2e3cc3`: *not checked*. Now `api-break`
-  (suggest the label; discuss with the krrood code owners).
+- Ready (owner kept it ready). CI on `36c1619306`: *not checked*. Suggest `api-break`
+  (for_all on empty domains, exists rows) and talk to the krrood code owners.
 
 ## Next
-- `match` thread stays open until the doc's vote (A/B/C/D); B means an error for plain values.
-- Three other open threads wait on the owner: bag vs set (repeated 10), `flat_variable`
-  automation (separate item), performance (~4%).
+- Open threads wait on the owner: bag vs set (repeated 10), `flat_variable` automation,
+  performance (~4%). The match.md thread points at #556 and stays open until the vote.
 - Still open: which of `exists-semijoin` / `negation-antijoin` this item supersedes.
