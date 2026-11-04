@@ -24,12 +24,14 @@ tracks:
   description: Descriptors, terminology, compiler, loader, check, verification, experiments.
 items:
 - id: eql-predicate-call-memo
-  branch: eql-predicate-call-memo
+  branch: claude/beautiful-thompson-561yjg
   title: 'EQL: call each predicate once per distinct argument tuple'
   track: paper-eql-ormatic
+  pull_request_number: 553
+  session: https://claude.ai/code/session_01JxHGiMEy4DjtkFbwQu2uRK
   depends_on:
   - eql-existential-semantics/correlated-quantifiers
-  status: not_started
+  status: in progress
   notes: Source commit 08f9178dd2 on aamas27-unification-revision.
 - id: ormatic-collection-translation
   branch: ormatic-collection-translation
