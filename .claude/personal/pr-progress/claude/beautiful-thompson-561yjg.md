@@ -1,9 +1,8 @@
 Plan:
-- Memo keyed on #535's CallTerm: CallResults on EvaluationContext, shared with nested evaluations
-- InstantiatedVariable reads procedure calls through it; constructor calls and iterator results are not reused
-- Predicate.__bool__ read once per instance per evaluation
-- Tests first: counted mimics in test/krrood_test/dataset, test_eql/test_call_results.py
+- Memo on #535: CallResults keyed by CallAsPassed; truth by predicate identity
+- SymbolGraph.remove_node quadratic cleanup: separate bug PR off main (awaiting user)
 Done:
-- Bootstrapped draft PR #553 on #535; depends_on swapped and posted on #507
+- Draft PR #553 on #535; depends_on swapped, posted on #507
+- Tests + implementation; test_eql/test_planning green (1495 passed); measurements in PR
 Next:
-- Write failing tests, implement, run test_eql, update PR
+- User decision on SymbolGraph fix; then record it on #507 and in plan.yaml
