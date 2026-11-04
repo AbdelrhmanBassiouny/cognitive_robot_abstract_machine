@@ -88,10 +88,12 @@ items:
     Ready for review; promoted as cram2#866 (open, checks green, no reviews yet). Includes #538 and
     #540, which should land upstream first.
 
+    Nov 4: cram2 main landed #540 in a reworked form (CallArguments and CallSignature in
+    krrood.class_diagrams), which conflicted in mapped_variable.py and utils.py. Merged main in
+    (cd8365454) and rebound ground terms through CallSignature; CI on the new head is not yet read.
+
     #542 is not merged into #535. If #535 needs it, #535 is stacked on #542 and then drops
     Fact._is_predicate's isinstance(_type_, type) guard.
-
-    Fork main is behind cram2 main; the next maintenance pass fast-forwards it.
 - id: state-objects-and-domains
   branch: ccr-b32c8432-18ncpi
   title: 'Objects in a State: a state adds and removes objects, and default EQL domains come from
