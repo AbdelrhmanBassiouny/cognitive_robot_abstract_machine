@@ -1,11 +1,5 @@
-## Plan
-- Keep the contract: for a SymbolicFunction class, `_type_` is what `__call__` returns and the class is `_factory_`. An unannotated factory raises ResultTypeCannotBeDetermined; `-> Self` on a method gives the class it is bound to.
+Resolve of Nov 4: the stall was a merge conflict with `main` (bee57056c2) in the imports of `krrood/src/krrood/patterns/factory_and_kwargs.py`: `main` replaced `list_like_classes` with `CollectionKind`, this branch adds `get_type_hints_of_object`. Merged `main` into the branch (9bd5951e46), keeping both imports; merge probe afterwards: clean.
 
-## Done
-- `inference(factory)`, shared `_type_built_by_`, unannotated factories raise (to f611cc5714).
-- CI fixes: Self-returning factory methods, compute_euclidean_planar_distance annotated (d20cc9d808); `_declared_factory_` (d019c307c7).
-- Factory-class pattern -> plan krrood-patterns (#552); a/an checker -> eql-verbalization/article-agreement-check.
+Read on 9b073d07f3: 18/18 fork checks passed. Not read on 9bd5951e46: its CI was still running. Upstream cram2/cognitive_robot_abstract_machine#862: two approvals, 29/29 checks, no unresolved threads. Four fork threads stay open for the owner (three "why not `_type_`", one on `predicate.py:348`/factory-class pattern is resolved).
 
-## Next
-- Wait for CI on 9b073d07f3 (main merged in).
-- Owner answers: the three "why not `_type_`" threads.
+No tests were run locally: the scratch environment cannot install pyjpt. Nothing is stacked on this branch.
