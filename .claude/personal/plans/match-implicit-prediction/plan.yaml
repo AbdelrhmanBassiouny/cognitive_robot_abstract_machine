@@ -29,3 +29,21 @@ items:
       RequiredAttributeCannotBeGenerated (references, unsized lists, recursive types).
       Optional fields are never inferred. Also drop the redundant hip_rotation=... in
       coraplex training_environment.py.
+      Skip patterns given a domain: their objects exist, so unstated fields are not
+      inferred.
+
+  - id: complete-domain-objects
+    branch: complete-domain-objects
+    title: Generative backends complete the missing attributes of domain objects
+    track: match
+    depends_on:
+      - eql-existential-semantics/match-generation
+    status: not started
+    notes: >
+      new-feature, based on main after #557. `...` (and cause) in a pattern with a domain,
+      top-level or nested, fills only attributes that are None on each domain object,
+      returning completed copies (one per generated value) and leaving the originals
+      unchanged; objects that already have the value pass unchanged. Deterministic backend
+      enumerates; probabilistic samples the missing attribute given the object's known
+      fields. Replaces #557's GenerativeBackendCannotFillInADomainObject; fixes the
+      top-level TypeError on main. Settle at kickoff: is a nested completed copy fine?

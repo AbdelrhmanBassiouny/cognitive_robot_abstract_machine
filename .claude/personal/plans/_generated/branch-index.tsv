@@ -107,6 +107,7 @@ claude/bold-ramanujan-vb0e9c	krrood-light-core
 claude/relaxed-wozniak-eu4gdv	krrood-light-core
 claude/keen-feynman-4xcf4m	krrood-light-core
 infer-required-match-attributes	match-implicit-prediction
+complete-domain-objects	match-implicit-prediction
 krrood_eql_orm_fixes	montessori-eql-stack
 sdt_numeric_geometry_and_panda	montessori-eql-stack
 segmind_numeric_hole_events	montessori-eql-stack
