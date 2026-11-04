@@ -1,1 +1,1 @@
-{"request_identifier": "a28b5410e21918c3", "error": "no pull request on cram2/cognitive_robot_abstract_machine has head 'AbdelrhmanBassiouny:D-core-support'\nSuggestion: The branch has most likely not been promoted upstream yet; read it once its upstream pull request is open", "responses": [], "job_logs": []}
+{"request_identifier": "0b2e765bc331b150", "upstream_pull_requests": {"fork": "AbdelrhmanBassiouny/cognitive_robot_abstract_machine", "pull_request_by_branch": {"claude/eql-planning-instantiated-variable-cue1io": 862, "claude/ecstatic-knuth-curscv": 804}}}
