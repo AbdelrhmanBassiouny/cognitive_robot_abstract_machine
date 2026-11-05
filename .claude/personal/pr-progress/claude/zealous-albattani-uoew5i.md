@@ -1,10 +1,11 @@
-PR #535, plan item eql-planning/fluent-state-overlay. Ready for review (owner). Merges bug PRs #538 and #540 (off main).
+PR #535, plan item eql-planning/fluent-state-overlay. Promoted as cram2#866: changes requested (tomsch420, LucaKro).
 
 Plan:
-- Value overlay; facts are EQL conditions (State.with_facts); typed value terms built by GroundTermExpression[TermT]; queries take state=.
+- Value overlay; facts are EQL conditions (State.with_facts); typed ground terms built by GroundTermExpression; queries take state=.
 
 Done:
-- adcb71821 owner review: CallSignature.of->from_callable; bind/bind_by_name take CallArguments; pass_to removed; no abbreviations in query_graph.
+- 35b00d72ca: merged #862 from main (terms built from _factory_); tuple index facts accepted; planning docstrings formatted.
 
 Next:
-- Owner decides 2 open threads (pass_to removal, keep bind). Api-break note in #535 description (Call._arguments_, from_callable, bind/bind_by_name). Fork CI at adcb71821 unread; branch 40 behind main.
+- Owner answers 3 cram2#866 design threads (fluent vocabulary, owner identity, state= on other backends); then implement and draft upstream replies.
+- Fork threads left for the owner: pass_to removal, keep bind, TermValue (kept).
