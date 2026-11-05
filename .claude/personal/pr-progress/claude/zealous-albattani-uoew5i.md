@@ -5,6 +5,7 @@ Plan:
 
 Done:
 - c1e7fc3c0a: cram2#866 answers: fluent defined in planning; owners by identity (ObjectIdentity); BackendCannotReadState.
+- 67ec08bf21: krrood/conftest.py keeps live logging out of doctests (State doctest fixed).
 
 Next:
 - Owner posts drafted cram2#866 replies; re-review. Fork threads left for owner: pass_to removal, keep bind, TermValue kept.
