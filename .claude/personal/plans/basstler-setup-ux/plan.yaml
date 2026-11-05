@@ -70,7 +70,15 @@ items:
   branch: ccr-55c61e97-pn7gso
   pull_request_number: 137
   session: https://claude.ai/code/session_01JxHGiMpEninHM6aZ3mXF6G
-  notes: Analysis, discussion with the user and a prototype on stack-board only. Cover pull by schedule or webhook, private notes repositories, latency, Actions usage and security trade-offs. No production change until the user decides.
+  notes: >
+    Analysis, discussion with the user and a prototype on stack-board only. Cover pull by schedule
+    or webhook, private notes repositories, latency, Actions usage and security trade-offs. No
+    production change until the user decides.
+
+    Analysis and a detect-only prototype are in #137 (docs only). It recommends a change-gated poll
+    on the site repository as the default, with the dispatch kept as an optional fast path. It waits
+    on the user: the go-ahead to run the prototype on stack-board, and decisions on the default
+    delay, the merge workflow and private notes repositories.
 
 - id: retry-transient-errors
   title: Retry transient GitHub server errors when reading in the site build
