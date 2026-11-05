@@ -33,12 +33,13 @@ items:
   - eql-planning/fluent-state-overlay
   - symbol-graph-removal-by-identity
   status: in progress
-  notes: 'Source commit 08f9178dd2 on aamas27-unification-revision. Stacked on #535 (merged
-    at c6bd57ebe8, which added TermValue and EvaluationContext.current_value_of for this
-    review); CallResults is a TermReader keyed by callee + CallArguments as passed (CallTerm
-    keys fail on builtins), predicate truth read as a __call__ call. Needs #554. Draft;
-    test_eql+test_planning green at 505c9eb508, CI unread; threads on rule-conclusion
-    dedup and the nested dict open.'
+  notes: 'Source 08f9178dd2 on aamas27-unification-revision. Stacked on #535 (merged
+    at c6bd57ebe8); CallResults is a TermReader keyed
+    by callee + CallArguments as passed (CallTerm keys fail on builtins), predicate truth read as
+    a __call__ call. Needs #554 and #558 (bug PR off main: non-scalar SymbolicMathType hash raises
+    TypeError; merged here, fixed the semantic_digital_twin CI failure on Vector3 arguments). Out
+    of draft (user); test_eql+test_planning+test_symbolic_math green at b694fe1229, CI unread;
+    threads on rule-conclusion dedup and the nested dict open.'
 - id: ormatic-collection-translation
   branch: ormatic-collection-translation
   title: 'ORMatic: translate EQL over collection-valued attributes to SQL'
