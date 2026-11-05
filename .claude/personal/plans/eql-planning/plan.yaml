@@ -82,21 +82,24 @@ items:
   title: Fluents and a State overlay that EQL queries are evaluated against
   track: planning-core
   pull_request_number: 535
-  session: https://claude.ai/code/session_01JxHGiMbWLBgK8nT2DHNmxJ
+  session: https://claude.ai/code/session_01JxHGiPQVbcnHx4PQ12P6fZ
+  blockers:
+    - >-
+      cram2#866 requests changes: three design questions wait on the owner (fluent vocabulary, owner
+      identity, state= on non-EQL backends); upstream thread replies are the owner's to post.
   depends_on:
   - instantiated-variable-type-and-factory
   - call-arguments-normalization
-  status: in progress
+  status: blocked
   notes: >
-    Ready for review; promoted as cram2#866 (open, checks green, no reviews yet). Includes #538 and
-    #540, which should land upstream first.
+    Promoted as cram2#866 (changes requested, 11 open threads). Merges #538, #540 and, from main,
+    #862; ground terms are built from InstantiatedVariable._factory_.
 
-    Nov 4: cram2 main landed #540 in a reworked form (CallArguments and CallSignature in
-    krrood.class_diagrams), which conflicted in mapped_variable.py and utils.py. Merged main in
-    (cd8365454) and rebound ground terms through CallSignature; CI on the new head is not yet read.
+    Next: carry out the owner's answers on the three cram2#866 design threads (fluent vocabulary,
+    owner identity, state= on other backends) and draft the upstream replies.
 
-    #542 is not merged into #535. If #535 needs it, #535 is stacked on #542 and then drops
-    Fact._is_predicate's isinstance(_type_, type) guard.
+    #542 is not merged in. If #535 needs it, stack on #542 and drop Fact._is_predicate's
+    isinstance(_type_, type) guard.
 - id: state-objects-and-domains
   branch: ccr-b32c8432-18ncpi
   title: 'Objects in a State: a state adds and removes objects, and default EQL domains come from
