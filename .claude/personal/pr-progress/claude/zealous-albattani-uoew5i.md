@@ -4,8 +4,7 @@ Plan:
 - Value overlay; facts are EQL conditions (State.with_facts); typed ground terms built by GroundTermExpression; queries take state=.
 
 Done:
-- 35b00d72ca: merged #862 from main (terms built from _factory_); tuple index facts accepted; planning docstrings formatted.
+- c1e7fc3c0a: cram2#866 answers: fluent defined in planning; owners by identity (ObjectIdentity); BackendCannotReadState.
 
 Next:
-- Owner answers 3 cram2#866 design threads (fluent vocabulary, owner identity, state= on other backends); then implement and draft upstream replies.
-- Fork threads left for the owner: pass_to removal, keep bind, TermValue (kept).
+- Owner posts drafted cram2#866 replies; re-review. Fork threads left for owner: pass_to removal, keep bind, TermValue kept.
