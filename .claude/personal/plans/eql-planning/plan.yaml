@@ -83,20 +83,17 @@ items:
   track: planning-core
   pull_request_number: 535
   session: https://claude.ai/code/session_01JxHGiPQVbcnHx4PQ12P6fZ
-  blockers:
-    - >-
-      cram2#866 requests changes: three design questions wait on the owner (fluent vocabulary, owner
-      identity, state= on non-EQL backends); upstream thread replies are the owner's to post.
   depends_on:
   - instantiated-variable-type-and-factory
   - call-arguments-normalization
-  status: blocked
+  status: in progress
   notes: >
-    Promoted as cram2#866 (changes requested, 11 open threads). Merges #538, #540 and, from main,
-    #862; ground terms are built from InstantiatedVariable._factory_.
+    Promoted as cram2#866 (changes requested). Merges #538, #540 and, from main, #862. The
+    cram2#866 design answers are in c1e7fc3c0a: fluent defined in planning only, owners by
+    identity, BackendCannotReadState. Counterfactual episodes moved to plan
+    eql-counterfactual-episodes.
 
-    Next: carry out the owner's answers on the three cram2#866 design threads (fluent vocabulary,
-    owner identity, state= on other backends) and draft the upstream replies.
+    Next: the owner posts the drafted upstream replies; reviewers re-review.
 
     #542 is not merged in. If #535 needs it, stack on #542 and drop Fact._is_predicate's
     isinstance(_type_, type) guard.
