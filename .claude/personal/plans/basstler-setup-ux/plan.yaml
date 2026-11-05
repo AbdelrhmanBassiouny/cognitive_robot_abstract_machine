@@ -66,7 +66,10 @@ items:
 - id: token-free-site
   title: Analyse and prototype publishing without PLAN_SITE_TOKEN
   track: token-free
-  status: not started
+  status: in progress
+  branch: ccr-55c61e97-pn7gso
+  pull_request_number: 137
+  session: https://claude.ai/code/session_01JxHGiMpEninHM6aZ3mXF6G
   notes: Analysis, discussion with the user and a prototype on stack-board only. Cover pull by schedule or webhook, private notes repositories, latency, Actions usage and security trade-offs. No production change until the user decides.
 
 - id: retry-transient-errors
