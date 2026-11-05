@@ -1,0 +1,57 @@
+schema_version: 1
+id: eql-counterfactual-episodes
+title: "Counterfactual EQL queries over stored episodes"
+description: >
+  Ask what would have held if a stored episode had differed at some moment: load the
+  episode's objects, assign facts in a State, and evaluate EQL with it. Later, the SQL
+  and probabilistic backends read a State themselves.
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 559
+
+waves:
+  - id: counterfactuals
+    name: "Counterfactuals"
+
+tracks:
+  - id: counterfactual-core
+    name: "Counterfactual core"
+    wave: counterfactuals
+
+items:
+  - id: owner-identity-across-reloads
+    title: "A ground term's owner keeps its identity when its object is reloaded or copied"
+    track: counterfactual-core
+    depends_on: [eql-planning/fluent-state-overlay]
+    status: not started
+    notes: >
+      #535 compares a ground term's owner (instance, container, receiver) by Python
+      identity. An object loaded from the database again, or deep-copied, is then a
+      different owner. Key the owner by its persistent identity where it has one (ORM
+      primary key or SymbolGraph identity), else by Python identity; never by value.
+  - id: episode-counterfactuals
+    title: "Evaluate a query on a stored episode's objects under a State of counterfactual facts"
+    track: counterfactual-core
+    depends_on: [owner-identity-across-reloads]
+    status: not started
+    notes: >
+      Load the objects of one moment of an episode through the ORM, state facts about
+      them, and evaluate with the EQL backend and state=. Tests compare the answer with
+      the live answer on the same loaded objects; nothing is written back.
+  - id: state-in-sql-backend
+    title: "SQLAlchemyBackend reads a State: assigned ground terms override the stored values"
+    track: counterfactual-core
+    depends_on: [episode-counterfactuals]
+    status: not started
+    notes: >
+      Translate assigned attributes into per-row overrides of the generated SQL, and set
+      reads_state. Refuse a state that assigns a call or a Python-bodied derived term,
+      which SQL cannot evaluate. Answers must equal episode-counterfactuals' on the same data.
+  - id: state-as-intervention
+    title: "ProbabilisticBackend reads a State as an intervention on its causal model"
+    track: counterfactual-core
+    depends_on: [episode-counterfactuals]
+    status: not started
+    notes: >
+      Design first: whether an assigned ground term is a do-intervention or conditioning
+      evidence, and what a state means for a model with no causal structure. Propose it
+      on the tracking issue before implementing.
