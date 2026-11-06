@@ -56,7 +56,7 @@ class VectorBoundCap(BoundCap):
 
     def cap_bound(self, bound: Scalar, reachable_change: Scalar) -> Scalar:
         scale = sm.min(
-            1, reachable_change.safe_division(self.vector_bounds.norm(), if_nan=1)
+            1, reachable_change.safe_division(other=self.vector_bounds.norm(), if_nan=1)
         )
         return bound * scale
 
@@ -79,5 +79,5 @@ class RotationBoundCap(BoundCap):
         angle = 2 * sm.atan2(sine_of_half_angle, cosine_of_half_angle)
         capped_angle = sm.min(angle, 2 * reachable_change)
         capped_sine_change = sine_of_half_angle - sm.sin((angle - capped_angle) / 2)
-        scale = capped_sine_change.safe_division(sine_of_half_angle, if_nan=1)
+        scale = capped_sine_change.safe_division(other=sine_of_half_angle, if_nan=1)
         return bound * scale

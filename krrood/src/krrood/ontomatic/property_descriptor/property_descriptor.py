@@ -37,7 +37,7 @@ Type alias for the domain-range map.
 """
 
 
-@dataclass
+@dataclass(kw_only=True)
 class PropertyDescriptor(Symbol):
     """Descriptor managing a data class field while giving it metadata like superproperties,
     sub-properties, inverse, transitivity, ...etc.
@@ -139,7 +139,9 @@ class PropertyDescriptor(Symbol):
         """
         field_ = [f for f in fields(self.domain) if f.name == self.field_name][0]
         self.wrapped_field = WrappedField(
-            WrappedClass(self.domain), field_, property_descriptor=self
+            clazz=WrappedClass(clazz=self.domain),
+            field=field_,
+            property_descriptor=self,
         )
 
     @cached_property
@@ -170,7 +172,7 @@ class PropertyDescriptor(Symbol):
         return self.domain_range_map[self.__class__][self.domain]
 
     def add_relation_to_the_graph_and_apply_implications(
-        self, domain_value: Symbol, range_value: Symbol, inferred: bool = False
+        self, *, domain_value: Symbol, range_value: Symbol, inferred: bool = False
     ) -> None:
         """
         Add the relation between the domain_value and the range_value to the symbol graph and apply all implications of
@@ -184,7 +186,10 @@ class PropertyDescriptor(Symbol):
         if domain_value and range_value:
             for v in make_set(range_value):
                 PropertyDescriptorRelation(
-                    domain_value, v, self.wrapped_field, inferred=inferred
+                    source=domain_value,
+                    target=v,
+                    wrapped_field=self.wrapped_field,
+                    inferred=inferred,
                 ).add_to_graph_and_apply_implications()
 
     def __get__(self, obj, objtype=None):
@@ -198,12 +203,12 @@ class PropertyDescriptor(Symbol):
         if obj is None:
             return self
         value = getattr(obj, self.private_attr_name)
-        self._bind_owner_if_container_type(value, owner=obj)
+        self._bind_owner_if_container_type(value=value, owner=obj)
         return value
 
     @staticmethod
     def _bind_owner_if_container_type(
-        value: Iterable[Symbol] | Symbol, owner: Any | None = None
+        *, value: Iterable[Symbol] | Symbol, owner: Any | None = None
     ):
         """
         Bind the owner instance to the monitored container if the value is a MonitoredContainer type.
@@ -215,10 +220,10 @@ class PropertyDescriptor(Symbol):
             isinstance(value, MonitoredContainer)
             and getattr(value, "owner", None) is not owner
         ):
-            value._bind_owner(owner)
+            value._bind_owner(owner=owner)
 
     def _ensure_monitored_type(
-        self, value: Iterable[Symbol] | Symbol, obj: Any | None = None
+        self, *, value: Iterable[Symbol] | Symbol, obj: Any | None = None
     ) -> MonitoredContainer[Symbol] | Symbol:
         """
         Ensure that the value is a monitored container type or is not iterable.
@@ -232,11 +237,13 @@ class PropertyDescriptor(Symbol):
                 monitored_type = monitored_type_map[type(value)]
             except KeyError:
                 raise UnMonitoredContainerTypeForDescriptor(
-                    self.domain, self.wrapped_field.name, type(value)
+                    clazz=self.domain,
+                    field_name=self.wrapped_field.name,
+                    container_type=type(value),
                 )
             monitored_value = monitored_type(descriptor=self)
             for v in make_set(value):
-                monitored_value._add_item(v, inferred=False)
+                monitored_value._add_item(item=v, inferred=False)
             value = monitored_value
         return value
 
@@ -251,19 +258,22 @@ class PropertyDescriptor(Symbol):
             return
         attr = getattr(obj, self.private_attr_name, None)
         if self.is_iterable and not isinstance(attr, MonitoredContainer):
-            attr = self._ensure_monitored_type(value, obj)
-            self._bind_owner_if_container_type(attr, owner=obj)
+            attr = self._ensure_monitored_type(value=value, obj=obj)
+            self._bind_owner_if_container_type(value=attr, owner=obj)
             setattr(obj, self.private_attr_name, attr)
         if isinstance(attr, MonitoredContainer):
             attr._clear()
             for v in make_set(value):
-                attr._add_item(v, inferred=False)
+                attr._add_item(item=v, inferred=False)
         else:
             setattr(obj, self.private_attr_name, value)
-            self.add_relation_to_the_graph_and_apply_implications(obj, value)
+            self.add_relation_to_the_graph_and_apply_implications(
+                domain_value=obj, range_value=value
+            )
 
     def update_value(
         self,
+        *,
         domain_value: Symbol,
         range_value: Symbol,
     ) -> bool:
@@ -275,7 +285,7 @@ class PropertyDescriptor(Symbol):
         v = getattr(domain_value, self.private_attr_name)
         updated = False
         if isinstance(v, MonitoredContainer):
-            updated = v._update(range_value, add_relation_to_the_graph=False)
+            updated = v._update(value=range_value, add_relation_to_the_graph=False)
         elif v != range_value:
             setattr(domain_value, self.private_attr_name, range_value)
             updated = True
@@ -285,6 +295,7 @@ class PropertyDescriptor(Symbol):
     @memoize
     def get_association_of_source_type(
         cls,
+        *,
         domain_type: type[Symbol] | WrappedClass,
     ) -> Association | AssociationThroughRoleTaker | None:
         """
@@ -293,13 +304,12 @@ class PropertyDescriptor(Symbol):
         :param domain_type: The domain type that has an associated field with this descriptor class.
         """
         class_diagram = SymbolGraph().class_diagram
-        association_condition = (
-            lambda association: type(association.wrapped_field.property_descriptor)
-            is cls
+        association_condition = lambda association: (
+            type(association.wrapped_field.property_descriptor) is cls
         )
         result = next(
             class_diagram.get_outgoing_associations_with_condition(
-                domain_type, association_condition
+                clazz=domain_type, condition=association_condition
             ),
             None,
         )
@@ -309,6 +319,7 @@ class PropertyDescriptor(Symbol):
     @memoize
     def get_superproperties_associations(
         cls,
+        *,
         domain_type: SymbolType | WrappedClass,
     ) -> tuple[Association, ...]:
         """
@@ -326,6 +337,6 @@ class PropertyDescriptor(Symbol):
         class_diagram = SymbolGraph().class_diagram
 
         associations_generator = class_diagram.get_outgoing_associations_with_condition(
-            domain_type, association_condition
+            clazz=domain_type, condition=association_condition
         )
         return tuple(associations_generator)

@@ -51,7 +51,7 @@ from ..dataset.example_classes import (
 @pytest.fixture
 def class_diagram() -> ClassDiagram:
     return ClassDiagram(
-        [
+        classes=[
             SceneWithExchangeableParts,
             SceneRoom,
             SceneObject,
@@ -61,7 +61,7 @@ def class_diagram() -> ClassDiagram:
     )
 
 
-@dataclass
+@dataclass(kw_only=True)
 class EveryPairJoinedLearner(CausalStructureLearner):
     """
     Joins every pair of nodes by an undirected edge, whatever the rows say.
@@ -69,6 +69,7 @@ class EveryPairJoinedLearner(CausalStructureLearner):
 
     def learn(
         self,
+        *,
         rows: pd.DataFrame,
         nodes: list[GraphNode],
         domain_knowledge: DomainCausalKnowledge,
@@ -171,13 +172,14 @@ def test_every_learned_edge_is_a_causal_relation_of_the_class(
         .selector.graph
     )
     relations = CausalRelationsOfClass(
-        class_diagram, class_diagram.get_wrapped_class(SceneRoom)
+        class_diagram=class_diagram,
+        owner=class_diagram.get_wrapped_class(clazz=SceneRoom),
     )
 
     node_of = {node.name: node for node in graph.nodes()}
-    assert {relation.edge_among(node_of) for relation in relations.relations} == set(
-        graph.edges()
-    )
+    assert {
+        relation.edge_among(node_of=node_of) for relation in relations.relations
+    } == set(graph.edges())
 
 
 def test_relearning_replaces_the_causal_relations_of_the_class(
@@ -192,7 +194,8 @@ def test_relearning_replaces_the_causal_relations_of_the_class(
 
     assert len(
         CausalRelationsOfClass(
-            class_diagram, class_diagram.get_wrapped_class(SceneRoom)
+            class_diagram=class_diagram,
+            owner=class_diagram.get_wrapped_class(clazz=SceneRoom),
         ).relations
     ) == len(graph.edges())
 
@@ -203,18 +206,20 @@ def test_a_part_attribute_is_reached_through_its_collection(
     RelationalCausalStructureLearner(class_diagram, EveryPairJoinedLearner()).learn(
         relational_probabilistic_circuit, list(scenario)
     )
-    room = class_diagram.get_wrapped_class(SceneRoom)
+    room = class_diagram.get_wrapped_class(clazz=SceneRoom)
 
     assert {
         endpoint.fields
-        for relation in CausalRelationsOfClass(class_diagram, room).relations
+        for relation in CausalRelationsOfClass(
+            class_diagram=class_diagram, owner=room
+        ).relations
         for endpoint in (relation.first, relation.second)
         if isinstance(endpoint, AttributeEndpoint)
-        and endpoint.fields[0] == room.get_field("objects")
+        and endpoint.fields[0] == room.get_field(name="objects")
     } == {
         (
-            room.get_field("objects"),
-            class_diagram.get_wrapped_class(SceneObject).get_field("type"),
+            room.get_field(name="objects"),
+            class_diagram.get_wrapped_class(clazz=SceneObject).get_field(name="type"),
         )
     }
 
@@ -230,14 +235,16 @@ def test_a_statistic_of_the_parts_is_reached_through_their_collection(
             "rooms"
         ].template_distribution.feature_extractor
     )
-    scene = class_diagram.get_wrapped_class(SceneWithExchangeableParts)
+    scene = class_diagram.get_wrapped_class(clazz=SceneWithExchangeableParts)
 
     assert {
         endpoint.name
-        for relation in CausalRelationsOfClass(class_diagram, scene).relations
+        for relation in CausalRelationsOfClass(
+            class_diagram=class_diagram, owner=scene
+        ).relations
         for endpoint in (relation.first, relation.second)
         if isinstance(endpoint, StatisticEndpoint)
-        and endpoint.collection == scene.get_field("rooms")
+        and endpoint.collection == scene.get_field(name="rooms")
     } == {
         f"{SceneWithExchangeableParts.__name__}.rooms.{statistic._name_}"
         for statistic in room_extractor.aggregation_features
@@ -251,6 +258,6 @@ def test_the_learned_structure_reads_the_relations_the_diagram_holds_now(
         class_diagram, EveryPairJoinedLearner()
     ).learn(relational_probabilistic_circuit, list(scenario))
 
-    structure.relations.replace_relations([])
+    structure.relations.replace_relations(relations=[])
 
     assert structure.selector.graph.edges() == []

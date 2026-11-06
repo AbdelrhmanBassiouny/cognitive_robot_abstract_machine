@@ -283,10 +283,10 @@ class Sage10kTVStudioDemo(Sage10kAbstractDemoHSRB):
             entity(v)
             .where(
                 contains(v.type_description, "book"),
-                SupportedBy(v.root, couch_table.root),
+                SupportedBy(supported=v.root, supporting=couch_table.root),
             )
             .ordered_by(
-                v,
+                variable=v,
                 key=lambda x: closes_to_border(
                     x.root,
                 ),
@@ -358,10 +358,10 @@ class Sage10kCraftsmanLobbyDemo(Sage10kAbstractDemoHSRB):
             entity(v)
             .where(
                 contains(v.type_description, "book"),
-                SupportedBy(v.root, couch_table.root),
+                SupportedBy(supported=v.root, supporting=couch_table.root),
             )
             .ordered_by(
-                v,
+                variable=v,
                 key=lambda x: closes_to_border(
                     x.root,
                 ),
@@ -880,7 +880,11 @@ class Sage10kAmericanBuffetDemo(Sage10kAbstractDemoHSRB):
         cup = (
             an(entity(v_cup)).where(
                 contains(v_cup.type_description, "cup"),
-                SupportedBy(v_cup.root, table.root, 0.05),
+                SupportedBy(
+                    supported=v_cup.root,
+                    supporting=table.root,
+                    maximum_intersection_height=0.05,
+                ),
             )
         ).first()
         return cup
