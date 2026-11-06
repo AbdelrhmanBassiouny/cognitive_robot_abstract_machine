@@ -48,12 +48,13 @@ session by `session-start.sh`. Never merge this file into `main`.
 
 - Store only what the next session needs to act; read only what this one needs. Landed
   work, history and settled rationale live in git and on the PRs.
-- The limits live in AbdelrhmanBassiouny/basstler's `src/basstler/plan_size_limits.py`
-  (from v0.1.5), enforced by the plugin's `save-plan.sh` and `save-pr-progress.sh`; this
+- The limits live in the basstler package's `${PLAN_SIZE_LIMITS_MODULE}` (from v0.1.5),
+  enforced by the plugin's `save-plan.sh` and `save-pr-progress.sh`; this
   repository's in-tree tooling has neither until `cram-basstler-removal` moves it onto the
   plugin. Condense to fit; never raise a limit or bypass the gate without asking me.
-- Read one item with the plugin's `"${BASSTLER_PYTHON}" -m basstler.plan_manifest_tools item
-  <file> --id <item-id>`, never the whole manifest; request only the fields you need
+- Read one item with `source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"`
+  then `"${BASSTLER_PYTHON}" -m "${PLAN_MANIFEST_TOOLS_MODULE}" item <file> --id <item-id>`,
+  in one Bash call, never the whole manifest; request only the fields you need
   (`minimal_output`/`fields`, diffs rather than whole files).
 
 ## Plans
@@ -70,7 +71,8 @@ session by `session-start.sh`. Never merge this file into `main`.
   `pull_request_number`, `session`, and `notes` rewritten to what is true now. Reasoning
   goes in the PR; `roadmap.md` gets only rules every later item must follow. Edit directly
   even when not the steward.
-- After every save, republish the dashboard yourself with `/plan-dashboard <plan-id>`.
+- Every plan save is a push the plan site rebuilds from, so never republish a plan: link
+  the plan's or item's page with `plan_site_page_url <plan-id> [<item-id>]`.
 - Note the notes-branch SHA whenever you read plan state. Before any `save-plan.sh`, and
   when resuming or starting an item, fetch and read only the delta
   (`git diff <sha>..FETCH_HEAD -- .claude/personal/plans/<plan-id>/`, and tracking-issue
