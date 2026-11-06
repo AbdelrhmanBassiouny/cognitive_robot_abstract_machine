@@ -93,7 +93,8 @@ items:
     identity, BackendCannotReadState. Counterfactual episodes moved to plan
     eql-counterfactual-episodes.
 
-    Next: the owner posts the drafted upstream replies; reviewers re-review.
+    Next: the owner decides the open fork threads (argument comparison by value, a shared
+    doctest plugin) and posts the drafted upstream replies; reviewers re-review.
 
     #542 is not merged in. If #535 needs it, stack on #542 and drop Fact._is_predicate's
     isinstance(_type_, type) guard.
