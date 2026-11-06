@@ -326,7 +326,7 @@ class Predicate(SymbolicCallable, ABC):
         """
         Bool casting a predicate evaluates it, once per evaluation of a query.
         """
-        truth = EvaluationContext.current_value_of(
+        truth = EvaluationContext.current_value_of_term(
             CallTerm.from_call(self.__call__, CallArguments())
         )
         return bool(truth.value)

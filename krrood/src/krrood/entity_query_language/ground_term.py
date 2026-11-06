@@ -456,23 +456,27 @@ class CallResults(TermReader):
     )
     """
     The value read for each callee, by the arguments as they were passed, or ``None``
-    where the call had none. A call that passes its arguments another way, such as
-    leaving out a default, is read again.
+    where the call had none.
+
+    A call that passes its arguments another way, such as leaving out a default, is read
+    again.
     """
 
-    def value_of(self, term: GroundTerm) -> TermValue | None:
+    def value_of_term(self, term: GroundTerm) -> TermValue | None:
         """
         Reads *term* with :attr:`term_reader`, reusing the value read before for the
-        same callee and equal arguments. Never reused are a call that does not
+        same callee and equal arguments.
+
+        Never reused are a call that does not
         :meth:`CallTerm.depends_only_on_arguments`, and a value that is an iterator,
         which whoever reads it first consumes.
         """
         if not isinstance(term, CallTerm) or not term.depends_only_on_arguments():
-            return self.term_reader.value_of(term)
+            return self.term_reader.value_of_term(term)
         values_by_arguments = self.values.setdefault(term.function, {})
         if term.arguments in values_by_arguments:
             return values_by_arguments[term.arguments]
-        term_value = self.term_reader.value_of(term)
+        term_value = self.term_reader.value_of_term(term)
         if term_value is not None and isinstance(term_value.value, Iterator):
             return term_value
         values_by_arguments[term.arguments] = term_value
