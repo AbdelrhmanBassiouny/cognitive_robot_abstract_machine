@@ -82,19 +82,24 @@ items:
   title: Fluents and a State overlay that EQL queries are evaluated against
   track: planning-core
   pull_request_number: 535
-  session: https://claude.ai/code/session_01JxHGiPQVbcnHx4PQ12P6fZ
+  session: https://claude.ai/code/session_018wfiv5UFGiK1C1yQrE4QSF
+  blockers:
+    - >-
+      Waiting on the owner: cram2#866 has changes requested, and every upstream thread is answered
+      by a commit except LucaKro's question at planning/__init__.py:2. The owner posts the replies
+      and decides the fork threads left open. Read at 730a9ae222 on Nov 6: no merge conflict with
+      main; CI not finished.
   depends_on:
   - instantiated-variable-type-and-factory
   - call-arguments-normalization
   status: in progress
   notes: >
-    Promoted as cram2#866 (changes requested). Merges #538, #540 and, from main, #862. The
-    cram2#866 design answers are in c1e7fc3c0a: fluent defined in planning only, owners by
-    identity, BackendCannotReadState. Counterfactual episodes moved to plan
-    eql-counterfactual-episodes.
+    Promoted as cram2#866. Merges #538, #540 and, from main, #862. The cram2#866 design answers are
+    in c1e7fc3c0a. Counterfactual episodes are plan eql-counterfactual-episodes.
 
-    Next: the owner decides the open fork threads (argument comparison by value, a shared
-    doctest plugin) and posts the drafted upstream replies; reviewers re-review.
+    Next: the owner decides the open fork threads (argument comparison by value, a shared doctest
+    plugin, from_call currying, the receiver rename, ObjectIdentity's NotImplemented) and posts the
+    drafted upstream replies; reviewers re-review.
 
     #542 is not merged in. If #535 needs it, stack on #542 and drop Fact._is_predicate's
     isinstance(_type_, type) guard.
