@@ -19,6 +19,7 @@ from ordered_set import OrderedSet
 from typing_extensions import Any, Callable, Iterator, TYPE_CHECKING, TypeVar
 
 from krrood.entity_query_language.ground_term import (
+    CallResults,
     GroundTerm,
     LiveTermReader,
     TermReader,
@@ -350,10 +351,12 @@ class EvaluationContext:
     Caches each nested subquery's result stream for the current evaluation pass.
     """
 
-    term_reader: TermReader = field(default_factory=LiveTermReader)
+    term_reader: TermReader = field(
+        default_factory=lambda: CallResults(LiveTermReader())
+    )
     """
     Reads the value of every attribute, index, call and symbolic function application
-    the evaluation reaches.
+    the evaluation reaches, reusing the result of a call made earlier in the evaluation.
     """
 
     has_running_evaluation: bool = field(default=False, init=False)
@@ -403,11 +406,11 @@ class EvaluationContext:
             with, or ``None`` to read them as the current evaluation context does.
         :param results: The results of an evaluation that has not started yet.
         :return: The same results. The evaluation, and every evaluation it starts, reads
-            ground terms with *term_reader*.
+            ground terms with *term_reader* and reuses each other's call results.
         """
         if term_reader is None:
             return results
-        return cls(term_reader=term_reader).iterate_as_current(results)
+        return cls(term_reader=CallResults(term_reader)).iterate_as_current(results)
 
     def iterate_as_current(self, results: Iterator[ResultType]) -> Iterator[ResultType]:
         """

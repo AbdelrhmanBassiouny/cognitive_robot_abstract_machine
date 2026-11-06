@@ -18,6 +18,7 @@ from typing_extensions import (
     Callable,
     Generic,
     Hashable,
+    Iterator,
     Mapping,
     Sequence,
     TypeVar,
@@ -347,6 +348,13 @@ class CallTerm(GroundTerm):
     def live_value(self) -> Any:
         return self.callee(*self.arguments.positional, **self.arguments.keyword)
 
+    def depends_only_on_arguments(self) -> bool:
+        """
+        :return: Whether another call with equal arguments gives the same result, which a
+            call that constructs a new object does not.
+        """
+        return not inspect.isclass(self.callee)
+
 
 @dataclass(frozen=True, eq=False)
 class BoundValueTerm(CallTerm):
@@ -360,6 +368,13 @@ class BoundValueTerm(CallTerm):
     """
     The class that is applied.
     """
+
+    def depends_only_on_arguments(self) -> bool:
+        """
+        Unlike :meth:`CallTerm.depends_only_on_arguments`, holds for every class: the
+        bound value is what the class computes from its arguments.
+        """
+        return True
 
     def live_value(self) -> Any:
         return self.callee._bound_value_(
@@ -418,3 +433,51 @@ class LiveTermReader(TermReader):
 
     def value_of_term(self, term: GroundTerm) -> TermValue | None:
         return term.live_term_value()
+
+
+@dataclass
+class CallResults(TermReader):
+    """
+    Reads ground terms with another reader, and reads each call once: a later call of
+    the same callee that passes equal arguments the same way gets the value the first
+    one read.
+
+    .. warning:: A live object that changes while the calls are being read is not seen
+        by the calls already made.
+    """
+
+    term_reader: TermReader
+    """
+    Reads every ground term whose value is not reused.
+    """
+
+    values: dict[Hashable, dict[CallArguments, TermValue | None]] = field(
+        default_factory=dict
+    )
+    """
+    The value read for each callee, by the arguments as they were passed, or ``None``
+    where the call had none.
+
+    A call that passes its arguments another way, such as leaving out a default, is read
+    again.
+    """
+
+    def value_of_term(self, term: GroundTerm) -> TermValue | None:
+        """
+        Reads *term* with :attr:`term_reader`, reusing the value read before for the
+        same callee and equal arguments.
+
+        Never reused are a call that does not
+        :meth:`CallTerm.depends_only_on_arguments`, and a value that is an iterator,
+        which whoever reads it first consumes.
+        """
+        if not isinstance(term, CallTerm) or not term.depends_only_on_arguments():
+            return self.term_reader.value_of_term(term)
+        values_by_arguments = self.values.setdefault(term.function, {})
+        if term.arguments in values_by_arguments:
+            return values_by_arguments[term.arguments]
+        term_value = self.term_reader.value_of_term(term)
+        if term_value is not None and isinstance(term_value.value, Iterator):
+            return term_value
+        values_by_arguments[term.arguments] = term_value
+        return term_value
