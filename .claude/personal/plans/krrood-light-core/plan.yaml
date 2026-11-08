@@ -64,10 +64,7 @@ items:
   pull_request_number: 546
   session: https://claude.ai/code/session_01JxHGiNxUAghACotuu2UKYp
   blockers:
-    - >-
-      695dbb7cb conflicts with main be69c37d5 in
-      test/krrood_test/test_development_tools/dataset_files.py (main added FieldAccessorSnippet and
-      MethodNameSnippet where this branch added CoreBoundarySnippet); being resolved on the branch.
+    - ""
   depends_on: []
   notes: 'PR #546 (reworked in the #547 review session): [tool.krrood.core-boundary] declares core and its dependencies once; CoreBoundaryChecker (shipped rule, `krrood check` pre-commit hook) checks the module-level import graph, chains included; one-interpreter runtime backstop test. No import-linter, no offender lists: `krrood check --all-lines` is the inventory.'
 - id: serializer-without-heavy-dependencies
