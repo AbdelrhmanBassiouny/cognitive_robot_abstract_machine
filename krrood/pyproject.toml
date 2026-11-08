@@ -41,6 +41,7 @@ dependencies = [
     "pytest",
     "probabilistic_model>=26.10.0",
     "random_events>=26.10.0",
+    "pydantic>=2.11",
 ]
 description = "A python package for Knowledge Representation and Reasoning systems based on Object Oriented Design."
 readme = "README.md"

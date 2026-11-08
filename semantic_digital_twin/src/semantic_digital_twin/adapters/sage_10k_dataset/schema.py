@@ -4,13 +4,12 @@ import math
 import json
 from dataclasses import field
 from pathlib import Path
-from typing_extensions import assert_never, Any, Self
+from typing_extensions import assert_never, Any
 
 import numpy as np
-from pydantic import TypeAdapter, field_validator
-from pydantic.dataclasses import dataclass as validated_dataclass
+from pydantic import field_validator
 
-from krrood.adapters.json_serializer import SubclassJSONSerializer
+from krrood.patterns.validated_dataclass import ValidatedDataclass
 from semantic_digital_twin.semantic_annotations.natural_language import (
     NaturalLanguageWithTypeDescription,
 )
@@ -46,31 +45,7 @@ from semantic_digital_twin.world_description.world_entity import (
 )
 
 
-class Sage10kLayoutEntry(SubclassJSONSerializer):
-    """
-    An object of a Sage10k JSON layout, read from and written in the layout's own
-    shape, with the class of every nested object given by its field.
-    """
-
-    def to_json(self, **kwargs) -> dict[str, Any]:
-        return {
-            **super().to_json(**kwargs),
-            **TypeAdapter(type(self)).dump_python(self, mode="json"),
-        }
-
-    @classmethod
-    def _from_json(cls, data: dict[str, Any], **kwargs) -> Self:
-        """
-        Read an object of the dataset's JSON layout, ignoring keys this class has no
-        field for.
-
-        :raises pydantic.ValidationError: If a value is missing or has the wrong type.
-        """
-        return TypeAdapter(cls).validate_python(data)
-
-
-@validated_dataclass
-class Sage10kBase(Sage10kLayoutEntry):
+class Sage10kBase(ValidatedDataclass):
     """
     Base class for all classes of the Sage 10k dataset.
 
@@ -86,7 +61,6 @@ class Sage10kBase(Sage10kLayoutEntry):
     """
 
 
-@validated_dataclass
 class Sage10kWithID(Sage10kBase):
     """
     Base class for Sage10k classes that have an id.
@@ -116,7 +90,6 @@ class Sage10kWithID(Sage10kBase):
         """
 
 
-@validated_dataclass
 class HasXYZ(Sage10kBase):
     """
     Parent for Sage10ks position and orientation to deduplicate the code.
@@ -138,7 +111,6 @@ class HasXYZ(Sage10kBase):
     """
 
 
-@validated_dataclass
 class Sage10kRotation(HasXYZ):
     """
     Rotations in the Sage 10k world.
@@ -155,7 +127,6 @@ class Sage10kRotation(HasXYZ):
         )
 
 
-@validated_dataclass
 class Sage10kPosition(HasXYZ):
     """
     Position of an entity in a Sage10k scene.
@@ -164,7 +135,6 @@ class Sage10kPosition(HasXYZ):
     """
 
 
-@validated_dataclass
 class Sage10kSize(Sage10kBase):
     """
     The scale of an object.
@@ -198,8 +168,7 @@ class Sage10kSize(Sage10kBase):
         return self.height
 
 
-@validated_dataclass
-class Sage10kPhysicallyBasedRendering(Sage10kLayoutEntry):
+class Sage10kPhysicallyBasedRendering(ValidatedDataclass):
     """
     Parameters for super realistic renderers.
 
@@ -219,7 +188,6 @@ class Sage10kPhysicallyBasedRendering(Sage10kLayoutEntry):
     """
 
 
-@validated_dataclass
 class Sage10kWall(Sage10kWithID):
     """
     Description of a wall for a room.
@@ -326,7 +294,6 @@ class Sage10kWall(Sage10kWithID):
         return annotation
 
 
-@validated_dataclass
 class Sage10kObject(Sage10kWithID):
     """
     Like a Body, but from Sage10k.
@@ -468,7 +435,6 @@ class Sage10kObject(Sage10kWithID):
         return body
 
 
-@validated_dataclass
 class Sage10kDoor(Sage10kWithID):
     """
     A door of a wall in Sage10k.
@@ -650,7 +616,6 @@ class Sage10kDoor(Sage10kWithID):
         )
 
 
-@validated_dataclass
 class Sage10kRoom(Sage10kWithID):
     """
     A room of the Sage10k dataset.
@@ -823,7 +788,6 @@ class Sage10kRoom(Sage10kWithID):
         return world.root
 
 
-@validated_dataclass
 class Sage10kScene(Sage10kWithID):
     """
     An entire scene from Sage10k.
