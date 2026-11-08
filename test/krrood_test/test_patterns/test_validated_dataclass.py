@@ -10,13 +10,19 @@ import dataclasses
 import pytest
 from pydantic import ValidationError
 
+from krrood.adapters.json_field import JSONField
 from krrood.adapters.json_serializer import from_json, to_json
 from ..dataset.validated_dataclasses import (
     CachedRecord,
     LabelledMeasurement,
+    LinkedPage,
     Measurement,
     NamedStrictRecord,
+    PageKey,
+    ReadingKey,
+    SensorReading,
     SourceMetadata,
+    StrictLinkedPage,
     Survey,
 )
 
@@ -90,3 +96,37 @@ def test_field_outside_the_constructor_takes_its_default() -> None:
         if field.name == "access_count"
     )
     assert CachedRecord(identifier="first").access_count == access_count.default
+
+
+# %% keys named differently in the data
+
+
+def test_value_is_read_under_its_alias() -> None:
+    page = LinkedPage._from_json({PageKey.ADDRESS: "https://example.org"})
+    assert page.address == "https://example.org"
+
+
+def test_field_with_an_alias_is_set_by_its_name() -> None:
+    assert LinkedPage(address="https://example.org").address == "https://example.org"
+
+
+def test_value_is_written_under_its_alias() -> None:
+    written = to_json(LinkedPage(address="https://example.org"))
+    assert {key: value for key, value in written.items() if key not in JSONField} == {
+        PageKey.ADDRESS: "https://example.org"
+    }
+
+
+def test_json_round_trip_of_a_field_with_an_alias() -> None:
+    page = LinkedPage(address="https://example.org")
+    assert from_json(to_json(page)) == page
+
+
+def test_subclass_with_its_own_settings_is_set_by_field_name() -> None:
+    page = StrictLinkedPage(address="https://example.org")
+    assert from_json(to_json(page)) == page
+
+
+def test_value_is_read_under_any_of_its_keys() -> None:
+    reading = SensorReading._from_json({ReadingKey.MEASUREMENT: 2.5})
+    assert reading == SensorReading(reading=2.5)

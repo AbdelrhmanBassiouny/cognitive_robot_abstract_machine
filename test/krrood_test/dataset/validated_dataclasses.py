@@ -6,8 +6,10 @@ instance.
 from __future__ import annotations
 
 from dataclasses import field
+from enum import StrEnum
 
-from pydantic import ConfigDict
+from pydantic import AliasChoices, ConfigDict, Field
+from typing_extensions import Annotated
 
 from krrood.patterns.field_metadata import FieldMetadata
 from krrood.patterns.validated_dataclass import ValidatedDataclass
@@ -95,4 +97,65 @@ class CachedRecord(ValidatedDataclass):
     access_count: int = field(default=0, init=False)
     """
     How often the record was read since it was made.
+    """
+
+
+# %% keys named differently in the data
+
+
+class PageKey(StrEnum):
+    """
+    The keys of a web page's data that differ from the field names they are read into.
+    """
+
+    ADDRESS = "html_url"
+    """
+    The address of the page.
+    """
+
+
+class LinkedPage(ValidatedDataclass):
+    """
+    A web page whose address the data names differently from its field.
+    """
+
+    address: Annotated[str, Field(alias=PageKey.ADDRESS)]
+    """
+    The address of the page.
+    """
+
+
+class StrictLinkedPage(LinkedPage, config=ConfigDict(extra="forbid")):
+    """
+    A web page that rejects keys it has no field for.
+    """
+
+
+class ReadingKey(StrEnum):
+    """
+    The keys a sensor reading is found under, depending on the data's version.
+    """
+
+    VALUE = "value"
+    """
+    The key of the current version.
+    """
+
+    MEASUREMENT = "measurement"
+    """
+    The key of the earlier version.
+    """
+
+
+class SensorReading(ValidatedDataclass):
+    """
+    A reading whose value is found under one of several keys.
+    """
+
+    reading: Annotated[
+        float,
+        Field(validation_alias=AliasChoices(ReadingKey.VALUE, ReadingKey.MEASUREMENT)),
+    ]
+    """
+    The value read.
     """

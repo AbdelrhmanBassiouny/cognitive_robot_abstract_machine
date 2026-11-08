@@ -227,6 +227,13 @@ class StructuredDataRules(Section):
         "needs as the class keyword `config`; its subclasses inherit them"
     )
 
+    FOREIGN_KEYS_ARE_ALIASES = (
+        "A field whose key in the data does not follow our naming rules is named by "
+        "them and declares the data's key as its alias, such as "
+        "`address: Annotated[str, Field(alias=PageKey.ADDRESS)]`; it is still set by "
+        "its name in code and written back under the alias"
+    )
+
     ARBITRARY_TYPES_ONLY_WHERE_NEEDED = (
         "Allow arbitrary types (`arbitrary_types_allowed`) only on the one class "
         "whose field holds an object pydantic cannot validate, never on a base "

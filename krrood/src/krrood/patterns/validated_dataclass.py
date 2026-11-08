@@ -24,7 +24,13 @@ class ValidatedDataclass(SubclassJSONSerializer):
 
     Every subclass is a pydantic dataclass on definition, so it carries no dataclass
     decorator. Pass a subclass its own pydantic settings as the class keyword
-    ``config``; its subclasses inherit them.
+    ``config``; its subclasses inherit them. A field the data names differently declares
+    that key as its pydantic alias, and is still set by its name in code.
+    """
+
+    __pydantic_config__ = ConfigDict(validate_by_name=True, validate_by_alias=True)
+    """
+    The pydantic settings every subclass starts from.
     """
 
     def __init_subclass__(cls, config: ConfigDict | None = None, **kwargs) -> None:
@@ -35,16 +41,19 @@ class ValidatedDataclass(SubclassJSONSerializer):
             inherits.
         """
         super().__init_subclass__(**kwargs)
-        pydantic_dataclass(cls, config=config)
+        cls.__pydantic_config__ = ConfigDict(
+            **cls.__pydantic_config__, **(config or {})
+        )
+        pydantic_dataclass(cls)
 
     def to_json(self, **kwargs) -> dict[str, Any]:
         """
-        :meth:`SubclassJSONSerializer.to_json`, followed by every field in its JSON
-        form.
+        :meth:`SubclassJSONSerializer.to_json`, followed by every field in its JSON form
+        under its alias where it has one.
         """
         return {
             **super().to_json(**kwargs),
-            **TypeAdapter(type(self)).dump_python(self, mode="json"),
+            **TypeAdapter(type(self)).dump_python(self, mode="json", by_alias=True),
         }
 
     @classmethod

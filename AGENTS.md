@@ -86,6 +86,7 @@
 - A magic number becomes an enum member, a field default or a `classproperty`; a bare literal that carries meaning is unreadable where it is used and unsearchable everywhere else
 - Data whose shape someone else controls - an API response, a configuration file, a dataset - is mirrored in subclasses of `krrood.patterns.validated_dataclass.ValidatedDataclass` and read with `from_json`, so it is validated once where it enters and the field names and the access path into the payload are written once
 - A subclass of `ValidatedDataclass` is a dataclass already: give it no dataclass decorator, and pass the pydantic settings it needs as the class keyword `config`; its subclasses inherit them
+- A field whose key in the data does not follow our naming rules is named by them and declares the data's key as its alias, such as `address: Annotated[str, Field(alias=PageKey.ADDRESS)]`; it is still set by its name in code and written back under the alias
 - Allow arbitrary types (`arbitrary_types_allowed`) only on the one class whose field holds an object pydantic cannot validate, never on a base others subclass: such a field is only checked with `isinstance` and cannot be written to JSON
 - A tuple whose positions carry meaning becomes a dataclass, or an enum when the positions are a fixed set of alternatives rather than fields
 - A long literal document - a query, a template, a schema - lives in a file of its own type and is read in, never embedded as a string
