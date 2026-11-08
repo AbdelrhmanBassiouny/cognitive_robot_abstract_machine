@@ -1,12 +1,13 @@
 ## Plan
-- Core is declared once in `[tool.krrood.core-boundary]` of krrood/pyproject.toml (now the roadmap's krrood-core: patterns, class_diagrams, symbol_graph, exceptions, _version). `CoreBoundaryChecker` checks the module-level import graph; a runtime backstop test catches the rest. Source reading lives in `krrood.source_analysis`.
+- Core is declared once in `[tool.krrood.core-boundary]` of krrood/pyproject.toml: patterns, class_diagrams, symbol_graph, exceptions, utils, singleton, _version. `CoreBoundaryChecker` checks the module-level import graph; a runtime backstop test catches the rest. Source reading lives in `krrood.source_analysis`.
 
 ## Done
-- 29d1fd7ff8: code_parsing_utils -> source_analysis.property_return_statement, source_extraction_utils -> source_analysis.source_extraction (api-break); core narrowed, crossings 42 -> 21 in 14 files. main dcfad8668 merged. 164 tests passed, pre-commit clean at 29d1fd7ff8.
-- #547 (claude/bold-ramanujan-vb0e9c): merged at d1025bd5b5, rdr import fixed in 8fc5a7dd86.
-- Thread on source_analysis resolved.
+- 245f68b570 + 0a78cbaaa7: utils + singleton in core; patterns.role_predicates -> entity_query_language.role_predicates (api-break); 5 crossings in 4 files left. Tests (core boundary, source analysis, dev tools, patterns, EQL verbalization) and pre-commit green at 0a78cbaaa7.
+- 29d1fd7ff8: source_analysis.property_return_statement / source_extraction moves (api-break); core narrowed.
+- #547 merged up to b0421dff7e.
+- Source-analysis and core-list threads resolved.
 
 ## Next
-- Owner to decide: add krrood.utils + krrood.singleton to core; move patterns/role_predicates.py into EQL; `krrood check --runtime` mode. Threads left open.
-- CI at 29d1fd7ff8 and 8fc5a7dd86 not read.
+- Owner to decide: `krrood check --runtime` mode (thread open).
+- CI at 0a78cbaaa7 and #547's b0421dff7e not read.
 - Labels: suggest new-feature + api-break in place of maintenance.
