@@ -20,6 +20,7 @@ from krrood.patterns.dataclass_field_descriptor import (
     DataclassFieldDescriptor,
     DataclassFieldDescriptorOwner,
 )
+from krrood.patterns.validated_dataclass import ValidatedDataclass
 
 
 class CodeStyleRules(Section):
@@ -27,7 +28,10 @@ class CodeStyleRules(Section):
     The rules on the shape of code.
     """
 
-    USE_DATACLASSES = "Always use dataclasses"
+    USE_DATACLASSES = (
+        f"Always use dataclasses: a {CodeReference(ValidatedDataclass).name} for "
+        "data whose shape someone else controls, plain dataclasses everywhere else"
+    )
 
     DIVIDE_FILES_INTO_SECTIONS = (
         "Divide every file, source and test, into sections with `# %% <short "

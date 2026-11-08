@@ -1,0 +1,215 @@
+{
+  "id": "layout_26384448",
+  "rooms": [
+    {
+      "id": "room_0b449b5c",
+      "room_type": "gym_fitness_center",
+      "position": {
+        "x": -4.0,
+        "y": -5.0,
+        "z": 0.0
+      },
+      "dimensions": {
+        "width": 8.0,
+        "length": 10.0,
+        "height": 2.7
+      },
+      "walls": [
+        {
+          "id": "wall_room_0b449b5c_north_36a9a648",
+          "start_point": {
+            "x": -4.0,
+            "y": 5.0,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 4.0,
+            "y": 5.0,
+            "z": 0.0
+          },
+          "height": 2.7,
+          "thickness": 0.1,
+          "material": "room_0b449b5c_wall"
+        },
+        {
+          "id": "wall_room_0b449b5c_south_c435b11b",
+          "start_point": {
+            "x": -4.0,
+            "y": -5.0,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 4.0,
+            "y": -5.0,
+            "z": 0.0
+          },
+          "height": 2.7,
+          "thickness": 0.1,
+          "material": "room_0b449b5c_wall"
+        }
+      ],
+      "doors": [
+        {
+          "id": "door_89e46454",
+          "wall_id": "wall_room_0b449b5c_south_c435b11b",
+          "position_on_wall": 0.12971232410205114,
+          "width": 0.95,
+          "height": 2.05,
+          "door_type": "entry/main/front",
+          "opens_inward": true,
+          "opening": false,
+          "door_material": "Door_1"
+        }
+      ],
+      "objects": [
+        {
+          "id": "room_0b449b5c_rack_150e143e",
+          "room_id": "room_0b449b5c",
+          "type": "rack",
+          "description": "A modern power rack with a sleek rectangular steel frame, bright white finish, and angular bar supports",
+          "position": {
+            "x": 3.047046694004707,
+            "y": -2.15,
+            "z": 0.0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 90
+          },
+          "dimensions": {
+            "width": 1.0909081463026775,
+            "length": 1.7709066119905865,
+            "height": 1.9455702839608158
+          },
+          "source": "generation",
+          "source_id": "7caf9919",
+          "place_id": "floor",
+          "place_guidance": "Standard placement for the object",
+          "placement_constraints": [
+            [
+              704.7046694004707,
+              285.0
+            ],
+            90,
+            [
+              [
+                795.0,
+                228.70459268486613
+              ],
+              [
+                795.0,
+                341.2954073151339
+              ],
+              [
+                614.4093388009414,
+                341.2954073151339
+              ],
+              [
+                614.4093388009414,
+                228.70459268486613
+              ]
+            ],
+            [
+              {
+                "type": "global",
+                "constraint": "edge"
+              }
+            ]
+          ],
+          "mass": 45.0,
+          "pbr_parameters": {
+            "metallic": 0.0,
+            "roughness": 0.6
+          }
+        },
+        {
+          "id": "room_0b449b5c_cabinet_4f3ebd34",
+          "room_id": "room_0b449b5c",
+          "type": "cabinet",
+          "description": "A modern storage cabinet with a clean rectangular silhouette, bright white doors, and sleek flat panels",
+          "position": {
+            "x": 3.682254446893827,
+            "y": -3.75,
+            "z": 0.0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 90
+          },
+          "dimensions": {
+            "width": 1.3082823626190925,
+            "length": 0.5004911062123453,
+            "height": 1.6624078030168412
+          },
+          "source": "generation",
+          "source_id": "042565c7",
+          "place_id": "floor",
+          "place_guidance": "Standard placement for the object",
+          "placement_constraints": [
+            [
+              768.2254446893827,
+              125.0
+            ],
+            90,
+            [
+              [
+                795.0,
+                57.83588186904538
+              ],
+              [
+                795.0,
+                192.16411813095462
+              ],
+              [
+                741.4508893787654,
+                192.16411813095462
+              ],
+              [
+                741.4508893787654,
+                57.83588186904538
+              ]
+            ],
+            [
+              {
+                "type": "global",
+                "constraint": "edge"
+              },
+              {
+                "type": "relative",
+                "constraint": "left of",
+                "target": "room_0b449b5c_rack_150e143e"
+              },
+              {
+                "type": "distance",
+                "constraint": "near",
+                "target": "room_0b449b5c_rack_150e143e"
+              },
+              {
+                "type": "direction",
+                "constraint": "face same as",
+                "target": "room_0b449b5c_rack_150e143e"
+              }
+            ]
+          ],
+          "mass": 80.0,
+          "pbr_parameters": {
+            "metallic": 0.0,
+            "roughness": 0.6
+          }
+        }
+      ],
+      "windows": [],
+      "floor_material": "room_0b449b5c_floor",
+      "ceiling_height": 2.7
+    }
+  ],
+  "total_area": 96.0,
+  "building_style": "Tudor\u2011inspired modern gym with medieval cottage feel",
+  "description": "Complete layout with doors/windows: Generate a single room: a medium-sized gym_fitness_center with Tudor style. The room should have dark exposed timber framing, leaded glass windows, and steeply pitched roofs. The style should give a medieval cottage feel. The room must be self-contained and contain all necessary elements for a gym. The room is isolated and should not connect to other rooms.; The scene requires a 8.0m x 10.0m gym_fitness_center designed in modern and bright style.",
+  "created_from_text": "Generate a single room: a medium-sized gym_fitness_center with Tudor style. The room should have dark exposed timber framing, leaded glass windows, and steeply pitched roofs. The style should give a medieval cottage feel. The room must be self-contained and contain all necessary elements for a gym. The room is isolated and should not connect to other rooms.; The scene requires a 8.0m x 10.0m gym_fitness_center designed in modern and bright style.",
+  "policy_analysis": {
+    "scene_requirements": "\u2026"
+  }
+}

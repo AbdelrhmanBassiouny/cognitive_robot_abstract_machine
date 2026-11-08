@@ -9,7 +9,7 @@
 
 # Code style
 <!-- from CodeStyleRules in krrood/development_tools/agents/shipped_rules/code_style.py -->
-- Always use dataclasses
+- Always use dataclasses: a `ValidatedDataclass` for data whose shape someone else controls, plain dataclasses everywhere else
 - Divide every file, source and test, into sections with `# %% <short description>` headers (e.g. `# %% same-noun disambiguation`), never decorative box-drawing dividers
 - A group of primitives that travels together, or a return type that keeps being repeated, becomes a dataclass
 - Never duplicate code. Never put methods in a catch-all module such as `utils.py`; move them onto the class that owns the behaviour
@@ -84,7 +84,10 @@
 - A string that names a fixed thing - a payload key, a state, a label, a filename, an environment variable, a command flag, a status - is a `StrEnum` member. A value spelled in two places has no single source to rename, and nothing fails when the two drift apart
 - When the values are more than text - paths, numbers - give the enum values of that type, mixing the type in (`IntEnum`, `StrEnum`)
 - A magic number becomes an enum member, a field default or a `classproperty`; a bare literal that carries meaning is unreadable where it is used and unsearchable everywhere else
-- Data whose shape someone else controls - an API response, a configuration file - is mirrored in dataclasses and parsed by a `from_json` classmethod, so the field names and the access path into the payload are written once
+- Data whose shape someone else controls - an API response, a configuration file, a dataset - is mirrored in subclasses of `krrood.patterns.validated_dataclass.ValidatedDataclass` and read with `from_json`, so it is validated once where it enters and the field names and the access path into the payload are written once
+- A subclass of `ValidatedDataclass` is a dataclass already: give it no dataclass decorator, and pass the pydantic settings it needs as the class keyword `config`; its subclasses inherit them
+- A field whose key in the data does not follow our naming rules is named by them and declares the data's key as its alias, such as `address: Annotated[str, Field(alias=PageKey.ADDRESS)]`; it is still set by its name in code and written back under the alias
+- Allow arbitrary types (`arbitrary_types_allowed`) only on the one class whose field holds an object pydantic cannot validate, never on a base others subclass: such a field is only checked with `isinstance` and cannot be written to JSON
 - A tuple whose positions carry meaning becomes a dataclass, or an enum when the positions are a fixed set of alternatives rather than fields
 - A long literal document - a query, a template, a schema - lives in a file of its own type and is read in, never embedded as a string
 - A path enum subclasses `krrood.patterns.path_enumeration.PathEnumeration`, so every path derived from a member is a plain `Path`; its members' `name` is the path's last component, so read the member name as `_name_`

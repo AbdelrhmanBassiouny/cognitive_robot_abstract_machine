@@ -19,6 +19,7 @@ from krrood.development_tools.agents.rule import CodeReference, Section
 from krrood.exceptions import DataclassException
 from krrood.ormatic.utils import classproperty
 from krrood.patterns.path_enumeration import PathEnumeration
+from krrood.patterns.validated_dataclass import ValidatedDataclass
 
 
 class DesignPrinciplesRules(Section):
@@ -213,9 +214,31 @@ class StructuredDataRules(Section):
 
     MIRROR_FOREIGN_DATA = (
         "Data whose shape someone else controls - an API response, a configuration "
-        "file - is mirrored in dataclasses and parsed by a `from_json` "
-        "classmethod, so the field names and the access path into the payload are "
-        "written once"
+        "file, a dataset - is mirrored in subclasses of "
+        f"{CodeReference(ValidatedDataclass).path} and read with "
+        f"{CodeReference(ValidatedDataclass.from_json).name}, so it is validated "
+        "once where it enters and the field names and the access path into the "
+        "payload are written once"
+    )
+
+    VALIDATED_DATACLASS_SUBCLASSES_ARE_DATACLASSES = (
+        f"A subclass of {CodeReference(ValidatedDataclass).name} is a dataclass "
+        "already: give it no dataclass decorator, and pass the pydantic settings it "
+        "needs as the class keyword `config`; its subclasses inherit them"
+    )
+
+    FOREIGN_KEYS_ARE_ALIASES = (
+        "A field whose key in the data does not follow our naming rules is named by "
+        "them and declares the data's key as its alias, such as "
+        "`address: Annotated[str, Field(alias=PageKey.ADDRESS)]`; it is still set by "
+        "its name in code and written back under the alias"
+    )
+
+    ARBITRARY_TYPES_ONLY_WHERE_NEEDED = (
+        "Allow arbitrary types (`arbitrary_types_allowed`) only on the one class "
+        "whose field holds an object pydantic cannot validate, never on a base "
+        "others subclass: such a field is only checked with "
+        f"{CodeReference(isinstance).name} and cannot be written to JSON"
     )
 
     NO_POSITIONAL_TUPLES = (
