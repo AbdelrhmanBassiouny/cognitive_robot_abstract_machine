@@ -2,8 +2,8 @@
 # carry a copy, and the registry's copy is the one whose list is complete. The
 # site is built from every listed repository's plans by basstler.plan_site.
 site_url: https://abdelrhmanbassiouny.github.io/stack-board/
-registry: AbdelrhmanBassiouny/basstler
+registry: KAOS-repositories/basstler
 notes_branch: claude/personal-notes
 repositories:
-- AbdelrhmanBassiouny/basstler
+- KAOS-repositories/basstler
 - AbdelrhmanBassiouny/cognitive_robot_abstract_machine
