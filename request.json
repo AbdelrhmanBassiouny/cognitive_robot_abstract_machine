@@ -1,6 +1,9 @@
 {
-  "kind": "open-pull-requests",
-  "request_identifier": "73a3a0a5f38a960d",
+  "kind": "pull-request-report",
+  "request_identifier": "97d3e3b6f1e13962",
   "upstream": "cram2/cognitive_robot_abstract_machine",
-  "fork": "AbdelrhmanBassiouny/cognitive_robot_abstract_machine"
+  "fork_owner": "AbdelrhmanBassiouny",
+  "pull_request": null,
+  "branch": "claude/keen-feynman-4xcf4m",
+  "failure_logs": false
 }
