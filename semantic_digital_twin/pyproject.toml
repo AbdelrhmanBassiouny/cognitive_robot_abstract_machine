@@ -25,6 +25,7 @@ dependencies = [
     "rustworkx",
     "nltk",
     "numpy",
+    "pydantic>=2.11",
     "trimesh>=4.11.1",
     "typing_extensions",
     "urdf-parser-py",

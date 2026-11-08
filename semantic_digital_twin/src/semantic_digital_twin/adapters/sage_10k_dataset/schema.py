@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+import json
+from dataclasses import field
 from pathlib import Path
 from typing_extensions import assert_never, Any, Self
 
 import numpy as np
+from pydantic import TypeAdapter, field_validator
+from pydantic.dataclasses import dataclass as validated_dataclass
 
-from krrood.adapters.json_field import JSONField
-from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json
-from krrood.utils import get_full_class_name
+from krrood.adapters.json_serializer import SubclassJSONSerializer
 from semantic_digital_twin.semantic_annotations.natural_language import (
     NaturalLanguageWithTypeDescription,
 )
@@ -45,8 +46,31 @@ from semantic_digital_twin.world_description.world_entity import (
 )
 
 
-@dataclass
-class Sage10kBase(SubclassJSONSerializer):
+class Sage10kLayoutEntry(SubclassJSONSerializer):
+    """
+    An object of a Sage10k JSON layout, read from and written in the layout's own
+    shape, with the class of every nested object given by its field.
+    """
+
+    def to_json(self, **kwargs) -> dict[str, Any]:
+        return {
+            **super().to_json(**kwargs),
+            **TypeAdapter(type(self)).dump_python(self, mode="json"),
+        }
+
+    @classmethod
+    def _from_json(cls, data: dict[str, Any], **kwargs) -> Self:
+        """
+        Read an object of the dataset's JSON layout, ignoring keys this class has no
+        field for.
+
+        :raises pydantic.ValidationError: If a value is missing or has the wrong type.
+        """
+        return TypeAdapter(cls).validate_python(data)
+
+
+@validated_dataclass
+class Sage10kBase(Sage10kLayoutEntry):
     """
     Base class for all classes of the Sage 10k dataset.
 
@@ -62,7 +86,7 @@ class Sage10kBase(SubclassJSONSerializer):
     """
 
 
-@dataclass
+@validated_dataclass
 class Sage10kWithID(Sage10kBase):
     """
     Base class for Sage10k classes that have an id.
@@ -92,30 +116,29 @@ class Sage10kWithID(Sage10kBase):
         """
 
 
-@dataclass
+@validated_dataclass
 class HasXYZ(Sage10kBase):
     """
     Parent for Sage10ks position and orientation to deduplicate the code.
     """
 
     x: float
+    """
+    The value along the x axis.
+    """
+
     y: float
+    """
+    The value along the y axis.
+    """
+
     z: float
-
-    def to_json(self, **kwargs) -> dict[str, Any]:
-        return {
-            **super().to_json(**kwargs),
-            "x": self.x,
-            "y": self.y,
-            "z": self.z,
-        }
-
-    @classmethod
-    def _from_json(cls, data: dict[str, Any], **kwargs) -> Self:
-        return cls(x=data["x"], y=data["y"], z=data["z"])
+    """
+    The value along the z axis.
+    """
 
 
-@dataclass
+@validated_dataclass
 class Sage10kRotation(HasXYZ):
     """
     Rotations in the Sage 10k world.
@@ -132,7 +155,7 @@ class Sage10kRotation(HasXYZ):
         )
 
 
-@dataclass
+@validated_dataclass
 class Sage10kPosition(HasXYZ):
     """
     Position of an entity in a Sage10k scene.
@@ -141,7 +164,7 @@ class Sage10kPosition(HasXYZ):
     """
 
 
-@dataclass
+@validated_dataclass
 class Sage10kSize(Sage10kBase):
     """
     The scale of an object.
@@ -174,21 +197,9 @@ class Sage10kSize(Sage10kBase):
     def z(self) -> float:
         return self.height
 
-    def to_json(self, **kwargs) -> dict[str, Any]:
-        return {
-            **super().to_json(**kwargs),
-            "height": self.height,
-            "length": self.length,
-            "width": self.width,
-        }
 
-    @classmethod
-    def _from_json(cls, data: dict[str, Any], **kwargs) -> Self:
-        return cls(height=data["height"], length=data["length"], width=data["width"])
-
-
-@dataclass
-class Sage10kPhysicallyBasedRendering(SubclassJSONSerializer):
+@validated_dataclass
+class Sage10kPhysicallyBasedRendering(Sage10kLayoutEntry):
     """
     Parameters for super realistic renderers.
 
@@ -198,23 +209,17 @@ class Sage10kPhysicallyBasedRendering(SubclassJSONSerializer):
     """
 
     metallic: float
+    """
+    How metallic the surface looks, from 0 to 1.
+    """
+
     roughness: float
-
-    def to_json(self, **kwargs) -> dict[str, Any]:
-        return {
-            **super().to_json(**kwargs),
-            "metallic": self.metallic,
-            "roughness": self.roughness,
-        }
-
-    @classmethod
-    def _from_json(
-        cls, data: dict[str, Any], **kwargs
-    ) -> Sage10kPhysicallyBasedRendering:
-        return cls(metallic=data["metallic"], roughness=data["roughness"])
+    """
+    How rough the surface looks, from 0 to 1.
+    """
 
 
-@dataclass
+@validated_dataclass
 class Sage10kWall(Sage10kWithID):
     """
     Description of a wall for a room.
@@ -248,28 +253,6 @@ class Sage10kWall(Sage10kWithID):
     """
     The thickness of the wall.
     """
-
-    def to_json(self, **kwargs) -> dict[str, Any]:
-        return {
-            **super().to_json(**kwargs),
-            "id": self.id,
-            "start_point": to_json(self.start_point, **kwargs),
-            "end_point": to_json(self.end_point, **kwargs),
-            "material": self.material,
-            "height": self.height,
-            "thickness": self.thickness,
-        }
-
-    @classmethod
-    def _from_json(cls, data: dict[str, Any], **kwargs) -> Sage10kWall:
-        return cls(
-            id=data["id"],
-            start_point=Sage10kPosition._from_json(data["start_point"], **kwargs),
-            end_point=Sage10kPosition._from_json(data["end_point"], **kwargs),
-            material=data["material"],
-            height=data["height"],
-            thickness=data["thickness"],
-        )
 
     @property
     def wall_length_and_yaw(self) -> tuple[float, float]:
@@ -343,7 +326,7 @@ class Sage10kWall(Sage10kWithID):
         return annotation
 
 
-@dataclass
+@validated_dataclass
 class Sage10kObject(Sage10kWithID):
     """
     Like a Body, but from Sage10k.
@@ -383,6 +366,16 @@ class Sage10kObject(Sage10kWithID):
     """
     A textual description of the place where the object is located.
     """
+
+    @field_validator("place_guidance", mode="before")
+    @classmethod
+    def read_place_guidance(cls, place_guidance: str | dict[str, Any]) -> str:
+        """
+        :return: The place guidance, as JSON text where the dataset gives an object.
+        """
+        if isinstance(place_guidance, str):
+            return place_guidance
+        return json.dumps(place_guidance)
 
     mass: float
     """
@@ -474,52 +467,8 @@ class Sage10kObject(Sage10kWithID):
 
         return body
 
-    def to_json(self, **kwargs) -> dict[str, Any]:
-        return {
-            **super().to_json(**kwargs),
-            "id": self.id,
-            "room_id": self.room_id,
-            "type": self.type,
-            "description": self.description,
-            "source": self.source,
-            "source_id": self.source_id,
-            "place_id": self.place_id,
-            "place_guidance": self.place_guidance,
-            "mass": self.mass,
-            "position": to_json(self.position, **kwargs),
-            "rotation": to_json(self.rotation, **kwargs),
-            "dimensions": to_json(self.dimensions, **kwargs),
-            "pbr_parameters": to_json(self.pbr_parameters, **kwargs),
-        }
 
-    @classmethod
-    def _from_json(cls, data: dict[str, Any], **kwargs) -> Sage10kObject:
-        place_guidance = data["place_guidance"]
-        if isinstance(place_guidance, dict):
-            import json
-
-            place_guidance = json.dumps(place_guidance)
-
-        return cls(
-            id=data["id"],
-            room_id=data["room_id"],
-            type=data["type"],
-            description=data["description"],
-            source=data["source"],
-            source_id=data["source_id"],
-            place_id=data["place_id"],
-            place_guidance=place_guidance,
-            mass=data["mass"],
-            position=Sage10kPosition._from_json(data["position"], **kwargs),
-            rotation=Sage10kRotation._from_json(data["rotation"], **kwargs),
-            dimensions=Sage10kSize._from_json(data["dimensions"], **kwargs),
-            pbr_parameters=Sage10kPhysicallyBasedRendering._from_json(
-                data["pbr_parameters"], **kwargs
-            ),
-        )
-
-
-@dataclass
+@validated_dataclass
 class Sage10kDoor(Sage10kWithID):
     """
     A door of a wall in Sage10k.
@@ -566,34 +515,6 @@ class Sage10kDoor(Sage10kWithID):
     """
     The door materials filename found in the `materials` folder.
     """
-
-    def to_json(self, **kwargs) -> dict[str, Any]:
-        return {
-            **super().to_json(**kwargs),
-            "id": self.id,
-            "wall_id": self.wall_id,
-            "position_on_wall": self.position_on_wall,
-            "width": self.width,
-            "height": self.height,
-            "door_type": self.door_type,
-            "opens_inward": self.opens_inward,
-            "opening": self.opening,
-            "door_material": self.door_material,
-        }
-
-    @classmethod
-    def _from_json(cls, data: dict[str, Any], **kwargs) -> Sage10kDoor:
-        return cls(
-            id=data["id"],
-            wall_id=data["wall_id"],
-            position_on_wall=data["position_on_wall"],
-            width=data["width"],
-            height=data["height"],
-            door_type=data["door_type"],
-            opens_inward=data["opens_inward"],
-            opening=data["opening"],
-            door_material=data["door_material"],
-        )
 
     def create_in_world(
         self,
@@ -729,7 +650,7 @@ class Sage10kDoor(Sage10kWithID):
         )
 
 
-@dataclass
+@validated_dataclass
 class Sage10kRoom(Sage10kWithID):
     """
     A room of the Sage10k dataset.
@@ -901,34 +822,8 @@ class Sage10kRoom(Sage10kWithID):
 
         return world.root
 
-    def to_json(self, **kwargs) -> dict[str, Any]:
-        return {
-            JSONField.TYPE: get_full_class_name(self.__class__),
-            "id": self.id,
-            "room_type": self.room_type,
-            "dimensions": to_json(self.dimensions, **kwargs),
-            "position": to_json(self.position, **kwargs),
-            "floor_material": self.floor_material,
-            "objects": to_json(self.objects, **kwargs),
-            "walls": to_json(self.walls, **kwargs),
-            "doors": to_json(self.doors, **kwargs),
-        }
 
-    @classmethod
-    def _from_json(cls, data: dict[str, Any], **kwargs) -> Sage10kRoom:
-        return cls(
-            id=data["id"],
-            room_type=data["room_type"],
-            dimensions=Sage10kSize._from_json(data["dimensions"], **kwargs),
-            position=Sage10kPosition._from_json(data["position"], **kwargs),
-            floor_material=data["floor_material"],
-            objects=[Sage10kObject._from_json(d, **kwargs) for d in data["objects"]],
-            walls=[Sage10kWall._from_json(w, **kwargs) for w in data["walls"]],
-            doors=[Sage10kDoor._from_json(d, **kwargs) for d in data["doors"]],
-        )
-
-
-@dataclass
+@validated_dataclass
 class Sage10kScene(Sage10kWithID):
     """
     An entire scene from Sage10k.
@@ -967,28 +862,6 @@ class Sage10kScene(Sage10kWithID):
 
     The layout files are named like `layout*.json`.
     """
-
-    def to_json(self, **kwargs) -> dict[str, Any]:
-        return {
-            **super().to_json(**kwargs),
-            "id": self.id,
-            "building_style": self.building_style,
-            "description": self.description,
-            "created_from_text": self.created_from_text,
-            "total_area": self.total_area,
-            "rooms": to_json(self.rooms, **kwargs),
-        }
-
-    @classmethod
-    def _from_json(cls, data: dict[str, Any], **kwargs) -> Sage10kScene:
-        return cls(
-            id=data["id"],
-            building_style=data["building_style"],
-            description=data["description"],
-            created_from_text=data["created_from_text"],
-            total_area=data["total_area"],
-            rooms=[Sage10kRoom._from_json(r, **kwargs) for r in data["rooms"]],
-        )
 
     def create_world(self) -> World:
         """
