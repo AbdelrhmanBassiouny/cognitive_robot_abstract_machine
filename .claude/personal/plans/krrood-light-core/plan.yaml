@@ -14,8 +14,8 @@ waves:
   description: Each item cuts one import edge from core into a heavy dependency, with a fresh-interpreter
     test.
 - id: extras
-  name: The extras exist
-  description: pyproject split, workspace packages switched, core-only CI job.
+  name: The distributions exist
+  description: krrood-* workspace members, the krrood package depending on all, per-distribution CI.
 tracks:
 - id: optional-imports
   name: Optional imports and their mechanism
@@ -87,11 +87,11 @@ items:
   - type-hint-resolver-skips-missing-modules
   - core-boundary-guard
   notes: 'Split operators/causal.py: Cause/Confounder/CausesEffect stay core, the random_events
-    dataclasses move out; probabilistic_queries.py and backends.py are `all`. number_like_field
+    dataclasses move out; probabilistic_queries.py and backends.py move to krrood-probabilistic. number_like_field
     (user-approved cleanest): plain check, int/float subclass and not bool/Enum, matching
     random_events today. aggregators interval stays method-local.'
 - id: verbalization-realization-split
-  title: Verbalization vocabulary stays core, realization moves to all
+  title: Verbalization vocabulary stays in krrood-eql, realization moves out of it
   branch: null
   status: not_started
   track: core-boundaries
@@ -100,7 +100,7 @@ items:
   - core-boundary-guard
   notes: 'User-approved: _verbalization_fragment_ stays abstract and unchanged. The vocabulary
     (clause, Noun, Verb, fragments) is declarative; only morphology (inflect ~1.7 s, lemminflect,
-    typeguard) and the pipeline (jinja2, IPython) move to `all`. Needs navigation_path and
+    typeguard) and the pipeline (jinja2, IPython) move out of krrood-eql (which distribution is decided in krrood-distributions). Needs navigation_path and
     parts_of_speech to stop calling morphology while building a clause (cardinal, verb_lemma
     become fragments realized later).'
 - id: core-weight-regression-check
