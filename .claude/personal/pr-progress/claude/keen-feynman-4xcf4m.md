@@ -1,13 +1,10 @@
 ## Plan
-- Core is declared once in `[tool.krrood.core-boundary]` of krrood/pyproject.toml: patterns, class_diagrams, symbol_graph, exceptions, utils, singleton, _version. `CoreBoundaryChecker` checks the module-level import graph; a runtime backstop test catches the rest. Source reading lives in `krrood.source_analysis`.
+- Answer the three open review questions on PR 546 once the owner decides.
 
 ## Done
-- 245f68b570 + 0a78cbaaa7: utils + singleton in core; patterns.role_predicates -> entity_query_language.role_predicates (api-break); 5 crossings in 4 files left. Tests (core boundary, source analysis, dev tools, patterns, EQL verbalization) and pre-commit green at 0a78cbaaa7.
-- 29d1fd7ff8: source_analysis.property_return_statement / source_extraction moves (api-break); core narrowed.
-- #547 merged up to b0421dff7e.
-- Source-analysis and core-list threads resolved.
+- 8dcc61cb36: Role.is_same_semantic_entity; IsSameSemanticEntity calls it. EQL kept out of core (28 crossings). Tests + pre-commit green at 8dcc61cb36; merged into #547 (cb45de5c6d).
+- 8 Nov review: 5 threads fixed in e5fa40ecd6 (krrood.source_analysis, renames, docstrings) and resolved; #547 merged to b2cf2c16b7.
 
 ## Next
-- Owner to decide: `krrood check --runtime` mode (thread open).
-- CI at 0a78cbaaa7 and #547's b0421dff7e not read.
-- Labels: suggest new-feature + api-break in place of maintenance.
+- Open threads: move code_parsing_utils/source_extraction_utils (API break, own PR?); narrow core list to roadmap's four; runtime mode for the backstop.
+- CI at e5fa40ecd6 unread.
