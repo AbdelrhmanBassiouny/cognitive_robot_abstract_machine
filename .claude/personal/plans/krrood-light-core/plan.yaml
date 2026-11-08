@@ -1,10 +1,11 @@
 schema_version: 1
 id: krrood-light-core
-title: 'krrood light core: heavy dependencies move behind krrood[all]'
-description: A plain `pip install krrood` installs a light, Windows-installable core (patterns,
-  exceptions, JSON serializer, class diagrams, symbol graph, EQL); verbalization realization,
-  random_events/probabilistic_model, casadi, numpy/scipy serialization, ORMatic, RDR, ontomatic
-  and matplotlib move behind `krrood[all]`. Replaces the separate krrood_core package (#506).
+title: 'krrood light core: krrood-* distributions, a light krrood-core'
+description: Each krrood part is its own pip-installable krrood-* distribution under the krrood.<part> namespace, released
+  at one version with exact sibling pins; `pip install krrood` installs them all. krrood-core (patterns, class_diagrams, symbol_graph,
+  exceptions) is light and Windows-installable; EQL, serialization, ORMatic, RDR, ontomatic and the probabilistic parts are
+  distributions of their own. krrood-development-tools builds on basstler-rules. Replaces the separate krrood_core package
+  (#506).
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 510
 waves:
@@ -26,7 +27,7 @@ tracks:
   name: Guards that keep core light
   wave: decoupling
 - id: packaging
-  name: Packaging and CI
+  name: Distributions and packaging
   wave: extras
 - id: command-line
   name: krrood command line
@@ -102,8 +103,49 @@ items:
     typeguard) and the pipeline (jinja2, IPython) move to `all`. Needs navigation_path and
     parts_of_speech to stop calling morphology while building a clause (cardinal, verb_lemma
     become fragments realized later).'
-- id: krrood-core-and-all-extras
-  title: pyproject core and all extras, workspace packages switched, core-only CI job
+- id: core-weight-regression-check
+  title: CI compares core install size and import time against the base branch
+  branch: null
+  status: not_started
+  track: packaging
+  depends_on:
+  - krrood-distributions
+  notes: 'One CI job, only when krrood or its pyproject changes: installs krrood-core from base and head into empty environments
+    and compares installed size and distribution count (deterministic), then median import time over alternating runs on the
+    same runner. Fails only past a relative and an absolute threshold, both named settings; prints both numbers in the job
+    summary. Catches a heavy package added to core''s own dependencies.'
+- id: command-line-on-cyclopts
+  title: krrood's command line is built on cyclopts
+  branch: null
+  status: deferred
+  track: command-line
+  depends_on: []
+  notes: 'Asked in review of #547. Absorbed by development-tools-on-basstler-rules: krrood''s command is then mounted on basstler-rules''
+    cyclopts commands. Delete once that item starts.'
+
+- id: classproperty-in-patterns
+  title: krrood-core imports nothing outside patterns, class_diagrams, symbol_graph and exceptions
+  branch: null
+  status: not_started
+  track: core-boundaries
+  depends_on: []
+  notes: 'Moves only. classproperty from ormatic/utils.py into krrood.patterns; DataclassException into core. symbol_graph
+    stops importing ontomatic''s attribute_introspector at module level. role_predicates (EQL Predicate, verbalization) and
+    code_parsing_utils (EQL exceptions) move to EQL. Role, SubClassSafeGeneric and factory_and_kwargs stay patterns (user
+    decision): Role inherits Symbol and symbol_graph imports patterns, so the three ship together as krrood-core.'
+
+- id: namespace-package
+  title: 'krrood is a namespace package: krrood/__init__.py removed'
+  branch: null
+  status: not_started
+  track: packaging
+  depends_on: []
+  notes: Several distributions share the krrood. prefix only if none ships krrood/__init__.py. Each distribution reads its
+    version with importlib.metadata; the krrood logger moves to the package that uses it; every `from krrood import logger`
+    and krrood.__version__ reader is fixed. Breaking for outside readers of krrood.__version__.
+
+- id: krrood-distributions
+  title: krrood-* distributions as workspace members, a krrood package depending on all, per-distribution CI
   branch: null
   status: not_started
   track: packaging
@@ -113,29 +155,23 @@ items:
   - serializer-without-heavy-dependencies
   - eql-probabilistic-split
   - verbalization-realization-split
-  notes: 'Breaking for outside users: pip has no default extras. Every workspace package that
-    lists krrood switches to krrood[all]. Core-only CI job on Linux and Windows runs the guard
-    and core tests; `krrood check --all-lines` must report no core-boundary crossing. basstler (basstler#12, item
-    basstler-krrood-dependency in basstler''s notes) then depends on plain krrood.'
-- id: core-weight-regression-check
-  title: CI compares core install size and import time against the base branch
-  branch: null
-  status: not_started
-  track: packaging
-  depends_on:
-  - krrood-core-and-all-extras
-  notes: 'One CI job, only when krrood or its pyproject changes: installs core krrood from
-    base and head into empty environments and compares installed size and distribution count
-    (deterministic), then median import time over alternating runs on the same runner. Fails
-    only past a relative and an absolute threshold, both named settings; prints both numbers
-    in the job summary. Catches a heavy package added to core''s own dependencies.'
+  - classproperty-in-patterns
+  - namespace-package
+  notes: 'One workspace member per distribution (krrood-core, -eql, -serialization, -ormatic, -rdr, -ontomatic, -probabilistic,
+    -development-tools...), cut by the decoupling items; sibling pins == root VERSION. A krrood distribution depending on
+    all keeps `pip install krrood` whole. random_events and probabilistic_model depend on krrood-core/-eql only, ending the
+    krrood <-> random_events cycle. #546''s checker checks a per-distribution map. CI installs each alone on Linux and Windows.'
 
-- id: command-line-on-cyclopts
-  title: krrood's command line is built on cyclopts
+- id: development-tools-on-basstler-rules
+  title: krrood-development-tools builds on basstler-rules' rule engine
   branch: null
-  status: not_started
+  status: blocked
   track: command-line
-  depends_on: []
-  notes: 'Asked in review of #547. Every `krrood` subcommand (format, agents-md, check) moves
-    from argparse to cyclopts, added to the development-tools extra; all at once, never one
-    subcommand alone.'
+  depends_on:
+  - krrood-distributions
+  blockers:
+  - Waits on basstler's basstler-packages/krrood-sync (basstler-rules is the engine) and its first PyPI release (basstler-packages/pypi-release).
+  notes: 'krrood-development-tools depends on basstler-rules>=X,<X+1 (a range, never ==, so neither repository''s release
+    waits on the other) and deletes development_tools/agents'' engine: rule, section, checker, instructions, formatting. It
+    keeps krrood''s shipped rules (EQL a/an, serializer, core-boundary) as a basstler-rules ruleset and the krrood command
+    mounted on basstler-rules'' commands. Absorbs command-line-on-cyclopts.'
