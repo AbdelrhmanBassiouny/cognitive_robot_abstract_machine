@@ -16,6 +16,6 @@ concurrency:
 
 jobs:
   read:
-    uses: KAOS-repositories/basstler/.github/workflows/upstream-reviews-action.yml@v3.10.6
+    uses: KAOS-repositories/basstler/.github/workflows/upstream-reviews-action.yml@v3.11.0
     with:
-      basstler_branch_or_tag: v3.10.6
+      basstler_branch_or_tag: v3.11.0
