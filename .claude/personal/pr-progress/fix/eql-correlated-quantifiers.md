@@ -1,9 +1,10 @@
 ## Plan
-- Keep #495's per-outer-binding quantifiers over cram2#905's narrower exists fix (now on main).
+- Keep #495's per-outer-binding quantifiers over cram2#905's narrower exists fix (now on main), with bag semantics; set semantics is plan item plain-where-locals-existential.
 
 ## Done
-- Merged main at b8b69c05e keeping this branch's logical_quantifiers.py; clean against main 8574ddfd0; 905's tests pass; added a local-scope regression test; test_eql + test_class_diagram 1623 passed, 3 skipped. Carried into #556 and #557 (both clean).
+- Merged main (b8b69c05e): 1623 passed, 3 skipped; carried into #556/#557.
+- 3b99b73cf: scoping tests compare distinct sizes; test_eql 1522 passed, 3 skipped; carried into #556/#557; replied on the bag vs set thread (left open).
 
 ## Next
-- Read CI at b8b69c05e.
-- Owner: decide the open threads (bag vs set, flat_variable automation, performance) and the api-break label.
+- Read CI at 3b99b73cf.
+- Owner: resolve the bag vs set thread; decide flat_variable automation, performance and the api-break label.
