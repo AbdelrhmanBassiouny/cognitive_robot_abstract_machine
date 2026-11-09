@@ -24,7 +24,7 @@ const path = require('path');
       displayHeaderFooter: true,
       headerTemplate: '<span></span>',
       footerTemplate: footer('Worksheet 3'),
-      margin: { top: '22mm', bottom: '22mm', left: '23mm', right: '23mm' },
+      margin: { top: '20mm', bottom: '20mm', left: '21mm', right: '21mm' },
     });
   }
   await browser.close();
