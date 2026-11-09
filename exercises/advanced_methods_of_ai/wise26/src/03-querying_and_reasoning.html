@@ -5,80 +5,69 @@
 <title>Advanced Methods of AI · Worksheet 3 · Asking, Describing, Constraining, Inferring</title>
 <style>
   @page { size: A4; margin: 20mm 21mm 20mm 21mm; }
-  :root {
-    --blue: #2e5c8a; --box: #fdf3c9; --solution: #eaf1f8; --line: #9aa7b5; --head: #dbe5f1;
-    --ask: #1565c0; --describe: #6a1b9a; --constrain: #c62828; --infer: #2e7d32; --generate: #ef6c00;
-    --answer: #c2185b;
-  }
-  html { font-family: "Liberation Serif", "Times New Roman", serif; font-size: 10.6pt; line-height: 1.33; color: #000; }
-  body { margin: 0; }
-  code, .code, pre { font-family: "DejaVu Sans Mono", "DejaVu Sans", monospace; font-size: 8.3pt; }
-  pre { margin: 4pt 0 6pt 14pt; line-height: 1.45; white-space: pre-wrap; break-inside: avoid; }
+  :root { --rule: #000; --soft: #8c8c8c; --fill: #f1f1f1; }
+  html { font-family: "Liberation Serif", "Times New Roman", serif; font-size: 10.6pt; line-height: 1.36; color: #000; }
+  body { margin: 0; background: #fff; }
+  code, .code, pre { font-family: "DejaVu Sans Mono", monospace; font-size: 8.3pt; }
+  pre { margin: 4pt 0 6pt 22pt; line-height: 1.45; white-space: pre-wrap; break-inside: avoid; }
   .nowrap { white-space: nowrap; }
   p, li { orphans: 3; widows: 3; }
+  p { margin: 3pt 0; }
+  ul, ol { margin: 2pt 0 4pt 22pt; padding-left: 14pt; }
+  li { margin: 1.5pt 0; }
+
   .head { display: flex; justify-content: space-between; font-weight: bold; }
   .head div:last-child { text-align: right; }
-  h1 { text-align: center; font-size: 21pt; line-height: 1.2; margin: 16pt 0 6pt; }
-  h2 { text-align: center; font-size: 14.5pt; margin: 0 0 5pt; }
-  .info { text-align: center; color: #555; margin: 0 0 3pt; }
-  p { margin: 3pt 0; }
-  .part { margin: 7pt 0 3pt; padding-left: 22pt; text-indent: -22pt; break-after: avoid; }
-  .part > b:first-child { margin-right: 2pt; }
-  .sub { margin: 2pt 0 2pt 22pt; }
-  ol.roman { list-style: lower-roman; margin: 2pt 0 4pt 22pt; padding-left: 22pt; }
-  ol.roman li { margin: 2pt 0; padding-left: 2pt; }
-  ul { margin: 2pt 0 4pt 22pt; padding-left: 14pt; }
-  li { margin: 1.5pt 0; }
-  .box { background: var(--box); padding: 6pt 8pt; margin: 7pt 0; break-inside: avoid; }
-  .theory { border-left: 3.5pt solid var(--blue); background: #f4f7fb; padding: 5pt 8pt; margin: 7pt 0; break-inside: avoid; }
-  .theory > b:first-child { color: var(--blue); }
-  .think { border: 1pt dashed #8d6e63; border-radius: 6pt; padding: 5pt 8pt 5pt 30pt; margin: 7pt 0 7pt 22pt;
-           position: relative; break-inside: avoid; background: #fffdf8; }
-  .think::before { content: "?"; position: absolute; left: 7pt; top: 4pt; width: 16pt; height: 16pt; border-radius: 8pt;
-           background: #8d6e63; color: white; font-weight: bold; text-align: center; line-height: 16pt;
-           font-family: "DejaVu Sans", sans-serif; font-size: 10pt; }
-  .tag { display: inline-block; font-family: "DejaVu Sans", sans-serif; font-size: 7pt; font-weight: bold; letter-spacing: 0.4pt;
-         padding: 0.5pt 4pt; border-radius: 3pt; color: white; vertical-align: 1pt; margin-right: 3pt; text-indent: 0; }
-  .tag.predict { background: var(--answer); }
-  .tag.paper { background: #546e7a; }
-  .tag.notebook { background: #00838f; }
-  .tag.pen { background: #8d6e63; }
-  .solution { background: var(--solution); padding: 6pt 9pt; margin: 6pt 0 8pt; }
-  .solution > .title { color: var(--blue); font-weight: bold; margin-bottom: 2pt; break-after: avoid; }
-  .solution ul, .solution ol.roman { margin-left: 4pt; }
-  table { border-collapse: collapse; margin: 5pt 0 6pt 22pt; font-size: 10pt; break-inside: avoid; }
-  .box table, .solution table, .theory table { margin-left: 0; }
-  th, td { border: 0.6pt solid var(--line); padding: 3pt 6pt; text-align: left; vertical-align: top; }
-  th { background: var(--head); }
-  th code { font-weight: normal; }
-  td.blank { min-width: 30pt; height: 14pt; }
+  h1 { text-align: center; font-size: 20pt; line-height: 1.2; margin: 16pt 0 4pt; }
+  h2.subtitle { text-align: center; font-size: 14pt; font-weight: normal; font-style: italic; margin: 0 0 6pt; }
+  .info { text-align: center; margin: 0 0 2pt; }
+
+  /* acts: a rule, the name, the quote, the time */
+  .act { display: flex; align-items: baseline; gap: 10pt; border-top: 1.2pt solid var(--rule);
+         border-bottom: 0.5pt solid var(--rule); padding: 4pt 0 3pt; margin: 15pt 0 5pt;
+         break-after: avoid; break-inside: avoid; }
+  .act .name { font-weight: bold; font-size: 12.5pt; }
+  .act .quote { font-style: italic; font-size: 11.5pt; flex: 1; }
+  .act .time { font-size: 9.5pt; white-space: nowrap; }
+  .story { font-style: italic; margin: 3pt 0 6pt; }
+
+  .task { margin: 8pt 0 3pt; padding-left: 22pt; text-indent: -22pt; break-after: avoid; }
+  .task > b:first-child { display: inline-block; width: 22pt; text-indent: 0; }
+  .sub { margin: 3pt 0 3pt 22pt; }
+  .mode { font-variant: small-caps; letter-spacing: 0.3pt; }
+  .blank-line { display: inline-block; border-bottom: 0.5pt solid #000; min-width: 60pt; }
+
+  .box { border: 0.6pt solid var(--rule); padding: 5pt 8pt; margin: 7pt 0; break-inside: avoid; }
+  .box > .title { font-weight: bold; margin-bottom: 3pt; }
+  .think { border-left: 1.5pt solid var(--rule); padding: 1pt 0 1pt 8pt; margin: 7pt 0 7pt 22pt; break-inside: avoid; }
+  .think > b:first-child { font-style: normal; }
+  .solution { background: var(--fill); padding: 5pt 9pt; margin: 6pt 0 8pt; }
+  .solution > .title { font-weight: bold; margin-bottom: 2pt; break-after: avoid; }
+  .solution ul, .solution ol { margin-left: 4pt; }
+
+  table { border-collapse: collapse; margin: 5pt 0 6pt 22pt; font-size: 9.8pt; break-inside: avoid; }
+  .box table, .solution table, table.full { margin-left: 0; }
+  th, td { border: 0.5pt solid var(--rule); padding: 2.5pt 5pt; text-align: left; vertical-align: top; }
+  th { font-weight: bold; }
+  td.blank { min-width: 30pt; height: 15pt; }
+  td.tall { height: 24pt; }
   table.wide { width: calc(100% - 22pt); }
-  .solution table.wide, .box table.wide, .theory table.wide { width: 100%; }
+  .box table.wide, .solution table.wide, table.full { width: 100%; }
   table.small { font-size: 9pt; }
-  table.small code { font-size: 7.6pt; }
+  table.small code { font-size: 7.8pt; }
   table.center td, table.center th { text-align: center; }
   table.center td:first-child, table.center th:first-child { text-align: left; }
-  td.tall { height: 22pt; }
+  table.syntax td:first-child { white-space: nowrap; }
+
   .figure { margin: 6pt 0 8pt; text-align: center; break-inside: avoid; }
   .figure img, .figure svg { max-width: 100%; }
-  .caption { font-size: 9pt; color: #444; margin-top: 2pt; text-align: center; }
-  .caption b { color: #000; }
+  .caption { font-size: 9pt; margin-top: 2pt; text-align: center; }
   .keep { break-inside: avoid; }
   .newpage { break-before: page; }
 
-  /* the act headers */
-  .act { margin: 16pt 0 6pt; padding: 6pt 10pt 7pt; border-radius: 6pt; color: white; break-after: avoid;
-         display: flex; justify-content: space-between; align-items: center; break-inside: avoid; }
-  .act .name { font-family: "DejaVu Sans", sans-serif; font-size: 8pt; letter-spacing: 1pt; opacity: 0.9; }
-  .act .quote { font-size: 14pt; font-weight: bold; font-style: italic; }
-  .act .time { font-family: "DejaVu Sans", sans-serif; font-size: 8pt; opacity: 0.9; text-align: right; }
-  .act.ask { background: var(--ask); } .act.describe { background: var(--describe); }
-  .act.constrain { background: var(--constrain); } .act.infer { background: var(--infer); }
-  .act.generate { background: var(--generate); } .act.prologue { background: #455a64; }
-  .act + .story { margin-top: 4pt; }
-  .story { font-style: italic; margin: 4pt 0 6pt; padding-left: 10pt; border-left: 2pt solid #bbb; }
-
-  body.worksheet .epilogue { break-before: page; }
+  .answer { margin: 2pt 0 6pt 22pt; }
+  .answer div { border-bottom: 0.5pt solid #000; height: 19pt; }
+  body.worksheet .act-4 { break-before: page; }
   body.worksheet .solution, body.worksheet .only-solution { display: none; }
   body.with-solutions .only-worksheet { display: none; }
 </style>
@@ -92,18 +81,37 @@
 </div>
 
 <h1><span class="only-solution">Solution: </span>Exercises for the Lecture<br>Advanced Methods of AI</h1>
-<h2>Asking, Describing, Constraining, Inferring</h2>
+<h2 class="subtitle">Asking, Describing, Constraining, Inferring</h2>
 <p class="info">Tutorial: Thursday, 12.11.2026, 8:30–10:00, room 0.30, ECO 5</p>
-<p class="info">Work in pairs with one laptop: open the notebook <span class="code nowrap">03-pizza_queries.ipynb</span>
-on Binder (link on Stud.IP). Parts marked <span class="tag paper">PAPER</span> are done on this sheet,
-<span class="tag notebook">NOTEBOOK</span> in the notebook. Before every <span class="tag predict">PREDICT</span>, commit to an
-answer on this sheet <i>before</i> you run the cell.</p>
 
 <!-- ======================================================================= -->
-<div class="act prologue" data-act="0">
-  <div><div class="name">PROLOGUE</div><div class="quote">Thursday evening, 19:30</div></div>
-  <div class="time">≈ 5 min</div>
+<div class="only-solution">
+<div class="box">
+  <div class="title">For the tutor: the 90 minutes</div>
+  <table class="full small">
+    <tr><th style="width:9%">Time</th><th style="width:19%">Part</th><th style="width:34%">Students</th><th>Tutor; the sentence that leads on</th></tr>
+    <tr><td>0–8</td><td>Slides</td><td>open the notebook and start its setup cell, then listen</td><td>slides 1–8. <i>“Let us look at the world the robot knows.”</i></td></tr>
+    <tr><td>8–12</td><td>Prologue</td><td>warm-up on paper, in pairs</td><td>collect domain and extensions (2 min). <i>“The chef has a first question.”</i></td></tr>
+    <tr><td>12–34</td><td>Act 1 Asking</td><td>1(a) paper, then 1(b) predict and run, the vegetarian query, 1(c)</td><td>stop after 1(b) for vacuous truth and the closed world (3 min). <i>“All fitting objects is not always what we want: a command means one.”</i></td></tr>
+    <tr><td>34–44</td><td>Act 2 Describing</td><td>2(a) predict and run, 2(b)</td><td>ask: what should the robot do with 0 and with 2? <i>“Some descriptions must never fit anything.”</i></td></tr>
+    <tr><td>44–58</td><td>Act 3 Constraining</td><td>3(a) table and <code>allergens</code>, <code>IsSafeFor</code>, then 3(b) on paper, <code>dangerous</code></td><td>draw ¬∀ ≡ ∃¬ on the board; one pair shows its red line. <i>“Instead of checking every time, the kitchen writes conclusions down.”</i></td></tr>
+    <tr><td>58–75</td><td>Act 4 Inferring</td><td>4(a), 4(b) predict, 4(c) predict and run</td><td>4(c) is the climax: let three pairs answer one of the three sources each. <i>“So far, every answer already existed. Dana orders one that does not.”</i></td></tr>
+    <tr><td>75–85</td><td>Act 5 Generating</td><td>5(a) predict and run, 5(b) on paper</td><td>collect 5(b) on the board: several answers are right. <i>“Let us put the evening together.”</i></td></tr>
+    <tr><td>85–90</td><td>Epilogue</td><td>5(c) summary table</td><td>show Figure 13; take-home message.</td></tr>
+  </table>
+  <p>If time runs short, skip the think questions of Acts 2 and 3 and assign 5(b) for home. Pairs that are fast
+  continue with the think questions; nobody waits. Every notebook cell runs as it is, so a pair that is stuck
+  on a <code>TODO</code> can go on and compare with the solution later.</p>
 </div>
+</div>
+
+<p class="only-worksheet">Work in pairs with one laptop. Open the notebook <span class="code nowrap">03-pizza_queries.ipynb</span>
+(link on Stud.IP) and run its setup cell first. Tasks marked <span class="mode">paper</span> are done on this sheet,
+tasks marked <span class="mode">notebook</span> in the notebook. Before a cell marked <span class="mode">predict</span>,
+write your prediction on this sheet, then run it.</p>
+
+<!-- ======================================================================= -->
+<div class="act"><span class="name">Prologue</span><span class="quote">Thursday evening, 19:30</span><span class="time">4 min</span></div>
 
 <p class="story">A small pizzeria in Bremen. A service robot works between the counter and the tables. Seven pizzas are
 on the counter, three tables have ordered, and two guests must not eat certain things. The robot knows all of this
@@ -112,267 +120,271 @@ as objects: the classes of <span class="code">pizza.owl</span> from last week, p
 <div class="figure">
   <img src="figures/world.svg" style="width:100%">
   <img src="figures/legend.svg" style="width:72%">
-  <div class="caption"><b>Figure 1.</b> What the robot knows at 19:30. Lines connect each table to the pizzas it ordered.
-  <span class="only-worksheet">You will draw on this figure all morning: keep a pen ready.</span></div>
+  <div class="caption"><b>Figure 1.</b> What the robot knows at 19:30. Lines connect each table to the pizzas it
+  ordered.<span class="only-worksheet"> You will draw on this figure during the tutorial.</span></div>
 </div>
 
-<p>Everything the robot does tonight starts with the same kind of expression, a <b>description</b>. In EQL, the query
-language of KRROOD, “a pizza with a cheese topping” is written as follows; it is the concept of Worksheet 2 below it:</p>
-<pre style="text-align:center; margin-left:0; font-size:9.5pt">a(Pizza)(toppings=a(CheeseTopping)())         Pizza ⊓ ∃hasTopping.CheeseTopping</pre>
-<p>What the robot <i>does</i> with a description is what this tutorial is about. There are five things, one per act:</p>
-
-<div class="figure">
-<svg viewBox="0 0 640 236" width="640" height="236" font-family="DejaVu Sans, sans-serif">
-  <defs>
-    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#666"/></marker>
-  </defs>
-  <g stroke-width="2.2">
-    <line x1="320" y1="118" x2="170" y2="40" stroke="#1565c0"/>
-    <line x1="320" y1="118" x2="470" y2="40" stroke="#6a1b9a"/>
-    <line x1="320" y1="118" x2="480" y2="190" stroke="#c62828"/>
-    <line x1="320" y1="118" x2="320" y2="190" stroke="#2e7d32"/>
-    <line x1="320" y1="118" x2="160" y2="190" stroke="#ef6c00"/>
-  </g>
-  <rect x="200" y="92" width="240" height="52" rx="10" fill="#fff" stroke="#333" stroke-width="1.5"/>
-  <text x="320" y="113" text-anchor="middle" font-size="11" font-weight="bold">a description</text>
-  <text x="320" y="131" text-anchor="middle" font-size="9" fill="#333">a concept: a set of objects that fit</text>
-
-  <g font-size="9.5">
-    <rect x="20" y="8" width="190" height="56" rx="8" fill="#e3f0fb" stroke="#1565c0" stroke-width="1.5"/>
-    <text x="30" y="24" font-weight="bold" fill="#1565c0">1 · ASK</text>
-    <text x="30" y="39">Which objects fit?</text>
-    <text x="30" y="54" fill="#555">answer: all of them</text>
-
-    <rect x="430" y="8" width="190" height="56" rx="8" fill="#f3e5f5" stroke="#6a1b9a" stroke-width="1.5"/>
-    <text x="440" y="24" font-weight="bold" fill="#6a1b9a">2 · DESCRIBE</text>
-    <text x="440" y="39">Which one is meant?</text>
-    <text x="440" y="54" fill="#555">answer: exactly one, or ask back</text>
-
-    <rect x="430" y="168" width="190" height="56" rx="8" fill="#fdecea" stroke="#c62828" stroke-width="1.5"/>
-    <text x="440" y="184" font-weight="bold" fill="#c62828">3 · CONSTRAIN</text>
-    <text x="440" y="199">Nothing may fit.</text>
-    <text x="440" y="214" fill="#555">answer: none, or the culprit</text>
-
-    <rect x="232" y="168" width="176" height="56" rx="8" fill="#e8f5e9" stroke="#2e7d32" stroke-width="1.5"/>
-    <text x="242" y="184" font-weight="bold" fill="#2e7d32">4 · INFER</text>
-    <text x="242" y="199">For all that fit, conclude …</text>
-    <text x="242" y="214" fill="#555">answer: new facts</text>
-
-    <rect x="20" y="168" width="190" height="56" rx="8" fill="#fff3e0" stroke="#ef6c00" stroke-width="1.5"/>
-    <text x="30" y="184" font-weight="bold" fill="#ef6c00">5 · GENERATE</text>
-    <text x="30" y="199">Make something that fits.</text>
-    <text x="30" y="214" fill="#555">answer: a new object</text>
-  </g>
-</svg>
-<div class="caption"><b>Figure 2.</b> One description, five uses. The expression stays the same; what changes is where the
-candidates come from and what is done with the objects that fit.</div>
-</div>
-
-<div class="think only-worksheet"><b>Warm-up.</b> Figure 1 is an <i>interpretation</i> in the sense of Worksheet 2. What is its
-domain? What is the extension of <span class="code">CheeseTopping</span>, and of <span class="code">hasTopping</span>?</div>
-<div class="solution">
-  <div class="title">Warm-up</div>
-  <p>The domain is the set of all objects: 7 pizzas, their 21 toppings, 3 guests, 3 orders (and the values of the
-  enumerations). CheeseTopping<sup>I</sup> is the set of yellow dots (7 mozzarellas); hasTopping<sup>I</sup> is the set
-  of pairs (pizza, dot on that pizza). Every query today is evaluated in this <i>one</i> interpretation.</p>
-</div>
-
-<!-- ======================================================================= -->
-<div class="act ask" data-act="1">
-  <div><div class="name">ACT 1 · ASKING</div><div class="quote">“Which pizzas have cheese?”</div></div>
-  <div class="time">≈ 25 min<br><span class="progress"></span></div>
-</div>
-
-<p class="story">The chef calls across the kitchen. The cheesy pizzas go back into the oven for a minute, so that the cheese
-melts. The robot has to find them.</p>
-
-<p class="part"><b>(a)</b> <span class="tag paper">PAPER</span> <b>A description is a concept.</b> Write
-<span class="code">D = a(Pizza)(toppings=a(CheeseTopping)())</span> as a first-order formula with one free variable
-<span class="code">x</span>. <span class="tag pen">PEN</span> Ring the pizzas of Figure 1 that are answers.
-<span class="tag notebook">NOTEBOOK</span> Run Act 1(a) and compare.</p>
+<p class="task" style="break-after:auto"><b></b><span class="mode">paper</span> <b>Warm-up.</b> Figure 1 is an <i>interpretation</i> of first-order
+logic. What is its domain? What is the extension of the predicate <span class="code">CheeseTopping</span>, and that of
+the relation <span class="code">hasTopping</span>?</p>
+<div class="answer only-worksheet"><div></div><div></div><div></div></div>
 
 <div class="solution">
   <div class="title">Solution</div>
-  <p><span class="code">Pizza(x) ∧ ∃y (hasTopping(x, y) ∧ CheeseTopping(y))</span>. The free variable is what is asked
-  for. Answers: margherita_1, napoletana_1, american_hot_1, mushroom_1, unclosed_1 (Figure 3). A nested description on
-  the list <span class="code">toppings</span> means <i>some</i> element fits: it is the ∃ of the concept.</p>
-  <p>The query does what you did by hand in Worksheet 2, Task 2(a): it computes the extension of a concept in one
-  interpretation (model checking). It does not ask whether something is <i>entailed</i>, i.e. true in every model.</p>
-  <div class="figure"><img src="figures/act_1.svg" style="width:86%">
-  <div class="caption"><b>Figure 3.</b> The answers of Act 1(a), ringed.</div></div>
+  <p>The domain is the set of all objects: 7 pizzas, their 19 toppings, 3 guests and 3 orders (the spiciness values
+  and allergens are named by constants). The extension of CheeseTopping is the set of the 5 yellow dots, one
+  mozzarella on each cheesy pizza; that of hasTopping is the set of pairs (pizza, dot on that pizza), 19 pairs.
+  Every query today is evaluated in this <i>one</i> interpretation.</p>
 </div>
 
-<div class="theory keep"><b>Three languages, one meaning.</b>
-  <table class="small wide">
-    <tr><th>Description logic</th><th>First-order logic</th><th>EQL</th></tr>
-    <tr><td><code>Pizza</code></td><td><code>Pizza(p)</code></td><td><code>p = variable(Pizza, domain=pizzas)</code></td></tr>
-    <tr><td>a filler of hasTopping</td><td><code>hasTopping(p, t)</code></td><td><code>t = flat_variable(p.toppings)</code></td></tr>
-    <tr><td><code>∃hasTopping.C</code></td><td><code>∃t (hasTopping(p, t) ∧ C(t))</code></td><td><code>exists(t, HasType(t, C))</code>, or <code>toppings=a(C)()</code></td></tr>
-    <tr><td><code>∀hasTopping.C</code></td><td><code>∀t (hasTopping(p, t) → C(t))</code></td><td><code>for_all(t, HasType(t, C))</code></td></tr>
-    <tr><td><code>¬  ⊓  ⊔</code></td><td><code>¬  ∧  ∨</code></td><td><code>not_(…)</code>, several conditions, <code>or_(…)</code></td></tr>
+<div class="box">
+  <div class="title">EQL, the Entity Query Language</div>
+  <p>EQL is part of the library KRROOD. Its queries are first-order formulas written over Python objects. The
+  central expression is a <b>description</b>: a class and a pattern of attributes.</p>
+  <table class="full small syntax">
+    <tr><th style="width:42%">EQL</th><th style="width:25%">read it as</th><th>first-order logic</th></tr>
+    <tr><td><code>a(Pizza)</code></td><td>some object of class Pizza</td><td>a variable <i>x</i> with Pizza(<i>x</i>)</td></tr>
+    <tr><td><code>a(Pizza)(toppings=a(CheeseTopping)())</code></td><td>a pizza with a cheese topping</td><td>Pizza(<i>x</i>) ∧ ∃<i>t</i> (hasTopping(<i>x</i>, <i>t</i>) ∧ CheeseTopping(<i>t</i>))</td></tr>
+    <tr><td><code>a(Pizza)(toppings=[A, B])</code></td><td>whose topping list is [A, B]</td><td>the whole list: exactly these, in this order</td></tr>
+    <tr><td><code>a(PizzaTopping)(spiciness=Spiciness.HOT)</code></td><td>a topping that is hot</td><td>spiciness(<i>t</i>) = hot</td></tr>
+    <tr><td><code>.from_(pizzas)</code></td><td>… among these objects</td><td>the range of <i>x</i></td></tr>
+    <tr><td><code>the(Pizza)(…)</code></td><td><i>the</i> pizza that …</td><td>exactly one object fits</td></tr>
+    <tr><td><code>topping = flat_variable(pizza.toppings)</code></td><td>a topping of that pizza</td><td>a variable <i>t</i> with hasTopping(<i>x</i>, <i>t</i>)</td></tr>
+    <tr><td><code>HasType(topping, VegetableTopping)</code></td><td>it is a vegetable topping</td><td>VegetableTopping(<i>t</i>)</td></tr>
+    <tr><td><code>exists(t, φ)</code>, <code>for_all(t, φ)</code></td><td>some, every topping …</td><td>∃<i>t</i> φ, ∀<i>t</i> φ, over the toppings of <i>x</i></td></tr>
+    <tr><td><code>not_(φ)</code>, <code>or_(φ, ψ)</code>, <code>.where(φ, ψ)</code></td><td>not, or, and</td><td>¬φ, φ ∨ ψ, φ ∧ ψ</td></tr>
+    <tr><td><code>set_of(order.guest, pizza)</code></td><td>return these together</td><td>the free variables of the formula</td></tr>
+    <tr><td><code>.tolist()</code></td><td>evaluate now</td><td>all assignments that satisfy it</td></tr>
   </table>
+  <p>Writing a query computes nothing; it builds a symbolic expression, evaluated only by <span class="code">.tolist()</span>.
+  Every <span class="code">a(…)</span> introduces a variable of its own: two <span class="code">a(Pizza)</span> are two
+  pizzas, as <i>x</i> and <i>y</i> are two variables.</p>
 </div>
 
-<p class="part"><b>(b)</b> <span class="tag predict">PREDICT</span> <b>Some, only, none.</b> Mark with a cross which pizzas each query
-returns, and write each query as a DL concept. Then run Act 1(b).</p>
-<pre>Q1 = entity(p).where(for_all(t, HasType(t, VegetableTopping)))
-Q2 = a(Pizza)(toppings=[a(MozzarellaTopping)(), a(TomatoTopping)()]).from_(pizzas)
-Q3 = entity(p).where(not_(exists(t, HasType(t, CheeseTopping))))</pre>
+<p>What the robot <i>does</i> with a description is what this tutorial is about. There are five uses, one per act:</p>
 
 <div class="figure">
-<svg viewBox="0 0 600 112" width="600" height="112" font-family="DejaVu Sans, sans-serif" font-size="9.5">
+<svg viewBox="0 0 640 132" width="640" height="132" font-family="DejaVu Sans, sans-serif" font-size="9.5">
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#000"/></marker></defs>
+  <rect x="220" y="2" width="200" height="34" rx="6" fill="#fff" stroke="#000" stroke-width="1.2"/>
+  <text x="320" y="16" text-anchor="middle" font-weight="bold">a description</text>
+  <text x="320" y="29" text-anchor="middle" font-size="8.5">a formula with a free variable</text>
+  <g stroke="#000" stroke-width="1" fill="none" marker-end="url(#arrow)">
+    <path d="M 240 36 L 64 62"/><path d="M 280 36 L 192 62"/><path d="M 320 36 L 320 62"/>
+    <path d="M 360 36 L 448 62"/><path d="M 400 36 L 576 62"/>
+  </g>
   <g>
-    <rect x="2" y="2" width="190" height="106" rx="8" fill="#f7f9fc" stroke="#9aa7b5"/>
-    <text x="97" y="18" text-anchor="middle" font-weight="bold">some  ∃</text>
-    <circle cx="55" cy="58" r="26" fill="#e8c38a" stroke="#b07c3c"/><circle cx="55" cy="58" r="20" fill="#fbeccb"/>
-    <circle cx="47" cy="52" r="6" fill="#f2c12e"/><circle cx="63" cy="52" r="6" fill="#43a047"/><circle cx="55" cy="66" r="6" fill="#43a047"/>
-    <text x="96" y="52">at least one</text><text x="96" y="65">dot is yellow</text>
-    <text x="97" y="100" text-anchor="middle" fill="#555">one witness is enough</text>
-  </g>
-  <g transform="translate(204,0)">
-    <rect x="2" y="2" width="190" height="106" rx="8" fill="#f7f9fc" stroke="#9aa7b5"/>
-    <text x="97" y="18" text-anchor="middle" font-weight="bold">only  ∀</text>
-    <circle cx="42" cy="58" r="26" fill="#e8c38a" stroke="#b07c3c"/><circle cx="42" cy="58" r="20" fill="#fbeccb"/>
-    <circle cx="34" cy="52" r="6" fill="#43a047"/><circle cx="50" cy="52" r="6" fill="#43a047"/><circle cx="42" cy="66" r="6" fill="#43a047"/>
-    <text x="80" y="52">every dot is green</text>
-    <circle cx="150" cy="74" r="17" fill="#e8c38a" stroke="#b07c3c"/><circle cx="150" cy="74" r="12" fill="#fbeccb"/>
-    <text x="150" y="79" text-anchor="middle" font-size="13" font-weight="bold" fill="#c2185b">?</text>
-    <text x="80" y="70" fill="#c2185b">and here?</text>
-    <text x="97" y="100" text-anchor="middle" fill="#555">no counterexample allowed</text>
-  </g>
-  <g transform="translate(408,0)">
-    <rect x="2" y="2" width="190" height="106" rx="8" fill="#f7f9fc" stroke="#9aa7b5"/>
-    <text x="97" y="18" text-anchor="middle" font-weight="bold">none  ¬∃</text>
-    <circle cx="55" cy="58" r="26" fill="#e8c38a" stroke="#b07c3c"/><circle cx="55" cy="58" r="20" fill="#fbeccb"/>
-    <circle cx="47" cy="52" r="6" fill="#43a047"/><circle cx="63" cy="52" r="6" fill="#c0392b"/><circle cx="55" cy="66" r="6" fill="#43a047"/>
-    <text x="96" y="52">no dot</text><text x="96" y="65">is yellow</text>
-    <text x="97" y="100" text-anchor="middle" fill="#555">“none known” counts as none</text>
+    <rect x="2" y="64" width="124" height="64" rx="6" fill="#fff" stroke="#000"/>
+    <text x="64" y="80" text-anchor="middle" font-weight="bold">1 Ask</text>
+    <text x="64" y="96" text-anchor="middle">Which objects fit?</text>
+    <text x="64" y="116" text-anchor="middle" font-size="8.5">all of them</text>
+    <rect x="130" y="64" width="124" height="64" rx="6" fill="#fff" stroke="#000"/>
+    <text x="192" y="80" text-anchor="middle" font-weight="bold">2 Describe</text>
+    <text x="192" y="96" text-anchor="middle">Which one is meant?</text>
+    <text x="192" y="116" text-anchor="middle" font-size="8.5">exactly one, or ask back</text>
+    <rect x="258" y="64" width="124" height="64" rx="6" fill="#fff" stroke="#000"/>
+    <text x="320" y="80" text-anchor="middle" font-weight="bold">3 Constrain</text>
+    <text x="320" y="96" text-anchor="middle">Nothing may fit.</text>
+    <text x="320" y="116" text-anchor="middle" font-size="8.5">none, or the culprit</text>
+    <rect x="386" y="64" width="124" height="64" rx="6" fill="#fff" stroke="#000"/>
+    <text x="448" y="80" text-anchor="middle" font-weight="bold">4 Infer</text>
+    <text x="448" y="96" text-anchor="middle">For all that fit …</text>
+    <text x="448" y="116" text-anchor="middle" font-size="8.5">new facts</text>
+    <rect x="514" y="64" width="124" height="64" rx="6" fill="#fff" stroke="#000"/>
+    <text x="576" y="80" text-anchor="middle" font-weight="bold">5 Generate</text>
+    <text x="576" y="96" text-anchor="middle">Make one that fits.</text>
+    <text x="576" y="116" text-anchor="middle" font-size="8.5">a new object</text>
   </g>
 </svg>
-<div class="caption"><b>Figure 4.</b> The three quantifier patterns of Worksheet 2, as the robot checks them on one pizza.</div>
+<div class="caption"><b>Figure 2.</b> One description, five uses. The expression stays the same; what changes is where
+the candidates come from and what is done with those that fit.</div>
 </div>
 
-<table class="small center grid only-worksheet">
-  <tr><th></th><th>margherita</th><th>napoletana</th><th>american_hot</th><th>mushroom</th><th>veggie</th><th>plain</th><th>unclosed</th><th style="width:150pt">DL concept</th></tr>
+<!-- ======================================================================= -->
+<div class="act"><span class="name">Act 1 · Asking</span><span class="quote">“Which pizzas have cheese?”</span><span class="time">22 min</span></div>
+
+<p class="story">The chef calls across the kitchen. The cheesy pizzas go back into the oven for a minute, so that the
+cheese melts. The robot has to find them.</p>
+
+<p class="task"><b>(a)</b> <b>A description is a formula.</b> <span class="mode">paper</span> Write
+<span class="code">a(Pizza)(toppings=a(CheeseTopping)())</span> as a first-order formula with the free variable
+<i>x</i>, and ring the pizzas of Figure 1 that satisfy it. <span class="mode">notebook</span> Run 1(a) and compare.</p>
+<div class="answer only-worksheet"><div></div></div>
+
+<div class="solution">
+  <div class="title">Solution</div>
+  <p>Pizza(<i>x</i>) ∧ ∃<i>t</i> (hasTopping(<i>x</i>, <i>t</i>) ∧ CheeseTopping(<i>t</i>)). The free variable is what is asked
+  for, the bound variable <i>t</i> is a witness. Answers: margherita_1, napoletana_1, american_hot_1, mushroom_1,
+  unclosed_1 (Figure 3). A pattern given for the list <span class="code">toppings</span> describes one element: it is
+  the ∃.</p>
+  <p>The query computes the set of objects that satisfy the formula <i>in one interpretation</i>: it checks a model.
+  It does not ask whether the formula follows from a theory, that is, whether it is true in <i>every</i> model.</p>
+  <div class="figure"><img src="figures/act_1.svg" style="width:86%">
+  <div class="caption"><b>Figure 3.</b> The answers of 1(a), ringed.</div></div>
+</div>
+
+<p class="task"><b>(b)</b> <b>Some, only, none.</b> A pattern can only say <i>some topping is …</i>. For <i>every</i> and
+<i>no</i>, the topping gets a name and is quantified in <span class="code">.where(…)</span>. Each query introduces its own
+variables <span class="code">pizza = a(Pizza).from_(pizzas)</span> and
+<span class="code">topping = flat_variable(pizza.toppings)</span>:</p>
+<pre>Q1 = pizza.where(for_all(topping, HasType(topping, VegetableTopping)))
+Q2 = a(Pizza)(toppings=[a(MozzarellaTopping)(), a(TomatoTopping)()]).from_(pizzas)
+Q3 = pizza.where(not_(exists(topping, HasType(topping, CheeseTopping))))</pre>
+<p class="sub"><span class="mode">paper</span> Write each query as a formula. <span class="mode">predict</span> Mark which pizzas
+each returns. Then run 1(b).</p>
+
+<table class="small center wide only-worksheet">
+  <tr><th></th><th>margherita</th><th>napoletana</th><th>american_hot</th><th>mushroom</th><th>veggie</th><th>plain</th><th>unclosed</th><th style="width:38%">formula</th></tr>
   <tr><td>Q1</td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
   <tr><td>Q2</td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
   <tr><td>Q3</td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
 </table>
 
+<div class="figure">
+<svg viewBox="0 0 600 104" width="600" height="104" font-family="DejaVu Sans, sans-serif" font-size="9.5">
+  <g>
+    <rect x="2" y="2" width="190" height="100" rx="6" fill="#fff" stroke="#000"/>
+    <text x="97" y="18" text-anchor="middle" font-weight="bold">some: ∃</text>
+    <circle cx="55" cy="56" r="26" fill="#e8c38a" stroke="#b07c3c"/><circle cx="55" cy="56" r="20" fill="#fbeccb"/>
+    <circle cx="47" cy="50" r="6" fill="#f2c12e"/><circle cx="63" cy="50" r="6" fill="#43a047"/><circle cx="55" cy="64" r="6" fill="#43a047"/>
+    <text x="96" y="50">at least one</text><text x="96" y="63">dot is yellow</text>
+    <text x="97" y="95" text-anchor="middle" font-size="8.5">one witness is enough</text>
+  </g>
+  <g transform="translate(204,0)">
+    <rect x="2" y="2" width="190" height="100" rx="6" fill="#fff" stroke="#000"/>
+    <text x="97" y="18" text-anchor="middle" font-weight="bold">every: ∀</text>
+    <circle cx="42" cy="56" r="26" fill="#e8c38a" stroke="#b07c3c"/><circle cx="42" cy="56" r="20" fill="#fbeccb"/>
+    <circle cx="34" cy="50" r="6" fill="#43a047"/><circle cx="50" cy="50" r="6" fill="#43a047"/><circle cx="42" cy="64" r="6" fill="#43a047"/>
+    <text x="80" y="50">every dot is green</text>
+    <circle cx="150" cy="72" r="17" fill="#e8c38a" stroke="#b07c3c"/><circle cx="150" cy="72" r="12" fill="#fbeccb"/>
+    <text x="150" y="77" text-anchor="middle" font-size="13" font-weight="bold">?</text>
+    <text x="80" y="68">and here?</text>
+    <text x="97" y="95" text-anchor="middle" font-size="8.5">no counterexample allowed</text>
+  </g>
+  <g transform="translate(408,0)">
+    <rect x="2" y="2" width="190" height="100" rx="6" fill="#fff" stroke="#000"/>
+    <text x="97" y="18" text-anchor="middle" font-weight="bold">none: ¬∃</text>
+    <circle cx="55" cy="56" r="26" fill="#e8c38a" stroke="#b07c3c"/><circle cx="55" cy="56" r="20" fill="#fbeccb"/>
+    <circle cx="47" cy="50" r="6" fill="#43a047"/><circle cx="63" cy="50" r="6" fill="#c0392b"/><circle cx="55" cy="64" r="6" fill="#43a047"/>
+    <text x="96" y="50">no dot</text><text x="96" y="63">is yellow</text>
+    <text x="97" y="95" text-anchor="middle" font-size="8.5">what is not listed, is not there</text>
+  </g>
+</svg>
+<div class="caption"><b>Figure 4.</b> The three quantifier patterns, as the robot checks them on one pizza.</div>
+</div>
+
 <div class="solution">
   <div class="title">Solution</div>
-  <table class="small center">
-    <tr><th></th><th>margherita</th><th>napoletana</th><th>american_hot</th><th>mushroom</th><th>veggie</th><th>plain</th><th>unclosed</th><th>DL concept</th></tr>
-    <tr><td>Q1</td><td></td><td></td><td></td><td></td><td>×</td><td><b>×</b></td><td></td><td style="text-align:left"><code>Pizza ⊓ ∀hasTopping.VegetableTopping</code></td></tr>
-    <tr><td>Q2</td><td>×</td><td></td><td></td><td></td><td></td><td></td><td></td><td style="text-align:left"><code>Pizza ⊓ ∃hasTopping.Mozzarella ⊓ ∃hasTopping.Tomato<br>⊓ ∀hasTopping.(Mozzarella ⊔ Tomato)</code></td></tr>
-    <tr><td>Q3</td><td></td><td></td><td></td><td></td><td>×</td><td>×</td><td></td><td style="text-align:left"><code>Pizza ⊓ ¬∃hasTopping.CheeseTopping</code></td></tr>
+  <table class="small center full">
+    <tr><th></th><th>margherita</th><th>napoletana</th><th>american_hot</th><th>mushroom</th><th>veggie</th><th>plain</th><th>unclosed</th><th>formula</th></tr>
+    <tr><td>Q1</td><td></td><td></td><td></td><td></td><td>×</td><td><b>×</b></td><td></td><td style="text-align:left">Pizza(<i>x</i>) ∧ ∀<i>t</i> (hasTopping(<i>x</i>, <i>t</i>) → VegetableTopping(<i>t</i>))</td></tr>
+    <tr><td>Q2</td><td>×</td><td></td><td></td><td></td><td></td><td></td><td></td><td style="text-align:left">Pizza(<i>x</i>) ∧ ∃<i>t</i>₁∃<i>t</i>₂ (toppings(<i>x</i>) = [<i>t</i>₁, <i>t</i>₂] ∧ Mozzarella(<i>t</i>₁) ∧ Tomato(<i>t</i>₂))</td></tr>
+    <tr><td>Q3</td><td></td><td></td><td></td><td></td><td>×</td><td>×</td><td></td><td style="text-align:left">Pizza(<i>x</i>) ∧ ¬∃<i>t</i> (hasTopping(<i>x</i>, <i>t</i>) ∧ CheeseTopping(<i>t</i>))</td></tr>
   </table>
   <ul>
-    <li><b>Q1:</b> plain_1 has no toppings, so “every topping is a vegetable” is vacuously true: there is no
-        counterexample. It is p3 of Worksheet 2.</li>
-    <li><b>Q2:</b> a <i>list</i> of descriptions describes the whole list: a mozzarella, a tomato, nothing else.
-        That is “some + only”, the closure axiom of the Margherita in Worksheet 2, Task 2(b)iii, in one expression.
-        mushroom_1 has a third topping, unclosed_1 only one. (Strictly, the list also fixes the order and the
-        number, which DL cannot say.)</li>
-    <li><b>Q3:</b> nobody stated “veggie_1 has no cheese”. The query concludes it because no cheese is <i>known</i>:
-        negation as failure.</li>
+    <li><b>Q1:</b> plain_1 has no toppings, so the implication is true for every <i>t</i>: there is no counterexample
+        (vacuous truth). It is p3 of Worksheet 2.</li>
+    <li><b>Q2:</b> a list of patterns describes the whole list. This implies the closure of Worksheet 2 (some
+        mozzarella, some tomato, and nothing else) and is stronger: it also fixes the number and the order of the
+        toppings. mushroom_1 has a third topping, unclosed_1 only one.</li>
+    <li><b>Q3:</b> nobody stated “veggie_1 has no cheese”. The query concludes it because the stored list is taken to
+        be complete: what is not stored is false (closed-world assumption).</li>
   </ul>
 </div>
 
-<div class="think">Last week Protégé refused to classify <span class="code">UnclosedPizza</span> (a pizza with some mozzarella)
-as vegetarian. <span class="tag notebook">NOTEBOOK</span> Write the query <span class="code">vegetarian</span> (no meat, no fish).
-Is unclosed_1 an answer? Who is right, the query or the reasoner?</div>
+<div class="think"><b>Think.</b> Last week the OWL reasoner refused to classify <span class="code">UnclosedPizza</span> (a
+pizza with some mozzarella) as vegetarian. <span class="mode">notebook</span> Write the query
+<span class="code">vegetarian</span> (no meat and no fish topping). Is unclosed_1 an answer? Who is right, the query
+or the reasoner?</div>
 
 <div class="solution">
   <div class="title">Solution</div>
-  <pre>vegetarian = entity(p).where(not_(exists(t, or_(HasType(t, MeatTopping), HasType(t, FishTopping)))))</pre>
-  <p>Answers: margherita_1, mushroom_1, veggie_1, plain_1, unclosed_1. In DL:
-  <span class="code">Pizza ⊓ ¬∃hasTopping.(MeatTopping ⊔ FishTopping)</span>.</p>
-  <p>Both are right; they answer different questions. The query treats the objects as <i>complete</i>: what is not in
-  the list does not exist (closed world). The reasoner asks whether “vegetarian” holds in <i>every</i> model of what
-  was said; there are models in which the pizza also has ham (open world). For a robot looking at a pizza, the
-  closed-world reading is usually what it wants, as long as its knowledge of the pizza is complete.</p>
+  <pre style="margin-left:0">vegetarian = pizza.where(not_(exists(topping, or_(HasType(topping, MeatTopping), HasType(topping, FishTopping)))))</pre>
+  <p>Answers: margherita_1, mushroom_1, veggie_1, plain_1, unclosed_1; in logic
+  ¬∃<i>t</i> (hasTopping(<i>x</i>, <i>t</i>) ∧ (MeatTopping(<i>t</i>) ∨ FishTopping(<i>t</i>))).</p>
+  <p>Both are right; they answer different questions. The query evaluates the formula in the one interpretation the
+  robot has, where the list of toppings is complete (closed world). The reasoner asks whether “vegetarian”
+  <i>follows</i> from what was said, i.e. holds in every model of it; there are models in which the pizza also has
+  ham (open world). A robot looking at a pizza usually wants the closed-world answer, provided its knowledge of the
+  pizza is complete.</p>
 </div>
 
-<p class="part"><b>(c)</b> <b>Following the relations.</b> <span class="story" style="border:0;padding:0">Ada at table 1 does
-not like spicy food: “Is anything hot on my table?”</span> Write the orders that contain a pizza with a hot topping as a
-DL concept (roles hasPizza, hasTopping, hasSpiciness; the individual Hot). <span class="tag notebook">NOTEBOOK</span>
-Write <span class="code">hot_pizzas</span> and <span class="code">hot_orders</span>.</p>
+<p class="task"><b>(c)</b> <b>Following the relations.</b> <i>Ada at table 1 does not like spicy food: “Is anything hot
+on my table?”</i> Patterns nest as deep as the objects do. <span class="mode">paper</span> Write the orders that contain a
+pizza with a hot topping as a formula with the free variable <i>o</i>. <span class="mode">notebook</span> Write
+<span class="code">hot_pizzas</span> and <span class="code">hot_orders</span>.</p>
+<div class="answer only-worksheet"><div></div></div>
 
 <div class="figure">
 <svg viewBox="0 0 600 104" width="600" height="104" font-family="DejaVu Sans, sans-serif" font-size="9.5">
-  <defs><marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#555"/></marker></defs>
-  <rect x="4" y="38" width="96" height="30" rx="6" fill="#eef2f7" stroke="#7b8ba1"/><text x="52" y="57" text-anchor="middle">order of table 1</text>
+  <defs><marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#000"/></marker></defs>
+  <rect x="4" y="38" width="96" height="30" rx="5" fill="#fff" stroke="#000"/><text x="52" y="57" text-anchor="middle">order of table 1</text>
   <rect x="160" y="38" width="110" height="30" rx="15" fill="#fbeccb" stroke="#b07c3c"/><text x="215" y="57" text-anchor="middle">american_hot_1</text>
-  <rect x="340" y="8" width="130" height="26" rx="13" fill="#43a047"/><text x="405" y="25" text-anchor="middle" fill="white">HotGreenPepper</text>
-  <rect x="340" y="72" width="130" height="26" rx="13" fill="#43a047"/><text x="405" y="89" text-anchor="middle" fill="white">JalapenoPepper</text>
-  <rect x="530" y="38" width="64" height="30" rx="6" fill="#fff3e0" stroke="#ff6d00" stroke-width="2"/><text x="562" y="57" text-anchor="middle" font-weight="bold">HOT</text>
-  <g stroke="#555" stroke-width="1.4" fill="none" marker-end="url(#a2)">
+  <rect x="340" y="8" width="130" height="26" rx="13" fill="#43a047"/><text x="405" y="25" text-anchor="middle" fill="#fff">HotGreenPepper</text>
+  <rect x="340" y="72" width="130" height="26" rx="13" fill="#43a047"/><text x="405" y="89" text-anchor="middle" fill="#fff">JalapenoPepper</text>
+  <rect x="530" y="38" width="64" height="30" rx="5" fill="#fff" stroke="#000" stroke-width="1.5"/><text x="562" y="57" text-anchor="middle" font-weight="bold">hot</text>
+  <g stroke="#000" stroke-width="1.1" fill="none" marker-end="url(#a2)">
     <line x1="100" y1="53" x2="158" y2="53"/><line x1="270" y1="48" x2="338" y2="23"/><line x1="270" y1="58" x2="338" y2="84"/>
     <line x1="470" y1="23" x2="528" y2="47"/><line x1="470" y1="84" x2="528" y2="60"/>
   </g>
-  <text x="129" y="47" text-anchor="middle" font-style="italic" fill="#333">pizzas</text>
-  <text x="300" y="30" text-anchor="middle" font-style="italic" fill="#333">toppings</text>
-  <text x="300" y="86" text-anchor="middle" font-style="italic" fill="#333">toppings</text>
-  <text x="502" y="28" text-anchor="middle" font-style="italic" fill="#333">spiciness</text>
+  <text x="129" y="47" text-anchor="middle" font-style="italic">pizzas</text>
+  <text x="300" y="30" text-anchor="middle" font-style="italic">toppings</text>
+  <text x="300" y="86" text-anchor="middle" font-style="italic">toppings</text>
+  <text x="502" y="28" text-anchor="middle" font-style="italic">spiciness</text>
 </svg>
-<div class="caption"><b>Figure 5.</b> The path from Ada's order to a hot topping. There are two such paths.</div>
+<div class="caption"><b>Figure 5.</b> The paths from Ada's order to a hot topping. There are two.</div>
 </div>
 
-<p class="sub"><span class="tag predict">PREDICT</span> The notebook then asks for the witnesses themselves:
-<span class="code">set_of(o.guest, ordered, topping).where(topping.spiciness == Spiciness.HOT)</span>.
-How many answers does it have, while <span class="code">hot_orders</span> has one? Answer: ______</p>
+<p class="sub"><span class="mode">predict</span> The notebook then asks for the witnesses themselves:
+<span class="code">set_of(order.guest, pizza, topping).where(topping.spiciness == Spiciness.HOT)</span>.
+How many answers does it have, while <span class="code">hot_orders</span> has one? <span class="blank-line"></span></p>
 
 <div class="solution">
   <div class="title">Solution</div>
-  <p><span class="code">∃hasPizza.∃hasTopping.∃hasSpiciness.{Hot}</span>; concepts nest as deep as the objects do.</p>
-  <pre>hot_pizzas = a(Pizza)(toppings=a(PizzaTopping)(spiciness=Spiciness.HOT)).from_(pizzas)
+  <p>Order(<i>o</i>) ∧ ∃<i>x</i> (hasPizza(<i>o</i>, <i>x</i>) ∧ ∃<i>t</i> (hasTopping(<i>x</i>, <i>t</i>) ∧ spiciness(<i>t</i>) = hot))</p>
+  <pre style="margin-left:0">hot_pizzas = a(Pizza)(toppings=a(PizzaTopping)(spiciness=Spiciness.HOT)).from_(pizzas)
 hot_orders = an(Order)(pizzas=a(Pizza)(toppings=a(PizzaTopping)(spiciness=Spiciness.HOT))).from_(orders)</pre>
-  <p>Answers: american_hot_1 and the order of table 1. The second query has <b>two</b> answers, one per path of Figure
-  5. An answer is a <b>binding</b>, one value per free variable that makes the formula true. In
-  <span class="code">hot_orders</span> the pizza and the topping are bound by ∃, so only the order is free and it is
-  returned once, however many witnesses exist.</p>
+  <p>Answers: american_hot_1, and the order of table 1. The <span class="code">set_of</span> query has <b>two</b> answers,
+  one per path of Figure 5. An answer is an <b>assignment</b> of values to the free variables that makes the formula
+  true. In <span class="code">hot_orders</span>, <i>x</i> and <i>t</i> are bound by ∃: only <i>o</i> is free, and the
+  order is returned once, however many witnesses there are.</p>
 </div>
 
 <!-- ======================================================================= -->
-<div class="act describe" data-act="2">
-  <div><div class="name">ACT 2 · DESCRIBING</div><div class="quote">“Bring me the pizza with olives.”</div></div>
-  <div class="time">≈ 12 min<br><span class="progress"></span></div>
-</div>
+<div class="act"><span class="name">Act 2 · Describing</span><span class="quote">“Bring me the pizza with olives.”</span><span class="time">10 min</span></div>
 
 <p class="story">Commands do not name objects; they describe them. Ben at table 2 waves at the robot.</p>
 
 <div class="figure">
-<svg viewBox="0 0 600 92" width="600" height="92" font-family="DejaVu Sans, sans-serif" font-size="9.5">
+<svg viewBox="0 0 600 84" width="600" height="84" font-family="DejaVu Sans, sans-serif" font-size="9.5">
   <g>
-    <rect x="2" y="2" width="190" height="86" rx="8" fill="#f7f9fc" stroke="#9aa7b5"/>
-    <text x="97" y="22" text-anchor="middle" font-size="18" font-weight="bold" fill="#6a1b9a">0</text>
+    <rect x="2" y="2" width="190" height="80" rx="6" fill="#fff" stroke="#000"/>
+    <text x="97" y="22" text-anchor="middle" font-size="16" font-weight="bold">0</text>
     <text x="97" y="40" text-anchor="middle">objects fit</text>
-    <text x="97" y="58" text-anchor="middle" font-weight="bold">does not refer</text>
-    <text x="97" y="76" text-anchor="middle" fill="#555" font-family="DejaVu Sans Mono" font-size="8.5">NoSolutionFound</text>
+    <text x="97" y="57" text-anchor="middle" font-weight="bold">nothing to refer to</text>
+    <text x="97" y="73" text-anchor="middle" font-family="DejaVu Sans Mono" font-size="8">NoSolutionFound</text>
   </g>
   <g transform="translate(204,0)">
-    <rect x="2" y="2" width="190" height="86" rx="8" fill="#f3e5f5" stroke="#6a1b9a" stroke-width="1.5"/>
-    <text x="97" y="22" text-anchor="middle" font-size="18" font-weight="bold" fill="#6a1b9a">1</text>
+    <rect x="2" y="2" width="190" height="80" rx="6" fill="#fff" stroke="#000" stroke-width="1.8"/>
+    <text x="97" y="22" text-anchor="middle" font-size="16" font-weight="bold">1</text>
     <text x="97" y="40" text-anchor="middle">object fits</text>
-    <text x="97" y="58" text-anchor="middle" font-weight="bold">refers: bring it</text>
-    <text x="97" y="76" text-anchor="middle" fill="#555" font-family="DejaVu Sans Mono" font-size="8.5">the answer</text>
+    <text x="97" y="57" text-anchor="middle" font-weight="bold">refers: bring it</text>
+    <text x="97" y="73" text-anchor="middle" font-family="DejaVu Sans Mono" font-size="8">the answer</text>
   </g>
   <g transform="translate(408,0)">
-    <rect x="2" y="2" width="190" height="86" rx="8" fill="#f7f9fc" stroke="#9aa7b5"/>
-    <text x="97" y="22" text-anchor="middle" font-size="18" font-weight="bold" fill="#6a1b9a">2 or more</text>
+    <rect x="2" y="2" width="190" height="80" rx="6" fill="#fff" stroke="#000"/>
+    <text x="97" y="22" text-anchor="middle" font-size="16" font-weight="bold">2 or more</text>
     <text x="97" y="40" text-anchor="middle">objects fit</text>
-    <text x="97" y="58" text-anchor="middle" font-weight="bold">ambiguous: ask back</text>
-    <text x="97" y="76" text-anchor="middle" fill="#555" font-family="DejaVu Sans Mono" font-size="8.5">MultipleSolutionFound</text>
+    <text x="97" y="57" text-anchor="middle" font-weight="bold">ambiguous: ask back</text>
+    <text x="97" y="73" text-anchor="middle" font-family="DejaVu Sans Mono" font-size="8">MultipleSolutionFound</text>
   </g>
 </svg>
-<div class="caption"><b>Figure 6.</b> <span class="code">a(…)</span> accepts any object that fits.
-<span class="code">the(…)</span> claims that exactly one fits: a definite description.</div>
+<div class="caption"><b>Figure 6.</b> <span class="code">a(…)</span> accepts every object that fits;
+<span class="code">the(…)</span> claims that exactly one fits, and raises an exception otherwise.</div>
 </div>
 
-<p class="part"><b>(a)</b> <span class="tag predict">PREDICT</span> <b><i>a</i> or <i>the</i>?</b> For each command, how
-many pizzas fit, and what should the robot do? Then run Act 2(a).</p>
+<p class="task"><b>(a)</b> <b><i>a</i> or <i>the</i>?</b> <span class="mode">predict</span> For each command, how many
+pizzas fit, and what should the robot do? Then run 2(a).</p>
 
 <table class="small wide only-worksheet">
   <tr><th style="width:38%">Command</th><th style="width:22%">Pizzas that fit</th><th>What the robot does</th></tr>
@@ -383,69 +395,70 @@ many pizzas fit, and what should the robot do? Then run Act 2(a).</p>
 
 <div class="solution">
   <div class="title">Solution</div>
-  <table class="small wide">
+  <table class="small full">
     <tr><th style="width:38%">Command</th><th style="width:22%">Pizzas that fit</th><th>What the robot does</th></tr>
     <tr><td>“the pizza with ham”</td><td>none</td><td>reports that there is no such pizza (NoSolutionFound)</td></tr>
     <tr><td>“the pizza with fish”</td><td>napoletana_1</td><td>brings it</td></tr>
     <tr><td>“the pizza with olives”</td><td>napoletana_1, veggie_1</td><td>asks back (MultipleSolutionFound)</td></tr>
   </table>
-  <p>A definite description presupposes that exactly one object fits (Russell). If the presupposition fails, the
-  command does not refer, and picking one at random would be a guess, not obedience.</p>
+  <p>Russell analysed “the F is G” as ∃<i>x</i> (F(<i>x</i>) ∧ ∀<i>y</i> (F(<i>y</i>) → <i>y</i> = <i>x</i>) ∧ G(<i>x</i>)): there
+  is exactly one F, and it is G. If there is no F or more than one, Russell calls the sentence false; Strawson
+  argued that it is neither true nor false, because its presupposition fails. The robot, which refuses instead of
+  answering, takes Strawson's side: picking one pizza at random would be a guess, not obedience.</p>
 </div>
 
-<p class="part"><b>(b)</b> <b>Making a description precise.</b> The robot asks back: “The one with fish, or the one
-without?” Ben: “Without fish.” Write the precise description as a DL concept.
-<span class="tag notebook">NOTEBOOK</span> Write it in EQL so that <span class="code">the(…)</span> succeeds.</p>
+<p class="task"><b>(b)</b> <b>Making a description precise.</b> The robot asks back: “The one with fish, or the one
+without?” Ben: “Without fish.” <span class="mode">paper</span> Write the precise description as a formula.
+<span class="mode">notebook</span> Add the condition to <span class="code">the(Pizza)(toppings=a(OliveTopping)())</span>
+with <span class="code">.where(…)</span>, so that <span class="code">the</span> succeeds.</p>
+<div class="answer only-worksheet"><div></div></div>
 
 <div class="solution">
   <div class="title">Solution</div>
-  <p><span class="code">Pizza ⊓ ∃hasTopping.OliveTopping ⊓ ¬∃hasTopping.FishTopping</span>; its extension tonight is
-  {veggie_1}.</p>
-  <pre>olives_without_fish = the(entity(p).where(exists(t, HasType(t, OliveTopping)),
-                                          not_(exists(t2, HasType(t2, FishTopping)))))</pre>
-  <p>Two quantifiers need two variables over the toppings: one topping is an olive, and <i>no</i> topping is a fish.
-  A good question back names a property that one candidate has and the other has not; finding it is again a query over
-  the candidates.</p>
+  <p>Pizza(<i>x</i>) ∧ ∃<i>t</i> (hasTopping(<i>x</i>, <i>t</i>) ∧ OliveTopping(<i>t</i>)) ∧ ¬∃<i>t′</i> (hasTopping(<i>x</i>, <i>t′</i>) ∧
+  FishTopping(<i>t′</i>)); tonight only veggie_1 satisfies it.</p>
+  <pre style="margin-left:0">pizza = the(Pizza)(toppings=a(OliveTopping)()).from_(pizzas)
+topping = flat_variable(pizza.toppings)
+olives_without_fish = pizza.where(not_(exists(topping, HasType(topping, FishTopping))))</pre>
+  <p>Two quantifiers, two variables: the pattern names the olive, <span class="code">topping</span> ranges over all
+  toppings. A good question back names a property that one candidate has and the other has not.</p>
 </div>
 
-<div class="think">“The pizza with cheese” does not refer tonight (five fit). Does “the pizza with cheese <i>of table 3</i>”
-refer? What does this tell you about <span class="code">the</span>, and about how people resolve “the …” in everyday
-speech?</div>
+<div class="think"><b>Think.</b> “The pizza with cheese” does not refer tonight: five fit. Does “the pizza with
+cheese <i>of table 3</i>” refer? What does this tell you about <span class="code">the</span>, and about how people
+understand “the …” in everyday speech?</div>
 
 <div class="solution">
   <div class="title">Solution</div>
   <p>Yes: mushroom_1 is the only cheesy pizza Chidi ordered. Whether a description refers depends on the
-  <b>domain</b> it is evaluated in, not only on the description. People shrink the domain with context (the table, what
-  is in sight, what was just said) until “the” works; a robot has to add that context to the description explicitly.</p>
+  <b>domain</b> it is evaluated in, not only on the description. People narrow the domain by context (the table,
+  what is in sight, what was just said) until “the” works; a robot has to add that context to the description,
+  for example as <span class="code">.from_(order_of_table_3.pizzas)</span>.</p>
 </div>
 
 <!-- ======================================================================= -->
-<div class="act constrain" data-act="3">
-  <div><div class="name">ACT 3 · CONSTRAINING</div><div class="quote">“Ben must never get milk.”</div></div>
-  <div class="time">≈ 15 min<br><span class="progress"></span></div>
-</div>
+<div class="act"><span class="name">Act 3 · Constraining</span><span class="quote">“Ben must never get milk.”</span><span class="time">14 min</span></div>
 
-<p class="story">Ben avoids milk. Nowhere does it say “napoletana_1 contains milk”: it has to be <i>computed</i>.
-Mozzarella is a cheese, cheese contains milk, the pizza has that topping.</p>
+<p class="story">Ben avoids milk. Nowhere does it say “napoletana_1 contains milk”: it has to be computed. Mozzarella is
+a cheese, cheese contains milk, and the pizza has that topping.</p>
 
-<p class="part"><b>(a)</b> <span class="tag paper">PAPER</span> <b>Stored or computed?</b> In the notebook,
-<span class="code">symbolic_function</span> turns a Python function into vocabulary of the query language, and a
-<span class="code">Predicate</span> is a relation decided by a computation. For each relation below, is it stored in the
-objects (S) or computed (C)? <span class="tag notebook">NOTEBOOK</span> Complete <span class="code">allergens</span> and
-<span class="code">IsSafeFor</span>.</p>
+<p class="task"><b>(a)</b> <b>Stored or computed?</b> <span class="code">symbolic_function</span> turns a Python function
+into a symbol of the query language, and a <span class="code">Predicate</span> is a relation decided by a computation.
+<span class="mode">paper</span> For each fact below, is it stored in the objects (S) or computed (C)?
+<span class="mode">notebook</span> Complete <span class="code">allergens</span> and <span class="code">IsSafeFor</span>.</p>
 
-<table class="small center only-worksheet">
-  <tr><th>hasTopping(x, y)</th><th>guest(o) = g</th><th>MozzarellaTopping ⊑ CheeseTopping</th><th>contains(x, milk)</th><th>IsSafeFor(x, g)</th></tr>
+<table class="small center wide only-worksheet">
+  <tr><th>hasTopping(<i>x</i>, <i>t</i>)</th><th>guest(<i>o</i>) = <i>g</i></th><th>∀<i>t</i> (Mozzarella(<i>t</i>) → Cheese(<i>t</i>))</th><th>milk ∈ allergens(<i>x</i>)</th><th>IsSafeFor(<i>x</i>, <i>g</i>)</th></tr>
   <tr><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
 </table>
 
 <div class="solution">
   <div class="title">Solution</div>
-  <table class="small center">
-    <tr><th>hasTopping(x, y)</th><th>guest(o) = g</th><th>MozzarellaTopping ⊑ CheeseTopping</th><th>contains(x, milk)</th><th>IsSafeFor(x, g)</th></tr>
+  <table class="small center full">
+    <tr><th>hasTopping(<i>x</i>, <i>t</i>)</th><th>guest(<i>o</i>) = <i>g</i></th><th>∀<i>t</i> (Mozzarella(<i>t</i>) → Cheese(<i>t</i>))</th><th>milk ∈ allergens(<i>x</i>)</th><th>IsSafeFor(<i>x</i>, <i>g</i>)</th></tr>
     <tr><td>S: the list <code>toppings</code></td><td>S: the field <code>guest</code></td><td>S: the class hierarchy</td><td>C: <code>allergens</code></td><td>C: the predicate</td></tr>
   </table>
-  <pre>@symbolic_function
+  <pre style="margin-left:0">@symbolic_function
 def allergens(pizza):
     found = {Allergen.GLUTEN}
     if any(isinstance(t, CheeseTopping) for t in pizza.toppings): found.add(Allergen.MILK)
@@ -453,150 +466,154 @@ def allergens(pizza):
     return found
 
 class IsSafeFor(Predicate):
-    def __call__(self): return not (allergens(self.pizza) &amp; self.guest.avoids)</pre>
-  <p>In a query, stored and computed relations look the same. That a symbol's meaning is a program is called
-  procedural attachment. “What can Ben eat?” has the answers veggie_1 and plain_1.</p>
+    def __call__(self): return not (allergens(self.pizza) &amp; self.guest.avoids)
+
+pizza = a(Pizza).from_(pizzas)
+safe_for_ben = pizza.where(IsSafeFor(pizza, ben))       # veggie_1, plain_1</pre>
+  <p>In a query, stored and computed relations look the same. Giving a symbol a program as its meaning is called
+  <b>procedural attachment</b>.</p>
 </div>
 
-<p class="part"><b>(b)</b> <span class="tag paper">PAPER</span> <b>A constraint is a query that must have no answer.</b>
-The kitchen's rule is: every pizza of an order is safe for the guest of that order. Write it in first-order logic
-(use hasPizza, guest and IsSafeFor). A query cannot prove a ∀, but it can search for a counterexample: write that
-formula too.</p>
+<p class="task"><b>(b)</b> <b>A constraint is a query that must have no answer.</b> The kitchen's rule: every pizza of
+an order is safe for the guest of that order. <span class="mode">paper</span> Write it as a formula (hasPizza, guest,
+IsSafeFor), and then its negation, pushed inwards.</p>
+<div class="answer only-worksheet"><div></div><div></div></div>
 
 <div class="figure">
 <svg viewBox="0 0 600 96" width="600" height="96" font-family="DejaVu Sans, sans-serif" font-size="9.5">
-  <defs><marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#555"/></marker></defs>
-  <rect x="2" y="24" width="150" height="46" rx="8" fill="#fdecea" stroke="#c62828" stroke-width="1.5"/>
+  <defs><marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#000"/></marker></defs>
+  <rect x="2" y="24" width="150" height="46" rx="6" fill="#fff" stroke="#000"/>
   <text x="77" y="42" text-anchor="middle" font-weight="bold">constraint</text>
   <text x="77" y="59" text-anchor="middle">∀ … : safe</text>
-  <rect x="210" y="24" width="160" height="46" rx="8" fill="#fff" stroke="#c62828" stroke-width="1.5"/>
+  <rect x="210" y="24" width="160" height="46" rx="6" fill="#fff" stroke="#000"/>
   <text x="290" y="42" text-anchor="middle" font-weight="bold">query for counterexamples</text>
   <text x="290" y="59" text-anchor="middle">∃ … : not safe</text>
-  <rect x="440" y="2" width="156" height="38" rx="8" fill="#e8f5e9" stroke="#2e7d32"/>
-  <text x="518" y="18" text-anchor="middle" font-weight="bold" fill="#2e7d32">no answer</text>
+  <rect x="440" y="2" width="156" height="38" rx="6" fill="#fff" stroke="#000"/>
+  <text x="518" y="18" text-anchor="middle" font-weight="bold">no answer</text>
   <text x="518" y="32" text-anchor="middle">the constraint holds</text>
-  <rect x="440" y="54" width="156" height="38" rx="8" fill="#fdecea" stroke="#d50000"/>
-  <text x="518" y="70" text-anchor="middle" font-weight="bold" fill="#d50000">an answer</text>
+  <rect x="440" y="54" width="156" height="38" rx="6" fill="#fff" stroke="#000" stroke-width="1.8"/>
+  <text x="518" y="70" text-anchor="middle" font-weight="bold">an answer</text>
   <text x="518" y="84" text-anchor="middle">violated, and it says where</text>
-  <g stroke="#555" stroke-width="1.4" marker-end="url(#a3)"><line x1="152" y1="47" x2="208" y2="47"/>
+  <g stroke="#000" stroke-width="1.1" marker-end="url(#a3)"><line x1="152" y1="47" x2="208" y2="47"/>
     <line x1="370" y1="40" x2="438" y2="22"/><line x1="370" y1="54" x2="438" y2="72"/></g>
-  <text x="181" y="40" text-anchor="middle" fill="#333" font-size="8.5">¬∀ ≡ ∃¬</text>
+  <text x="181" y="40" text-anchor="middle" font-size="8.5">¬∀ ≡ ∃¬</text>
 </svg>
-<div class="caption"><b>Figure 7.</b> Checking a universal statement over one interpretation means looking for a counterexample.</div>
+<div class="caption"><b>Figure 7.</b> A universal statement is violated exactly when a counterexample exists.</div>
 </div>
 
-<p class="sub"><span class="tag predict">PREDICT</span> How many violations are there tonight? <span class="tag pen">PEN</span>
-Draw each one as a red line in Figure 1. <span class="tag notebook">NOTEBOOK</span> Write
-<span class="code">dangerous</span> and check.</p>
+<p class="sub"><span class="mode">predict</span> How many violations are there tonight? Draw each one as a line in
+Figure 1. <span class="mode">notebook</span> Write <span class="code">dangerous</span> and check.</p>
 
 <div class="solution">
   <div class="title">Solution</div>
-  <p>Constraint: <span class="code">∀o ∀x (hasPizza(o, x) → IsSafeFor(x, guest(o)))</span>.<br>
-  Counterexample: <span class="code">∃o ∃x (hasPizza(o, x) ∧ ¬IsSafeFor(x, guest(o)))</span>, with o and x left free so
-  that the answer names them:</p>
-  <pre>dangerous = set_of(o, ordered).where(not_(IsSafeFor(ordered, o.guest)))</pre>
-  <p>One violation: table 2, Ben, napoletana_1 (mozzarella, hence milk). Nobody wants to read this list; the kitchen
-  wants it to be empty. But when it is not, the binding is exactly the useful part: the robot knows which plate
-  not to serve.</p>
+  <p>Constraint: ∀<i>o</i> ∀<i>x</i> (hasPizza(<i>o</i>, <i>x</i>) → IsSafeFor(<i>x</i>, guest(<i>o</i>))).<br>
+  Negation: ∃<i>o</i> ∃<i>x</i> (hasPizza(<i>o</i>, <i>x</i>) ∧ ¬IsSafeFor(<i>x</i>, guest(<i>o</i>))). As a query, <i>o</i> and
+  <i>x</i> are left free, so that each answer names a culprit:</p>
+  <pre style="margin-left:0">order = an(Order).from_(orders)
+pizza = flat_variable(order.pizzas)
+dangerous = set_of(order, pizza).where(not_(IsSafeFor(pizza, order.guest)))</pre>
+  <p>One violation: table 2, Ben, napoletana_1 (mozzarella, hence milk). EQL could evaluate the ∀ directly, but the
+  answer would only be “false”; the counterexample query says which plate not to serve.</p>
   <div class="figure"><img src="figures/act_3.svg" style="width:86%">
   <div class="caption"><b>Figure 8.</b> The one violation of the constraint.</div></div>
 </div>
 
-<div class="think">In OWL you could state the kitchen's rule as an axiom. If the facts violate it, what does the reasoner
-report? What does the query report instead?</div>
+<div class="think"><b>Think.</b> Suppose the kitchen's rule were an axiom of last week's ontology. What would the
+reasoner report for tonight's facts? And if the mozzarella of the Napoletana had simply not been recorded?</div>
 
 <div class="solution">
   <div class="title">Solution</div>
-  <p>In OWL an axiom does not check the facts, it restricts the models. Facts that violate it leave no model: the
-  ontology is <b>inconsistent</b>, everything is entailed, and the reasoner says “inconsistent” (its explanation lists
-  the axioms involved). If a fact were merely missing, e.g. the mozzarella of the Napoletana, the open-world reasoner
-  would find no violation at all. The query treats the rule as an <i>integrity constraint</i> over one interpretation:
-  the knowledge base stays usable, and the answer is the culprit.</p>
+  <p>An axiom does not check facts; it restricts the models. Facts that contradict it leave no model at all: the
+  ontology is <b>inconsistent</b>, and from an inconsistent theory every formula follows. The reasoner reports the
+  inconsistency, not a plate. If the mozzarella had not been recorded, there would be no contradiction: in the open
+  world, the reasoner would rather conclude that the Napoletana is safe for Ben, because the axiom demands it. Used
+  as an <b>integrity constraint</b>, the same formula is checked against the one interpretation; the knowledge base
+  stays usable, and the answer is the culprit.</p>
 </div>
 
 <!-- ======================================================================= -->
-<div class="act infer" data-act="4">
-  <div><div class="name">ACT 4 · INFERRING</div><div class="quote">The kitchen writes warnings and labels.</div></div>
-  <div class="time">≈ 20 min<br><span class="progress"></span></div>
-</div>
+<div class="act act-4"><span class="name">Act 4 · Inferring</span><span class="quote">The kitchen writes warnings and labels.</span><span class="time">17 min</span></div>
 
-<p class="story">The menu must list the allergens of every pizza and a label: vegetarian, vegan or meaty. Instead of
-computing these anew for every question, the kitchen writes them down once, as new facts.</p>
+<p class="story">The menu must list the allergens of every pizza, and a label: vegetarian, vegan or meaty. Instead of
+computing these for every question, the kitchen writes them down once, as new facts.</p>
 
-<p class="part"><b>(a)</b> <b>A rule creates facts.</b> In EQL, <span class="code">inference(AllergenWarning)(pizza=D, …)</span>
-creates one new warning object for every pizza that fits the description D. The milk rule is</p>
-<pre>∀x (Pizza(x) ∧ ∃y (hasTopping(x, y) ∧ CheeseTopping(y)) → ∃w (Warning(w) ∧ about(w, x) ∧ allergen(w, milk)))</pre>
-<p class="sub"><span class="tag paper">PAPER</span> Which part of the formula is the description D, and which part
-does the rule build? <span class="tag predict">PREDICT</span> With a fish rule and a gluten rule (every pizza) added, how
-many warnings are there? ______ <span class="tag notebook">NOTEBOOK</span> Write both rules.</p>
+<p class="task"><b>(a)</b> <b>A rule creates facts.</b> <span class="code">inference(AllergenWarning)(pizza=D,
+allergen=Allergen.MILK)</span> creates one new warning object for every pizza that fits the description D. With D the
+description of Act 1(a), it is the rule</p>
+<pre>∀x (Pizza(x) ∧ ∃t (hasTopping(x, t) ∧ CheeseTopping(t)) → ∃w (Warning(w) ∧ about(w, x) ∧ allergen(w) = milk))</pre>
+<p class="sub"><span class="mode">paper</span> Which part of the formula is D, and which part does the rule build?
+<span class="mode">predict</span> With a fish rule and a gluten rule for every pizza added, how many warnings are there?
+<span class="blank-line"></span> <span class="mode">notebook</span> Write both rules.</p>
+<div class="answer only-worksheet"><div></div></div>
 
 <div class="solution">
   <div class="title">Solution</div>
-  <p>The left side of → is the body of the rule: exactly the description of Act 1(a). The right side is the head:
-  what is built for each answer.</p>
-  <pre>fishy = a(Pizza)(toppings=a(FishTopping)()).from_(pizzas)
+  <p>The left side of → is the <b>body</b> of the rule: exactly the description of 1(a). The right side is the
+  <b>head</b>: for every answer of the body, a new object <i>w</i> is created as the witness of ∃<i>w</i>.</p>
+  <pre style="margin-left:0">fishy = a(Pizza)(toppings=a(FishTopping)()).from_(pizzas)
 fish_warnings   = inference(AllergenWarning)(pizza=fishy, allergen=Allergen.FISH).tolist()
-gluten_warnings = inference(AllergenWarning)(pizza=p, allergen=Allergen.GLUTEN).tolist()</pre>
-  <p>13 warnings: 5 milk, 1 fish, 7 gluten. Producing all conclusions in advance is <b>forward chaining</b>
-  (materialisation), as HermiT did when it filled the inferred class hierarchy. The predicate of Act 3 is the
-  opposite: computed when asked (backward chaining). Both found Ben's problem.</p>
+gluten_warnings = inference(AllergenWarning)(pizza=a(Pizza).from_(pizzas), allergen=Allergen.GLUTEN).tolist()</pre>
+  <p>13 warnings: 5 milk, 1 fish, 7 gluten. Deriving all conclusions in advance is <b>forward chaining</b>
+  (materialisation). The predicate of Act 3 works the other way: it derives its conclusion only when a question
+  needs it, which is the strategy of <b>backward chaining</b>.</p>
 </div>
 
-<p class="part"><b>(b)</b> <span class="tag predict">PREDICT</span> <b>Rules with exceptions.</b> The chef's rule of thumb
-for the labels is a rule tree (Figure 9). Predict the label of each pizza, then run Act 4(b).</p>
+<p class="task"><b>(b)</b> <b>Rules with exceptions.</b> The chef's rule of thumb is a rule tree (Figure 9).
+<span class="mode">predict</span> Write the label of each pizza in the table, then run 4(b).</p>
 
 <div class="figure">
 <svg viewBox="0 0 600 150" width="600" height="150" font-family="DejaVu Sans, sans-serif" font-size="9.5">
-  <defs><marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#555"/></marker></defs>
-  <rect x="210" y="4" width="180" height="32" rx="16" fill="#fff" stroke="#2e7d32" stroke-width="1.5"/>
+  <defs><marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#000"/></marker></defs>
+  <rect x="210" y="4" width="180" height="32" rx="16" fill="#fff" stroke="#000"/>
   <text x="300" y="24" text-anchor="middle">no meat and no fish?</text>
-  <rect x="40" y="64" width="150" height="30" rx="6" fill="#e8f5e9" stroke="#2e7d32"/>
+  <rect x="40" y="64" width="150" height="30" rx="4" fill="#fff" stroke="#000" stroke-width="1.6"/>
   <text x="115" y="83" text-anchor="middle" font-weight="bold">Vegetarian</text>
-  <rect x="226" y="64" width="150" height="30" rx="16" fill="#fff" stroke="#2e7d32"/>
-  <text x="301" y="83" text-anchor="middle">… but no cheese either?</text>
-  <rect x="226" y="114" width="150" height="30" rx="6" fill="#e8f5e9" stroke="#2e7d32"/>
-  <text x="301" y="133" text-anchor="middle" font-weight="bold">Vegan <tspan font-weight="normal" fill="#555">(instead)</tspan></text>
-  <rect x="430" y="64" width="150" height="30" rx="16" fill="#fff" stroke="#2e7d32"/>
+  <rect x="226" y="64" width="150" height="30" rx="15" fill="#fff" stroke="#000"/>
+  <text x="301" y="83" text-anchor="middle">… and no cheese either?</text>
+  <rect x="226" y="114" width="150" height="30" rx="4" fill="#fff" stroke="#000" stroke-width="1.6"/>
+  <text x="301" y="133" text-anchor="middle" font-weight="bold">Vegan <tspan font-weight="normal">(instead)</tspan></text>
+  <rect x="430" y="64" width="150" height="30" rx="15" fill="#fff" stroke="#000"/>
   <text x="505" y="83" text-anchor="middle">has meat?</text>
-  <rect x="430" y="114" width="70" height="30" rx="6" fill="#e8f5e9" stroke="#2e7d32"/>
+  <rect x="430" y="114" width="70" height="30" rx="4" fill="#fff" stroke="#000" stroke-width="1.6"/>
   <text x="465" y="133" text-anchor="middle" font-weight="bold">Meaty</text>
-  <rect x="510" y="114" width="70" height="30" rx="6" fill="#f5f5f5" stroke="#9e9e9e" stroke-dasharray="4 3"/>
-  <text x="545" y="133" text-anchor="middle" fill="#757575">silent</text>
-  <g stroke="#555" stroke-width="1.3" marker-end="url(#a4)" fill="none">
+  <rect x="510" y="114" width="70" height="30" rx="4" fill="#fff" stroke="#000" stroke-dasharray="4 3"/>
+  <text x="545" y="133" text-anchor="middle">silent</text>
+  <g stroke="#000" stroke-width="1.1" marker-end="url(#a4)" fill="none">
     <path d="M 250 36 L 130 62"/><path d="M 190 79 L 224 79"/><path d="M 301 94 L 301 112"/>
     <path d="M 350 36 L 490 62"/><path d="M 480 94 L 466 112"/><path d="M 530 94 L 544 112"/>
   </g>
-  <g font-size="8.5" font-style="italic" fill="#2e7d32">
-    <text x="168" y="45">yes</text><text x="194" y="73">unless</text><text x="306" y="106">yes</text>
+  <g font-size="8.5" font-style="italic">
+    <text x="168" y="45">yes</text><text x="193" y="73">unless</text><text x="306" y="106">yes</text>
     <text x="420" y="45">otherwise</text><text x="458" y="106">yes</text><text x="542" y="106">no</text>
   </g>
 </svg>
-<div class="caption"><b>Figure 9.</b> A rule tree: a default conclusion, an exception (<i>unless</i>, EQL:
-<span class="code">refinement</span>) and an alternative (<i>otherwise</i>, EQL: <span class="code">alternative</span>).</div>
+<div class="caption"><b>Figure 9.</b> A rule tree: a default conclusion, an exception (<i>unless</i>, in EQL
+<span class="code">refinement</span>) and an alternative (<i>otherwise</i>, in EQL <span class="code">alternative</span>).</div>
 </div>
 
-<table class="small center only-worksheet">
+<table class="small center wide only-worksheet">
   <tr><th>margherita</th><th>napoletana</th><th>american_hot</th><th>mushroom</th><th>veggie</th><th>plain</th><th>unclosed</th></tr>
   <tr><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
 </table>
 
 <div class="solution">
   <div class="title">Solution</div>
-  <table class="small center">
+  <table class="small center full">
     <tr><th>margherita</th><th>napoletana</th><th>american_hot</th><th>mushroom</th><th>veggie</th><th>plain</th><th>unclosed</th></tr>
     <tr><td>Vegetarian</td><td><b>none</b></td><td>Meaty</td><td>Vegetarian</td><td>Vegan</td><td>Vegan</td><td>Vegetarian</td></tr>
   </table>
-  <p>napoletana_1 has fish: the first condition fails, and it has no meat, so the alternative fails as well. The rules
-  are <b>silent</b>. Silence is not “no”: they never concluded “not vegetarian”; reading it so is one more
-  closed-world step. The <i>unless</i> branch is an exception: it replaces the general conclusion where a more
-  specific one applies. Trees of this shape are known as ripple-down rules.</p>
+  <p>napoletana_1 has fish, so the first condition fails; it has no meat, so the alternative fails as well. The rules
+  are <b>silent</b>, and silence is not “no”: they never concluded “not vegetarian”; reading it so would be one more
+  closed-world step. The <i>unless</i> branch is an exception: a more specific conclusion replaces the general one.
+  Rule trees of this shape are known as ripple-down rules.</p>
   <div class="figure"><img src="figures/act_4.svg" style="width:86%">
-  <div class="caption"><b>Figure 10.</b> The derived labels and the milk and fish warnings (gluten, on every pizza, is left out).</div></div>
+  <div class="caption"><b>Figure 10.</b> The derived labels, and the milk and fish warnings (gluten, on every pizza, is
+  left out).</div></div>
 </div>
 
-<p class="part"><b>(c)</b> <span class="tag predict">PREDICT</span> <b>The world moves on.</b> <span class="story"
-style="border:0;padding:0">It is busy. The cook mixes up two tickets and grates parmesan over veggie_1, Ben's pizza.</span>
-What do the three sources say about veggie_1 now? Which of them protects Ben? Then run Act 4(c).</p>
+<p class="task"><b>(c)</b> <b>The world moves on.</b> <i>It is busy. The cook mixes up two tickets and grates parmesan
+over veggie_1, Ben's pizza.</i> <span class="mode">predict</span> What do the three sources below say about veggie_1
+now? Which of them protects Ben? Then run 4(c).</p>
 
 <table class="small wide only-worksheet">
   <tr><th>1. the constraint of Act 3, checked now</th><th>2. the milk warnings derived in (a)</th><th>3. the label of veggie_1, derived again</th></tr>
@@ -605,144 +622,131 @@ What do the three sources say about veggie_1 now? Which of them protects Ben? Th
 
 <div class="solution">
   <div class="title">Solution</div>
-  <table class="small wide">
+  <table class="small full">
     <tr><th>1. the constraint of Act 3, checked now</th><th>2. the milk warnings derived in (a)</th><th>3. the label of veggie_1, derived again</th></tr>
     <tr><td>two violations: napoletana_1 <i>and</i> veggie_1</td><td>no warning for veggie_1</td><td>Vegetarian (it was Vegan)</td></tr>
   </table>
   <ul>
     <li>Only the constraint protects Ben. It was written before the mistake and is evaluated against the world as it
         is <i>now</i>.</li>
-    <li>The warnings were concluded at a fixed moment and are stale until the rule runs again. <i>When</i> to
-        re-derive is the hard part of forward chaining; a robot, whose world changes all the time, faces it
-        constantly. Keeping derived facts in line with their reasons is called truth maintenance.</li>
+    <li>The stored warnings were derived at a fixed moment and are stale until the rule runs again. Keeping derived
+        facts in line with the facts they were derived from is called <b>truth maintenance</b>; a robot, whose world
+        changes all the time, needs it constantly.</li>
     <li>“Vegan” was withdrawn because a fact was <i>added</i>. Reasoning in which more knowledge can remove a
-        conclusion is <b>non-monotonic</b>. Classical logic and OWL are monotonic: what is entailed stays
-        entailed when axioms are added. Under the open-world assumption OWL would not have concluded “vegan” in the
-        first place.</li>
+        conclusion is <b>non-monotonic</b>; here it is so because the vegan rule relies on the absence of cheese.
+        Classical first-order logic is monotonic: what follows from a set of formulas still follows when formulas
+        are added.</li>
   </ul>
 </div>
 
 <!-- ======================================================================= -->
-<div class="act generate" data-act="5">
-  <div><div class="name">ACT 5 · GENERATING</div><div class="quote">“A pizza with mozzarella and tomato, please.”</div></div>
-  <div class="time">≈ 13 min<br><span class="progress"></span></div>
-</div>
+<div class="act"><span class="name">Act 5 · Generating</span><span class="quote">“A pizza with mozzarella and tomato, please.”</span><span class="time">10 min</span></div>
 
 <p class="story">Dana sits down at table 4 and orders. Her order is a description, exactly like those of Act 1. What is
 new is <i>who answers it</i>.</p>
 
-<p>A query in EQL is a symbolic object; nothing is computed when it is written. A <b>backend</b> is whatever answers it.
-The same description can be handed to different backends:</p>
+<p>A query in EQL is a symbolic object; nothing is computed when it is written. A <b>backend</b> is whatever answers it,
+and the same description can be handed to different backends:</p>
 
 <div class="figure">
-<svg viewBox="0 0 600 160" width="600" height="160" font-family="DejaVu Sans, sans-serif" font-size="9.5">
-  <rect x="190" y="62" width="220" height="36" rx="8" fill="#fff" stroke="#333" stroke-width="1.5"/>
-  <text x="300" y="78" text-anchor="middle" font-family="DejaVu Sans Mono" font-size="8.3">a(Pizza)(toppings=[a(Mozzarella…)(),</text>
-  <text x="300" y="91" text-anchor="middle" font-family="DejaVu Sans Mono" font-size="8.3">a(Tomato…)()])</text>
-  <g stroke="#ef6c00" stroke-width="1.6">
-    <line x1="190" y1="72" x2="160" y2="24"/><line x1="190" y1="88" x2="160" y2="136"/>
-    <line x1="410" y1="72" x2="440" y2="24"/><line x1="410" y1="88" x2="440" y2="136"/>
-    <line x1="300" y1="98" x2="300" y2="122"/>
+<svg viewBox="0 0 600 150" width="600" height="150" font-family="DejaVu Sans, sans-serif" font-size="9.5">
+  <rect x="190" y="57" width="220" height="36" rx="6" fill="#fff" stroke="#000" stroke-width="1.4"/>
+  <text x="300" y="73" text-anchor="middle" font-family="DejaVu Sans Mono" font-size="8.3">a(Pizza)(toppings=[a(Mozzarella…)(),</text>
+  <text x="300" y="86" text-anchor="middle" font-family="DejaVu Sans Mono" font-size="8.3">a(Tomato…)()])</text>
+  <g stroke="#000" stroke-width="1.1">
+    <line x1="190" y1="67" x2="182" y2="24"/><line x1="190" y1="83" x2="182" y2="126"/>
+    <line x1="410" y1="67" x2="418" y2="24"/><line x1="410" y1="83" x2="418" y2="126"/>
+    <line x1="300" y1="93" x2="300" y2="112"/>
   </g>
   <g>
-    <rect x="2" y="4" width="180" height="40" rx="8" fill="#e3f0fb" stroke="#1565c0"/>
-    <text x="92" y="20" text-anchor="middle" font-weight="bold">the live objects: select</text>
-    <text x="92" y="35" text-anchor="middle" fill="#555">margherita_1 (Act 1)</text>
-    <rect x="2" y="116" width="180" height="40" rx="8" fill="#e3f0fb" stroke="#1565c0"/>
-    <text x="92" y="132" text-anchor="middle" font-weight="bold">a recorded database: select</text>
-    <text x="92" y="147" text-anchor="middle" fill="#555">what was served last Thursday</text>
-    <rect x="418" y="4" width="180" height="40" rx="8" fill="#fff3e0" stroke="#ef6c00"/>
+    <rect x="2" y="4" width="180" height="40" rx="6" fill="#fff" stroke="#000"/>
+    <text x="92" y="20" text-anchor="middle" font-weight="bold">the objects: select</text>
+    <text x="92" y="35" text-anchor="middle" font-size="8.5">margherita_1 (Act 1)</text>
+    <rect x="2" y="106" width="180" height="40" rx="6" fill="#fff" stroke="#000"/>
+    <text x="92" y="122" text-anchor="middle" font-weight="bold">a database: select</text>
+    <text x="92" y="137" text-anchor="middle" font-size="8.5">what was served last Thursday</text>
+    <rect x="418" y="4" width="180" height="40" rx="6" fill="#fff" stroke="#000"/>
     <text x="508" y="20" text-anchor="middle" font-weight="bold">a generator: construct</text>
-    <text x="508" y="35" text-anchor="middle" fill="#555">a new pizza that fits</text>
-    <rect x="418" y="116" width="180" height="40" rx="8" fill="#fff3e0" stroke="#ef6c00"/>
-    <text x="508" y="132" text-anchor="middle" font-weight="bold">a probabilistic model: sample</text>
-    <text x="508" y="147" text-anchor="middle" fill="#555">the pizzas most likely wanted</text>
-    <rect x="215" y="122" width="170" height="34" rx="8" fill="#f3e5f5" stroke="#6a1b9a"/>
-    <text x="300" y="137" text-anchor="middle" font-weight="bold">a camera: look</text>
-    <text x="300" y="150" text-anchor="middle" fill="#555">where on the counter it is</text>
+    <text x="508" y="35" text-anchor="middle" font-size="8.5">a new pizza that fits</text>
+    <rect x="418" y="106" width="180" height="40" rx="6" fill="#fff" stroke="#000"/>
+    <text x="508" y="122" text-anchor="middle" font-weight="bold">a probabilistic model: sample</text>
+    <text x="508" y="137" text-anchor="middle" font-size="8.5">the pizzas most likely wanted</text>
+    <rect x="215" y="112" width="170" height="34" rx="6" fill="#fff" stroke="#000"/>
+    <text x="300" y="127" text-anchor="middle" font-weight="bold">a camera: look</text>
+    <text x="300" y="140" text-anchor="middle" font-size="8.5">where on the counter it is</text>
   </g>
 </svg>
-<div class="caption"><b>Figure 11.</b> The description is written once, symbolically. Selecting, constructing, sampling
-and looking are different ways of answering it.</div>
+<div class="caption"><b>Figure 11.</b> The description is written once, symbolically. Selecting, constructing,
+sampling and looking are different ways of answering it.</div>
 </div>
 
-<p class="part"><b>(a)</b> <span class="tag predict">PREDICT</span> <b>Select or construct?</b> What does the counter
-answer, and what does the kitchen answer? Then Dana adds “… and a green pepper, I don't mind how hot”
-(<span class="code">spiciness=...</span>, left open). How many pizzas fit that description? ______
-<span class="tag notebook">NOTEBOOK</span> Run Act 5.</p>
+<p class="task"><b>(a)</b> <b>Select or construct?</b> <span class="mode">predict</span> What does the counter answer,
+and what does the kitchen answer? Dana adds “… and a green pepper, I don't mind how hot”
+(<span class="code">spiciness=...</span>, left open). How many pizzas does the kitchen offer? <span class="blank-line"></span>
+<span class="mode">notebook</span> Run Act 5.</p>
 
-<div class="think">In Act 1, every answer was an object of the interpretation in Figure 1. What is an answer here? What
-does it mean, in the language of models, that Dana's open description has several answers?</div>
+<div class="think"><b>Think.</b> In Act 1, every answer was an object of the interpretation in Figure 1. What is an
+answer here? What does it mean, in terms of models, that Dana's open description has several answers?</div>
 
 <div class="solution">
   <div class="title">Solution</div>
-  <p>The counter (selecting backend) answers margherita_1; the kitchen (generative backend) answers a <i>new</i>
-  pizza with exactly these toppings. The open description has three answers, one per spiciness of the pepper.</p>
+  <p>The counter (a selecting backend) answers margherita_1; the kitchen (a generative backend) answers a <i>new</i>
+  pizza with exactly these toppings. The open description has three answers, one per value of
+  <span class="code">Spiciness</span>.</p>
   <p>An answer is now a new object that, added to the interpretation, makes the description true: answering means
-  <i>constructing a model</i> instead of checking one. An underspecified description has several models; the generator
-  enumerates them, a probabilistic backend would rank them by how likely they are. Everything Dana left open, the
-  kitchen fills in, just as a cook does.</p>
+  <i>constructing</i> a model instead of checking one. An underspecified description can be made true in several
+  ways; the generator enumerates them, a probabilistic backend would rank them by how likely they are.</p>
   <div class="figure"><img src="figures/act_5.svg" style="width:94%">
   <div class="caption"><b>Figure 12.</b> The world has grown: a pizza that did not exist at 19:30.</div></div>
 </div>
 
-<p class="part"><b>(b)</b> <span class="tag paper">PAPER</span> <b>One plan, many answerers.</b> The robot's next task is a
-plan with open slots, each written as a description:</p>
+<p class="task"><b>(b)</b> <b>One plan, many answerers.</b> The robot's next task is a plan with open slots, each
+written as a description:</p>
 
-<div class="box" style="font-size:10.5pt; line-height:1.9">
-  <b>Bring</b> <span style="border:1.5pt solid #333;padding:1pt 4pt;border-radius:4pt">① a pizza that is safe for Ben</span>,
-  lying <span style="border:1.5pt solid #333;padding:1pt 4pt;border-radius:4pt">② at some pose on the counter</span>,
-  <b>to</b> <span style="border:1.5pt solid #333;padding:1pt 4pt;border-radius:4pt">③ the table of Ben</span>,
-  <b>holding the plate with</b> <span style="border:1.5pt solid #333;padding:1pt 4pt;border-radius:4pt">④ a grasp that works</span>.
-  <b>If none is on the counter:</b> <span style="border:1.5pt solid #333;padding:1pt 4pt;border-radius:4pt">⑤ have one made</span>.
+<div class="box" style="line-height:1.9">
+  <b>Bring</b> <span style="border:0.8pt solid #000;padding:1pt 4pt">① a pizza that is safe for Ben</span>,
+  lying <span style="border:0.8pt solid #000;padding:1pt 4pt">② at some pose on the counter</span>,
+  <b>to</b> <span style="border:0.8pt solid #000;padding:1pt 4pt">③ the table of Ben</span>,
+  <b>holding the plate with</b> <span style="border:0.8pt solid #000;padding:1pt 4pt">④ a grasp that works</span>.
+  <b>If none is on the counter:</b> <span style="border:0.8pt solid #000;padding:1pt 4pt">⑤ have one made</span>.
 </div>
 
-<p class="sub">Which kind of backend should answer each slot? Choose from <b>K</b> a query over the knowledge base,
-<b>R</b> rules and predicates, <b>L</b> looking with the camera, <b>S</b> sampling from a probabilistic model,
-<b>G</b> a generator.</p>
+<p class="sub"><span class="mode">paper</span> Which kind of backend should answer each slot? Choose from <b>K</b> a query
+over the knowledge base, <b>R</b> rules and predicates, <b>L</b> looking with the camera, <b>S</b> sampling from a
+probabilistic model, <b>G</b> a generator.</p>
 
-<table class="small center only-worksheet">
+<table class="small center wide only-worksheet">
   <tr><th>① safe pizza</th><th>② its pose</th><th>③ Ben's table</th><th>④ grasp</th><th>⑤ have one made</th></tr>
   <tr><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
 </table>
 
 <div class="solution">
   <div class="title">Solution</div>
-  <table class="small center">
+  <table class="small center full">
     <tr><th>① safe pizza</th><th>② its pose</th><th>③ Ben's table</th><th>④ grasp</th><th>⑤ have one made</th></tr>
-    <tr><td>R (and K): IsSafeFor over the pizzas</td><td>L: the knowledge base knows <i>that</i> it is there, not exactly <i>where</i></td><td>K: the orders</td><td>S: sampled, then tried</td><td>G: Act 5(a)</td></tr>
+    <tr><td>R and K: IsSafeFor over the pizzas</td><td>L: the knowledge base knows <i>that</i> it is there, not exactly <i>where</i></td><td>K: the orders</td><td>S: sampled, then tried</td><td>G: Act 5(a)</td></tr>
   </table>
   <p>Several answers are defensible; what matters is that the plan does not say <i>who</i> answers. It states what it
-  wants, symbolically, and each slot is handed to whichever backend can answer that kind of description. This is how
-  the robot of our current research works: in a sorting task, the piece to pick up is <i>looked for</i> by perception,
+  needs, symbolically, and each slot goes to the backend that can answer that kind of description. The robots of
+  our current research work this way: in a sorting task, the piece to pick up is <i>looked for</i> by perception,
   where it stands is <i>read off</i> the robot's digital twin, the hole it fits through is <i>concluded</i> by rules,
-  and how to take hold of it is <i>sampled</i>; one plan, four backends. Separating the symbolic description from the
-  machinery that answers it is what lets one language serve questions, constraints, rules, plans and perception.</p>
+  and how to grasp it is <i>sampled</i>: one plan, four backends.</p>
 </div>
 
 <!-- ======================================================================= -->
-<div class="act prologue epilogue" data-act="6">
-  <div><div class="name">EPILOGUE</div><div class="quote">The whole picture</div></div>
-  <div class="time">≈ 5 min<br><span class="progress"></span></div>
-</div>
+<div class="act epilogue"><span class="name">Epilogue</span><span class="quote">The whole picture</span><span class="time">5 min</span></div>
 
 <div class="solution">
   <div class="figure"><img src="figures/whole.svg" style="width:96%">
   <div class="caption"><b>Figure 13.</b> What the robot knows at 20:00: the answers to the chef's question (ringed), the
-  violated constraint (red), the derived labels, and Dana's new pizza.</div></div>
+  violated constraint, the derived labels, and Dana's new pizza.</div></div>
 </div>
 
-<div class="box"><b>Take home.</b> One expression, a description, carried the whole evening. Its meaning is a concept, as in
-description logic; what you <i>do</i> with it decides whether it is a question, a reference, a constraint, the body of a
-rule or a specification. Next week: the same descriptions as the open parameters of robot plans.
-<span class="only-worksheet"><br><b>To think about at home:</b> a robot tidies a kitchen. Give one description of each
-of the five uses, with the backend that should answer it.</span></div>
-
-<p class="part"><b>(c)</b> <span class="tag paper">PAPER</span> <b>Your summary.</b> For each use of a description, give
-tonight's example and what it looks like in logic.</p>
+<p class="task"><b>(c)</b> <b>Your summary.</b> <span class="mode">paper</span> For each use of a description, give
+tonight's example and what it is in logic.</p>
 
 <table class="small wide only-worksheet">
-  <tr><th style="width:15%">Use</th><th style="width:23%">The question behind it</th><th style="width:30%">Tonight's example</th><th>In logic</th></tr>
+  <tr><th style="width:14%">Use</th><th style="width:23%">The question behind it</th><th style="width:28%">Tonight's example</th><th>In logic</th></tr>
   <tr><td>1 Ask</td><td>Which objects fit?</td><td class="blank tall"></td><td class="blank"></td></tr>
   <tr><td>2 Describe</td><td>Which one is meant?</td><td class="blank tall"></td><td class="blank"></td></tr>
   <tr><td>3 Constrain</td><td>Does anything violate it?</td><td class="blank tall"></td><td class="blank"></td></tr>
@@ -752,35 +756,21 @@ tonight's example and what it looks like in logic.</p>
 
 <div class="solution">
   <div class="title">Solution</div>
-  <table class="small wide">
-    <tr><th style="width:13%">Use</th><th style="width:22%">The question behind it</th><th style="width:30%">Tonight's example</th><th>In logic</th></tr>
-    <tr><td>1 Ask</td><td>Which objects fit?</td><td>the cheesy pizzas; who gets which hot topping</td><td>the extension of a concept, the satisfying assignments of a formula with free variables, in one interpretation</td></tr>
-    <tr><td>2 Describe</td><td>Which one is meant?</td><td>the pizza with olives and without fish</td><td>a definite description: the extension must have exactly one element</td></tr>
-    <tr><td>3 Constrain</td><td>Does anything violate it?</td><td>no pizza unsafe for its guest</td><td>a ∀ checked by searching for a counterexample ∃¬; an integrity constraint, not an axiom</td></tr>
-    <tr><td>4 Infer</td><td>What follows for each fit?</td><td>allergen warnings, menu labels with an exception</td><td>a rule body → head; forward chaining; with exceptions non-monotonic</td></tr>
-    <tr><td>5 Generate</td><td>What could fit?</td><td>Dana's pizza; the slots of the plan</td><td>model construction: new objects that make the description true</td></tr>
+  <table class="small full">
+    <tr><th style="width:13%">Use</th><th style="width:21%">The question behind it</th><th style="width:28%">Tonight's example</th><th>In logic</th></tr>
+    <tr><td>1 Ask</td><td>Which objects fit?</td><td>the cheesy pizzas; who gets which hot topping</td><td>the assignments to the free variables that satisfy a formula in one interpretation</td></tr>
+    <tr><td>2 Describe</td><td>Which one is meant?</td><td>the pizza with olives and without fish</td><td>a definite description: exactly one object satisfies the formula</td></tr>
+    <tr><td>3 Constrain</td><td>Does anything violate it?</td><td>no pizza unsafe for its guest</td><td>a ∀ checked through its counterexamples ∃¬; an integrity constraint, not an axiom</td></tr>
+    <tr><td>4 Infer</td><td>What follows for each fit?</td><td>allergen warnings, menu labels with an exception</td><td>a rule body → head, applied by forward chaining; with exceptions, non-monotonic</td></tr>
+    <tr><td>5 Generate</td><td>What could fit?</td><td>Dana's pizza; the slots of the plan</td><td>constructing new objects that make the description true</td></tr>
   </table>
-
 </div>
 
-
-
-<script>
-  // Fill every act header with a progress strip: done acts grey, the current act in its colour.
-  for (const act of document.querySelectorAll('.act[data-act]')) {
-    const strip = act.querySelector('.progress');
-    if (!strip) continue;
-    const current = Number(act.dataset.act);
-    let svg = '<svg width="96" height="14" viewBox="0 0 96 14" style="margin-top:3pt">';
-    for (let index = 1; index <= 5; index++) {
-      const x = 8 + (index - 1) * 20;
-      const fill = index === current ? '#fff' : index < current ? 'rgba(255,255,255,0.55)' : 'none';
-      svg += `<circle cx="${x}" cy="7" r="5.5" fill="${fill}" stroke="#fff" stroke-width="1.3"/>`;
-      if (index < 5) svg += `<line x1="${x + 6}" y1="7" x2="${x + 14}" y2="7" stroke="#fff" stroke-width="1"/>`;
-    }
-    strip.innerHTML = svg + '</svg>';
-  }
-</script>
+<div class="box"><b>Take home.</b> One expression, a description, carried the whole evening. Its meaning is a formula
+with free variables; what you <i>do</i> with it decides whether it is a question, a reference, a constraint, the body
+of a rule or a specification, and which backend answers it decides whether it is checked, computed or constructed.
+<span class="only-worksheet"><br><b>To think about at home:</b> a robot tidies a kitchen. Give one description for each
+of the five uses, and the backend that should answer it.</span></div>
 
 </body>
 </html>

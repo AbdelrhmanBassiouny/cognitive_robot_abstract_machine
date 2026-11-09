@@ -45,7 +45,8 @@ class Cell:
 
     tags: list[str] = field(default_factory=list)
     """
-    The cell tags; ``knowledge-base`` marks the cells :file:`make_figures.py` runs to build the same objects.
+    The cell tags: ``setup`` marks the installation cell, which :file:`make_figures.py` skips, and
+    ``knowledge-base`` the cells that build the objects of the pizzeria.
     """
 
     def to_json(self, solution: bool) -> dict:
@@ -91,43 +92,80 @@ def code(text: str, student: str | None = None, tags: list[str] | None = None) -
     return Cell(text, student_source=student, tags=tags or [])
 
 
-# %% prologue
+# %% setup and prologue
 
-PROLOGUE = [
+SETUP = [
     markdown(
         """
         # Worksheet 3 · Asking, Describing, Constraining, Inferring
 
-        **Advanced Methods of AI · WiSe 2026/2027 · the notebook of the tutorial**
+        *Advanced Methods of AI, WiSe 2026/2027 — the notebook of the tutorial.*
 
-        Last week you *represented* the pizza world: concepts in description logic, axioms in first-order logic,
-        the classes of `pizza.owl` as Python dataclasses. Today a robot *uses* that knowledge.
+        Last week you *represented* the pizza world in first-order logic and in Python. Today a service robot in a
+        pizzeria *uses* that knowledge. It does so with one kind of expression, a **description** written in the
+        Entity Query Language (EQL), and the evening shows five things it can do with one:
 
-        **The story.** Thursday evening in a small pizzeria in Bremen. A service robot works between the counter
-        and the tables. Seven pizzas are on the counter, three tables have ordered, and two guests must not eat
-        certain things. Everything the robot does tonight starts with one kind of expression, a *description*,
-        and the evening shows four things you can do with it:
-
-        | Act | The robot … | The description is … |
-        |:--|:--|:--|
-        | 1 | **asks** which pizzas have cheese | a *question*: which objects fit? |
-        | 2 | is told to bring *the* pizza with olives | a *reference*: which one object is meant? |
-        | 3 | must keep Ben away from milk | a *constraint*: nothing may fit |
-        | 4 | writes warnings and menu labels | the *condition of a rule*: for everything that fits, conclude … |
-        | 5 | gets an order for a pizza that does not exist yet | a *specification*: make something that fits |
+        | Act | Story | The description is used as … | Logic |
+        |:--|:--|:--|:--|
+        | 1 Asking | "Which pizzas have cheese?" | a question | ∃, ∀, ¬ over one interpretation |
+        | 2 Describing | "Bring me *the* pizza with olives." | a reference | definite descriptions |
+        | 3 Constraining | "Ben must never get milk." | a constraint | ∀ checked as ¬∃¬ |
+        | 4 Inferring | allergen warnings and menu labels | the body of a rule | rules, exceptions, non-monotonicity |
+        | 5 Generating | Dana orders a pizza that does not exist yet | a specification | constructing a model |
 
         **How to work.** Run the cells from top to bottom. Cells marked `TODO` are yours; every cell runs as it
-        is, so you can always continue. Before every cell marked **Predict**, write your prediction on the
-        worksheet. Every answer is also drawn: the robot's picture of the pizzeria, with the answers ringed in
-        magenta.
+        is, so you can always go on. Before a cell marked **Predict**, write your prediction on the worksheet.
+        Every answer is drawn as a picture of the pizzeria.
         """
     ),
     markdown(
         """
+        ## Setup
+
+        Run the next cell first. On a new machine it installs EQL (part of the library KRROOD) and the drawing
+        helper `kitchen_picture.py`. That takes one to two minutes; afterwards the cell does nothing.
+        """
+    ),
+    code(
+        """
+        import importlib.util, pathlib, subprocess, sys, urllib.request
+
+        SOURCE = "https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/archive/bda57fa931659b2046bf9d2c1216632e532f1249.zip"
+        WORKSHEET = "https://raw.githubusercontent.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/claude/serene-carson-x3hvx6/exercises/advanced_methods_of_ai/wise26"
+
+
+        def install(*arguments):
+            # Run pip in the Python of this notebook; show its output only if it fails.
+            result = subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", *arguments],
+                                    capture_output=True, text=True)
+            if result.returncode != 0:
+                print(result.stdout, result.stderr)
+                raise RuntimeError("The installation failed; see the output above.")
+
+
+        for helper in ("kitchen_picture.py", "requirements.txt"):
+            if not pathlib.Path(helper).exists():
+                urllib.request.urlretrieve(f"{WORKSHEET}/{helper}", helper)
+
+        if importlib.util.find_spec("krrood") is None:
+            print("installing EQL, this takes one to two minutes ...")
+            install("--no-deps", *(f"{package} @ {SOURCE}#subdirectory={package}"
+                                   for package in ("krrood", "random_events", "probabilistic_model")))
+            install("-r", "requirements.txt")
+        print("ready")
+        """,
+        tags=["setup"],
+    ),
+]
+
+PROLOGUE = [
+    markdown(
+        """
+        ---
         ## Prologue · The world the robot knows
 
-        The classes are those of `pizza.owl`, as in Worksheet 2. New are `Guest` and `Order`, because a
-        pizzeria needs to know who gets what. **Run the next three cells; do not edit them.**
+        The classes are those of `pizza.owl`, as in Worksheet 2. New are `Guest` and `Order`, because a pizzeria
+        needs to know who gets what. **Run the next three cells; do not edit them.**
         """
     ),
     code(
@@ -144,8 +182,8 @@ PROLOGUE = [
         )
         from krrood.entity_query_language.exceptions import MultipleSolutionFound, NoSolutionFound
         from krrood.entity_query_language.factories import (
-            a, an, the, variable, flat_variable, entity, set_of,
-            or_, not_, exists, for_all, contains, HasType,
+            a, an, the, flat_variable, entity, set_of,
+            or_, not_, exists, for_all, HasType,
             inference, deduced_variable, add, refinement, alternative,
         )
         from krrood.entity_query_language.predicate import Predicate, symbolic_function
@@ -295,9 +333,8 @@ PROLOGUE = [
     ),
     markdown(
         """
-        The next cell defines how the robot looks at answers. There is one helper for each way of using a
-        description: `show` for a question, `refer` for a reference, `check` for a constraint. Run it; reading it
-        is optional.
+        The next cell defines how the robot shows its answers: `show` for a question, `refer` for a reference,
+        `check` for a constraint. Run it; reading it is optional.
         """
     ),
     code(
@@ -369,9 +406,30 @@ PROLOGUE = [
     ),
     markdown(
         """
-        This picture *is* an interpretation in the sense of Worksheet 2. Its domain is the set of objects; the
-        extension of `CheeseTopping` is the set of yellow dots; the extension of `hasTopping` is the set of pairs
-        (pizza, dot on that pizza). A query is evaluated *in* this one interpretation.
+        This picture *is* an interpretation in the sense of first-order logic. Its domain is the set of objects
+        (pizzas, toppings, guests, orders); the extension of the predicate `CheeseTopping` is the set of yellow
+        dots; the extension of the relation `hasTopping` is the set of pairs (pizza, dot on that pizza). Every
+        query today is evaluated *in* this one interpretation.
+
+        ### EQL in one table
+
+        | EQL | Read it as | First-order logic |
+        |:--|:--|:--|
+        | `a(Pizza)` | some object of class `Pizza` | a variable `x` with `Pizza(x)` |
+        | `a(Pizza)(toppings=a(CheeseTopping)())` | a pizza with a cheese topping | `Pizza(x) ∧ ∃t (hasTopping(x, t) ∧ CheeseTopping(t))` |
+        | `a(Pizza)(toppings=[A, B])` | a pizza whose topping list is exactly `[A, B]` | the whole list, in this order |
+        | `a(PizzaTopping)(spiciness=Spiciness.HOT)` | a topping whose spiciness is hot | `spiciness(t) = hot` |
+        | `.from_(pizzas)` | … among these objects | the domain of `x` |
+        | `the(...)` | *the* … : exactly one fits | `∃x (φ(x) ∧ ∀y (φ(y) → y = x))` |
+        | `flat_variable(pizza.toppings)` | one topping of that pizza | a variable `t` with `hasTopping(x, t)` |
+        | `HasType(t, VegetableTopping)` | `t` is a vegetable topping | `VegetableTopping(t)` |
+        | `exists(t, φ)`, `for_all(t, φ)` | some / every `t` satisfies `φ` | `∃t φ`, `∀t φ` (over the toppings of `x`) |
+        | `not_(φ)`, `or_(φ, ψ)`, `.where(φ, ψ)` | not, or, and | `¬φ`, `φ ∨ ψ`, `φ ∧ ψ` |
+        | `set_of(x, t)` | return the pairs | the free variables of the formula |
+        | `.tolist()` | evaluate now | the set of satisfying assignments |
+
+        Writing a query computes nothing: it builds a symbolic expression. Only `.tolist()` (or iterating over
+        it) evaluates it. The helpers `show`, `refer` and `check` call `.tolist()` for you.
         """
     ),
 ]
@@ -385,13 +443,13 @@ ACT_1 = [
         ---
         ## Act 1 · Asking: *"Which pizzas have cheese?"*
 
-        The chef needs to know which pizzas have to go back into the oven for the cheese to melt.
+        The chef needs to know which pizzas go back into the oven for a minute, so that the cheese melts.
 
-        ### 1(a) A description is a concept
+        ### 1(a) A description is a formula with one free variable
 
-        `a(Pizza)(...)` describes an object by its attributes; `.from_(pizzas)` says where to look. A nested
-        description on the list `toppings` means *some element* of the list fits. Compare with the concept
-        `Pizza ⊓ ∃hasTopping.CheeseTopping` of Worksheet 2.
+        `a(Pizza)(...)` describes an object by its attributes, `.from_(pizzas)` says where to look. A pattern
+        given for the list `toppings` describes *one element* of the list, so it means *some topping fits*.
+        Read the query aloud: *"a pizza with a cheese topping, from the pizzas"*.
         """
     ),
     code(
@@ -402,30 +460,11 @@ ACT_1 = [
     ),
     markdown(
         """
-        The same question, written with variables. This is the first-order formula
-        `Pizza(p) ∧ ∃t (hasTopping(p, t) ∧ CheeseTopping(t))` almost symbol for symbol. The free variable `p` is
-        what is asked for.
-
-        | Description logic | First-order logic | EQL |
-        |:--|:--|:--|
-        | `Pizza` | `Pizza(p)` | `p = variable(Pizza, domain=pizzas)` |
-        | role filler | `hasTopping(p, t)` | `t = flat_variable(p.toppings)` |
-        | `∃hasTopping.C` | `∃t (hasTopping(p, t) ∧ C(t))` | `exists(t, HasType(t, C))` or `toppings=a(C)()` |
-        | `∀hasTopping.C` | `∀t (hasTopping(p, t) → C(t))` | `for_all(t, HasType(t, C))` |
-        | `¬`, `⊓`, `⊔` | `¬`, `∧`, `∨` | `not_(…)`, several conditions, `or_(…)` |
-        """
-    ),
-    code(
-        """
-        p = variable(Pizza, domain=pizzas)        # p ranges over the pizzas on the counter
-        t = flat_variable(p.toppings)             # t ranges over the toppings of p
-
-        show("cheesy pizzas, with variables", entity(p).where(exists(t, HasType(t, CheeseTopping))))
-        """
-    ),
-    markdown(
-        """
         ### 1(b) Some, only, none
+
+        A pattern can only say *some topping is …*. For *every* and *no*, give the topping a name with
+        `flat_variable` and quantify over it in `.where(...)`. Each query below introduces its own variables,
+        just as every formula binds its own.
 
         **Predict** on the worksheet which pizzas each query returns, then run the cell. Watch `plain_1` (no
         toppings) and `unclosed_1` (only mozzarella).
@@ -433,25 +472,30 @@ ACT_1 = [
     ),
     code(
         """
-        only_vegetables = entity(p).where(for_all(t, HasType(t, VegetableTopping)))
-        show("Q1  only vegetable toppings", only_vegetables)
+        pizza = a(Pizza).from_(pizzas)
+        topping = flat_variable(pizza.toppings)
+        only_vegetables = pizza.where(for_all(topping, HasType(topping, VegetableTopping)))
+        show("Q1  every topping is a vegetable", only_vegetables)
 
         exactly_these = a(Pizza)(toppings=[a(MozzarellaTopping)(), a(TomatoTopping)()]).from_(pizzas)
         show("Q2  the toppings are [a mozzarella, a tomato]", exactly_these)
 
-        no_cheese = entity(p).where(not_(exists(t, HasType(t, CheeseTopping))))
-        show("Q3  no cheese topping", no_cheese)
+        pizza = a(Pizza).from_(pizzas)
+        topping = flat_variable(pizza.toppings)
+        no_cheese = pizza.where(not_(exists(topping, HasType(topping, CheeseTopping))))
+        show("Q3  no topping is a cheese", no_cheese)
         """
     ),
     note(
         """
-        - **Q1** returns `veggie_1` and `plain_1`. `for_all` over an empty list is true (vacuous truth), exactly
-          as p3 was in `∀hasTopping.VegetableTopping` last week.
-        - **Q2** returns only `margherita_1`. A *list* of descriptions describes the *whole* list: a mozzarella,
-          then a tomato, nothing else. That is "some + only", the closure axiom of Worksheet 2, in one
-          expression. `mushroom_1` has a third topping, `unclosed_1` only one.
+        - **Q1** returns `veggie_1` and `plain_1`. `∀t (hasTopping(x, t) → VegetableTopping(t))` is true for a
+          pizza without toppings, because there is no counterexample (vacuous truth).
+        - **Q2** returns only `margherita_1`. A *list* of patterns describes the *whole* list: a mozzarella, then a
+          tomato, nothing else. This implies the closure of Worksheet 2 (some mozzarella, some tomato, and only
+          these), and is stronger: it also fixes the number and the order. `mushroom_1` has a third topping,
+          `unclosed_1` only one.
         - **Q3** returns `veggie_1` and `plain_1`. Nobody stated "veggie_1 has no cheese". The query concludes it
-          because no cheese is in the list: negation as failure, the closed-world assumption.
+          because no cheese is in the list: the stored list is taken to be complete (closed-world assumption).
         """
     ),
     markdown(
@@ -462,34 +506,38 @@ ACT_1 = [
     ),
     code(
         """
-        vegetarian = entity(p).where(
-            not_(exists(t, or_(HasType(t, MeatTopping), HasType(t, FishTopping))))
+        pizza = a(Pizza).from_(pizzas)
+        topping = flat_variable(pizza.toppings)
+        vegetarian = pizza.where(
+            not_(exists(topping, or_(HasType(topping, MeatTopping), HasType(topping, FishTopping))))
         )
         show("vegetarian pizzas", vegetarian)
         """,
         student="""
-        vegetarian = ...   # TODO
+        pizza = a(Pizza).from_(pizzas)
+        topping = flat_variable(pizza.toppings)
+        vegetarian = ...   # TODO: pizza.where(...)
         show("vegetarian pizzas", vegetarian)
         """,
     ),
     note(
         """
-        Five pizzas: `margherita_1`, `mushroom_1`, `veggie_1`, `plain_1`, `unclosed_1`. In DL:
-        `Pizza ⊓ ¬∃hasTopping.(MeatTopping ⊔ FishTopping)`; by De Morgan the same as
-        `for_all(t, not_(or_(...)))`, i.e. `∀hasTopping.¬(MeatTopping ⊔ FishTopping)`. `unclosed_1` is in, unlike
-        last week in Protégé: the list is taken to be complete. Use one `exists`: two quantifiers that share `t`
-        would no longer be independent of each other. Two quantifiers need two `flat_variable(p.toppings)`.
+        Five pizzas: `margherita_1`, `mushroom_1`, `veggie_1`, `plain_1`, `unclosed_1`. In logic:
+        `Pizza(x) ∧ ¬∃t (hasTopping(x, t) ∧ (MeatTopping(t) ∨ FishTopping(t)))`, equivalently
+        `∀t (hasTopping(x, t) → ¬MeatTopping(t) ∧ ¬FishTopping(t))`. `unclosed_1` is in, unlike last week in
+        Protégé: the query reads the list as complete, the OWL reasoner does not. Two separate quantifiers
+        would each need a topping variable of their own.
         """
     ),
     markdown(
         """
         ### 1(c) Following the relations
 
-        Ada at table 1 does not like spicy food. She asks the robot: *"Is anything hot on my table?"* Descriptions
-        nest as deep as the objects do: an order has pizzas, a pizza has toppings, a topping has a spiciness.
+        Ada at table 1 does not like spicy food: *"Is anything hot on my table?"* Patterns nest as deep as the
+        objects do: an order has pizzas, a pizza has toppings, a topping has a spiciness.
 
         **Your turn.** Write `hot_pizzas` (the pizzas with some topping whose spiciness is `Spiciness.HOT`) and
-        `hot_orders` (the orders with such a pizza).
+        `hot_orders` (the orders with such a pizza). Use `an(Order)`: the query should read as English.
         """
     ),
     code(
@@ -510,34 +558,37 @@ ACT_1 = [
     ),
     note(
         """
-        `american_hot_1` and the order of table 1. In DL: `Pizza ⊓ ∃hasTopping.∃hasSpiciness.{Hot}`, and for the
-        order `∃hasPizza.∃hasTopping.∃hasSpiciness.{Hot}`. The American Hot has two hot toppings and is still
-        returned once: an object fits a description or it does not, however many witnesses there are.
+        `american_hot_1` and the order of table 1:
+        `Order(o) ∧ ∃x (hasPizza(o, x) ∧ ∃t (hasTopping(x, t) ∧ spiciness(t) = hot))`.
+        The American Hot has two hot toppings and is still returned once: `x` and `t` are bound by `∃`, only `o` is
+        free, and an object either satisfies the formula or it does not.
         """
     ),
     markdown(
         """
         Ada wants to know *what exactly* is hot. Now the robot does not ask *whether* there is a witness, it asks
-        for the witnesses themselves. With several variables, an answer is a **binding**: one value per variable,
-        such that the condition holds.
+        for the witnesses themselves: the pizza and the topping become free variables, selected with `set_of`.
+        An answer is then a **binding**: one value per selected variable, such that the condition holds.
 
         **Predict:** how many answers, and why not one?
         """
     ),
     code(
         """
-        o = variable(Order, domain=orders)
-        ordered = flat_variable(o.pizzas)                 # a pizza of the order
-        topping = flat_variable(ordered.toppings)         # a topping of that pizza
+        order = an(Order).from_(orders)
+        pizza = flat_variable(order.pizzas)          # a pizza of that order
+        topping = flat_variable(pizza.toppings)      # a topping of that pizza
 
-        show("who gets which hot topping", set_of(o.guest, ordered, topping).where(topping.spiciness == Spiciness.HOT))
+        what_is_hot = set_of(order.guest, pizza, topping).where(topping.spiciness == Spiciness.HOT)
+        show("who gets which hot topping", what_is_hot)
         """
     ),
     note(
         """
-        Two bindings: (Ada, american_hot_1, HotGreenPepperTopping) and (Ada, american_hot_1, JalapenoPepperTopping).
-        In logic: the formula `hasPizza(o, x) ∧ hasTopping(x, y) ∧ hasSpiciness(y, hot)` with the free variables
-        o, x, y has two satisfying assignments. `hot_orders` hid `x` and `y` under `∃`, so it only had one.
+        Two bindings: (Ada, american_hot_1, HotGreenPepperTopping) and (Ada, american_hot_1,
+        JalapenoPepperTopping). The formula `hasPizza(o, x) ∧ hasTopping(x, t) ∧ spiciness(t) = hot` with the
+        free variables `x` and `t` has two satisfying assignments. `hot_orders` hid `x` and `t` under `∃`, so it
+        had only one answer.
         """
     ),
 ]
@@ -551,8 +602,8 @@ ACT_2 = [
         ---
         ## Act 2 · Describing: *"Bring me the pizza with olives."*
 
-        The robot gets a command. Commands do not say *which object*; they *describe* it. `a(...)` means any
-        object that fits; `the(...)` claims that *exactly one* object fits, and fails otherwise.
+        Commands do not say *which object*; they *describe* it. `a(...)` accepts every object that fits;
+        `the(...)` claims that *exactly one* object fits, and raises an exception otherwise.
 
         ### 2(a) *a* or *the*?
 
@@ -568,44 +619,42 @@ ACT_2 = [
     ),
     note(
         """
-        Ham: no pizza fits (`NoSolutionFound`). Fish: `napoletana_1`. Olives: `napoletana_1` and `veggie_1` fit
-        (`MultipleSolutionFound`). A definite description presupposes that exactly one object fits (Russell).
-        If that is false, the command does not refer, and picking one at random would be a guess.
+        Ham: no pizza fits (`NoSolutionFound`). Fish: `napoletana_1`. Olives: `napoletana_1` and `veggie_1`
+        (`MultipleSolutionFound`). Russell's analysis of *the F*: `∃x (F(x) ∧ ∀y (F(y) → y = x))`. When it
+        fails, Russell calls the sentence false; Strawson says it has no truth value, because its presupposition
+        fails. The robot, which refuses instead of answering, behaves like Strawson.
         """
     ),
     markdown(
         """
         ### 2(b) Making a description precise
 
-        The robot asks back: *"The one with fish or the one without?"* Ben answers: *"Without fish."*
+        The robot asks back: *"The one with fish or the one without?"* Ben: *"Without fish."*
 
-        **Your turn.** Write the description *"the pizza with olives and without fish"* so that `the` succeeds.
-        Two quantifiers need two variables over the toppings; `t2` is given.
+        **Your turn.** Start from *"the pizza with olives"* and add *"and no fish"* with `.where(...)`, so that
+        `the` succeeds.
         """
     ),
     code(
         """
-        t2 = flat_variable(p.toppings)
-
-        olives_without_fish = the(entity(p).where(
-            exists(t, HasType(t, OliveTopping)),
-            not_(exists(t2, HasType(t2, FishTopping))),
-        ))
+        pizza = the(Pizza)(toppings=a(OliveTopping)()).from_(pizzas)
+        topping = flat_variable(pizza.toppings)
+        olives_without_fish = pizza.where(not_(exists(topping, HasType(topping, FishTopping))))
         refer("the pizza with olives and without fish", olives_without_fish)
         """,
         student="""
-        t2 = flat_variable(p.toppings)
-
-        olives_without_fish = ...   # TODO: the(entity(p).where(...))
+        pizza = the(Pizza)(toppings=a(OliveTopping)()).from_(pizzas)
+        topping = flat_variable(pizza.toppings)
+        olives_without_fish = ...   # TODO: pizza.where(...)
         refer("the pizza with olives and without fish", olives_without_fish)
         """,
     ),
     note(
         """
-        `veggie_1`. In DL: `Pizza ⊓ ∃hasTopping.OliveTopping ⊓ ¬∃hasTopping.FishTopping`, and its extension in
-        tonight's interpretation has exactly one element. The robot's question was chosen so that the answer
-        splits the candidates: a property that one has and the other has not. Finding such a property is again a
-        query over the candidates.
+        `veggie_1`. In logic: `∃t (hasTopping(x, t) ∧ OliveTopping(t)) ∧ ¬∃t' (hasTopping(x, t') ∧
+        FishTopping(t'))`, and exactly one pizza satisfies it tonight. The pattern names the olive, the new
+        variable the topping that must not be a fish: two quantifiers, two variables. A good question back names a
+        property that one candidate has and the other has not.
         """
     ),
 ]
@@ -617,15 +666,15 @@ ACT_3 = [
     markdown(
         """
         ---
-        ## Act 3 · Constraining: *"Ben must not get milk."*
+        ## Act 3 · Constraining: *"Ben must never get milk."*
 
-        Ben avoids milk. Nothing in the knowledge base says *"napoletana_1 contains milk"*. It has to be
-        computed: mozzarella is a cheese, cheese contains milk, the pizza has that topping.
+        Ben avoids milk. Nothing in the knowledge base says *"napoletana_1 contains milk"*. It has to be computed:
+        mozzarella is a cheese, cheese contains milk, the pizza has that topping.
 
         ### 3(a) Knowledge as a function
 
         `symbolic_function` turns a Python function into vocabulary of the query language. Called on an object,
-        it returns its value; called on a variable, it becomes a condition that is evaluated for every binding.
+        it returns its value; called on a variable, it becomes a condition that is evaluated for every candidate.
         """
     ),
     code(
@@ -634,9 +683,10 @@ ACT_3 = [
         is_meaty = symbolic_function(is_meaty)
         is_vegetarian = symbolic_function(is_vegetarian)
 
-        print("on an object:  ", is_vegetarian(margherita_1))
-        print("on a variable: ", type(is_vegetarian(p)).__name__, "- not a truth value but a piece of a query")
-        show("vegetarian, with last week's function", entity(p).where(is_vegetarian(p)))
+        pizza = a(Pizza).from_(pizzas)
+        print("on an object: ", is_vegetarian(margherita_1))
+        print("on a variable:", type(is_vegetarian(pizza)).__name__, "- a piece of a query, not a truth value")
+        show("vegetarian, with last week's function", pizza.where(is_vegetarian(pizza)))
         """
     ),
     markdown(
@@ -657,8 +707,8 @@ ACT_3 = [
             return found
 
 
-        for pizza in pizzas:
-            print(f"{pizza.name:16}", sorted(allergen.value for allergen in allergens(pizza)))
+        for each_pizza in pizzas:
+            print(f"{each_pizza.name:16}", sorted(allergen.value for allergen in allergens(each_pizza)))
         """,
         student="""
         @symbolic_function
@@ -668,13 +718,13 @@ ACT_3 = [
             return found
 
 
-        for pizza in pizzas:
-            print(f"{pizza.name:16}", sorted(allergen.value for allergen in allergens(pizza)))
+        for each_pizza in pizzas:
+            print(f"{each_pizza.name:16}", sorted(allergen.value for allergen in allergens(each_pizza)))
         """,
     ),
     markdown(
         """
-        ### 3(b) A relation that is computed, and a constraint
+        ### 3(b) A computed relation
 
         `hasTopping` is *stored*: it is the list `toppings`. *"Pizza x is safe for guest g"* is a relation as well,
         but stored nowhere: it is computed from both. A `Predicate` is such a relation. Its fields are its
@@ -682,7 +732,8 @@ ACT_3 = [
         English.
 
         **Your turn.** Complete `__call__`: a pizza is safe for a guest if it contains none of the allergens the
-        guest avoids.
+        guest avoids. Note that the query uses *one* variable `pizza` twice: in `.where` and as the argument of the
+        predicate. Writing `a(Pizza)` a second time would introduce a second, unrelated pizza.
         """
     ),
     code(
@@ -700,7 +751,8 @@ ACT_3 = [
                 return clause(Noun(fields["pizza"]), Copula(), Adjective("safe"), Prepositions.FOR, Noun(fields["guest"]))
 
 
-        show("what can Ben eat?", entity(p).where(IsSafeFor(p, ben)))
+        pizza = a(Pizza).from_(pizzas)
+        show("what can Ben eat?", pizza.where(IsSafeFor(pizza, ben)))
         """,
         student="""
         @dataclass(eq=False)
@@ -716,38 +768,45 @@ ACT_3 = [
                 return clause(Noun(fields["pizza"]), Copula(), Adjective("safe"), Prepositions.FOR, Noun(fields["guest"]))
 
 
-        show("what can Ben eat?", entity(p).where(IsSafeFor(p, ben)))
+        pizza = a(Pizza).from_(pizzas)
+        show("what can Ben eat?", pizza.where(IsSafeFor(pizza, ben)))
         """,
     ),
     markdown(
         """
-        That was a *question*. The kitchen also needs a *rule that must never be broken*:
+        ### 3(c) A constraint is a query that must have no answer
 
-        > Every pizza of an order is safe for the guest of that order.
+        That was a *question*. The kitchen also has a *rule that must never be broken*:
+
+        > Every pizza of an order is safe for the guest of that order:
         > `∀o ∀x (hasPizza(o, x) → IsSafeFor(x, guest(o)))`
 
-        A query cannot *prove* a `∀`. It can search for a counterexample: `∃o ∃x (hasPizza(o, x) ∧ ¬IsSafeFor(…))`.
-        The constraint holds exactly when that query has **no** answer.
+        Its negation is `∃o ∃x (hasPizza(o, x) ∧ ¬IsSafeFor(x, guest(o)))`. The constraint holds exactly when this
+        query has **no** answer, and if it has one, the answer names the culprit.
 
         **Your turn.** Write `dangerous`: the pairs of an order and one of its pizzas that is not safe for the
-        guest of that order. Reuse `o` and `ordered` from Act 1. **Predict** the answer first.
+        guest of that order. **Predict** the answer first.
         """
     ),
     code(
         """
-        dangerous = set_of(o, ordered).where(not_(IsSafeFor(ordered, o.guest)))
+        order = an(Order).from_(orders)
+        pizza = flat_variable(order.pizzas)
+        dangerous = set_of(order, pizza).where(not_(IsSafeFor(pizza, order.guest)))
         check("every pizza is safe for its guest", dangerous)
         """,
         student="""
-        dangerous = ...   # TODO
+        order = an(Order).from_(orders)
+        pizza = flat_variable(order.pizzas)
+        dangerous = ...   # TODO: set_of(order, pizza).where(...)
         check("every pizza is safe for its guest", dangerous)
         """,
     ),
     note(
         """
-        One violation: table 2, Ben, `napoletana_1` (mozzarella, so milk). The query does not only say *that*
-        the constraint is broken, the binding says *where*: the robot knows which plate not to serve. `o.guest`
-        is a path from the order to its guest: a relation followed, not a join written.
+        One violation: table 2, Ben, `napoletana_1` (mozzarella, hence milk). The query does not only say *that*
+        the constraint is broken; the binding says *where*, so the robot knows which plate not to serve.
+        `order.guest` follows a relation from the order to its guest, like the term `guest(o)` in the formula.
         """
     ),
 ]
@@ -764,14 +823,14 @@ ACT_4 = [
         ### 4(a) A rule creates facts
 
         The predicate of Act 3 computes its answer every time it is asked. A **rule** writes its conclusion down
-        as new objects that later queries can use. `inference(AllergenWarning)(...)` creates one warning for
-        every object that fits the description inside it: the description is the body of the rule, the new
-        object its head.
+        once, as new objects that later queries can use. `inference(AllergenWarning)(pizza=..., allergen=...)`
+        creates one warning for every pizza that fits the description given for `pizza`: the description is the
+        body of the rule, the new warning its head.
 
-        > `∀x (Pizza(x) ∧ ∃y (hasTopping(x, y) ∧ CheeseTopping(y)) → ∃w (Warning(w) ∧ about(w, x) ∧ allergen(w, milk)))`
+        > `∀x (Pizza(x) ∧ ∃t (hasTopping(x, t) ∧ CheeseTopping(t)) → ∃w (Warning(w) ∧ about(w, x) ∧ allergen(w) = milk))`
 
         **Your turn.** The milk rule is given. Write the rule for fish, and the rule that *every* pizza carries a
-        gluten warning (a rule without a condition: use the variable `p`). **Predict** the number of warnings.
+        gluten warning (its body is just `a(Pizza).from_(pizzas)`). **Predict** the number of warnings.
         """
     ),
     code(
@@ -789,7 +848,7 @@ ACT_4 = [
 
         fishy = a(Pizza)(toppings=a(FishTopping)()).from_(pizzas)
         fish_warnings = inference(AllergenWarning)(pizza=fishy, allergen=Allergen.FISH).tolist()
-        gluten_warnings = inference(AllergenWarning)(pizza=p, allergen=Allergen.GLUTEN).tolist()
+        gluten_warnings = inference(AllergenWarning)(pizza=a(Pizza).from_(pizzas), allergen=Allergen.GLUTEN).tolist()
 
         warnings = milk_warnings + fish_warnings + gluten_warnings
         print(len(warnings), "warnings")
@@ -817,9 +876,11 @@ ACT_4 = [
     ),
     note(
         """
-        13 warnings: 5 milk, 1 fish, 7 gluten. The warnings are objects now, part of the knowledge base, and
-        could be queried, counted or joined like pizzas. Producing all conclusions in advance is *forward
-        chaining* (materialisation); it is what HermiT did when it filled the inferred class hierarchy.
+        13 warnings: 5 milk, 1 fish, 7 gluten. The head `∃w` is why new objects appear: for every answer of the
+        body, the rule creates a witness. The warnings are now part of the knowledge base and can be queried like
+        pizzas. Deriving all conclusions in advance is *forward chaining* (materialisation); deriving a
+        conclusion only when a question needs it, as the predicate of Act 3 does, is the strategy of *backward
+        chaining*.
         """
     ),
     markdown(
@@ -831,9 +892,10 @@ ACT_4 = [
         > A pizza without meat and fish is **vegetarian**, *unless* it has no cheese either: then it is
         > **vegan**. *Otherwise*, if it has meat, it is **meaty**.
 
-        A rule tree states exactly this. Inside `with query:` the first `add` is the default conclusion,
-        `refinement(condition)` is the *unless* (it replaces the conclusion where the condition also holds), and
-        `alternative(condition)` is the *otherwise* (tried where the query's own condition fails).
+        A rule tree states exactly this. `deduced_variable(Label)` stands for the conclusion; inside `with rules:`,
+        the first `add` is the default conclusion, `refinement(condition)` is the *unless* (it replaces the
+        conclusion where its condition also holds), and `alternative(condition)` is the *otherwise* (tried where
+        the first condition fails).
 
         **Predict** the label of each pizza on the worksheet, then run the cell.
         """
@@ -853,15 +915,16 @@ ACT_4 = [
 
 
         def label_pizzas():
+            pizza = a(Pizza).from_(pizzas)
             label = deduced_variable(Label)
-            query = entity(label).where(is_vegetarian(p))
-            with query:
-                add(label, inference(Vegetarian)(pizza=p))
-                with refinement(not_(is_cheesy(p))):
-                    add(label, inference(Vegan)(pizza=p))
-                with alternative(is_meaty(p)):
-                    add(label, inference(Meaty)(pizza=p))
-            return query.tolist()
+            rules = entity(label).where(is_vegetarian(pizza))
+            with rules:
+                add(label, inference(Vegetarian)(pizza=pizza))
+                with refinement(not_(is_cheesy(pizza))):
+                    add(label, inference(Vegan)(pizza=pizza))
+                with alternative(is_meaty(pizza)):
+                    add(label, inference(Meaty)(pizza=pizza))
+            return rules.tolist()
 
 
         labels = label_pizzas()
@@ -872,17 +935,17 @@ ACT_4 = [
     note(
         """
         Vegetarian: `margherita_1`, `mushroom_1`, `unclosed_1`. Vegan: `veggie_1`, `plain_1`. Meaty:
-        `american_hot_1`. **No label:** `napoletana_1`: it has fish, so it is not vegetarian, and no meat, so the
-        alternative does not apply. The rules are *silent* about it. Silence is not "no": they never concluded
-        "not vegetarian". The refinement is an *exception*: the general conclusion is replaced where a more
-        specific one applies. Trees of this shape are called ripple-down rules.
+        `american_hot_1`. **No label:** `napoletana_1` has fish, so the first condition fails, and no meat, so the
+        alternative fails as well. The rules are *silent* about it. Silence is not "no": they never concluded
+        "not vegetarian". The refinement is an *exception*: a more specific conclusion replaces the general one.
+        Trees of this shape are known as ripple-down rules.
         """
     ),
     markdown(
         """
         ### 4(c) The world moves on
 
-        It is busy. The cook mixes up two tickets and grates parmesan over `veggie_1`, the pizza for Ben.
+        It is busy. The cook mixes up two tickets and grates parmesan over `veggie_1`, Ben's pizza.
 
         **Predict** what each of the three outputs says, then run the cell. Which of them protects Ben?
         """
@@ -892,19 +955,19 @@ ACT_4 = [
         veggie_1.toppings.append(ParmesanTopping())
 
         check("1. the constraint of Act 3, evaluated now", dangerous)
-        print("2. milk warnings, derived in 4(a):", milk_warnings)
+        print("2. the milk warnings derived in 4(a):", milk_warnings)
         print("3. the label of veggie_1, derived again:", [label for label in label_pizzas() if label.pizza is veggie_1])
         """
     ),
     note(
         """
-        1. The constraint now reports **two** violations: `napoletana_1` and `veggie_1`. It was written long
-           before the parmesan; it is evaluated against the state of the world at the moment it is asked.
-        2. The milk warnings do not mention `veggie_1`. They were concluded at a fixed moment and are stale now,
-           until the rule runs again. Deciding *when* to re-derive is the hard part of forward chaining.
+        1. The constraint reports **two** violations now: `napoletana_1` and `veggie_1`. It was written before the
+           mistake, and it is evaluated against the world as it is at the moment it is asked.
+        2. The stored milk warnings do not mention `veggie_1`. They were derived at a fixed moment and are stale
+           until the rule runs again. Keeping derived facts in line with their reasons is *truth maintenance*.
         3. `veggie_1` was `Vegan`, now it is `Vegetarian`. A new fact *removed* a conclusion: the reasoning is
-           **non-monotonic**. Classical logic and OWL are monotonic: what is entailed stays entailed when axioms
-           are added. Under the open-world assumption OWL would never have concluded "vegan" in the first place.
+           **non-monotonic**, because the vegan rule relies on the absence of cheese. Classical first-order
+           logic is monotonic: what follows from a set of formulas still follows when formulas are added.
         """
     ),
     code(
@@ -922,18 +985,19 @@ ACT_5 = [
     markdown(
         """
         ---
-        ## Act 5 · One description, many ways to answer it
+        ## Act 5 · Generating: *"A pizza with mozzarella and tomato, please."*
 
         Dana sits down at table 4 and orders *"a pizza with mozzarella and tomato, nothing else"*. That is a
         description, exactly like those of Act 1. What changes is *who answers it*. A query is a symbolic object;
-        a **backend** is something that answers it. The same description can be answered by different backends:
+        a **backend** is something that answers it. The one you used so far *selects* existing objects that
+        fit; a generative backend *constructs* a new object that fits. Below, one and the same `wish` goes to both.
         """
     ),
     code(
         """
-        wish = a(Pizza)(toppings=[a(MozzarellaTopping)(), a(TomatoTopping)()])
+        wish = a(Pizza)(toppings=[a(MozzarellaTopping)(), a(TomatoTopping)()]).from_(pizzas)
 
-        on_the_counter = list(EntityQueryLanguageBackend().evaluate(wish.from_(pizzas)))
+        on_the_counter = list(EntityQueryLanguageBackend().evaluate(wish))
         print("selected from the counter:", on_the_counter)
 
         from_the_kitchen = list(EntityQueryLanguageGenerativeBackend().evaluate(wish))
@@ -943,7 +1007,7 @@ ACT_5 = [
     markdown(
         """
         A description usually leaves things open. Dana adds: *"and a green pepper, I don't mind how hot"*. `...`
-        marks what she left open. **Predict:** how many pizzas fit this description?
+        marks what she left open. **Predict:** how many pizzas does the kitchen offer?
         """
     ),
     code(
@@ -961,10 +1025,10 @@ ACT_5 = [
     ),
     note(
         """
-        Three pizzas, one per spiciness: the description has three *models* over this domain, and the generator
-        constructs them. In Act 1 the description *selected* among existing objects; here it is a
-        *specification*, and the answers are new objects. Act 5(b) on the worksheet goes one step further: a
-        robot plan whose open slots are answered by different backends.
+        Three pizzas, one per value of `Spiciness`: the generator fills the open slot in every possible way. In
+        Act 1 the description *selected* among existing objects (checking a given interpretation); here it is a
+        *specification*, and an answer is a new object that makes it true (constructing a model). Act 5(b) on the
+        worksheet goes one step further: a robot plan whose open slots are answered by different backends.
         """
     ),
     markdown(
@@ -1017,7 +1081,7 @@ def main() -> None:
     """
     Write both notebooks next to the folder of this script.
     """
-    cells = PROLOGUE + ACT_1 + ACT_2 + ACT_3 + ACT_4 + ACT_5
+    cells = SETUP + PROLOGUE + ACT_1 + ACT_2 + ACT_3 + ACT_4 + ACT_5
     folder = Path(__file__).resolve().parent.parent
     for solution, name in (
         (False, "03-pizza_queries.ipynb"),

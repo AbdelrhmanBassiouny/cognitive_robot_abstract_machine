@@ -1,7 +1,7 @@
 """
 Draws the pictures of the pizzeria for the worksheet from the solution notebook.
 
-The code cells of :file:`03-pizza_queries_solution.ipynb` are run in order, so the pictures show exactly what the
+The code cells of :file:`03-pizza_queries_solution.ipynb` except the installation cell are run in order, so the pictures show exactly what the
 notebook computes. Usage: ``python src/make_figures.py`` from the folder of the worksheet; the SVG files are
 written to :file:`src/figures`.
 """
@@ -30,7 +30,7 @@ def run_solution_notebook(folder: Path) -> dict[str, Any]:
     sys.modules[module.__name__] = module
     namespace = module.__dict__
     for cell in notebook["cells"]:
-        if cell["cell_type"] != "code":
+        if cell["cell_type"] != "code" or "setup" in cell["metadata"].get("tags", []):
             continue
         exec("".join(cell["source"]), namespace)
         namespace["display"] = lambda *arguments, **keywords: None

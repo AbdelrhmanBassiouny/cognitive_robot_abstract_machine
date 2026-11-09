@@ -1,0 +1,31 @@
+# The packages the notebook needs besides KRROOD, random_events and probabilistic_model, which the setup cell of
+# the notebook installs from source without their dependencies (those would add about 2 GB that EQL does not use).
+anytree>=2.8.0
+casadi
+colorama
+graphviz
+inflect
+inflection
+ipython
+jinja2
+lemminflect
+numpy
+omegaconf
+ordered_set>=4
+owlrl
+pandas
+plotly
+pybind11
+pydot
+pygments
+pyparsing>=3.2.3
+rdflib
+requests
+rustworkx>=0.16.0
+scipy>=1.10
+setuptools-scm
+sortedcontainers
+sqlalchemy
+tabulate
+tqdm
+typing-extensions>=4.12.2
