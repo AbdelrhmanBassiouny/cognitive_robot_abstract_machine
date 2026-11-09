@@ -131,14 +131,18 @@ items:
   pull_request_number: 495
   track: quantifiers
   status: in_progress
-  session: https://claude.ai/code/session_01JxHGiLw14x2s6qUmLMbTjy
-  notes: 'Quantifiers only since the 2026-11-04 split: match and annotation work moved to annotation-resolution-by-module
-    (#555, its base), match-collection-attributes (#556) and match-generation (#557). Ready (owner
-    kept it ready); api-break to suggest (for_all on empty domains, exists rows). Open threads:
-    bag vs set, flat_variable automation, performance. Overlaps exists-semijoin and negation-antijoin:
-    settle which supersedes which before either starts.'
-  depends_on:
-  - annotation-resolution-by-module
+  session: https://claude.ai/code/session_018wfiv7oQjiUXbsag9MrnXY
+  notes: 'Quantifiers only; base #555 merged, #556 and #557 stack on it. Ready (owner kept
+    it ready); api-break to suggest (for_all on empty domains, exists rows).
+
+    Supersedes cram2#905''s narrower exists fix, now on main: merged keeping this item''s
+    quantifiers; 905''s tests pass. Reasoning on the PR.
+
+    Open threads: bag vs set, flat_variable automation, performance. Overlaps exists-semijoin
+    and negation-antijoin: settle which supersedes which before either starts.
+
+    '
+  depends_on: []
 - id: exists-semijoin
   title: 'Make exists() a semi-join: per outer binding, no escaping locals'
   branch: null
@@ -242,18 +246,6 @@ items:
     is the disjunction over every k-subset of that subset''s conjunction, so k=1 is Or, k=n
     is And, k=ceil(n/2) is majority. Giskardpy already has both ends on one dial: Parallel.minimum_success=None
     means all nodes must be True.'
-
-- id: annotation-resolution-by-module
-  title: A field's string annotation resolves through its declaring module
-  branch: fix/krrood-annotation-resolution-by-module
-  pull_request_number: 555
-  track: match-collections
-  status: in_progress
-  session: https://claude.ai/code/session_01JxHGiLw14x2s6qUmLMbTjy
-  notes: 'Draft, based on main; bug-fix. Split out of #495. Bottom of the stack #555 <- #495 <- #556
-    <- #557.'
-  depends_on: []
-
 - id: match-collection-attributes
   title: match on a collection-valued attribute matches by element
   branch: fix/eql-match-collection-attributes
@@ -261,12 +253,11 @@ items:
   track: match-collections
   status: in_progress
   session: https://claude.ai/code/session_01JxHGiLw14x2s6qUmLMbTjy
-  notes: 'Draft, stacked on #495; bug-fix, api-break (list/tuple == by order, list of patterns needs
-    the same length, ValueFitsNeitherElementNorCollection). Option A; the match.md thread on #495
-    waits on the shared doc vote (A/B/C/D).'
+  notes: 'Draft, stacked on #495; bug-fix, api-break (list/tuple == by order, list of patterns
+    needs the same length, ValueFitsNeitherElementNorCollection). Option A; the match.md thread
+    on #495 waits on the shared doc vote (A/B/C/D).'
   depends_on:
   - correlated-quantifiers
-
 - id: match-generation
   title: Generative backends construct collection attributes and take a nested domain's object
   branch: fix/eql-match-generation
