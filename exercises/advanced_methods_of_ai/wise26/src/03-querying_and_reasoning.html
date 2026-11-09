@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Advanced Methods of AI · Worksheet 3 · Querying and Reasoning</title>
+<style>
+  @page { size: A4; margin: 22mm 23mm 22mm 23mm; }
+  :root { --blue: #2e5c8a; --box: #fdf3c9; --solution: #eaf1f8; --line: #9aa7b5; --head: #dbe5f1; }
+  html { font-family: "Liberation Serif", "Times New Roman", serif; font-size: 10.7pt; line-height: 1.33; color: #000; }
+  body { margin: 0; }
+  code, .code, pre { font-family: "DejaVu Sans", "Liberation Sans", sans-serif; font-size: 8.6pt; }
+  pre { margin: 4pt 0 6pt 14pt; line-height: 1.45; white-space: pre-wrap; break-inside: avoid; }
+  .nowrap { white-space: nowrap; }
+  p, li { orphans: 3; widows: 3; }
+  h3 + .box { break-after: avoid; }
+  .solution > .title { break-after: avoid; }
+  .solution > .title + * { break-before: avoid; }
+  .solution > .title + ol > li:first-child, .solution > .title + ul > li:first-child { break-after: avoid; }
+  body.worksheet h3.third { break-before: page; }
+  th code, th .code { font-weight: normal; }
+  table.grid td:first-child { white-space: nowrap; }
+  table.grid td.blank { min-width: 26pt; }
+  .head { display: flex; justify-content: space-between; font-weight: bold; }
+  .head div:last-child { text-align: right; }
+  h1 { text-align: center; font-size: 22pt; line-height: 1.2; margin: 22pt 0 8pt; }
+  h2 { text-align: center; font-size: 15pt; margin: 0 0 6pt; }
+  .info { text-align: center; color: #555; margin: 0 0 4pt; }
+  h3 { color: var(--blue); font-size: 13pt; margin: 14pt 0 4pt; break-after: avoid; }
+  p { margin: 3pt 0; }
+  .part { margin: 5pt 0 3pt; padding-left: 22pt; text-indent: -22pt; break-after: avoid; }
+  .part > b:first-child { margin-right: 2pt; }
+  .sub { margin: 2pt 0 2pt 22pt; }
+  ol.roman { list-style: lower-roman; margin: 2pt 0 4pt 22pt; padding-left: 22pt; }
+  ol.roman li { margin: 2pt 0; padding-left: 2pt; }
+  ul { margin: 2pt 0 4pt 22pt; padding-left: 14pt; }
+  li { margin: 1.5pt 0; }
+  .box { background: var(--box); padding: 6pt 8pt; margin: 8pt 0; break-inside: avoid; }
+  .solution { background: var(--solution); padding: 6pt 9pt; margin: 6pt 0 8pt; }
+  .solution > .title { color: var(--blue); font-weight: bold; margin-bottom: 2pt; }
+  .solution ul, .solution ol.roman { margin-left: 4pt; }
+  table { border-collapse: collapse; margin: 5pt 0 6pt 22pt; font-size: 10pt; break-inside: avoid; }
+  .box table, .solution table { margin-left: 0; }
+  th, td { border: 0.6pt solid var(--line); padding: 3pt 6pt; text-align: left; vertical-align: top; }
+  th { background: var(--head); }
+  td.blank { min-width: 34pt; height: 13pt; }
+  table.wide { width: calc(100% - 22pt); }
+  .solution table.wide, .box table.wide { width: 100%; }
+  table.small { font-size: 9pt; }
+  table.small code { font-size: 7.8pt; }
+  .keep { break-inside: avoid; }
+  .newpage { break-before: page; }
+  body.worksheet .solution, body.worksheet .only-solution { display: none; }
+  body.with-solutions .only-worksheet { display: none; }
+</style>
+</head>
+<body class="worksheet">
+
+<div class="head">
+  <div>University of Bremen<br>Department of Computer Science<br>Prof. Dr. h.c. Michael Beetz, PhD</div>
+  <div>AICOR Institute for Artificial Intelligence<br>WiSe 2026/2027<br>
+    <span class="only-worksheet">Worksheet 3</span><span class="only-solution">Solution for Worksheet 3</span></div>
+</div>
+
+<h1><span class="only-solution">Solution: </span>Exercises for the Lecture<br>Advanced Methods of AI</h1>
+<h2>Querying and Reasoning</h2>
+<p class="info">Tutorial: Thursday, 12.11.2026, 8:30–10:00, room 0.30, ECO 5</p>
+<p class="info">Task 1 on paper: 10 minutes in pairs, 5 minutes of discussion. Tasks 2 to 4: about 15 minutes in pairs
+each, then 5 to 10 minutes of discussion. They need a laptop with a web browser: open the notebook
+<span class="code nowrap">03-pizza_queries.ipynb</span> on Binder (link on Stud.IP) and note your predictions and answers on this sheet.</p>
+
+<div class="box">
+  <b>One expression, three readings.</b> Last week you wrote the concept ∃hasTopping.CheeseTopping. In EQL, the
+  query language of KRROOD, the same thing is written
+  <pre>D  =  a(Pizza)(toppings=a(CheeseTopping)())</pre>
+  It is a <b>description</b>: it denotes a set of objects, as a concept does.
+  It is a <b>question</b>: which objects of the knowledge base fit it?
+  It is a <b>constraint</b>: a condition that an object has to satisfy, or must not satisfy.
+  Today you use all three readings.
+</div>
+
+<!-- ======================================================================= -->
+<h3>Task 1: What Is a Query?</h3>
+
+<div class="box">
+  <b>The interpretation of Worksheet 2.</b> Four pizzas and their toppings; these are <i>all</i> the objects and
+  <i>all</i> the hasTopping pairs. CheeseTopping, VegetableTopping and MeatTopping are disjoint.
+  <table class="wide">
+    <tr><th>Pizza</th><th>Toppings</th></tr>
+    <tr><td>p1</td><td>m1 : CheeseTopping, t1 : VegetableTopping</td></tr>
+    <tr><td>p2</td><td>h2 : MeatTopping, m2 : CheeseTopping</td></tr>
+    <tr><td>p3</td><td>none</td></tr>
+    <tr><td>p4</td><td>v4 : VegetableTopping</td></tr>
+  </table>
+</div>
+
+<p class="part"><b>(a) One description, several languages.</b> Write D as</p>
+<ol class="roman">
+  <li>a description logic concept,</li>
+  <li>a first-order formula with one free variable x,</li>
+  <li>an SQL query over the tables <span class="code">pizza(id)</span> and
+      <span class="code">topping(id, pizza_id, kind)</span>, where <span class="code">kind</span> is the name of the
+      topping's class.</li>
+</ol>
+<p class="sub">Which pizzas of the interpretation are the answer?</p>
+
+<div class="solution">
+  <div class="title">Solution</div>
+  <ol class="roman">
+    <li><span class="code">Pizza ⊓ ∃hasTopping.CheeseTopping</span>, which is C1 of Worksheet 2 restricted to pizzas.</li>
+    <li><span class="code">Pizza(x) ∧ ∃y (hasTopping(x, y) ∧ CheeseTopping(y))</span><br>
+        The free variable is what is asked for. A formula without free variables is a yes/no question.</li>
+    <li><span class="code">SELECT DISTINCT pizza.id FROM pizza JOIN topping ON topping.pizza_id = pizza.id
+        WHERE topping.kind = 'CheeseTopping'</span><br>
+        The pair hasTopping(x, y) has become the foreign key <span class="code">pizza_id</span>, and following it
+        has to be written as a join. Without DISTINCT, a pizza with two cheese toppings is returned twice.
+        <span class="code">WHERE EXISTS (SELECT ...)</span> is the direct translation of ∃.</li>
+  </ol>
+  <p>Answer: {p1, p2}, the row C1 of last week's table.</p>
+  <p><b>For the discussion:</b> two more languages say the same.
+     SPARQL, over the RDF graph of pizza.owl:
+     <span class="code">SELECT ?x WHERE { ?x a :Pizza ; :hasTopping ?y . ?y a :CheeseTopping }</span>.
+     Prolog or Datalog: <span class="code">?- pizza(X), has_topping(X, Y), cheese_topping(Y).</span>
+     All of them are syntax for the formula in ii. They differ in what they are asked <i>of</i> (Task 4).</p>
+</div>
+
+<p class="part"><b>(b) Reading EQL.</b> <span class="code">pizzas</span> is the list of p1 to p4. What does each query
+return?</p>
+<pre>p = variable(Pizza, domain=pizzas)       # p ranges over the pizzas
+t = flat_variable(p.toppings)            # t ranges over the toppings of p
+
+Q1 = a(Pizza)(toppings=a(MeatTopping)()).from_(pizzas)
+Q2 = entity(p).where(for_all(t, HasType(t, VegetableTopping)))
+Q3 = set_of(p, t).where(HasType(t, CheeseTopping))
+Q4 = the(Pizza)(toppings=a(VegetableTopping)()).from_(pizzas)</pre>
+
+<div class="solution">
+  <div class="title">Solution</div>
+  <ul>
+    <li><b>Q1:</b> {p2}. A nested description on a list-valued attribute means: <i>some</i> element fits.</li>
+    <li><b>Q2:</b> {p3, p4}. This is C2 = ∀hasTopping.VegetableTopping. p3 is an answer because it has no
+        toppings: there is nothing to check (vacuous truth).</li>
+    <li><b>Q3:</b> the two pairs (p1, m1) and (p2, m2). An answer is a <i>binding</i>: one value for each
+        selected variable such that the condition is true. Q1 and Q2 select one variable, so their answers
+        look like objects.</li>
+    <li><b>Q4:</b> no answer but an error (MultipleSolutionFound). <span class="code">the</span> claims that
+        exactly one object fits, and both p1 and p4 have a vegetable topping. With
+        <span class="code">a</span> the answer would be {p1, p4}.</li>
+  </ul>
+</div>
+
+<p class="part"><b>(c) Question, description or constraint?</b> Four people in a pizzeria use D. For each: where do the
+candidate objects come from, and what counts as the answer?</p>
+<ol class="roman">
+  <li>The waiter, to the kitchen display: “Which pizzas on the counter have cheese?”</li>
+  <li>The menu: “Cheesy pizza: a pizza with a cheese topping.”</li>
+  <li>A guest: “A pizza with cheese, please.”</li>
+  <li>The allergy sheet on the wall: “No order of a guest who avoids milk contains a pizza with cheese.”</li>
+</ol>
+
+<div class="solution">
+  <div class="title">Solution</div>
+  <ol class="roman">
+    <li><b>Question.</b> Candidates: the pizzas on the counter, i.e. objects of the knowledge base. Answer: all
+        of them that fit.</li>
+    <li><b>Description.</b> No candidates at all. The menu defines a concept (a set that depends on the
+        situation); it is terminology, the TBox. It becomes a question as soon as somebody supplies
+        candidates.</li>
+    <li><b>Constraint on an object that does not exist yet.</b> Candidates: everything the kitchen can make.
+        Answer: <i>one</i> new pizza that fits, any one. Everything the guest did not mention is left open; the
+        description is underspecified and the cook fills it in.</li>
+    <li><b>Constraint on the knowledge base.</b> Candidates: tonight's orders. The answer that everybody
+        hopes for is the empty set; every binding that comes back is a violation, with the guilty order in
+        it.</li>
+  </ol>
+  <p>The expression is the same four times. What differs is where the candidates come from (the <i>domain</i>)
+     and what is done with the objects that fit: list them, name them, make one, or raise the alarm.</p>
+</div>
+
+<p class="part"><b>(d) True or entailed?</b> In Worksheet 2 you answered “does the KB entail φ?” with an argument about
+<i>every</i> model (Task 1b), and “which pizzas belong to C?” by looking at <i>one</i> interpretation (Task 2a).
+Which of the two does a query on p1 to p4 do? What does that mean for the question whether a pizza of which we
+only know a mozzarella topping is vegetarian?</p>
+
+<div class="solution">
+  <div class="title">Solution</div>
+  <p>The second. The objects <i>are</i> the interpretation, and the query is evaluated in it (model checking).
+  This is correct only if the interpretation is complete: whatever is not there is false. That is the
+  closed-world assumption, shared by SQL, Prolog and EQL.</p>
+  <p>An OWL reasoner does the first: an answer has to hold in every model of the axioms. For the pizza with a
+  mozzarella topping, the query says “vegetarian” (no meat in the list), the reasoner says “not entailed”
+  (there are models in which it also has ham). Evaluation is cheap, polynomial in the data for a fixed
+  query; entailment is expensive. This is one reason why most data lives in databases and not in ontologies.</p>
+</div>
+
+<!-- ======================================================================= -->
+<h3>Task 2: Asking Questions</h3>
+
+<div class="box">
+  <b>Notebook, part 2.</b> Thursday evening in a pizzeria: seven pizzas on the counter, three orders, three
+  guests. Run the cells from the top. For every <b>Predict</b>, fill in the sheet <i>before</i> you run the cell.
+</div>
+
+<p class="part"><b>(a) One question, two spellings.</b> Write <span class="code">hot_pizzas</span> and
+<span class="code">hot_orders</span>. american_hot_1 has two hot toppings. Why is it returned only once?</p>
+
+<div class="solution">
+  <div class="title">Solution</div>
+  <pre>hot_pizzas = a(Pizza)(toppings=a(PizzaTopping)(spiciness=Spiciness.HOT)).from_(pizzas)
+hot_orders = an(Order)(
+    pizzas=a(Pizza)(toppings=a(PizzaTopping)(spiciness=Spiciness.HOT))).from_(orders)</pre>
+  <p>Results: american_hot_1, and the order of table 1 (Ada). The description says “<i>some</i> topping is hot”;
+  an object fits it or does not, however many witnesses there are. The order query passes through two lists:
+  some pizza of the order has some hot topping. In DL: ∃hasPizza.∃hasTopping.∃hasSpiciness.Hot.</p>
+</div>
+
+<p class="part"><b>(b) <i>a</i> or <i>the</i>?</b> Predict the result of “the pizza with fish” and of “the pizza with
+cheese”. A robot is told: “Bring me the pizza with cheese.” What should it do?</p>
+
+<div class="solution">
+  <div class="title">Solution</div>
+  <p>The first is napoletana_1. The second raises MultipleSolutionFound, because five pizzas have cheese (and
+  NoSolutionFound if none had). “The pizza with cheese” is a definite description: it claims that exactly one
+  such object exists. When the claim is false, the sentence does not refer, and the honest reaction is not to
+  pick one but to ask back, “which one: the Margherita or the Napoletana?”. Finding what distinguishes the
+  candidates is again a query.</p>
+</div>
+
+<p class="part"><b>(c) Some, only, none.</b> Predict with a cross which pizzas each query returns. Then write
+<span class="code">vegetarian</span> (no meat and no fish topping).</p>
+
+<table class="small grid only-worksheet">
+  <tr><th></th><th>margherita</th><th>napoletana</th><th>american_hot</th><th>mushroom</th><th>veggie</th><th>plain</th><th>unclosed</th></tr>
+  <tr><td>Q1 only vegetable toppings</td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
+  <tr><td>Q2 [a mozzarella, a tomato]</td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
+  <tr><td>Q3 no cheese topping</td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
+</table>
+
+<div class="solution">
+  <div class="title">Solution</div>
+  <table class="small grid">
+    <tr><th></th><th>margherita</th><th>napoletana</th><th>american_hot</th><th>mushroom</th><th>veggie</th><th>plain</th><th>unclosed</th></tr>
+    <tr><td>Q1 only vegetable toppings</td><td></td><td></td><td></td><td></td><td>×</td><td><b>×</b></td><td></td></tr>
+    <tr><td>Q2 [a mozzarella, a tomato]</td><td>×</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>Q3 no cheese topping</td><td></td><td></td><td></td><td></td><td>×</td><td>×</td><td></td></tr>
+  </table>
+  <ul>
+    <li><b>Q1:</b> plain_1 has no toppings, so “all of them are vegetables” is vacuously true. It is p3 of
+        Worksheet 2.</li>
+    <li><b>Q2:</b> a <i>list</i> of descriptions describes the whole list: first a mozzarella, then a tomato,
+        nothing else. mushroom_1 has both and a third topping, unclosed_1 has only the mozzarella. A single
+        description means “some element”; the list is “some + only”, the closure axiom of Worksheet 2, in
+        one expression.</li>
+    <li><b>Q3:</b> nobody stated “veggie_1 has no cheese”. The query concludes it because none is listed:
+        negation as failure.</li>
+  </ul>
+  <pre>vegetarian = entity(p).where(not_(exists(t, or_(HasType(t, MeatTopping), HasType(t, FishTopping)))))</pre>
+  <p>Result: margherita_1, mushroom_1, veggie_1, plain_1, unclosed_1. Equivalent:
+  <span class="code">for_all(t, not_(or_(...)))</span>. Use one <span class="code">exists</span>: if two
+  quantifiers share the variable <span class="code">t</span>, it is no longer local to either of them and the query
+  becomes a join. Two quantifiers need two <span class="code">flat_variable(p.toppings)</span>.</p>
+</div>
+
+<p class="part"><b>(d) Answers are bindings.</b> Predict the number of rows of <span class="code">hot_rows</span>. Then
+write <span class="code">toppings_per_table</span>. What are the SQL words for what you used?</p>
+
+<div class="solution">
+  <div class="title">Solution</div>
+  <p>Two rows: (Ada, american_hot_1, HotGreenPepperTopping) and (Ada, american_hot_1, JalapenoPepperTopping). A
+  join returns every binding that makes the condition true; <span class="code">exists</span> in (a) only asked
+  whether there is one. In SQL: JOIN versus WHERE EXISTS.</p>
+  <pre>toppings_per_table = set_of(o.table, count(topping)).grouped_by(o.table)      # (1, 7), (2, 8), (3, 3)</pre>
+  <p>SQL: SELECT ..., COUNT(*) ... GROUP BY. The two joins are not written:
+  <span class="code">o.pizzas</span> and <span class="code">ordered.toppings</span> are paths through the objects.</p>
+</div>
+
+<!-- ======================================================================= -->
+<h3 class="third">Task 3: Reasoning with Functions, Predicates and Rules</h3>
+
+<div class="box">
+  <b>Notebook, part 3.</b> Ben avoids milk. No object says “napoletana_1 contains milk”; it has to be derived:
+  mozzarella is a cheese, cheese contains milk, the pizza has that topping.
+</div>
+
+<p class="part"><b>(a) Functions.</b> Complete <span class="code">allergens</span>. What is
+<span class="code">is_vegetarian(p)</span> when p is a variable instead of a pizza?</p>
+
+<div class="solution">
+  <div class="title">Solution</div>
+  <pre>if any(isinstance(topping, CheeseTopping) for topping in pizza.toppings): found.add(Allergen.MILK)
+if any(isinstance(topping, FishTopping) for topping in pizza.toppings):   found.add(Allergen.FISH)</pre>
+  <p>Called on a pizza, a symbolic function returns its value. Called on a variable, it returns a piece of a
+  query that is evaluated later, once for each binding. Last week's four functions are query vocabulary
+  after one line each. This is procedural attachment: the meaning of the symbol is a program.</p>
+</div>
+
+<p class="part"><b>(b) Predicates and constraints.</b> Complete <span class="code">IsSafeFor</span> and write
+<span class="code">dangerous</span>. What does it return? Why is this query a constraint and not a question?</p>
+
+<div class="solution">
+  <div class="title">Solution</div>
+  <pre>def __call__(self) -> bool:
+    return not (allergens(self.pizza) &amp; self.guest.avoids)
+
+dangerous = set_of(o, ordered).where(not_(IsSafeFor(ordered, o.guest)))</pre>
+  <p>One row: the order of table 2 (Ben) with napoletana_1, which has mozzarella. Nobody is interested in the
+  list as such; the kitchen needs it to be empty. A constraint is a query whose answer has to be empty, and a
+  non-empty answer is useful: the binding says where the violation is. Databases call this an integrity
+  constraint, SHACL calls it a validation report.</p>
+  <p>hasTopping is a stored relation (the list). IsSafeFor is a relation as well, a set of (pizza, guest)
+  pairs, but it is computed. In a query the two look the same.</p>
+</div>
+
+<p class="part"><b>(c) Rules.</b> Write the rules for fish and for gluten. How many warnings are derived? The predicate of
+(b) and the rules both find Ben's problem. When is each of them computed? Name one advantage of each.</p>
+
+<div class="solution">
+  <div class="title">Solution</div>
+  <pre>fishy = a(Pizza)(toppings=a(FishTopping)()).from_(pizzas)
+fish_warnings   = inference(AllergenWarning)(pizza=fishy, allergen=Allergen.FISH).tolist()
+gluten_warnings = inference(AllergenWarning)(pizza=p, allergen=Allergen.GLUTEN).tolist()</pre>
+  <p>13 warnings: 5 milk, 1 fish, 7 gluten. As a formula, the first rule is
+  ∀x (Pizza(x) ∧ ∃y (hasTopping(x, y) ∧ CheeseTopping(y)) → ∃w (Warning(w) ∧ about(w, x) ∧ allergen(w, milk))).
+  The body of a rule is a query; the head says what to build for each answer.</p>
+  <ul>
+    <li><b>Predicate:</b> computed when it is asked (backward chaining, a view). Always up to date; paid for
+        at every query.</li>
+    <li><b>Rule:</b> computed once and written down (forward chaining, materialisation; what HermiT did when
+        it filled the inferred hierarchy). The conclusions are objects: they can be queried, joined, counted,
+        stored. They become stale when the world changes (Task 4b).</li>
+  </ul>
+</div>
+
+<p class="part"><b>(d) Rules with exceptions.</b> Predict the label of each pizza. Which pizza gets none, and does that
+mean it is not vegetarian? After the ham on unclosed_1: which conclusion changed? What would an OWL reasoner
+have had to do?</p>
+
+<table class="small only-worksheet">
+  <tr><th>margherita</th><th>napoletana</th><th>american_hot</th><th>mushroom</th><th>veggie</th><th>plain</th><th>unclosed</th></tr>
+  <tr><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
+</table>
+
+<div class="solution">
+  <div class="title">Solution</div>
+  <table class="small">
+    <tr><th>margherita</th><th>napoletana</th><th>american_hot</th><th>mushroom</th><th>veggie</th><th>plain</th><th>unclosed</th></tr>
+    <tr><td>Vegetarian</td><td><b>none</b></td><td>Meaty</td><td>Vegetarian</td><td>Vegan</td><td>Vegan</td><td>Vegetarian</td></tr>
+  </table>
+  <ul>
+    <li>napoletana_1 has fish: not vegetarian, so the default does not apply; no meat, so the alternative does
+        not apply either. The rules are silent. Silence is not “no”: reading it as “not vegetarian” is one
+        more closed-world step, which here happens to be right, and for “not meaty” as well.</li>
+    <li>The refinement is an exception. Where it holds, the general conclusion Vegetarian is replaced by
+        Vegan. Such default-and-exception trees are known as ripple-down rules.</li>
+    <li>With ham, unclosed_1 changes from Vegetarian to Meaty. New information removed a conclusion: the
+        reasoning is <b>non-monotonic</b>. Classical logic and OWL are monotonic: what is entailed stays
+        entailed when axioms are added. The reasoner never has to retract “vegetarian”, because under the
+        open-world assumption it never concluded it (Worksheet 2, Task 3c).</li>
+    <li>The Label objects from before the ham still exist in Python. Removing conclusions whose reasons are
+        gone is a task of its own, truth maintenance.</li>
+  </ul>
+</div>
+
+<!-- ======================================================================= -->
+<h3>Task 4: Live Objects and Recorded Data</h3>
+
+<div class="box">
+  <b>Notebook, part 4.</b> So far the knowledge base was the <i>live</i> kitchen: Python objects that change
+  while we look. At midnight the evening is <i>recorded</i> in a relational database (SQLite) and stays as it
+  was.
+</div>
+
+<p class="part"><b>(a) The same question in SQL.</b> Why does the condition
+<span class="code">topping.kind = 'CheeseTopping'</span> return nothing? What does the repaired query need that the
+EQL query did not?</p>
+
+<div class="solution">
+  <div class="title">Solution</div>
+  <p>The rows say MozzarellaTopping. That a mozzarella <i>is a</i> cheese is knowledge about classes (TBox);
+  the tables hold facts about individuals (ABox). In Python the hierarchy is part of the program, so
+  <span class="code">a(CheeseTopping)()</span> fits a mozzarella. For SQL the hierarchy has to be stored as data
+  (table subclass_of) and the query has to compute its transitive closure:</p>
+  <pre>WITH RECURSIVE cheese(kind) AS (
+    SELECT 'CheeseTopping'
+    UNION
+    SELECT subclass_of.child FROM subclass_of JOIN cheese ON subclass_of.parent = cheese.kind)
+SELECT DISTINCT pizza.name FROM pizza JOIN topping ON topping.pizza_id = pizza.id
+WHERE topping.kind IN (SELECT kind FROM cheese)</pre>
+  <p>Recursion is what Datalog adds to relational algebra. SPARQL has it for this case as the property path
+  <span class="code">rdfs:subClassOf*</span>.</p>
+</div>
+
+<p class="part"><b>(b) The world moves on.</b> The cook grates parmesan over Ben's veggie_1 by mistake. Predict what
+each source says about cheese on veggie_1. Which one would have protected Ben?</p>
+
+<table class="small only-worksheet">
+  <tr><th>1. query <span class="code">cheesy</span> of Task 2, live objects</th><th>2. the record</th><th>3. milk warnings of Task 3(c)</th></tr>
+  <tr><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
+</table>
+
+<div class="solution">
+  <div class="title">Solution</div>
+  <table class="small">
+    <tr><th>1. query <span class="code">cheesy</span> of Task 2, live objects</th><th>2. the record</th><th>3. milk warnings of Task 3(c)</th></tr>
+    <tr><td>veggie_1 is cheesy</td><td>no parmesan anywhere</td><td>no warning for veggie_1</td></tr>
+  </table>
+  <ul>
+    <li>Only the live query protects Ben. It was written before the mistake and is evaluated against the
+        state at the moment of evaluation. Nothing was reloaded.</li>
+    <li>The record is a snapshot, and that is its purpose: an inspector asks what was served on Thursday,
+        not what is on the counter now. It answers “what was true then”.</li>
+    <li>The warnings are derived facts, a small record of their own. After the change they are wrong until
+        the rule runs again. <i>When</i> to re-derive is the hard part of forward chaining, and a robot, whose
+        world changes continuously, faces it all the time.</li>
+  </ul>
+</div>
+
+<p class="part"><b>(c) What is missing?</b> Try to write <span class="code">dangerous</span> in SQL over the record. What
+exactly is missing?</p>
+
+<div class="solution">
+  <div class="title">Solution</div>
+  <p>Not expressive power, but data. A SQL query can only use what is a row in a table. The record has no
+  table for what a guest avoids, and “cheese contains milk” was inside the Python function
+  <span class="code">allergens</span>. With two more tables (avoids, contains) the query is possible: five joins
+  and a recursive expression (see the solution notebook; result: table 2, Ben, napoletana_1, milk). In EQL it
+  was one line because the query follows object references (<span class="code">o.guest.avoids</span>) and calls
+  the function.</p>
+  <p>The price: the database holds millions of rows on disk, uses indexes, survives a power cut and serves
+  many users at once. A query over Python objects does none of this. KRROOD's ORMatic connects the two: it
+  generates the tables from the dataclasses and translates a part of EQL to SQL.</p>
+</div>
+
+<p class="part"><b>(d) Four query languages.</b> Fill in the columns SQL and EQL from what you saw today. SPARQL (which
+you would use on pizza.owl) and Datalog/Prolog follow in the discussion.</p>
+
+<table class="small wide only-worksheet">
+  <tr><th style="width:24%"></th><th>SQL</th><th>SPARQL</th><th>Datalog / Prolog</th><th>EQL</th></tr>
+  <tr><td>What is queried?</td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
+  <tr><td>From a pizza to its toppings</td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
+  <tr><td>“A mozzarella is a cheese” comes from</td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
+  <tr><td>“Not” means</td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
+  <tr><td>Rules</td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
+  <tr><td>Your own function in a query</td><td class="blank"></td><td class="blank"></td><td class="blank"></td><td class="blank"></td></tr>
+</table>
+
+<div class="solution">
+  <div class="title">Solution</div>
+  <table class="small wide">
+    <tr><th style="width:17%"></th><th>SQL</th><th>SPARQL</th><th>Datalog / Prolog</th><th>EQL</th></tr>
+    <tr><td>What is queried?</td>
+        <td>tables of rows in a database: the record</td>
+        <td>a graph of triples, e.g. pizza.owl with individuals</td>
+        <td>facts and rules of a program</td>
+        <td>the objects of a running Python program</td></tr>
+    <tr><td>From a pizza to its toppings</td>
+        <td>join on a foreign key</td>
+        <td>triple pattern <code>?p :hasTopping ?t</code></td>
+        <td>shared variable: <code>has_topping(P, T)</code></td>
+        <td>attribute path <code>p.toppings</code>, nested description</td></tr>
+    <tr><td>“A mozzarella is a cheese” comes from</td>
+        <td>nowhere, unless stored as rows and closed with WITH RECURSIVE</td>
+        <td>the graph: path <code>rdfs:subClassOf*</code>, or a reasoner behind the query</td>
+        <td>a rule: <code>cheese(X) :- mozzarella(X).</code></td>
+        <td>the class hierarchy of the program</td></tr>
+    <tr><td>“Not” means</td>
+        <td>no such row (NOT EXISTS): closed world</td>
+        <td>no such triple in the graph (FILTER NOT EXISTS), although OWL itself is open-world</td>
+        <td>not provable: negation as failure</td>
+        <td>no such object in the domain: closed world</td></tr>
+    <tr><td>Rules</td>
+        <td>views; recursion only with WITH RECURSIVE</td>
+        <td>none in the language (CONSTRUCT builds triples; rules come from OWL, SWRL)</td>
+        <td>the heart of the language, recursive</td>
+        <td><code>inference</code>, rule trees with exceptions</td></tr>
+    <tr><td>Your own function in a query</td>
+        <td>only if registered inside the database</td>
+        <td>built-in filter functions, vendor extensions</td>
+        <td>every predicate is a program</td>
+        <td>any Python function or predicate</td></tr>
+  </table>
+  <p>None of the four is “the best”. They sit at different points between two wishes: to ask rich questions
+  about a world that is changing now, and to keep large amounts of what was once true safely for later. A
+  robot needs both, and its memory of past episodes is a record that it queries with the same descriptions as
+  its present.</p>
+</div>
+
+<p class="part"><b>(e) Your turn.</b> You are building a robot that tidies a kitchen. In words (or in EQL, with classes you
+invent), give one query of each kind and say what its domain is: a <b>question</b> the robot asks its knowledge
+base, a <b>description</b> of something that does not exist yet and that the robot has to produce, and a
+<b>constraint</b> that must never have an answer.</p>
+
+<div class="solution">
+  <div class="title">Solution</div>
+  <p>Many answers are good; three examples.</p>
+  <ul>
+    <li><b>Question:</b> “Which cups stand on the table and are not clean?” Domain: the objects the robot
+        currently believes to exist, a live knowledge base that perception keeps changing.
+        <span class="code">a(Cup)(supported_by=the(Table)(), clean=False)</span></li>
+    <li><b>Description to be produced:</b> “a pose in the dishwasher rack where the cup stands upright, is
+        reachable and touches nothing”. No such pose is stored anywhere. The domain is a continuous space,
+        the description is underspecified, and the robot has to generate a pose that fits (the bonus cell of
+        the notebook does this for a pizza).</li>
+    <li><b>Constraint:</b> “a knife in the gripper while a person is closer than one metre”. Domain: the
+        state of the world at every moment. The answer has to stay empty, so the query is not asked once but
+        watched; it is a monitor.</li>
+  </ul>
+</div>
+
+</body>
+</html>
