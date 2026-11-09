@@ -1,8 +1,8 @@
 ## Plan
-- Skip TYPE_CHECKING imports whose module is not found along its whole dotted path; runtime imports keep raising (developer decision)
+- Attempt plain imports under TYPE_CHECKING; ImportError binds no name (developer-approved try/except); runtime imports keep raising
 
 ## Done
-- Full-path check (covers krrood.<part>) pushed to #545 at aee4130297 after merging main; 217 krrood tests pass, RDR unchanged; PR description updated
+- 88b34936ee on #545: covers uninstalled packages, missing krrood parts, missing dependencies, extended package paths; 220 krrood tests pass, RDR unchanged, krrood check clean; PR description updated
 
 ## Next
 - Developer review of #545 (marked ready by developer); CI result
