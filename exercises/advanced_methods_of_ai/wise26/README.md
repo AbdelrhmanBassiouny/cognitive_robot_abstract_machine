@@ -10,7 +10,7 @@ expression, a description, in a different way, and relates it to first-order log
 | Time | Part | Story | The description is … | Logic |
 |:--|:--|:--|:--|:--|
 | 0–8 | Slides | what we want today, EQL and first-order logic | – | queries as formulas with free variables |
-| 8–12 | Prologue | the pizzeria (Figure 1) | – | an interpretation |
+| 8–12 | Prologue | the pizzeria (Figure 2) | – | an interpretation |
 | 12–34 | 1 Asking | “Which pizzas have cheese?” | a question | ∃, ∀, ¬∃; assignments; closed world |
 | 34–44 | 2 Describing | “Bring me the pizza with olives.” | a reference | definite descriptions (Russell, Strawson) |
 | 44–58 | 3 Constraining | “Ben must never get milk.” | a constraint | ¬∀ ≡ ∃¬; integrity constraint versus axiom |
@@ -27,8 +27,8 @@ PDF is the tutor's run sheet, with what to discuss at the end of each act and th
 | File | Purpose |
 |:-----|:--------|
 | `03-introduction_slides.pdf` | Eight slides for the first 8 minutes. |
-| `03-querying_and_reasoning.pdf` | The worksheet (6 pages). |
-| `03-querying_and_reasoning_solution.pdf` | The run sheet for the tutor, and the worksheet with solutions (11 pages). |
+| `03-querying_and_reasoning.pdf` | The worksheet (12 pages; each act starts on a new page). |
+| `03-querying_and_reasoning_solution.pdf` | The run sheet for the tutor, and the worksheet with solutions (17 pages). |
 | `03-pizza_queries.ipynb` | The student notebook. Cells marked `TODO` are to be filled in; it runs from top to bottom as it is. |
 | `03-pizza_queries_solution.ipynb` | The notebook with solutions, solution notes and its outputs. |
 | `kitchen_picture.py` | Draws the pizzeria with the answers of a query marked on it. |

@@ -5,49 +5,61 @@
 <title>Advanced Methods of AI · Worksheet 3 · Introduction</title>
 <style>
   @page { size: 254mm 142.875mm; margin: 0; }
-  html { font-family: "DejaVu Sans", sans-serif; color: #000; background: #fff; }
+  :root { --ink: #1a1a1a; --muted: #555; --navy: #1f3a5f; --navy-tint: #eaf0f6; --line: #b9c4d1;
+          --ochre: #9c6b1f; --ochre-tint: #f8f2e6; }
+  html { font-family: "DejaVu Sans", sans-serif; color: var(--ink); background: #fff; }
   body { margin: 0; }
   code, pre { font-family: "DejaVu Sans Mono", monospace; }
-  .slide { width: 254mm; height: 142.875mm; box-sizing: border-box; padding: 11mm 15mm 9mm; position: relative;
-           break-after: page; overflow: hidden; display: flex; flex-direction: column; }
+  .slide { width: 254mm; height: 142.875mm; box-sizing: border-box; padding: 12mm 17mm 12mm; position: relative;
+           break-after: page; overflow: hidden; display: flex; flex-direction: column;
+           border-top: 4mm solid var(--navy); }
   .slide:last-child { break-after: auto; }
-  h1 { font-size: 23pt; margin: 0 0 5mm; border-bottom: 1.2pt solid #000; padding-bottom: 2.5mm; }
-  h1.title { border: 0; font-size: 30pt; margin-top: 18mm; }
-  p, li { font-size: 14.5pt; line-height: 1.4; margin: 0 0 2.5mm; }
+  .kicker { font-size: 10pt; letter-spacing: 1.5pt; text-transform: uppercase; color: var(--ochre); font-weight: bold;
+            margin-bottom: 1.5mm; }
+  h1 { font-size: 24pt; color: var(--navy); margin: 0 0 6mm; }
+  .slide.title { background: var(--navy); color: #fff; border-top: 0; justify-content: center; }
+  .slide.title h1 { color: #fff; font-size: 32pt; margin-bottom: 4mm; }
+  .slide.title .kicker { color: #e0c48f; }
+  .slide.title .footer { color: #c9d3df; border-color: #4a6283; }
+  p, li { font-size: 15pt; line-height: 1.45; margin: 0 0 3mm; }
   ul { margin: 0; padding-left: 7mm; }
-  .small { font-size: 11pt; }
-  .footer { position: absolute; bottom: 5mm; left: 15mm; right: 15mm; font-size: 8.5pt; display: flex;
-            justify-content: space-between; color: #555; }
-  .formula { font-family: "Liberation Serif", serif; font-size: 19pt; text-align: center; margin: 3mm 0; }
+  li::marker { color: var(--navy); }
+  .small { font-size: 12pt; color: var(--muted); }
+  .footer { position: absolute; bottom: 5mm; left: 17mm; right: 17mm; font-size: 8.5pt; display: flex;
+            justify-content: space-between; color: var(--muted); border-top: 0.6pt solid var(--line); padding-top: 1.5mm; }
+  .formula { font-family: "Liberation Serif", serif; font-size: 21pt; text-align: center; margin: 2mm 0 7mm;
+             padding: 4mm; background: var(--navy-tint); border-radius: 2mm; }
   .formula i { font-family: "Liberation Serif", serif; }
-  pre { font-size: 14pt; margin: 2mm 0 4mm; line-height: 1.5; }
-  .columns { display: flex; gap: 10mm; flex: 1; }
-  .columns > div { flex: 1; }
-  table { border-collapse: collapse; font-size: 12.5pt; width: 100%; }
-  th, td { border: 0.6pt solid #000; padding: 1.6mm 3mm; text-align: left; vertical-align: top; }
-  td code { font-size: 11.5pt; }
+  pre { font-size: 14pt; margin: 0 0 5mm; line-height: 1.55; background: var(--navy-tint); padding: 3mm 5mm;
+        border-radius: 2mm; }
+  table { border-collapse: collapse; font-size: 13pt; width: 100%; }
+  th, td { border: 0.6pt solid var(--line); padding: 1.8mm 3mm; text-align: left; vertical-align: top; }
+  th { background: var(--navy-tint); color: var(--navy); font-size: 11.5pt; }
+  td code { font-size: 12pt; }
   .figure { text-align: center; }
   .figure img { max-height: 70mm; max-width: 100%; }
-  .note { border-left: 1.5pt solid #000; padding-left: 4mm; margin-top: 4mm; }
-  .timeline { display: flex; margin-top: 5mm; border: 0.8pt solid #000; }
-  .timeline div { border-right: 0.8pt solid #000; padding: 1.8mm 0.5mm; font-size: 9pt; text-align: center; }
-  .timeline div:last-child { border-right: 0; }
-  .timeline b { display: block; font-size: 9pt; }
+  .note { border-left: 2mm solid var(--ochre); background: var(--ochre-tint); padding: 4mm 5mm; margin-top: 8mm; color: var(--ink); }
+  .timeline { display: flex; margin-top: 2mm; gap: 1mm; }
+  .timeline div { background: var(--navy-tint); color: var(--navy); padding: 2mm 0.5mm; font-size: 9pt; text-align: center; border-radius: 1mm; }
+  .timeline div.now { background: var(--navy); color: #fff; }
+  .timeline b { display: block; font-size: 9.5pt; }
 </style>
 </head>
 <body>
 
 <!-- 1 -->
-<section class="slide">
-  <h1 class="title">Asking, Describing, Constraining, Inferring</h1>
+<section class="slide title">
+  <div class="kicker">Advanced Methods of AI · Worksheet 3</div>
+  <h1>Asking, Describing, Constraining, Inferring</h1>
   <p style="font-size:17pt">Worksheet 3 · querying a knowledge base with the Entity Query Language</p>
-  <p style="margin-top:14mm" class="note"><b>Now:</b> in pairs, open <code>03-pizza_queries.ipynb</code> (link on Stud.IP) and
+  <p class="note"><b>Now:</b> in pairs, open <code>03-pizza_queries.ipynb</code> (link on Stud.IP) and
   run its <b>setup cell</b>. It installs EQL while we talk.</p>
   <div class="footer"><span>Advanced Methods of AI · WiSe 2026/2027</span><span>1</span></div>
 </section>
 
 <!-- 2 -->
 <section class="slide">
+  <div class="kicker">Where we are</div>
   <h1>Last week: represent. Today: use.</h1>
   <ul>
     <li>Worksheet 2: the pizza world in first-order logic, in OWL, and as Python classes.</li>
@@ -60,6 +72,7 @@
 
 <!-- 3 -->
 <section class="slide">
+  <div class="kicker">Logic</div>
   <h1>A query is a formula with free variables</h1>
   <p class="formula">Pizza(<i>x</i>) ∧ ∃<i>t</i> (hasTopping(<i>x</i>, <i>t</i>) ∧ CheeseTopping(<i>t</i>))</p>
   <ul>
@@ -73,6 +86,7 @@
 
 <!-- 4 -->
 <section class="slide">
+  <div class="kicker">EQL</div>
   <h1>EQL: the same formula, over Python objects</h1>
   <pre>cheesy = a(Pizza)(toppings=a(CheeseTopping)()).from_(pizzas)</pre>
   <table>
@@ -89,24 +103,26 @@
 
 <!-- 5 -->
 <section class="slide">
+  <div class="kicker">EQL</div>
   <h1>Beyond patterns: naming variables</h1>
-  <pre>pizza   = a(Pizza).from_(pizzas)
+  <pre style="font-size:12.5pt; margin-bottom:3mm">pizza   = a(Pizza).from_(pizzas)
 topping = flat_variable(pizza.toppings)
 pizza.where(for_all(topping, HasType(topping, VegetableTopping)))</pre>
-  <p class="formula" style="font-size:16pt">Pizza(<i>x</i>) ∧ ∀<i>t</i> (hasTopping(<i>x</i>, <i>t</i>) → VegetableTopping(<i>t</i>))</p>
-  <ul>
-    <li>A pattern says <i>some</i>. For <i>every</i> and <i>no</i>, name the topping and use <code>for_all</code>,
+  <p class="formula" style="font-size:16pt; margin:0 0 4mm; padding:2.5mm">Pizza(<i>x</i>) ∧ ∀<i>t</i> (hasTopping(<i>x</i>, <i>t</i>) → VegetableTopping(<i>t</i>))</p>
+  <ul style="font-size:13.5pt">
+    <li style="font-size:13.5pt; margin-bottom:1.5mm">A pattern says <i>some</i>. For <i>every</i> and <i>no</i>, name the topping and use <code>for_all</code>,
         <code>not_(exists(…))</code>.</li>
-    <li>Every <code>a(…)</code> is a variable of its own: two <code>a(Pizza)</code> are two pizzas.</li>
-    <li><code>set_of(x, y)</code> returns several free variables together: the answers become assignments.</li>
+    <li style="font-size:13.5pt; margin-bottom:1.5mm">Every <code>a(…)</code> is a variable of its own: two <code>a(Pizza)</code> are two pizzas.</li>
+    <li style="font-size:13.5pt"><code>set_of(x, y)</code> returns several free variables: the answers become assignments.</li>
   </ul>
   <div class="footer"><span>Advanced Methods of AI · Worksheet 3</span><span>5</span></div>
 </section>
 
 <!-- 6 -->
 <section class="slide">
+  <div class="kicker">Today</div>
   <h1>One description, five uses</h1>
-  <table>
+  <table style="font-size:12pt">
     <tr><th style="width:18%">Act</th><th style="width:36%">Story</th><th style="width:22%">The description is …</th><th>Logic</th></tr>
     <tr><td>1 Asking</td><td>“Which pizzas have cheese?”</td><td>a question</td><td>∃, ∀, ¬ in one interpretation</td></tr>
     <tr><td>2 Describing</td><td>“Bring me <i>the</i> pizza with olives.”</td><td>a reference</td><td>definite descriptions</td></tr>
@@ -114,13 +130,14 @@ pizza.where(for_all(topping, HasType(topping, VegetableTopping)))</pre>
     <tr><td>4 Inferring</td><td>allergen warnings, menu labels</td><td>the body of a rule</td><td>rules, exceptions</td></tr>
     <tr><td>5 Generating</td><td>Dana orders a pizza that does not exist</td><td>a specification</td><td>constructing a model</td></tr>
   </table>
-  <p class="small" style="margin-top:4mm">The expression stays the same. What changes is where the candidates come from,
+  <p class="small" style="margin-top:3mm; font-size:11pt">The expression stays the same. What changes is where the candidates come from,
   what is done with those that fit, and <i>who</i> answers: a selecting or a generating backend.</p>
   <div class="footer"><span>Advanced Methods of AI · Worksheet 3</span><span>6</span></div>
 </section>
 
 <!-- 7 -->
 <section class="slide">
+  <div class="kicker">Today</div>
   <h1>Two questions to keep in mind</h1>
   <ul style="margin-top:4mm">
     <li><b>Does the robot know everything?</b> The query treats what it knows as complete; last week's OWL reasoner
@@ -133,16 +150,17 @@ pizza.where(for_all(topping, HasType(topping, VegetableTopping)))</pre>
 
 <!-- 8 -->
 <section class="slide">
+  <div class="kicker">Today</div>
   <h1>How we work today</h1>
   <ul>
     <li>In pairs, one laptop. The <b>sheet</b> is for logic and predictions, the <b>notebook</b> for running EQL.</li>
     <li><b>Predict, then run.</b> Write your answer on the sheet before you run a cell: a wrong prediction is where
         you learn the most.</li>
     <li>Every cell runs as it is; a <code>TODO</code> you cannot solve does not stop you.</li>
-    <li>Every answer is drawn on the picture of the pizzeria. Draw along on Figure 1 of the sheet.</li>
+    <li>Every answer is drawn on the picture of the pizzeria. Draw along on Figure 2 of the sheet.</li>
   </ul>
-  <p class="small" style="margin-top:4mm">Before the acts: these slides, 8 minutes.</p>
-  <div class="timeline" style="margin-top:1mm">
+  <p class="small" style="margin-top:3mm">Slides 8′, then:</p>
+  <div class="timeline">
     <div style="flex:4"><b>Prologue</b>4′</div>
     <div style="flex:22"><b>Ask</b>22′</div>
     <div style="flex:10"><b>Describe</b>10′</div>

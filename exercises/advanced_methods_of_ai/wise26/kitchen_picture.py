@@ -25,24 +25,24 @@ class Colour(str, Enum):
     The colours of the picture, one per kind of thing drawn.
     """
 
-    CHEESE = "#f2c12e"
-    VEGETABLE = "#43a047"
-    MEAT = "#c0392b"
-    FISH = "#1e88e5"
-    OTHER_TOPPING = "#9e9e9e"
-    HOT = "#ff6d00"
-    CRUST = "#e8c38a"
-    CRUST_EDGE = "#b07c3c"
-    DOUGH = "#fbeccb"
-    TABLE = "#eef2f7"
-    TABLE_EDGE = "#7b8ba1"
-    ORDER_LINE = "#9aa7b5"
-    ANSWER = "#c2185b"
-    VIOLATION = "#d50000"
-    NOTE = "#37474f"
-    WARNING = "#e65100"
-    TEXT = "#212121"
-    MUTED = "#757575"
+    CHEESE = "#e0b048"
+    VEGETABLE = "#5f8f62"
+    MEAT = "#a8483e"
+    FISH = "#3f6e9a"
+    OTHER_TOPPING = "#9a9a9a"
+    HOT = "#c8742e"
+    CRUST = "#e3c79a"
+    CRUST_EDGE = "#a9844f"
+    DOUGH = "#f6ebd3"
+    TABLE = "#eef1f5"
+    TABLE_EDGE = "#7d8a9b"
+    ORDER_LINE = "#a3aebb"
+    ANSWER = "#1f3a5f"
+    VIOLATION = "#b03a2e"
+    NOTE = "#33414d"
+    WARNING = "#9c6b1f"
+    TEXT = "#1a1a1a"
+    MUTED = "#6b6b6b"
 
 
 TOPPING_CATEGORIES = (
@@ -194,7 +194,7 @@ class KitchenPicture:
             parts.append(
                 f'<rect x="{first - 46}" y="{pizza_y - 44}" width="{last - first + 92}" height="88" rx="10" '
                 f'fill="#faf6ef" stroke="#e3d6c0"/>'
-                f'<text x="{first - 40}" y="{pizza_y - 33}" font-size="9" '
+                f'<text x="{first - 44}" y="{pizza_y - 48}" font-size="9" '
                 f'fill="{Colour.MUTED.value}">counter</text>'
             )
         for pizza in counter:

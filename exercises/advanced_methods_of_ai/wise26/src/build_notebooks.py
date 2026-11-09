@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from textwrap import dedent
 
@@ -69,11 +70,47 @@ class Cell:
         return cell
 
 
+class Callout(Enum):
+    """
+    The kinds of framed paragraph in the Markdown cells, each with its border and fill colour.
+    """
+
+    TASK = ("#1f3a5f", "#eaf0f6")
+    PREDICT = ("#9c6b1f", "#f8f2e6")
+    SOLUTION = ("#7d8a9b", "#f3f5f7")
+
+    def frame(self, text: str) -> str:
+        """
+        :return: The Markdown text inside a box with a coloured left border; without styles, the text alone.
+        """
+        border, fill = self.value
+        style = f"border-left: 5px solid {border}; background-color: {fill}; padding: 6px 14px"
+        return f'<div style="{style}">\n\n{text}\n\n</div>'
+
+
+def styled(text: str) -> str:
+    """
+    :return: The Markdown text with tasks and predictions framed and the rule above an act drawn in the theme colour.
+    """
+    paragraphs = dedent(text).strip("\n").split("\n\n")
+    for index, paragraph in enumerate(paragraphs):
+        if paragraph.startswith(("**Your turn.**", "**How to work.**")):
+            paragraphs[index] = Callout.TASK.frame(paragraph)
+        elif paragraph.startswith("**Predict"):
+            paragraphs[index] = Callout.PREDICT.frame(paragraph)
+        elif paragraph.startswith(("---\n## ", "# ")):
+            heading = paragraph.removeprefix("---\n")
+            paragraphs[index] = (
+                f'<hr style="border: 0; border-top: 6px solid #1f3a5f; margin: 0">\n\n{heading}'
+            )
+    return "\n\n".join(paragraphs)
+
+
 def markdown(text: str) -> Cell:
     """
     :return: A Markdown cell shown in both notebooks.
     """
-    return Cell(text, code=False)
+    return Cell(styled(text), code=False)
 
 
 def note(text: str) -> Cell:
@@ -81,7 +118,9 @@ def note(text: str) -> Cell:
     :return: A solution note, shown only in the solution notebook.
     """
     return Cell(
-        "**Solution note.** " + dedent(text).strip("\n"), code=False, only_solution=True
+        Callout.SOLUTION.frame("**Solution note.**\n\n" + dedent(text).strip("\n")),
+        code=False,
+        only_solution=True,
     )
 
 
@@ -410,8 +449,13 @@ PROLOGUE = [
         (pizzas, toppings, guests, orders); the extension of the predicate `CheeseTopping` is the set of yellow
         dots; the extension of the relation `hasTopping` is the set of pairs (pizza, dot on that pizza). Every
         query today is evaluated *in* this one interpretation.
-
+        """
+    ),
+    markdown(
+        """
         ### EQL in one table
+
+        Keep this table at hand; it is also on page 3 of the worksheet.
 
         | EQL | Read it as | First-order logic |
         |:--|:--|:--|
@@ -1007,7 +1051,9 @@ ACT_5 = [
     markdown(
         """
         A description usually leaves things open. Dana adds: *"and a green pepper, I don't mind how hot"*. `...`
-        marks what she left open. **Predict:** how many pizzas does the kitchen offer?
+        marks what she left open.
+
+        **Predict:** how many pizzas does the kitchen offer?
         """
     ),
     code(
