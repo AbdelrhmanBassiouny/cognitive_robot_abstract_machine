@@ -3,8 +3,9 @@ Plan
 
 Done
 - Draft PR AbdelrhmanBassiouny/cognitive_robot_abstract_machine#560, labels api-break + new-feature.
-- CI at 34c541868: all 1,298 failures (6 packages) came from a positional LeftOf/RightOf call in robot_part_mixins.py; fixed in 10bad04db.
+- Merged main (8574ddf) at 3982b9c0b + format 91ad9a382; main's new krrood code migrated; krrood tests pass (3,077) locally.
 
 Next
-- Read CI on #560 at 10bad04db; fixing the robot loading may expose failures it masked (PR2/xacro tests cannot run locally). User discusses the break with code owners.
-- Open question: extend the rule to module-level functions (suggested as a follow-up PR).
+- Finish rerunning the other packages against main (scratchpad all_packages.sh); fix any new failures; then read CI on #560 at the latest head.
+- User discusses the break with code owners. Open: extend the rule to module-level functions (suggested follow-up PR).
+
