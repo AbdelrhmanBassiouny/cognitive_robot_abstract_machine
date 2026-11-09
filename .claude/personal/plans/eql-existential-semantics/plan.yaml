@@ -254,8 +254,8 @@ items:
   status: in_progress
   session: https://claude.ai/code/session_01JxHGiLw14x2s6qUmLMbTjy
   notes: 'Draft, stacked on #495; bug-fix, api-break (list/tuple == by order, list of patterns
-    needs the same length, ValueFitsNeitherElementNorCollection). Option A; the match.md thread
-    on #495 waits on the shared doc vote (A/B/C/D).'
+    needs the same length, ValueFitsNeitherElementNorCollection). Option A, chosen by the owner
+    in the shared doc vote on 2026-11-09.'
   depends_on:
   - correlated-quantifiers
 - id: match-generation
