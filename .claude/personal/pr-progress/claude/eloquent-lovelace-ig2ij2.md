@@ -3,9 +3,9 @@ Plan
 
 Done
 - Draft PR AbdelrhmanBassiouny/cognitive_robot_abstract_machine#560, labels api-break + new-feature.
-- Merged main (8574ddf) at 3982b9c0b + format 91ad9a382; main's new krrood code migrated; krrood tests pass (3,077) locally.
+- Merged main (8574ddf); head 3e6cedfb4. Local runs vs main: no new failures in any package that runs here (coraplex not comparable: ROS stand-ins).
 
 Next
-- Finish rerunning the other packages against main (scratchpad all_packages.sh); fix any new failures; then read CI on #560 at the latest head.
+- Read CI on #560 at 3e6cedfb4 when the user prompts.
 - User discusses the break with code owners. Open: extend the rule to module-level functions (suggested follow-up PR).
 
