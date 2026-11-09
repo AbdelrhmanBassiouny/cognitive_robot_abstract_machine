@@ -228,14 +228,14 @@ items:
     from #222/#275, not from #265.'
 - id: demo-asks-by-query
   title: The demo's perception runs because a query was evaluated
-  branch: tracy_icra
   pull_request_number: null
   track: demo-requests
   depends_on:
   - choose-detection-method
   - knowledge-directed-grounding/demo-runs-on-grounded-perception
   status: not_started
-  notes: 'Every perception call in montessori_demo.py goes through the backend rather than
+  notes: 'Lands on the tracy_icra demo branch, which knowledge-directed-expectation/demo-detects-and-recovers-a-failed-insert
+    tracks. Every perception call in montessori_demo.py goes through the backend rather than
     calling the pipeline by hand, and the detector that answers is the one the rule tree chose
     from the surface and the target - visibly a different one for the steel table than for
     the board''s lid. This is the wave''s claim made demonstrable: the same question, answered
