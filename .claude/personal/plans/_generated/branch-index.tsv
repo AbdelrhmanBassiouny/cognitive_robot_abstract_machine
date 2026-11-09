@@ -131,7 +131,6 @@ abox-loader	ontomatic-port
 owl2rl-consistency-check	ontomatic-port
 closure-verification	ontomatic-port
 owl2bench-experiments	ontomatic-port
-fix/symbol-graph-removal-by-identity	ontomatic-port
 rl-unsupported-constructs	ontomatic-reasoning
 rl-data-properties	ontomatic-reasoning
 rl-nested-expressions	ontomatic-reasoning
