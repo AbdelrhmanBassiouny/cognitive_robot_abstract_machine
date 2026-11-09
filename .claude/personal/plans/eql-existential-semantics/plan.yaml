@@ -138,7 +138,8 @@ items:
     Supersedes cram2#905''s narrower exists fix, now on main: merged keeping this item''s
     quantifiers; 905''s tests pass. Reasoning on the PR.
 
-    Open threads: bag vs set, flat_variable automation, performance. Overlaps exists-semijoin
+    Bag kept (test ignores repeats); set semantics is plain-where-locals-existential.
+    Open threads: flat_variable automation, performance. Overlaps exists-semijoin
     and negation-antijoin: settle which supersedes which before either starts.
 
     '
@@ -165,11 +166,12 @@ items:
   depends_on:
   - exists-semijoin
   status: not_started
-  notes: 'GOAL: a variable a query does not select, used in a plain .where(), behaves like
-    one inside exists(): it binds nothing per row and never escapes, so the query yields one
-    row per binding of its selection, not one per witness. The same "locals never escape"
-    rule exists-semijoin defines, applied outside exists(). Raised by the developer on the
-    review of #480 (2026-10-01) and proposed on #137.'
+  notes: 'GOAL: set semantics over unselected variables: a variable a query does not select
+    is existential, so the query yields one row per binding of its selection, not one per
+    witness (relational calculus, Datalog). Raised on #480; chosen as the target on #495
+    (2026-11-09), which keeps bag semantics. DECIDE: rows compared by the objects bound to
+    the selected variables, not their values; whether aggregates see deduplicated rows; the
+    memory of remembering returned rows. api-break: every unselected join variable.'
 - id: negation-antijoin
   title: Make negated exists an antijoin, and fix for_all the same way
   branch: null
