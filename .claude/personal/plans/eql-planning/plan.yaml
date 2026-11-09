@@ -1,10 +1,11 @@
 schema_version: 1
 id: eql-planning
 title: 'EQL planning: goals as EQL conditions, planners as EQL backends'
-description: 'Domain-agnostic planning over EQL in krrood: fluents and a State overlay, action schemas
-  with assignment effects, and a PlanningBackend that answers a goal query with plans, with compiled
-  heuristic search, regression-based explanation, trajectory constraints and a unified-planning backend.
-  Its robot use is eql-planning-robots (#522). Core by Nov 13; target IROS 2027.'
+description: 'Domain-agnostic planning over EQL in krrood: fluents and a State overlay, action
+  schemas with assignment effects, and a PlanningBackend that answers a goal query with plans,
+  with compiled heuristic search, regression-based explanation, trajectory constraints and
+  a unified-planning backend. Its robot use is eql-planning-robots (#522). Core by Nov 13;
+  target IROS 2027.'
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 513
 waves:
@@ -33,118 +34,54 @@ items:
   title: Predicate results cached per state, not per argument tuple alone
   track: eql-prerequisites
   depends_on:
-  - fluent-state-overlay
   - ontomatic-port/eql-predicate-call-memo
   status: deferred
   notes: 'Changes the per-argument cache (ontomatic-port eql-predicate-call-memo, commit 08f9178dd
-    on aamas27-unification-revision): fold into whichever PR lands that cache. Keys on the State
-    that fluent-state-overlay introduces. Deferred at kickoff on 2026-10-20.'
-- id: instantiated-variable-type-and-factory
-  branch: claude/eql-planning-instantiated-variable-cue1io
-  title: InstantiatedVariable separates its result type from the factory that builds it
-  track: eql-prerequisites
-  pull_request_number: 542
-  session: https://claude.ai/code/session_01JxHGiPsM8oqLSysqVaSFHa
-  blockers:
-    - >-
-      Owner to answer the three open #542 threads asking why _factory_, not _type_
-      (plan_transformations.py:334, task_conditions.py:477, planner.py:118). Upstream cram2#862 has
-      two approvals and no open threads.
-    - >-
-      CI on the merge of main at 9bd5951e46 was still running when read; not run locally (pyjpt
-      cannot be installed here).
-  depends_on: []
-  status: in progress
-  notes: >
-    Bug-style PR off main, landing on its own (#542). One field for the result type, always a type;
-    inference takes only the factory and the type is inferred from it by HasFactoryAndKwargs, the
-    same way Match infers its type. A factory with no usable return annotation raises; there is no
-    object fallback. A method annotated -> Self builds the class it is bound to.
-
-    InstantiatedVariable inherits HasFactoryAndKwargs, like Match; _declared_factory_ holds the
-    decorated symbolic function.
-- id: call-arguments-normalization
-  branch: eql-planning/mapped-variable-cache-unhashable-arguments
-  title: A query calling a method accepts unhashable arguments, compared through CallArguments
-  track: eql-prerequisites
-  pull_request_number: 540
-  session: https://claude.ai/code/session_01JxHGiMbWLBgK8nT2DHNmxJ
-  depends_on: []
-  status: in progress
-  notes: >
-    Bug PR off main, merged into #535. Promoted: cram2 PR #837 is open and under upstream review
-    (tomsch420 requested changes). The one actionable request, sharing the signature cache with
-    HasFactoryAndKwargs, is done. The other two threads (frozen MappedVariableCacheItem, purpose of
-    the mimic) are answered by the owner and wait for the reviewers. The fork checks failing on
-    1616d8d (random_events, segmind) were runner disk space, not the change.
-- id: fluent-state-overlay
-  branch: claude/zealous-albattani-uoew5i
-  title: Fluents and a State overlay that EQL queries are evaluated against
-  track: planning-core
-  pull_request_number: 535
-  session: https://claude.ai/code/session_018wfiv5UFGiK1C1yQrE4QSF
-  blockers:
-    - >-
-      Waiting on the owner: cram2#866 has changes requested, and every upstream thread is answered
-      by a commit except LucaKro's question at planning/__init__.py:2. The owner posts the replies
-      and decides the fork threads left open. Read at 730a9ae222 on Nov 6: no merge conflict with
-      main; CI not finished.
-  depends_on:
-  - instantiated-variable-type-and-factory
-  - call-arguments-normalization
-  status: in progress
-  notes: >
-    Promoted as cram2#866. Merges #538, #540 and, from main, #862. The cram2#866 design answers are
-    in c1e7fc3c0a. Counterfactual episodes are plan eql-counterfactual-episodes.
-
-    Next: the owner decides the open fork threads (argument comparison by value, a shared doctest
-    plugin, from_call currying, the receiver rename, ObjectIdentity's NotImplemented) and posts the
-    drafted upstream replies; reviewers re-review.
-
-    #542 is not merged in. If #535 needs it, stack on #542 and drop Fact._is_predicate's
-    isinstance(_type_, type) guard.
+    on aamas27-unification-revision): fold into whichever PR lands that cache. Keys on the
+    State that fluent-state-overlay introduces. Deferred at kickoff on 2026-10-20.'
 - id: state-objects-and-domains
   branch: ccr-b32c8432-18ncpi
-  title: 'Objects in a State: a state adds and removes objects, and default EQL domains come from
-    it'
+  title: 'Objects in a State: a state adds and removes objects, and default EQL domains come
+    from it'
   track: planning-core
   pull_request_number: 541
   session: https://claude.ai/code/session_018wfiv5yasD7se5ZBXvUw5i
-  depends_on:
-  - fluent-state-overlay
+  depends_on: []
   status: in progress
-  notes: >
-    In #541 (draft, on #535): state objects, TermReader.instances_of, per-evaluation default
-    domains, expression domains as FlatVariable/InstanceFilteredFlatVariable (a(T).from_(expr) too).
-    First review addressed in fa1dc1af6e; the owner chose to filter removed objects out of
-    list/tuple/set fluent values, captured lists stay unfiltered.
+  notes: 'In #541 (draft, on #535): state objects, TermReader.instances_of, per-evaluation
+    default domains, expression domains as FlatVariable/InstanceFilteredFlatVariable (a(T).from_(expr)
+    too). First review addressed in fa1dc1af6e; the owner chose to filter removed objects
+    out of list/tuple/set fluent values, captured lists stay unfiltered.
 
-    Open: a thread asks for match syntax everywhere; the binding test keeps variable() since a match
-    in set_of does not correlate (correlated-quantifiers). Unregistered objects are left to
-    action-schema-progression.
+    Open: a thread asks for match syntax everywhere; the binding test keeps variable() since
+    a match in set_of does not correlate (correlated-quantifiers). Unregistered objects are
+    left to action-schema-progression.
+
+    '
 - id: action-schema-progression
   branch: eql-planning/action-schema-progression
   title: ActionSchema with an EQL precondition and assignment effects, applied to a State
   track: planning-core
   depends_on:
-  - fluent-state-overlay
   - state-objects-and-domains
   status: not_started
-  notes: 'Effects can create and remove objects (state-objects-and-domains). Field types of the class
-    diagram type-check effects. Effects are facts (State.with_facts) whose value may depend on the
-    binding (x.support := y); #535 accepts only constant values. Appending to a collection is an effect
-    here, not a fact (#535 review): a fact only fixes an existing fluent.'
+  notes: 'Effects can create and remove objects (state-objects-and-domains). Field types of
+    the class diagram type-check effects. Effects are facts (State.with_facts) whose value
+    may depend on the binding (x.support := y); #535 accepts only constant values. Appending
+    to a collection is an effect here, not a fact (#535 review): a fact only fixes an existing
+    fluent.'
 - id: declared-setter-implications
   branch: eql-planning/declared-setter-implications
-  title: Assignments follow the implications a setter declares, such as ontomatic inverse properties
+  title: Assignments follow the implications a setter declares, such as ontomatic inverse
+    properties
   track: planning-core
   depends_on:
   - action-schema-progression
   status: not_started
-  notes: 'ontomatic PropertyDescriptor.__set__ applies inverse, super-property and transitive implications;
-    a state assigning one side must assign the implied ones too, from the declared structure. Lets
-    a domain declare how its setter''s effects are modelled, lifting AssignmentBypassesSetter (#535)
-    for it.'
+  notes: ontomatic PropertyDescriptor.__set__ applies inverse, super-property and transitive
+    implications; a state assigning one side must assign the implied ones too, from the declared
+    structure. Lets a domain declare how its setter's effects are modelled, lifting AssignmentBypassesSetter
+    (#535) for it.
 - id: planning-backend-search
   branch: eql-planning/planning-backend-search
   title: PlanningBackend answers a goal query with plans; breadth-first search on test domains
@@ -153,8 +90,8 @@ items:
   - action-schema-progression
   - eql-existential-semantics/correlated-quantifiers
   status: not_started
-  notes: Test domains write each derived fact that passes the three-part rule (changes during a plan,
-    used by a goal or precondition, relational) as an EQL body, not Python.
+  notes: Test domains write each derived fact that passes the three-part rule (changes during
+    a plan, used by a goal or precondition, relational) as an EQL body, not Python.
 - id: regression-and-explanation
   branch: eql-planning/regression-and-explanation
   title: Successor state axioms generated from effects; regression explains each step
@@ -164,15 +101,16 @@ items:
   status: not_started
 - id: compiled-search-ff
   branch: eql-planning/compiled-search-ff
-  title: Grounding through EQL, compiled integer state, greedy best-first and A* with the FF heuristic
+  title: Grounding through EQL, compiled integer state, greedy best-first and A* with the
+    FF heuristic
   track: planning-core
   depends_on:
   - planning-backend-search
   - state-aware-predicate-cache
   status: not_started
-  notes: 'Grounding, finite-domain variables and h_add/h_FF need each condition''s read set before
-    search: they see through EQL bodies only; Python bodies are attachments. Field types give grounding
-    and finite domains.'
+  notes: 'Grounding, finite-domain variables and h_add/h_FF need each condition''s read set
+    before search: they see through EQL bodies only; Python bodies are attachments. Field
+    types give grounding and finite domains.'
 - id: trajectory-constraints
   branch: eql-planning/trajectory-constraints
   title: Trajectory constraints (PDDL3 subset) checked in search and monitored during execution
@@ -182,7 +120,8 @@ items:
   status: not_started
 - id: unified-planning-backend
   branch: eql-planning/unified-planning-backend
-  title: Compile EQL domains to unified-planning; cross-check against Fast Downward on IPC domains
+  title: Compile EQL domains to unified-planning; cross-check against Fast Downward on IPC
+    domains
   track: evaluation
   depends_on:
   - planning-backend-search

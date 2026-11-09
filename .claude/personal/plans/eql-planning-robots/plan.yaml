@@ -1,10 +1,11 @@
 schema_version: 1
 id: eql-planning-robots
 title: 'EQL planning on robots: Montessori sorting, cramph Achieve nodes and RoboCasa'
-description: 'The planner from eql-planning (#513) put to work on robots: Montessori sorting as a
-  planning domain and #511''s fifth backend, effects for the coraplex actions, a cramph Achieve(goal)
-  node that plans and replans, RoboCasa goals read from the tasks'' success checks, and 5-10 RoboCasa
-  tasks end to end. Feature freeze 2026-12-18; IROS 2027 experiments in January.'
+description: 'The planner from eql-planning (#513) put to work on robots: Montessori sorting
+  as a planning domain and #511''s fifth backend, effects for the coraplex actions, a cramph
+  Achieve(goal) node that plans and replans, RoboCasa goals read from the tasks'' success
+  checks, and 5-10 RoboCasa tasks end to end. Feature freeze 2026-12-18; IROS 2027 experiments
+  in January.'
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 522
 waves:
@@ -29,7 +30,8 @@ tracks:
 items:
 - id: montessori-planning-domain
   branch: eql-planning-robots/montessori-planning-domain
-  title: 'Montessori sorting as a planning domain: SortPieceAction effects and the for_all goal'
+  title: 'Montessori sorting as a planning domain: SortPieceAction effects and the for_all
+    goal'
   track: montessori
   status: not_started
   notes: 'SortPieceAction exists only on the unlanded showcase PR #511.'
@@ -39,8 +41,8 @@ items:
   - eql-planning/planning-backend-search
 - id: planner-as-showcase-backend
   branch: eql-planning-robots/planner-as-showcase-backend
-  title: 'The planner answers the plan''s open steps as #511''s fifth backend, through the Achieve
-    act'
+  title: 'The planner answers the plan''s open steps as #511''s fifth backend, through the
+    Achieve act'
   track: montessori
   depends_on:
   - montessori-planning-domain
@@ -51,42 +53,43 @@ items:
   title: blocking leaves its IK solution in the live world state
   track: cram-robocasa
   status: not_started
-  notes: 'semantic_digital_twin reasoning/robot_predicates.py: blocking writes the IK result into
-    world.state inside modify_world() and never restores it. Bug-fix PR off main with the bug label;
-    failing test first.'
+  notes: 'semantic_digital_twin reasoning/robot_predicates.py: blocking writes the IK result
+    into world.state inside modify_world() and never restores it. Bug-fix PR off main with
+    the bug label; failing test first.'
 - id: world-collections-as-expressions
   branch: eql-planning-robots/world-collections-as-expressions
-  title: World-scoped EQL domains (world.connections, world.semantic_annotations) written as expressions
-    that follow the state
+  title: World-scoped EQL domains (world.connections, world.semantic_annotations) written
+    as expressions that follow the state
   track: cram-robocasa
   status: not_started
   depends_on:
   - eql-planning/state-objects-and-domains
-  notes: 23 sites, mostly semantic_digital_twin world_rdr/rules.py, plus robot_predicates.py, queries.py,
-    robot_parts.py and coraplex training_environment.py. Mechanical once variable(Type, expression)
-    evaluates its expression.
+  notes: 23 sites, mostly semantic_digital_twin world_rdr/rules.py, plus robot_predicates.py,
+    queries.py, robot_parts.py and coraplex training_environment.py. Mechanical once variable(Type,
+    expression) evaluates its expression.
 - id: relational-predicates-in-eql
   branch: eql-planning-robots/relational-predicates-in-eql
-  title: Robot relational predicates the planner reasons through (GripperHolds, IsPartOfARobot) as
-    EQL bodies
+  title: Robot relational predicates the planner reasons through (GripperHolds, IsPartOfARobot)
+    as EQL bodies
   track: cram-robocasa
   status: not_started
   depends_on:
   - eql-planning/state-objects-and-domains
-  notes: 'Owner decided (Oct 30): relational predicates the planner reasons through get EQL bodies.
-    12 of the 57 workspace predicates and symbolic functions are relational; inventory in https://claude.ai/artifact/3zhr45pHQ9P9mdqxtJs5L5'
+  notes: 'Owner decided (Oct 30): relational predicates the planner reasons through get EQL
+    bodies. 12 of the 57 workspace predicates and symbolic functions are relational; inventory
+    in https://claude.ai/artifact/3zhr45pHQ9P9mdqxtJs5L5'
 - id: geometric-attachments
   branch: eql-planning-robots/geometric-attachments
-  title: Geometric predicates as attachments that receive the state and declare what they read
+  title: Geometric predicates as attachments that receive the state and declare what they
+    read
   track: cram-robocasa
   status: not_started
   depends_on:
-  - eql-planning/fluent-state-overlay
   - eql-planning/state-objects-and-domains
-  notes: 'Owner decided (Oct 30): an attachment declares the terms it reads (coarse at first, e.g.
-    the joint positions of these bodies). SemDT meets it by putting its world into the state inside
-    the attachment, scoped, restored and without notifying observers. 27 geometric bodies, inventory
-    in the design.'
+  notes: 'Owner decided (Oct 30): an attachment declares the terms it reads (coarse at first,
+    e.g. the joint positions of these bodies). SemDT meets it by putting its world into the
+    state inside the attachment, scoped, restored and without notifying observers. 27 geometric
+    bodies, inventory in the design.'
 - id: coraplex-action-effects
   branch: eql-planning-robots/coraplex-action-effects
   title: Effects for pick, place, open, close and navigate, separate from post_condition monitors
@@ -99,8 +102,8 @@ items:
   - concept-theory/holds-estimator
   - eql-planning/state-objects-and-domains
   - world-collections-as-expressions
-  notes: Attaching a body removes a Connection and adds a FixedConnection, so pick and place need
-    objects in a state.
+  notes: Attaching a body removes a Connection and adds a FixedConnection, so pick and place
+    need objects in a state.
 - id: cramph-achieve-node
   branch: eql-planning-robots/cramph-achieve-node
   title: A cramph Achieve(goal) node that plans when expanded and replans when a step fails

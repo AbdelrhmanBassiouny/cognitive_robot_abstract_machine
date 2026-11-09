@@ -2,9 +2,9 @@ schema_version: 1
 id: ontomatic-port
 title: Port Ontomatic and the paper's EQL/ORMatic work to upstream
 description: 'Bring Ontomatic (OWL ontology to KRROOD model, ABox loading with OWL 2 RL materialization,
-  AAMAS 2027 paper Section 5) from the fork''s aamas27-experiments branch onto current main as a clean
-  rewrite-in-place, and land the paper''s EQL/ORMatic work alongside it. Closing the OWL 2 RL gaps and
-  going past RL is ontomatic-reasoning.
+  AAMAS 2027 paper Section 5) from the fork''s aamas27-experiments branch onto current main
+  as a clean rewrite-in-place, and land the paper''s EQL/ORMatic work alongside it. Closing
+  the OWL 2 RL gaps and going past RL is ontomatic-reasoning.
 
   '
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
@@ -17,7 +17,8 @@ tracks:
 - id: paper-eql-ormatic
   name: Paper EQL/ORMatic work
   wave: port
-  description: Split aamas27-unification-revision (15 commits) into per-root-cause PRs off main.
+  description: Split aamas27-unification-revision (15 commits) into per-root-cause PRs off
+    main.
 - id: ontomatic-core
   name: Ontomatic port
   wave: port
@@ -30,16 +31,14 @@ items:
   pull_request_number: 553
   session: https://claude.ai/code/session_01JxHGiMEy4DjtkFbwQu2uRK
   depends_on:
-  - eql-planning/fluent-state-overlay
   - symbol-graph-removal-by-identity
   status: in progress
-  notes: 'Source 08f9178dd2 on aamas27-unification-revision. Stacked on #535 (merged
-    at c6bd57ebe8); CallResults is a TermReader keyed
-    by callee + CallArguments as passed (CallTerm keys fail on builtins), predicate truth read as
-    a __call__ call. Needs #554 and #558 (bug PR off main: non-scalar SymbolicMathType hash raises
-    TypeError; merged here, fixed the semantic_digital_twin CI failure on Vector3 arguments). Out
-    of draft (user); test_eql+test_planning+test_symbolic_math green at b694fe1229, CI unread;
-    threads on rule-conclusion dedup and the nested dict open.'
+  notes: 'Source 08f9178dd2 on aamas27-unification-revision. Stacked on #535 (merged at c6bd57ebe8);
+    CallResults is a TermReader keyed by callee + CallArguments as passed (CallTerm keys fail
+    on builtins), predicate truth read as a __call__ call. Needs #554 and #558 (bug PR off
+    main: non-scalar SymbolicMathType hash raises TypeError; merged here, fixed the semantic_digital_twin
+    CI failure on Vector3 arguments). Out of draft (user); test_eql+test_planning+test_symbolic_math
+    green at b694fe1229, CI unread; threads on rule-conclusion dedup and the nested dict open.'
 - id: ormatic-collection-translation
   branch: ormatic-collection-translation
   title: 'ORMatic: translate EQL over collection-valued attributes to SQL'
@@ -70,7 +69,8 @@ items:
   track: ontomatic-core
   depends_on: []
   status: not_started
-  notes: Port ontomatic/property_descriptor/mixins.py from aamas27-experiments onto main's descriptors.
+  notes: Port ontomatic/property_descriptor/mixins.py from aamas27-experiments onto main's
+    descriptors.
 - id: descriptor-provenance
   branch: descriptor-provenance
   title: Inferred facts with provenance and fact placement in PropertyDescriptorRelation
@@ -85,7 +85,8 @@ items:
   track: ontomatic-core
   depends_on: []
   status: not_started
-  notes: Seed from owl2rl_tbox.py; replaces ClassInfo/PropertyInfo and the rdrs/property_inference files.
+  notes: Seed from owl2rl_tbox.py; replaces ClassInfo/PropertyInfo and the rdrs/property_inference
+    files.
 - id: model-compiler
   branch: model-compiler
   title: Compile a Terminology into Python modules on krrood.code_generation
@@ -95,7 +96,8 @@ items:
   - descriptor-characteristics
   - eql-existential-semantics/correlated-quantifiers
   status: not_started
-  notes: 'Fixes: sufficient conditions as a disjunction, owl:Thing filler, owl:Nothing, hierarchy cycles.'
+  notes: 'Fixes: sufficient conditions as a disjunction, owl:Thing filler, owl:Nothing, hierarchy
+    cycles.'
 - id: abox-loader
   branch: abox-loader
   title: ABox loader as the Algorithm 1 pipeline of step classes
@@ -127,7 +129,6 @@ items:
   - closure-verification
   status: not_started
   notes: From krrood_experiments aamas27-* and the supplement; large runs skipped in CI.
-
 - id: symbol-graph-removal-by-identity
   branch: fix/symbol-graph-removal-by-identity
   title: 'SymbolGraph: remove a wrapped instance by identity, not by equality'
@@ -136,6 +137,6 @@ items:
   session: https://claude.ai/code/session_01JxHGiMEy4DjtkFbwQu2uRK
   depends_on: []
   status: in progress
-  notes: 'Bug fix off main, found measuring eql-predicate-call-memo. Draft, krrood_test
-    green apart from Graphviz tests. The stale _instance_index entry of a dead instance
-    is a separate root cause, not fixed here.'
+  notes: Bug fix off main, found measuring eql-predicate-call-memo. Draft, krrood_test green
+    apart from Graphviz tests. The stale _instance_index entry of a dead instance is a separate
+    root cause, not fixed here.
