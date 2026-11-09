@@ -1,1 +1,1 @@
-{"request_identifier": "ebdf633bc799f17e", "error": "no pull request on cram2/cognitive_robot_abstract_machine has head 'AbdelrhmanBassiouny:fix/eql-match-collection-attributes'\nSuggestion: The branch has most likely not been promoted upstream yet; read it once its upstream pull request is open", "responses": [], "job_logs": []}
+{"request_identifier": "2c417999bda599b9", "upstream_pull_requests": {"fork": "AbdelrhmanBassiouny/cognitive_robot_abstract_machine", "pull_request_by_branch": {"claude/keen-feynman-4xcf4m": 904, "claude/ecstatic-knuth-curscv": 804}}}
