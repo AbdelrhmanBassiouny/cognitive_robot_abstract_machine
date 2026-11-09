@@ -51,11 +51,11 @@ items:
   pull_request_number: 545
   session: https://claude.ai/code/session_01JxHGiMzkomLaQ42NXK331R
   depends_on: []
-  notes: 'In review in #545: get_scope_from_imports skips a TYPE_CHECKING import whose module is
-    not found along its whole dotted path (krrood.<part> included, no package code runs); runtime
-    imports keep raising (user decision). An installed module with missing dependencies still
-    raises on a plain import. After #546 lands, move these helpers into krrood.source_analysis
-    and share ModuleLevelImportFinder.type_checking_flag.'
+  notes: 'In review in #545: get_scope_from_imports attempts a plain import under TYPE_CHECKING
+    and an ImportError makes it bind no name (developer-approved exception to no-try/except;
+    find_spec missed modules with missing dependencies). Runtime imports keep raising. After #546
+    lands, move these helpers into krrood.source_analysis and share
+    ModuleLevelImportFinder.type_checking_flag.'
 - id: core-boundary-guard
   title: One guard over every core module, with import-linter and a shrinking offender list
   branch: claude/keen-feynman-4xcf4m
