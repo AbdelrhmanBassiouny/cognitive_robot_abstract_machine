@@ -144,13 +144,13 @@ items:
     - not MontessoriShape, not CubeShape, not ShapeSortingBoard.
 - id: demo-runs-on-grounded-perception
   title: The demo sees only the table, finds pieces on the lid, and reports each once
-  branch: tracy_icra
   pull_request_number: null
   track: demo-grounding
   depends_on:
   - one-detection-per-thing
   status: not_started
-  notes: 'Wave one is finished when the three faults are gone on the real robot, not when
+  notes: 'Lands on the tracy_icra demo branch, which knowledge-directed-expectation/demo-detects-and-recovers-a-failed-insert
+    tracks. Wave one is finished when the three faults are gone on the real robot, not when
     their pull requests are approved: the clipped windows show the table and nothing beyond
     it, a cube resting on the board''s lid is detected there, and no detection rides the board''s
     borders. Verified against the live camera, with a captured frame kept for the tests.'
