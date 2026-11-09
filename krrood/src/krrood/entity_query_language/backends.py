@@ -43,6 +43,7 @@ from krrood.entity_query_language.exceptions import (
     NoCausesEffectConditionForCause,
     NoSolutionFound,
     GenerativeBackendQueryIsNotUnderspecifiedVariable,
+    GenerativeBackendCannotFillInADomainObject,
     SelectiveBackendCannotResolveEllipsisMatch,
     UnderspecifiedStatementInfeasibleForEntityQueryLanguageGeneration,
 )
@@ -207,6 +208,12 @@ class GenerativeBackend(QueryBackend, ABC):
     def evaluate(self, expression: Evaluable) -> Iterable[T]:
         if not isinstance(expression, Match):
             raise GenerativeBackendQueryIsNotUnderspecifiedVariable(expression)
+        for attribute_match in expression._generated_attribute_matches_:
+            pattern = attribute_match.assigned_value
+            if attribute_match._chooses_from_a_domain_ and (
+                pattern._has_ellipsis_attributes_ or pattern._has_cause_attributes_
+            ):
+                raise GenerativeBackendCannotFillInADomainObject(pattern)
         yield from self._evaluate(expression)
 
     @abstractmethod
@@ -271,7 +278,7 @@ class EntityQueryLanguageGenerativeBackend(GenerativeBackend):
     def _evaluate(self, expression: Match[T]) -> Iterable[T]:
         self._warn_or_raise_on_unresolved_cause_(expression)
         enumerated_variables: dict[uuid.UUID, Selectable] = {}
-        for attribute_match in expression._matches_with_variables_:
+        for attribute_match in expression._generated_attribute_matches_:
             self._check_attribute_match_is_suitable_for_generation(attribute_match)
             enumerated_variables[attribute_match.assigned_variable._id_] = (
                 self._convert_attribute_match_to_variable(attribute_match)
@@ -324,8 +331,10 @@ class EntityQueryLanguageGenerativeBackend(GenerativeBackend):
                 attribute_match.assigned_variable._type_,
                 list(attribute_match.assigned_variable._type_),
             )
-        if isinstance(attribute_match.assigned_value, SymbolicExpression):
-            return attribute_match.assigned_value
+        if attribute_match._chooses_from_a_domain_ or isinstance(
+            attribute_match.assigned_value, SymbolicExpression
+        ):
+            return attribute_match.assigned_variable
         return variable(
             type(attribute_match.assigned_value),
             [attribute_match.assigned_value],

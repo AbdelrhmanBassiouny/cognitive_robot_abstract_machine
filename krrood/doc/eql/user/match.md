@@ -139,6 +139,16 @@ An attribute declared as an optional collection, such as `Optional[set[Course]]`
 collection (`None`) counts as empty: it contains no value and no element matches a pattern. `attr=None` still compares
 the attribute to `None`.
 
+When a generative backend constructs objects from a pattern, the element built for a collection-valued attribute is
+wrapped in the attribute's collection type, so `items=an(Item)(...)` on a `list[Item]` attribute constructs
+`items=[item]`, and on a `set[Item]` attribute `items={item}`.
+
+A nested pattern ranging over a domain is not constructed: the generated object takes an object of that domain that
+satisfies the nested pattern, so `book=a(Book)(weight=5.0).from_(library)` generates one object per book of weight
+5.0 in `library`, holding that very book. Such a book already has all its attributes, so leaving one open with
+`...` or `cause` in its pattern raises `GenerativeBackendCannotFillInADomainObject`. A nested pattern without a domain is always
+constructed, never taken from existing objects; use `.from_()` to reuse them.
+
 ## Full Example: Finding Connected Parts
 
 This example demonstrates how to find a complex structural relationship using nested matches.
