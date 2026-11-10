@@ -79,18 +79,18 @@ def test_an_affine_point_is_given_in_an_affine_frame():
 
 def test_a_point_reports_the_kind_of_frame_it_is_given_in():
     assert (
-        StoredScalablePlanePoint.get_type_of_generic_parameter(AffineFrameT)
+        StoredScalablePlanePoint.get_type_of_generic_parameter(parameter=AffineFrameT)
         is ScalablePlaneFrame
     )
 
 
 def test_a_point_reports_what_its_coordinates_are_stored_as():
-    assert StoredScalablePlanePoint.get_type_of_generic_parameter(CoordinateT) is float
+    assert StoredScalablePlanePoint.get_type_of_generic_parameter(parameter=CoordinateT) is float
 
 
 def test_a_point_reports_the_kind_of_vector_it_is_moved_by():
     assert (
-        StoredScalablePlanePoint.get_type_of_generic_parameter(AffineVectorT)
+        StoredScalablePlanePoint.get_type_of_generic_parameter(parameter=AffineVectorT)
         is StoredScalablePlaneVector
     )
 

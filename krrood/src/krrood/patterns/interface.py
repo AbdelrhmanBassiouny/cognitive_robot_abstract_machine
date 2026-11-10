@@ -27,20 +27,22 @@ class Interface(ABC):
     """
 
     def __new__(cls, *args: Any, **kwargs: Any) -> Self:
-        if Interface.is_interface(cls):
-            raise InterfaceInstantiationError(cls)
+        if Interface.is_interface(class_=cls):
+            raise InterfaceInstantiationError(interface=cls)
         return super().__new__(cls)
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
-        if Interface.is_interface(cls) or Interface.is_abstract(cls):
+        if Interface.is_interface(class_=cls) or Interface.is_abstract(class_=cls):
             return
-        missing_attributes = Interface.missing_attributes(cls)
+        missing_attributes = Interface.missing_attributes(class_=cls)
         if missing_attributes:
-            raise MissingInterfaceAttributesError(cls, missing_attributes)
+            raise MissingInterfaceAttributesError(
+                implementation=cls, attributes=missing_attributes
+            )
 
     @staticmethod
-    def is_interface(class_: type) -> bool:
+    def is_interface(*, class_: type) -> bool:
         """
         :param class_: The class to check.
         :return: Whether the class names :class:`Interface` among its own bases.
@@ -48,7 +50,7 @@ class Interface(ABC):
         return Interface in class_.__bases__
 
     @staticmethod
-    def is_abstract(class_: type) -> bool:
+    def is_abstract(*, class_: type) -> bool:
         """
         :param class_: A class that is being created.
         :return: Whether the class leaves an abstract method unimplemented.
@@ -60,19 +62,19 @@ class Interface(ABC):
         return inspect.isabstract(class_)
 
     @staticmethod
-    def missing_attributes(class_: type) -> tuple[str, ...]:
+    def missing_attributes(*, class_: type) -> tuple[str, ...]:
         """
         :param class_: A class implementing interfaces.
         :return: The attributes the interfaces of the class declare that neither the
             class nor any of its other bases declares or defines, in name order.
         """
         implementations = [
-            base for base in class_.__mro__ if not Interface.is_interface(base)
+            base for base in class_.__mro__ if not Interface.is_interface(class_=base)
         ]
         declared_attributes = {
             name
             for base in class_.__mro__
-            if Interface.is_interface(base)
+            if Interface.is_interface(class_=base)
             for name in inspect.get_annotations(base)
         }
         return tuple(

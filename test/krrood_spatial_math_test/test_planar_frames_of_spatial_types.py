@@ -208,7 +208,7 @@ def test_a_planar_value_is_no_value_given_in_a_three_dimensional_frame(planar_va
 
 def test_a_two_dimensional_point_is_given_in_a_two_dimensional_cartesian_frame():
     assert (
-        CartesianPoint2D.get_type_of_generic_parameter(CoordinateSystemT)
+        CartesianPoint2D.get_type_of_generic_parameter(parameter=CoordinateSystemT)
         is CartesianFrame2D
     )
 
@@ -225,11 +225,11 @@ def test_the_euclidean_distance_between_two_dimensional_points_is_measured_on_th
 
 
 def test_a_two_dimensional_point_stores_its_coordinates_as_symbolic_scalars():
-    assert CartesianPoint2D.get_type_of_generic_parameter(CoordinateT) is sm.Scalar
+    assert CartesianPoint2D.get_type_of_generic_parameter(parameter=CoordinateT) is sm.Scalar
 
 
 def test_a_two_dimensional_point_is_moved_by_a_two_dimensional_vector():
-    assert CartesianPoint2D.get_type_of_generic_parameter(AffineVectorT) is Vector2D
+    assert CartesianPoint2D.get_type_of_generic_parameter(parameter=AffineVectorT) is Vector2D
 
 
 # %% vectors on a frame's plane
@@ -237,7 +237,7 @@ def test_a_two_dimensional_point_is_moved_by_a_two_dimensional_vector():
 
 def test_a_two_dimensional_vector_is_a_cartesian_vector_of_a_two_dimensional_frame():
     assert issubclass(Vector2D, CartesianVector)
-    assert Vector2D.get_type_of_generic_parameter(CoordinateSystemT) is CartesianFrame2D
+    assert Vector2D.get_type_of_generic_parameter(parameter=CoordinateSystemT) is CartesianFrame2D
 
 
 def test_the_difference_of_two_points_on_a_plane_is_the_vector_between_them(
@@ -302,7 +302,7 @@ def test_a_planar_transformation_is_a_rigid_change_of_two_dimensional_frames():
     assert issubclass(HomogeneousTransformationMatrix2D, RigidCoordinateChange)
     assert (
         HomogeneousTransformationMatrix2D.get_type_of_generic_parameter(
-            CoordinateSystemT
+            parameter=CoordinateSystemT
         )
         is CartesianFrame2D
     )
@@ -508,7 +508,7 @@ def test_a_planar_transformation_moves_a_point_as_its_change_does(
 def test_a_two_dimensional_vector_keeps_its_coordinates_and_frame_in_json(floor_frame):
     vector = Vector2D(1, 2, reference_frame=floor_frame)
     known_frames = KnownFrames()
-    known_frames.add(floor_frame.id, floor_frame)
+    known_frames.add(key=floor_frame.id, tracked_object=floor_frame)
 
     copy = from_json(to_json(vector), **known_frames.create_kwargs())
 
@@ -523,8 +523,8 @@ def test_a_planar_transformation_keeps_its_motion_and_frames_in_json(
         x=1, y=2, yaw=0.5, reference_frame=floor_frame, child_frame=robot_base_frame
     )
     known_frames = KnownFrames()
-    known_frames.add(floor_frame.id, floor_frame)
-    known_frames.add(robot_base_frame.id, robot_base_frame)
+    known_frames.add(key=floor_frame.id, tracked_object=floor_frame)
+    known_frames.add(key=robot_base_frame.id, tracked_object=robot_base_frame)
 
     copy = from_json(to_json(floor_T_robot_base), **known_frames.create_kwargs())
 

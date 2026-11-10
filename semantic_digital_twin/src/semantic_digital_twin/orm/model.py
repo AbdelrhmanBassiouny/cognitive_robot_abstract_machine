@@ -52,7 +52,7 @@ class WorldMapping(HasSimulatorProperties, AlternativeMapping[World]):
     modification_history: list[WorldModelModificationBlock]
 
     @classmethod
-    def from_domain_object(cls, obj: World):
+    def from_domain_object(cls, *, obj: World):
         return cls(
             kinematic_structure_entities=obj.kinematic_structure_entities,
             connections=obj.connections,
@@ -88,7 +88,7 @@ class WorldStateMapping(AlternativeMapping[WorldState]):
     ids: list[UUID]
 
     @classmethod
-    def from_domain_object(cls, obj: WorldState):
+    def from_domain_object(cls, *, obj: WorldState):
         return cls(
             data=obj.data,
             ids=obj.ids,
@@ -111,7 +111,7 @@ class Vector3DMapping(AlternativeMapping[Vector3D]):
     reference_frame: KinematicStructureEntity | None
 
     @classmethod
-    def from_domain_object(cls, obj: Vector3D):
+    def from_domain_object(cls, *, obj: Vector3D):
         x, y, z, _ = obj.to_np().tolist()
         result = cls(x=x, y=y, z=z, reference_frame=obj.reference_frame)
         return result
@@ -158,7 +158,7 @@ class CartesianPoint3DMapping(
     """
 
     @classmethod
-    def from_domain_object(cls, obj: CartesianPoint3D) -> Self:
+    def from_domain_object(cls, *, obj: CartesianPoint3D) -> Self:
         return cls(
             x=float(obj.x),
             y=float(obj.y),
@@ -182,7 +182,7 @@ class QuaternionMapping(AlternativeMapping[Quaternion]):
     reference_frame: KinematicStructureEntity | None
 
     @classmethod
-    def from_domain_object(cls, obj: Quaternion):
+    def from_domain_object(cls, *, obj: Quaternion):
         x, y, z, w = float(obj.x), float(obj.y), float(obj.z), float(obj.w)
         result = cls(x=x, y=y, z=z, w=w, reference_frame=obj.reference_frame)
         return result
@@ -204,7 +204,7 @@ class AxisAngleMapping(AlternativeMapping[AxisAngle]):
     reference_frame: KinematicStructureEntity | None
 
     @classmethod
-    def from_domain_object(cls, obj: AxisAngle):
+    def from_domain_object(cls, *, obj: AxisAngle):
         return cls(
             axis=obj.axis, angle=float(obj.angle), reference_frame=obj.reference_frame
         )
@@ -226,7 +226,7 @@ class TwistMapping(AlternativeMapping[Twist]):
     reference_frame: KinematicStructureEntity | None
 
     @classmethod
-    def from_domain_object(cls, obj: Twist):
+    def from_domain_object(cls, *, obj: Twist):
         return cls(
             translation=obj.translation,
             rotation_vector=obj.rotation_vector,
@@ -251,7 +251,7 @@ class RotationMatrixMapping(AlternativeMapping[RotationMatrix]):
     reference_frame: KinematicStructureEntity | None
 
     @classmethod
-    def from_domain_object(cls, obj: RotationMatrix):
+    def from_domain_object(cls, *, obj: RotationMatrix):
         return cls(axis_angle=obj.axis_angle, reference_frame=obj.reference_frame)
 
     def to_domain_object(self) -> RotationMatrix:
@@ -275,7 +275,7 @@ class HomogeneousTransformationMatrixMapping(
     child_frame: KinematicStructureEntity | None
 
     @classmethod
-    def from_domain_object(cls, obj: HomogeneousTransformationMatrix):
+    def from_domain_object(cls, *, obj: HomogeneousTransformationMatrix):
         return cls(
             position=obj.position,
             axis_angle=obj.axis_angle,
@@ -303,7 +303,7 @@ class Pose3DMapping(AlternativeMapping[Pose3D]):
     reference_frame: KinematicStructureEntity | None = field(default=None, kw_only=True)
 
     @classmethod
-    def from_domain_object(cls, obj: Pose3D):
+    def from_domain_object(cls, *, obj: Pose3D):
         result = cls(position=obj.position, axis_angle=obj.axis_angle)
         result.reference_frame = obj.reference_frame
         return result
@@ -370,7 +370,7 @@ class CartesianPoint2DMapping(
     """
 
     @classmethod
-    def from_domain_object(cls, obj: CartesianPoint2D) -> Self:
+    def from_domain_object(cls, *, obj: CartesianPoint2D) -> Self:
         return cls(x=float(obj.x), y=float(obj.y), reference_frame=obj.reference_frame)
 
     def to_domain_object(self) -> CartesianPoint2D:
@@ -386,7 +386,7 @@ class Pose2DMapping(AlternativeMapping[Pose2D]):
     reference_frame: KinematicStructureEntity | None = field(default=None, kw_only=True)
 
     @classmethod
-    def from_domain_object(cls, obj: Pose2D):
+    def from_domain_object(cls, *, obj: Pose2D):
         result = cls(position=obj.position, yaw=float(obj.yaw))
         result.reference_frame = obj.reference_frame
         return result

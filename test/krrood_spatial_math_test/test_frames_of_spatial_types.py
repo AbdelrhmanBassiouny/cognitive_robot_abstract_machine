@@ -74,7 +74,7 @@ def test_a_spatial_value_is_a_value_given_in_a_cartesian_frame(spatial_value):
 def test_a_value_in_a_cartesian_frame_is_a_coordinate_representation():
     assert issubclass(ValueInCartesianFrame3D, CoordinateRepresentation)
     assert (
-        ValueInCartesianFrame3D.get_type_of_generic_parameter(CoordinateSystemT)
+        ValueInCartesianFrame3D.get_type_of_generic_parameter(parameter=CoordinateSystemT)
         is CartesianFrame3D
     )
 
@@ -93,7 +93,7 @@ def test_a_spatial_values_coordinates_are_given_in_its_reference_frame(
 
 def test_a_three_dimensional_point_is_given_in_a_three_dimensional_cartesian_frame():
     assert (
-        CartesianPoint3D.get_type_of_generic_parameter(CoordinateSystemT)
+        CartesianPoint3D.get_type_of_generic_parameter(parameter=CoordinateSystemT)
         is CartesianFrame3D
     )
 
@@ -103,11 +103,11 @@ def test_a_three_dimensional_point_is_a_cartesian_point():
 
 
 def test_a_three_dimensional_point_stores_its_coordinates_as_symbolic_scalars():
-    assert CartesianPoint3D.get_type_of_generic_parameter(CoordinateT) is sm.Scalar
+    assert CartesianPoint3D.get_type_of_generic_parameter(parameter=CoordinateT) is sm.Scalar
 
 
 def test_a_three_dimensional_point_is_moved_by_a_three_dimensional_vector():
-    assert CartesianPoint3D.get_type_of_generic_parameter(AffineVectorT) is Vector3D
+    assert CartesianPoint3D.get_type_of_generic_parameter(parameter=AffineVectorT) is Vector3D
 
 
 # %% a vector in a frame's space as a Cartesian vector
@@ -115,7 +115,7 @@ def test_a_three_dimensional_point_is_moved_by_a_three_dimensional_vector():
 
 def test_a_three_dimensional_vector_is_a_cartesian_vector_of_a_three_dimensional_frame():
     assert issubclass(Vector3D, CartesianVector)
-    assert Vector3D.get_type_of_generic_parameter(CoordinateSystemT) is CartesianFrame3D
+    assert Vector3D.get_type_of_generic_parameter(parameter=CoordinateSystemT) is CartesianFrame3D
 
 
 def test_the_difference_of_two_three_dimensional_points_moves_one_onto_the_other():
@@ -130,8 +130,8 @@ def test_the_difference_of_two_three_dimensional_points_moves_one_onto_the_other
 
 def test_a_three_dimensional_line_runs_through_a_point_along_a_vector():
     assert issubclass(Line3D, AffineLine)
-    assert Line3D.get_type_of_generic_parameter(AffinePointT) is CartesianPoint3D
-    assert Line3D.get_type_of_generic_parameter(AffineVectorT) is Vector3D
+    assert Line3D.get_type_of_generic_parameter(parameter=AffinePointT) is CartesianPoint3D
+    assert Line3D.get_type_of_generic_parameter(parameter=AffineVectorT) is Vector3D
 
 
 # %% a transformation as a change between two frames
@@ -147,7 +147,7 @@ def test_a_transformation_is_no_value_given_in_a_frame():
 
 def test_a_transformation_binds_cartesian_frames_as_its_coordinate_systems():
     assert (
-        HomogeneousTransformationMatrix.get_type_of_generic_parameter(CoordinateSystemT)
+        HomogeneousTransformationMatrix.get_type_of_generic_parameter(parameter=CoordinateSystemT)
         is CartesianFrame3D
     )
 
@@ -295,7 +295,7 @@ def test_a_deserialized_point_refers_to_the_readers_frame(table_frame):
     point = CartesianPoint3D(1, 2, 3, reference_frame=table_frame)
     data = json.loads(json.dumps(to_json(point)))
     known_frames = KnownFrames()
-    known_frames.add(table_frame.id, table_frame)
+    known_frames.add(key=table_frame.id, tracked_object=table_frame)
 
     point_copy = from_json(data, **known_frames.create_kwargs())
 
@@ -308,8 +308,8 @@ def test_a_transformation_keeps_both_of_its_frames(table_frame, camera_frame):
         x=1, reference_frame=table_frame, child_frame=camera_frame
     )
     known_frames = KnownFrames()
-    known_frames.add(table_frame.id, table_frame)
-    known_frames.add(camera_frame.id, camera_frame)
+    known_frames.add(key=table_frame.id, tracked_object=table_frame)
+    known_frames.add(key=camera_frame.id, tracked_object=camera_frame)
 
     copy = from_json(to_json(table_T_camera), **known_frames.create_kwargs())
 

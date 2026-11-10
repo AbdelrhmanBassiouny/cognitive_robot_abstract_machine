@@ -84,11 +84,11 @@ def test_an_affine_frame_need_not_be_cartesian():
 
 
 def test_an_affine_frame_reports_the_space_it_charts():
-    assert ScalablePlaneFrame.get_type_of_generic_parameter(SpaceT) is ScalablePlane
+    assert ScalablePlaneFrame.get_type_of_generic_parameter(parameter=SpaceT) is ScalablePlane
 
 
 def test_an_affine_frame_reports_the_kind_of_name_it_is_called_by():
-    assert ScalablePlaneFrame.get_type_of_generic_parameter(NameT) is str
+    assert ScalablePlaneFrame.get_type_of_generic_parameter(parameter=NameT) is str
 
 
 # %% values given in a coordinate system
@@ -141,12 +141,12 @@ def test_a_rigid_change_changes_between_cartesian_frames():
 
 def test_a_rigid_change_reports_the_kind_of_frame_it_changes():
     assert (
-        CartesianFrame3DChange.get_type_of_generic_parameter(CartesianFrameT)
+        CartesianFrame3DChange.get_type_of_generic_parameter(parameter=CartesianFrameT)
         is CartesianFrame3D
     )
 
 
 def test_an_affine_change_reports_the_kind_of_frame_it_changes():
     assert (
-        ScalingChange.get_type_of_generic_parameter(AffineFrameT) is ScalablePlaneFrame
+        ScalingChange.get_type_of_generic_parameter(parameter=AffineFrameT) is ScalablePlaneFrame
     )

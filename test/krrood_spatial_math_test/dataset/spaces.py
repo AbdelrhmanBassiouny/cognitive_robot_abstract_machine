@@ -97,7 +97,7 @@ class StoredAffinePoint(AffinePoint[AffineFrameT, CoordinateT, AffineVectorT]):
     """
 
     def __sub__(self, other: Self) -> AffineVectorT:
-        vector_type = self.get_type_of_generic_parameter(AffineVectorT)
+        vector_type = self.get_type_of_generic_parameter(parameter=AffineVectorT)
         return vector_type(self.x - other.x, self.y - other.y, self.coordinate_system)
 
     def __add__(self, vector: AffineVectorT) -> Self:

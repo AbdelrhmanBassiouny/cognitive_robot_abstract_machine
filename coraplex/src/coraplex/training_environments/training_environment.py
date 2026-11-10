@@ -106,7 +106,7 @@ class TrainingEnvironment(Generic[TrainedAction], SubClassSafeGeneric, ABC):
         """
         :return: The type of action that is trained.
         """
-        return type(self).get_type_of_generic_parameter(TrainedAction)
+        return type(self).get_type_of_generic_parameter(parameter=TrainedAction)
 
     @abstractmethod
     def setup_world(self, *kwargs) -> World:
@@ -238,7 +238,7 @@ class MoveToReachTrainingEnvironment(TrainingEnvironment[MoveToReach]):
             approach_clearance=...,
         )
 
-        move_to_reach.limit(limit)
+        move_to_reach.limit(n=limit)
 
         if self.model_path:
             query_backend = self.setup_backend_from_path(move_to_reach)
@@ -267,16 +267,18 @@ class MoveToReachTrainingEnvironment(TrainingEnvironment[MoveToReach]):
         :param underspecified_action: The underspecified action to create a backend for.
         :return: The probabilistic backend
         """
-        parameters = UnderspecifiedParameters(underspecified_action)
+        parameters = UnderspecifiedParameters(statement=underspecified_action)
         robot_x = parameters.variable_of(
-            underspecified_action.target_pose_offset_robot.position.x
+            attribute=underspecified_action.target_pose_offset_robot.position.x
         )
         robot_y = parameters.variable_of(
-            underspecified_action.target_pose_offset_robot.position.y
+            attribute=underspecified_action.target_pose_offset_robot.position.y
         )
-        hip_rotation = parameters.variable_of(underspecified_action.hip_rotation)
+        hip_rotation = parameters.variable_of(
+            attribute=underspecified_action.hip_rotation
+        )
         approach_clearance = parameters.variable_of(
-            underspecified_action.approach_clearance
+            attribute=underspecified_action.approach_clearance
         )
 
         distribution = fully_factorized(
@@ -291,7 +293,9 @@ class MoveToReachTrainingEnvironment(TrainingEnvironment[MoveToReach]):
         hip_rotation_condition.fill_missing_variables(distribution.variables)
         distribution.log_truncated_of_simple_event_in_place(hip_rotation_condition)
 
-        return ProbabilisticBackend(DictRegistry({self.action_type: distribution}))
+        return ProbabilisticBackend(
+            model_registry=DictRegistry(models={self.action_type: distribution})
+        )
 
     def setup_backend_from_path(self, underspecified_action: Match):
         """
@@ -306,7 +310,7 @@ class MoveToReachTrainingEnvironment(TrainingEnvironment[MoveToReach]):
             distribution: ProbabilisticCircuit = from_json(json.load(f))
 
         # expand model with new variables
-        parameters = UnderspecifiedParameters(underspecified_action)
+        parameters = UnderspecifiedParameters(statement=underspecified_action)
         variables_not_in_parameters = set(parameters.variables.values()) - set(
             distribution.variables
         )
@@ -317,4 +321,6 @@ class MoveToReachTrainingEnvironment(TrainingEnvironment[MoveToReach]):
             distribution, distribution_for_variables_not_in_parameters
         )
 
-        return ProbabilisticBackend(DictRegistry({self.action_type: distribution}))
+        return ProbabilisticBackend(
+            model_registry=DictRegistry(models={self.action_type: distribution})
+        )

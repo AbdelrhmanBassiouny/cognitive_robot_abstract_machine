@@ -16,7 +16,7 @@ class Measurable(Interface):
     length: float
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Rod(Measurable):
     length: float
 
@@ -46,7 +46,7 @@ def test_an_interface_cannot_be_instantiated():
 
 def test_a_class_implementing_an_interface_can_be_instantiated():
     length = 2.0
-    assert Rod(length).length == length
+    assert Rod(length=length).length == length
 
 
 def test_a_property_provides_a_declared_attribute():
@@ -59,7 +59,7 @@ def test_a_property_provides_a_declared_attribute():
 def test_a_class_leaving_out_a_declared_attribute_cannot_be_defined():
     with pytest.raises(MissingInterfaceAttributesError) as error:
 
-        @dataclass
+        @dataclass(kw_only=True)
         class Unmeasured(Measurable):
             label: str = ""
 
@@ -67,4 +67,4 @@ def test_a_class_leaving_out_a_declared_attribute_cannot_be_defined():
 
 
 def test_an_abstract_class_may_leave_a_declared_attribute_to_its_subclasses():
-    assert Interface.missing_attributes(MeasuringTool) == ("length",)
+    assert Interface.missing_attributes(class_=MeasuringTool) == ("length",)
