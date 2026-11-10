@@ -47,10 +47,7 @@ items:
   pull_request_number: 541
   session: https://claude.ai/code/session_018wfiv5yasD7se5ZBXvUw5i
   blockers:
-    - >-
-      Conflict with main resolved in ff1fa9d22b (tests pass), parked on ccr-a0dcce67-u1j40w:
-      maintenance push exited 12, the upstream-reviews Action kept being cancelled. Next:
-      maintenance push of ff1fa9d22b to ccr-b32c8432-18ncpi, then restack.
+    - ""
   depends_on: []
   status: in progress
   notes: 'In #541 (draft, on #535): state objects, TermReader.instances_of, per-evaluation
