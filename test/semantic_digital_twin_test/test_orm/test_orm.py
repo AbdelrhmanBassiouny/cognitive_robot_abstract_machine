@@ -23,7 +23,7 @@ from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
-from krrood_spatial_math.spatial_types import Vector3
+from krrood_spatial_math.spatial_types import Vector3D
 from semantic_digital_twin.specifications.connections import (
     RevoluteConnectionSpecification,
 )
@@ -313,7 +313,7 @@ def test_door_swings_about_its_hinge_after_orm_round_trip(session):
             scale=Scale(0.03, 1, 2),
             world=world,
             parent_connection_specification=RevoluteConnectionSpecification(
-                axis=Vector3.Z(), connection_T_child=hinge_T_door
+                axis=Vector3D.Z(), connection_T_child=hinge_T_door
             ),
         )
 

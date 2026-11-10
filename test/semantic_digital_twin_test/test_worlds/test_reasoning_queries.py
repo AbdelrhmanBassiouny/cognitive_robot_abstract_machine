@@ -121,23 +121,23 @@ def test_get_next_object_using_planar_distance(kitchen_environment_fixture):
     banana1 = kitchen_environment_fixture.get_semantic_annotation_by_name("banana1")
 
     assert get_next_object_using_planar_distance(
-        toya, table1, Vector3.Z()
+        toya, table1, Vector3D.Z()
     ).tolist() == [orange, banana1, apple]
     assert get_next_object_using_planar_distance(
-        toya, table2, Vector3.Z()
+        toya, table2, Vector3D.Z()
     ).tolist() == [
         carrot,
         lettuce,
     ]
     assert get_next_object_using_planar_distance(
-        apple.bodies[0], table1, Vector3.Z()
+        apple.bodies[0], table1, Vector3D.Z()
     ).tolist() == [apple, banana1, orange]
     assert get_next_object_using_planar_distance(
-        apple.bodies[0], table1, Vector3.Y()
+        apple.bodies[0], table1, Vector3D.Y()
     ).tolist() == [apple, orange, banana1]
 
     assert (
-        get_next_object_using_planar_distance(toya, table3, Vector3.Z()).tolist() == []
+        get_next_object_using_planar_distance(toya, table3, Vector3D.Z()).tolist() == []
     )
 
 

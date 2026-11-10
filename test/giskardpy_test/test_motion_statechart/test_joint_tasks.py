@@ -27,7 +27,7 @@ from krrood.symbolic_math.symbolic_math import (
 )
 from semantic_digital_twin.datastructures.definitions import StaticJointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3
+from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3D
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
     RevoluteConnection,
@@ -135,7 +135,7 @@ def test_joint_goal(tmp_path):
         )
         world.add_degree_of_freedom(dof)
         root_C_tip = RevoluteConnection(
-            parent=root, child=tip, axis=Vector3.Z(), raw_dof=dof
+            parent=root, child=tip, axis=Vector3D.Z(), raw_dof=dof
         )
         world.add_connection(root_C_tip)
 
@@ -145,7 +145,7 @@ def test_joint_goal(tmp_path):
         )
         world.add_degree_of_freedom(dof)
         root_C_tip2 = RevoluteConnection(
-            parent=root, child=tip2, axis=Vector3.Z(), raw_dof=dof
+            parent=root, child=tip2, axis=Vector3D.Z(), raw_dof=dof
         )
         world.add_connection(root_C_tip2)
 
@@ -438,7 +438,7 @@ def world_with_revolute_joints(
             joint = RevoluteConnection(
                 parent=root,
                 child=Body(name=PrefixedName(f"tip_{index}")),
-                axis=Vector3.Z(),
+                axis=Vector3D.Z(),
                 raw_dof=dof,
             )
             world.add_connection(joint)

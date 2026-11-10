@@ -19,7 +19,7 @@ from semantic_digital_twin.exceptions import (
     PointOccupiedError,
 )
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Floor
-from krrood_spatial_math.spatial_types import CartesianPoint2D, CartesianPoint3D, Pose
+from krrood_spatial_math.spatial_types import CartesianPoint2D, CartesianPoint3D, Pose3D
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
@@ -422,7 +422,7 @@ def test_from_world_with_rotated_box():
     assert path is not None
 
     for bounding_box in graph_of_convex_sets.graph.nodes():
-        bounding_box_T_world: Pose = world.transform(
+        bounding_box_T_world: Pose3D = world.transform(
             bounding_box.as_shape().origin, world.root
         ).pose
 

@@ -41,7 +41,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     CartesianPoint3D,
-    Vector3,
+    Vector3D,
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
@@ -157,7 +157,7 @@ class ProcthorDoor:
         one_door_scale = Scale(self.thickness, self.scale.y * 0.5, self.scale.z)
         x_direction: float = one_door_scale.x / 2
         y_direction: float = one_door_scale.y / 2
-        handle_directions = [Vector3.Y(), Vector3.NEGATIVE_Y()]
+        handle_directions = [Vector3D.Y(), Vector3D.NEGATIVE_Y()]
 
         doors = []
 
@@ -166,7 +166,7 @@ class ProcthorDoor:
 
             horizontal_direction = (
                 HorizontalSemanticDirection.RIGHT
-                if np.allclose(direction, Vector3.Y())
+                if np.allclose(direction, Vector3D.Y())
                 else HorizontalSemanticDirection.LEFT
             )
             semantic_position = SemanticPositionDescription(
@@ -181,7 +181,7 @@ class ProcthorDoor:
                 x=x_direction,
                 y=(
                     (-y_direction)
-                    if np.allclose(direction, Vector3.Y())
+                    if np.allclose(direction, Vector3D.Y())
                     else y_direction
                 ),
             )
@@ -246,7 +246,7 @@ class ProcthorDoor:
             )
             door.add(handle)
 
-        door.mount_on_movable_joint(RevoluteConnectionSpecification(axis=Vector3.Z()))
+        door.mount_on_movable_joint(RevoluteConnectionSpecification(axis=Vector3D.Z()))
         return door
 
     def add_to_world(self, world: World) -> Door | DoubleDoor:

@@ -12,7 +12,7 @@ from giskardpy.motion_statechart.debug_expression_publisher import (
 from giskardpy.motion_statechart.graph_node import DebugExpression
 from cramph.statechart import Statechart
 from giskardpy.motion_statechart.tasks.align_planes import AlignPlanes
-from krrood_spatial_math.spatial_types import Vector3
+from krrood_spatial_math.spatial_types import Vector3D
 from semantic_digital_twin.world import World
 from giskardpy.motion_statechart.debug_expression_publisher import (
     DebugExpressionPublishing,
@@ -36,8 +36,8 @@ def align_planes_statechart(context: StatechartContext) -> Statechart:
         AlignPlanes(
             root_link=root,
             tip_link=tip,
-            goal_normal=Vector3.Z(reference_frame=root),
-            tip_normal=Vector3.Z(reference_frame=tip),
+            goal_normal=Vector3D.Z(reference_frame=root),
+            tip_normal=Vector3D.Z(reference_frame=tip),
             name="align",
         )
     )
@@ -50,8 +50,8 @@ def build_align_planes_task(world: World) -> AlignPlanes:
     task = AlignPlanes(
         root_link=root,
         tip_link=tip,
-        goal_normal=Vector3.Z(reference_frame=root),
-        tip_normal=Vector3.Z(reference_frame=tip),
+        goal_normal=Vector3D.Z(reference_frame=root),
+        tip_normal=Vector3D.Z(reference_frame=tip),
         name="align",
     )
     add_to_statechart_with_motion_control(task, world)
@@ -126,7 +126,7 @@ def test_vector_with_reference_frame_is_transformed_to_visualisation_frame(
 ):
     root = cylinder_bot_world.root
     bot = cylinder_bot_world.get_body_by_name("bot")
-    vector = Vector3(x=1, y=0, z=0, reference_frame=root, visualisation_frame=bot)
+    vector = Vector3D(x=1, y=0, z=0, reference_frame=root, visualisation_frame=bot)
     publisher = DebugExpressionPublisher(world=cylinder_bot_world, node=rclpy_node)
 
     request = publisher._to_request(DebugExpression(name="vector", expression=vector))

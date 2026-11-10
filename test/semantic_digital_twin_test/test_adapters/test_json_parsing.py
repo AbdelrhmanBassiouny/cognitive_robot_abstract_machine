@@ -21,7 +21,7 @@ from semantic_digital_twin.exceptions import (
 )
 from krrood_spatial_math.spatial_types import (
     CartesianPoint3D,
-    Vector3,
+    Vector3D,
     Quaternion,
     RotationMatrix,
 )
@@ -29,7 +29,7 @@ from semantic_digital_twin.world_description.derivatives import Derivatives
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     CartesianPoint2D,
-    Pose,
+    Pose3D,
     Pose2D,
 )
 from semantic_digital_twin.world import World
@@ -270,12 +270,12 @@ def test_world_entity_missing_from_the_world_is_an_untracked_object():
 
 def test_vector3_json_serialization():
     body = Body(name=PrefixedName("body"))
-    vector = Vector3(1, 2, 3, reference_frame=body)
+    vector = Vector3D(1, 2, 3, reference_frame=body)
     json_data = vector.to_json()
     kwargs = {}
     tracker = WorldEntityWithIDKwargsTracker.from_kwargs(kwargs)
     tracker.add(body.id, body)
-    vector_copy = Vector3.from_json(json_data, **kwargs)
+    vector_copy = Vector3D.from_json(json_data, **kwargs)
     assert vector.reference_frame == vector_copy.reference_frame
     assert id(vector.reference_frame) == id(vector_copy.reference_frame)
     assert np.allclose(vector.to_np(), vector_copy.to_np())
@@ -309,14 +309,14 @@ def test_rotation_matrix_json_serialization():
 
 def test_pose_json_serialization():
     body = Body(name=PrefixedName("body"))
-    pose = Pose.from_xyz_rpy(
+    pose = Pose3D.from_xyz_rpy(
         x=4, y=5, z=7, roll=1, pitch=2, yaw=3, reference_frame=body
     )
     json_data = pose.to_json()
     kwargs = {}
     tracker = WorldEntityWithIDKwargsTracker.from_kwargs(kwargs)
     tracker.add(body.id, body)
-    pose_copy = Pose.from_json(json_data, **kwargs)
+    pose_copy = Pose3D.from_json(json_data, **kwargs)
     assert pose.reference_frame == pose_copy.reference_frame
     assert id(pose.reference_frame) == id(pose_copy.reference_frame)
     assert np.allclose(pose, pose_copy)
@@ -370,7 +370,7 @@ def test_screw_connection_json_serialization_with_world():
             world,
             body,
             body2,
-            axis=Vector3.Z(),
+            axis=Vector3D.Z(),
             screw_pitch=screw_pitch,
             multiplier=2.0,
             offset=0.1,
@@ -445,7 +445,7 @@ def _world_with_two_equally_named_connections() -> tuple[
                 world=world,
                 parent=world.root,
                 child=child,
-                axis=Vector3.Z(),
+                axis=Vector3D.Z(),
                 name=PrefixedName("shared_joint"),
             )
             world.add_connection(connection)
@@ -478,11 +478,11 @@ def test_joint_state_resolves_the_connection_it_was_built_from():
     [
         CartesianPoint3D(1.0, 2.0, 3.0),
         CartesianPoint2D(1.0, 2.0),
-        Vector3(1.0, 2.0, 3.0),
+        Vector3D(1.0, 2.0, 3.0),
         Quaternion(0.0, 0.0, 0.0, 1.0),
         RotationMatrix.from_rpy(0.1, 0.2, 0.3),
         HomogeneousTransformationMatrix.from_xyz_rpy(1.0, 2.0, 3.0, 0.1, 0.2, 0.3),
-        Pose.from_xyz_quaternion(1.0, 2.0, 3.0, 0.0, 0.0, 0.0, 1.0),
+        Pose3D.from_xyz_quaternion(1.0, 2.0, 3.0, 0.0, 0.0, 0.0, 1.0),
         Pose2D.from_xy_yaw(1.0, 2.0, 0.3),
     ],
 )
@@ -554,8 +554,8 @@ def symbolic_cartesian_point_2d(
     return CartesianPoint2D(variable, 2.0, reference_frame=frame)
 
 
-def symbolic_vector3(variable: FloatVariable, frame: Body) -> Vector3:
-    return Vector3(variable, 2.0, 3.0, reference_frame=frame)
+def symbolic_vector3(variable: FloatVariable, frame: Body) -> Vector3D:
+    return Vector3D(variable, 2.0, 3.0, reference_frame=frame)
 
 
 def symbolic_quaternion(variable: FloatVariable, frame: Body) -> Quaternion:
@@ -574,8 +574,8 @@ def symbolic_transformation_matrix(
     )
 
 
-def symbolic_pose(variable: FloatVariable, frame: Body) -> Pose:
-    return Pose.from_xyz_rpy(
+def symbolic_pose(variable: FloatVariable, frame: Body) -> Pose3D:
+    return Pose3D.from_xyz_rpy(
         variable, 2.0, 3.0, 0.1, variable, 0.3, reference_frame=frame
     )
 

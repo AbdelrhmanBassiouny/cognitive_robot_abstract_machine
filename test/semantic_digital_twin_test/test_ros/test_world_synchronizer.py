@@ -65,7 +65,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Fridge,
     Drawer,
 )
-from krrood_spatial_math.spatial_types import Vector3
+from krrood_spatial_math.spatial_types import Vector3D
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
     Connection6DoF,
@@ -741,7 +741,7 @@ def test_ChangeDifHasHardwareInterface(rclpy_node):
             dof = DegreeOfFreedom(name=PrefixedName("dof"))
             w1.add_degree_of_freedom(dof)
             connection = PrismaticConnection(
-                raw_dof=dof, parent=body1, child=body2, axis=Vector3(1, 1, 1)
+                raw_dof=dof, parent=body1, child=body2, axis=Vector3D(1, 1, 1)
             )
             w1.add_connection(connection)
 
@@ -1341,7 +1341,7 @@ def test_simultaneous_state_and_model_updates(rclpy_node):
         w1.add_body(b1)
         w1.add_body(b2)
         connection = PrismaticConnection.create_with_dofs(
-            world=w1, parent=b1, child=b2, axis=Vector3.X()
+            world=w1, parent=b1, child=b2, axis=Vector3D.X()
         )
         w1.add_connection(connection)
 
@@ -1702,7 +1702,7 @@ def test_world_synchronizer_basic_model_sync(rclpy_node):
         w1.add_body(b1)
         w1.add_body(b2)
         conn = PrismaticConnection.create_with_dofs(
-            world=w1, parent=b1, child=b2, axis=Vector3.X()
+            world=w1, parent=b1, child=b2, axis=Vector3D.X()
         )
         w1.add_connection(conn)
 
@@ -1741,7 +1741,7 @@ def test_world_synchronizer_ordering_no_key_error_after_model_change(rclpy_node)
         w1.add_body(b1)
         w1.add_body(b2)
         conn = PrismaticConnection.create_with_dofs(
-            world=w1, parent=b1, child=b2, axis=Vector3.X()
+            world=w1, parent=b1, child=b2, axis=Vector3D.X()
         )
         w1.add_connection(conn)
 
@@ -1874,7 +1874,7 @@ def test_apply_missed_messages_interleaved_model_and_state(rclpy_node):
         world_1.add_body(body_1)
         world_1.add_body(body_2)
         prismatic_connection = PrismaticConnection.create_with_dofs(
-            world=world_1, parent=body_1, child=body_2, axis=Vector3.X()
+            world=world_1, parent=body_1, child=body_2, axis=Vector3D.X()
         )
         world_1.add_connection(prismatic_connection)
 
@@ -2324,7 +2324,7 @@ def test_combined_update_model_and_state_applied_atomically(rclpy_node):
             world=source_world,
             parent=source_world.root,
             child=new_body,
-            axis=Vector3.X(),
+            axis=Vector3D.X(),
         )
         source_world.add_connection(connection)
 
@@ -2522,7 +2522,7 @@ def create_connected_worlds(
                 world=publisher_world,
                 parent=parent_body,
                 child=child_body,
-                axis=Vector3.X(),
+                axis=Vector3D.X(),
             )
         )
     assert wait_for_condition(
@@ -2571,7 +2571,7 @@ def test_deferring_incoming_updates_keeps_outgoing_publishing_alive(rclpy_node):
                     world=world_1,
                     parent=parent_body,
                     child=child_body,
-                    axis=Vector3.X(),
+                    axis=Vector3D.X(),
                 )
             )
         assert wait_for_condition(
@@ -2614,7 +2614,7 @@ def test_state_updates_are_applied_up_to_the_next_model_modification(rclpy_node)
                 world=publisher_world,
                 parent=parent_body,
                 child=child_body,
-                axis=Vector3.X(),
+                axis=Vector3D.X(),
             )
             publisher_world.add_connection(connection)
         # Building the receiver from the block of the publisher leaves both worlds with the
@@ -3160,7 +3160,7 @@ def add_prismatic_connection(world: World, name: str) -> PrismaticConnection:
         child_body = Body(name=PrefixedName(name))
         world.add_body(child_body)
         connection = PrismaticConnection.create_with_dofs(
-            world=world, parent=world.root, child=child_body, axis=Vector3.X()
+            world=world, parent=world.root, child=child_body, axis=Vector3D.X()
         )
         world.add_connection(connection)
     return connection

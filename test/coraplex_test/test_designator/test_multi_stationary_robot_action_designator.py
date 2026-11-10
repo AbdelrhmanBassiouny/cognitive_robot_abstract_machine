@@ -41,7 +41,7 @@ from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     CartesianPoint3D,
 )
-from krrood_spatial_math.spatial_types import Pose
+from krrood_spatial_math.spatial_types import Pose3D
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import Connection6DoF
 from semantic_digital_twin.world_description.geometry import Box, Scale
@@ -153,7 +153,9 @@ def top_down_grasp(
     """
     return GraspCandidate(
         graspable_annotation(world, body),
-        Pose.from_xyz_rpy(z=height_above_origin, pitch=np.pi / 2, reference_frame=body),
+        Pose3D.from_xyz_rpy(
+            z=height_above_origin, pitch=np.pi / 2, reference_frame=body
+        ),
     )
 
 
@@ -199,7 +201,7 @@ def test_reach_action_multi(stationary_block_context):
     box_body = world.get_body_by_name("box1")
     box = graspable_annotation(world, box_body)
     position = box_body.global_pose.position.to_np()
-    grasp_pose = Pose.from_xyz_rpy(pitch=np.pi / 2, reference_frame=box_body)
+    grasp_pose = Pose3D.from_xyz_rpy(pitch=np.pi / 2, reference_frame=box_body)
 
     plan = Sequence(
         nodes=[
@@ -318,7 +320,7 @@ def test_place_multi(stationary_block_context, place_position):
             ),
             PlaceAction(
                 object_designator=graspable_annotation(world, box_body),
-                target_location=Pose(place_position, reference_frame=world.root),
+                target_location=Pose3D(place_position, reference_frame=world.root),
             ),
         ]
     )
@@ -349,7 +351,7 @@ def anchor_position(robot_setup) -> CartesianPoint3D:
 def test_move_tcp_follows_sine_waypoints(stationary_block_context, anchor_position):
     world, view, extensions = stationary_block_context
     right_arm = right_or_only_arm(view)
-    anchor = Pose(anchor_position, reference_frame=world.root)
+    anchor = Pose3D(anchor_position, reference_frame=world.root)
     anchor_T = anchor.homogeneous_matrix
     offset_T = HomogeneousTransformationMatrix.from_xyz_axis_angle(
         z=-0.03,
@@ -488,7 +490,7 @@ def test_a_place_in_physics_leaves_the_box_to_the_release(
             PickUpAction(grasp=grasp_near_the_top(world, box), arm=arm),
             PlaceAction(
                 object_designator=graspable_annotation(world, box),
-                target_location=Pose(target, reference_frame=world.root),
+                target_location=Pose3D(target, reference_frame=world.root),
             ),
         ]
     )

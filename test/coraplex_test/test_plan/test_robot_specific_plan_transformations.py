@@ -56,7 +56,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Milk,
 )
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
-from krrood_spatial_math.spatial_types import Pose, Pose2D
+from krrood_spatial_math.spatial_types import Pose3D, Pose2D
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
 
@@ -129,7 +129,7 @@ def navigation_to(world: World, **parameters) -> NavigateAction:
     :return: A drive to a pose two meters from the origin of `world`.
     """
     return NavigateAction(
-        target_location=Pose.from_xyz_rpy(2.0, 2.0, 0.0, reference_frame=world.root),
+        target_location=Pose3D.from_xyz_rpy(2.0, 2.0, 0.0, reference_frame=world.root),
         **parameters,
     )
 
@@ -212,7 +212,7 @@ def test_stretch_drives_every_leg_of_a_path_with_its_differential_drive(
     stretch_apartment_context,
 ) -> None:
     world, robot, extensions = stretch_apartment_context
-    target = Pose.from_xyz_rpy(2.0, 2.0, 0.0, reference_frame=world.root)
+    target = Pose3D.from_xyz_rpy(2.0, 2.0, 0.0, reference_frame=world.root)
     unchanged = prepared(
         PathPlanningNavigateAction(target=target),
         simulated_executor(extensions, robot_adaptations=[]),
@@ -381,7 +381,7 @@ def test_a_simulated_stretch_stays_in_front_of_the_container_it_closes(
     assert type(holding) is CartesianPose
     assert holding.root_link is action.grasp.graspable.root
     assert holding.tip_link is tool_frame
-    np.testing.assert_allclose(holding.goal_pose.to_np(), Pose().to_np())
+    np.testing.assert_allclose(holding.goal_pose.to_np(), Pose3D().to_np())
     assert holding.goal_pose.reference_frame is tool_frame
     assert type(facing) is AlignPlanes
     assert facing.root_link is world.root
@@ -612,7 +612,7 @@ def test_stretch_holds_the_orientation_of_its_base_only_once_it_drove_there(
     action = prepared(
         MoveToReach(
             target_pose_offset_robot=Pose2D.from_xy_yaw(0.2, -0.55),
-            reference_T_grasp=Pose.from_xyz_rpy(
+            reference_T_grasp=Pose3D.from_xyz_rpy(
                 x=0.7, y=-1.3, z=0.9, reference_frame=world.root
             ),
             hip_rotation=0.0,
@@ -629,7 +629,7 @@ def test_stretch_holds_the_orientation_of_its_base_only_once_it_drove_there(
 
 
 def stretch_reaching_milk_from(
-    world: World, robot: AbstractRobot, extensions: list, root_T_base: Pose
+    world: World, robot: AbstractRobot, extensions: list, root_T_base: Pose3D
 ) -> tuple[KinematicallySimulatedPlanExecutor, ReachAction, OrientationWhileRunning]:
     """
     Puts the base of a Stretch at `root_T_base`, and prepares a reach for the milk
@@ -650,7 +650,7 @@ def stretch_reaching_milk_from(
         StatechartContext.with_extensions(world, extensions), extensions=[recording]
     )
     action = ReachAction(
-        grasp=GraspCandidate(milk, Pose(reference_frame=milk.root)),
+        grasp=GraspCandidate(milk, Pose3D(reference_frame=milk.root)),
         arm=robot.all_arms[0],
     )
     executor.compile(statechart_of(executor, action))
@@ -677,8 +677,8 @@ def assert_kept_its_heading(
 @pytest.mark.parametrize(
     "root_T_base",
     [
-        Pose.from_xyz_rpy(0.33, -1.98, 0, yaw=np.pi / 2),
-        Pose.from_xyz_rpy(0.33, -2.2, 0, yaw=np.pi / 2),
+        Pose3D.from_xyz_rpy(0.33, -1.98, 0, yaw=np.pi / 2),
+        Pose3D.from_xyz_rpy(0.33, -2.2, 0, yaw=np.pi / 2),
     ],
     ids=["where its arm reaches the milk", "short of the milk along its heading"],
 )
@@ -717,7 +717,7 @@ def test_a_simulated_stretch_facing_away_fails_to_reach_rather_than_turning(
         world,
         robot,
         extensions,
-        Pose.from_xyz_rpy(0.4, -2.3, 0, reference_frame=world.root),
+        Pose3D.from_xyz_rpy(0.4, -2.3, 0, reference_frame=world.root),
     )
 
     with pytest.raises(MotionMadeNoProgress):

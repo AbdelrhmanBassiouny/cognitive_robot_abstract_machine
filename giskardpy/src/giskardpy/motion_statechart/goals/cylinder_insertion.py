@@ -16,7 +16,7 @@ from giskardpy.motion_statechart.graph_node import ConvergingTask, MotionNodeArt
 from giskardpy.motion_statechart.tasks.align_planes import AlignPlanes
 from giskardpy.motion_statechart.tasks.feature_functions import AngleGoal, ReachPoint
 from krrood.symbolic_math.symbolic_math import logic_and
-from krrood_spatial_math.spatial_types import CartesianPoint3D, Vector3
+from krrood_spatial_math.spatial_types import CartesianPoint3D, Vector3D
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
@@ -123,12 +123,12 @@ class InsertCylinder(EndedByOwner, CompositeNode):
     Position of the hole to insert into.
     """
 
-    tip_V_axis: Vector3
+    tip_V_axis: Vector3D
     """
     Insertion axis of the cylinder.
     """
 
-    up_axis: Vector3
+    up_axis: Vector3D
     """
     Axis pointing out of the hole.
     """

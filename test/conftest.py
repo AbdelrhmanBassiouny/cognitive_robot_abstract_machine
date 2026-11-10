@@ -108,7 +108,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
 )
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Vector3,
+    Vector3D,
     CartesianPoint3D,
 )
 from semantic_digital_twin.utils import rclpy_installed
@@ -271,7 +271,7 @@ def mini_world() -> World:
         body = Body(name=PrefixedName("root"))
         body2 = Body(name=PrefixedName("tip"))
         connection = RevoluteConnection.create_with_dofs(
-            world=world, parent=body, child=body2, axis=Vector3.Z()
+            world=world, parent=body, child=body2, axis=Vector3D.Z()
         )
         world.add_connection(connection)
     return world
@@ -387,7 +387,7 @@ def self_collision_bot_world():
             RevoluteConnection.create_with_dofs(
                 parent=robot,
                 child=l_shoulder,
-                axis=Vector3.Z(),
+                axis=Vector3D.Z(),
                 parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
                     x=0.2, y=0.2
                 ),
@@ -398,7 +398,7 @@ def self_collision_bot_world():
             RevoluteConnection.create_with_dofs(
                 parent=l_shoulder,
                 child=l_tip,
-                axis=Vector3.Z(),
+                axis=Vector3D.Z(),
                 parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
                     x=0.2
                 ),
@@ -419,7 +419,7 @@ def self_collision_bot_world():
             RevoluteConnection.create_with_dofs(
                 parent=robot,
                 child=r_shoulder,
-                axis=Vector3.Z(),
+                axis=Vector3D.Z(),
                 parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
                     x=0.2,
                     y=-0.2,
@@ -431,7 +431,7 @@ def self_collision_bot_world():
             RevoluteConnection.create_with_dofs(
                 parent=r_shoulder,
                 child=r_tip,
-                axis=Vector3.Z(),
+                axis=Vector3D.Z(),
                 parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
                     x=0.2
                 ),
@@ -754,7 +754,7 @@ def _elevator_world_setup():
                 scale=Scale(2, 2, 2), wall_thickness=0.05
             ),
             parent_connection_specification=PrismaticConnectionSpecification(
-                axis=Vector3.Z(),
+                axis=Vector3D.Z(),
                 dof_limits=DegreeOfFreedomLimits.from_position_range_and_speed(
                     maximum_speed=1.0
                 ),
@@ -772,7 +772,7 @@ def _elevator_world_setup():
                     reference_frame=world.root,
                 ),
                 parent_connection_specification=PrismaticConnectionSpecification(
-                    axis=(Vector3.Y() * ((-1) ** (i + 1))),
+                    axis=(Vector3D.Y() * ((-1) ** (i + 1))),
                     dof_limits=DegreeOfFreedomLimits.from_position_range_and_speed(
                         lower_position=0.0, upper_position=door_travel
                     ),

@@ -87,11 +87,11 @@ from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.robots.daisy import DAiSy
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Vector3,
+    Vector3D,
     CartesianPoint3D,
     RotationMatrix,
 )
-from krrood_spatial_math.spatial_types import Pose
+from krrood_spatial_math.spatial_types import Pose3D
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
     FixedConnection,
@@ -704,11 +704,11 @@ def test_avoid_collision_go_around_corner(pr2_with_box):
                         CartesianPose(
                             root_link=pr2_with_box.root,
                             tip_link=r_tip,
-                            goal_pose=Pose.from_xyz_axis_angle(
+                            goal_pose=Pose3D.from_xyz_axis_angle(
                                 x=0.8,
                                 y=-0.38,
                                 z=0.84,
-                                axis=Vector3.Y(),
+                                axis=Vector3D.Y(),
                                 angle=np.pi / 2.0,
                                 reference_frame=pr2_with_box.root,
                             ),
@@ -1131,7 +1131,7 @@ def _build_arms_crossing_statechart(
                 CartesianPose(
                     root_link=base_footprint,
                     tip_link=r_tip,
-                    goal_pose=Pose.from_xyz_rpy(0.2, reference_frame=r_tip),
+                    goal_pose=Pose3D.from_xyz_rpy(0.2, reference_frame=r_tip),
                     weight=DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE,
                 ),
             ],
@@ -1817,7 +1817,7 @@ def test_avoid_self_collision_specific_link(
             "base_footprint"
         ),
         tip_link=right_tip,
-        goal_pose=Pose.from_xyz_rpy(0.2, reference_frame=right_tip),
+        goal_pose=Pose3D.from_xyz_rpy(0.2, reference_frame=right_tip),
     )
 
     run_to_end(
@@ -1999,14 +1999,14 @@ def test_avoid_collision_box_between_3_boxes(
             AlignPlanes(
                 root_link=pr2_world_copy.root,
                 tip_link=box,
-                tip_normal=Vector3.X(reference_frame=box),
-                goal_normal=Vector3.X(reference_frame=pr2_world_copy.root),
+                tip_normal=Vector3D.X(reference_frame=box),
+                goal_normal=Vector3D.X(reference_frame=pr2_world_copy.root),
             ),
             AlignPlanes(
                 root_link=pr2_world_copy.root,
                 tip_link=box,
-                tip_normal=Vector3.Y(reference_frame=box),
-                goal_normal=Vector3.Y(reference_frame=pr2_world_copy.root),
+                tip_normal=Vector3D.Y(reference_frame=box),
+                goal_normal=Vector3D.Y(reference_frame=pr2_world_copy.root),
             ),
             ExternalCollisionAvoidance(robot=robot),
             local_min,
@@ -2047,7 +2047,7 @@ def test_hsr_self_collision_avoidance(
         tip_link=hsr_world_copy.get_kinematic_structure_entity_by_name(
             "hand_gripper_tool_frame"
         ),
-        goal_pose=Pose.from_xyz_axis_angle(
+        goal_pose=Pose3D.from_xyz_axis_angle(
             x=0.5,
             reference_frame=hsr_world_copy.get_kinematic_structure_entity_by_name(
                 "hand_palm_link"

@@ -27,10 +27,10 @@ from semantic_digital_twin.adapters.ros.semdt_to_ros2_converters import (
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     CartesianPoint3D,
-    Vector3,
+    Vector3D,
     Quaternion,
 )
-from krrood_spatial_math.spatial_types import Pose
+from krrood_spatial_math.spatial_types import Pose3D
 from semantic_digital_twin.world_description.geometry import (
     Box,
     Color,
@@ -197,7 +197,7 @@ def test_no_frame_id(cylinder_bot_world):
     transform = SemDTToRos2Converter.convert(HomogeneousTransformationMatrix())
     assert transform.header.frame_id == ""
     assert transform.child_frame_id == ""
-    for spatial_type in [Pose(), CartesianPoint3D(), Vector3(), Quaternion()]:
+    for spatial_type in [Pose3D(), CartesianPoint3D(), Vector3D(), Quaternion()]:
         assert SemDTToRos2Converter.convert(spatial_type).header.frame_id == ""
 
     transformation_matrix = Ros2ToSemDTConverter.convert(

@@ -19,7 +19,7 @@ from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
 )
 from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.robots.hsrb import HSRBJoint
-from krrood_spatial_math.spatial_types import CartesianPoint3D, Vector3
+from krrood_spatial_math.spatial_types import CartesianPoint3D, Vector3D
 from semantic_digital_twin.world import World
 from test.semantic_digital_twin_test.test_orm.test_orm import hsr_world_state_reset
 from giskardpy.motion_control import MotionControl
@@ -53,7 +53,7 @@ def test_wiggle_insert_reaches_hole(pr2_world_state_reset: World, rclpy_node):
         root_link=root,
         tip_link=tip,
         hole_point=hole_point,
-        hole_normal=Vector3.Z(reference_frame=root),
+        hole_normal=Vector3D.Z(reference_frame=root),
         noise_translation=0.01,
         noise_angle=0.05,
         cruise_velocity=0.05,
@@ -79,7 +79,7 @@ def test_wiggle_insert_basis_uses_root_frame_hole_normal(pr2_world_state_reset: 
     )
     root = pr2_world_state_reset.get_kinematic_structure_entity_by_name("odom_combined")
     hole_point = _hole_at_current_tip(pr2_world_state_reset, tip, root)
-    hole_normal_in_tip_frame = Vector3.Z(reference_frame=tip)
+    hole_normal_in_tip_frame = Vector3D.Z(reference_frame=tip)
 
     wiggle = WiggleInsert(
         root_link=root,
@@ -124,7 +124,7 @@ def test_wiggle_insert_on_tick_updates_noise(pr2_world_state_reset: World):
         root_link=root,
         tip_link=tip,
         hole_point=hole_point,
-        hole_normal=Vector3.Z(reference_frame=root),
+        hole_normal=Vector3D.Z(reference_frame=root),
         noise_translation=0.05,
         noise_angle=0.2,
         cruise_velocity=0.05,

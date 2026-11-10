@@ -94,7 +94,7 @@ from HasCaseA   sRootBody, has a list of Produces, for example our Apples, and d
 
 ```{code-cell} ipython3
 from semantic_digital_twin.semantic_annotations.mixins import HasCaseAsRootBody
-from krrood_spatial_math.spatial_types import Vector3
+from krrood_spatial_math.spatial_types import Vector3D
 from krrood.ormatic.utils import classproperty
 from dataclasses import dataclass, field
 
@@ -103,8 +103,8 @@ class ProduceBox(HasCaseAsRootBody):
     produces: List[Produce] = field(default_factory=list)
     
     @classproperty
-    def _hole_direction_axis(self) -> Vector3:
-        return Vector3.Z()
+    def _hole_direction_axis(self) -> Vector3D:
+        return Vector3D.Z()
 ```
  
 This is our first semantic annotation! They need to be dataclasses, because it makes it trivial to create datastructures which can be used 

@@ -50,7 +50,7 @@ from krrood_spatial_math.spatial_types import (
     GenericSpatialType,
     HomogeneousTransformationMatrix,
     CartesianPoint3D,
-    Pose,
+    Pose3D,
 )
 from semantic_digital_twin.utils import camel_case_split
 from semantic_digital_twin.world_description.geometry import Mesh
@@ -436,11 +436,11 @@ class KinematicStructureEntity(
         return self._world.compute_forward_kinematics(self._world.root, self)
 
     @property
-    def global_pose(self) -> Pose:
+    def global_pose(self) -> Pose3D:
         """
-        Computes the Pose of the KinematicStructureEntity in the world frame.
+        Computes the Pose3D of the KinematicStructureEntity in the world frame.
 
-        :return: Pose representing the global pose.
+        :return: Pose3D representing the global pose.
         """
         return self._world.compute_forward_kinematics(self._world.root, self).pose
 

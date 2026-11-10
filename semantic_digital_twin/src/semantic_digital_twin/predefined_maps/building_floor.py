@@ -13,7 +13,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Handle,
     Wall,
 )
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3
+from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3D
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import Color, Scale
 from semantic_digital_twin.world_description.world_entity import (
@@ -45,7 +45,7 @@ class SingleDoorRoom:
 
     door_color: Color = field(default_factory=lambda: Color.RED())
     """
-    Color of the door to to visually distinguish it from the wall
+    Color of the door to to visually distinguish it from the wall.
     """
 
     def spawn(
@@ -105,7 +105,7 @@ class SingleDoorRoom:
             Door.get_default_root_kinematic_structure_entity_specification(
                 scale=self.door_scale,
                 connection_specification=RevoluteConnectionSpecification(
-                    axis=Vector3.Z()
+                    axis=Vector3D.Z()
                 ),
             ),
             part_specifications={
@@ -157,8 +157,8 @@ class BuildingFloor:
 
         :param world: The world the building floor is added to.
         :param name: Prefix for the names of every entity this building floor creates.
-        :param parent: The entity the floor slab attaches to. If None, ``world.root``
-            is used.
+        :param parent: The entity the floor slab attaches to. If None, ``world.root`` is
+            used.
         :param parent_T_self: Placement of the floor slab in ``parent``'s frame.
             Identity if None.
         :return: The floor slab's annotation.

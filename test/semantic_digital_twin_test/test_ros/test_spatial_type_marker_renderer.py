@@ -15,15 +15,15 @@ from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     CartesianPoint3D,
     Quaternion,
-    Vector3,
+    Vector3D,
 )
-from krrood_spatial_math.spatial_types import RotationMatrix, SpatialType
+from krrood_spatial_math.spatial_types import RotationMatrix, SymbolicSpatialType
 from semantic_digital_twin.world_description.world_entity import Body
 
 ROOT_FRAME_NAME = "map"
 
 
-def render(spatial_type: SpatialType, **kwargs) -> list[Marker]:
+def render(spatial_type: SymbolicSpatialType, **kwargs) -> list[Marker]:
     request = SpatialTypeVisualization(spatial_type=spatial_type, **kwargs)
     return SpatialTypeMarkerRenderer.render(request, ROOT_FRAME_NAME)
 
@@ -55,7 +55,7 @@ def test_point_without_reference_frame_uses_root():
 def test_vector_renders_arrow_anchored_at_visualisation_frame():
     reference = Body(name=PrefixedName("reference"))
     visualisation = Body(name=PrefixedName("visualisation"))
-    vector = Vector3(
+    vector = Vector3D(
         x=1, y=0, z=0, reference_frame=reference, visualisation_frame=visualisation
     )
 

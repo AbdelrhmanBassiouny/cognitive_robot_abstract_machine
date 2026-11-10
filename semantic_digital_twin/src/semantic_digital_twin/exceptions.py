@@ -42,7 +42,7 @@ if TYPE_CHECKING:
         KinematicStructureEntity,
     )
     from krrood_spatial_math.affine_point import CartesianPoint
-    from krrood_spatial_math.spatial_types import Vector3
+    from krrood_spatial_math.spatial_types import Vector3D
     from semantic_digital_twin.world_description.degree_of_freedom import (
         DegreeOfFreedomLimits,
         DegreeOfFreedom,
@@ -1269,7 +1269,7 @@ class InvalidHingeActiveAxis(UsageError):
     Raised when an invalid axis is provided.
     """
 
-    axis: Vector3
+    axis: Vector3D
     """
     The invalid axis.
     """

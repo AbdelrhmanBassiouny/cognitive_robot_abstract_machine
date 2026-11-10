@@ -18,7 +18,7 @@ from semantic_digital_twin.robots.tracy import Tracy
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     CartesianPoint3D,
-    Vector3,
+    Vector3D,
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
@@ -77,8 +77,8 @@ def test_insert_cylinder_with_tracy(tracy_world: World) -> None:
         tip_P_tool=CartesianPoint3D(
             0.0, 0.0, cylinder_height / 2, reference_frame=cylinder
         ),
-        tip_V_axis=Vector3(0.0, 0.0, -1.0, reference_frame=cylinder),
-        up_axis=Vector3(0.0, 0.0, 1.0, reference_frame=world.root),
+        tip_V_axis=Vector3D(0.0, 0.0, -1.0, reference_frame=cylinder),
+        up_axis=Vector3D(0.0, 0.0, 1.0, reference_frame=world.root),
         hole_point=hole_point,
         pre_grasp_height=0.1,
     )
@@ -97,4 +97,4 @@ def test_insert_cylinder_with_tracy(tracy_world: World) -> None:
     root_V_axis = root_T_cylinder.rotation_matrix.z_vector()
     root_P_bottom = root_T_cylinder.position + root_V_axis * (cylinder_height / 2)
     assert np.allclose(root_P_bottom, hole_point, atol=0.02)
-    assert np.allclose(root_V_axis, Vector3(0.0, 0.0, -1.0), atol=0.02)
+    assert np.allclose(root_V_axis, Vector3D(0.0, 0.0, -1.0), atol=0.02)

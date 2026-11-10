@@ -15,7 +15,7 @@ from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     CartesianPoint3D,
     RotationMatrix,
-    Vector3,
+    Vector3D,
 )
 
 
@@ -83,8 +83,8 @@ class ViewDirection:
         return HomogeneousTransformationMatrix.from_point_rotation_matrix(
             point=CartesianPoint3D(*(target + towards_camera * distance)),
             rotation_matrix=RotationMatrix.from_vectors(
-                x=Vector3(*-towards_camera),
-                y=Vector3(*-image_up / np.linalg.norm(image_up)),
+                x=Vector3D(*-towards_camera),
+                y=Vector3D(*-image_up / np.linalg.norm(image_up)),
             ),
         )
 

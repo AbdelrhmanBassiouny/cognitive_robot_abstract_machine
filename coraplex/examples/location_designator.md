@@ -87,10 +87,10 @@ run(Sequence(nodes=[ParkArmsAction(arms=pr2_view.all_arms),
 ```python
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from coraplex.locations.locations import ReachabilityLocation
-from krrood_spatial_math.spatial_types import Pose
+from krrood_spatial_math.spatial_types import Pose3D
 
 location = ReachabilityLocation(
-    Pose(reference_frame=world.get_body_by_name("milk.stl")),
+    Pose3D(reference_frame=world.get_body_by_name("milk.stl")),
     pr2_view.left_arm,
     context=context,
 )
@@ -127,7 +127,7 @@ with world.modify_world():
     )
 
 location = ReachabilityLocation(
-    Pose(reference_frame=drawer.handle.root),
+    Pose3D(reference_frame=drawer.handle.root),
     pr2_view.left_arm,
     ReachFraction.ACCESSING,
     context=context,
@@ -145,7 +145,7 @@ with its default camera. It only needs the target.
 from coraplex.locations.locations import VisibilityLocation
 
 location = VisibilityLocation(
-    Pose(reference_frame=world.get_body_by_name("milk.stl")), context=context
+    Pose3D(reference_frame=world.get_body_by_name("milk.stl")), context=context
 )
 
 run(NavigateAction(target_location=location.ground()))
@@ -163,7 +163,7 @@ location samples at most `number_of_samples` candidates. It draws them with the 
 from krrood_spatial_math.spatial_types import CartesianPoint3D
 
 location = VisibilityLocation(
-    Pose(CartesianPoint3D.from_iterable([-1, 0, 1.2]), reference_frame=world.root),
+    Pose3D(CartesianPoint3D.from_iterable([-1, 0, 1.2]), reference_frame=world.root),
     context=context,
     number_of_samples=5,
 )
@@ -184,9 +184,9 @@ from krrood.entity_query_language.factories import a, variable
 
 navigate = a(NavigateAction)(
     target_location=variable(
-        Pose,
+        Pose3D,
         domain=ReachabilityLocation(
-            Pose(reference_frame=world.get_body_by_name("milk.stl")),
+            Pose3D(reference_frame=world.get_body_by_name("milk.stl")),
             pr2_view.left_arm,
             context=context,
         ),
@@ -206,7 +206,7 @@ how far, in cells, its candidates spread around the stand-off distance.
 
 ```python
 location = ReachabilityLocation(
-    Pose(reference_frame=world.get_body_by_name("milk.stl")),
+    Pose3D(reference_frame=world.get_body_by_name("milk.stl")),
     pr2_view.left_arm,
     context=context,
     map_resolution=0.04,

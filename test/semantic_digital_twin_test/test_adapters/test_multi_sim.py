@@ -20,8 +20,8 @@ from semantic_digital_twin.robots.hsrb import HSRB
 from semantic_digital_twin.robots.tracy import Tracy
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Vector3,
-    Pose,
+    Vector3D,
+    Pose3D,
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
@@ -746,7 +746,7 @@ def test_builder_writes_a_negative_multiplier_mimic_joints_own_range(tmp_path):
                 name=PrefixedName("knuckle_joint"),
                 parent=root,
                 child=knuckle,
-                axis=Vector3.Z(reference_frame=knuckle),
+                axis=Vector3D.Z(reference_frame=knuckle),
                 raw_dof=degree_of_freedom,
             )
         )
@@ -755,7 +755,7 @@ def test_builder_writes_a_negative_multiplier_mimic_joints_own_range(tmp_path):
                 name=PrefixedName("mirrored_knuckle_joint"),
                 parent=root,
                 child=mirrored_knuckle,
-                axis=Vector3.Z(reference_frame=mirrored_knuckle),
+                axis=Vector3D.Z(reference_frame=mirrored_knuckle),
                 raw_dof=degree_of_freedom,
                 multiplier=-1.0,
             )
@@ -880,7 +880,7 @@ def test_spawn_body_with_connections():
                     name=dof.name,
                     parent=root_body,
                     child=spawn_left_shoulder_body,
-                    axis=Vector3.Z(reference_frame=spawn_left_shoulder_body),
+                    axis=Vector3D.Z(reference_frame=spawn_left_shoulder_body),
                     raw_dof=dof,
                     parent_T_connection_expression=left_shoulder_origin,
                 )
@@ -913,7 +913,7 @@ def test_spawn_body_with_connections():
                     name=dof.name,
                     parent=root_body,
                     child=spawn_right_shoulder_body,
-                    axis=Vector3.Z(reference_frame=spawn_right_shoulder_body),
+                    axis=Vector3D.Z(reference_frame=spawn_right_shoulder_body),
                     raw_dof=dof,
                     parent_T_connection_expression=right_shoulder_origin,
                 )
@@ -982,7 +982,7 @@ def test_body_frame_excludes_joint_state_at_build_time():
                 name=rotated_joint_dof.name,
                 parent=base_body,
                 child=rotated_link,
-                axis=Vector3.Z(reference_frame=rotated_link),
+                axis=Vector3D.Z(reference_frame=rotated_link),
                 raw_dof=rotated_joint_dof,
                 parent_T_connection_expression=rotated_origin,
             )

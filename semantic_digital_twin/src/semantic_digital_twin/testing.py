@@ -10,7 +10,7 @@ from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.callbacks.callback import StateChangeCallback
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
-from krrood_spatial_math.spatial_types import Vector3
+from krrood_spatial_math.spatial_types import Vector3D
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
     Connection6DoF,
@@ -90,10 +90,10 @@ def world_setup() -> tuple[
         world.add_degree_of_freedom(dof)
 
         c_l1_l2 = PrismaticConnection(
-            parent=l1, child=l2, raw_dof=dof, axis=Vector3.X(reference_frame=l1)
+            parent=l1, child=l2, raw_dof=dof, axis=Vector3D.X(reference_frame=l1)
         )
         c_r1_r2 = RevoluteConnection(
-            parent=r1, child=r2, raw_dof=dof, axis=Vector3.Z(reference_frame=r1)
+            parent=r1, child=r2, raw_dof=dof, axis=Vector3D.Z(reference_frame=r1)
         )
         bf_root_l1 = FixedConnection(parent=bf, child=l1)
         bf_root_r1 = FixedConnection(parent=bf, child=r1)

@@ -39,7 +39,7 @@ from giskardpy.motion_statechart.ros2_nodes.topic_monitor import (
     WaitForMessage,
 )
 from giskardpy.motion_statechart.ros_context import RosNodeAccess
-from krrood_spatial_math.spatial_types import Pose
+from krrood_spatial_math.spatial_types import Pose3D
 
 from ..motion_control_context import create_context_with_motion_control
 from ...statechart_json_round_trip import (
@@ -95,7 +95,7 @@ def _cases() -> list[NodeRoundTripCase]:
                 NavigateActionServerTask(
                     action_topic=RosName.NAVIGATION_ACTION,
                     message_type=NavigateToPose,
-                    target_pose=Pose.from_xyz_rpy(x=0.1, reference_frame=world.root),
+                    target_pose=Pose3D.from_xyz_rpy(x=0.1, reference_frame=world.root),
                     base_link=world.get_kinematic_structure_entity_by_name("tip"),
                 )
             ],

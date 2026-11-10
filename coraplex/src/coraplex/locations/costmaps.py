@@ -23,7 +23,7 @@ from krrood_spatial_math.spatial_types import (
     Quaternion,
     RotationMatrix,
 )
-from krrood_spatial_math.spatial_types import Pose, CartesianPoint3D, Vector3
+from krrood_spatial_math.spatial_types import Pose3D, CartesianPoint3D, Vector3D
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
 
@@ -50,7 +50,7 @@ class Costmap(Location):
     """
     Width of the locations.
     """
-    origin: Pose = field(kw_only=True, default_factory=Pose)
+    origin: Pose3D = field(kw_only=True, default_factory=Pose3D)
     """
     Origin pose of the locations.
     """
@@ -64,7 +64,7 @@ class Costmap(Location):
     system is given by the resolution. 
 
     Furthermore, there is a difference in the origin of the two representations while the numpy arrays start from the top left 
-    corner, the origin given as Pose is placed in the middle of the array. The locations is build around the origin and 
+    corner, the origin given as Pose3D is placed in the middle of the array. The locations is build around the origin and 
     since the array start from 0, 0 in the corner this conversion is necessary. 
 
                 y-axis      0, 10
@@ -169,10 +169,12 @@ class Costmap(Location):
     def __and__(self, other):
         return self.merge(other)
 
-    def candidates(self) -> Iterator[Pose]:
+    def candidates(self) -> Iterator[Pose3D]:
         return self.sample(self.number_of_samples, self.seed)
 
-    def sample(self, number_of_samples: int, seed: int | None = None) -> Iterator[Pose]:
+    def sample(
+        self, number_of_samples: int, seed: int | None = None
+    ) -> Iterator[Pose3D]:
         """
         Sample pose candidates from this map.
 
@@ -267,7 +269,7 @@ class Costmap(Location):
         self,
         number_of_samples: int,
         random_generator: np.random.Generator,
-    ) -> Iterator[Pose]:
+    ) -> Iterator[Pose3D]:
         """
         Sample candidates, the given number of them spread over this map's segments.
 
@@ -291,10 +293,10 @@ class Costmap(Location):
                 # Compute world position independent of origin orientation:
                 # map indices increase with world axes; origin is at the center.
                 offset = (index - center) * self.resolution
-                position = self.origin.position + Vector3(offset[0], offset[1], 0)
+                position = self.origin.position + Vector3D(offset[0], offset[1], 0)
 
                 orientation: Quaternion = self._orientation_facing_origin(position)
-                yield Pose(
+                yield Pose3D(
                     position,
                     orientation,
                     self.world.root,
@@ -469,7 +471,7 @@ class OccupancyCostmap(Costmap):
     def default_map(
         cls,
         robot: AbstractRobot,
-        target: Pose,
+        target: Pose3D,
         *,
         resolution: float = 0.02,
         cells: int = 200,
@@ -510,11 +512,11 @@ class VisibilityCostmap(Costmap):
 
     maximum_height: float
 
-    target_object: Body | Pose | None = None
+    target_object: Body | Pose3D | None = None
 
     def __post_init__(self) -> None:
-        self.origin: Pose = (
-            Pose(reference_frame=self.world.root) if not self.origin else self.origin
+        self.origin: Pose3D = (
+            Pose3D(reference_frame=self.world.root) if not self.origin else self.origin
         )
         self._generate_map()
 
@@ -801,7 +803,7 @@ class RingCostmap(Costmap):
     def from_arm_reach_distance(
         cls,
         arm: Arm,
-        origin: Pose,
+        origin: Pose3D,
         reach_fraction: float,
         *,
         resolution: float = 0.02,

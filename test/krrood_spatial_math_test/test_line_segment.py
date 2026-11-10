@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import numpy as np
 
-from krrood_spatial_math.spatial_types import LineSegment3, CartesianPoint3D
+from krrood_spatial_math.spatial_types import LineSegment3D, CartesianPoint3D
 
 # %% the direction a segment runs in
 
 
 def test_a_segment_runs_from_its_start_to_its_end_as_a_unit_vector():
-    segment = LineSegment3(
+    segment = LineSegment3D(
         start=CartesianPoint3D(1.0, 2.0, 3.0), end=CartesianPoint3D(1.0, 5.0, 7.0)
     )
 

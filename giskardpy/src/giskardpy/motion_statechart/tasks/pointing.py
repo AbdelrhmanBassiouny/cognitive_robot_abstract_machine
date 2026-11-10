@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from giskardpy.motion_statechart.cruise_velocities import DefaultCruiseVelocity
 from giskardpy.motion_statechart.graph_node import MotionNodeArtifacts
 from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianTask
-from krrood_spatial_math.spatial_types import CartesianPoint3D, Vector3
+from krrood_spatial_math.spatial_types import CartesianPoint3D, Vector3D
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
@@ -22,7 +22,7 @@ class Pointing(CartesianTask):
     Where to point pointing_axis at.
     """
 
-    pointing_axis: Vector3
+    pointing_axis: Vector3D
     """
     The axis of tip_link that will be used for pointing.
     """
@@ -94,7 +94,7 @@ class PointingCone(CartesianTask):
     Where to point pointing_axis at.
     """
 
-    pointing_axis: Vector3
+    pointing_axis: Vector3D
     """
     The axis of tip_link that will be used for pointing.
     """

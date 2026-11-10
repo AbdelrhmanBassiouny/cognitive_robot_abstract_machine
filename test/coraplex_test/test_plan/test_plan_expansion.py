@@ -36,7 +36,7 @@ from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
-from krrood_spatial_math.spatial_types import CartesianPoint3D, Pose
+from krrood_spatial_math.spatial_types import CartesianPoint3D, Pose3D
 from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
 
 from ..conftest import expand, motion_nodes_of, tool_center_point_goal
@@ -310,7 +310,7 @@ def test_a_transport_runs_with_its_underspecified_steps(
             ParkArmsAction(arms=view.all_arms),
             TransportAction.from_graspable_by_closest_grasps(
                 world.get_semantic_annotations_by_type(Milk)[0],
-                Pose.from_xyz_rpy(2.37, 2.5, 1.05, reference_frame=world.root),
+                Pose3D.from_xyz_rpy(2.37, 2.5, 1.05, reference_frame=world.root),
                 view.right_arm,
                 context_of(extensions),
             ),

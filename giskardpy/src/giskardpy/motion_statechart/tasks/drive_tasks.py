@@ -18,9 +18,9 @@ from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     CartesianPoint3D,
     RotationMatrix,
-    Vector3,
+    Vector3D,
 )
-from krrood_spatial_math.spatial_types import Pose
+from krrood_spatial_math.spatial_types import Pose3D
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
@@ -43,7 +43,7 @@ class DrivenBaseTask(ConvergingTask, ABC):
     The body the drive carries.
     """
 
-    goal_pose: Pose
+    goal_pose: Pose3D
     """
     Where the base should end up.
     """
@@ -62,7 +62,7 @@ class DrivenBaseTask(ConvergingTask, ABC):
         return self.base.parent_kinematic_structure_entity
 
     @property
-    def parent_T_goal(self) -> Pose:
+    def parent_T_goal(self) -> Pose3D:
         """
         :return: :attr:`goal_pose` relative to :attr:`drive_parent`.
         """
@@ -187,7 +187,7 @@ class BaseHeading(DrivenBaseRotation):
         parent_V_base_to_goal.scale(1)
         return RotationMatrix.from_vectors(
             x=parent_V_base_to_goal,
-            z=Vector3.Z(reference_frame=self.drive_parent),
+            z=Vector3D.Z(reference_frame=self.drive_parent),
             reference_frame=self.drive_parent,
         )
 

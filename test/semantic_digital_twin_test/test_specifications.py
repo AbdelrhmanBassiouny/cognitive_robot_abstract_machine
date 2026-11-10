@@ -85,7 +85,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     CartesianPoint3D,
-    Vector3,
+    Vector3D,
 )
 from semantic_digital_twin.semantic_annotations.mixins import (
     HasApertures,
@@ -159,7 +159,7 @@ def test_region_specification_uses_connection_specification(empty_world):
     spec = RegionSpecification.box(
         "sliding_region",
         Scale(1, 1, 1),
-        connection_specification=PrismaticConnectionSpecification(axis=Vector3.Z()),
+        connection_specification=PrismaticConnectionSpecification(axis=Vector3D.Z()),
     )
     region = spec.spawn(empty_world)
     assert isinstance(region.parent_connection, PrismaticConnection)
@@ -189,7 +189,7 @@ def test_body_and_connection_active(empty_world):
     spec = BodySpecification.box(
         "drawer",
         Scale(1, 1, 1),
-        connection_specification=PrismaticConnectionSpecification(axis=Vector3.Z()),
+        connection_specification=PrismaticConnectionSpecification(axis=Vector3D.Z()),
     )
     body = spec.spawn(empty_world)
     assert isinstance(body.parent_connection, PrismaticConnection)
@@ -221,7 +221,7 @@ def test_active_annotation_spawns(empty_world):
         "drawer",
         BodySpecification.box("drawer", Scale(0.4, 0.5, 0.6)),
         parent_connection_specification=PrismaticConnectionSpecification(
-            axis=Vector3.X()
+            axis=Vector3D.X()
         ),
     )
     annotation = spec.spawn(empty_world)
@@ -1119,7 +1119,7 @@ def test_connection_6dof_spec_binds_type_without_params():
 
 def test_active_1dof_spec_captures_parameters():
     limits = DegreeOfFreedomLimits.from_position_range_and_speed(maximum_speed=1.0)
-    axis = Vector3.Z()
+    axis = Vector3D.Z()
     spec = PrismaticConnectionSpecification(
         axis=axis, multiplier=2.0, offset=0.5, dof_limits=limits
     )
@@ -1131,7 +1131,7 @@ def test_active_1dof_spec_captures_parameters():
 
 
 def test_active_1dof_spec_defaults():
-    axis = Vector3.Z()
+    axis = Vector3D.Z()
     spec = RevoluteConnectionSpecification(axis=axis)
     assert spec.connection_type is RevoluteConnection
     assert spec._create_with_dofs_kwargs() == {
@@ -1147,7 +1147,7 @@ def test_fixed_spec_rejects_active_parameters():
     # Each connection family carries exactly its own parameters, so an inapplicable one
     # is a construction error instead of being silently dropped.
     with pytest.raises(TypeError):
-        FixedConnectionSpecification(axis=Vector3.Z())
+        FixedConnectionSpecification(axis=Vector3D.Z())
 
 
 def _connection_specification_types() -> list[type[ConnectionSpecification]]:
@@ -1167,9 +1167,9 @@ def _build_connection_specification(
     Build a specification, supplying the parameters its own family requires.
     """
     if issubclass(specification_type, ScrewConnectionSpecification):
-        return specification_type(axis=Vector3.Z(), screw_pitch=0.005)
+        return specification_type(axis=Vector3D.Z(), screw_pitch=0.005)
     if issubclass(specification_type, ActiveConnection1DOFSpecification):
-        return specification_type(axis=Vector3.Z())
+        return specification_type(axis=Vector3D.Z())
     return specification_type()
 
 
@@ -1212,7 +1212,7 @@ def test_connection_spec_connect_active_forwards_kwargs(empty_world):
     limits = DegreeOfFreedomLimits.from_position_range_and_speed(maximum_speed=1.5)
     child = BodySpecification.box("slider", Scale(1, 1, 1)).to_domain_object()
     connection = PrismaticConnectionSpecification(
-        axis=Vector3.Z(), dof_limits=limits
+        axis=Vector3D.Z(), dof_limits=limits
     ).connect(empty_world, child=child)
     assert isinstance(connection, PrismaticConnection)
     assert connection.dof.limits.upper.velocity == 1.5
@@ -1223,10 +1223,10 @@ def test_connection_spec_connect_active_forwards_kwargs(empty_world):
     "specification",
     [
         RevoluteConnectionSpecification(
-            axis=Vector3.Z(), dynamics=JointDynamics(damping=0.7, dry_friction=0.3)
+            axis=Vector3D.Z(), dynamics=JointDynamics(damping=0.7, dry_friction=0.3)
         ),
         ScrewConnectionSpecification(
-            axis=Vector3.Z(),
+            axis=Vector3D.Z(),
             screw_pitch=0.005,
             dynamics=JointDynamics(damping=0.7, dry_friction=0.3),
         ),
@@ -1244,7 +1244,7 @@ def test_connection_spec_connect_applies_dynamics(
 def test_screw_connection_spec_connect_forwards_pitch(empty_world):
     child = BodySpecification.box("cap", Scale(1, 1, 1)).to_domain_object()
     connection = ScrewConnectionSpecification(
-        axis=Vector3.Z(), screw_pitch=0.005
+        axis=Vector3D.Z(), screw_pitch=0.005
     ).connect(empty_world, child=child)
     assert isinstance(connection, ScrewConnection)
     assert connection.screw_pitch == 0.005
@@ -1318,7 +1318,7 @@ def _door_on_hinge_specification() -> BodySpecification:
         "door",
         Scale(0.03, 1, 2),
         connection_specification=RevoluteConnectionSpecification(
-            axis=Vector3.Z(), connection_T_child=_hinge_T_door()
+            axis=Vector3D.Z(), connection_T_child=_hinge_T_door()
         ),
     )
 
@@ -1398,7 +1398,7 @@ def test_reconnect_keeps_the_child_and_its_branch_where_they_are(empty_world):
     root_T_door = empty_world.compute_forward_kinematics(empty_world.root, door)
 
     connection = RevoluteConnectionSpecification(
-        axis=Vector3.Z(), connection_T_child=_hinge_T_door()
+        axis=Vector3D.Z(), connection_T_child=_hinge_T_door()
     ).reconnect(empty_world, door)
 
     assert isinstance(door.parent_connection, RevoluteConnection)
@@ -1415,7 +1415,7 @@ def test_reconnect_keeps_the_child_and_its_branch_where_they_are(empty_world):
 def test_reconnect_swings_the_child_about_the_new_connection_frame(empty_world):
     door = BodySpecification.box("door", Scale(0.03, 1, 2)).spawn(empty_world)
     connection = RevoluteConnectionSpecification(
-        axis=Vector3.Z(), connection_T_child=_hinge_T_door()
+        axis=Vector3D.Z(), connection_T_child=_hinge_T_door()
     ).reconnect(empty_world, door)
     angle = np.pi / 2
 
@@ -1438,10 +1438,10 @@ def test_reconnect_swings_the_child_about_the_new_connection_frame(empty_world):
     "joint_specification",
     [
         RevoluteConnectionSpecification(
-            axis=Vector3.Z(), offset=0.3, connection_T_child=_hinge_T_door()
+            axis=Vector3D.Z(), offset=0.3, connection_T_child=_hinge_T_door()
         ),
         RevoluteConnectionSpecification(
-            axis=Vector3.Z(),
+            axis=Vector3D.Z(),
             dof_limits=DegreeOfFreedomLimits.from_position_range_and_speed(
                 lower_position=0.2, upper_position=1.0
             ),
@@ -1472,7 +1472,7 @@ def test_reconnect_keeps_the_child_where_it_is_when_the_joint_starts_away_from_z
 def test_reconnect_keeps_the_name_of_the_specification(empty_world):
     door = BodySpecification.box("door", Scale(0.03, 1, 2)).spawn(empty_world)
     specification = RevoluteConnectionSpecification(
-        name="front_door_hinge", axis=Vector3.Z(), connection_T_child=_hinge_T_door()
+        name="front_door_hinge", axis=Vector3D.Z(), connection_T_child=_hinge_T_door()
     )
 
     connection = specification.reconnect(empty_world, door)
@@ -1486,11 +1486,11 @@ def test_reconnect_releases_the_degrees_of_freedom_of_the_replaced_connection(
     drawer = BodySpecification.box(
         "drawer",
         Scale(0.5, 0.5, 0.2),
-        connection_specification=PrismaticConnectionSpecification(axis=Vector3.X()),
+        connection_specification=PrismaticConnectionSpecification(axis=Vector3D.X()),
     ).spawn(empty_world)
     [replaced_degree_of_freedom] = drawer.parent_connection.dofs
 
-    connection = RevoluteConnectionSpecification(axis=Vector3.Z()).reconnect(
+    connection = RevoluteConnectionSpecification(axis=Vector3D.Z()).reconnect(
         empty_world, drawer
     )
 
@@ -1505,7 +1505,7 @@ def test_connection_T_child_survives_orm_round_trip(empty_world):
             scale=Scale(0.03, 1, 2)
         ),
         parent_connection_specification=RevoluteConnectionSpecification(
-            axis=Vector3.Z(), connection_T_child=_hinge_T_door()
+            axis=Vector3D.Z(), connection_T_child=_hinge_T_door()
         ),
     )
 
@@ -1708,7 +1708,7 @@ def test_annotation_spec_active_door(empty_world):
             scale=Scale(0.03, 1, 2)
         ),
         parent_connection_specification=RevoluteConnectionSpecification(
-            axis=Vector3.Z()
+            axis=Vector3D.Z()
         ),
     )
     annotation = spec.spawn(empty_world)
@@ -1790,7 +1790,7 @@ def test_door_joint_survives_mounting_the_door_as_a_part(empty_world):
             scale=Scale(0.03, 1, 2)
         ),
         parent_connection_specification=RevoluteConnectionSpecification(
-            axis=Vector3.Z(), connection_T_child=_hinge_T_door()
+            axis=Vector3D.Z(), connection_T_child=_hinge_T_door()
         ),
     )
 
@@ -1818,7 +1818,7 @@ def test_drawer_joint_survives_mounting_the_drawer_as_a_part(empty_world):
             scale=Scale(0.4, 0.5, 0.6)
         ),
         parent_connection_specification=PrismaticConnectionSpecification(
-            axis=Vector3.X()
+            axis=Vector3D.X()
         ),
     )
 
@@ -1941,7 +1941,7 @@ def test_annotation_connection_limits_threaded(empty_world):
             scale=Scale(0.4, 0.5, 0.6)
         ),
         parent_connection_specification=PrismaticConnectionSpecification(
-            axis=Vector3.Z(), dof_limits=limits
+            axis=Vector3D.Z(), dof_limits=limits
         ),
     )
     drawer = spec.spawn(empty_world)
@@ -2029,7 +2029,7 @@ def test_complex_spawned_world_is_deepcopyable(empty_world):
             scale=Scale(0.4, 0.5, 0.6)
         ),
         parent_connection_specification=RevoluteConnectionSpecification(
-            axis=Vector3.Z(), connection_T_child=_hinge_T_door()
+            axis=Vector3D.Z(), connection_T_child=_hinge_T_door()
         ),
         part_specifications={
             "handle": Handle.get_annotation_specification(
@@ -2081,7 +2081,7 @@ def test_nested_composite_matches_manual_construction(empty_world):
         "drawer",
         Drawer.get_default_root_kinematic_structure_entity_specification(scale=scale),
         parent_connection_specification=PrismaticConnectionSpecification(
-            axis=Vector3.X()
+            axis=Vector3D.X()
         ),
         part_specifications={
             "handle": Handle.get_annotation_specification(
@@ -2104,7 +2104,7 @@ def test_nested_composite_matches_manual_construction(empty_world):
             world=manual_world,
             scale=scale,
             parent_connection_specification=PrismaticConnectionSpecification(
-                axis=Vector3.X()
+                axis=Vector3D.X()
             ),
         )
         manual_handle = Handle.create_with_new_body_in_world(
@@ -2120,7 +2120,7 @@ def test_nested_composite_matches_manual_construction(empty_world):
 
 # %% factory defaults are not shared mutable state
 # Factory overrides must not carry shared mutable spatial defaults:
-# a Vector3 default is constructed once at definition time and would
+# a Vector3D default is constructed once at definition time and would
 # be aliased by every caller that mutates it.
 
 
@@ -2151,7 +2151,7 @@ def test_factories_have_no_shared_mutable_spatial_defaults():
         f"{owner.__name__}.{method_name}({parameter.name})"
         for owner, method_name, signature in _factory_overrides()
         for parameter in signature.parameters.values()
-        if isinstance(parameter.default, (Vector3, CartesianPoint3D, Scale))
+        if isinstance(parameter.default, (Vector3D, CartesianPoint3D, Scale))
     ]
     assert not offenders, f"shared mutable defaults: {offenders}"
 

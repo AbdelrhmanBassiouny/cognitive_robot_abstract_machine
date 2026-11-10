@@ -6,7 +6,7 @@ import krrood.symbolic_math.symbolic_math as sm
 from cramph.node import EndedByOwner
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from cramph.node import NodeArtifacts
-from krrood_spatial_math.spatial_types import CartesianPoint3D, Vector3
+from krrood_spatial_math.spatial_types import CartesianPoint3D, Vector3D
 from semantic_digital_twin.world_description.world_entity import Body
 
 
@@ -21,9 +21,9 @@ class FeatureFunctionMonitor(EndedByOwner, MotionStatechartNode):
     """Link the controlled feature is attached to."""
     root_link: Body
     """Link the reference feature is attached to."""
-    reference_feature: CartesianPoint3D | Vector3 = field(init=False)
+    reference_feature: CartesianPoint3D | Vector3D = field(init=False)
     """Reference feature, typically the target for `controlled_feature`."""
-    controlled_feature: CartesianPoint3D | Vector3 = field(init=False)
+    controlled_feature: CartesianPoint3D | Vector3D = field(init=False)
     """Controlled feature, typically moved towards `reference_feature`."""
 
     def build_artifacts(self) -> NodeArtifacts:
@@ -43,12 +43,12 @@ class FeatureFunctionMonitor(EndedByOwner, MotionStatechartNode):
         )
         if isinstance(self.controlled_feature, CartesianPoint3D):
             self.root_P_controlled_feature = root_T_tip @ tip_controlled_feature
-        elif isinstance(self.controlled_feature, Vector3):
+        elif isinstance(self.controlled_feature, Vector3D):
             self.root_V_controlled_feature = root_T_tip @ tip_controlled_feature
 
         if isinstance(self.reference_feature, CartesianPoint3D):
             self.root_P_reference_feature = root_reference_feature
-        if isinstance(self.reference_feature, Vector3):
+        if isinstance(self.reference_feature, Vector3D):
             self.root_V_reference_feature = root_reference_feature
 
         return NodeArtifacts()
@@ -77,7 +77,7 @@ class HeightMonitor(FeatureFunctionMonitor):
 
         distance = (
             self.root_P_controlled_feature - self.root_P_reference_feature
-        ) @ Vector3.Z()
+        ) @ Vector3D.Z()
         artifacts.observation = sm.logic_and(
             distance >= self.lower_limit,
             distance <= self.upper_limit,
@@ -92,9 +92,9 @@ class PerpendicularMonitor(FeatureFunctionMonitor):
     ``threshold``.
     """
 
-    reference_normal: Vector3
+    reference_normal: Vector3D
     """Reference normal to check perpendicularity against."""
-    tip_normal: Vector3
+    tip_normal: Vector3D
     """Controlled normal."""
     threshold: float = 0.01
     """Threshold on the dot product of the two normals."""
@@ -147,9 +147,9 @@ class AngleMonitor(FeatureFunctionMonitor):
     ``[lower_angle, upper_angle]``.
     """
 
-    reference_vector: Vector3
+    reference_vector: Vector3D
     """Reference vector to measure the angle against."""
-    tip_vector: Vector3
+    tip_vector: Vector3D
     """Controlled vector."""
     lower_angle: float
     """Lower bound for the angle in radians."""

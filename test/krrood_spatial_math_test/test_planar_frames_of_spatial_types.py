@@ -23,7 +23,7 @@ from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix2D,
     CartesianPoint2D,
     CartesianPoint3D,
-    Pose,
+    Pose3D,
     Pose2D,
     XYPlane2D,
     XYPlaneFrame2D,
@@ -418,7 +418,7 @@ def test_a_planar_transformation_keeps_its_motion_and_frames_in_json(
 
 
 def test_a_flattened_pose_faces_the_way_its_x_axis_points_on_the_plane(floor_frame):
-    pose = Pose.from_xyz_rpy(
+    pose = Pose3D.from_xyz_rpy(
         x=1, y=2, z=3, roll=0.3, pitch=0.2, yaw=0.5, reference_frame=floor_frame
     )
 
@@ -434,7 +434,7 @@ def test_a_flattened_pose_faces_the_way_its_x_axis_points_on_the_plane(floor_fra
 def test_a_pose_whose_x_axis_is_normal_to_the_plane_cannot_be_flattened(
     floor_frame,
 ):
-    pose = Pose.from_xyz_rpy(pitch=np.pi / 2, reference_frame=floor_frame)
+    pose = Pose3D.from_xyz_rpy(pitch=np.pi / 2, reference_frame=floor_frame)
 
     with pytest.raises(XAxisNormalToPlaneError):
         Pose2D.from_pose(pose)

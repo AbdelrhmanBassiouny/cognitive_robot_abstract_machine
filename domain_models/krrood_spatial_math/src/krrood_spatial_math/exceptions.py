@@ -8,7 +8,7 @@ from krrood.exceptions import DataclassException
 
 if TYPE_CHECKING:
     from krrood_spatial_math.cartesian_frame_3d import CartesianFrame3D
-    from krrood_spatial_math.spatial_types import Pose, SpatialType, Vector3
+    from krrood_spatial_math.spatial_types import Pose3D, SymbolicSpatialType, Vector3D
 
 # %% spatial types
 
@@ -26,9 +26,9 @@ class InsufficientVectorsError(SpatialTypesError):
     Raised when a rotation matrix is constructed from fewer than two vectors.
     """
 
-    x: Vector3 | None
-    y: Vector3 | None
-    z: Vector3 | None
+    x: Vector3D | None
+    y: Vector3D | None
+    z: Vector3D | None
 
     def error_message(self) -> str:
         return (
@@ -93,7 +93,7 @@ class MissingReferenceFrameError(SpatialTypesError):
     though it is required for the current operation.
     """
 
-    spatial_type: SpatialType
+    spatial_type: SymbolicSpatialType
     """
     Spatial type that lacks a reference frame.
     """
@@ -175,7 +175,7 @@ class XAxisNormalToPlaneError(SpatialTypesError):
     gives the flattened pose no heading.
     """
 
-    pose: Pose
+    pose: Pose3D
     """
     The pose that was flattened.
     """

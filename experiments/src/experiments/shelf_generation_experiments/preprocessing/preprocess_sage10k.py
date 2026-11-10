@@ -39,7 +39,7 @@ from experiments.shelf_generation_experiments.shelf_schema import (
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     CartesianPoint2D,
-    Pose,
+    Pose3D,
     Pose2D,
 )
 from semantic_digital_twin.world_description.geometry import (
@@ -84,11 +84,11 @@ class PreprocessedObject:
     The scale of the object.
     """
 
-    pose: Pose
+    pose: Pose3D
     """
-    Pose of the object.
+    Pose3D of the object.
 
-    ``roll``/``pitch``/``yaw`` are in radians, as :class:`~krrood_spatial_math.spatial_types.Pose`
+    ``roll``/``pitch``/``yaw`` are in radians, as :class:`~krrood_spatial_math.spatial_types.Pose3D`
     requires -- everywhere else in this schema reasons about rotation in degrees, so it is
     converted at the boundary where a value enters or leaves this field.
     """
@@ -154,7 +154,7 @@ class PreprocessedObject:
                 y=sage10k_object.dimensions.width,
                 z=sage10k_object.dimensions.height,
             ),
-            pose=Pose.from_xyz_rpy(
+            pose=Pose3D.from_xyz_rpy(
                 x=corrected.position.x,
                 y=corrected.position.y,
                 z=sage10k_object.position.z,

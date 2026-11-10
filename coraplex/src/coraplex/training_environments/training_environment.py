@@ -48,7 +48,7 @@ from semantic_digital_twin.robots.pr2 import PR2
 from krrood_spatial_math.spatial_types import (
     CartesianPoint2D,
     CartesianPoint3D,
-    Pose,
+    Pose3D,
     Pose2D,
 )
 from semantic_digital_twin.world import World
@@ -219,7 +219,7 @@ class MoveToReachTrainingEnvironment(TrainingEnvironment[MoveToReach]):
 
         world = self.setup_world()
         [robot] = world.get_semantic_annotations_by_type(AbstractRobot)
-        target_pose = Pose.from_xyz_rpy(
+        target_pose = Pose3D.from_xyz_rpy(
             x=0,
             y=0,
             z=1,

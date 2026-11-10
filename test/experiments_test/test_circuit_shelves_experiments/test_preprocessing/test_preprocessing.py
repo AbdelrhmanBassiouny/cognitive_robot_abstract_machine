@@ -49,7 +49,7 @@ from experiments.shelf_generation_experiments.shelf_schema import (
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     CartesianPoint2D,
-    Pose,
+    Pose3D,
     Pose2D,
 )
 from semantic_digital_twin.world import World
@@ -107,7 +107,7 @@ def _eg_object(
         place_id=place_id,
         object_type=object_type,
         scale=Scale(x=length, y=width, z=height),
-        pose=Pose.from_xyz_rpy(
+        pose=Pose3D.from_xyz_rpy(
             x=x, y=y, z=z, roll=0.0, pitch=0.0, yaw=math.radians(yaw)
         ),
         source_id=source_id or f"{object_id}_src",

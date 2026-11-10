@@ -64,12 +64,12 @@ from semantic_digital_twin.semantic_annotations.part_whole import (
     IsPartWholeRelationship,
 )
 from krrood_spatial_math.spatial_types import (
-    LineSegment3,
+    LineSegment3D,
     CartesianPoint3D,
     HomogeneousTransformationMatrix,
-    Vector3,
+    Vector3D,
 )
-from krrood_spatial_math.spatial_types import Pose, RotationMatrix
+from krrood_spatial_math.spatial_types import Pose3D, RotationMatrix
 from semantic_digital_twin.world_description.connections import (
     FixedConnection,
     ActiveConnection1DOF,
@@ -453,7 +453,7 @@ class HasGraspCandidates(HasRootBody, Mixin):
         return [
             GraspCandidate(
                 self,
-                Pose(
+                Pose3D(
                     orientation=RotationMatrix.from_rpy(yaw=yaw).quaternion,
                     reference_frame=self.root,
                 ),
@@ -509,7 +509,7 @@ class HasGraspCandidates(HasRootBody, Mixin):
             raise NoGraspGeometry(self)
         return trimesh.util.concatenate(surfaces)
 
-    def grasp_axis(self) -> LineSegment3:
+    def grasp_axis(self) -> LineSegment3D:
         """
         :return: The axis an elongated object is grasped around, in the root body's
             frame: through the centre of the bounding box of :meth:`grasp_surface`,
@@ -520,7 +520,7 @@ class HasGraspCandidates(HasRootBody, Mixin):
         axis_index = int(np.argmax(highest - lowest))
         start, end = (lowest + highest) / 2, (lowest + highest) / 2
         start[axis_index], end[axis_index] = lowest[axis_index], highest[axis_index]
-        return LineSegment3(
+        return LineSegment3D(
             start=CartesianPoint3D.from_iterable(start, reference_frame=self.root),
             end=CartesianPoint3D.from_iterable(end, reference_frame=self.root),
         )
@@ -746,7 +746,7 @@ class HasMovableJoint(HasRootBody, Mixin, ABC):
 
     @abstractmethod
     def calculate_self_T_movable_joint(
-        self, axis: Vector3
+        self, axis: Vector3D
     ) -> HomogeneousTransformationMatrix:
         """
         Calculate where the joint that moves this annotation sits, relative to its root.
@@ -1440,7 +1440,7 @@ class HasCaseAsRootBody(HasSupportingSurface, Mixin):
 
     @classproperty
     @abstractmethod
-    def _hole_direction_axis(cls) -> Vector3:
+    def _hole_direction_axis(cls) -> Vector3D:
         """
         The unit vector along the direction of the physical hole of the geometry, without
         a reference frame.
@@ -1451,7 +1451,7 @@ class HasCaseAsRootBody(HasSupportingSurface, Mixin):
         """
 
     @property
-    def hole_direction(self) -> Vector3:
+    def hole_direction(self) -> Vector3D:
         """
         The direction of the physical hole of the geometry.
 
@@ -1459,7 +1459,7 @@ class HasCaseAsRootBody(HasSupportingSurface, Mixin):
                 ..warning:: This does not describe the axis along, for example, a drawer opens. Its the physical opening where
                 you can put something into the drawer.
         """
-        return Vector3.from_iterable(
+        return Vector3D.from_iterable(
             self._hole_direction_axis.to_np(), reference_frame=self.root
         )
 

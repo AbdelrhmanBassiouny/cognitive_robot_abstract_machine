@@ -2625,7 +2625,7 @@ class World(HasSimulatorProperties):
         Transform a given spatial object from its reference frame to a target frame.
 
         How the transformation applies is the spatial type's own business -- see
-        :meth:`~krrood_spatial_math.spatial_types.SpatialType.transform`
+        :meth:`~krrood_spatial_math.spatial_types.SymbolicSpatialType.transform`
         -- so a type that needs more than a matrix multiplication says so itself.
 
         :param spatial_object: The spatial object to be transformed.

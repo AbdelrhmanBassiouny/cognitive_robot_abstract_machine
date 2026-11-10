@@ -41,7 +41,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Milk,
     Drawer,
 )
-from krrood_spatial_math.spatial_types import Vector3
+from krrood_spatial_math.spatial_types import Vector3D
 from semantic_digital_twin.world_description.derivatives import (
     Derivatives,
     DerivativeMap,
@@ -1663,7 +1663,7 @@ def test_overwrite_dof_limits_mimic(world_setup):
             child=body,
             offset=23,
             multiplier=-2,
-            axis=Vector3(0, 0, 1),
+            axis=Vector3D(0, 0, 1),
             raw_dof=connection.raw_dof,
         )
         world.add_body(body)
@@ -1776,14 +1776,14 @@ def test_dof_removal_simple():
     body2 = Body(name=PrefixedName("body2"))
     with world.modify_world():
         c = RevoluteConnection.create_with_dofs(
-            world=world, parent=body1, child=body2, axis=Vector3.Z()
+            world=world, parent=body1, child=body2, axis=Vector3D.Z()
         )
         world.add_connection(c)
     with world.modify_world():
         world.remove_connection(c)
 
         c2 = RevoluteConnection.create_with_dofs(
-            world=world, parent=body1, child=body2, axis=Vector3.Z()
+            world=world, parent=body1, child=body2, axis=Vector3D.Z()
         )
         world.add_connection(c2)
 
@@ -2604,14 +2604,14 @@ def test_robot_velocity_limit_setup_does_not_touch_environment_joints():
             world=world,
             parent=robot_base,
             child=robot_link,
-            axis=Vector3.Z(reference_frame=robot_base),
+            axis=Vector3D.Z(reference_frame=robot_base),
         )
         world.add_connection(robot_joint)
         drawer_joint = PrismaticConnection.create_with_dofs(
             world=world,
             parent=root,
             child=drawer_body,
-            axis=Vector3.X(reference_frame=root),
+            axis=Vector3D.X(reference_frame=root),
             dof_limits=env_limits,
         )
         world.add_connection(drawer_joint)
@@ -3151,7 +3151,7 @@ def test_replace_with_transfers_degrees_of_freedom_and_state():
             world=other_world,
             parent=other_world.root,
             child=child_body,
-            axis=Vector3.Z(),
+            axis=Vector3D.Z(),
         )
         other_world.add_connection(conn)
     other_world.state[conn.dof.id].position = 0.75

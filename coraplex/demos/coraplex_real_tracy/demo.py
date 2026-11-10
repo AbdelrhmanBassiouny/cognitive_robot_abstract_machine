@@ -21,7 +21,7 @@ from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.semantic_annotations.semantic_annotations import GelatinBox
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Pose
+from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Pose3D
 from semantic_digital_twin.world_description.connections import (
     FixedConnection,
 )
@@ -159,7 +159,7 @@ plan = Sequence(
         PickUpAction(
             grasp=GraspCandidate(
                 box2_annotation,
-                Pose.from_xyz_rpy(
+                Pose3D.from_xyz_rpy(
                     pitch=np.pi / 2, reference_frame=box2_annotation.root
                 ),
             ),
@@ -167,7 +167,7 @@ plan = Sequence(
         ),
         PlaceAction(
             object_designator=box2_annotation,
-            target_location=Pose.from_xyz_rpy(
+            target_location=Pose3D.from_xyz_rpy(
                 0.8, 0.0, table_top_z + 1.5 * box_edge, reference_frame=world.root
             ),
         ),
@@ -176,7 +176,7 @@ plan = Sequence(
         PickUpAction(
             grasp=GraspCandidate(
                 box3_annotation,
-                Pose.from_xyz_rpy(
+                Pose3D.from_xyz_rpy(
                     pitch=np.pi / 2, reference_frame=box3_annotation.root
                 ),
             ),
@@ -184,7 +184,7 @@ plan = Sequence(
         ),
         PlaceAction(
             object_designator=box3_annotation,
-            target_location=Pose.from_xyz_rpy(
+            target_location=Pose3D.from_xyz_rpy(
                 0.8, 0.0, table_top_z + 2.5 * box_edge, reference_frame=world.root
             ),
         ),

@@ -20,17 +20,17 @@ from semantic_digital_twin.exceptions import ParsingError
 from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
 from semantic_digital_twin.robots.robot_parts import AbstractRobot, MobileBase
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
-from krrood_spatial_math.spatial_types import Pose, Vector3
+from krrood_spatial_math.spatial_types import Pose3D, Vector3D
 from semantic_digital_twin.world import World
 
 # %% the forward axes the declared robots use
 
 
-def axis_components(axis: Vector3) -> tuple[float, float, float]:
+def axis_components(axis: Vector3D) -> tuple[float, float, float]:
     """
     The three components of ``axis``.
 
-    :class:`~krrood_spatial_math.spatial_types.Vector3` compares by
+    :class:`~krrood_spatial_math.spatial_types.Vector3D` compares by
     identity and cannot be hashed, so an axis needs this form to be grouped or matched
     by the direction it points in.
     """
@@ -56,7 +56,7 @@ def forward_axis_components(
 
 
 @symbolic_function
-def points_along(robot_type: type[AbstractRobot], axis: Vector3) -> bool:
+def points_along(robot_type: type[AbstractRobot], axis: Vector3D) -> bool:
     """
     Whether the robot's base calls ``axis`` its front.
     """
@@ -122,7 +122,7 @@ X_FORWARD_ROBOTS = an(
     entity(x_forward_candidate := variable_from(ROBOT_TYPES_WITH_A_MOBILE_BASE)).where(
         and_(
             description_is_available(x_forward_candidate),
-            points_along(x_forward_candidate, Vector3.X()),
+            points_along(x_forward_candidate, Vector3D.X()),
         )
     )
 ).tolist()
@@ -186,7 +186,7 @@ def test_forward_axis_points_along_the_heading(
     robot_type: type[AbstractRobot], heading_yaw: float
 ):
     mobile_base = spawn(robot_type)
-    heading = Pose.from_xyz_rpy(
+    heading = Pose3D.from_xyz_rpy(
         1.3, 2.0, 0.0, yaw=heading_yaw, reference_frame=mobile_base.root._world.root
     )
 
@@ -205,7 +205,7 @@ def test_forward_axis_points_along_the_heading(
 )
 def test_the_position_is_the_headings_own(robot_type: type[AbstractRobot]):
     mobile_base = spawn(robot_type)
-    heading = Pose.from_xyz_rpy(
+    heading = Pose3D.from_xyz_rpy(
         1.3, 2.0, 0.0, yaw=0.3, reference_frame=mobile_base.root._world.root
     )
 
@@ -232,7 +232,7 @@ def test_the_heading_of_a_base_pose_is_the_heading_it_was_placed_at(
     :attr:`~semantic_digital_twin.robots.robot_parts.MobileBase.base_R_front`.
     """
     mobile_base = spawn(robot_type)
-    heading = Pose.from_xyz_rpy(
+    heading = Pose3D.from_xyz_rpy(
         1.3, 2.0, 0.0, yaw=heading_yaw, reference_frame=mobile_base.root._world.root
     )
 
@@ -254,7 +254,7 @@ def test_an_x_forward_base_takes_the_heading_unchanged(
     x_forward_robot: type[AbstractRobot],
 ):
     mobile_base = spawn(x_forward_robot)
-    heading = Pose.from_xyz_rpy(
+    heading = Pose3D.from_xyz_rpy(
         1.3, 2.0, 0.0, yaw=0.3, reference_frame=mobile_base.root._world.root
     )
 

@@ -26,11 +26,11 @@ from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     OrthogonalProjection,
     CartesianPoint3D,
-    Pose,
+    Pose3D,
     Pose2D,
     Quaternion,
     RotationMatrix,
-    Vector3,
+    Vector3D,
 )
 
 from .dataset.frames import KnownFrames
@@ -54,11 +54,11 @@ def shelf_frame(table_frame) -> MountedFrame:
 
 spatial_values = [
     CartesianPoint3D,
-    Vector3,
+    Vector3D,
     Quaternion,
     AxisAngle,
     RotationMatrix,
-    Pose,
+    Pose3D,
 ]
 
 
@@ -238,7 +238,7 @@ def test_a_point_projected_onto_another_frames_plane_is_expressed_in_that_frame(
 def test_a_pose_flattened_onto_another_frames_plane_is_expressed_in_that_frame(
     table_frame, shelf_frame
 ):
-    pose_in_table = Pose.from_xyz_rpy(
+    pose_in_table = Pose3D.from_xyz_rpy(
         x=3, y=2, z=5, yaw=0.5, reference_frame=table_frame
     )
 

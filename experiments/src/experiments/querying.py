@@ -52,7 +52,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Milk,
     Spoon,
 )
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Pose
+from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Pose3D
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.world_modification import (
@@ -235,7 +235,7 @@ def build_plan(executor: KinematicallySimulatedPlanExecutor) -> StatechartNode:
                     FunctionCall(function=_failing_step, failure_types=(PlanFailure,)),
                     TransportAction.from_graspable_by_closest_grasps(
                         world.get_semantic_annotations_by_type(Milk)[0],
-                        Pose.from_xyz_rpy(
+                        Pose3D.from_xyz_rpy(
                             4.9, 3.3, 0.8, yaw=1.57, reference_frame=world.root
                         ),
                         pr2.left_arm,
@@ -245,13 +245,17 @@ def build_plan(executor: KinematicallySimulatedPlanExecutor) -> StatechartNode:
             ),
             TransportAction.from_graspable_by_closest_grasps(
                 world.get_semantic_annotations_by_type(Bowl)[0],
-                Pose.from_xyz_rpy(5.0, 3.3, 0.75, yaw=1.57, reference_frame=world.root),
+                Pose3D.from_xyz_rpy(
+                    5.0, 3.3, 0.75, yaw=1.57, reference_frame=world.root
+                ),
                 pr2.left_arm,
                 executor.context,
             ),
             TransportAction.from_graspable_by_closest_grasps(
                 world.get_semantic_annotations_by_type(Spoon)[0],
-                Pose.from_xyz_rpy(5.1, 3.3, 0.75, yaw=1.57, reference_frame=world.root),
+                Pose3D.from_xyz_rpy(
+                    5.1, 3.3, 0.75, yaw=1.57, reference_frame=world.root
+                ),
                 pr2.left_arm,
                 executor.context,
             ),

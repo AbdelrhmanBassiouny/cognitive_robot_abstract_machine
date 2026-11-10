@@ -57,11 +57,11 @@ from semantic_digital_twin.part_finding.locating import LocatedFacesFinder
 from semantic_digital_twin.part_finding.splitting import PartSplitter
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
 from krrood_spatial_math.spatial_types import (
-    LineSegment3,
+    LineSegment3D,
     CartesianPoint3D,
-    Pose,
+    Pose3D,
     RotationMatrix,
-    Vector3,
+    Vector3D,
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
@@ -167,7 +167,7 @@ def milk() -> Milk:
     return annotation
 
 
-def axes_of(pose: Pose) -> NDArray[np.float64]:
+def axes_of(pose: Pose3D) -> NDArray[np.float64]:
     """
     :param pose: The pose to read the frame axes of.
     :return: The pose's x, y and z axis as the columns of a 3x3 array.
@@ -883,8 +883,8 @@ class HandleWithDiagonalBar(Handle):
     A handle that states its grasp axis instead of leaving it to its bounding box.
     """
 
-    def grasp_axis(self) -> LineSegment3:
-        return LineSegment3(
+    def grasp_axis(self) -> LineSegment3D:
+        return LineSegment3D(
             start=CartesianPoint3D(0.0, 0.0, 0.0, reference_frame=self.root),
             end=CartesianPoint3D(0.1, 0.1, 0.1, reference_frame=self.root),
         )
@@ -926,7 +926,7 @@ def test_a_grasp_in_a_foreign_frame_is_refused(milk, bowl):
     clear the wrong geometry. Nothing downstream can tell, so it is refused here.
     """
     with pytest.raises(ReferenceFrameMismatchError):
-        GraspCandidate(milk, Pose(reference_frame=bowl.root))
+        GraspCandidate(milk, Pose3D(reference_frame=bowl.root))
 
 
 def test_a_grasp_without_a_frame_is_refused(milk):
@@ -934,7 +934,7 @@ def test_a_grasp_without_a_frame_is_refused(milk):
     A frameless pose names no body at all, so it cannot be a grasp on one.
     """
     with pytest.raises(MissingReferenceFrameError):
-        GraspCandidate(milk, Pose())
+        GraspCandidate(milk, Pose3D())
 
 
 def test_a_grasp_from_the_body_origin_takes_the_object_at_its_own_origin(milk):
@@ -1024,9 +1024,9 @@ def test_the_width_is_the_objects_extent_along_the_closing_axis(milk):
     """
     grasp = GraspCandidate(
         milk,
-        Pose(
+        Pose3D(
             orientation=RotationMatrix.from_vectors(
-                x=Vector3.NEGATIVE_Z(), y=Vector3.Y()
+                x=Vector3D.NEGATIVE_Z(), y=Vector3D.Y()
             ).quaternion,
             reference_frame=milk.root,
         ),
@@ -1043,14 +1043,14 @@ def test_turning_the_grasp_changes_the_width_it_meets(milk):
     along_y, along_x = (
         GraspCandidate(
             milk,
-            Pose(
+            Pose3D(
                 orientation=RotationMatrix.from_vectors(
-                    x=Vector3.NEGATIVE_Z(), y=closing_axis
+                    x=Vector3D.NEGATIVE_Z(), y=closing_axis
                 ).quaternion,
                 reference_frame=milk.root,
             ),
         )
-        for closing_axis in (Vector3.Y(), Vector3.X())
+        for closing_axis in (Vector3D.Y(), Vector3D.X())
     )
 
     assert along_y.width_along_closing_axis == pytest.approx(BOX_SCALE.y)
@@ -1064,10 +1064,10 @@ def test_a_diagonal_grasp_meets_the_box_across_its_shadow(milk):
     """
     diagonal = GraspCandidate(
         milk,
-        Pose(
+        Pose3D(
             orientation=RotationMatrix.from_vectors(
-                x=Vector3.NEGATIVE_Z(),
-                y=Vector3(x=1 / np.sqrt(2), y=1 / np.sqrt(2), z=0),
+                x=Vector3D.NEGATIVE_Z(),
+                y=Vector3D(x=1 / np.sqrt(2), y=1 / np.sqrt(2), z=0),
             ).quaternion,
             reference_frame=milk.root,
         ),

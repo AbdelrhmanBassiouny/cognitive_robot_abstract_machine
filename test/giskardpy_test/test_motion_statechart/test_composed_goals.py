@@ -22,7 +22,7 @@ from semantic_digital_twin.robots.robot_parts import MobileBase
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
     WorldEntityWithIDKwargsTracker,
 )
-from krrood_spatial_math.spatial_types import Pose
+from krrood_spatial_math.spatial_types import Pose3D
 from semantic_digital_twin.world import World
 from ..motion_control_context import create_context_with_motion_control
 
@@ -48,7 +48,9 @@ def test_cartesian_pose_is_a_parallel_of_its_position_and_orientation(
         pose := CartesianPose(
             root_link=cylinder_bot_world.root,
             tip_link=tip,
-            goal_pose=Pose.from_xyz_rpy(x=0.1, reference_frame=cylinder_bot_world.root),
+            goal_pose=Pose3D.from_xyz_rpy(
+                x=0.1, reference_frame=cylinder_bot_world.root
+            ),
         )
     )
     statechart.add_node(EndMotion.when_true(pose))
@@ -74,7 +76,7 @@ def test_nodes_handed_to_a_cartesian_pose_run_beside_its_tasks(
     pose = CartesianPose(
         root_link=cylinder_bot_world.root,
         tip_link=tip,
-        goal_pose=Pose.from_xyz_rpy(x=0.1, reference_frame=cylinder_bot_world.root),
+        goal_pose=Pose3D.from_xyz_rpy(x=0.1, reference_frame=cylinder_bot_world.root),
     )
     speed_cap = CartesianPositionVelocityLimit(
         root_link=cylinder_bot_world.root, tip_link=tip
@@ -104,7 +106,9 @@ def test_cartesian_pose_observes_its_goal_reached(
         pose := CartesianPose(
             root_link=cylinder_bot_world.root,
             tip_link=tip,
-            goal_pose=Pose.from_xyz_rpy(x=0.1, reference_frame=cylinder_bot_world.root),
+            goal_pose=Pose3D.from_xyz_rpy(
+                x=0.1, reference_frame=cylinder_bot_world.root
+            ),
         )
     )
     statechart.add_node(EndMotion.when_true(pose))
@@ -128,7 +132,9 @@ def test_cartesian_pose_straight_is_a_parallel_of_its_tasks(
         pose := CartesianPoseStraight(
             root_link=cylinder_bot_world.root,
             tip_link=tip,
-            goal_pose=Pose.from_xyz_rpy(x=0.1, reference_frame=cylinder_bot_world.root),
+            goal_pose=Pose3D.from_xyz_rpy(
+                x=0.1, reference_frame=cylinder_bot_world.root
+            ),
         )
     )
     statechart.add_node(EndMotion.when_true(pose))
@@ -180,7 +186,7 @@ def test_differential_drive_goal_runs_its_steps_in_one_sequence(
             mobile_base=cylinder_bot_diff_world.get_semantic_annotations_by_type(
                 MobileBase
             )[0],
-            goal_pose=Pose.from_xyz_rpy(
+            goal_pose=Pose3D.from_xyz_rpy(
                 x=1, reference_frame=cylinder_bot_diff_world.root
             ),
         )
@@ -206,7 +212,7 @@ def test_differential_drive_goal_is_a_step_without_an_attempt(
                     mobile_base=cylinder_bot_diff_world.get_semantic_annotations_by_type(
                         MobileBase
                     )[0],
-                    goal_pose=Pose.from_xyz_rpy(
+                    goal_pose=Pose3D.from_xyz_rpy(
                         x=1, reference_frame=cylinder_bot_diff_world.root
                     ),
                 )

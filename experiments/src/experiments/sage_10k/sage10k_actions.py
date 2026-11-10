@@ -11,7 +11,7 @@ from coraplex.robot_plans.actions.core.container import OpenAction
 from coraplex.robot_plans.actions.core.misc import MoveToReach
 from semantic_digital_twin.robots.robot_parts import EndEffector
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Door
-from krrood_spatial_math.spatial_types import CartesianPoint2D, Pose2D, Pose
+from krrood_spatial_math.spatial_types import CartesianPoint2D, Pose2D, Pose3D
 from semantic_digital_twin.world_description.graph_of_convex_sets.boxes import (
     PlanarGraphOfBoundingBoxes,
 )
@@ -49,7 +49,7 @@ class Sage10kOpenDoor(SequentialAction):
         y = (min_p.y + max_p.y) / 2
         z = (min_p.z + max_p.z) / 2
 
-        pre_grasp_pose = Pose.from_xyz_rpy(
+        pre_grasp_pose = Pose3D.from_xyz_rpy(
             x=x, y=y, z=z, reference_frame=self.door.handle.root
         )
 

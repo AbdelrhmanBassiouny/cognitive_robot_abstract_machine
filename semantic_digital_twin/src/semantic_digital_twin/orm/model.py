@@ -14,17 +14,17 @@ from krrood_spatial_math.affine_point import CartesianPoint
 from semantic_digital_twin.mixin import HasSimulatorProperties
 from krrood_spatial_math.spatial_types import (
     RotationMatrix,
-    Vector3,
+    Vector3D,
     CartesianPoint3D,
     HomogeneousTransformationMatrix,
 )
 from krrood_spatial_math.spatial_types import (
     Quaternion,
-    Pose,
+    Pose3D,
     CartesianPoint2D,
     Pose2D,
     AxisAngle,
-    SpatialType,
+    SymbolicSpatialType,
     Twist,
 )
 from semantic_digital_twin.world import World
@@ -77,7 +77,7 @@ class WorldMapping(HasSimulatorProperties, AlternativeMapping[World]):
 
     @classmethod
     def required_pre_build_classes(cls) -> list[type]:
-        return [WorldState, SpatialType, WorldEntity]
+        return [WorldState, SymbolicSpatialType, WorldEntity]
 
     __hash__ = AlternativeMapping.__hash__
 
@@ -103,7 +103,7 @@ class WorldStateMapping(AlternativeMapping[WorldState]):
 
 
 @dataclass(eq=False)
-class Vector3Mapping(AlternativeMapping[Vector3]):
+class Vector3DMapping(AlternativeMapping[Vector3D]):
     x: float
     y: float
     z: float
@@ -111,13 +111,13 @@ class Vector3Mapping(AlternativeMapping[Vector3]):
     reference_frame: KinematicStructureEntity | None
 
     @classmethod
-    def from_domain_object(cls, obj: Vector3):
+    def from_domain_object(cls, obj: Vector3D):
         x, y, z, _ = obj.to_np().tolist()
         result = cls(x=x, y=y, z=z, reference_frame=obj.reference_frame)
         return result
 
-    def to_domain_object(self) -> Vector3:
-        return Vector3(
+    def to_domain_object(self) -> Vector3D:
+        return Vector3D(
             x=self.x, y=self.y, z=self.z, reference_frame=self.reference_frame
         )
 
@@ -199,7 +199,7 @@ class QuaternionMapping(AlternativeMapping[Quaternion]):
 
 @dataclass(eq=False)
 class AxisAngleMapping(AlternativeMapping[AxisAngle]):
-    axis: Vector3
+    axis: Vector3D
     angle: float
     reference_frame: KinematicStructureEntity | None
 
@@ -216,13 +216,13 @@ class AxisAngleMapping(AlternativeMapping[AxisAngle]):
 
     @classmethod
     def required_pre_build_classes(cls) -> list[type]:
-        return [Vector3]
+        return [Vector3D]
 
 
 @dataclass(eq=False)
 class TwistMapping(AlternativeMapping[Twist]):
-    translation: Vector3
-    rotation_vector: Vector3
+    translation: Vector3D
+    rotation_vector: Vector3D
     reference_frame: KinematicStructureEntity | None
 
     @classmethod
@@ -242,7 +242,7 @@ class TwistMapping(AlternativeMapping[Twist]):
 
     @classmethod
     def required_pre_build_classes(cls) -> list[type]:
-        return [Vector3]
+        return [Vector3D]
 
 
 @dataclass(eq=False)
@@ -297,19 +297,19 @@ class HomogeneousTransformationMatrixMapping(
 
 
 @dataclass(eq=False)
-class PoseMapping(AlternativeMapping[Pose]):
+class Pose3DMapping(AlternativeMapping[Pose3D]):
     position: CartesianPoint3D
     axis_angle: AxisAngle
     reference_frame: KinematicStructureEntity | None = field(default=None, kw_only=True)
 
     @classmethod
-    def from_domain_object(cls, obj: Pose):
+    def from_domain_object(cls, obj: Pose3D):
         result = cls(position=obj.position, axis_angle=obj.axis_angle)
         result.reference_frame = obj.reference_frame
         return result
 
-    def to_domain_object(self) -> Pose:
-        return Pose(
+    def to_domain_object(self) -> Pose3D:
+        return Pose3D(
             position=self.position,
             orientation=self.axis_angle.quaternion,
             reference_frame=self.reference_frame,
@@ -321,25 +321,26 @@ class PoseMapping(AlternativeMapping[Pose]):
         position: CartesianPoint3DMapping,
         orientation: QuaternionMapping,
         reference_frame: KinematicStructureEntity,
-    ) -> Pose:
+    ) -> Pose3D:
         """
-        Creates a Pose instance from a CartesianPoint3DMapping and a QuaternionMapping.
+        Creates a Pose3D instance from a CartesianPoint3DMapping and a
+        QuaternionMapping.
 
-        This method constructs a Pose object by utilizing the provided
+        This method constructs a Pose3D object by utilizing the provided
         CartesianPoint3DMapping for the position and the QuaternionMapping for the
-        orientation. The resulting Pose is associated with the specified reference
+        orientation. The resulting Pose3D is associated with the specified reference
         frame.
 
         :param position: A CartesianPoint3DMapping object that provides the position
-            data for the Pose.
+            data for the Pose3D.
         :param orientation: A QuaternionMapping object that provides the orientation
-            data for the Pose.
-        :param reference_frame: The reference frame to which the Pose will be
+            data for the Pose3D.
+        :param reference_frame: The reference frame to which the Pose3D will be
             associated.
-        :return: A Pose instance created from the given CartesianPoint3DMapping and
+        :return: A Pose3D instance created from the given CartesianPoint3DMapping and
             QuaternionMapping.
         """
-        return Pose(
+        return Pose3D(
             position=position.to_domain_object(),
             orientation=orientation.to_domain_object(),
             reference_frame=reference_frame,

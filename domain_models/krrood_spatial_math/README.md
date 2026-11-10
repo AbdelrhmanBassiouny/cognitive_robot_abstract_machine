@@ -29,8 +29,8 @@ coordinate system. Its base depends on `krrood` alone.
   given by its two or three coordinates in an affine frame. Each implementation binds the kind of frame and what
   its coordinates are stored as.
 - `krrood_spatial_math.spatial_types`, with the extra `krrood_spatial_math[casadi]`:
-  `CartesianPoint2D`, `CartesianPoint3D`, `Vector3`, `RotationMatrix`, `Quaternion`, `AxisAngle`,
-  `HomogeneousTransformationMatrix`, `Pose` and `Pose2D`, as symbolic expressions that
+  `CartesianPoint2D`, `CartesianPoint3D`, `Vector3D`, `RotationMatrix`, `Quaternion`, `AxisAngle`,
+  `HomogeneousTransformationMatrix`, `Pose3D` and `Pose2D`, as symbolic expressions that
   can also hold plain numbers. `CartesianPoint2D` and `Pose2D` lie on the x-y plane of their
   reference frame, an `XYPlane2D`, and are given in its `XYPlaneFrame2D`;
   `HomogeneousTransformationMatrix2D` is the rigid change between two frames on one

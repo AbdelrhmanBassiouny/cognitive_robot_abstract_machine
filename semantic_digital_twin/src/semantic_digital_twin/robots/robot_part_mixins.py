@@ -29,7 +29,7 @@ from semantic_digital_twin.datastructures.definitions import (
 )
 from semantic_digital_twin.datastructures.lidar_reading import LidarReading
 from semantic_digital_twin.reasoning.predicates import LeftOf, RightOf
-from krrood_spatial_math.spatial_types import CartesianPoint3D, Pose, Vector3
+from krrood_spatial_math.spatial_types import CartesianPoint3D, Pose3D, Vector3D
 from semantic_digital_twin.robots.exceptions import (
     MissingEndEffectorError,
     MissingInputSourceError,
@@ -168,7 +168,7 @@ class Fingertips:
     The frame the measurements are expressed in.
     """
 
-    closing_axis: Vector3
+    closing_axis: Vector3D
     """
     The axis the fingers close along, in :attr:`tool_frame`.
     """
@@ -218,7 +218,7 @@ class Fingertips:
         return float((tool_P_thumb - tool_P_finger).dot(self.tool_V_finger_to_thumb))
 
     @property
-    def tool_V_finger_to_thumb(self) -> Vector3:
+    def tool_V_finger_to_thumb(self) -> Vector3D:
         """
         :attr:`closing_axis`, pointing from the finger's tip towards the thumb's, in
         :attr:`tool_frame`.
@@ -257,7 +257,7 @@ class Fingertips:
         return self.thumb._world
 
     def _facing_point(
-        self, tip: Body, tool_V_towards_other_tip: Vector3
+        self, tip: Body, tool_V_towards_other_tip: Vector3D
     ) -> CartesianPoint3D:
         """
         :param tip: One of the two tips.
@@ -460,7 +460,7 @@ class HasTwoFingers(
 
     # %% reaching and reading back a grasp
 
-    def tool_frame_goal_for_grasp(self, grasp_pose: Pose) -> Pose:
+    def tool_frame_goal_for_grasp(self, grasp_pose: Pose3D) -> Pose3D:
         """
         Express a grasp frame as the goal that puts :attr:`tool_P_grasp_when_closed` on
         it.
@@ -471,7 +471,7 @@ class HasTwoFingers(
         return self.tool_frame_goal_for_point(self.tool_P_grasp_when_closed, grasp_pose)
 
     @property
-    def held_body_T_grasp(self) -> Pose:
+    def held_body_T_grasp(self) -> Pose3D:
         """
         The grasp this gripper has on the body it holds, read at the point it holds an
         object, which is the point :meth:`tool_frame_goal_for_grasp` aims at.

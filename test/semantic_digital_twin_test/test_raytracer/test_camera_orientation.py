@@ -18,7 +18,7 @@ from semantic_digital_twin.datastructures.camera_rendering import RayIntersectio
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import Camera
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3
+from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3D
 from semantic_digital_twin.testing import ray_test_world
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
@@ -58,7 +58,7 @@ def test_viewing_direction_uses_optical_root(optical_camera: Camera) -> None:
     Positive optical z is the camera's root-relative viewing direction.
     """
     np.testing.assert_array_equal(
-        optical_camera.viewing_direction.to_np(), Vector3.Z().to_np()
+        optical_camera.viewing_direction.to_np(), Vector3D.Z().to_np()
     )
     assert optical_camera.viewing_direction.reference_frame is optical_camera.root
 

@@ -6,12 +6,12 @@ import pytest
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from krrood_spatial_math.exceptions import ReferenceFrameMismatchError
 from krrood_spatial_math.spatial_types import (
-    Line3,
+    Line3D,
     OrthogonalProjection,
     CartesianPoint2D,
     CartesianPoint3D,
-    Pose,
-    Vector3,
+    Pose3D,
+    Vector3D,
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import RevoluteConnection
@@ -31,7 +31,7 @@ def tilted_world() -> World:
         root = Body(name=PrefixedName("root"))
         tip = Body(name=PrefixedName("tip"))
         connection = RevoluteConnection.create_with_dofs(
-            world=world, parent=root, child=tip, axis=Vector3.X()
+            world=world, parent=root, child=tip, axis=Vector3D.X()
         )
         world.add_connection(connection)
     connection.position = math.pi / 2
@@ -68,7 +68,7 @@ class TestProject:
 
     def test_pose_position_projects_like_a_point(self):
         frame = Body(name=PrefixedName("world"))
-        pose = Pose.from_xyz_rpy(
+        pose = Pose3D.from_xyz_rpy(
             x=1.5, y=-2.5, z=3.0, roll=0.1, pitch=0.2, yaw=0.3, reference_frame=frame
         )
 
@@ -202,12 +202,12 @@ class TestProjectionLine:
 
         line = projection.projection_line(point)
 
-        assert isinstance(line, Line3)
+        assert isinstance(line, Line3D)
         np.testing.assert_allclose(
             line.point.to_np(), projection.unproject(point).to_np()
         )
         np.testing.assert_allclose(
-            line.direction.to_np(), Vector3.Z(reference_frame=frame).to_np()
+            line.direction.to_np(), Vector3D.Z(reference_frame=frame).to_np()
         )
         assert line.direction.reference_frame is frame
 

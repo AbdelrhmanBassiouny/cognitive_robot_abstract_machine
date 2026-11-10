@@ -37,7 +37,7 @@ from semantic_digital_twin.robots.robot_parts import (
 )
 from semantic_digital_twin.datastructures.camera_model import FieldOfViewCameraModel
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3
+from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3D
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
@@ -412,12 +412,12 @@ class ICub3LeftHand(
         return [gripper_open, gripper_close]
 
     @property
-    def approach_axis(self) -> Vector3:
-        return Vector3.Z(reference_frame=self.tool_frame)
+    def approach_axis(self) -> Vector3D:
+        return Vector3D.Z(reference_frame=self.tool_frame)
 
     @property
-    def closing_axis(self) -> Vector3:
-        return Vector3.X(reference_frame=self.tool_frame)
+    def closing_axis(self) -> Vector3D:
+        return Vector3D.X(reference_frame=self.tool_frame)
 
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(
@@ -486,12 +486,12 @@ class ICub3RightHand(
         return [gripper_open, gripper_close]
 
     @property
-    def approach_axis(self) -> Vector3:
-        return Vector3.Z(reference_frame=self.tool_frame)
+    def approach_axis(self) -> Vector3D:
+        return Vector3D.Z(reference_frame=self.tool_frame)
 
     @property
-    def closing_axis(self) -> Vector3:
-        return Vector3.X(reference_frame=self.tool_frame)
+    def closing_axis(self) -> Vector3D:
+        return Vector3D.X(reference_frame=self.tool_frame)
 
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(
@@ -624,8 +624,8 @@ class ICub3Torso(
 @dataclass(eq=False)
 class ICub3MobileBase(MobileBase[OmniDrive]):
     @classproperty
-    def forward_axis(cls) -> Vector3:
-        return Vector3.X()
+    def forward_axis(cls) -> Vector3D:
+        return Vector3D.X()
 
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(

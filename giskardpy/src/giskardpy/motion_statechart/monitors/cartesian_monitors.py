@@ -15,11 +15,11 @@ from cramph.node import NodeArtifacts
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from krrood_spatial_math.spatial_types import (
     CartesianPoint3D,
-    Vector3,
+    Vector3D,
     RotationMatrix,
     HomogeneousTransformationMatrix,
 )
-from krrood_spatial_math.spatial_types import SpatialType
+from krrood_spatial_math.spatial_types import SymbolicSpatialType
 from semantic_digital_twin.world_description.world_entity import Body
 
 
@@ -54,7 +54,7 @@ class RootRelativeGoalMonitor(EndedByOwner, MotionStatechartNode, ABC):
 
     @property
     @abstractmethod
-    def goal(self) -> SpatialType:
+    def goal(self) -> SymbolicSpatialType:
         """
         :return: The goal spatial object, expressed in its own reference frame.
         """
@@ -72,7 +72,7 @@ class RootRelativeGoalMonitor(EndedByOwner, MotionStatechartNode, ABC):
         )
         self._forward_kinematics_binding.bind(self.context.world)
 
-    def resolve_root_goal(self) -> SpatialType:
+    def resolve_root_goal(self) -> SymbolicSpatialType:
         """
         Express the goal in the root link frame, captured relative to the goal reference
         frame via a forward kinematics binding.
@@ -230,7 +230,7 @@ class PointingAt(EndedByOwner, MotionStatechartNode):
     Reference link the goal point is expressed in.
     """
 
-    pointing_axis: Vector3
+    pointing_axis: Vector3D
     """
     Axis of the tip link that should point at the goal point.
     """
@@ -278,12 +278,12 @@ class VectorsAligned(EndedByOwner, MotionStatechartNode):
     Link the tip normal is expressed in.
     """
 
-    goal_normal: Vector3
+    goal_normal: Vector3D
     """
     Reference normal the tip normal should align with.
     """
 
-    tip_normal: Vector3
+    tip_normal: Vector3D
     """
     Normal of the tip link that should align with the goal normal.
     """
@@ -334,7 +334,7 @@ class DistanceToLine(EndedByOwner, MotionStatechartNode):
     Center of the line segment.
     """
 
-    line_axis: Vector3
+    line_axis: Vector3D
     """
     Direction of the line segment.
     """

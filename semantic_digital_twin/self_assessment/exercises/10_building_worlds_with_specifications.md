@@ -46,7 +46,7 @@ from semantic_digital_twin.specifications.robots import RobotSpecification
 from semantic_digital_twin.specifications.worlds import WorldSpecification
 from semantic_digital_twin.robots.pr2 import PR2
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Drawer, Handle, Milk
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3
+from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3D
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import PrismaticConnection
 from semantic_digital_twin.world_description.geometry import Scale
@@ -101,7 +101,7 @@ for index in range(4):
 ## 2. Give a body a degree of freedom
 Your goal:
 - Spawn a body named `sliding_drawer` with scale `Scale(0.4, 0.5, 0.2)` whose
-  `connection_specification` is a `PrismaticConnectionSpecification` with axis `Vector3.X()`
+  `connection_specification` is a `PrismaticConnectionSpecification` with axis `Vector3D.X()`
 - Store the body in a variable named `sliding_drawer`
 
 ```{code-cell} ipython3
@@ -119,7 +119,7 @@ Your goal:
 sliding_drawer = BodySpecification.box(
     name="sliding_drawer",
     scale=Scale(0.4, 0.5, 0.2),
-    connection_specification=PrismaticConnectionSpecification(axis=Vector3.X()),
+    connection_specification=PrismaticConnectionSpecification(axis=Vector3D.X()),
 ).spawn(world)
 ```
 

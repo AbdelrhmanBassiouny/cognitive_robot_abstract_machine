@@ -22,7 +22,7 @@ from cramph.node import StatechartNode
 from cramph.statechart import Statechart
 from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
 from semantic_digital_twin.predefined_maps.building_floor import BuildingFloor
-from krrood_spatial_math.spatial_types import Pose
+from krrood_spatial_math.spatial_types import Pose3D
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world import World
 
@@ -213,7 +213,7 @@ def empty_region(pr2_apartment_context) -> VolumetricBoundingBox:
 def tool_center_point_goal(
     robot: AbstractRobot,
     arm: Arm | None = None,
-    target: Pose | None = None,
+    target: Pose3D | None = None,
 ) -> CartesianPose:
     """
     Build the goal an action would build to move an arm's tool center point.
@@ -234,7 +234,7 @@ def tool_center_point_goal(
             left_or_only_arm(robot) if arm is None else arm
         ).end_effector.tool_frame,
         goal_pose=(
-            Pose(reference_frame=robot._world.root) if target is None else target
+            Pose3D(reference_frame=robot._world.root) if target is None else target
         ),
     )
 

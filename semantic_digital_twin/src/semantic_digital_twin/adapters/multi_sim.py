@@ -53,7 +53,7 @@ from krrood_spatial_math.spatial_types import (
     CartesianPoint3D,
     Quaternion,
     RotationMatrix,
-    Vector3,
+    Vector3D,
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
@@ -1072,9 +1072,9 @@ class MujocoCamera(MultiSimCamera):
         """
         forward = target_position - camera_position
         forward.scale(1)
-        up_hint = Vector3.Z()
+        up_hint = Vector3D.Z()
         if abs(float(forward.dot(up_hint).to_np().item())) > 0.99:
-            up_hint = Vector3.Y()
+            up_hint = Vector3D.Y()
 
         z_axis = -forward
         x_axis = up_hint.cross(z_axis)
@@ -1103,7 +1103,7 @@ class MujocoCamera(MultiSimCamera):
         center = minimum + diagonal_vector * 0.5
         diagonal = float(diagonal_vector.norm().to_np().item())
         distance = max(diagonal, minimum_distance) * distance_factor
-        direction = Vector3.from_iterable([1.0, -1.0, 1.0])
+        direction = Vector3D.from_iterable([1.0, -1.0, 1.0])
         direction.scale(1)
         position = center + direction * distance
         rotation = cls._look_at_rotation(position, center)

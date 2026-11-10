@@ -7,7 +7,7 @@ from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
-from krrood_spatial_math.spatial_types import Pose, RotationMatrix, Vector3
+from krrood_spatial_math.spatial_types import Pose3D, RotationMatrix, Vector3D
 from semantic_digital_twin.world_description.connections import (
     Connection6DoF,
     FixedConnection,
@@ -61,10 +61,10 @@ def grasp_from_above(graspable) -> GraspCandidate:
     """
     return GraspCandidate(
         graspable,
-        Pose(
-            position=Vector3(0, 0, BOX_SCALE.z / 2).cartesian_point_3d,
+        Pose3D(
+            position=Vector3D(0, 0, BOX_SCALE.z / 2).cartesian_point_3d,
             orientation=RotationMatrix.from_vectors(
-                x=Vector3.NEGATIVE_Z(), y=Vector3.X()
+                x=Vector3D.NEGATIVE_Z(), y=Vector3D.X()
             ).quaternion,
             reference_frame=graspable.root,
         ),
@@ -163,8 +163,8 @@ def test_a_grasp_outside_the_body_is_approached_from_the_clearance_alone(
     action = HasApproachesGraspPoses()
     in_front = GraspCandidate(
         graspable,
-        Pose(
-            position=Vector3(-BOX_SCALE.x, 0, 0).cartesian_point_3d,
+        Pose3D(
+            position=Vector3D(-BOX_SCALE.x, 0, 0).cartesian_point_3d,
             reference_frame=graspable.root,
         ),
     )
@@ -185,7 +185,7 @@ def test_a_diagonal_approach_leaves_the_body_through_its_nearest_face(
     action = HasApproachesGraspPoses()
     diagonal = GraspCandidate(
         graspable,
-        Pose(
+        Pose3D(
             orientation=RotationMatrix.from_rpy(yaw=np.pi / 4).quaternion,
             reference_frame=graspable.root,
         ),

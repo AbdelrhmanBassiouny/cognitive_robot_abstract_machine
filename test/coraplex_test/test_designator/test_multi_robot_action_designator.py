@@ -140,9 +140,9 @@ from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     CartesianPoint3D,
     Quaternion,
-    Vector3,
+    Vector3D,
 )
-from krrood_spatial_math.spatial_types import Pose, Pose2D
+from krrood_spatial_math.spatial_types import Pose3D, Pose2D
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection1DOF,
@@ -186,7 +186,7 @@ def attach_to_statechart(action, extensions) -> None:
 
 def heading_towards(
     world_P_stand: Iterable[float], world_P_target: Iterable[float], world: World
-) -> Pose:
+) -> Pose3D:
     """
     A pose at ``world_P_stand`` whose x-axis points at ``world_P_target``.
 
@@ -198,7 +198,7 @@ def heading_towards(
     to look there.
     """
     world_V_heading = np.asarray(world_P_target)[:2] - np.asarray(world_P_stand)[:2]
-    return Pose.from_xyz_rpy(
+    return Pose3D.from_xyz_rpy(
         *np.asarray(world_P_stand)[:3],
         yaw=float(np.arctan2(world_V_heading[1], world_V_heading[0])),
         reference_frame=world.root,
@@ -370,7 +370,7 @@ def test_navigate_multi(multiple_robot_apartment_context, rclpy_node):
     target_position = [5, 2, 0]
 
     plan = NavigateAction(
-        target_location=Pose(
+        target_location=Pose3D(
             CartesianPoint3D.from_iterable(target_position), reference_frame=world.root
         )
     )
@@ -437,7 +437,7 @@ def test_reach_action_multi(multiple_robot_apartment_context):
     left_arm = left_or_only_arm(view)
 
     milk = world.get_semantic_annotations_by_type(Milk)[0]
-    grasp_pose = Pose(reference_frame=milk.root)
+    grasp_pose = Pose3D(reference_frame=milk.root)
     milk_body = milk.root
     milk_body.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
         1, -2, 0.8, reference_frame=world.root
@@ -497,9 +497,9 @@ def test_follow_tcp_path_multi(multiple_robot_apartment_context):
 
     pose_T = world.get_body_by_name("milk.stl").global_transform
     pose = pose_T.pose
-    if np.allclose(approach_axis, Vector3.Z().to_np()):
+    if np.allclose(approach_axis, Vector3D.Z().to_np()):
         offset_T = HomogeneousTransformationMatrix.from_xyz_axis_angle(
-            axis=Vector3.Y(),
+            axis=Vector3D.Y(),
             angle=np.pi / 2,
             reference_frame=world.root,
         )
@@ -622,7 +622,7 @@ def test_place_multi(multiple_robot_apartment_context):
             ),
             PlaceAction(
                 object_designator=world.get_semantic_annotations_by_type(Milk)[0],
-                target_location=Pose(
+                target_location=Pose3D(
                     CartesianPoint3D.from_iterable([1, -2.2, 0.6]),
                     reference_frame=world.root,
                 ),
@@ -645,13 +645,13 @@ def test_place_multi(multiple_robot_apartment_context):
 def test_look_at(multiple_robot_apartment_context):
     world, robot_view, extensions = multiple_robot_apartment_context
     description = LookAtAction(
-        target=Pose(
+        target=Pose3D(
             CartesianPoint3D.from_iterable([3, 0, 1]), reference_frame=world.root
         )
     )
     assert np.allclose(
         description.target.to_np(),
-        Pose(
+        Pose3D(
             CartesianPoint3D.from_iterable([3, 0, 1]), reference_frame=world.root
         ).to_np(),
         atol=1e-3,
@@ -703,7 +703,7 @@ def test_open(multiple_robot_apartment_context):
             MoveTorsoAction(torso_state=TorsoState.HIGH),
             ParkArmsAction(arms=robot.all_arms),
             NavigateAction(
-                target_location=Pose(
+                target_location=Pose3D(
                     CartesianPoint3D.from_iterable([1.6, 1.9, 0]),
                     Quaternion.from_iterable([0, 0, 0.3, 1]),
                     reference_frame=world.root,
@@ -778,7 +778,7 @@ def test_transport(multiple_robot_apartment_context, rclpy_node):
 
     description = TransportAction.from_graspable_by_closest_grasps(
         world.get_semantic_annotations_by_type(Milk)[0],
-        Pose(
+        Pose3D(
             CartesianPoint3D.from_iterable([3.1, 2.2, 0.95]),
             Quaternion.from_iterable([0.0, 0.0, 1.0, 0.0]),
             reference_frame=world.root,
@@ -804,7 +804,7 @@ def test_move_to_reach(multiple_robot_apartment_context, rclpy_node):
     )
     move_to_reach = MoveToReach(
         target_pose_offset_robot=stand_offset,
-        reference_T_grasp=Pose.from_xyz_rpy(
+        reference_T_grasp=Pose3D.from_xyz_rpy(
             x=0.7, y=-1.3, z=0.9, reference_frame=world.root
         ),
         hip_rotation=0.0,
@@ -820,7 +820,7 @@ def test_transport_open_container(multiple_robot_apartment_context, rclpy_node):
 
     if isinstance(robot, HSRB):
         return
-    target_pose = Pose.from_xyz_rpy(
+    target_pose = Pose3D.from_xyz_rpy(
         5.1, 3.25, 0.75, yaw=1.57, reference_frame=world.root
     )
     plan_transformations = [OpenDrawerBeforeMoveAndPickUp()]
@@ -851,7 +851,7 @@ def test_multi_robot_gcs_navigation(multiple_robot_apartment_context, rclpy_node
     target_position = [5, 1]
 
     plan = PathPlanningNavigateAction(
-        target=Pose.from_xyz_rpy(*target_position, 0, reference_frame=world.root)
+        target=Pose3D.from_xyz_rpy(*target_position, 0, reference_frame=world.root)
     )
 
     run_plan(plan, extensions)
@@ -870,7 +870,7 @@ def test_gcs_navigation_arrives_at_each_waypoint_facing_the_next_one(
     world, robot, extensions = multiple_robot_apartment_context
 
     action = PathPlanningNavigateAction(
-        target=Pose.from_xyz_rpy(5, 1, 0, reference_frame=world.root)
+        target=Pose3D.from_xyz_rpy(5, 1, 0, reference_frame=world.root)
     )
     attach_to_statechart(action, extensions)
 
@@ -903,7 +903,7 @@ def test_gcs_navigation_plans_on_the_floor_the_robot_stands_on(
     world, robot, extensions = multiple_robot_apartment_context
 
     action = PathPlanningNavigateAction(
-        target=Pose.from_xyz_rpy(5, 1, 0, reference_frame=world.root)
+        target=Pose3D.from_xyz_rpy(5, 1, 0, reference_frame=world.root)
     )
     attach_to_statechart(action, extensions)
 
@@ -935,7 +935,7 @@ def test_gcs_navigation_takes_a_waypoints_height_from_that_waypoints_frame(
     world, robot, extensions = multiple_robot_apartment_context
 
     action = PathPlanningNavigateAction(
-        target=Pose.from_xyz_rpy(5, 1, 0, reference_frame=world.root)
+        target=Pose3D.from_xyz_rpy(5, 1, 0, reference_frame=world.root)
     )
     attach_to_statechart(action, extensions)
 
@@ -961,7 +961,7 @@ def test_gcs_navigation_needs_a_floor_below_the_robot(
     world.notify_state_change()
 
     action = PathPlanningNavigateAction(
-        target=Pose.from_xyz_rpy(5, 1, 0, reference_frame=world.root)
+        target=Pose3D.from_xyz_rpy(5, 1, 0, reference_frame=world.root)
     )
 
     with pytest.raises(NoFloorBelowRobot) as raised:
@@ -1044,7 +1044,7 @@ def test_elevator_navigation_needs_a_cabin_that_can_move():
             world=world,
             scale=Scale(0.05, 1, 2),
             parent_connection_specification=PrismaticConnectionSpecification(
-                axis=Vector3.Y()
+                axis=Vector3D.Y()
             ),
         )
         elevator.add(door)
@@ -1136,7 +1136,7 @@ def test_a_search_looks_at_the_target_then_at_the_ends_of_a_cross_around_it(
     multiple_robot_apartment_context,
 ):
     world, robot, extensions = multiple_robot_apartment_context
-    target = Pose.from_xyz_rpy(6, -2, 1.2, reference_frame=world.root)
+    target = Pose3D.from_xyz_rpy(6, -2, 1.2, reference_frame=world.root)
     arm = 0.3
 
     search = SearchAction.looking_around(
@@ -1162,7 +1162,7 @@ def test_a_search_detects_within_its_cross_and_the_detection_margin(
     multiple_robot_apartment_context,
 ):
     world, robot, extensions = multiple_robot_apartment_context
-    target = Pose.from_xyz_rpy(6, -2, 1.2, reference_frame=world.root)
+    target = Pose3D.from_xyz_rpy(6, -2, 1.2, reference_frame=world.root)
     arm = 0.3
     margin = 0.2
 
@@ -1215,7 +1215,7 @@ def test_a_search_tries_the_looks_it_is_given_in_turn(
     Where a search looks is up to whoever builds it, such as a look a bit further up.
     """
     world, robot, extensions = multiple_robot_apartment_context
-    above_the_target = Pose.from_xyz_rpy(6, -2, 1.6, reference_frame=world.root)
+    above_the_target = Pose3D.from_xyz_rpy(6, -2, 1.6, reference_frame=world.root)
     look_up = LookAtAndDetectAction(
         look_at=LookAtAction(target=above_the_target),
         detect=DetectAction(
@@ -1328,7 +1328,7 @@ def test_look_at_points_the_default_camera(multiple_robot_apartment_context):
     Looking somewhere aims the robot's own camera, and runs nothing else.
     """
     _, robot, extensions = multiple_robot_apartment_context
-    action = LookAtAction(target=Pose())
+    action = LookAtAction(target=Pose3D())
 
     expand(action, extensions)
 
@@ -1345,7 +1345,7 @@ def test_look_at_points_along_the_optical_viewing_direction(
     """
     _, robot, extensions = multiple_robot_apartment_context
     camera = robot.get_default_camera()
-    action = LookAtAction(target=Pose())
+    action = LookAtAction(target=Pose3D())
 
     expand(action, extensions)
 
@@ -1363,7 +1363,7 @@ def test_following_a_path_runs_one_goal_per_waypoint(
     Every waypoint of the path becomes a goal of its own, in order.
     """
     _, robot, extensions = multiple_robot_apartment_context
-    waypoints = [Pose(), Pose(), Pose()]
+    waypoints = [Pose3D(), Pose3D(), Pose3D()]
     action = FollowToolCenterPointPathAction(
         target_locations=PoseTrajectory(waypoints), arm=left_or_only_arm(robot)
     )
@@ -1382,10 +1382,10 @@ def test_moving_the_manipulator_relaxes_collisions_only_when_allowed(
     _, robot, extensions = multiple_robot_apartment_context
     end_effector = left_or_only_arm(robot).end_effector
     allowed = MoveManipulatorAction(
-        target_pose=Pose(), end_effector=end_effector, allow_gripper_collision=True
+        target_pose=Pose3D(), end_effector=end_effector, allow_gripper_collision=True
     )
     forbidden = MoveManipulatorAction(
-        target_pose=Pose(), end_effector=end_effector, allow_gripper_collision=False
+        target_pose=Pose3D(), end_effector=end_effector, allow_gripper_collision=False
     )
 
     expand(allowed, extensions)
@@ -1409,7 +1409,7 @@ def test_moving_the_manipulator_hands_what_accompanies_it_to_its_pose(
     with world.modify_world():
         robot.mobile_base.full_body_controlled = False
     action = MoveManipulatorAction(
-        target_pose=Pose(),
+        target_pose=Pose3D(),
         end_effector=left_or_only_arm(robot).end_effector,
         allow_gripper_collision=True,
     )
@@ -1434,13 +1434,13 @@ def test_a_pose_of_the_tool_center_point_holds_what_accompanies_it(
         robot.mobile_base.full_body_controlled = False
     arm = left_or_only_arm(robot)
     action = MoveManipulatorAction(
-        target_pose=Pose(),
+        target_pose=Pose3D(),
         end_effector=arm.end_effector,
         allow_gripper_collision=False,
     )
     expand(action, extensions)
 
-    goal = action.tool_center_point_goal(Pose(), arm, max_linear_velocity=0.1)
+    goal = action.tool_center_point_goal(Pose3D(), arm, max_linear_velocity=0.1)
 
     assert isinstance(goal, (CartesianPose, CartesianPoseStraight))
     assert [type(node) for node in goal.nodes] == [
@@ -1468,7 +1468,7 @@ def test_navigating_drives_the_base_towards_what_it_should_face(
     Navigating commands the base pose, and runs nothing else.
     """
     _, robot, extensions = robot_without_differential_drive_context
-    action = NavigateAction(target_location=Pose())
+    action = NavigateAction(target_location=Pose3D())
 
     statechart_of(robot_executor(extensions), action)
 
@@ -1483,7 +1483,7 @@ def test_navigating_writes_the_odometry_when_simulated(
     A simulated run has no drive to follow a pose, so it sets the odometry itself.
     """
     _, _, extensions = robot_without_differential_drive_context
-    action = NavigateAction(target_location=Pose())
+    action = NavigateAction(target_location=Pose3D())
 
     expand(action, extensions)
 
@@ -1499,7 +1499,7 @@ def test_navigating_drives_the_base_when_physically_simulated(
     why performing in physics is told apart from performing kinematically.
     """
     _, robot, extensions = robot_without_differential_drive_context
-    action = NavigateAction(target_location=Pose())
+    action = NavigateAction(target_location=Pose3D())
 
     statechart_of(physically_simulated_executor(extensions), action)
 
@@ -1519,14 +1519,14 @@ def arm_and_look_actions(robot: AbstractRobot) -> list[Action]:
     arm = left_or_only_arm(robot)
     return [
         MoveManipulatorAction(
-            target_pose=Pose(),
+            target_pose=Pose3D(),
             end_effector=arm.end_effector,
             allow_gripper_collision=False,
         ),
         FollowToolCenterPointPathAction(
-            target_locations=PoseTrajectory([Pose()]), arm=arm
+            target_locations=PoseTrajectory([Pose3D()]), arm=arm
         ),
-        LookAtAction(target=Pose()),
+        LookAtAction(target=Pose3D()),
     ]
 
 
@@ -1737,7 +1737,7 @@ def test_a_physically_simulated_place_is_released_by_its_own_grip(
             ),
             PlaceAction(
                 object_designator=milk,
-                target_location=Pose.from_xyz_rpy(
+                target_location=Pose3D.from_xyz_rpy(
                     1, 1, 0.8, reference_frame=world.root
                 ),
             ),
@@ -1866,7 +1866,7 @@ def drive_ahead(robot: AbstractRobot) -> NavigateAction:
     :return: The drive moving `robot` a short way.
     """
     return NavigateAction(
-        target_location=Pose.from_xyz_rpy(x=0.3, reference_frame=robot.root)
+        target_location=Pose3D.from_xyz_rpy(x=0.3, reference_frame=robot.root)
     )
 
 
@@ -2088,7 +2088,7 @@ def test_a_placing_carries_its_object_to_where_it_stands(
     """
     _, robot, extensions = multiple_robot_apartment_context
     cup = cup_held_tilted(robot)
-    target = Pose.from_xyz_rpy(x=0.8, z=0.8, reference_frame=robot.root)
+    target = Pose3D.from_xyz_rpy(x=0.8, z=0.8, reference_frame=robot.root)
     move_and_place = MoveAndPlaceAction(
         carry=CarryAction(
             navigate=drive_ahead(robot), holding_arms=[left_or_only_arm(robot)]
@@ -2150,7 +2150,7 @@ class CupForEachArm:
             PlaceAction(
                 object_designator=pick_up.grasp.graspable,
                 target_location=self.world.transform(
-                    Pose.from_xyz_rpy(
+                    Pose3D.from_xyz_rpy(
                         y=sideways_distance,
                         reference_frame=pick_up.grasp.graspable.root,
                     ),

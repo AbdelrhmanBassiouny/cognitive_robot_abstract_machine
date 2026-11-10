@@ -35,7 +35,7 @@ from semantic_digital_twin.robots.hsrb import HSRB
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
-from krrood_spatial_math.spatial_types import Pose
+from krrood_spatial_math.spatial_types import Pose3D
 from semantic_digital_twin.specifications.connections import (
     Connection6DoFSpecification,
 )
@@ -229,7 +229,7 @@ class MilkTransportDemonstration(RobotDemonstration):
             noslip_iterations=self.no_slip_iterations,
         )
 
-    def _milk_pose_on(self, surface: Body, milk: Milk) -> Pose:
+    def _milk_pose_on(self, surface: Body, milk: Milk) -> Pose3D:
         """
         :param surface: The counter or the table.
         :param milk: The milk.
@@ -247,14 +247,14 @@ class MilkTransportDemonstration(RobotDemonstration):
             x, yaw = surface_box.min_x + self.milk_depth, 0.0
         else:
             x, yaw = surface_box.max_x - self.milk_depth, np.pi
-        return Pose.from_xyz_rpy(
+        return Pose3D.from_xyz_rpy(
             x=x,
             z=surface_box.max_z - milk_box.min_z,
             yaw=yaw,
             reference_frame=world.root,
         )
 
-    def _standing_pose_facing(self, milk_pose: Pose) -> Pose:
+    def _standing_pose_facing(self, milk_pose: Pose3D) -> Pose3D:
         """
         :param milk_pose: Where the milk stands or is set down.
         :return: Where the robot's base stands on the floor to reach the milk there,
@@ -267,7 +267,7 @@ class MilkTransportDemonstration(RobotDemonstration):
             )
         ).pose
 
-    def _grasp_from(self, standing_pose: Pose, milk: Milk) -> GraspCandidate:
+    def _grasp_from(self, standing_pose: Pose3D, milk: Milk) -> GraspCandidate:
         """
         :param standing_pose: Where the robot stands to take the milk.
         :param milk: The milk.

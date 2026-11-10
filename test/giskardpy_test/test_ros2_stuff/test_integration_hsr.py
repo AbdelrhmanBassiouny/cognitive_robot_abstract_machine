@@ -15,8 +15,8 @@ from cramph.statechart import Statechart
 from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
 from giskardpy.qp.qp_controller_config import QPControllerConfig
 from numpy import pi
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3
-from krrood_spatial_math.spatial_types import Pose
+from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3D
+from krrood_spatial_math.spatial_types import Pose3D
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
@@ -80,7 +80,7 @@ def test_move_base(giskard: HSRTester) -> None:
                     base_pose=HomogeneousTransformationMatrix.from_xyz_axis_angle(
                         x=1.0,
                         y=1.0,
-                        axis=Vector3.Z(),
+                        axis=Vector3D.Z(),
                         angle=pi / 3,
                         reference_frame=giskard.map,
                     ),
@@ -88,9 +88,9 @@ def test_move_base(giskard: HSRTester) -> None:
                 CartesianPose(
                     root_link=giskard.default_root,
                     tip_link=giskard.base_footprint,
-                    goal_pose=Pose.from_xyz_axis_angle(
+                    goal_pose=Pose3D.from_xyz_axis_angle(
                         x=1.0,
-                        axis=Vector3.Z(),
+                        axis=Vector3D.Z(),
                         angle=pi,
                         reference_frame=giskard.map,
                     ),

@@ -36,7 +36,7 @@ from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     CartesianPoint2D,
     CartesianPoint3D,
-    Vector3,
+    Vector3D,
 )
 from semantic_digital_twin.world_description.exceptions import InvalidColorChannelCount
 from semantic_digital_twin.world_description.mesh_file_storage import (
@@ -471,7 +471,7 @@ class Scale:
 
     def to_simple_event(
         self,
-        extend_result_in_direction: Vector3 | None = None,
+        extend_result_in_direction: Vector3D | None = None,
         amount: float = 0.0,
     ) -> SimpleEvent:
         simple_event = SimpleEvent.from_data(
@@ -490,7 +490,7 @@ class Scale:
         return simple_event
 
     def _extend_simple_event_in_direction(
-        self, simple_event: SimpleEvent, direction: Vector3, amount: float
+        self, simple_event: SimpleEvent, direction: Vector3D, amount: float
     ) -> SimpleEvent:
         """
         Extend the inner event in the specified direction to create the container
@@ -1392,8 +1392,8 @@ class CoordinateBounds(Bounds[npt.NDArray[np.float64]]):
 
         .. note::
             ``start``/``direction`` are plain arrays rather than :class:`CartesianPoint3D`/
-            :class:`Vector3` on purpose: this runs once per graph node on every
-            collision check, and :class:`CartesianPoint3D`/:class:`Vector3` arithmetic pays a
+            :class:`Vector3D` on purpose: this runs once per graph node on every
+            collision check, and :class:`CartesianPoint3D`/:class:`Vector3D` arithmetic pays a
             symbolic (casadi) cost on every access. Callers should convert to arrays
             once before looping, not per call.
 

@@ -33,19 +33,19 @@ from krrood_spatial_math.spatial_types import (
     AxisAngle,
     HomogeneousTransformationMatrix,
     CartesianPoint2D,
-    Pose,
+    Pose3D,
     Pose2D,
     RotationMatrix,
-    Vector3,
+    Vector3D,
 )
 
 # %% rotated instances of every spatial type that stores its rotation as an axis angle
 
 axes = [
-    Vector3(0.0, 0.0, 1.0),
-    Vector3(0.0, 1.0, 0.0),
-    Vector3(1.0, 0.0, 0.0),
-    Vector3.unit_vector(1.0, 1.0, 1.0),
+    Vector3D(0.0, 0.0, 1.0),
+    Vector3D(0.0, 1.0, 0.0),
+    Vector3D(1.0, 0.0, 0.0),
+    Vector3D.unit_vector(1.0, 1.0, 1.0),
 ]
 angles = np.linspace(0.2, 2.8, 12)
 
@@ -68,9 +68,9 @@ spatial_types = pytest.mark.parametrize(
             HomogeneousTransformationMatrix,
             HomogeneousTransformationMatrix.from_xyz_axis_angle,
         ),
-        (Pose, Pose.from_xyz_axis_angle),
+        (Pose3D, Pose3D.from_xyz_axis_angle),
     ],
-    ids=["RotationMatrix", "HomogeneousTransformationMatrix", "Pose"],
+    ids=["RotationMatrix", "HomogeneousTransformationMatrix", "Pose3D"],
 )
 
 access_paths = pytest.mark.parametrize(

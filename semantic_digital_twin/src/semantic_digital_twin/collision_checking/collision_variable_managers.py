@@ -18,7 +18,7 @@ from semantic_digital_twin.collision_checking.collision_groups import (
     CollisionGroup,
     CollisionGroupCombination,
 )
-from krrood_spatial_math.spatial_types import Vector3, CartesianPoint3D
+from krrood_spatial_math.spatial_types import Vector3D, CartesianPoint3D
 from semantic_digital_twin.world_description.world_entity import Body
 
 # %% avoided contacts
@@ -402,7 +402,7 @@ class ExternalCollisionVariableManager(BaseCollisionVariableManager):
 
     def get_root_V_contact_normal_symbol(
         self, contact: AvoidedExternalContact
-    ) -> Vector3:
+    ) -> Vector3D:
         """
         :return: The contact normal of `contact`, pointing from the environment to its
             group, relative to the root of the world.
@@ -410,7 +410,7 @@ class ExternalCollisionVariableManager(BaseCollisionVariableManager):
         return self._get_cached_symbol(
             "get_root_V_contact_normal_symbol",
             (contact.group.root.name, contact.rank),
-            lambda: Vector3.create_with_variables(
+            lambda: Vector3D.create_with_variables(
                 f"root_V_contact_normal({contact.group.root.name}, {contact.rank})",
             ),
         )
@@ -707,7 +707,7 @@ class SelfCollisionVariableManager(BaseCollisionVariableManager):
 
     def get_group_b_V_contact_normal_symbol(
         self, contact: AvoidedSelfContact
-    ) -> Vector3:
+    ) -> Vector3D:
         """
         :return: The contact normal of `contact`, pointing from its second group to its
             first, relative to the root of the second group.
@@ -717,7 +717,7 @@ class SelfCollisionVariableManager(BaseCollisionVariableManager):
         return self._get_cached_symbol(
             "get_group_b_V_contact_normal_symbol",
             (group_a.root.name, group_b.root.name, contact.rank),
-            lambda: Vector3.create_with_variables(
+            lambda: Vector3D.create_with_variables(
                 f"group_b_V_contact_normal({group_a.root.name}, {group_b.root.name}, {contact.rank})",
             ),
         )

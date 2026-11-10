@@ -19,9 +19,9 @@ from coraplex.robot_plans.mixins import HasApproachesGraspPoses, MovesToolCenter
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     RotationMatrix,
-    Vector3,
+    Vector3D,
 )
-from krrood_spatial_math.spatial_types import Pose, CartesianPoint3D, Pose2D
+from krrood_spatial_math.spatial_types import Pose3D, CartesianPoint3D, Pose2D
 from semantic_digital_twin.robots.robot_parts import EndEffector
 from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
 from semantic_digital_twin.world_description.world_entity import SemanticAnnotation
@@ -160,7 +160,7 @@ class MoveToReach(MovesToolCenterPoint, SequentialAction, HasApproachesGraspPose
     Additional yaw applied to the orientation facing the target directly.
     """
 
-    reference_T_grasp: Pose
+    reference_T_grasp: Pose3D
     """
     The grasp frame the end effector is to reach.
     """
@@ -185,18 +185,18 @@ class MoveToReach(MovesToolCenterPoint, SequentialAction, HasApproachesGraspPose
         ]
 
     @property
-    def standing_pose(self) -> Pose:
+    def standing_pose(self) -> Pose3D:
         """
         Calculates the pose where the robot should stand to reach the target.
 
         :return: The calculated standing pose on the floor.
         """
         reference_T_target = self.reference_T_grasp.homogeneous_matrix
-        target_V_robot = -Vector3(
+        target_V_robot = -Vector3D(
             x=self.target_pose_offset_robot.x, y=self.target_pose_offset_robot.y
         )
         target_V_robot.scale(1.0)
-        world_z = Vector3.Z()
+        world_z = Vector3D.Z()
         target_R_robot_pointing_to_target = RotationMatrix.from_vectors(
             x=target_V_robot, z=world_z
         ) @ RotationMatrix.from_rpy(yaw=self.hip_rotation)
@@ -211,7 +211,7 @@ class MoveToReach(MovesToolCenterPoint, SequentialAction, HasApproachesGraspPose
         )
         reference_T_robot = reference_T_target @ target_T_robot
         world_T_robot = self.world.transform(reference_T_robot.pose, self.world.root)
-        return Pose.from_xyz_rpy(
+        return Pose3D.from_xyz_rpy(
             x=world_T_robot.x,
             y=world_T_robot.y,
             yaw=world_T_robot.yaw,

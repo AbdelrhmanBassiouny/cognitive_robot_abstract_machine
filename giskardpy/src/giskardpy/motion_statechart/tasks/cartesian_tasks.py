@@ -39,9 +39,9 @@ from krrood_spatial_math.spatial_types import (
     CartesianPoint3D,
     RotationMatrix,
     HomogeneousTransformationMatrix,
-    Vector3,
+    Vector3D,
 )
-from krrood_spatial_math.spatial_types import Pose, SpatialType
+from krrood_spatial_math.spatial_types import Pose3D, SymbolicSpatialType
 from semantic_digital_twin.world_description.geometry import Color
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
@@ -109,8 +109,8 @@ class CartesianTask(ConvergingTask, ABC):
     def add_goal_and_current_debug_expressions(
         self,
         artifacts: MotionNodeArtifacts,
-        goal: SpatialType,
-        current: SpatialType,
+        goal: SymbolicSpatialType,
+        current: SymbolicSpatialType,
     ) -> None:
         """
         Register a goal and a current spatial expression for visualization.
@@ -205,7 +205,7 @@ class DistanceAlongAxis(ConvergingTask):
     The point the distance is measured to, in the frame of the link it is fixed on.
     """
 
-    axis: Vector3
+    axis: Vector3D
     """
     The unit direction the distance is measured along, in :attr:`root_link`.
     """
@@ -708,7 +708,7 @@ class CartesianPose(Parallel):
     tip_link: KinematicStructureEntity
     """End link that should reach the goal pose."""
 
-    goal_pose: Pose
+    goal_pose: Pose3D
     """The goal pose."""
 
     cruise_linear_velocity: float = DefaultCruiseVelocity.TRANSLATION
@@ -951,7 +951,7 @@ class RigidCoupling(Task):
     def _keep_at_rest(
         self,
         artifacts: MotionNodeArtifacts,
-        vector: CartesianPoint3D | Vector3,
+        vector: CartesianPoint3D | Vector3D,
         velocity_scale: float,
         name: str,
     ) -> None:

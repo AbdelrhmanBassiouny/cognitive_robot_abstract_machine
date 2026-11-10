@@ -8,10 +8,10 @@ from krrood_spatial_math.spatial_types import (
     AxisAngle,
     HomogeneousTransformationMatrix,
     CartesianPoint3D,
-    Pose,
+    Pose3D,
     Quaternion,
     RotationMatrix,
-    Vector3,
+    Vector3D,
 )
 from semantic_digital_twin.world_description.inertial_properties import Inertial
 
@@ -23,7 +23,7 @@ def feature_names(extractor: FeatureExtractor) -> list[str]:
 
 
 def test_features_of_a_pose_are_read_from_the_pose_itself():
-    pose = Pose.from_xyz_rpy(x=1.0, y=2.0, z=3.0, yaw=0.5)
+    pose = Pose3D.from_xyz_rpy(x=1.0, y=2.0, z=3.0, yaw=0.5)
 
     extractor = FeatureExtractor.from_instances([pose])
 
@@ -48,12 +48,12 @@ def test_features_of_a_pose_are_read_from_the_pose_itself():
     "instance",
     [
         CartesianPoint3D(1.0, 2.0, 3.0),
-        Vector3(1.0, 2.0, 3.0),
+        Vector3D(1.0, 2.0, 3.0),
         Quaternion(0.0, 0.0, 0.0, 1.0),
-        AxisAngle(axis=Vector3(0.0, 1.0, 0.0), angle=0.4),
+        AxisAngle(axis=Vector3D(0.0, 1.0, 0.0), angle=0.4),
         RotationMatrix.from_rpy(roll=0.1, pitch=0.2, yaw=0.3),
         HomogeneousTransformationMatrix.from_xyz_rpy(x=1.0, y=2.0, z=3.0, yaw=0.3),
-        Pose.from_xyz_rpy(x=1.0, y=2.0, z=3.0, yaw=0.5),
+        Pose3D.from_xyz_rpy(x=1.0, y=2.0, z=3.0, yaw=0.5),
         Inertial(mass=2.0),
     ],
     ids=lambda instance: type(instance).__name__,

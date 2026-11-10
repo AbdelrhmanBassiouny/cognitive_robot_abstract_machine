@@ -41,7 +41,7 @@ from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
     VizMarkerPublisher,
 )
 from krrood_spatial_math.spatial_types import CartesianPoint3D
-from krrood_spatial_math.spatial_types import Pose
+from krrood_spatial_math.spatial_types import Pose3D
 from semantic_digital_twin.world import World
 from giskardpy.motion_control import MotionControl
 from cramph.context import StatechartContext
@@ -258,7 +258,7 @@ class TestStallDetection:
             mobile_base=cylinder_bot_diff_world.get_semantic_annotations_by_type(
                 MobileBase
             )[0],
-            goal_pose=Pose.from_xyz_rpy(
+            goal_pose=Pose3D.from_xyz_rpy(
                 x=1, y=1, reference_frame=cylinder_bot_diff_world.root
             ),
         )

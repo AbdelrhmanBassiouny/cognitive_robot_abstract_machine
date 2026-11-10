@@ -10,7 +10,7 @@ from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     CartesianPoint3D,
     RotationMatrix,
-    Vector3,
+    Vector3D,
 )
 from semantic_digital_twin.exceptions import GraspNotOnObjectError
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
@@ -67,7 +67,7 @@ class SurfaceGrasp(ObjectRelativeGrasp):
         root_P_surface = self._surface_point(graspable, root_V_outward)
         if root_P_surface is None:
             raise GraspNotOnObjectError(grasp=self, graspable=graspable)
-        root_V_approach = Vector3.NEGATIVE_Z() * math.cos(
+        root_V_approach = Vector3D.NEGATIVE_Z() * math.cos(
             self.pitch
         ) - root_V_outward * math.sin(self.pitch)
         root_V_across = root_V_outward - root_V_approach * root_V_outward.dot(
@@ -92,14 +92,14 @@ class SurfaceGrasp(ObjectRelativeGrasp):
         """
         return self._surface_point(graspable, self._outward_direction()) is not None
 
-    def _outward_direction(self) -> Vector3:
+    def _outward_direction(self) -> Vector3D:
         """
         :return: ``root_V_outward``.
         """
-        return Vector3(math.cos(self.yaw), math.sin(self.yaw), 0.0)
+        return Vector3D(math.cos(self.yaw), math.sin(self.yaw), 0.0)
 
     def _surface_point(
-        self, graspable: HasGraspCandidates, root_V_outward: Vector3
+        self, graspable: HasGraspCandidates, root_V_outward: Vector3D
     ) -> CartesianPoint3D | None:
         """
         :param graspable: The object whose grasp surface the ray is cast against.

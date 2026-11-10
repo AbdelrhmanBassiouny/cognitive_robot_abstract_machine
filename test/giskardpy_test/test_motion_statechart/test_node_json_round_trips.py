@@ -130,9 +130,9 @@ from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     CartesianPoint3D,
     RotationMatrix,
-    Vector3,
+    Vector3D,
 )
-from krrood_spatial_math.spatial_types import Pose
+from krrood_spatial_math.spatial_types import Pose3D
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection1DOF,
@@ -181,16 +181,16 @@ def _tip_point(world: World) -> CartesianPoint3D:
     return CartesianPoint3D(0.0, 0.0, 0.1, reference_frame=_tip(world))
 
 
-def _root_axis(world: World) -> Vector3:
-    return Vector3.Z(reference_frame=_root(world))
+def _root_axis(world: World) -> Vector3D:
+    return Vector3D.Z(reference_frame=_root(world))
 
 
-def _tip_axis(world: World) -> Vector3:
-    return Vector3.X(reference_frame=_tip(world))
+def _tip_axis(world: World) -> Vector3D:
+    return Vector3D.X(reference_frame=_tip(world))
 
 
-def _pose(world: World) -> Pose:
-    return Pose.from_xyz_rpy(x=0.1, yaw=0.2, reference_frame=_root(world))
+def _pose(world: World) -> Pose3D:
+    return Pose3D.from_xyz_rpy(x=0.1, yaw=0.2, reference_frame=_root(world))
 
 
 def _transformation(world: World) -> HomogeneousTransformationMatrix:

@@ -31,7 +31,7 @@ from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
 from semantic_digital_twin.robots.robot_parts import AbstractRobot, MobileBase
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
-from krrood_spatial_math.spatial_types import Pose
+from krrood_spatial_math.spatial_types import Pose3D
 from semantic_digital_twin.world_description.connections import DifferentialDrive
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
@@ -49,7 +49,7 @@ class MobileBasePoseGoal(ABC):
     @classmethod
     @abstractmethod
     def moving_base_of(
-        cls, robot: AbstractRobot, goal_pose: Pose, threshold: float
+        cls, robot: AbstractRobot, goal_pose: Pose3D, threshold: float
     ) -> Self:
         """
         :param robot: The robot whose base is put at `goal_pose`.
@@ -86,9 +86,9 @@ class DrivenBaseGoal(
     The base moved, by the drive attaching its robot to its parent.
     """
 
-    goal_pose: Pose
+    goal_pose: Pose3D
     """
-    Pose to reach.
+    Pose3D to reach.
     """
 
     weight: float = DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE
@@ -146,7 +146,7 @@ class DrivenBaseGoal(
 
     @classmethod
     def moving_base_of(
-        cls, robot: AbstractRobot, goal_pose: Pose, threshold: float
+        cls, robot: AbstractRobot, goal_pose: Pose3D, threshold: float
     ) -> Self:
         """
         Differs from :meth:`MobileBasePoseGoal.moving_base_of` in requiring `robot` to

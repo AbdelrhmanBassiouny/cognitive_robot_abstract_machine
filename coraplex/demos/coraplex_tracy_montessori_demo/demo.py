@@ -34,7 +34,7 @@ from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     ShapeSortingPiece,
 )
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Pose
+from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Pose3D
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
     Connection6DoF,
@@ -462,7 +462,7 @@ class ShapeSortingPlan:
         statechart.add_node(Sequence(nodes=actions))
         return statechart
 
-    def release_pose_over(self, hole: HoleShape, world: World) -> Pose:
+    def release_pose_over(self, hole: HoleShape, world: World) -> Pose3D:
         """
         :param hole: The hole a piece is sorted into.
         :param world: The world the board stands in.
@@ -473,7 +473,7 @@ class ShapeSortingPlan:
         center = self.scene.shape_sorting_board.geometry.hole_of_shape(
             hole
         ).bounds.center
-        board_T_release = Pose.from_xyz_rpy(
+        board_T_release = Pose3D.from_xyz_rpy(
             center.x,
             center.y,
             self.scene.shape_sorting_board.geometry.lid_top

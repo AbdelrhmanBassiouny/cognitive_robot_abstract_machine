@@ -8,7 +8,7 @@ from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from krrood_spatial_math.spatial_types import (
     CartesianPoint2D,
     Pose2D,
-    Pose,
+    Pose3D,
     CartesianPoint3D,
     Quaternion,
 )
@@ -68,7 +68,7 @@ class TestPose2DToPose:
     def test_to_pose_position(self):
         p2 = Pose2D.from_xy_yaw(x=3.0, y=-1.5, yaw=0)
         pose = p2.pose
-        assert isinstance(pose, Pose)
+        assert isinstance(pose, Pose3D)
         assert pose.x.to_np() == pytest.approx(3.0)
         assert pose.y.to_np() == pytest.approx(-1.5)
         assert pose.z.to_np() == pytest.approx(0.0)
@@ -175,7 +175,7 @@ class TestPose2DFromPose:
 
     def test_from_pose_inherits_reference_frame(self):
         frame = Body(name=PrefixedName("base"))
-        pose = Pose.from_xyz_rpy(1, 2, 3, 0, 0, 0.5, reference_frame=frame)
+        pose = Pose3D.from_xyz_rpy(1, 2, 3, 0, 0, 0.5, reference_frame=frame)
         p2 = Pose2D.from_pose(pose)
         assert p2.reference_frame is frame
 
@@ -186,7 +186,7 @@ class TestPose2DFromPose:
         """
         mini_world.connections[0].position = math.pi / 2
         root, tip = mini_world.root, mini_world.bodies[1]
-        tip_pose = Pose.from_xyz_rpy(1, 0, 2, 0, 0, 0.3, reference_frame=tip)
+        tip_pose = Pose3D.from_xyz_rpy(1, 0, 2, 0, 0, 0.3, reference_frame=tip)
 
         p2 = Pose2D.from_pose(tip_pose, plane_frame=root)
 

@@ -21,7 +21,7 @@ from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     CartesianPoint3D,
     RotationMatrix,
-    Vector3,
+    Vector3D,
 )
 from semantic_digital_twin.utils import (
     suppress_stdout_stderr,
@@ -328,7 +328,7 @@ class URDFParser(WorldModelParser):
             parent_T_connection_expression=parent_T_connection,
             multiplier=multiplier,
             offset=offset,
-            axis=Vector3(*urdf_joint_axis(joint), reference_frame=parent),
+            axis=Vector3D(*urdf_joint_axis(joint), reference_frame=parent),
             raw_dof=dof,
             dynamics=self.parse_dynamics(joint),
         )

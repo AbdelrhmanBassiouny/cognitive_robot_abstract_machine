@@ -8,9 +8,9 @@ import numpy as np
 from builtin_interfaces.msg import Duration
 from geometry_msgs.msg import (
     Point as RosPoint,
-    Pose as RosPose,
+    Pose3D as RosPose,
     Quaternion as RosQuaternion,
-    Vector3 as RosVector3,
+    Vector3D as RosVector3,
 )
 from std_msgs.msg import ColorRGBA, Header
 from typing_extensions import ClassVar, TypeVar, Generic
@@ -27,23 +27,23 @@ from semantic_digital_twin.adapters.ros.visualization.exceptions import (
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     CartesianPoint3D,
-    Pose,
+    Pose3D,
     Pose2D,
     Quaternion,
     RotationMatrix,
-    SpatialType,
-    Vector3,
+    SymbolicSpatialType,
+    Vector3D,
 )
 from semantic_digital_twin.world_description.geometry import Color
 
-SpatialTypeInput = TypeVar("SpatialTypeInput", bound=SpatialType)
+SpatialTypeInput = TypeVar("SpatialTypeInput", bound=SymbolicSpatialType)
 
 
 @dataclass
 class SpatialTypeVisualization:
     """A spatial type together with the display metadata needed to render it as markers."""
 
-    spatial_type: SpatialType
+    spatial_type: SymbolicSpatialType
     """The spatial type to visualize. Its current value is resolved from the live world state."""
 
     color: Color = field(default_factory=Color)
@@ -87,7 +87,7 @@ class SpatialTypeMarkerRenderer(Generic[SpatialTypeInput], SubClassSafeGeneric, 
         return cls.get_generic_type_parameters()[0]
 
     @classmethod
-    def can_render(cls, spatial_type: SpatialType) -> bool:
+    def can_render(cls, spatial_type: SymbolicSpatialType) -> bool:
         """
         Whether this renderer can render the given spatial type.
 
@@ -96,7 +96,9 @@ class SpatialTypeMarkerRenderer(Generic[SpatialTypeInput], SubClassSafeGeneric, 
         return isinstance(spatial_type, cls.input_type())
 
     @classmethod
-    def renderer_for(cls, spatial_type: SpatialType) -> type[SpatialTypeMarkerRenderer]:
+    def renderer_for(
+        cls, spatial_type: SymbolicSpatialType
+    ) -> type[SpatialTypeMarkerRenderer]:
         """
         Find the renderer responsible for the given spatial type.
 
@@ -137,7 +139,9 @@ class SpatialTypeMarkerRenderer(Generic[SpatialTypeInput], SubClassSafeGeneric, 
         raise NotImplementedError
 
     @staticmethod
-    def _reference_frame_name(spatial_type: SpatialType, root_frame_name: str) -> str:
+    def _reference_frame_name(
+        spatial_type: SymbolicSpatialType, root_frame_name: str
+    ) -> str:
         """
         The name of the spatial type's reference frame, falling back to the root frame.
 
@@ -223,7 +227,7 @@ class CartesianPoint3DMarkerRenderer(SpatialTypeMarkerRenderer[CartesianPoint3D]
 
 
 @dataclass
-class Vector3MarkerRenderer(SpatialTypeMarkerRenderer[Vector3]):
+class Vector3MarkerRenderer(SpatialTypeMarkerRenderer[Vector3D]):
     """Renders a vector as a single arrow anchored at the origin of its visualisation frame."""
 
     @classmethod
@@ -253,11 +257,11 @@ class Vector3MarkerRenderer(SpatialTypeMarkerRenderer[Vector3]):
 
 
 @dataclass
-class PoseLikeMarkerRenderer(SpatialTypeMarkerRenderer[Pose]):
+class PoseLikeMarkerRenderer(SpatialTypeMarkerRenderer[Pose3D]):
     """Renders any orientation-carrying spatial type as an RGB axis triad with an optional label."""
 
-    _renderable_types: ClassVar[tuple[type[SpatialType], ...]] = (
-        Pose,
+    _renderable_types: ClassVar[tuple[type[SymbolicSpatialType], ...]] = (
+        Pose3D,
         Pose2D,
         HomogeneousTransformationMatrix,
         RotationMatrix,
@@ -266,7 +270,7 @@ class PoseLikeMarkerRenderer(SpatialTypeMarkerRenderer[Pose]):
     """The spatial types rendered as an axis triad."""
 
     @classmethod
-    def can_render(cls, spatial_type: SpatialType) -> bool:
+    def can_render(cls, spatial_type: SymbolicSpatialType) -> bool:
         return isinstance(spatial_type, cls._renderable_types)
 
     @classmethod
@@ -330,7 +334,7 @@ class PoseLikeMarkerRenderer(SpatialTypeMarkerRenderer[Pose]):
 
     @staticmethod
     def _position_and_orientation(
-        spatial_type: SpatialType,
+        spatial_type: SymbolicSpatialType,
     ) -> tuple[np.ndarray, np.ndarray]:
         """
         Resolve the current position and orientation quaternion of the spatial type.

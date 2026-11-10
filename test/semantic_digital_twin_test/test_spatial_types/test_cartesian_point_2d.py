@@ -11,7 +11,7 @@ from krrood_spatial_math.spatial_types import (
     OrthogonalProjection,
     CartesianPoint2D,
     CartesianPoint3D,
-    Pose,
+    Pose3D,
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
@@ -114,7 +114,7 @@ class TestCartesianPoint2DFromCartesianPoint3D:
 class TestCartesianPoint2DFromPose:
     def test_projects_the_pose_position(self):
         frame = Body(name=PrefixedName("world"))
-        pose = Pose.from_xyz_rpy(
+        pose = Pose3D.from_xyz_rpy(
             x=1.5, y=-2.5, z=3.0, roll=0.1, pitch=0.2, yaw=0.3, reference_frame=frame
         )
 
@@ -128,7 +128,7 @@ class TestCartesianPoint2DFromPose:
 
     def test_transforms_into_another_plane_frame(self, rotated_mini_world: World):
         root, tip = rotated_mini_world.root, rotated_mini_world.bodies[1]
-        pose = Pose.from_xyz_rpy(x=1.0, z=2.0, yaw=0.3, reference_frame=tip)
+        pose = Pose3D.from_xyz_rpy(x=1.0, z=2.0, yaw=0.3, reference_frame=tip)
 
         projected = CartesianPoint2D.from_pose(pose, plane_frame=root)
 

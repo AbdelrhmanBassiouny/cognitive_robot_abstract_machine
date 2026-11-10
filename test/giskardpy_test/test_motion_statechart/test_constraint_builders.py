@@ -8,7 +8,7 @@ from krrood_spatial_math.spatial_types import (
     AxisAngle,
     CartesianPoint3D,
     RotationMatrix,
-    Vector3,
+    Vector3D,
 )
 
 from giskardpy.motion_statechart.constraint_builders import GeometricConstraintBuilder
@@ -86,7 +86,7 @@ def test_rotation_goal_writes_three_equality_constraints():
     builder = GeometricConstraintBuilder(collection)
     builder.add_rotation_goal_constraints(
         frame_R_current=RotationMatrix(),
-        frame_R_goal=RotationMatrix.from_axis_angle(AxisAngle(Vector3.Z(), 0.5)),
+        frame_R_goal=RotationMatrix.from_axis_angle(AxisAngle(Vector3D.Z(), 0.5)),
         cruise_velocity=0.1,
         quadratic_weight=1.0,
         name="goal",
@@ -139,7 +139,7 @@ def rotation_goal_bounds(
     add_rotation_goal(
         GeometricConstraintBuilder(collection),
         frame_R_current=RotationMatrix(),
-        frame_R_goal=RotationMatrix.from_axis_angle(AxisAngle(Vector3.Z(), angle)),
+        frame_R_goal=RotationMatrix.from_axis_angle(AxisAngle(Vector3D.Z(), angle)),
         cruise_velocity=ROTATION_CRUISE_VELOCITY,
         quadratic_weight=1.0,
     )
@@ -273,16 +273,16 @@ def enforced_goal(
             CartesianPoint3D(distance, 0.0, 0.0),
         ),
         GeometricConstraintBuilder.add_vector_goal_constraints: (
-            Vector3.X(),
-            Vector3(np.cos(distance), np.sin(distance), 0.0),
+            Vector3D.X(),
+            Vector3D(np.cos(distance), np.sin(distance), 0.0),
         ),
         GeometricConstraintBuilder.add_rotation_goal_constraints: (
             RotationMatrix(),
-            RotationMatrix.from_axis_angle(AxisAngle(Vector3.Z(), distance)),
+            RotationMatrix.from_axis_angle(AxisAngle(Vector3D.Z(), distance)),
         ),
         GeometricConstraintBuilder.add_yaw_goal_constraint: (
             RotationMatrix(),
-            RotationMatrix.from_axis_angle(AxisAngle(Vector3.Z(), distance)),
+            RotationMatrix.from_axis_angle(AxisAngle(Vector3D.Z(), distance)),
         ),
     }
     current, goal = current_and_goal[add_goal]
@@ -326,7 +326,7 @@ def test_a_quaternion_error_is_normalized_by_how_fast_it_changes_with_the_angle(
     add_rotation_goal(
         GeometricConstraintBuilder(collection),
         frame_R_current=RotationMatrix(),
-        frame_R_goal=RotationMatrix.from_axis_angle(AxisAngle(Vector3.Z(), 0.5)),
+        frame_R_goal=RotationMatrix.from_axis_angle(AxisAngle(Vector3D.Z(), 0.5)),
         cruise_velocity=ROTATION_CRUISE_VELOCITY,
         quadratic_weight=1.0,
     )

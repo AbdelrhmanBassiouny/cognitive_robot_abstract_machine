@@ -30,18 +30,18 @@ from semantic_digital_twin.robots.minimal_robot import MinimalRobot
 from semantic_digital_twin.robots.pr2 import PR2
 from semantic_digital_twin.robots.robot_parts import MobileBase
 from semantic_digital_twin.robots.stretch import Stretch
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Pose
+from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Pose3D
 from semantic_digital_twin.world_description.derivatives import Derivatives
 from semantic_digital_twin.world import World
 
 # %% building a goal for a robot
 
 
-def _target(world: World) -> Pose:
+def _target(world: World) -> Pose3D:
     """
     :return: A pose for the base, away from the origin of `world` and turned.
     """
-    return Pose.from_xyz_rpy(1, 2, 0, yaw=0.5, reference_frame=world.root)
+    return Pose3D.from_xyz_rpy(1, 2, 0, yaw=0.5, reference_frame=world.root)
 
 
 def test_a_holonomic_base_goal_moves_the_root_of_the_robot(
@@ -157,7 +157,7 @@ def test_a_holonomic_base_goal_reaches_the_pose_on_the_floor_below_its_target(
     its way, which the base can do without lifting or tilting.
     """
     robot = cylinder_bot_world.get_semantic_annotations_by_type(MinimalRobot)[0]
-    target = Pose.from_xyz_rpy(
+    target = Pose3D.from_xyz_rpy(
         1,
         -0.5,
         0.3,
@@ -197,7 +197,7 @@ def _peak_yaw_per_tick_towards(
     base = world.get_semantic_annotations_by_type(MinimalRobot)[0].root
     turn = BaseOrientation(
         base=base,
-        goal_pose=Pose.from_xyz_rpy(yaw=yaw, reference_frame=world.root),
+        goal_pose=Pose3D.from_xyz_rpy(yaw=yaw, reference_frame=world.root),
         parent_T_goal_reference_frame=HomogeneousTransformationMatrix(),
         cruise_velocity=cruise_velocity,
     )

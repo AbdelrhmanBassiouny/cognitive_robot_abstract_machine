@@ -38,7 +38,7 @@ from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     CartesianPoint3D,
     RotationMatrix,
-    Vector3,
+    Vector3D,
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
@@ -241,7 +241,7 @@ class UsdAxis(StrEnum):
     Y = "Y"
     Z = "Z"
 
-    def vector(self, reference_frame: Body) -> Vector3:
+    def vector(self, reference_frame: Body) -> Vector3D:
         """
         :param reference_frame: The frame the returned vector is expressed in.
         :return: The unit vector this axis token denotes.
@@ -251,7 +251,7 @@ class UsdAxis(StrEnum):
             UsdAxis.Y: (0.0, 1.0, 0.0),
             UsdAxis.Z: (0.0, 0.0, 1.0),
         }
-        return Vector3(*unit_vectors[self], reference_frame=reference_frame)
+        return Vector3D(*unit_vectors[self], reference_frame=reference_frame)
 
 
 @dataclass

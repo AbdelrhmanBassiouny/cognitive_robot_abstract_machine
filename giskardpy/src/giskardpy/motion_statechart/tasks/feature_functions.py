@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import field, dataclass
 
 import krrood.symbolic_math.symbolic_math as sm
-from krrood_spatial_math.spatial_types import CartesianPoint3D, Vector3
+from krrood_spatial_math.spatial_types import CartesianPoint3D, Vector3D
 from semantic_digital_twin.world_description.geometry import Color
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
@@ -35,11 +35,11 @@ class FeatureFunctionGoal(ConvergingTask, ABC):
     """
     The static reference link. Defines the fixed frame of reference.
     """
-    controlled_feature: CartesianPoint3D | Vector3 = field(init=False)
+    controlled_feature: CartesianPoint3D | Vector3D = field(init=False)
     """
     The geometric feature (point or vector) that is being controlled, expressed in the tip link frame.
     """
-    reference_feature: CartesianPoint3D | Vector3 = field(init=False)
+    reference_feature: CartesianPoint3D | Vector3D = field(init=False)
     """
     The geometric feature (point or vector) that serves as reference, expressed in the root link frame.
     """
@@ -47,11 +47,11 @@ class FeatureFunctionGoal(ConvergingTask, ABC):
     @abstractmethod
     def get_controlled_and_reference_features(
         self,
-    ) -> tuple[CartesianPoint3D | Vector3, CartesianPoint3D | Vector3]:
+    ) -> tuple[CartesianPoint3D | Vector3D, CartesianPoint3D | Vector3D]:
         """
         Return the controlled and reference features.
 
-        :return: Tuple (controlled_feature, reference_feature), each a CartesianPoint3D or Vector3.
+        :return: Tuple (controlled_feature, reference_feature), each a CartesianPoint3D or Vector3D.
         """
         raise NotImplementedError
 
@@ -79,7 +79,7 @@ class FeatureFunctionGoal(ConvergingTask, ABC):
                     color=Color.from_rgba(red=1, green=0, blue=0, opacity=1),
                 )
             )
-        elif isinstance(self.controlled_feature, Vector3):
+        elif isinstance(self.controlled_feature, Vector3D):
             self.root_V_controlled_feature = root_T_tip @ tip_controlled_feature
             self.root_V_controlled_feature.visualisation_frame = (
                 self.controlled_feature.visualisation_frame
@@ -101,7 +101,7 @@ class FeatureFunctionGoal(ConvergingTask, ABC):
                     color=Color.from_rgba(red=0, green=1, blue=0, opacity=1),
                 )
             )
-        elif isinstance(self.reference_feature, Vector3):
+        elif isinstance(self.reference_feature, Vector3D):
             self.root_V_reference_feature = root_reference_feature
             self.root_V_reference_feature.visualisation_frame = (
                 self.reference_feature.visualisation_frame
@@ -128,11 +128,11 @@ class AlignPerpendicular(FeatureFunctionGoal):
     Completion occurs when |current_angle - π/2| < `threshold`.
     """
 
-    tip_normal: Vector3
+    tip_normal: Vector3D
     """
     The normal vector to be controlled, defined in the tip link frame.
     """
-    reference_normal: Vector3
+    reference_normal: Vector3D
     """
     The reference normal vector to align against, defined in the root link frame.
     """
@@ -222,7 +222,7 @@ class HeightGoal(FeatureFunctionGoal):
         artifacts = MotionNodeArtifacts()
         expr = (
             self.root_P_controlled_feature - self.root_P_reference_feature
-        ) @ Vector3.Z()
+        ) @ Vector3D.Z()
 
         artifacts.constraints.add_inequality_constraint(
             cruise_velocity=self.cruise_velocity,
@@ -372,11 +372,11 @@ class AngleGoal(FeatureFunctionGoal):
     `lower_angle` and `upper_angle`.
     """
 
-    tip_vector: Vector3
+    tip_vector: Vector3D
     """
     Tip vector to be controlled.
     """
-    reference_vector: Vector3
+    reference_vector: Vector3D
     """
     Reference vector to measure the angle against.
     """

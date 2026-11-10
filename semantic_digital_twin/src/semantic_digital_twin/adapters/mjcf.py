@@ -32,7 +32,7 @@ from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     RotationMatrix,
     CartesianPoint3D,
-    Vector3,
+    Vector3D,
 )
 from semantic_digital_twin.world import World, Body
 from semantic_digital_twin.world_description.connection_properties import JointDynamics
@@ -607,7 +607,7 @@ class MJCFParser(WorldModelParser):
                 )
             else:
                 joint_to_child_body_transform = child_body_to_joint_transform.inverse()
-                joint_axis = Vector3(
+                joint_axis = Vector3D(
                     mujoco_joint.axis[0],
                     mujoco_joint.axis[1],
                     mujoco_joint.axis[2],

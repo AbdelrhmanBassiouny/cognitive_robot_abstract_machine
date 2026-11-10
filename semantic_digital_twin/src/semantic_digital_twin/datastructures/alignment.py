@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from krrood_spatial_math.spatial_types import Vector3
+from krrood_spatial_math.spatial_types import Vector3D
 
 
 @dataclass
@@ -12,12 +12,12 @@ class AlignmentPair:
     tool tip and the normal of the goal it acts on.
     """
 
-    tip_normal: Vector3
+    tip_normal: Vector3D
     """
     The normal of the tool tip, expressed in the tool's frame.
     """
 
-    goal_normal: Vector3
+    goal_normal: Vector3D
     """
     The normal of the goal, expressed in the goal's frame.
     """

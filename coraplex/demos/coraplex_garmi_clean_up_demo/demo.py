@@ -71,7 +71,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Milk,
 )
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
-from krrood_spatial_math.spatial_types import CartesianPoint3D, Pose
+from krrood_spatial_math.spatial_types import CartesianPoint3D, Pose3D
 from semantic_digital_twin.specifications.connections import (
     Connection6DoFSpecification,
 )
@@ -204,12 +204,12 @@ class ScenePlacement:
             self.x, self.y, self.z, pitch=self.pitch, yaw=self.yaw
         )
 
-    def pose(self, reference_frame: KinematicStructureEntity) -> Pose:
+    def pose(self, reference_frame: KinematicStructureEntity) -> Pose3D:
         """
         :param reference_frame: The frame the placement is given in.
         :return: The placement as a pose in `reference_frame`.
         """
-        return Pose.from_xyz_rpy(
+        return Pose3D.from_xyz_rpy(
             self.x,
             self.y,
             self.z,
@@ -375,13 +375,13 @@ class GarmiCleanUpDemonstration(RobotDemonstration):
         [milk] = world.get_semantic_annotations_by_type(Milk)
         milk_grasp = GraspCandidate(
             graspable=milk,
-            grasp_pose=Pose.from_xyz_quaternion(
+            grasp_pose=Pose3D.from_xyz_quaternion(
                 quat_z=1, quat_w=0, reference_frame=milk.root
             ),
         )
         handle_grasp = GraspCandidate(
             graspable=drawer.handle,
-            grasp_pose=Pose.from_xyz_quaternion(
+            grasp_pose=Pose3D.from_xyz_quaternion(
                 quat_y=0.707107,
                 quat_z=0.707107,
                 quat_w=0,
@@ -564,7 +564,7 @@ class GarmiCleanUpDemonstration(RobotDemonstration):
         # A variable, so the grasps are ranked when the statement is grounded, from
         # where the robot stands then.
         where_the_robot_stands = variable(
-            Pose, domain=[Pose(reference_frame=arm._robot.root)]
+            Pose3D, domain=[Pose3D(reference_frame=arm._robot.root)]
         )
         return flat_variable(
             GraspsByCloseness(graspable, where_the_robot_stands, number_of_grasps=None)
@@ -574,7 +574,7 @@ class GarmiCleanUpDemonstration(RobotDemonstration):
         self,
         milk: Milk,
         milk_grasp: GraspCandidate,
-        milk_in_drawer: Pose,
+        milk_in_drawer: Pose3D,
         storage_drawer: KinematicStructureEntity,
         right_arm: Arm,
     ) -> list[StatechartNode | Match]:

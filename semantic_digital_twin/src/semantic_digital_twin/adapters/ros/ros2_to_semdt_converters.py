@@ -21,10 +21,10 @@ from semantic_digital_twin.datastructures.scan_pattern import ScanPattern
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     CartesianPoint3D,
-    Vector3,
+    Vector3D,
     Quaternion,
 )
-from krrood_spatial_math.spatial_types import Pose
+from krrood_spatial_math.spatial_types import Pose3D
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import (
     Color,
@@ -66,11 +66,11 @@ class TransformStampedToSemDTConverter(
 
 @dataclass
 class PoseStampedToSemDTConverter(
-    Ros2ToSemDTConverter[geometry_msgs.PoseStamped, Pose]
+    Ros2ToSemDTConverter[geometry_msgs.PoseStamped, Pose3D]
 ):
     @classmethod
-    def convert(cls, data: geometry_msgs.PoseStamped, world: World) -> Pose:
-        result = Pose.from_xyz_quaternion(
+    def convert(cls, data: geometry_msgs.PoseStamped, world: World) -> Pose3D:
+        result = Pose3D.from_xyz_quaternion(
             pos_x=data.pose.position.x,
             pos_y=data.pose.position.y,
             pos_z=data.pose.position.z,
@@ -87,10 +87,10 @@ class PoseStampedToSemDTConverter(
 
 
 @dataclass
-class PoseToSemDTConverter(Ros2ToSemDTConverter[geometry_msgs.Pose, Pose]):
+class PoseToSemDTConverter(Ros2ToSemDTConverter[geometry_msgs.Pose, Pose3D]):
     @classmethod
-    def convert(cls, data: geometry_msgs.Pose, world: World) -> Pose:
-        result = Pose.from_xyz_quaternion(
+    def convert(cls, data: geometry_msgs.Pose, world: World) -> Pose3D:
+        result = Pose3D.from_xyz_quaternion(
             pos_x=data.position.x,
             pos_y=data.position.y,
             pos_z=data.position.z,
@@ -122,11 +122,11 @@ class PointStampedToSemDTConverter(
 
 @dataclass
 class Vector3StampedToSemDTConverter(
-    Ros2ToSemDTConverter[geometry_msgs.Vector3Stamped, Vector3]
+    Ros2ToSemDTConverter[geometry_msgs.Vector3Stamped, Vector3D]
 ):
     @classmethod
-    def convert(cls, data: geometry_msgs.Vector3Stamped, world: World) -> Vector3:
-        result = Vector3(
+    def convert(cls, data: geometry_msgs.Vector3Stamped, world: World) -> Vector3D:
+        result = Vector3D(
             data.vector.x,
             data.vector.y,
             data.vector.z,

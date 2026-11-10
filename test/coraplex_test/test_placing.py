@@ -9,7 +9,7 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
 from semantic_digital_twin.robots.robot_parts import Arm
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
-from krrood_spatial_math.spatial_types import Pose
+from krrood_spatial_math.spatial_types import Pose3D
 
 from ..conftest import SAMPLING_SEED
 from .conftest import expand
@@ -68,7 +68,9 @@ def test_a_place_puts_the_held_object_on_the_target_however_it_is_held(
     actually holds it at.
     """
     world, robot, milk, extensions = pr2_holding_milk
-    target = Pose.from_xyz_rpy(1.2, 0.4, 0.9, yaw=np.pi / 4, reference_frame=world.root)
+    target = Pose3D.from_xyz_rpy(
+        1.2, 0.4, 0.9, yaw=np.pi / 4, reference_frame=world.root
+    )
     place = PlaceAction(object_designator=milk, target_location=target)
     expand(Sequence(nodes=[place]), extensions)
 
@@ -91,7 +93,7 @@ def test_a_place_runs_the_grasp_backwards(pr2_holding_milk):
     and leaves the way a pick-up would approach it.
     """
     world, robot, milk, extensions = pr2_holding_milk
-    target = Pose.from_xyz_rpy(1.2, 0.4, 0.9, reference_frame=world.root)
+    target = Pose3D.from_xyz_rpy(1.2, 0.4, 0.9, reference_frame=world.root)
     place = PlaceAction(object_designator=milk, target_location=target)
     expand(Sequence(nodes=[place]), extensions)
     grasp = place._grasp_on_the_held_object()
@@ -122,7 +124,7 @@ def test_place_uses_the_grasp_its_pick_up_will_take(pr2_apartment_context):
     """
     world, robot, extensions = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
-    target = Pose.from_xyz_rpy(1.2, 0.4, 0.9, reference_frame=world.root)
+    target = Pose3D.from_xyz_rpy(1.2, 0.4, 0.9, reference_frame=world.root)
 
     pick_up = PickUpAction(grasp=milk.grasp_candidates()[0], arm=robot.left_arm)
     place = PlaceAction(object_designator=milk, target_location=target)
@@ -141,7 +143,7 @@ def test_a_place_of_an_object_nothing_holds_is_refused(pr2_apartment_context):
     """
     world, robot, extensions = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
-    target = Pose.from_xyz_rpy(1.2, 0.4, 0.9, reference_frame=world.root)
+    target = Pose3D.from_xyz_rpy(1.2, 0.4, 0.9, reference_frame=world.root)
 
     place = PlaceAction(object_designator=milk, target_location=target)
 
@@ -162,7 +164,7 @@ def _arms_moved_by(place: PlaceAction, robot) -> set[Arm]:
 
 def test_place_takes_the_arm_that_holds_the_object(pr2_holding_milk):
     world, robot, milk, extensions = pr2_holding_milk
-    target = Pose.from_xyz_rpy(1.2, 0.4, 0.9, reference_frame=world.root)
+    target = Pose3D.from_xyz_rpy(1.2, 0.4, 0.9, reference_frame=world.root)
     place = PlaceAction(object_designator=milk, target_location=target)
     expand(Sequence(nodes=[place]), extensions)
 
@@ -176,7 +178,7 @@ def test_place_takes_the_arm_its_pick_up_will_use(pr2_apartment_context):
     """
     world, robot, extensions = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
-    target = Pose.from_xyz_rpy(1.2, 0.4, 0.9, reference_frame=world.root)
+    target = Pose3D.from_xyz_rpy(1.2, 0.4, 0.9, reference_frame=world.root)
     pick_up = PickUpAction(grasp=milk.grasp_candidates()[0], arm=robot.right_arm)
     place = PlaceAction(object_designator=milk, target_location=target)
     expand(Sequence(nodes=[pick_up, place]), extensions)

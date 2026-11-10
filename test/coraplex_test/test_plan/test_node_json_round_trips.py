@@ -81,12 +81,12 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Tool,
     Whisk,
 )
-from krrood_spatial_math.spatial_types import Pose, Pose2D
+from krrood_spatial_math.spatial_types import Pose3D, Pose2D
 from semantic_digital_twin.world import World
 from semantic_digital_twin.specifications.connections import (
     PrismaticConnectionSpecification,
 )
-from krrood_spatial_math.spatial_types import Vector3
+from krrood_spatial_math.spatial_types import Vector3D
 from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedomLimits,
 )
@@ -139,8 +139,8 @@ def _milk(world: World) -> Milk:
     return world.get_semantic_annotations_by_type(Milk)[0]
 
 
-def _pose(world: World) -> Pose:
-    return Pose.from_xyz_rpy(x=1.5, y=2.0, z=0.9, reference_frame=world.root)
+def _pose(world: World) -> Pose3D:
+    return Pose3D.from_xyz_rpy(x=1.5, y=2.0, z=0.9, reference_frame=world.root)
 
 
 def _handle(world: World) -> Handle:
@@ -228,7 +228,7 @@ def _elevator_navigation(world: World) -> list[StatechartNode]:
             world=world,
             scale=Scale(2, 2, 2),
             parent_connection_specification=PrismaticConnectionSpecification(
-                axis=Vector3.Z(),
+                axis=Vector3D.Z(),
                 dof_limits=DegreeOfFreedomLimits.from_position_range_and_speed(
                     maximum_speed=1.0
                 ),
@@ -239,7 +239,7 @@ def _elevator_navigation(world: World) -> list[StatechartNode]:
             world=world,
             scale=Scale(0.05, 1, 2),
             parent_connection_specification=PrismaticConnectionSpecification(
-                axis=Vector3.Y(),
+                axis=Vector3D.Y(),
                 dof_limits=DegreeOfFreedomLimits.from_position_range_and_speed(
                     lower_position=0.0, upper_position=1.0
                 ),

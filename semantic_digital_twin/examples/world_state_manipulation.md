@@ -36,7 +36,7 @@ from semantic_digital_twin.specifications.connections import (
     PrismaticConnectionSpecification,
 )
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Drawer, Handle, Dresser
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3
+from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3D
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import Scale, Box, Color
 from semantic_digital_twin.world_description.world_entity import Body
@@ -54,7 +54,7 @@ with world.modify_world():
         world=world,
         world_root_T_self=HomogeneousTransformationMatrix(),
         parent_connection_specification=PrismaticConnectionSpecification(
-            axis=Vector3.X()
+            axis=Vector3D.X()
         ),
     )
     handle = Handle.create_with_new_body_in_world(

@@ -50,7 +50,7 @@ class _ConstantMatrixParts(ca.SX, Enum):
     The entries a homogeneous matrix always holds, whatever it represents.
 
     Assigned as whole rows and columns rather than element by element, because
-    :meth:`SpatialType._verify_type` runs on every intermediate product and each casadi
+    :meth:`SymbolicSpatialType._verify_type` runs on every intermediate product and each casadi
     element write costs about as much as the whole slice.
     """
 
@@ -81,7 +81,7 @@ class SpatialFrameKey(StrEnum):
 
 
 @dataclass(eq=False, repr=False)
-class SpatialType(ABC):
+class SymbolicSpatialType(ABC):
     """
     A symbolic matrix of spatial mathematics, given relative to a
     :class:`~krrood_spatial_math.cartesian_frame_3d.CartesianFrame3D`: a value given in
@@ -194,7 +194,7 @@ class SpatialType(ABC):
 
     @staticmethod
     def _ensure_consistent_frame(
-        spatial_objects: list[SpatialType | None],
+        spatial_objects: list[SymbolicSpatialType | None],
     ) -> CartesianFrame3D | None:
         """
         Ensures that all provided spatial objects have a consistent reference frame.
@@ -263,10 +263,10 @@ class SpatialType(ABC):
 
 
 @dataclass(eq=False, repr=False)
-class SpatialChange(SpatialType, ABC):
+class SpatialChange(SymbolicSpatialType, ABC):
     """
     A spatial type that changes coordinates given in its :attr:`child_frame` into its
-    :attr:`~SpatialType.reference_frame`.
+    :attr:`~SymbolicSpatialType.reference_frame`.
     """
 
     child_frame: CartesianFrame3D | None = field(kw_only=True, default=None)
@@ -310,7 +310,7 @@ class HomogeneousTransformationMatrix(
 
     It is only a change of coordinates from its :attr:`child_frame` into its
     :attr:`reference_frame`, never a value given in a frame: the value it corresponds to
-    is a :class:`Pose`.
+    is a :class:`Pose3D`.
 
     .. warning::
         The matrix must be rigid: its upper left 3x3 block a rotation and its last row
@@ -331,7 +331,7 @@ class HomogeneousTransformationMatrix(
         self.child_frame = child_frame
         if data is None:
             self._casadi_sx = ca.SX.eye(4)
-        elif isinstance(data, SpatialType):
+        elif isinstance(data, SymbolicSpatialType):
             # create a copy if data is a spatial type, because they are often still being used
             self.casadi_sx = copy(data.casadi_sx)
         else:
@@ -520,7 +520,7 @@ class HomogeneousTransformationMatrix(
         x: sm.ScalarData = 0,
         y: sm.ScalarData = 0,
         z: sm.ScalarData = 0,
-        axis: Vector3 | sm.NumericalVector = None,
+        axis: Vector3D | sm.NumericalVector = None,
         angle: sm.ScalarData = 0,
         reference_frame: CartesianFrame3D | None = None,
         child_frame: CartesianFrame3D | None = None,
@@ -535,7 +535,7 @@ class HomogeneousTransformationMatrix(
         :param x: Initial x-coordinate.
         :param y: Initial y-coordinate.
         :param z: Initial z-coordinate.
-        :param axis: Vector defining the axis of rotation. Defaults to Vector3(0, 0, 1)
+        :param axis: Vector defining the axis of rotation. Defaults to Vector3D(0, 0, 1)
             if not specified.
         :param angle: Angle of rotation around the specified axis, in radians.
         :param reference_frame: Reference frame entity to be associated with the object.
@@ -543,9 +543,9 @@ class HomogeneousTransformationMatrix(
         :return: An instance of the class with the specified transformations applied.
         """
         if axis is None:
-            axis = Vector3(0, 0, 1)
-        elif not isinstance(axis, Vector3):
-            axis = Vector3.from_iterable(axis)
+            axis = Vector3D(0, 0, 1)
+        elif not isinstance(axis, Vector3D):
+            axis = Vector3D.from_iterable(axis)
         rotation_matrix = RotationMatrix.from_axis_angle(
             AxisAngle(axis=axis, angle=angle)
         )
@@ -603,11 +603,11 @@ class HomogeneousTransformationMatrix(
         if isinstance(
             other,
             (
-                Vector3,
+                Vector3D,
                 CartesianPoint3D,
                 RotationMatrix,
                 HomogeneousTransformationMatrix,
-                Pose,
+                Pose3D,
             ),
         ):
             result_sx = ca.mtimes(self.casadi_sx, other.casadi_sx)
@@ -678,11 +678,11 @@ class HomogeneousTransformationMatrix(
         return RotationMatrix(data=self, reference_frame=self.reference_frame)
 
     @property
-    def pose(self) -> Pose:
+    def pose(self) -> Pose3D:
         """
         :return: The pose this transformation moves its reference frame to.
         """
-        result = Pose.from_casadi_sx(casadi_sx=copy(self.casadi_sx))
+        result = Pose3D.from_casadi_sx(casadi_sx=copy(self.casadi_sx))
         result.reference_frame = self.reference_frame
         return result
 
@@ -714,7 +714,10 @@ class HomogeneousTransformationMatrix(
 
 @dataclass(eq=False, init=False, repr=False)
 class RotationMatrix(
-    sm.SymbolicMathType, SpatialType, ValueInCartesianFrame3D, SubclassJSONSerializer
+    sm.SymbolicMathType,
+    SymbolicSpatialType,
+    ValueInCartesianFrame3D,
+    SubclassJSONSerializer,
 ):
     """
     Class to represent a 4x4 symbolic rotation matrix tied to kinematic references.
@@ -867,24 +870,24 @@ class RotationMatrix(
             reference_frame=quaternion.reference_frame,
         )
 
-    def x_vector(self) -> Vector3:
-        return Vector3(
+    def x_vector(self) -> Vector3D:
+        return Vector3D(
             x=self[0, 0],
             y=self[1, 0],
             z=self[2, 0],
             reference_frame=self.reference_frame,
         )
 
-    def y_vector(self) -> Vector3:
-        return Vector3(
+    def y_vector(self) -> Vector3D:
+        return Vector3D(
             x=self[0, 1],
             y=self[1, 1],
             z=self[2, 1],
             reference_frame=self.reference_frame,
         )
 
-    def z_vector(self) -> Vector3:
-        return Vector3(
+    def z_vector(self) -> Vector3D:
+        return Vector3D(
             x=self[0, 2],
             y=self[1, 2],
             z=self[2, 2],
@@ -908,7 +911,7 @@ class RotationMatrix(
             result.reference_frame = self.reference_frame
             return result
         if isinstance(
-            other, (Vector3, RotationMatrix, HomogeneousTransformationMatrix, Pose)
+            other, (Vector3D, RotationMatrix, HomogeneousTransformationMatrix, Pose3D)
         ):
             result_sx = ca.mtimes(self.casadi_sx, other.casadi_sx)
             result = type(other).from_casadi_sx(casadi_sx=result_sx)
@@ -945,9 +948,9 @@ class RotationMatrix(
     @classmethod
     def from_vectors(
         cls,
-        x: Vector3 | None = None,
-        y: Vector3 | None = None,
-        z: Vector3 | None = None,
+        x: Vector3D | None = None,
+        y: Vector3D | None = None,
+        z: Vector3D | None = None,
         reference_frame: CartesianFrame3D | None = None,
     ) -> RotationMatrix:
         """
@@ -986,7 +989,7 @@ class RotationMatrix(
     @classmethod
     def from_x_axis(
         cls,
-        x_vector: Vector3,
+        x_vector: Vector3D,
         reference_frame: CartesianFrame3D | None = None,
     ) -> RotationMatrix:
         """
@@ -1001,9 +1004,9 @@ class RotationMatrix(
         # Crossing a direction with a world axis degenerates when the two are parallel, so
         # pick whichever of the X/Y axes yields the better-conditioned (longer) cross
         # product.
-        frame_V_cross_x = x_vector.cross(Vector3.X())
-        frame_V_cross_y = x_vector.cross(Vector3.Y())
-        y = Vector3.from_iterable(
+        frame_V_cross_x = x_vector.cross(Vector3D.X())
+        frame_V_cross_y = x_vector.cross(Vector3D.Y())
+        y = Vector3D.from_iterable(
             [
                 sm.if_greater(
                     frame_V_cross_x.norm(),
@@ -1160,7 +1163,7 @@ class XYPlane2D(EuclideanSpace2D):
             CartesianPoint3D(reference_frame=other.frame_3d)
         )
         other_z_axis = self.frame_3d.express_in_own_frame(
-            Vector3.Z(reference_frame=other.frame_3d)
+            Vector3D.Z(reference_frame=other.frame_3d)
         )
         return bool(
             np.isclose(other_origin.z.to_np(), 0).all()
@@ -1228,7 +1231,7 @@ class ValueOnXYPlane2D(CoordinateRepresentation[CartesianFrame2D], Mixin):
 @dataclass(eq=False, init=False, repr=False)
 class CartesianPoint3D(
     sm.SymbolicMathType,
-    SpatialType,
+    SymbolicSpatialType,
     ValueInCartesianFrame3D,
     SubclassJSONSerializer,
     AffinePoint3D[CartesianFrame3D, sm.Scalar],
@@ -1298,7 +1301,7 @@ class CartesianPoint3D(
         :return: Returns an instance of CartesianPoint3D initialized with the processed data and
             an optional reference frame.
         """
-        if isinstance(data, SpatialType) and reference_frame is None:
+        if isinstance(data, SymbolicSpatialType) and reference_frame is None:
             reference_frame = data.reference_frame
         result = cls.from_casadi_sx(copy(sm.to_sx(data)))
         result.reference_frame = reference_frame
@@ -1319,11 +1322,11 @@ class CartesianPoint3D(
         cls, name: str, resolver: Callable[[], list[float] | np.ndarray] | None = None
     ) -> Self:
         """
-        Creates a Vector3 object with float variables in all relevant entries.
+        Creates a Vector3D object with float variables in all relevant entries.
 
         :param name: Name for the variables.
         :param resolver: Callable that returns the actual vector when called.
-        :return: Vector3 object with float variables.
+        :return: Vector3D object with float variables.
         """
         x = sm.FloatVariable(name=f"{name}.x")
         y = sm.FloatVariable(name=f"{name}.y")
@@ -1372,8 +1375,8 @@ class CartesianPoint3D(
     def z(self, value: sm.ScalarData):
         self[2] = value
 
-    def __add__(self, other: Vector3) -> CartesianPoint3D:
-        if isinstance(other, Vector3):
+    def __add__(self, other: Vector3D) -> CartesianPoint3D:
+        if isinstance(other, Vector3D):
             result = CartesianPoint3D.from_casadi_sx(
                 ca.SX.binary(ca.OP_ADD, self.casadi_sx, other.casadi_sx)
             )
@@ -1383,17 +1386,17 @@ class CartesianPoint3D(
         return result
 
     @overload
-    def __sub__(self, other: CartesianPoint3D) -> Vector3: ...
+    def __sub__(self, other: CartesianPoint3D) -> Vector3D: ...
 
     @overload
-    def __sub__(self, other: Vector3) -> CartesianPoint3D: ...
+    def __sub__(self, other: Vector3D) -> CartesianPoint3D: ...
 
     def __sub__(self, other):
         if isinstance(other, CartesianPoint3D):
-            result = Vector3.from_casadi_sx(
+            result = Vector3D.from_casadi_sx(
                 ca.SX.binary(ca.OP_SUB, self.casadi_sx, other.casadi_sx)
             )
-        elif isinstance(other, Vector3):
+        elif isinstance(other, Vector3D):
             result = CartesianPoint3D.from_casadi_sx(
                 ca.SX.binary(ca.OP_SUB, self.casadi_sx, other.casadi_sx)
             )
@@ -1408,7 +1411,7 @@ class CartesianPoint3D(
         return result
 
     def project_to_plane(
-        self, frame_V_plane_vector1: Vector3, frame_V_plane_vector2: Vector3
+        self, frame_V_plane_vector1: Vector3D, frame_V_plane_vector2: Vector3D
     ) -> tuple[CartesianPoint3D, sm.Scalar]:
         """
         Projects a point onto a plane defined by two vectors.
@@ -1425,12 +1428,12 @@ class CartesianPoint3D(
         normal.scale(1)
         frame_V_current = self.vector3
         d = normal @ frame_V_current
-        v: Vector3 = normal * d
+        v: Vector3D = normal * d
         projection = self - v
         return projection, d
 
     def project_to_line(
-        self, line_point: CartesianPoint3D, line_direction: Vector3
+        self, line_point: CartesianPoint3D, line_direction: Vector3D
     ) -> tuple[CartesianPoint3D, sm.Scalar]:
         """
         :param line_point: a point that the line intersects, must have the same reference frame as self
@@ -1480,11 +1483,11 @@ class CartesianPoint3D(
         return self + (other - self) / 2
 
     @property
-    def vector3(self) -> Vector3:
+    def vector3(self) -> Vector3D:
         """
         :return: The vector from the origin of the reference frame to this point.
         """
-        result = Vector3.from_casadi_sx(copy(self.casadi_sx))
+        result = Vector3D.from_casadi_sx(copy(self.casadi_sx))
         result.reference_frame = self.reference_frame
         return result
 
@@ -1502,7 +1505,7 @@ class CartesianPoint3D(
 @dataclass(eq=False, init=False, repr=False)
 class CartesianPoint2D(
     sm.SymbolicMathType,
-    SpatialType,
+    SymbolicSpatialType,
     ValueOnXYPlane2D,
     SubclassJSONSerializer,
     AffinePoint2D[CartesianFrame2D, sm.Scalar],
@@ -1576,7 +1579,7 @@ class CartesianPoint2D(
     @classmethod
     def from_pose(
         cls,
-        pose: Pose,
+        pose: Pose3D,
         plane_frame: CartesianFrame3D | None = None,
     ) -> CartesianPoint2D:
         """
@@ -1644,7 +1647,7 @@ class CartesianPoint2D(
 
 
 @dataclass(eq=False)
-class Line3:
+class Line3D:
     """
     An infinite straight line in 3D space.
     """
@@ -1654,14 +1657,14 @@ class Line3:
     A point the line passes through.
     """
 
-    direction: Vector3
+    direction: Vector3D
     """
     The direction the line runs in, in the same reference frame as :attr:`point`.
     """
 
 
 @dataclass(eq=False)
-class LineSegment3:
+class LineSegment3D:
     """
     A straight line in 3D space between two points.
     """
@@ -1677,7 +1680,7 @@ class LineSegment3:
     """
 
     @property
-    def direction(self) -> Vector3:
+    def direction(self) -> Vector3D:
         """
         :return: The unit vector from :attr:`start` towards :attr:`end`.
         """
@@ -1746,7 +1749,7 @@ class OrthogonalProjection:
             point.x, point.y, height, reference_frame=self.plane_frame
         )
 
-    def projection_line(self, point: CartesianPoint2D) -> Line3:
+    def projection_line(self, point: CartesianPoint2D) -> Line3D:
         """
         The vertical line through ``point`` along which :meth:`project` maps every point
         onto ``point``.
@@ -1754,15 +1757,18 @@ class OrthogonalProjection:
         :param point: A point on the x-y plane of :attr:`plane_frame`.
         :return: The line of every 3D point that projects onto ``point``.
         """
-        return Line3(
+        return Line3D(
             point=self.unproject(point),
-            direction=Vector3.Z(reference_frame=self.plane_frame),
+            direction=Vector3D.Z(reference_frame=self.plane_frame),
         )
 
 
 @dataclass(eq=False, init=False, repr=False)
-class Vector3(
-    sm.SymbolicMathType, SpatialType, ValueInCartesianFrame3D, SubclassJSONSerializer
+class Vector3D(
+    sm.SymbolicMathType,
+    SymbolicSpatialType,
+    ValueInCartesianFrame3D,
+    SubclassJSONSerializer,
 ):
     """
     Representation of a 3D vector with reference frame support for homogenous
@@ -1833,28 +1839,28 @@ class Vector3(
         cls,
         data: sm.VectorData,
         reference_frame: CartesianFrame3D | None = None,
-    ) -> Vector3:
+    ) -> Vector3D:
         """
-        Creates an instance of Vector3 from provided iterable data.
+        Creates an instance of Vector3D from provided iterable data.
 
-        This class method is used to construct a Vector3 object by processing the given
+        This class method is used to construct a Vector3D object by processing the given
         data and optionally assigning a reference frame. The data can represent
-        different array-like objects compatible with the desired format for a Vector3
+        different array-like objects compatible with the desired format for a Vector3D
         instance. The provided iterable or array should follow a 1D structure to avoid
         raised errors.
 
         :param data: The array-like data or object such as a list, tuple, or numpy array
-            used to initialize the Vector3 instance.
+            used to initialize the Vector3D instance.
         :param reference_frame: A reference to a `CartesianFrame3D` object,
-            representing the frame of reference for the Vector3 instance. If the data
+            representing the frame of reference for the Vector3D instance. If the data
             has a `reference_frame` attribute, and this parameter is not specified, it
             will be taken from the data.
-        :return: Returns an instance of Vector3 initialized with the processed data and
+        :return: Returns an instance of Vector3D initialized with the processed data and
             an optional reference frame.
         """
-        if isinstance(data, SpatialType) and reference_frame is None:
+        if isinstance(data, SymbolicSpatialType) and reference_frame is None:
             reference_frame = data.reference_frame
-        if isinstance(data, Vector3) and reference_frame is None:
+        if isinstance(data, Vector3D) and reference_frame is None:
             visualisation_frame = data.visualisation_frame
         else:
             visualisation_frame = None
@@ -1864,27 +1870,27 @@ class Vector3(
         return result
 
     @classmethod
-    def X(cls, reference_frame: CartesianFrame3D | None = None) -> Vector3:
+    def X(cls, reference_frame: CartesianFrame3D | None = None) -> Vector3D:
         return cls(x=1, y=0, z=0, reference_frame=reference_frame)
 
     @classmethod
-    def Y(cls, reference_frame: CartesianFrame3D | None = None) -> Vector3:
+    def Y(cls, reference_frame: CartesianFrame3D | None = None) -> Vector3D:
         return cls(x=0, y=1, z=0, reference_frame=reference_frame)
 
     @classmethod
-    def Z(cls, reference_frame: CartesianFrame3D | None = None) -> Vector3:
+    def Z(cls, reference_frame: CartesianFrame3D | None = None) -> Vector3D:
         return cls(x=0, y=0, z=1, reference_frame=reference_frame)
 
     @classmethod
-    def NEGATIVE_X(cls, reference_frame: CartesianFrame3D | None = None) -> Vector3:
+    def NEGATIVE_X(cls, reference_frame: CartesianFrame3D | None = None) -> Vector3D:
         return cls(x=-1, y=0, z=0, reference_frame=reference_frame)
 
     @classmethod
-    def NEGATIVE_Y(cls, reference_frame: CartesianFrame3D | None = None) -> Vector3:
+    def NEGATIVE_Y(cls, reference_frame: CartesianFrame3D | None = None) -> Vector3D:
         return cls(x=0, y=-1, z=0, reference_frame=reference_frame)
 
     @classmethod
-    def NEGATIVE_Z(cls, reference_frame: CartesianFrame3D | None = None) -> Vector3:
+    def NEGATIVE_Z(cls, reference_frame: CartesianFrame3D | None = None) -> Vector3D:
         return cls(x=0, y=0, z=-1, reference_frame=reference_frame)
 
     @classmethod
@@ -1894,7 +1900,7 @@ class Vector3(
         y: sm.ScalarData = 0,
         z: sm.ScalarData = 0,
         reference_frame: CartesianFrame3D | None = None,
-    ) -> Vector3:
+    ) -> Vector3D:
         v = cls(x=x, y=y, z=z, reference_frame=reference_frame)
         v.scale(1, unsafe=True)
         return v
@@ -1904,11 +1910,11 @@ class Vector3(
         cls, name: str, resolver: Callable[[], list[float] | np.ndarray] | None = None
     ) -> Self:
         """
-        Creates a Vector3 object with float variables in all relevant entries.
+        Creates a Vector3D object with float variables in all relevant entries.
 
         :param name: Name for the variables.
         :param resolver: Callable that returns the actual vector when called.
-        :return: Vector3 object with float variables.
+        :return: Vector3D object with float variables.
         """
         x = sm.FloatVariable(name=f"{name}.x")
         y = sm.FloatVariable(name=f"{name}.y")
@@ -1949,9 +1955,9 @@ class Vector3(
     def z(self, value: sm.ScalarData):
         self[2] = value
 
-    def __add__(self, other: Vector3) -> Vector3:
-        if isinstance(other, Vector3):
-            result = Vector3.from_casadi_sx(
+    def __add__(self, other: Vector3D) -> Vector3D:
+        if isinstance(other, Vector3D):
+            result = Vector3D.from_casadi_sx(
                 ca.SX.binary(ca.OP_ADD, self.casadi_sx, other.casadi_sx)
             )
         else:
@@ -1959,9 +1965,9 @@ class Vector3(
         result.reference_frame = self.reference_frame
         return result
 
-    def __sub__(self, other: Vector3) -> Vector3:
-        if isinstance(other, Vector3):
-            result = Vector3.from_casadi_sx(
+    def __sub__(self, other: Vector3D) -> Vector3D:
+        if isinstance(other, Vector3D):
+            result = Vector3D.from_casadi_sx(
                 ca.SX.binary(ca.OP_SUB, self.casadi_sx, other.casadi_sx)
             )
         else:
@@ -1969,9 +1975,9 @@ class Vector3(
         result.reference_frame = self.reference_frame
         return result
 
-    def __mul__(self, other: sm.ScalarData) -> Vector3:
+    def __mul__(self, other: sm.ScalarData) -> Vector3D:
         if isinstance(other, sm.ScalarData):
-            result = Vector3.from_casadi_sx(
+            result = Vector3D.from_casadi_sx(
                 ca.SX.binary(ca.OP_MUL, self.casadi_sx, sm.to_sx(other))
             )
         else:
@@ -1979,9 +1985,9 @@ class Vector3(
         result.reference_frame = self.reference_frame
         return result
 
-    def __rmul__(self, other: float) -> Vector3:
+    def __rmul__(self, other: float) -> Vector3D:
         if isinstance(other, (int, float)):
-            result = Vector3.from_casadi_sx(
+            result = Vector3D.from_casadi_sx(
                 ca.SX.binary(ca.OP_MUL, self.casadi_sx, sm.to_sx(other))
             )
         else:
@@ -1989,9 +1995,9 @@ class Vector3(
         result.reference_frame = self.reference_frame
         return result
 
-    def __truediv__(self, other: sm.ScalarData) -> Vector3:
+    def __truediv__(self, other: sm.ScalarData) -> Vector3D:
         if isinstance(other, sm.ScalarData):
-            result = Vector3.from_casadi_sx(
+            result = Vector3D.from_casadi_sx(
                 ca.SX.binary(ca.OP_DIV, self.casadi_sx, sm.to_sx(other))
             )
         else:
@@ -2002,7 +2008,7 @@ class Vector3(
     def safe_division(
         self,
         other: sm.ScalarData,
-        if_nan: Vector3 | None = None,
+        if_nan: Vector3D | None = None,
     ) -> sm.GenericSymbolicType:
         """
         A version of division where no sub-expression is ever NaN.
@@ -2013,7 +2019,7 @@ class Vector3(
         is not returned. This method is a workaround for such cases.
         """
         if if_nan is None:
-            if_nan = Vector3()
+            if_nan = Vector3D()
         save_denominator = sm.if_eq_zero(
             condition=other, if_result=sm.Scalar(1), else_result=other
         )
@@ -2021,22 +2027,22 @@ class Vector3(
             other, if_result=if_nan, else_result=self / save_denominator
         )
 
-    def __neg__(self) -> Vector3:
-        result = Vector3.from_casadi_sx(ca.SX.unary(ca.OP_NEG, self.casadi_sx))
+    def __neg__(self) -> Vector3D:
+        result = Vector3D.from_casadi_sx(ca.SX.unary(ca.OP_NEG, self.casadi_sx))
         result.reference_frame = self.reference_frame
         return result
 
-    def dot(self, other: Vector3) -> sm.Scalar:
-        if isinstance(other, Vector3):
+    def dot(self, other: Vector3D) -> sm.Scalar:
+        if isinstance(other, Vector3D):
             return sm.Scalar.from_casadi_sx(
                 ca.mtimes(self.casadi_sx[:3].T, other.casadi_sx[:3])
             )
         raise UnsupportedOperationError("dot", self, other)
 
-    def __matmul__(self, other: Vector3) -> sm.Scalar:
+    def __matmul__(self, other: Vector3D) -> sm.Scalar:
         return self.dot(other)
 
-    def cross(self, other: Vector3) -> Vector3:
+    def cross(self, other: Vector3D) -> Vector3D:
         result = ca.cross(self.casadi_sx[:3], other.casadi_sx[:3])
         result = self.__class__.from_iterable(result)
         result.reference_frame = self.reference_frame
@@ -2053,9 +2059,9 @@ class Vector3(
 
     def project_to_cone(
         self,
-        frame_V_cone_axis: Vector3,
+        frame_V_cone_axis: Vector3D,
         cone_theta: sm.ScalarData,
-    ) -> Vector3:
+    ) -> Vector3D:
         """
         Projects a given vector onto the boundary of a cone defined by its axis and
         angle.
@@ -2101,7 +2107,7 @@ class Vector3(
             else_result=project_on_cone_boundary,
         )
 
-    def angle_between(self, other: Vector3) -> sm.Scalar:
+    def angle_between(self, other: Vector3D) -> sm.Scalar:
         return sm.acos(
             sm.limit(
                 self @ other / (self.norm() * other.norm()),
@@ -2110,7 +2116,7 @@ class Vector3(
             )
         )
 
-    def slerp(self, other: Vector3, t: sm.ScalarData) -> Vector3:
+    def slerp(self, other: Vector3D, t: sm.ScalarData) -> Vector3D:
         """
         spherical linear interpolation
         :param other: vector of same length as self
@@ -2138,7 +2144,10 @@ class Vector3(
 
 @dataclass(eq=False, init=False, repr=False)
 class Quaternion(
-    sm.SymbolicMathType, SpatialType, ValueInCartesianFrame3D, SubclassJSONSerializer
+    sm.SymbolicMathType,
+    SymbolicSpatialType,
+    ValueInCartesianFrame3D,
+    SubclassJSONSerializer,
 ):
     """
     Represents a quaternion, which is a mathematical entity used to encode rotations in
@@ -2489,7 +2498,10 @@ class Quaternion(
 
 @dataclass(eq=False, init=False, repr=False)
 class AxisAngle(
-    sm.SymbolicMathType, SpatialType, ValueInCartesianFrame3D, SubclassJSONSerializer
+    sm.SymbolicMathType,
+    SymbolicSpatialType,
+    ValueInCartesianFrame3D,
+    SubclassJSONSerializer,
 ):
     """
     A rotation by an angle around a unit axis.
@@ -2497,7 +2509,7 @@ class AxisAngle(
 
     def __init__(
         self,
-        axis: Vector3 | None = None,
+        axis: Vector3D | None = None,
         angle: sm.ScalarData = 0,
         reference_frame: CartesianFrame3D | None = None,
     ):
@@ -2507,7 +2519,7 @@ class AxisAngle(
         :param reference_frame: The frame the axis is expressed in.
         """
         if axis is None:
-            axis = Vector3.Z()
+            axis = Vector3D.Z()
         self.casadi_sx = sm.to_sx([axis.x, axis.y, axis.z, angle])
         self.reference_frame = reference_frame
         super().__post_init__()
@@ -2524,7 +2536,7 @@ class AxisAngle(
             data, frame=SpatialFrameKey.REFERENCE, **kwargs
         )
         return cls(
-            axis=Vector3(*data["axis"]),
+            axis=Vector3D(*data["axis"]),
             angle=data["angle"],
             reference_frame=reference_frame,
         )
@@ -2556,7 +2568,7 @@ class AxisAngle(
         y = sm.if_eq_zero(sine_of_half_angle, sm.Scalar(0), quaternion.y / divisor)
         z = sm.if_eq_zero(sine_of_half_angle, sm.Scalar(1), quaternion.z / divisor)
         return cls(
-            axis=Vector3(x=x, y=y, z=z),
+            axis=Vector3D(x=x, y=y, z=z),
             angle=angle,
             reference_frame=quaternion.reference_frame,
         )
@@ -2581,7 +2593,7 @@ class AxisAngle(
         )
 
         # 2 sin(angle) times the axis, which vanishes at half a turn
-        scaled_axis = Vector3(
+        scaled_axis = Vector3D(
             x=rotation[2, 1] - rotation[1, 2],
             y=rotation[0, 2] - rotation[2, 0],
             z=rotation[1, 0] - rotation[0, 1],
@@ -2589,7 +2601,7 @@ class AxisAngle(
         scaled_axis_length = scaled_axis.norm()
         axis_within_quarter_turn = sm.if_eq_zero(
             scaled_axis_length,
-            Vector3.Z(),
+            Vector3D.Z(),
             scaled_axis / sm.if_eq_zero(scaled_axis_length, 1, scaled_axis_length),
         )
 
@@ -2597,7 +2609,7 @@ class AxisAngle(
         # turn; its column with the largest diagonal entry is the axis up to its sign
         axis_outer_product = (rotation + rotation.T) / 2 - sm.Matrix.eye(3) * cosine
         columns = [
-            Vector3(*(axis_outer_product[row, column] for row in range(3)))
+            Vector3D(*(axis_outer_product[row, column] for row in range(3)))
             for column in range(3)
         ]
         largest_column = sm.if_greater(
@@ -2619,11 +2631,11 @@ class AxisAngle(
         )
 
     @property
-    def axis(self) -> Vector3:
+    def axis(self) -> Vector3D:
         """
         :return: The unit axis this rotation turns around.
         """
-        return Vector3(
+        return Vector3D(
             x=self[0], y=self[1], z=self[2], reference_frame=self.reference_frame
         )
 
@@ -2651,7 +2663,10 @@ class AxisAngle(
 
 @dataclass(eq=False, init=False, repr=False)
 class Twist(
-    sm.SymbolicMathType, SpatialType, ValueInCartesianFrame3D, SubclassJSONSerializer
+    sm.SymbolicMathType,
+    SymbolicSpatialType,
+    ValueInCartesianFrame3D,
+    SubclassJSONSerializer,
 ):
     """
     How a rigid body moved: a translation and a rotation vector, both along the axes of
@@ -2660,8 +2675,8 @@ class Twist(
 
     def __init__(
         self,
-        translation: Vector3 | None = None,
-        rotation_vector: Vector3 | None = None,
+        translation: Vector3D | None = None,
+        rotation_vector: Vector3D | None = None,
         reference_frame: CartesianFrame3D | None = None,
     ):
         """
@@ -2672,9 +2687,9 @@ class Twist(
         :param reference_frame: The frame along whose axes the body moved.
         """
         if translation is None:
-            translation = Vector3()
+            translation = Vector3D()
         if rotation_vector is None:
-            rotation_vector = Vector3()
+            rotation_vector = Vector3D()
         self.casadi_sx = sm.to_sx(
             [
                 translation.x,
@@ -2700,8 +2715,8 @@ class Twist(
             data, frame=SpatialFrameKey.REFERENCE, **kwargs
         )
         return cls(
-            translation=Vector3(*data["translation"]),
-            rotation_vector=Vector3(*data["rotation_vector"]),
+            translation=Vector3D(*data["translation"]),
+            rotation_vector=Vector3D(*data["rotation_vector"]),
             reference_frame=reference_frame,
         )
 
@@ -2720,34 +2735,37 @@ class Twist(
         """
         rotation = start_T_end.axis_angle
         return cls(
-            translation=Vector3.from_iterable(start_T_end.position),
+            translation=Vector3D.from_iterable(start_T_end.position),
             rotation_vector=rotation.axis * rotation.angle,
             reference_frame=start_T_end.reference_frame,
         )
 
     @property
-    def translation(self) -> Vector3:
+    def translation(self) -> Vector3D:
         """
         :return: How far and in which direction the body moved, in meters.
         """
-        return Vector3(
+        return Vector3D(
             x=self[0], y=self[1], z=self[2], reference_frame=self.reference_frame
         )
 
     @property
-    def rotation_vector(self) -> Vector3:
+    def rotation_vector(self) -> Vector3D:
         """
         :return: The axis the body turned around, scaled by the angle it turned by in
             radians.
         """
-        return Vector3(
+        return Vector3D(
             x=self[3], y=self[4], z=self[5], reference_frame=self.reference_frame
         )
 
 
 @dataclass(eq=False, init=False, repr=False)
-class Pose(
-    sm.SymbolicMathType, SpatialType, ValueInCartesianFrame3D, SubclassJSONSerializer
+class Pose3D(
+    sm.SymbolicMathType,
+    SymbolicSpatialType,
+    ValueInCartesianFrame3D,
+    SubclassJSONSerializer,
 ):
     def __init__(
         self,
@@ -2816,7 +2834,7 @@ class Pose(
         reference_frame: CartesianFrame3D | None = None,
     ) -> Self:
         """
-        Creates a Pose object from position (x, y, z) and Euler angles (roll, pitch,
+        Creates a Pose3D object from position (x, y, z) and Euler angles (roll, pitch,
         yaw) values. The function also accepts optional reference and child frame
         parameters.
 
@@ -2827,7 +2845,7 @@ class Pose(
         :param pitch: The rotation around the y-axis
         :param yaw: The rotation around the z-axis
         :param reference_frame: The reference frame for the transformation
-        :return: A Pose object created using the provided position and orientation
+        :return: A Pose3D object created using the provided position and orientation
             values
         """
         p = CartesianPoint3D(x=x, y=y, z=z)
@@ -2847,7 +2865,7 @@ class Pose(
         reference_frame: CartesianFrame3D | None = None,
     ) -> Self:
         """
-        Creates a `Pose` instance from the provided position coordinates and quaternion
+        Creates a `Pose3D` instance from the provided position coordinates and quaternion
         values representing rotation. This method constructs a 3D point for the position
         and a rotation matrix derived from the quaternion, and initializes the
         transformation matrix with these along with optional reference and child frame
@@ -2861,7 +2879,7 @@ class Pose(
         :param quat_y: Y component of the quaternion representing rotation.
         :param quat_z: Z component of the quaternion representing rotation.
         :param reference_frame: Optional reference frame for the transformation matrix.
-        :return: A `Pose` object constructed from the given parameters.
+        :return: A `Pose3D` object constructed from the given parameters.
         """
         p = CartesianPoint3D(x=pos_x, y=pos_y, z=pos_z)
         r = Quaternion(w=quat_w, x=quat_x, y=quat_y, z=quat_z)
@@ -2873,7 +2891,7 @@ class Pose(
         x: sm.ScalarData = 0,
         y: sm.ScalarData = 0,
         z: sm.ScalarData = 0,
-        axis: Vector3 | sm.NumericalVector = None,
+        axis: Vector3D | sm.NumericalVector = None,
         angle: sm.ScalarData = 0,
         reference_frame: CartesianFrame3D | None = None,
     ) -> Self:
@@ -2887,16 +2905,16 @@ class Pose(
         :param x: Initial x-coordinate.
         :param y: Initial y-coordinate.
         :param z: Initial z-coordinate.
-        :param axis: Vector defining the axis of rotation. Defaults to Vector3(0, 0, 1)
+        :param axis: Vector defining the axis of rotation. Defaults to Vector3D(0, 0, 1)
             if not specified.
         :param angle: Angle of rotation around the specified axis, in radians.
         :param reference_frame: Reference frame entity to be associated with the object.
         :return: An instance of the class with the specified transformations applied.
         """
         if axis is None:
-            axis = Vector3(0, 0, 1)
-        elif not isinstance(axis, Vector3):
-            axis = Vector3.from_iterable(axis)
+            axis = Vector3D(0, 0, 1)
+        elif not isinstance(axis, Vector3D):
+            axis = Vector3D.from_iterable(axis)
         rotation_matrix = Quaternion.from_axis_angle(AxisAngle(axis=axis, angle=angle))
         point = CartesianPoint3D(x=x, y=y, z=z)
         return cls(
@@ -2992,7 +3010,7 @@ class Pose(
 
 @dataclass(eq=False, init=False, repr=False)
 class Pose2D(
-    sm.SymbolicMathType, SpatialType, ValueOnXYPlane2D, SubclassJSONSerializer
+    sm.SymbolicMathType, SymbolicSpatialType, ValueOnXYPlane2D, SubclassJSONSerializer
 ):
     """
     Represents a 2D pose consisting of an x coordinate, a y coordinate, and a yaw angle.
@@ -3000,7 +3018,7 @@ class Pose2D(
     Internally stored as a 3×1 symbolic vector ``[x, y, yaw]``. It lies on its reference
     frame's x-y plane and has no height or tilt of its own, so it carries no ``z``,
     ``roll`` or ``pitch``. Whenever 3D calculations are required, use :attr:`pose` to
-    obtain the equivalent 3D :class:`Pose`.
+    obtain the equivalent 3D :class:`Pose3D`.
     """
 
     def __init__(
@@ -3057,11 +3075,11 @@ class Pose2D(
     # %% Conversion to 3D
 
     @property
-    def pose(self) -> Pose:
+    def pose(self) -> Pose3D:
         """
-        Convert to a 3D :class:`Pose` with z=0, roll=0, pitch=0.
+        Convert to a 3D :class:`Pose3D` with z=0, roll=0, pitch=0.
         """
-        return Pose.from_xyz_rpy(
+        return Pose3D.from_xyz_rpy(
             x=self.x,
             y=self.y,
             z=0,
@@ -3071,7 +3089,7 @@ class Pose2D(
             reference_frame=self.reference_frame,
         )
 
-    # %% Pose-like interface (delegates to pose)
+    # %% Pose3D-like interface (delegates to pose)
 
     @property
     def position(self) -> CartesianPoint2D:
@@ -3107,11 +3125,11 @@ class Pose2D(
     @classmethod
     def from_pose(
         cls,
-        pose: Pose,
+        pose: Pose3D,
         plane_frame: CartesianFrame3D | None = None,
     ) -> Pose2D:
         """
-        Flatten a 3D Pose onto the x-y plane of a frame: its position is projected onto
+        Flatten a 3D Pose3D onto the x-y plane of a frame: its position is projected onto
         the plane, and it faces the way its x-axis, projected onto the plane, points.
 
         That heading, ``atan2(r21, r11)`` of the pose's rotation matrix, equals the yaw
@@ -3217,7 +3235,7 @@ class HomogeneousTransformationMatrix2D(
     """
     A 3x3 homogeneous matrix of SE(2): the rigid change from the
     :class:`XYPlaneFrame2D` of its :attr:`~SpatialChange.child_frame` into that of its
-    :attr:`~SpatialType.reference_frame`, two frames on one plane.
+    :attr:`~SymbolicSpatialType.reference_frame`, two frames on one plane.
 
     It is only a change of coordinates, never a value given in a frame: the value it
     corresponds to is a :class:`Pose2D`.
@@ -3517,13 +3535,13 @@ def rotation_matrix_to_quaternion(r: Matrix):
 
 GenericSpatialType = TypeVar(
     "GenericSpatialType",
-    bound=SpatialType,
+    bound=SymbolicSpatialType,
 )
 
 GenericHomogeneousSpatialType = TypeVar(
     "GenericHomogeneousSpatialType",
     CartesianPoint3D,
-    Vector3,
+    Vector3D,
     HomogeneousTransformationMatrix,
     RotationMatrix,
     Quaternion,
@@ -3531,7 +3549,7 @@ GenericHomogeneousSpatialType = TypeVar(
 
 GenericRotatableSpatialType = TypeVar(
     "GenericRotatableSpatialType",
-    Vector3,
+    Vector3D,
     HomogeneousTransformationMatrix,
     RotationMatrix,
     Quaternion,

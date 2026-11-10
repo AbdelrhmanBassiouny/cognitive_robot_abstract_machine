@@ -30,7 +30,7 @@ from semantic_digital_twin.specifications.worlds import WorldSpecification
 from semantic_digital_twin.robots.unitree_g1 import UnitreeG1
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Parcel
-from krrood_spatial_math.spatial_types import Pose
+from krrood_spatial_math.spatial_types import Pose3D
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import Color, Scale
 from coraplex.plans.context_extensions import RobotAccess
@@ -58,7 +58,7 @@ The pelvis is the robot's root, so its ``odom`` has to be lifted by this much fo
 robot's feet to rest on the floor rather than sink through it.
 """
 
-ROBOT_START_POSE = Pose.from_xyz_rpy(1.9, 9.1, PELVIS_HEIGHT_ABOVE_FLOOR)
+ROBOT_START_POSE = Pose3D.from_xyz_rpy(1.9, 9.1, PELVIS_HEIGHT_ABOVE_FLOOR)
 """
 Where the robot starts, in the aisle south of the two pallet stacks.
 """
@@ -68,14 +68,14 @@ PARCEL_SCALE = Scale(0.08, 0.08, 0.14)
 The extents of the transported parcel.
 """
 
-PICK_POSE = Pose.from_xyz_rpy(2.75, 9.3, 0.793)
+PICK_POSE = Pose3D.from_xyz_rpy(2.75, 9.3, 0.793)
 """
 Where the parcel starts.
 
 Rotated 90 degrees so a FRONT grasp approach can reach it.
 """
 
-PLACE_POSE = Pose.from_xyz_rpy(2.6, 7.7, 0.8)
+PLACE_POSE = Pose3D.from_xyz_rpy(2.6, 7.7, 0.8)
 """
 Where the parcel ends up.
 """
@@ -131,14 +131,14 @@ def straighten_torso(robot: AbstractRobot) -> JointPositionList:
     )
 
 
-def standing_pose_in_front_of(pose: Pose, world: World) -> Pose:
+def standing_pose_in_front_of(pose: Pose3D, world: World) -> Pose3D:
     """
     :param pose: The pose the robot should approach from its FRONT-facing side.
     :param world: The world the pose is expressed in.
     :return: The pose the robot stands in to reach that pose with a FRONT grasp.
     """
     yaw = float(pose.yaw)
-    return Pose.from_xyz_rpy(
+    return Pose3D.from_xyz_rpy(
         pose.x - STANDING_DISTANCE * np.cos(yaw),
         pose.y - STANDING_DISTANCE * np.sin(yaw),
         PELVIS_HEIGHT_ABOVE_FLOOR,
@@ -148,7 +148,7 @@ def standing_pose_in_front_of(pose: Pose, world: World) -> Pose:
 
 
 def build_statechart(
-    context: StatechartContext, source: Pose, destination: Pose, turn: float
+    context: StatechartContext, source: Pose3D, destination: Pose3D, turn: float
 ) -> Statechart:
     """
     :param context: The context the plan runs in, holding the robot carrying it out.
@@ -177,7 +177,7 @@ def build_statechart(
                 ParkArmsAction(arms=robot.all_arms),
                 straighten_torso(robot),
                 NavigateAction(
-                    target_location=Pose.from_xyz_rpy(
+                    target_location=Pose3D.from_xyz_rpy(
                         yaw=turn, reference_frame=robot.root
                     )
                 ),
@@ -186,7 +186,7 @@ def build_statechart(
                 ),
                 PlaceAction(
                     object_designator=parcel,
-                    target_location=Pose(
+                    target_location=Pose3D(
                         destination.position,
                         destination.quaternion,
                         reference_frame=world.root,
@@ -219,8 +219,8 @@ def lowest_collision_point_of(robot: UnitreeG1, world: World) -> float:
 
 
 def run(
-    source: Pose,
-    destination: Pose,
+    source: Pose3D,
+    destination: Pose3D,
     turn: float,
     world: World,
     robot: UnitreeG1,

@@ -29,7 +29,7 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
 from giskardpy.motion_statechart.tasks.joint_tasks import JointState
 from semantic_digital_twin.robots.pr2 import PR2Joint
 from semantic_digital_twin.robots.tracy import TracyJoint
-from krrood_spatial_math.spatial_types import Pose, Vector3
+from krrood_spatial_math.spatial_types import Pose3D, Vector3D
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
@@ -59,16 +59,16 @@ class PoseOffset:
     Angle to the goal orientation in radians, about :data:`ROTATION_AXIS`.
     """
 
-    def goal_pose(self, tip: KinematicStructureEntity) -> Pose:
+    def goal_pose(self, tip: KinematicStructureEntity) -> Pose3D:
         """
         :return: The goal pose, relative to the tip.
         """
         x, y, z = self.translation * TRANSLATION_DIRECTION
-        return Pose.from_xyz_axis_angle(
+        return Pose3D.from_xyz_axis_angle(
             x=x,
             y=y,
             z=z,
-            axis=Vector3(*ROTATION_AXIS),
+            axis=Vector3D(*ROTATION_AXIS),
             angle=self.rotation,
             reference_frame=tip,
         )
@@ -95,7 +95,7 @@ POSE_OFFSETS = [
     PoseOffset("rotation only", 0.0, np.radians(90)),
 ]
 """
-Pose offsets from mostly translation to mostly rotation, with both errors small or
+Pose3D offsets from mostly translation to mostly rotation, with both errors small or
 large.
 """
 
