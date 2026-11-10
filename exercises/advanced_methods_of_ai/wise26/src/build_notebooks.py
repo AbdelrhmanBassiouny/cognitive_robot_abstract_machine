@@ -171,7 +171,7 @@ SETUP = [
         """
         import importlib.util, pathlib, subprocess, sys, urllib.request
 
-        SOURCE = "https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/archive/a4c474b434d4b623badfe2b32bdacdb3f6b5c982.zip"
+        SOURCE = "https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/archive/28ca88fc71f096bf68fcae1a924026d8dbaa0cda.zip"
         WORKSHEET = "https://raw.githubusercontent.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/claude/serene-carson-x3hvx6/exercises/advanced_methods_of_ai/wise26"
 
 
@@ -470,6 +470,7 @@ PROLOGUE = [
         | `.from_(pizzas)` | … among these objects only | the domain of `x` |
         | `the(...)` | *the* … : exactly one fits | `∃x (φ(x) ∧ ∀y (φ(y) → y = x))` |
         | `flat_variable(pizza.toppings)` | one topping of that pizza | a variable `t` with `hasTopping(x, t)` |
+        | `pizza.where(pizza.toppings.spiciness == Spiciness.HOT)` | a pizza with a hot topping | `∃t (hasTopping(x, t) ∧ spiciness(t) = hot)` |
         | `HasType(t, VegetableTopping)` | `t` is a vegetable topping | `VegetableTopping(t)` |
         | `exists(t, φ)`, `for_all(t, φ)` | some / every `t` satisfies `φ` | `∃t φ`, `∀t φ` (over the toppings of `x`) |
         | `not_(φ)`, `or_(φ, ψ)`, `.where(φ, ψ)` | not, or, and | `¬φ`, `φ ∨ ψ`, `φ ∧ ψ` |
@@ -613,6 +614,35 @@ ACT_1 = [
         `Order(o) ∧ ∃x (hasPizza(o, x) ∧ ∃t (hasTopping(x, t) ∧ spiciness(t) = hot))`.
         The American Hot has two hot toppings and is still returned once: `x` and `t` are bound by `∃`, only `o` is
         free, and an object either satisfies the formula or it does not.
+        """
+    ),
+    markdown(
+        """
+        A **path** follows the relations as well. On the list `toppings`, an attribute that only its elements have
+        is read on an element: `pizza.toppings.spiciness` is the spiciness of *a topping* of the pizza. In
+        `.where(...)` it filters: the pizza is kept when one of its toppings passes, and returned once. Every
+        writing of the same path means the same topping.
+
+        **Predict** what the second query returns. Is it the pizzas with *no* hot topping? Watch `plain_1`.
+        """
+    ),
+    code(
+        """
+        pizza = a(Pizza).from_(pizzas)
+        show("a topping is hot", pizza.where(pizza.toppings.spiciness == Spiciness.HOT))
+
+        pizza = a(Pizza).from_(pizzas)
+        show("a topping is not hot", pizza.where(not_(pizza.toppings.spiciness == Spiciness.HOT)))
+        """
+    ),
+    note(
+        """
+        The first query returns `american_hot_1`, like `hot_pizzas`. The second returns *every* pizza.
+        `not_` negates the condition on *the* topping the path names, so on a pizza with toppings it reads
+        `∃t (hasTopping(x, t) ∧ spiciness(t) ≠ hot)`: `american_hot_1` has a mozzarella, which is not hot.
+        `plain_1` has no topping at all: a condition on a topping that does not exist is false (closed world), so
+        its negation is true. *No hot topping* needs a quantifier over a named topping, as in 1(b):
+        `pizza.where(not_(exists(topping, topping.spiciness == Spiciness.HOT)))`.
         """
     ),
     markdown(

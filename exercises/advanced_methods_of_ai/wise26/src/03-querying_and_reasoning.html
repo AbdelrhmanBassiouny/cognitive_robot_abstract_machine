@@ -418,6 +418,9 @@ pizza has no toppings at all: is every dot on it green?</div>
 </div>
 
 <ul class="steps">
+  <li><span class="mode predict">predict</span><span>A path such as <span class="code nowrap">pizza.toppings.spiciness</span>
+  reads <i>a</i> topping. Does <span class="code">pizza.where(not_(pizza.toppings.spiciness == Spiciness.HOT))</span>
+  return the pizzas without a hot topping? <span class="blank-line"></span></span></li>
   <li><span class="mode predict">predict</span><span>The notebook then asks for the witnesses themselves:
   <span class="code">set_of(order.guest, pizza, topping).where(topping.spiciness == Spiciness.HOT)</span>. How many
   answers does it have, while <span class="code">hot_orders</span> has one? <span class="blank-line"></span></span></li>
@@ -432,6 +435,8 @@ hot_orders = an(Order)(pizzas=hot_pizzas)</pre>
   one per path of Figure 5. An answer is an <b>assignment</b> of values to the free variables that makes the formula
   true. In <span class="code">hot_orders</span>, <i>x</i> and <i>t</i> are bound by ∃: only <i>o</i> is free, and the
   order is returned once, however many witnesses there are.</p>
+  <p>No, it returns every pizza: <span class="code">not_</span> negates the condition on <i>one</i> topping, and on
+  plain_1 the condition is false (closed world). <i>No hot topping</i> needs ¬∃, as in (b).</p>
 </div>
 
 <section class="task newpage">

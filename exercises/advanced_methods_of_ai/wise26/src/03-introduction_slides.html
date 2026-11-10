@@ -112,6 +112,7 @@ pizza.where(for_all(topping, HasType(topping, VegetableTopping)))</pre>
   <ul style="font-size:13.5pt">
     <li style="font-size:13.5pt; margin-bottom:1.5mm">A pattern says <i>some</i>. For <i>every</i> and <i>no</i>, name the topping and use <code>for_all</code>,
         <code>not_(exists(…))</code>.</li>
+    <li style="font-size:13.5pt; margin-bottom:1.5mm">A path, <code>pizza.toppings.spiciness == HOT</code>, filters on <i>a</i> topping; it never says <i>every</i> or <i>no</i>.</li>
     <li style="font-size:13.5pt; margin-bottom:1.5mm">Every <code>a(…)</code> is a variable of its own: two <code>a(Pizza)</code> are two pizzas.</li>
     <li style="font-size:13.5pt"><code>set_of(x, y)</code> returns several free variables: the answers become assignments.</li>
   </ul>
