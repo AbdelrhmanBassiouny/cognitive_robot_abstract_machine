@@ -169,7 +169,7 @@ def _classify_case_with_context(
     :param case: The single instance to classify.
     :return: The :class:`ConclusionObserver` and the :class:`EvaluationContext` used.
     """
-    case_variable._update_domain_([case])
+    case_variable._update_domain_(domain=[case])
     observer = ConclusionObserver(conclusion_variable)
     context = EvaluationContext(
         observers=[observer, EvaluationTracker(), SatisfiedConditionTracker()]
