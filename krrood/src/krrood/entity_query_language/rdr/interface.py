@@ -211,7 +211,7 @@ class ExpertInterface(ABC):
             header = self._render_header(context, requests, errors)
             self._run(namespace, header, validate)
             if namespace.get(NamespaceName.ABORT_FLAG):
-                raise ExpertAbort(self._missing_required(namespace, requests))
+                raise ExpertAbort(missing=self._missing_required(namespace, requests))
             errors = validate()
             if not errors:
                 return {r.name: namespace.get(r.name) for r in requests}

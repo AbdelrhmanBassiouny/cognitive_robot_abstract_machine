@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 # %% branch-semantics dispatch
 
 
-@dataclass
+@dataclass(kw_only=True)
 class AmbiguousBranchSemanticsError(DataclassException):
     """
     Two or more branch-semantics classes are equally specific for the same conclusion
@@ -29,7 +29,9 @@ class AmbiguousBranchSemanticsError(DataclassException):
     """
 
     selector: object
-    """The conclusion selector node being dispatched when the collision occurred."""
+    """
+    The conclusion selector node being dispatched when the collision occurred.
+    """
 
     candidates: list[type]
     """
@@ -50,7 +52,7 @@ class AmbiguousBranchSemanticsError(DataclassException):
 # %% rule construction
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ExpertAbort(DataclassException):
     """
     Raised by
@@ -70,7 +72,7 @@ class ExpertAbort(DataclassException):
         return ""
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ConclusionSelectorAsConditionError(DataclassException):
     """Raised when a
     :class:`~krrood.entity_query_language.rules.conclusion_selector.ConclusionSelector` is
@@ -89,7 +91,7 @@ class ConclusionSelectorAsConditionError(DataclassException):
 # %% underspecified inference targets
 
 
-@dataclass
+@dataclass(kw_only=True)
 class NoInferenceTarget(DataclassException):
     """
     Raised when an underspecified ``Match`` has no ``...`` attribute to infer.
@@ -107,7 +109,7 @@ class NoInferenceTarget(DataclassException):
         return "Mark the attribute to infer with `...`, e.g. an(Animal)(species=...)."
 
 
-@dataclass
+@dataclass(kw_only=True)
 class QueryIsNotAMatch(DataclassException):
     """
     Raised when the RDR backend is asked to answer an expression that is not a ``Match``.
@@ -132,7 +134,7 @@ class QueryIsNotAMatch(DataclassException):
         )
 
 
-@dataclass
+@dataclass(kw_only=True)
 class MultipleInferenceTargets(DataclassException):
     """
     Raised when a single-class RDR is handed more than one ``...`` attribute.
@@ -153,7 +155,7 @@ class MultipleInferenceTargets(DataclassException):
         return "Use a separate RDR per attribute (or a future MultiClassRDR)."
 
 
-@dataclass
+@dataclass(kw_only=True)
 class UnsupportedInferenceTarget(DataclassException):
     """
     Raised when an ``...`` attribute is an unbounded iterable.
@@ -183,7 +185,7 @@ class UnsupportedInferenceTarget(DataclassException):
         return "This will be supported by a future MultiClassRDR."
 
 
-@dataclass
+@dataclass(kw_only=True)
 class UndeclaredInferenceTarget(DataclassException):
     """
     Raised when an ``...`` attribute is not a declared field of the case type, so the

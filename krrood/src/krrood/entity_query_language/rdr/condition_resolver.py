@@ -56,7 +56,7 @@ class ResolutionMode(StrEnum):
     """Auto-resolved condition is shown to the expert as a pre-seeded suggestion."""
 
 
-@dataclass(frozen=True)
+@dataclass(kw_only=True, frozen=True)
 class ResolvedCondition:
     """An automatically derived condition expression and its provenance."""
 
@@ -129,9 +129,13 @@ class TargetSufficientConditionsBasedResolver(ConditionResolver):
         for sufficient_condition_set in target_conditions.sufficient_condition_sets:
             for guard in sufficient_condition_set.conditions:
                 if guard.holds_for(
-                    context.case_variable, context.case_instance
-                ) and not guard.holds_for(context.case_variable, context.corner_case):
-                    return ResolvedCondition(guard.as_expression, type(self))
+                    shared_variable=context.case_variable, case=context.case_instance
+                ) and not guard.holds_for(
+                    shared_variable=context.case_variable, case=context.corner_case
+                ):
+                    return ResolvedCondition(
+                        expression=guard.as_expression, resolver_type=type(self)
+                    )
         return None
 
 
@@ -196,13 +200,17 @@ class CornerCaseKnowledgeResolver(ConditionResolver):
                 continue
             for guard in sufficient_condition_set.conditions:
                 if guard.holds_for(
-                    context.case_variable, context.case_instance
-                ) and not guard.holds_for(context.case_variable, context.corner_case):
-                    return ResolvedCondition(guard.as_expression, type(self))
+                    shared_variable=context.case_variable, case=context.case_instance
+                ) and not guard.holds_for(
+                    shared_variable=context.case_variable, case=context.corner_case
+                ):
+                    return ResolvedCondition(
+                        expression=guard.as_expression, resolver_type=type(self)
+                    )
         return None
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ChainConditionResolver(ConditionResolver):
     """A Chain-of-Responsibility that tries each resolver in order, returning the first match."""
 
@@ -233,5 +241,8 @@ class ChainConditionResolver(ConditionResolver):
         :class:`CornerCaseKnowledgeResolver`, in priority order.
         """
         return cls(
-            [TargetSufficientConditionsBasedResolver(), CornerCaseKnowledgeResolver()]
+            resolvers=[
+                TargetSufficientConditionsBasedResolver(),
+                CornerCaseKnowledgeResolver(),
+            ]
         )
