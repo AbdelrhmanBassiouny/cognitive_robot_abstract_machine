@@ -39,9 +39,15 @@ items:
   track: engine-stack
   session: https://claude.ai/code/session_018RwLhEUQy5ojjgCvmYRbWp
   blockers:
-  - 'Labelled `integration-conflict` since 2026-09-30: the integration build reported this
-    branch merges cleanly but the suite fails on the combined tree, with no single other branch
-    reproducing it.'
+    - >-
+      Four 2026-11-10 review threads unanswered at 6b3b447f: rename CornerCaseStore.record to
+      record_corner_case and get to get_corner_case_for_node, a question on moving
+      CaseSource/CaseSerializer to krrood.code_generation, and a/an grammar in
+      test_underspecified_match.py.
+    - >-
+      The `integration-conflict` label (2026-09-30) was measured on a combined tree that no longer
+      exists: #64 has since merged into main and this branch merged main (6b3b447f). Not re-checked;
+      this basstler release has no integration build to re-run it.
   depends_on: []
   status: in_progress
   notes: '2026-08-12 steward cascade: restacked onto its cascaded base, which now carries
