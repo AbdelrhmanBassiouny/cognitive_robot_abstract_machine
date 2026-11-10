@@ -37,24 +37,23 @@ items:
   branch: D-core-corner-case
   pull_request_number: 65
   track: engine-stack
-  session: https://claude.ai/code/session_018RwLhEUQy5ojjgCvmYRbWp
+  session: https://claude.ai/code/session_01JxHGiKaQnckii8nWhnKuRh
   blockers:
     - >-
-      Four 2026-11-10 review threads unanswered at 6b3b447f: rename CornerCaseStore.record to
-      record_corner_case and get to get_corner_case_for_node, a question on moving
-      CaseSource/CaseSerializer to krrood.code_generation, and a/an grammar in
-      test_underspecified_match.py.
+      Developer decision pending on PR #65's thread: move CaseSource, CaseSerializer and
+      AsdictCaseSerializer to krrood.code_generation under generic names, before or after #66's
+      type_hints.py rename. A repository-wide a/an sweep plus checker is proposed as separate work.
     - >-
       The `integration-conflict` label (2026-09-30) was measured on a combined tree that no longer
       exists: #64 has since merged into main and this branch merged main (6b3b447f). Not re-checked;
       this basstler release has no integration build to re-run it.
   depends_on: []
   status: in_progress
-  notes: '2026-08-12 steward cascade: restacked onto its cascaded base, which now carries
-    main be377fdf (#41 merged 2026-08-10). Full account in roadmap.md section 21. Merged D-core-underspecified
-    (07545624); the same rdr/exceptions.py add/add recurring, this time also carrying CaseNotSerializableError.
-    Unioned again. 2026-10-02 review round (`55e70b6ac`): the developer''s seven threads were
-    all naming and docstring fixes, and all are applied, replied to and resolved.'
+  notes: >
+    Targets main since #64 merged. The 2026-11-10 review is applied in d2d7ceb990: CornerCaseStore's
+    record and get are now record_corner_case and get_corner_case_for_node, renamed through the
+    stack too. The claude/rdr-why-answer-6fnw2o chain still uses the old names because its own
+    conflict blocked the restack.
 - id: D-core-serialization
   title: 'RDR engine: rule-tree unparser (rdr_to_python)'
   branch: D-core-serialization
