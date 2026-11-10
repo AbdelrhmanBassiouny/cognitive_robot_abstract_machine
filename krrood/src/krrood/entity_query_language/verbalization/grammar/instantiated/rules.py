@@ -44,8 +44,8 @@ class InstantiatedVariableRule(PhraseRule):
         >>> verbalize_expression(inference(Drawer)(container=connection.parent, handle=connection.child))
         'a Drawer, where the container of the Drawer is the parent of a FixedConnection, and the handle of the Drawer is the child of the FixedConnection'
         """
-        type_ = node._type_
-        if isinstance(type_, type) and issubclass(type_, Verbalizable):
+        factory = node._factory_
+        if isinstance(factory, type) and issubclass(factory, Verbalizable):
             raise PredicateFragmentRequiredError(node=node)
         return InstantiatedAssembler(context).assemble(node)
 
@@ -86,13 +86,14 @@ class InstantiatedVerbalizableRule(PhraseRule):
         """
         fields = RenderedFields(
             fragments={
-                name: context.child(child) for name, child in node._child_vars_.items()
+                name: context.child(child)
+                for name, child in node._child_variables_.items()
             },
-            raw=node._child_vars_,
+            raw=node._child_variables_,
         )
-        fragment = node._type_._verbalization_fragment_(fields)
+        fragment = node._factory_._verbalization_fragment_(fields)
         if not isinstance(fragment, VerbalizationFragment):
             raise NonFragmentPredicateError(
-                predicate_type=node._type_, returned=fragment
+                predicate_type=node._factory_, returned=fragment
             )
         return fragment
