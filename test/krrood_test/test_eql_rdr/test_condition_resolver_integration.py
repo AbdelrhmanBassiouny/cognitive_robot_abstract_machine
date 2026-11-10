@@ -40,7 +40,7 @@ def _holds_for(expression: SymbolicExpression, case_variable, case: Animal) -> b
     :param case: The case to evaluate it for.
     :return: Whether the condition holds for ``case``.
     """
-    case_variable._update_domain_([case])
+    case_variable._update_domain_(domain=[case])
     return any(expression.evaluate())
 
 
@@ -341,8 +341,8 @@ def test_resolving_at_a_shared_anchor_leaves_the_sibling_guards_free_of_selector
         for guard in condition_set.conditions
     ]
 
-    assert (
-        molusc_guards
-    ), "molusc must still be reachable for the assertion to constrain"
+    assert molusc_guards, (
+        "molusc must still be reachable for the assertion to constrain"
+    )
     for guard in molusc_guards:
         assert not isinstance(guard.as_expression, ConclusionSelector)
