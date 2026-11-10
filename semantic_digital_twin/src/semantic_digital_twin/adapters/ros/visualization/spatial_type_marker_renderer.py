@@ -8,9 +8,9 @@ import numpy as np
 from builtin_interfaces.msg import Duration
 from geometry_msgs.msg import (
     Point as RosPoint,
-    Pose3D as RosPose,
+    Pose as RosPose,
     Quaternion as RosQuaternion,
-    Vector3D as RosVector3,
+    Vector3 as RosVector3,
 )
 from std_msgs.msg import ColorRGBA, Header
 from typing_extensions import ClassVar, TypeVar, Generic

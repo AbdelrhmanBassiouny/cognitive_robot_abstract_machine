@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 from geometry_msgs.msg import (
     PoseStamped as ROSPoseStamped,
-    Pose3D as ROSPose,
+    Pose as ROSPose,
     Point as ROSPoint,
     Quaternion as ROSQuaternion,
 )
