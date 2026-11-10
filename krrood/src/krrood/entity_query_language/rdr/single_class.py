@@ -231,7 +231,7 @@ class EQLSingleClassRDR:
         if expert is None:
             raise ValueError("Expert must be supplied to fit_case")
 
-        corner_case = self.corner_cases.get(
+        corner_case = self.corner_cases.get_corner_case_for_node(
             trace.firing_anchor_id if trace is not None else None
         )
 
@@ -395,7 +395,7 @@ class EQLSingleClassRDR:
                 target,
             )
 
-        self.corner_cases.record(new_node, case)
+        self.corner_cases.record_corner_case(new_node, case)
 
         if self.save_path is not None:
             save_rdr_with_case(self, self.save_path)

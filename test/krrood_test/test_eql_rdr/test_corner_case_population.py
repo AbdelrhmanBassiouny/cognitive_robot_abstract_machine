@@ -87,7 +87,7 @@ def test_first_rule_corner_case_is_recorded():
 
     assert len(rdr.corner_cases.cases) == 1
     root_node_id = _first_recorded_node_id(rdr)
-    assert rdr.corner_cases.get(root_node_id) is mammal
+    assert rdr.corner_cases.get_corner_case_for_node(root_node_id) is mammal
 
 
 # %% Test 2 — alternative rule adds a second corner case entry
@@ -113,7 +113,7 @@ def test_alternative_rule_corner_case_is_recorded():
     nodes = walk_rules_in_emission_order(rdr.conditions_root)
     assert len(nodes) == 2
     alternative_node_id = nodes[1]._id_
-    assert rdr.corner_cases.get(alternative_node_id) is bird
+    assert rdr.corner_cases.get_corner_case_for_node(alternative_node_id) is bird
 
 
 # %% Test 3 — refinement rule adds a third corner case entry for the trigger case
@@ -145,7 +145,7 @@ def test_refinement_rule_corner_case_is_recorded():
     nodes = walk_rules_in_emission_order(rdr.conditions_root)
     # The refinement node is the third in emission order.
     refinement_node_id = nodes[2]._id_
-    assert rdr.corner_cases.get(refinement_node_id) is mammal
+    assert rdr.corner_cases.get_corner_case_for_node(refinement_node_id) is mammal
 
 
 # %% Test 4 — fitting an already-correct case does not add a new corner case
