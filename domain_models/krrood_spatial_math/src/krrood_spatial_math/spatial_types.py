@@ -43,6 +43,7 @@ from krrood_spatial_math.exceptions import (
     XAxisNormalToPlaneError,
 )
 from krrood_spatial_math.space import EuclideanSpace2D, EuclideanSpace3D
+from krrood_spatial_math.space_map import SpaceMap
 
 
 class _ConstantMatrixParts(ca.SX, Enum):
@@ -1689,16 +1690,15 @@ class LineSegment3D:
         return direction
 
 
-@dataclass(frozen=True)
-class OrthogonalProjection:
+@dataclass
+class OrthogonalProjection(
+    SpaceMap[CartesianPoint3D, CartesianPoint2D, Line3D, sm.ScalarData]
+):
     """
-    The orthogonal projection of 3D space onto the x-y plane of one frame, together
-    with its right inverse.
+    The orthogonal projection of 3D space onto the x-y plane of one frame.
 
-    :meth:`unproject` at any height is a right inverse of :meth:`project`: for every
-    :class:`CartesianPoint2D` ``p`` on the plane, ``project(unproject(p, h)) == p``. The reverse,
-    ``unproject(project(q), h) == q``, holds only for a :class:`CartesianPoint3D` ``q`` whose
-    z-coordinate in :attr:`plane_frame` is ``h``.
+    A point's :meth:`projection_line` is the vertical line through it, and its
+    position along that line is its height above the plane.
     """
 
     plane_frame: CartesianFrame3D | None
@@ -1712,8 +1712,6 @@ class OrthogonalProjection:
 
     def project(self, point: CartesianPoint3D) -> CartesianPoint2D:
         """
-        :param point: A point in :attr:`plane_frame` or in any frame of its world.
-        :return: The point on the plane directly below or above ``point``.
         :raises ReferenceFrameMismatchError: If exactly one of ``point`` and this
             projection has no reference frame.
         """
@@ -1728,15 +1726,9 @@ class OrthogonalProjection:
         return CartesianPoint2D(point.x, point.y, reference_frame=self.plane_frame)
 
     def unproject(
-        self, point: CartesianPoint2D, height: sm.ScalarData = 0
+        self, point: CartesianPoint2D, position_along_line: sm.ScalarData = 0
     ) -> CartesianPoint3D:
         """
-        The inverse of :meth:`project` at ``height``: the 3D point at ``height`` above
-        ``point``.
-
-        :param point: A point on the x-y plane of :attr:`plane_frame`.
-        :param height: The z-coordinate the point is placed at.
-        :return: The 3D point at ``height`` above ``point``, in :attr:`plane_frame`.
         :raises ReferenceFrameMismatchError: If ``point`` lies on another frame's plane.
         """
         if point.reference_frame is not self.plane_frame:
@@ -1746,17 +1738,10 @@ class OrthogonalProjection:
                 context="the unprojected CartesianPoint2D",
             )
         return CartesianPoint3D(
-            point.x, point.y, height, reference_frame=self.plane_frame
+            point.x, point.y, position_along_line, reference_frame=self.plane_frame
         )
 
     def projection_line(self, point: CartesianPoint2D) -> Line3D:
-        """
-        The vertical line through ``point`` along which :meth:`project` maps every point
-        onto ``point``.
-
-        :param point: A point on the x-y plane of :attr:`plane_frame`.
-        :return: The line of every 3D point that projects onto ``point``.
-        """
         return Line3D(
             point=self.unproject(point),
             direction=Vector3D.Z(reference_frame=self.plane_frame),

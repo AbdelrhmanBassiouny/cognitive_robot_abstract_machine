@@ -98,7 +98,7 @@ class CoordinateChange(Generic[CoordinateSystemT], SubClassSafeGeneric, Interfac
     .. note::
         Each implementation binds the kind of coordinate system once, so the kind of
         change a space allows is part of its type. A map between two spaces is a
-        projection, not a coordinate change.
+        :class:`~krrood_spatial_math.space_map.SpaceMap`, not a coordinate change.
     """
 
     source_coordinate_system: CoordinateSystemT | None

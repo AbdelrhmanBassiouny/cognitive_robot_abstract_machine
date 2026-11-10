@@ -73,7 +73,9 @@ class TestCartesianPoint2DToCartesianPoint3D:
         assert unprojected.reference_frame is frame
         np.testing.assert_allclose(
             unprojected.to_np(),
-            OrthogonalProjection(frame).unproject(point, height=5.0).to_np(),
+            OrthogonalProjection(frame)
+            .unproject(point, position_along_line=5.0)
+            .to_np(),
         )
 
     def test_default_height_is_the_plane(self):

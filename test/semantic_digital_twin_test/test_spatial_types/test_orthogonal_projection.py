@@ -94,7 +94,9 @@ class TestUnproject:
     def test_explicit_height(self):
         point = CartesianPoint2D(1.0, 2.0)
 
-        unprojected = OrthogonalProjection(None).unproject(point, height=5.0)
+        unprojected = OrthogonalProjection(None).unproject(
+            point, position_along_line=5.0
+        )
 
         np.testing.assert_allclose(unprojected.to_np()[:3], [1.0, 2.0, 5.0])
 
@@ -113,7 +115,9 @@ class TestInverseLaws:
         point = CartesianPoint2D(1.0, 2.0, reference_frame=frame)
         projection = OrthogonalProjection(frame)
 
-        round_trip = projection.project(projection.unproject(point, height=4.0))
+        round_trip = projection.project(
+            projection.unproject(point, position_along_line=4.0)
+        )
 
         np.testing.assert_allclose(round_trip.to_np(), point.to_np())
 
@@ -130,7 +134,9 @@ class TestInverseLaws:
         projection = OrthogonalProjection(frame)
         point = CartesianPoint3D(1.0, 2.0, 4.0, reference_frame=frame)
 
-        round_trip = projection.unproject(projection.project(point), height=4.0)
+        round_trip = projection.unproject(
+            projection.project(point), position_along_line=4.0
+        )
 
         np.testing.assert_allclose(round_trip.to_np(), point.to_np())
 
@@ -140,7 +146,9 @@ class TestInverseLaws:
         point = CartesianPoint3D(1.0, 2.0, 3.0, reference_frame=frame)
         height = 4.0
 
-        round_trip = projection.unproject(projection.project(point), height=height)
+        round_trip = projection.unproject(
+            projection.project(point), position_along_line=height
+        )
 
         np.testing.assert_allclose(round_trip.to_np()[:3], [*point.to_np()[:2], height])
 
