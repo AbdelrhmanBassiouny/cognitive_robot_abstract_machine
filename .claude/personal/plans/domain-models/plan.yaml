@@ -146,10 +146,10 @@ items:
   track: spatial
   status: in_progress
   blockers:
-  - 'CI on 02cc477b not yet read. Owner to decide the 2026-11-10 review proposals: drop AffinePoint2D/3D, add AffineVector and an OrthogonalProjection interface, rename XY* and SpatialChange. Ready, not promoted. #524 conflicts with main.'
+  - 'CI on 32bcb2a3 (main ecc91acd merged) not yet read. Open thread: name of ValueInCartesianFrame3D (owner). Ready, not promoted. #524 must move from PlanarPoint to AffinePoint with a vector type, and conflicts with main.'
   depends_on: []
   session: https://claude.ai/code/session_01JxHGiNS35j6Nc3GQ87MdyP
-  notes: '#527 holds the casadi-free base per https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS and SemDT''s spatial types adopting it, and since 2026-11-10 also planar-coordinate-system (#549), spatial-math-imports, projection-interface, spatial-action and frame-checked-arithmetic (see their notes). api-break; migration in the PR description. Next: CI and review, then promote.'
+  notes: '#527 holds the casadi-free base per https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS and SemDT''s spatial types adopting it, and since 2026-11-10 also planar-coordinate-system (#549), spatial-math-imports, projection-interface, spatial-action and frame-checked-arithmetic (see their notes), and the 2026-11-10 review: AffineVector, AffineLine and the OrthogonalProjection interface, no AffinePoint2D/3D. api-break; migration in the PR description. Next: CI and review, then promote.'
 - id: image-coordinate-change
   title: krrood_image's ImageCoordinateChange (scale and shift per axis) for crops and resizes,
     with cv2 resampling
