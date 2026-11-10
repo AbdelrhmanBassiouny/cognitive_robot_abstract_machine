@@ -130,7 +130,7 @@ class QueryIsNotAMatch(DataclassException):
     def suggest_correction(self) -> str:
         return (
             "Evaluate a match that underspecifies the attribute, e.g. "
-            "an(Animal)(species=...).from_(animals)."
+            "an(Animal)(species=...).from_(domain=animals)."
         )
 
 
