@@ -912,14 +912,24 @@ class AttributeMatch(AbstractMatchExpression[T]):
 
         For a collection-valued attribute, a single value or pattern describes one
         element of the collection: a value must be in it, and some element must match a
-        pattern.
+        pattern. A pattern evaluated before it was nested still restricts the attribute.
         """
         attribute = self.attribute
-        if (
-            not isinstance(self.assigned_value, AbstractMatchExpression)
-            or self.assigned_value._resolved_
-        ):
+        if not isinstance(self.assigned_value, AbstractMatchExpression):
             self._conditions_.append(self._build_condition_on_assigned_value_())
+            return
+
+        if self.assigned_value._resolved_:
+            self._conditions_.append(
+                Exists(
+                    self.assigned_variable,
+                    chained_logic(
+                        AND,
+                        self._build_condition_on_assigned_value_(),
+                        *self.assigned_value._conditions_,
+                    ),
+                )
+            )
             return
 
         if not self._states_an_element_of_the_attribute_:

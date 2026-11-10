@@ -295,6 +295,26 @@ def test_nested_pattern_with_condition_satisfied_by_two_elements_yields_owner_on
     assert names_of(pattern.from_(students).evaluate()) == ["Once", "Twice"]
 
 
+def test_pattern_evaluated_before_it_is_nested_still_restricts_the_elements():
+    """
+    A pattern that was evaluated on its own and then nested is matched only by elements
+    that satisfy it, and each owner appears once.
+    """
+    seminars = [CampusCourse("Seminar"), CampusCourse("Seminar")]
+    other = CampusCourse("Other")
+    students = [
+        CampusStudent(role_taker=CampusMember("Twice"), takes_course=set(seminars)),
+        CampusStudent(
+            role_taker=CampusMember("Once"), takes_course={seminars[0], other}
+        ),
+        CampusStudent(role_taker=CampusMember("Never"), takes_course={other}),
+    ]
+    seminar = a(CampusCourse)(name="Seminar").from_([*seminars, other])
+    seminar.tolist()
+    pattern = a(CampusStudent)(takes_course=seminar)
+    assert names_of(pattern.from_(students).evaluate()) == ["Once", "Twice"]
+
+
 def test_pattern_of_a_subtype_filters_the_elements_by_type():
     """
     A pattern of a subclass of the element type is matched only by elements of that
