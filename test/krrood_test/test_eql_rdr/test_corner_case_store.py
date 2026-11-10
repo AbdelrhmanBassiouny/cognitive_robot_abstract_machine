@@ -10,10 +10,8 @@ from typing_extensions import Any, Set, Tuple, Type
 
 import pytest
 
-from krrood.entity_query_language.rdr.corner_case import (  # noqa: E402
-    CaseSerializer,
-    CornerCaseStore,
-)
+from krrood.code_generation.dataclass_source import ObjectSourceSerializer
+from krrood.entity_query_language.rdr.corner_case import CornerCaseStore
 from krrood.entity_query_language.factories import entity, variable
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
@@ -51,9 +49,9 @@ def _make_condition_node(case_type=Animal):
 
 
 @dataclass
-class TrivialSerializer(CaseSerializer):
+class TrivialSerializer(ObjectSourceSerializer):
     """
-    Pattern: TrivialSerializer — minimal CaseSerializer that returns str(case).
+    Pattern: TrivialSerializer — minimal ObjectSourceSerializer that returns str(case).
 
     Replaces the old ``_trivial_emit`` raw callable after the Option A migration.
     ``to_source`` returns the string representation with an empty referenced-type set;
@@ -77,7 +75,7 @@ class TrivialSerializer(CaseSerializer):
 
 
 @dataclass
-class SpySerializer(CaseSerializer):
+class SpySerializer(ObjectSourceSerializer):
     """
     Pattern: SpySerializer — records every case passed to ``to_source``.
 

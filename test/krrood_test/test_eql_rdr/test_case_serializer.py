@@ -1,5 +1,5 @@
 """
-Unit tests for ``CaseSerializer`` ABC and ``AsdictCaseSerializer``.
+Unit tests for ``ObjectSourceSerializer`` ABC and ``DataclassConstructorSerializer``.
 """
 
 from __future__ import annotations
@@ -11,13 +11,13 @@ from typing_extensions import Any, Type
 
 import pytest
 
-from krrood.entity_query_language.rdr.corner_case import (
-    AsdictCaseSerializer,
-    CaseNotSerializableError,
-    CaseSerializer,
-    CaseSource,
-    CornerCaseStore,
+from krrood.code_generation.dataclass_source import (
+    DataclassConstructorSerializer,
+    ObjectSource,
+    ObjectSourceSerializer,
 )
+from krrood.code_generation.exceptions import ObjectNotSerializableError
+from krrood.entity_query_language.rdr.corner_case import CornerCaseStore
 from krrood.entity_query_language.factories import variable
 
 from .animal import Animal, Species
@@ -30,7 +30,7 @@ class FlatAnimal:
     """
     Pattern: FlatAnimal — flat dataclass with only scalar fields.
 
-    Used to verify that ``AsdictCaseSerializer.to_source`` emits valid eval-able Python
+    Used to verify that ``DataclassConstructorSerializer.to_source`` emits valid eval-able Python
     constructor source for the simplest possible case.
     """
 
@@ -107,7 +107,7 @@ class BadFieldCase:
 
     The ``payload`` field holds an arbitrary Python object (a ``set`` of strings) that
     ``value_to_source`` cannot handle without falling back to ``repr()``.
-    ``AsdictCaseSerializer`` must raise ``CaseNotSerializableError`` for this case.
+    ``DataclassConstructorSerializer`` must raise ``ObjectNotSerializableError`` for this case.
     """
 
     name: str
@@ -115,7 +115,7 @@ class BadFieldCase:
 
     payload: set  # type: ignore[type-arg]
     """
-    An arbitrary object that ``AsdictCaseSerializer`` cannot serialize.
+    An arbitrary object that ``DataclassConstructorSerializer`` cannot serialize.
     """
 
 
@@ -123,14 +123,14 @@ class BadFieldCase:
 
 
 @pytest.fixture(scope="module")
-def serializer() -> AsdictCaseSerializer:
+def serializer() -> DataclassConstructorSerializer:
     """
-    Module-scoped ``AsdictCaseSerializer`` instance.
+    Module-scoped ``DataclassConstructorSerializer`` instance.
 
-    ``AsdictCaseSerializer`` is stateless, so module scope avoids repeated construction
+    ``DataclassConstructorSerializer`` is stateless, so module scope avoids repeated construction
     without sacrificing test isolation.
     """
-    return AsdictCaseSerializer()
+    return DataclassConstructorSerializer()
 
 
 # %% to_source: the cases it can render
@@ -154,7 +154,7 @@ def test_flat_dataclass_to_source_is_eval_able(serializer):
 
 def test_flat_dataclass_to_source_source_is_nonempty_string(serializer):
     """
-    ``to_source`` returns a ``CaseSource`` whose ``source`` is a non-empty string.
+    ``to_source`` returns a ``ObjectSource`` whose ``source`` is a non-empty string.
     """
     case = FlatAnimal(hair=False, legs=6, name="ant")
 
@@ -258,16 +258,16 @@ def test_nested_dataclass_referenced_types_includes_inner_type(serializer):
 
 def test_non_serializable_field_raises_case_not_serializable_error(serializer):
     """
-    ``to_source`` raises ``CaseNotSerializableError`` for a field holding an arbitrary
+    ``to_source`` raises ``ObjectNotSerializableError`` for a field holding an arbitrary
     object.
 
     A ``set`` of strings is not a scalar, not an enum, and not a nested dataclass.
-    ``AsdictCaseSerializer`` must not silently fall through to ``repr()``; it must raise
-    ``CaseNotSerializableError`` instead.
+    ``DataclassConstructorSerializer`` must not silently fall through to ``repr()``; it must raise
+    ``ObjectNotSerializableError`` instead.
     """
     case = BadFieldCase(name="problem", payload={"a", "b", "c"})
 
-    with pytest.raises(CaseNotSerializableError):
+    with pytest.raises(ObjectNotSerializableError):
         serializer.to_source(case)
 
 
@@ -318,7 +318,7 @@ def _make_condition_node():
 
 
 @dataclass
-class SentinelSerializer(CaseSerializer):
+class SentinelSerializer(ObjectSourceSerializer):
     """
     Pattern: SentinelSerializer — records calls and returns a sentinel source string.
 
@@ -336,17 +336,17 @@ class SentinelSerializer(CaseSerializer):
     Every case passed to :meth:`to_source`, in call order.
     """
 
-    def to_source(self, case: Any) -> CaseSource:
+    def to_source(self, case: Any) -> ObjectSource:
         """
         Record the case and return a sentinel source so callers can detect this was
         used.
 
         :param case: The case to record.
-        :return: A :class:`CaseSource` carrying :data:`SENTINEL` and no referenced
+        :return: A :class:`ObjectSource` carrying :data:`SENTINEL` and no referenced
             types.
         """
         self.called_with.append(case)
-        return CaseSource(self.SENTINEL, set())
+        return ObjectSource(self.SENTINEL, set())
 
     def from_data(self, data: Any, case_type: Type) -> Any:
         """
@@ -361,7 +361,7 @@ def test_custom_serializer_is_used_by_to_ordered_sources():
     ``custom.to_source``.
 
     Guarantees: the store delegates serialization to ``self.serializer``; the default
-    ``AsdictCaseSerializer`` is NOT used when a custom serializer is provided.
+    ``DataclassConstructorSerializer`` is NOT used when a custom serializer is provided.
     """
     sentinel_serializer = SentinelSerializer()
     store = CornerCaseStore(serializer=sentinel_serializer)
@@ -378,11 +378,11 @@ def test_custom_serializer_is_used_by_to_ordered_sources():
 
 def test_default_serializer_is_asdict_serializer():
     """
-    ``CornerCaseStore()`` uses an ``AsdictCaseSerializer`` by default.
+    ``CornerCaseStore()`` uses an ``DataclassConstructorSerializer`` by default.
 
     Guarantees: the zero-argument constructor produces a store whose ``serializer``
-    attribute is an instance of ``AsdictCaseSerializer``.
+    attribute is an instance of ``DataclassConstructorSerializer``.
     """
     store = CornerCaseStore()
 
-    assert isinstance(store.serializer, AsdictCaseSerializer)
+    assert isinstance(store.serializer, DataclassConstructorSerializer)

@@ -387,7 +387,7 @@ class TestSaveRdrWithCasePreservesCornerCases(unittest.TestCase):
         """
         Each restored corner case must equal (``==``) the case used during fitting.
 
-        Verifies that ``AsdictCaseSerializer`` faithfully reconstructs the ``Animal``
+        Verifies that ``DataclassConstructorSerializer`` faithfully reconstructs the ``Animal``
         dataclass through the constructor-source round-trip path.
         """
         rdr = _build_two_rule_rdr()
