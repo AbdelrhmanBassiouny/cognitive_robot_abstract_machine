@@ -10,7 +10,8 @@ import numpy as np
 import pytest
 
 from krrood.patterns.exceptions import InterfaceInstantiationError
-from krrood_spatial_math.space_map import SpaceMap
+from krrood_spatial_math.affine_point import AffinePoint
+from krrood_spatial_math.space_map import SourcePointT, SpaceMap, TargetPointT
 from krrood_spatial_math.spatial_types import (
     CartesianPoint2D,
     OrthogonalProjection,
@@ -24,7 +25,7 @@ from .dataset.frames import NamedFrame
 @dataclass
 class SpaceMapCase:
     """
-    A space map together with an image point it is tested at.
+    A space map together with a target point it is tested at.
     """
 
     space_map: SpaceMap
@@ -32,7 +33,7 @@ class SpaceMapCase:
     The space map under test.
     """
 
-    image_point: CartesianPoint2D
+    target_point: CartesianPoint2D
     """
     A point of the space map's target space.
     """
@@ -49,7 +50,7 @@ def space_map_case(request: pytest.FixtureRequest) -> SpaceMapCase:
     frame = NamedFrame("plane")
     return SpaceMapCase(
         space_map=request.param(frame),
-        image_point=CartesianPoint2D(1.5, -2.0, reference_frame=frame),
+        target_point=CartesianPoint2D(1.5, -2.0, reference_frame=frame),
     )
 
 
@@ -60,19 +61,19 @@ positions_along_line = [-3.0, 0.0, 0.5, 4.0]
 
 
 @pytest.mark.parametrize("position_along_line", positions_along_line)
-def test_project_after_unproject_restores_the_image_point(
+def test_project_after_unproject_restores_the_target_point(
     space_map_case: SpaceMapCase, position_along_line: float
 ):
     """
-    Every point unprojected from an image point projects back onto it.
+    Every point unprojected from a target point projects back onto it.
     """
-    space_map, image_point = space_map_case.space_map, space_map_case.image_point
+    space_map, target_point = space_map_case.space_map, space_map_case.target_point
 
     round_trip = space_map.project(
-        space_map.unproject(image_point, position_along_line)
+        space_map.unproject(target_point, position_along_line)
     )
 
-    np.testing.assert_allclose(round_trip.to_np(), image_point.to_np())
+    np.testing.assert_allclose(round_trip.to_np(), target_point.to_np())
 
 
 @pytest.mark.parametrize("position_along_line", positions_along_line)
@@ -83,10 +84,10 @@ def test_unproject_lies_at_its_position_on_the_projection_line(
     An unprojected point lies on the projection line, as many direction lengths from its
     point as its position along the line.
     """
-    space_map, image_point = space_map_case.space_map, space_map_case.image_point
-    projection_line = space_map.projection_line(image_point)
+    space_map, target_point = space_map_case.space_map, space_map_case.target_point
+    projection_line = space_map.projection_line(target_point)
 
-    unprojected = space_map.unproject(image_point, position_along_line)
+    unprojected = space_map.unproject(target_point, position_along_line)
 
     np.testing.assert_allclose(
         unprojected.to_np(),
@@ -105,3 +106,11 @@ def test_a_space_map_cannot_be_instantiated():
     """
     with pytest.raises(InterfaceInstantiationError):
         SpaceMap()
+
+
+@pytest.mark.parametrize("point_parameter", [SourcePointT, TargetPointT])
+def test_a_space_map_sends_affine_points_to_affine_points(point_parameter: object):
+    """
+    Both the points a space map takes and those it gives are points given in a frame.
+    """
+    assert point_parameter.__bound__ is AffinePoint

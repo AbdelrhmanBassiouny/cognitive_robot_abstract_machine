@@ -10,29 +10,29 @@ from typing_extensions import Generic, TypeVar
 
 from krrood.patterns.interface import Interface
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
-from krrood_spatial_math.affine_point import CoordinateT
+from krrood_spatial_math.affine_point import AffinePoint, CoordinateT
 
 # %% maps from the points of one space to the points of another
 
-PreimagePointT = TypeVar("PreimagePointT")
+SourcePointT = TypeVar("SourcePointT", bound=AffinePoint)
 """
-The kind of point a space map takes, given in a coordinate system of its source space.
+The kind of point a space map takes, given in a frame of its source space.
 """
 
-ImagePointT = TypeVar("ImagePointT")
+TargetPointT = TypeVar("TargetPointT", bound=AffinePoint)
 """
-The kind of point a space map gives, in a coordinate system of its target space.
+The kind of point a space map gives, in a frame of its target space.
 """
 
 ProjectionLineT = TypeVar("ProjectionLineT")
 """
 The kind of line, such as a straight line or a ray, of the source points a space map
-sends to one image point.
+sends to one target point.
 """
 
 
 class SpaceMap(
-    Generic[PreimagePointT, ImagePointT, ProjectionLineT, CoordinateT],
+    Generic[SourcePointT, TargetPointT, ProjectionLineT, CoordinateT],
     SubClassSafeGeneric,
     Interface,
 ):
@@ -40,9 +40,9 @@ class SpaceMap(
     Sends each point of one space to a point of another space of lower dimension, such
     as 3D space onto a plane or onto a camera's image.
 
-    Every image point is the image of the points on one line, its
-    :meth:`projection_line`, and :meth:`unproject` picks one of them. For every image
-    point ``p`` and position ``t``, ``project(unproject(p, t)) == p``.
+    Every target point is where the source points on one line, its
+    :meth:`projection_line`, are sent, and :meth:`unproject` picks one of them. For
+    every target point ``p`` and position ``t``, ``project(unproject(p, t)) == p``.
 
     .. note::
         A space map relates two spaces, so it is never a coordinate change, which stays
@@ -50,14 +50,14 @@ class SpaceMap(
     """
 
     @abstractmethod
-    def project(self, point: PreimagePointT) -> ImagePointT:
+    def project(self, point: SourcePointT) -> TargetPointT:
         """
         :param point: A point of the source space.
         :return: The point of the target space ``point`` is sent to.
         """
 
     @abstractmethod
-    def projection_line(self, point: ImagePointT) -> ProjectionLineT:
+    def projection_line(self, point: TargetPointT) -> ProjectionLineT:
         """
         :param point: A point of the target space.
         :return: The line of every source point :meth:`project` sends to ``point``.
@@ -65,8 +65,8 @@ class SpaceMap(
 
     @abstractmethod
     def unproject(
-        self, point: ImagePointT, position_along_line: CoordinateT
-    ) -> PreimagePointT:
+        self, point: TargetPointT, position_along_line: CoordinateT
+    ) -> SourcePointT:
         """
         :param point: A point of the target space.
         :param position_along_line: How many direction lengths the returned point lies
