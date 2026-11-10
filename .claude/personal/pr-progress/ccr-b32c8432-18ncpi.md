@@ -2,9 +2,9 @@ Plan
 - Settle the open review threads on #541, then let the owner mark it ready.
 
 Done
-- 47c7ab76c6: Variable holds one VariableDomain (ListedValues/ExistingValues/InstancesOfType/ExpressionDomain); replies posted, done threads resolved. PR body updated.
+- 2c05cad548: Variable holds one VariableDomain; values_with_sources/sources renames. Nested-query correlation recorded as eql-existential-semantics/argument-position-correlation (#137 comment). All threads but state.py:53 resolved.
 
 Next
-- Owner to answer (threads open): keep literals unfiltered? (probe: filtering empties != and not_); add plan item for nested-query correlation, SQL rule + cache keyed on shared values + mode example rewrite? ExistingValues kept (resolved).
-- Read CI at 47c7ab76c6.
+- Owner to answer state.py:53: keep literals unfiltered? (probe: filtering empties != and not_).
+- Read CI at 2c05cad548.
 - Delete parked fork branch ccr-a0dcce67-u1j40w (proxy refuses; owner to do it).
