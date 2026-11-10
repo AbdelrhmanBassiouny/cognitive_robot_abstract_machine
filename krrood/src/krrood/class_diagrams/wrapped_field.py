@@ -1,3 +1,7 @@
+"""
+The fields of the classes in a class diagram, with what their annotations declare.
+"""
+
 from __future__ import annotations
 
 import enum
@@ -196,15 +200,35 @@ class WrappedField:
         :class:`~krrood.class_diagrams.collection_kind.CollectionKind`, or, for a union
         such as ``Optional``, whether any member of the union is.
         """
-        annotations = (
-            get_args(self.resolved_type)
-            if is_union_annotation(self.resolved_type)
-            else (self.resolved_type,)
-        )
         return any(
             get_origin(annotation) in CollectionKind.all_classes()
-            for annotation in annotations
+            for annotation in self._union_members_
         )
+
+    @cached_property
+    def element_sequence_class(self) -> type | None:
+        """
+        The class of the unkeyed collection the field holds, such as :class:`list` for
+        ``list[X]`` or ``Optional[list[X]]``, or ``None`` when it holds none.
+        """
+        return next(
+            (
+                get_origin(annotation)
+                for annotation in self._union_members_
+                if get_origin(annotation) in CollectionKind.ELEMENT_SEQUENCE.value
+            ),
+            None,
+        )
+
+    @cached_property
+    def _union_members_(self) -> tuple[Any, ...]:
+        """
+        The members of the field's annotation when it is a union, else the annotation
+        alone.
+        """
+        if is_union_annotation(self.resolved_type):
+            return get_args(self.resolved_type)
+        return (self.resolved_type,)
 
     @cached_property
     def container_type(self) -> type | None:

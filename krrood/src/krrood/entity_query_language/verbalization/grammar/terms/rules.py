@@ -1,3 +1,8 @@
+"""
+The phrase rules that verbalize the terms of a query, such as variables, literals and
+flattened collections.
+"""
+
 from __future__ import annotations
 
 import enum
@@ -6,7 +11,10 @@ from dataclasses import fields, is_dataclass
 
 from typing_extensions import Any
 
-from krrood.entity_query_language.core.mapped_variable import FlatVariable
+from krrood.entity_query_language.core.mapped_variable import (
+    CollectionFlattening,
+    FlatVariable,
+)
 from krrood.entity_query_language.core.variable import (
     ExternallySetVariable,
     Literal,
@@ -285,8 +293,10 @@ class FlatVariableRule(PhraseRule):
     'the tasks of a Worker'
     """
 
-    construct = FlatVariable
+    construct = CollectionFlattening
 
-    def build(self, node: FlatVariable, context: RuleContext) -> VerbalizationFragment:
+    def build(
+        self, node: CollectionFlattening, context: RuleContext
+    ) -> VerbalizationFragment:
         """:return: The child's rendering, unwrapped from the transparent SetOf wrapper."""
         return context.child(node._child_, number=context.number)

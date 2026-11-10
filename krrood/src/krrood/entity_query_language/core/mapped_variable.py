@@ -36,6 +36,7 @@ from random_events.variable import (
 from krrood.class_diagrams.utils import common_base_class, get_type_hints_of_object
 from krrood.class_diagrams.call_arguments import CallArguments
 from krrood.class_diagrams.call_signature import CallSignature
+from krrood.entity_query_language.core.absence import Absence
 from krrood.entity_query_language.core.base_expressions import (
     UnaryExpression,
     Bindings,
@@ -54,6 +55,7 @@ from krrood.entity_query_language.ground_term import (
     IndexTerm,
 )
 from krrood.entity_query_language.exceptions import (
+    AmbiguousCollectionAttribute,
     MultipleValuesAlongAccessPath,
     NoValueAlongAccessPath,
     NotNumberLikeFieldError,
@@ -67,6 +69,7 @@ from krrood.patterns.factory_and_kwargs import HasFactoryAndKwargs
 from krrood.symbol_graph.helpers import (
     get_field_type_endpoint,
     get_method_return_type,
+    get_wrapped_field,
 )
 
 if TYPE_CHECKING:
@@ -148,7 +151,9 @@ class HasSymbolicOperations(Operand, Generic[T], ABC):
 
     def __getattr__(self, name: str) -> Attribute[T]:
         """
-        Read a name that is not this object's own as an attribute of the value type.
+        Read a name that is not this object's own as an attribute of the value type, or
+        of each element when this stands for a collection that lacks the attribute (see
+        :meth:`CanBehaveLikeAVariable._expression_holding_attribute_`).
 
         Dunder names are never symbolic: mapping them would let ``copy``, ``pickle`` and
         anything else probing optional dunder hooks recurse into endless expression
@@ -162,7 +167,9 @@ class HasSymbolicOperations(Operand, Generic[T], ABC):
             raise SymbolicDunderAccessError(name)
         if self._is_own_name_(name):
             raise AttributeError(name)
-        return self._symbolic_expression_._get_mapped_variable_(Attribute, name)
+        return self._symbolic_expression_._expression_holding_attribute_(
+            name
+        )._get_mapped_variable_(Attribute, name)
 
     def __dir__(self) -> list[str]:
         """
@@ -318,6 +325,14 @@ class CanBehaveLikeAVariable(Selectable[T], HasSymbolicOperations[T], ABC):
     def _symbolic_expression_(self) -> CanBehaveLikeAVariable[T]:
         """
         :return: This variable, which is what its own operations are built on.
+        """
+        return self
+
+    def _expression_holding_attribute_(self, name: str) -> CanBehaveLikeAVariable:
+        """
+        :param name: The name of an attribute read on this expression.
+        :return: The expression whose value has the attribute, which is this expression
+            itself unless it stands for a collection.
         """
         return self
 
@@ -517,7 +532,7 @@ class MappedVariable(UnaryExpression, CanBehaveLikeAVariable[T], ABC):
         element is stored under. The other three do not, and a value cannot be written
         through any of them: a :class:`Call` computes its value, an
         :class:`IndexByExpression` names which elements to reach rather than where one
-        of them lives, and a :class:`FlatVariable` reaches every element without naming
+        of them lives, and a :class:`CollectionFlattening` reaches every element without naming
         any.
 
         Naming such a place is a separate question from how many values a mapping
@@ -608,6 +623,9 @@ class SingleValueMapping(MappedVariable[T], GroundTermExpression[GroundTermType]
     def _apply_mapping_(
         self, value: Any, sources: OperationResult | None = None
     ) -> Iterable[T]:
+        if value is Absence.NO_ELEMENT:
+            yield Absence.NO_ELEMENT
+            return
         term_value = EvaluationContext.current_value_of_term(self._ground_term_(value))
         if term_value is not None:
             yield term_value.value
@@ -646,6 +664,37 @@ class Attribute(SingleValueMapping[T, AttributeTerm]):
         Update the `_type_` attribute with the type of the values of this attribute.
         """
         self._type_ = get_field_type_endpoint(self._owner_class_, self._attribute_name_)
+
+    @cached_property
+    def _element_sequence_class_(self) -> type | None:
+        """
+        The class of the unkeyed collection this attribute is declared to hold, or
+        ``None`` when it is declared to hold none.
+        """
+        if not isinstance(self._owner_class_, type):
+            return None
+        wrapped_field = get_wrapped_field(self._owner_class_, self._attribute_name_)
+        if wrapped_field is None:
+            return None
+        return wrapped_field.element_sequence_class
+
+    def _expression_holding_attribute_(self, name: str) -> CanBehaveLikeAVariable:
+        """
+        Overrides :meth:`CanBehaveLikeAVariable._expression_holding_attribute_`: an
+        attribute declared to hold a collection hands a name the collection class lacks
+        on to its :class:`CollectionElement`, so ``pizza.toppings.spiciness`` reads the
+        spiciness of a topping.
+
+        :raises AmbiguousCollectionAttribute: If the collection class and the element
+            type both have the attribute.
+        """
+        if self._element_sequence_class_ is None:
+            return self
+        if name not in dir(self._element_sequence_class_):
+            return self._get_mapped_variable_(CollectionElement)
+        if name in attribute_names_for_completion(self._type_):
+            raise AmbiguousCollectionAttribute(self, name)
+        return self
 
     def _ground_term_(self, instance: Any) -> AttributeTerm:
         return AttributeTerm(instance, self._attribute_name_)
@@ -767,6 +816,9 @@ class IndexByExpression(Index[T], GroundTermExpression[IndexTerm]):
     def _apply_mapping_(
         self, value: Any, sources: OperationResult | None = None
     ) -> Iterable[T]:
+        if value is Absence.NO_ELEMENT:
+            yield Absence.NO_ELEMENT
+            return
         if isinstance(value, UnificationDict) and self._key_ in value:
             yield value[self._key_]
             return
@@ -831,19 +883,12 @@ class Call(SingleValueMapping[T, CallTerm]):
 
 
 @dataclass(eq=False, repr=False)
-class FlatVariable(MappedVariable[T]):
+class CollectionFlattening(MappedVariable[T], ABC):
     """
-    A variable that is created from its child through a flattening operation that
-     transforms the values of the child from an iterable-of-iterables into a single iterable of items.
-     Note: It only unwraps one level of nesting.
+    A mapping from a collection to its elements, which yields one solution per element
+    while keeping the bindings that led to the collection, like ``UNNEST`` in SQL.
 
-    Given a child expression that evaluates to an iterable (e.g., Views.bodies), this mapping yields
-    one solution per inner element while preserving the original bindings (e.g., the View instance),
-    similar to UNNEST in SQL.
-
-    Unlike a :class:`SingleValueMapping`, it takes no argument naming which element it means, so
-    the iteration belongs to the node itself: each flattening written is a variable of
-    its own, and two of them range over the elements independently.
+    It unwraps one level of nesting only.
     """
 
     def _update_type_(self) -> None:
@@ -877,21 +922,61 @@ class FlatVariable(MappedVariable[T]):
             return
         self._type_ = common_base_class(distinct_element_types)
 
+    @cached_property
+    def _name_(self) -> str:
+        """
+        The name of the flattened collection, marked as flattened.
+        """
+        return f"Flatten({self._child_._name_})"
+
+
+@dataclass(eq=False, repr=False)
+class FlatVariable(CollectionFlattening[T]):
+    """
+    A flattening written out with
+    :func:`~krrood.entity_query_language.factories.flat_variable`.
+
+    It takes no argument naming which element it means, so the iteration belongs to the
+    node itself: each flattening written is a variable of its own, and two of them range
+    over the elements independently. A collection that is absent has no elements.
+    """
+
     def _apply_mapping_(
         self, value: Iterable[T] | None, sources: OperationResult | None = None
     ) -> Iterable[T]:
-        # An absent collection, such as an optional one left as None, has no elements.
-        if value is not None:
-            yield from value
+        if value is None or value is Absence.NO_ELEMENT:
+            return
+        yield from value
 
     def _rebuild_on_(self, child: CanBehaveLikeAVariable) -> MappedVariable:
         # Not routed through the mapped-variable cache: a flattening is an iteration
         # variable, so each one written ranges over the elements on its own.
         return FlatVariable(child)
 
-    @cached_property
-    def _name_(self) -> str:
-        return f"Flatten({self._child_._name_})"
+
+@dataclass(eq=False, repr=False)
+class CollectionElement(CollectionFlattening[T]):
+    """
+    The element a path means when it reads an attribute that only the elements of a
+    collection have, as the topping in ``pizza.toppings.spiciness``.
+
+    The same path gives this same node, so it means one element. An empty collection
+    yields :attr:`~krrood.entity_query_language.core.absence.Absence.NO_ELEMENT` once.
+    """
+
+    def _apply_mapping_(
+        self, value: Iterable[T] | None, sources: OperationResult | None = None
+    ) -> Iterable[T]:
+        reached_an_element = False
+        if value is not None and value is not Absence.NO_ELEMENT:
+            for element in value:
+                reached_an_element = True
+                yield element
+        if not reached_an_element:
+            yield Absence.NO_ELEMENT
+
+    def _rebuild_on_(self, child: CanBehaveLikeAVariable) -> MappedVariable:
+        return child._get_mapped_variable_(CollectionElement)
 
 
 @dataclass(frozen=True)
