@@ -62,7 +62,10 @@ from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
     WorldEntityWithIDKwargsTracker,
 )
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Bowl, Milk
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Point3
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    CartesianPoint3D,
+)
 from krrood_spatial_math.spatial_types import Pose
 from semantic_digital_twin.world import World
 from .conftest import motion_nodes_in_physics_of, motion_nodes_of
@@ -1048,7 +1051,7 @@ def test_detection_in_a_chart_corrects_a_reach_planned_before_it(
     reach = CartesianPosition(
         root_link=world.root,
         tip_link=view.right_arm.end_effector.tool_frame,
-        goal_point=Point3(reference_frame=milk_body),
+        goal_point=CartesianPoint3D(reference_frame=milk_body),
         name="MoveTCP",
     )
     statechart = build_perception_task(detection, world, rclpy_node)
@@ -1135,7 +1138,7 @@ def test_a_detection_without_a_box_looks_as_far_to_every_side_of_the_robot(
 
     for x, y in [(distance, 0), (-distance, 0), (0, distance), (0, -distance)]:
         assert task.query.region.contains(
-            Point3(x, y, distance, reference_frame=view.root)
+            CartesianPoint3D(x, y, distance, reference_frame=view.root)
         )
 
 

@@ -23,7 +23,7 @@ from semantic_digital_twin.exceptions import MissingConnectionAxisError
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     Vector3,
-    Point3,
+    CartesianPoint3D,
     Quaternion,
 )
 
@@ -533,7 +533,7 @@ class Connection6DoF(Connection):
 
     def add_to_world(self, world: World):
         super().add_to_world(world)
-        parent_P_child = Point3(
+        parent_P_child = CartesianPoint3D(
             x=self.x.variables.position,
             y=self.y.variables.position,
             z=self.z.variables.position,

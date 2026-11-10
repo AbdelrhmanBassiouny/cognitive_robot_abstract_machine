@@ -8,7 +8,7 @@ from typing_extensions import TYPE_CHECKING
 
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Point3,
+    CartesianPoint3D,
     RotationMatrix,
     Vector3,
 )
@@ -100,7 +100,7 @@ class SurfaceGrasp(ObjectRelativeGrasp):
 
     def _surface_point(
         self, graspable: HasGraspCandidates, root_V_outward: Vector3
-    ) -> Point3 | None:
+    ) -> CartesianPoint3D | None:
         """
         :param graspable: The object whose grasp surface the ray is cast against.
         :param root_V_outward: The horizontal direction the ray comes from.
@@ -118,6 +118,6 @@ class SurfaceGrasp(ObjectRelativeGrasp):
         )
         if len(locations) == 0:
             return None
-        return Point3(
+        return CartesianPoint3D(
             *locations[int(np.argmin(np.linalg.norm(locations - origin, axis=1)))]
         )

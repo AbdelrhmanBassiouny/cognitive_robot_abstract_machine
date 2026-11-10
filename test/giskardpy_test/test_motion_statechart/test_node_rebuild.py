@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from krrood_spatial_math.spatial_types import Point3
+from krrood_spatial_math.spatial_types import CartesianPoint3D
 from semantic_digital_twin.world import World
 
 from giskardpy.motion_statechart.monitors.progress_monitors import (
@@ -21,7 +21,7 @@ def _task_moving_the_bot(world: World, name: str) -> CartesianPosition:
         name=name,
         root_link=world.root,
         tip_link=world.get_kinematic_structure_entity_by_name("bot"),
-        goal_point=Point3(0, 0, 0, reference_frame=world.root),
+        goal_point=CartesianPoint3D(0, 0, 0, reference_frame=world.root),
     )
 
 

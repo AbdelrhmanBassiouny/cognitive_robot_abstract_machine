@@ -56,7 +56,7 @@ from semantic_digital_twin.grasping.grasp_strategies import (
     PinchARim,
 )
 from krrood_spatial_math.spatial_types import (
-    Point3,
+    CartesianPoint3D,
     HomogeneousTransformationMatrix,
     Vector3,
 )
@@ -188,7 +188,7 @@ class Handle(HasGraspCandidates):
             GraspCandidate(
                 self,
                 Pose(
-                    position=Point3.from_iterable(mesh.bounds.mean(axis=0)),
+                    position=CartesianPoint3D.from_iterable(mesh.bounds.mean(axis=0)),
                     orientation=RotationMatrix.from_vectors(
                         x=approach, y=bar_direction.cross(approach)
                     ).quaternion,
@@ -712,12 +712,12 @@ class Floor(HasSupportingSurface):
         cls,
         name: str,
         world: World,
-        floor_polytope: list[Point3],
+        floor_polytope: list[CartesianPoint3D],
         world_root_T_self: HomogeneousTransformationMatrix | None = None,
     ) -> Self:
         """
         Create a Floor semantic annotation with a new body defined by the given list of
-        Point3.
+        CartesianPoint3D.
 
         :param name: The name of the floor body.
         :param floor_polytope: A list of 3D points defining the floor poly
@@ -788,7 +788,7 @@ class Level(HasRootRegion):
     """
 
     @property
-    def floor_plane(self) -> tuple[Point3, Point3]:
+    def floor_plane(self) -> tuple[CartesianPoint3D, CartesianPoint3D]:
         """
         The floor plane of a level, expressed as two points
 
@@ -801,7 +801,7 @@ class Level(HasRootRegion):
             self.root.area.max_point, self._world.root
         )
         min_z = min_point_global.z
-        return min_point_global, Point3(
+        return min_point_global, CartesianPoint3D(
             max_point_global.x,
             max_point_global.y,
             min_z,
@@ -895,7 +895,7 @@ class Wall(HasApertures):
         origin: HomogeneousTransformationMatrix,
         bloat_amount: float,
         obstacle_height_clearance: float = 0.01,
-    ) -> BoundingBoxCollection[VolumetricBoundingBox, Point3]:
+    ) -> BoundingBoxCollection[VolumetricBoundingBox, CartesianPoint3D]:
         """
         Bloat this wall's bounding boxes along their thinner dimension only -- the
         side that faces the room -- rather than symmetrically in x and y.
@@ -1513,7 +1513,7 @@ class ShapeSortingPiece(HasGraspCandidates):
             GraspCandidate(
                 self,
                 Pose(
-                    position=Point3(
+                    position=CartesianPoint3D(
                         0.0,
                         0.0,
                         bottom_face + self.grasp_height,
@@ -1591,7 +1591,8 @@ class SemanticEnvironmentAnnotation(HasRootBody):
     """
 
     def obstacle_entities(
-        self, search_space: BoundingBoxCollection[VolumetricBoundingBox, Point3]
+        self,
+        search_space: BoundingBoxCollection[VolumetricBoundingBox, CartesianPoint3D],
     ) -> list[Body]:
         """
         Collect the obstacle bodies to consider within ``search_space``.
@@ -1612,12 +1613,12 @@ class SemanticEnvironmentAnnotation(HasRootBody):
 
     def build_bloated_obstacle_collection(
         self,
-        search_space: BoundingBoxCollection[VolumetricBoundingBox, Point3],
+        search_space: BoundingBoxCollection[VolumetricBoundingBox, CartesianPoint3D],
         semantic_wall_annotation: Wall | None = None,
         bloat_obstacles: float = 0.0,
         bloat_walls: float = 0.0,
         obstacle_height_clearance: float = 0.01,
-    ) -> BoundingBoxCollection[VolumetricBoundingBox, Point3]:
+    ) -> BoundingBoxCollection[VolumetricBoundingBox, CartesianPoint3D]:
         """
         Collect and bloat this annotation's obstacle bounding boxes.
 

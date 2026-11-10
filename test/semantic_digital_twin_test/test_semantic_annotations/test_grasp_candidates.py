@@ -58,7 +58,7 @@ from semantic_digital_twin.part_finding.splitting import PartSplitter
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
 from krrood_spatial_math.spatial_types import (
     LineSegment3,
-    Point3,
+    CartesianPoint3D,
     Pose,
     RotationMatrix,
     Vector3,
@@ -885,8 +885,8 @@ class HandleWithDiagonalBar(Handle):
 
     def grasp_axis(self) -> LineSegment3:
         return LineSegment3(
-            start=Point3(0.0, 0.0, 0.0, reference_frame=self.root),
-            end=Point3(0.1, 0.1, 0.1, reference_frame=self.root),
+            start=CartesianPoint3D(0.0, 0.0, 0.0, reference_frame=self.root),
+            end=CartesianPoint3D(0.1, 0.1, 0.1, reference_frame=self.root),
         )
 
 

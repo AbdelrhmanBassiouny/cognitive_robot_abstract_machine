@@ -16,7 +16,11 @@ from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     SemanticEnvironmentAnnotation,
 )
-from krrood_spatial_math.spatial_types import Point3
+from krrood_spatial_math.spatial_types import (
+    CartesianPoint2D,
+    CartesianPoint3D,
+    OrthogonalProjection,
+)
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
@@ -37,6 +41,7 @@ from semantic_digital_twin.world_description.graph_of_convex_sets.plotting impor
     ConvexSetAdjacency,
     ConvexSetsPanel,
     EnvironmentPanel,
+    FloorPlan,
     Footprint,
     GraphOfConvexSetsFigure,
     NavigationPath,
@@ -246,9 +251,9 @@ def test_navigation_path_length_sums_its_segments():
 
     corner_path = NavigationPath(
         [
-            Point3(0.0, 0.0, 0.0, reference_frame=world.root),
-            Point3(3.0, 0.0, 0.0, reference_frame=world.root),
-            Point3(3.0, 4.0, 0.0, reference_frame=world.root),
+            CartesianPoint3D(0.0, 0.0, 0.0, reference_frame=world.root),
+            CartesianPoint3D(3.0, 0.0, 0.0, reference_frame=world.root),
+            CartesianPoint3D(3.0, 4.0, 0.0, reference_frame=world.root),
         ]
     )
 
@@ -266,15 +271,15 @@ def test_navigation_path_reports_how_much_of_it_is_vertical():
 
     climbing_path = NavigationPath(
         [
-            Point3(0.0, 0.0, 0.0, reference_frame=world.root),
-            Point3(0.0, 0.0, 2.0, reference_frame=world.root),
-            Point3(1.0, 0.0, 1.5, reference_frame=world.root),
+            CartesianPoint3D(0.0, 0.0, 0.0, reference_frame=world.root),
+            CartesianPoint3D(0.0, 0.0, 2.0, reference_frame=world.root),
+            CartesianPoint3D(1.0, 0.0, 1.5, reference_frame=world.root),
         ]
     )
     level_path = NavigationPath(
         [
-            Point3(0.0, 0.0, 1.0, reference_frame=world.root),
-            Point3(5.0, 0.0, 1.0, reference_frame=world.root),
+            CartesianPoint3D(0.0, 0.0, 1.0, reference_frame=world.root),
+            CartesianPoint3D(5.0, 0.0, 1.0, reference_frame=world.root),
         ]
     )
 
@@ -319,7 +324,35 @@ def test_adjacency_is_drawn_through_the_portal_the_sets_share(
         target_center=box_row.boxes[1].center,
     )
 
-    assert adjacency.coordinates.tolist() == [[0.5, 0.5], [1.0, 0.5], [1.5, 0.5]]
+    floor_plan = FloorPlan(
+        OrthogonalProjection(box_row.graph.search_space.reference_frame)
+    )
+
+    assert floor_plan.coordinates(adjacency.points).tolist() == [
+        [0.5, 0.5],
+        [1.0, 0.5],
+        [1.5, 0.5],
+    ]
+
+
+def test_the_floor_plan_projects_3d_points_and_keeps_points_on_it():
+    """
+    A 3D point is drawn where it projects onto the floor plan; a point already on the
+    floor plan is drawn where it is.
+    """
+    world = World()
+    with world.modify_world():
+        world.add_kinematic_structure_entity(Body(name=PrefixedName("map")))
+    floor_plan = FloorPlan(OrthogonalProjection(world.root))
+
+    coordinates = floor_plan.coordinates(
+        [
+            CartesianPoint3D(1.0, 2.0, 3.0, reference_frame=world.root),
+            CartesianPoint2D(4.0, 5.0, reference_frame=world.root),
+        ]
+    )
+
+    assert coordinates.tolist() == [[1.0, 2.0], [4.0, 5.0]]
 
 
 def test_query_spans_the_graph_in_coordinate_order(box_row: BoxRowFixture):

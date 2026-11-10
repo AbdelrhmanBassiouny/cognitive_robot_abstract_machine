@@ -8,7 +8,7 @@ from krrood.exceptions import DataclassException
 
 if TYPE_CHECKING:
     from krrood_spatial_math.cartesian_frame_3d import CartesianFrame3D
-    from krrood_spatial_math.spatial_types import SpatialType, Vector3
+    from krrood_spatial_math.spatial_types import Pose, SpatialType, Vector3
 
 # %% spatial types
 
@@ -103,6 +103,91 @@ class MissingReferenceFrameError(SpatialTypesError):
 
     def suggest_correction(self) -> str:
         return "construct it with an explicit reference frame."
+
+
+# %% values and changes on the x-y plane of a frame
+
+
+@dataclass
+class NoPlanarTransformationError(SpatialTypesError):
+    """
+    A change between two three-dimensional frames has no rigid counterpart between the
+    frames on their x-y planes.
+    """
+
+    reference_frame: CartesianFrame3D | None
+    """
+    The frame the change turns coordinates into.
+    """
+
+    child_frame: CartesianFrame3D | None
+    """
+    The frame the change turns coordinates from.
+    """
+
+
+@dataclass
+class FramesOnDifferentPlanesError(NoPlanarTransformationError):
+    """
+    Raised when the x-y planes of two frames are different planes, so no change between
+    frames on one plane relates them.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The x-y plane of {self.child_frame} is not the x-y plane of "
+            f"{self.reference_frame}: their z-axes are not parallel, or the child's "
+            f"origin is off the reference frame's plane."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "project the values onto one plane with an OrthogonalProjection instead of "
+            "changing their coordinates."
+        )
+
+
+@dataclass
+class MirroredPlaneFramesError(NoPlanarTransformationError):
+    """
+    Raised when two frames span one plane but their z-axes point to opposite sides of
+    it, so the frames on that plane have opposite handedness and the change between them
+    is a reflection, not a rigid change.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.child_frame} and {self.reference_frame} span one x-y plane, but "
+            f"their z-axes point in opposite directions."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "relate frames whose z-axes point the same way, for instance by turning one "
+            "of them half a turn about its x-axis."
+        )
+
+
+@dataclass
+class XAxisNormalToPlaneError(SpatialTypesError):
+    """
+    Raised when a pose is flattened onto a plane its x-axis is normal to, so the x-axis
+    gives the flattened pose no heading.
+    """
+
+    pose: Pose
+    """
+    The pose that was flattened.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The x-axis of {self.pose} is normal to the x-y plane of "
+            f"{self.pose.reference_frame}, so it has no heading on that plane."
+        )
+
+    def suggest_correction(self) -> str:
+        return "flatten the pose onto a plane its x-axis is not normal to."
 
 
 # %% serialized Cartesian frames

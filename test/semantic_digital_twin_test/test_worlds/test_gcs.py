@@ -19,7 +19,7 @@ from semantic_digital_twin.exceptions import (
     PointOccupiedError,
 )
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Floor
-from krrood_spatial_math.spatial_types import Point2, Point3, Pose
+from krrood_spatial_math.spatial_types import CartesianPoint2D, CartesianPoint3D, Pose
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
@@ -108,10 +108,10 @@ def test_reachability(
     """
     Verify if a path can be found around the unit box.
     """
-    start_point = Point3(
+    start_point = CartesianPoint3D(
         -1, -1, 0.5, reference_frame=graph_of_convex_sets_unit_box.world.root
     )
-    target_point = Point3(
+    target_point = CartesianPoint3D(
         2, 2, 0.5, reference_frame=graph_of_convex_sets_unit_box.world.root
     )
 
@@ -164,8 +164,8 @@ def test_from_world(table_world: World):
     assert len(graph_of_convex_sets.graph.nodes()) > 0
     assert len(graph_of_convex_sets.graph.edges()) > 0
 
-    start = Point3(-4.5, -0.5, 0.4, reference_frame=table_world.root)
-    target = Point3(-2.5, 1.5, 0.9, reference_frame=table_world.root)
+    start = CartesianPoint3D(-4.5, -0.5, 0.4, reference_frame=table_world.root)
+    target = CartesianPoint3D(-2.5, 1.5, 0.9, reference_frame=table_world.root)
 
     path = graph_of_convex_sets.path_from_to(start, target)
 
@@ -173,8 +173,12 @@ def test_from_world(table_world: World):
     assert len(path) > 1
 
     with pytest.raises(PointOutsideSearchSpaceError):
-        start_unsearched = Point3(-10, -10, -10, reference_frame=table_world.root)
-        target_unsearched = Point3(10, 10, 10, reference_frame=table_world.root)
+        start_unsearched = CartesianPoint3D(
+            -10, -10, -10, reference_frame=table_world.root
+        )
+        target_unsearched = CartesianPoint3D(
+            10, 10, 10, reference_frame=table_world.root
+        )
         graph_of_convex_sets.path_from_to(start_unsearched, target_unsearched)
 
 
@@ -235,7 +239,7 @@ def test_constrain_to_free_space_adds_a_where_condition(table_world: World):
         table_world, search_space=search_space
     )
 
-    query = a(Point3)(x=..., y=..., z=..., reference_frame=None)
+    query = a(CartesianPoint3D)(x=..., y=..., z=..., reference_frame=None)
 
     condition = graph_of_convex_sets.constrain_to_free_space(query._get_expression_())
 
@@ -269,7 +273,7 @@ def test_constrain_to_free_space_rejects_a_query_selecting_multiple_variables(
         table_world, search_space=search_space
     )
 
-    query = set_of(variable(Point3), variable(Point3))
+    query = set_of(variable(CartesianPoint3D), variable(CartesianPoint3D))
 
     with pytest.raises(AmbiguousSelectedVariableError):
         graph_of_convex_sets.constrain_to_free_space(query)
@@ -314,10 +318,11 @@ def test_navigation_map_from_world(table_world: World):
     )
 
 
-def test_navigation_map_path_returns_point2_waypoints(table_world: World):
+def test_navigation_map_path_returns_cartesian_point_2d_waypoints(table_world: World):
     """
-    A planar GCS's path is expressed in Point2, not Point3: there is no z to report, and
-    interior waypoints (portals between boxes) carry no meaningful orientation.
+    A planar GCS's path is expressed in CartesianPoint2D, not CartesianPoint3D: there is
+    no z to report, and interior waypoints (portals between boxes) carry no meaningful
+    orientation.
     """
     search_space = BoundingBoxCollection(
         [
@@ -339,14 +344,14 @@ def test_navigation_map_path_returns_point2_waypoints(table_world: World):
         table_world, search_space=search_space
     )
 
-    start = Point2(-4.5, -0.5, reference_frame=table_world.root)
-    goal = Point2(-2.5, 1.5, reference_frame=table_world.root)
+    start = CartesianPoint2D(-4.5, -0.5, reference_frame=table_world.root)
+    goal = CartesianPoint2D(-2.5, 1.5, reference_frame=table_world.root)
     path = graph_of_convex_sets.path_from_to(start, goal)
 
     assert path is not None
     assert len(path) > 1
     for waypoint in path:
-        assert isinstance(waypoint, Point2)
+        assert isinstance(waypoint, CartesianPoint2D)
 
 
 def test_from_world_with_rotated_box():
@@ -410,8 +415,8 @@ def test_from_world_with_rotated_box():
 
     assert len(graph_of_convex_sets.graph.nodes()) > 0
 
-    start = Point3(-1, 0, 0.5, reference_frame=world.root)
-    target = Point3(4, 0, 0.5, reference_frame=world.root)
+    start = CartesianPoint3D(-1, 0, 0.5, reference_frame=world.root)
+    target = CartesianPoint3D(4, 0, 0.5, reference_frame=world.root)
 
     path = graph_of_convex_sets.path_from_to(start, target)
     assert path is not None
@@ -467,8 +472,8 @@ def test_path_from_to_prefers_shorter_distance_over_fewer_hops():
         graph_of_convex_sets.add_node(box)
     graph_of_convex_sets.calculate_connectivity()
 
-    start = Point3(0.5, 0.5, 0.5, reference_frame=world.root)
-    goal = Point3(10.5, 0.5, 0.5, reference_frame=world.root)
+    start = CartesianPoint3D(0.5, 0.5, 0.5, reference_frame=world.root)
+    goal = CartesianPoint3D(10.5, 0.5, 0.5, reference_frame=world.root)
 
     path = graph_of_convex_sets.path_from_to(start, goal)
 
@@ -503,8 +508,8 @@ def test_path_from_to_shortcuts_redundant_waypoints():
         graph_of_convex_sets.add_node(box)
     graph_of_convex_sets.calculate_connectivity()
 
-    start = Point3(0.5, 0.5, 0.5, reference_frame=world.root)
-    goal = Point3(10.5, 0.5, 0.5, reference_frame=world.root)
+    start = CartesianPoint3D(0.5, 0.5, 0.5, reference_frame=world.root)
+    goal = CartesianPoint3D(10.5, 0.5, 0.5, reference_frame=world.root)
 
     path = graph_of_convex_sets.path_from_to(start, goal)
 
@@ -544,8 +549,8 @@ def test_path_from_to_scales_to_a_real_apartment_scene():
     # Confirms this is a genuinely large graph, not an accidentally-trivial one.
     assert len(graph_of_convex_sets.graph.nodes()) > 1000
 
-    start = Point3(0.8, 1.0, 0.6, reference_frame=world.root)
-    goal = Point3(0.8, 2.3, 0.6, reference_frame=world.root)
+    start = CartesianPoint3D(0.8, 1.0, 0.6, reference_frame=world.root)
+    goal = CartesianPoint3D(0.8, 2.3, 0.6, reference_frame=world.root)
     path = graph_of_convex_sets.path_from_to(start, goal)
 
     assert path is not None
@@ -686,9 +691,9 @@ def test_path_from_to_answers_every_waypoint_in_the_search_spaces_frame():
 
     graph = floor.planar_free_space(max_height=1.0)
 
-    world_P_start = Point2(8.0, 0.0, reference_frame=world.root)
+    world_P_start = CartesianPoint2D(8.0, 0.0, reference_frame=world.root)
     path = graph.path_from_to(
-        world_P_start, Point2(12.0, 0.0, reference_frame=world.root)
+        world_P_start, CartesianPoint2D(12.0, 0.0, reference_frame=world.root)
     )
 
     # The wall forces a detour, so the path carries waypoints beyond its two endpoints.
@@ -739,8 +744,8 @@ def test_path_from_to_rejects_a_point_outside_the_search_space(table_world: Worl
     """
     navigation_map = _navigation_map_around_the_table(table_world)
 
-    free = Point2(-4.5, -0.5, reference_frame=table_world.root)
-    unsearched = Point2(10, 10, reference_frame=table_world.root)
+    free = CartesianPoint2D(-4.5, -0.5, reference_frame=table_world.root)
+    unsearched = CartesianPoint2D(10, 10, reference_frame=table_world.root)
 
     with pytest.raises(PointOutsideSearchSpaceError) as raised:
         navigation_map.path_from_to(free, unsearched)
@@ -755,8 +760,8 @@ def test_path_from_to_rejects_a_point_inside_an_obstacle(table_world: World):
     """
     navigation_map = _navigation_map_around_the_table(table_world)
 
-    free = Point2(-4.5, -0.5, reference_frame=table_world.root)
-    under_the_table = Point2(-3.5, 0.5, reference_frame=table_world.root)
+    free = CartesianPoint2D(-4.5, -0.5, reference_frame=table_world.root)
+    under_the_table = CartesianPoint2D(-3.5, 0.5, reference_frame=table_world.root)
 
     with pytest.raises(PointOccupiedError):
         navigation_map.path_from_to(free, under_the_table)
@@ -770,8 +775,8 @@ def test_path_from_to_accepts_points_in_another_reference_frame(table_world: Wor
     navigation_map = _navigation_map_around_the_table(table_world)
     table_top = table_world.get_body_by_name("top")
 
-    world_P_start = Point2(-4.5, -0.5, reference_frame=table_world.root)
-    world_P_goal = Point2(-2.5, 1.5, reference_frame=table_world.root)
+    world_P_start = CartesianPoint2D(-4.5, -0.5, reference_frame=table_world.root)
+    world_P_goal = CartesianPoint2D(-2.5, 1.5, reference_frame=table_world.root)
 
     path = navigation_map.path_from_to(
         table_world.transform(world_P_start, table_top),
@@ -801,7 +806,7 @@ def test_node_of_point_answers_with_the_free_box_a_point_falls_into(
     """
     navigation_map = _navigation_map_around_the_table(table_world)
 
-    free = Point2(-4.5, -0.5, reference_frame=table_world.root)
+    free = CartesianPoint2D(-4.5, -0.5, reference_frame=table_world.root)
 
     assert navigation_map.node_of_point(free).contains(free)
 
@@ -813,7 +818,7 @@ def test_node_of_point_rejects_a_point_no_free_box_covers(table_world: World):
     """
     navigation_map = _navigation_map_around_the_table(table_world)
 
-    under_the_table = Point2(-3.5, 0.5, reference_frame=table_world.root)
+    under_the_table = CartesianPoint2D(-3.5, 0.5, reference_frame=table_world.root)
 
     with pytest.raises(PointOccupiedError):
         navigation_map.node_of_point(under_the_table)
@@ -826,7 +831,7 @@ def test_node_of_point_rejects_a_point_outside_the_search_space(table_world: Wor
     """
     navigation_map = _navigation_map_around_the_table(table_world)
 
-    unsearched = Point2(10, 10, reference_frame=table_world.root)
+    unsearched = CartesianPoint2D(10, 10, reference_frame=table_world.root)
 
     with pytest.raises(PointOutsideSearchSpaceError):
         navigation_map.node_of_point(unsearched)
@@ -841,6 +846,6 @@ def test_the_unchecked_lookup_answers_with_nothing_for_an_occupied_point(
     """
     navigation_map = _navigation_map_around_the_table(table_world)
 
-    under_the_table = Point2(-3.5, 0.5, reference_frame=table_world.root)
+    under_the_table = CartesianPoint2D(-3.5, 0.5, reference_frame=table_world.root)
 
     assert navigation_map._node_of_point(under_the_table) is None

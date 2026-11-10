@@ -19,7 +19,7 @@ from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
 )
 from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.robots.hsrb import HSRBJoint
-from krrood_spatial_math.spatial_types import Point3, Vector3
+from krrood_spatial_math.spatial_types import CartesianPoint3D, Vector3
 from semantic_digital_twin.world import World
 from test.semantic_digital_twin_test.test_orm.test_orm import hsr_world_state_reset
 from giskardpy.motion_control import MotionControl
@@ -28,11 +28,11 @@ from cramph.executor import StatechartExecutor
 from ..motion_control_context import add_to_statechart_with_motion_control
 
 
-def _hole_at_current_tip(world: World, tip, root) -> Point3:
+def _hole_at_current_tip(world: World, tip, root) -> CartesianPoint3D:
     root_P_tip = world.transform(
-        target_frame=root, spatial_object=Point3(0, 0, 0, reference_frame=tip)
+        target_frame=root, spatial_object=CartesianPoint3D(0, 0, 0, reference_frame=tip)
     ).to_np()[:3]
-    return Point3(*root_P_tip, reference_frame=root)
+    return CartesianPoint3D(*root_P_tip, reference_frame=root)
 
 
 def test_wiggle_insert_reaches_hole(pr2_world_state_reset: World, rclpy_node):
@@ -157,7 +157,7 @@ def test_wiggle_insert(hsr_world_state_reset):
     hpl = hsr_world_state_reset.get_body_by_name("hand_gripper_tool_frame")
     root_link = hsr_world_state_reset.get_body_by_name("map")
 
-    hole_point = Point3(x=0.5, z=0.3, reference_frame=root_link)
+    hole_point = CartesianPoint3D(x=0.5, z=0.3, reference_frame=root_link)
 
     executor = StatechartExecutor(
         context=StatechartContext(world=hsr_world_state_reset),
@@ -188,7 +188,7 @@ def test_wiggle_insert(hsr_world_state_reset):
                                 CartesianPosition(
                                     root_link=root_link,
                                     tip_link=hpl,
-                                    goal_point=Point3(
+                                    goal_point=CartesianPoint3D(
                                         x=0.5, z=0.4, reference_frame=root_link
                                     ),
                                     weight=DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE,

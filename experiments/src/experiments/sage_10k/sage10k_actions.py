@@ -11,7 +11,7 @@ from coraplex.robot_plans.actions.core.container import OpenAction
 from coraplex.robot_plans.actions.core.misc import MoveToReach
 from semantic_digital_twin.robots.robot_parts import EndEffector
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Door
-from krrood_spatial_math.spatial_types import Point2, Pose2D, Pose
+from krrood_spatial_math.spatial_types import CartesianPoint2D, Pose2D, Pose
 from semantic_digital_twin.world_description.graph_of_convex_sets.boxes import (
     PlanarGraphOfBoundingBoxes,
 )
@@ -55,7 +55,7 @@ class Sage10kOpenDoor(SequentialAction):
 
         # Find a node in free space that is near the pre-grasp pose. gcs is planar, so
         # the query point is its floor-plane projection, not the full 3D position.
-        target_node = gcs.node_of_point(Point2.from_pose(pre_grasp_pose))
+        target_node = gcs.node_of_point(CartesianPoint2D.from_pose(pre_grasp_pose))
 
         gcs = gcs.create_subgraph(
             list(
@@ -67,7 +67,7 @@ class Sage10kOpenDoor(SequentialAction):
 
         reach_query = a(MoveToReach)(
             target_pose_offset_robot=a(Pose2D)(
-                position=a(Point2)(x=..., y=..., reference_frame=None),
+                position=a(CartesianPoint2D)(x=..., y=..., reference_frame=None),
                 yaw=...,
                 reference_frame=None,
             ),

@@ -59,8 +59,8 @@ def compare_poses(
 
 
 def compare_points(
-    actual_point: cas.Point3,
-    desired_point: cas.Point3,
+    actual_point: cas.CartesianPoint3D,
+    desired_point: cas.CartesianPoint3D,
     decimal: int = 2,
 ) -> None:
     """

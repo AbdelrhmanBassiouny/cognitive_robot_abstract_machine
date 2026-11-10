@@ -25,7 +25,7 @@ from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     RotationMatrix,
 )
-from krrood_spatial_math.spatial_types import Pose, Point3
+from krrood_spatial_math.spatial_types import Pose, CartesianPoint3D
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
 from semantic_digital_twin.world_description.world_entity import (
@@ -203,7 +203,7 @@ class Detection:
 
     @staticmethod
     def _with_z_up_and_x_towards(
-        root_T_frame: HomogeneousTransformationMatrix, root_P_target: Point3
+        root_T_frame: HomogeneousTransformationMatrix, root_P_target: CartesianPoint3D
     ) -> HomogeneousTransformationMatrix:
         """
         Return ``root_T_frame`` rotated by 180° around its own axes so that its z axis
@@ -212,7 +212,8 @@ class Detection:
 
         The position is left untouched, and every axis stays on the axis it started on.
         :param root_T_frame:``HomogeneousTransformationMatrix`` which will be rotated
-        :param root_P_target:``Point3`` towards which root_T_frame x axis will point
+        :param root_P_target:``CartesianPoint3D`` towards which root_T_frame x axis will
+            point
         :return: rotated transformation matrix
         """
         root_V_target = root_P_target - root_T_frame.position

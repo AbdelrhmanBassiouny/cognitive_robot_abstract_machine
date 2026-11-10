@@ -48,7 +48,7 @@ from experiments.shelf_generation_experiments.shelf_schema import (
 )
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Point2,
+    CartesianPoint2D,
     Pose,
     Pose2D,
 )
@@ -297,7 +297,7 @@ def test_position_is_corrected_to_the_meshs_bounding_box_center(
     measurements = MeshMeasurements(source_id_to_path={"book_src": scene_directory})
 
     corrected = measurements.corrected_position(
-        source_id="book_src", position=Point2(x=1.0, y=2.0), yaw_degrees=0.0
+        source_id="book_src", position=CartesianPoint2D(x=1.0, y=2.0), yaw_degrees=0.0
     )
 
     assert corrected.is_mesh_corrected
@@ -335,7 +335,7 @@ def test_position_correction_is_rotated_by_the_objects_own_yaw(
     measurements = MeshMeasurements(source_id_to_path={"book_src": scene_directory})
 
     corrected = measurements.corrected_position(
-        source_id="book_src", position=Point2(x=0.0, y=0.0), yaw_degrees=90.0
+        source_id="book_src", position=CartesianPoint2D(x=0.0, y=0.0), yaw_degrees=90.0
     )
 
     assert float(corrected.position.x) == pytest.approx(0.0, abs=1e-9)
@@ -351,7 +351,9 @@ def test_position_falls_back_to_the_recorded_one_without_a_cached_mesh() -> None
     measurements = MeshMeasurements(source_id_to_path={})
 
     corrected = measurements.corrected_position(
-        source_id="missing_src", position=Point2(x=0.3, y=0.1), yaw_degrees=0.0
+        source_id="missing_src",
+        position=CartesianPoint2D(x=0.3, y=0.1),
+        yaw_degrees=0.0,
     )
 
     assert not corrected.is_mesh_corrected
@@ -369,7 +371,9 @@ def test_mesh_is_measured_once_per_source_id(tmp_path: Path) -> None:
 
     for _ in range(3):
         measurements.corrected_position(
-            source_id="book_src", position=Point2(x=0.0, y=0.0), yaw_degrees=0.0
+            source_id="book_src",
+            position=CartesianPoint2D(x=0.0, y=0.0),
+            yaw_degrees=0.0,
         )
 
     assert measurements.measured_mesh_count == 1

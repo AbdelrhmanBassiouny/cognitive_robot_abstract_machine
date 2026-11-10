@@ -16,7 +16,7 @@ from giskardpy.motion_statechart.cruise_velocities import DefaultCruiseVelocity
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Point3,
+    CartesianPoint3D,
     RotationMatrix,
     Vector3,
 )
@@ -193,7 +193,7 @@ class BaseHeading(DrivenBaseRotation):
 
     def parent_P_viewpoint(
         self, parent_T_base: HomogeneousTransformationMatrix
-    ) -> Point3:
+    ) -> CartesianPoint3D:
         """
         :param parent_T_base: The pose of the base relative to the drive's parent.
         :return: The point relative to the drive's parent the base faces the position of
@@ -245,5 +245,5 @@ class BaseTurnTowardsGoalPosition(BaseHeading):
 
     def parent_P_viewpoint(
         self, parent_T_base: HomogeneousTransformationMatrix
-    ) -> Point3:
+    ) -> CartesianPoint3D:
         return self._parent_T_start_binding.root_T_tip.position

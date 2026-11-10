@@ -49,7 +49,7 @@ from semantic_digital_twin.specifications.semantic_annotations import (
 )
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Point3,
+    CartesianPoint3D,
     Vector3,
 )
 from semantic_digital_twin.utils import create_cache_dir
@@ -2545,31 +2545,31 @@ class KitchenEnvironment(WorldSource):
 
         with world.modify_world():
             kitchen_floor_polytope = [
-                Point3(0, 0, 0),
-                Point3(0, 3.334, 0),
-                Point3(5.214, 3.334, 0),
-                Point3(5.214, 0, 0),
+                CartesianPoint3D(0, 0, 0),
+                CartesianPoint3D(0, 3.334, 0),
+                CartesianPoint3D(5.214, 3.334, 0),
+                CartesianPoint3D(5.214, 0, 0),
             ]
 
             living_room_floor_polytope = [
-                Point3(0, 0, 0),
-                Point3(0, 2.801, 0),
-                Point3(5.214, 2.801, 0),
-                Point3(5.214, 0, 0),
+                CartesianPoint3D(0, 0, 0),
+                CartesianPoint3D(0, 2.801, 0),
+                CartesianPoint3D(5.214, 2.801, 0),
+                CartesianPoint3D(5.214, 0, 0),
             ]
 
             bed_room_floor_polytope = [
-                Point3(0, 0, 0),
-                Point3(0, 2.67, 0.0),
-                Point3(2.50, 2.67, 0.0),
-                Point3(2.50, 0, 0.0),
+                CartesianPoint3D(0, 0, 0),
+                CartesianPoint3D(0, 2.67, 0.0),
+                CartesianPoint3D(2.50, 2.67, 0.0),
+                CartesianPoint3D(2.50, 0, 0.0),
             ]
 
             office_floor_polytope = [
-                Point3(0, 0, 0),
-                Point3(0, 2.67, 0),
-                Point3(2.705, 2.67, 0),
-                Point3(2.705, 0, 0),
+                CartesianPoint3D(0, 0, 0),
+                CartesianPoint3D(0, 2.67, 0),
+                CartesianPoint3D(2.705, 2.67, 0),
+                CartesianPoint3D(2.705, 0, 0),
             ]
 
             kitchen_floor = Floor.create_with_new_body_from_polytope_in_world(

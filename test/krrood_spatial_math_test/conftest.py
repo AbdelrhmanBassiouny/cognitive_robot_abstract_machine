@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from .dataset.frames import NamedFrame
+from .dataset.frames import NamedFrame, Room
 
 # %% Cartesian frames
 
@@ -20,3 +20,11 @@ def camera_frame() -> NamedFrame:
 @pytest.fixture
 def gripper_frame() -> NamedFrame:
     return NamedFrame("gripper")
+
+
+# %% the space frames chart
+
+
+@pytest.fixture
+def room() -> Room:
+    return Room()

@@ -4,7 +4,12 @@ import numpy as np
 import pytest
 from typing_extensions import Callable
 
-from krrood_spatial_math.spatial_types import AxisAngle, Point3, RotationMatrix, Vector3
+from krrood_spatial_math.spatial_types import (
+    AxisAngle,
+    CartesianPoint3D,
+    RotationMatrix,
+    Vector3,
+)
 
 from giskardpy.motion_statechart.constraint_builders import GeometricConstraintBuilder
 from giskardpy.motion_statechart.graph_node import MotionNodeArtifacts
@@ -50,8 +55,8 @@ def test_point_goal_writes_three_equality_constraints():
     collection = ConstraintCollection()
     builder = GeometricConstraintBuilder(collection)
     builder.add_point_goal_constraints(
-        frame_P_current=Point3(0.0, 0.0, 0.0),
-        frame_P_goal=Point3(1.0, 2.0, 3.0),
+        frame_P_current=CartesianPoint3D(0.0, 0.0, 0.0),
+        frame_P_goal=CartesianPoint3D(1.0, 2.0, 3.0),
         cruise_velocity=0.1,
         quadratic_weight=1.0,
         name="goal",
@@ -64,8 +69,8 @@ def test_point_goal_caps_the_length_of_its_error_and_keeps_its_direction():
     error = np.array([1.0, 0.3, 0.0])
     collection = ConstraintCollection()
     GeometricConstraintBuilder(collection).add_point_goal_constraints(
-        frame_P_current=Point3(0.0, 0.0, 0.0),
-        frame_P_goal=Point3(*error),
+        frame_P_current=CartesianPoint3D(0.0, 0.0, 0.0),
+        frame_P_goal=CartesianPoint3D(*error),
         cruise_velocity=0.1,
         quadratic_weight=1.0,
     )
@@ -195,8 +200,8 @@ def test_rotation_goal_within_reach_is_not_capped(
 def test_node_artifacts_geometry_writes_into_its_constraints():
     artifacts = MotionNodeArtifacts()
     artifacts.geometry.add_point_goal_constraints(
-        frame_P_current=Point3(0.0, 0.0, 0.0),
-        frame_P_goal=Point3(1.0, 2.0, 3.0),
+        frame_P_current=CartesianPoint3D(0.0, 0.0, 0.0),
+        frame_P_goal=CartesianPoint3D(1.0, 2.0, 3.0),
         cruise_velocity=0.1,
         quadratic_weight=1.0,
         name="goal",
@@ -264,8 +269,8 @@ def enforced_goal(
     """
     current_and_goal = {
         GeometricConstraintBuilder.add_point_goal_constraints: (
-            Point3(0.0, 0.0, 0.0),
-            Point3(distance, 0.0, 0.0),
+            CartesianPoint3D(0.0, 0.0, 0.0),
+            CartesianPoint3D(distance, 0.0, 0.0),
         ),
         GeometricConstraintBuilder.add_vector_goal_constraints: (
             Vector3.X(),

@@ -35,7 +35,7 @@ from semantic_digital_twin.spatial_computations.ik_solver import (
     MaxIterationsException,
     UnreachableException,
 )
-from krrood_spatial_math.spatial_types import Vector3, Point3
+from krrood_spatial_math.spatial_types import Vector3, CartesianPoint3D
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Pose
 from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
 from semantic_digital_twin.world_description.world_entity import (
@@ -447,12 +447,12 @@ class PointSpatialRelation(Predicate, ABC):
     Check if the point is spatially related to the other point.
     """
 
-    point: Point3
+    point: CartesianPoint3D
     """
     The point for which the check should be done.
     """
 
-    other: Point3
+    other: CartesianPoint3D
     """
     The other point.
     """

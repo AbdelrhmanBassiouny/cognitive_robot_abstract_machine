@@ -32,7 +32,7 @@ from probabilistic_model.learning.jpt.jpt import JointProbabilityTree
 from krrood_spatial_math.spatial_types import (
     AxisAngle,
     HomogeneousTransformationMatrix,
-    Point2,
+    CartesianPoint2D,
     Pose,
     Pose2D,
     RotationMatrix,
@@ -173,7 +173,7 @@ def scattered_poses_2d() -> list[Pose2D]:
     generator = random.Random(0)
     return [
         Pose2D(
-            position=Point2(
+            position=CartesianPoint2D(
                 x=generator.uniform(0.0, 1.0), y=generator.uniform(10.0, 11.0)
             ),
             yaw=generator.uniform(-1.0, 1.0),
@@ -203,7 +203,7 @@ def test_a_pose_2d_built_by_a_query_takes_the_values_sampled_from_the_learned_mo
     np.random.seed(0)
     [sampled] = ProbabilisticBackend(
         model_registry=DictRegistry({Pose2D: model}), number_of_samples=1
-    ).evaluate(a(Pose2D)(position=a(Point2)(x=..., y=...), yaw=...))
+    ).evaluate(a(Pose2D)(position=a(CartesianPoint2D)(x=..., y=...), yaw=...))
 
     [actual] = (
         FeatureExtractor.from_instances([sampled])

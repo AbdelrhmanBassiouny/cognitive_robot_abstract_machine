@@ -17,7 +17,7 @@ from robokudo.io.sensor_world import RecordedCameraWorld
 from robokudo.types.camera import CameraObservation
 from robokudo.types.cv import ImageROI
 from robokudo.types.scene import ObjectHypothesis
-from krrood_spatial_math.spatial_types import Point2
+from krrood_spatial_math.spatial_types import CartesianPoint2D
 from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -97,7 +97,7 @@ def create_camera_model() -> PinholeCameraModel:
         image_resolution=CameraResolution(width=640, height=480),
         focal_length_x=525.0,
         focal_length_y=526.0,
-        principal_point=Point2(x=319.5, y=239.5),
+        principal_point=CartesianPoint2D(x=319.5, y=239.5),
     )
 
 

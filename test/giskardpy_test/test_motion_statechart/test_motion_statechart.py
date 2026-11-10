@@ -47,7 +47,7 @@ from krrood_spatial_math.spatial_types import (
     Quaternion,
     RotationMatrix,
     Vector3,
-    Point3,
+    CartesianPoint3D,
 )
 from krrood_spatial_math.spatial_types import Pose
 from semantic_digital_twin.world import World
@@ -408,7 +408,7 @@ class TestTemplates:
         right_shift = -0.1
         # The knife's x axis points up in map, so its -x stroke cuts downwards.
         pre_cut_pose = Pose(
-            position=Point3(x=0.85, y=0.2, z=0.75, reference_frame=map_link),
+            position=CartesianPoint3D(x=0.85, y=0.2, z=0.75, reference_frame=map_link),
             orientation=Quaternion.from_rotation_matrix(
                 RotationMatrix.from_vectors(
                     x=Vector3(z=1, reference_frame=map_link),
@@ -436,7 +436,7 @@ class TestTemplates:
                     root_link=map_link,
                     tip_link=knife,
                     goal_pose=Pose(
-                        position=Point3(x=-depth, reference_frame=knife),
+                        position=CartesianPoint3D(x=-depth, reference_frame=knife),
                         reference_frame=knife,
                     ),
                 ),
@@ -445,7 +445,7 @@ class TestTemplates:
                     root_link=map_link,
                     tip_link=knife,
                     goal_pose=Pose(
-                        position=Point3(x=depth, reference_frame=knife),
+                        position=CartesianPoint3D(x=depth, reference_frame=knife),
                         reference_frame=knife,
                     ),
                 ),
@@ -454,7 +454,7 @@ class TestTemplates:
                     root_link=map_link,
                     tip_link=knife,
                     goal_pose=Pose(
-                        position=Point3(y=right_shift, reference_frame=knife),
+                        position=CartesianPoint3D(y=right_shift, reference_frame=knife),
                         reference_frame=knife,
                     ),
                 ),
@@ -548,8 +548,8 @@ def test_constraint_collection(pr2_world_state_reset: World):
     expr = Vector3.X(tip).angle_between(Vector3.Y(root))
 
     GeometricConstraintBuilder(col).add_point_goal_constraints(
-        frame_P_current=Point3(0, 0, 0, reference_frame=tip),
-        frame_P_goal=Point3(0, 0, 0, reference_frame=tip),
+        frame_P_current=CartesianPoint3D(0, 0, 0, reference_frame=tip),
+        frame_P_goal=CartesianPoint3D(0, 0, 0, reference_frame=tip),
         cruise_velocity=0.1,
         quadratic_weight=DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE,
     )

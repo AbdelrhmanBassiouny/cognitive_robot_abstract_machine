@@ -128,7 +128,7 @@ from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.robots.robot_parts import AbstractRobot, EndEffector
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Point3,
+    CartesianPoint3D,
     RotationMatrix,
     Vector3,
 )
@@ -173,12 +173,12 @@ def _robot(world: World) -> AbstractRobot:
     return world.get_semantic_annotations_by_type(AbstractRobot)[0]
 
 
-def _point(world: World) -> Point3:
-    return Point3(0.1, 0.2, 0.3, reference_frame=_root(world))
+def _point(world: World) -> CartesianPoint3D:
+    return CartesianPoint3D(0.1, 0.2, 0.3, reference_frame=_root(world))
 
 
-def _tip_point(world: World) -> Point3:
-    return Point3(0.0, 0.0, 0.1, reference_frame=_tip(world))
+def _tip_point(world: World) -> CartesianPoint3D:
+    return CartesianPoint3D(0.0, 0.0, 0.1, reference_frame=_tip(world))
 
 
 def _root_axis(world: World) -> Vector3:
@@ -495,7 +495,9 @@ def _cartesian_cases() -> list[NodeRoundTripCase]:
                     tip_link=_tip(world),
                     tip_P_tool=_tip_point(world),
                     root_P_start=_point(world),
-                    root_P_end=Point3(0.1, 0.2, 0.5, reference_frame=_root(world)),
+                    root_P_end=CartesianPoint3D(
+                        0.1, 0.2, 0.5, reference_frame=_root(world)
+                    ),
                 )
             ],
             WorldFixture.PR2_WORLD,

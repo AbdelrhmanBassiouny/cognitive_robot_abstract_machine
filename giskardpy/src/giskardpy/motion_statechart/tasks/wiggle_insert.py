@@ -17,7 +17,12 @@ from giskardpy.motion_statechart.graph_node import (
     DebugExpression,
     MotionNodeArtifacts,
 )
-from krrood_spatial_math.spatial_types import AxisAngle, Point3, Vector3, RotationMatrix
+from krrood_spatial_math.spatial_types import (
+    AxisAngle,
+    CartesianPoint3D,
+    Vector3,
+    RotationMatrix,
+)
 from semantic_digital_twin.world_description.world_entity import Body
 
 
@@ -41,7 +46,7 @@ class WiggleInsert(ConvergingTask):
     Tip link that is pressed into the hole.
     """
 
-    hole_point: Point3
+    hole_point: CartesianPoint3D
     """
     Center point of the hole.
     """

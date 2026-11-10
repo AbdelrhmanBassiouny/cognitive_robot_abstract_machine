@@ -36,7 +36,7 @@ from krrood.symbolic_math.symbolic_math import (
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from krrood_spatial_math.spatial_types import (
-    Point3,
+    CartesianPoint3D,
     RotationMatrix,
     HomogeneousTransformationMatrix,
     Vector3,
@@ -140,7 +140,7 @@ class CartesianPosition(CartesianTask):
     .. warning:: This task does not constrain orientation.
     """
 
-    goal_point: Point3
+    goal_point: CartesianPoint3D
     """Target 3D point to reach."""
     threshold: float = 0.01
     """Distance threshold for goal achievement in meters."""
@@ -195,12 +195,12 @@ class DistanceAlongAxis(ConvergingTask):
     The frame :attr:`axis` is fixed in.
     """
 
-    reference_point: Point3
+    reference_point: CartesianPoint3D
     """
     The point the distance is measured from, in the frame of the link it is fixed on.
     """
 
-    tip_point: Point3
+    tip_point: CartesianPoint3D
     """
     The point the distance is measured to, in the frame of the link it is fixed on.
     """
@@ -253,7 +253,7 @@ class CartesianPositionTrajectory(CartesianTask):
     .. warning:: the trajectory is assumed to be dense and smooth.
     """
 
-    goal_points: list[Point3]
+    goal_points: list[CartesianPoint3D]
     """Target 3D point to reach."""
     _goal_points_np: np.ndarray = field(init=False, repr=False)
     """Goal points in numpy format."""
@@ -277,7 +277,9 @@ class CartesianPositionTrajectory(CartesianTask):
     cruise_velocity: float | None = DefaultCruiseVelocity.TRANSLATION
     """Sets how fast the goal is approached, in m/s; not strictly enforced."""
 
-    goal_reference_frame_P_current_target_point: Point3 = field(init=False, repr=False)
+    goal_reference_frame_P_current_target_point: CartesianPoint3D = field(
+        init=False, repr=False
+    )
     """Symbolic expression representing the current target point in the goal reference frame."""
 
     remaining_distance: FloatVariable = field(init=False, repr=False)
@@ -501,8 +503,10 @@ class CartesianPositionTrajectory(CartesianTask):
         Initialize the symbolic expression representing the current target point in the goal reference frame.
         :param float_variable_data: The FloatVariableData instance to register the expression with.
         """
-        self.goal_reference_frame_P_current_target_point = Point3.create_with_variables(
-            "goal_reference_frame_P_current_target_point"
+        self.goal_reference_frame_P_current_target_point = (
+            CartesianPoint3D.create_with_variables(
+                "goal_reference_frame_P_current_target_point"
+            )
         )
         self.goal_reference_frame_P_current_target_point.reference_frame = (
             self.goal_reference_frame
@@ -525,7 +529,7 @@ class CartesianPositionStraight(CartesianTask):
     line towards the goal, useful for tasks requiring linear trajectories.
     """
 
-    goal_point: Point3
+    goal_point: CartesianPoint3D
     """Target 3D point to reach."""
 
     cruise_velocity: float = DefaultCruiseVelocity.TRANSLATION
@@ -947,7 +951,7 @@ class RigidCoupling(Task):
     def _keep_at_rest(
         self,
         artifacts: MotionNodeArtifacts,
-        vector: Point3 | Vector3,
+        vector: CartesianPoint3D | Vector3,
         velocity_scale: float,
         name: str,
     ) -> None:

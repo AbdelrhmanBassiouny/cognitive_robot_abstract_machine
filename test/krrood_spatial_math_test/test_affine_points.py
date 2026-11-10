@@ -5,10 +5,18 @@ from dataclasses import fields
 import pytest
 
 from krrood.patterns.exceptions import InterfaceInstantiationError
-from krrood_spatial_math.affine_point import AffinePoint2D, AffinePoint3D, CoordinateT
+from krrood_spatial_math.affine_point import (
+    AffinePoint,
+    AffinePoint2D,
+    AffinePoint3D,
+    CartesianPoint,
+    CoordinateT,
+)
 from krrood_spatial_math.coordinate_system import (
     AffineFrame,
     AffineFrameT,
+    CartesianFrame,
+    CartesianFrameT,
     CoordinateRepresentation,
 )
 
@@ -22,7 +30,7 @@ from .dataset.spaces import (
 # %% points given in an affine frame
 
 
-affine_points = [AffinePoint2D, AffinePoint3D]
+affine_points = [AffinePoint, AffinePoint2D, AffinePoint3D, CartesianPoint]
 
 
 @pytest.mark.parametrize("affine_point", affine_points)
@@ -34,6 +42,16 @@ def test_an_affine_point_cannot_be_instantiated(affine_point):
 @pytest.mark.parametrize("affine_point", affine_points)
 def test_an_affine_point_is_a_coordinate_representation(affine_point):
     assert issubclass(affine_point, CoordinateRepresentation)
+
+
+@pytest.mark.parametrize("affine_point", [AffinePoint2D, AffinePoint3D, CartesianPoint])
+def test_a_point_of_any_dimension_is_an_affine_point(affine_point):
+    assert issubclass(affine_point, AffinePoint)
+
+
+def test_a_cartesian_point_is_given_in_a_cartesian_frame():
+    assert CartesianPoint.__parameters__ == (CartesianFrameT, CoordinateT)
+    assert CartesianFrameT.__bound__ is CartesianFrame
 
 
 def test_a_three_dimensional_affine_point_is_not_a_two_dimensional_one():

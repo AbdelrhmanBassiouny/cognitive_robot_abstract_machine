@@ -3,13 +3,14 @@ from __future__ import annotations
 import pytest
 
 from krrood.patterns.exceptions import InterfaceInstantiationError
+from krrood_spatial_math.cartesian_frame_2d import CartesianFrame2D
 from krrood_spatial_math.cartesian_frame_3d import (
     CartesianFrame3D,
     CartesianFrame3DReference,
 )
 from krrood_spatial_math.coordinate_system import CartesianFrame, SpaceT
 from krrood_spatial_math.exceptions import MissingCartesianFrame3DResolver
-from krrood_spatial_math.space import EuclideanSpace3D
+from krrood_spatial_math.space import EuclideanSpace2D, EuclideanSpace3D
 
 from .dataset.frames import KnownFrames, ThingFrame
 
@@ -37,6 +38,26 @@ def test_a_three_dimensional_cartesian_frame_declares_expressing_values_in_it():
 
 def test_a_frame_can_extend_an_object_named_before_it_is_identified():
     assert issubclass(ThingFrame, CartesianFrame3D)
+
+
+# %% the frame interface of a plane
+
+
+def test_a_two_dimensional_cartesian_frame_cannot_be_instantiated():
+    with pytest.raises(InterfaceInstantiationError):
+        CartesianFrame2D()
+
+
+def test_a_two_dimensional_cartesian_frame_is_a_cartesian_frame():
+    assert issubclass(CartesianFrame2D, CartesianFrame)
+
+
+def test_a_two_dimensional_cartesian_frame_charts_two_dimensional_euclidean_space():
+    assert CartesianFrame2D.get_type_of_generic_parameter(SpaceT) is EuclideanSpace2D
+
+
+def test_a_two_dimensional_cartesian_frame_is_no_three_dimensional_one():
+    assert not issubclass(CartesianFrame2D, CartesianFrame3D)
 
 
 # %% referring to a frame in a serialized value

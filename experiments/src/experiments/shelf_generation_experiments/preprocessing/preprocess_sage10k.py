@@ -38,7 +38,7 @@ from experiments.shelf_generation_experiments.shelf_schema import (
 )
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Point2,
+    CartesianPoint2D,
     Pose,
     Pose2D,
 )
@@ -139,7 +139,9 @@ class PreprocessedObject:
         """
         corrected = measurements.corrected_position(
             source_id=sage10k_object.source_id,
-            position=Point2(x=sage10k_object.position.x, y=sage10k_object.position.y),
+            position=CartesianPoint2D(
+                x=sage10k_object.position.x, y=sage10k_object.position.y
+            ),
             yaw_degrees=sage10k_object.rotation.z,
         )
         return PreprocessedObject(
@@ -438,7 +440,7 @@ class ShelfExtractor:
 
     @staticmethod
     def _is_within_shelf_footprint(
-        position: Point2,
+        position: CartesianPoint2D,
         shelf: PreprocessedObject,
         maximum_relative_x: float,
         maximum_relative_y: float,
@@ -458,7 +460,9 @@ class ShelfExtractor:
         :param maximum_relative_y: Half the shelf's length, inset by the margin.
         :return: Whether the position falls within the inset footprint.
         """
-        world_offset = Point2(x=position.x - shelf.pose.x, y=position.y - shelf.pose.y)
+        world_offset = CartesianPoint2D(
+            x=position.x - shelf.pose.x, y=position.y - shelf.pose.y
+        )
         shelf_T_world = HomogeneousTransformationMatrix.from_xyz_rpy(
             yaw=-float(shelf.pose.yaw)
         )
@@ -504,7 +508,7 @@ class ShelfExtractor:
         content_frame_yaw_radians = RelationalCircuitExperimentShelf.content_frame_yaw(
             float(shelf.pose.yaw)
         )
-        world_offset = Point2(
+        world_offset = CartesianPoint2D(
             x=object_.pose.x - shelf.pose.x, y=object_.pose.y - shelf.pose.y
         )
         content_T_world = HomogeneousTransformationMatrix.from_xyz_rpy(
@@ -619,7 +623,7 @@ class ShelfExtractor:
             for object_ in members
             if object_.position_is_mesh_corrected
             and ShelfExtractor._is_within_shelf_footprint(
-                Point2(x=object_.pose.x, y=object_.pose.y),
+                CartesianPoint2D(x=object_.pose.x, y=object_.pose.y),
                 shelf,
                 maximum_relative_x,
                 maximum_relative_y,

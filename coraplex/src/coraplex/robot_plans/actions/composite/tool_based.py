@@ -17,7 +17,10 @@ from semantic_digital_twin.datastructures.alignment import AlignmentPair
 from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
 from semantic_digital_twin.robots.robot_parts import Arm
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Tool
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Point3
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    CartesianPoint3D,
+)
 from krrood_spatial_math.spatial_types import Pose
 from semantic_digital_twin.world_description.world_entity import (
     Body,
@@ -133,14 +136,16 @@ class ToolMotionAction(
         """
 
     @cached_property
-    def _waypoints(self) -> list[Point3]:
+    def _waypoints(self) -> list[CartesianPoint3D]:
         """
         :return: The sampled waypoints of the tool path in the world frame.
         """
         _, points, _ = self._build_tool_path().sample(frame=self._path_frame())
         stride = max(1, int(self.pointer_stride))
         waypoints = [
-            Point3(x=point[0], y=point[1], z=point[2], reference_frame=self.world.root)
+            CartesianPoint3D(
+                x=point[0], y=point[1], z=point[2], reference_frame=self.world.root
+            )
             for point in points
         ][::stride]
         if not waypoints:
