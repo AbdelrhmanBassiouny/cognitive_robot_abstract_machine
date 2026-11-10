@@ -125,6 +125,9 @@ class Variable(CanHaveDomainSource[T]):
             domain = [domain]
         self._re_enterable_domain_generator_.set_iterable(iterable=domain)
 
+    def _restart_domain_from_source_(self) -> None:
+        self._re_enterable_domain_generator_.restart_from_source()
+
     def _evaluate__(
         self,
         *,
