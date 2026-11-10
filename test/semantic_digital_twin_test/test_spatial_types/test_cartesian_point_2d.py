@@ -8,7 +8,7 @@ import krrood.symbolic_math.symbolic_math as sm
 from krrood.adapters.json_serializer import from_json, to_json
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from krrood_spatial_math.spatial_types import (
-    OrthogonalProjection,
+    FramePlaneProjection,
     CartesianPoint2D,
     CartesianPoint3D,
     Pose3D,
@@ -73,7 +73,7 @@ class TestCartesianPoint2DToCartesianPoint3D:
         assert unprojected.reference_frame is frame
         np.testing.assert_allclose(
             unprojected.to_np(),
-            OrthogonalProjection(frame)
+            FramePlaneProjection(frame)
             .unproject(point, position_along_line=5.0)
             .to_np(),
         )
@@ -83,7 +83,7 @@ class TestCartesianPoint2DToCartesianPoint3D:
 
         np.testing.assert_allclose(
             point.to_cartesian_point_3d().to_np(),
-            OrthogonalProjection(None).unproject(point).to_np(),
+            FramePlaneProjection(None).unproject(point).to_np(),
         )
 
 
@@ -96,7 +96,7 @@ class TestCartesianPoint2DFromCartesianPoint3D:
 
         assert projected.reference_frame is frame
         np.testing.assert_allclose(
-            projected.to_np(), OrthogonalProjection(frame).project(point).to_np()
+            projected.to_np(), FramePlaneProjection(frame).project(point).to_np()
         )
 
     def test_transforms_into_another_plane_frame(self, rotated_mini_world: World):
@@ -108,7 +108,7 @@ class TestCartesianPoint2DFromCartesianPoint3D:
         assert projected.reference_frame is root
         np.testing.assert_allclose(
             projected.to_np(),
-            OrthogonalProjection(root).project(point).to_np(),
+            FramePlaneProjection(root).project(point).to_np(),
             atol=1e-12,
         )
 
@@ -125,7 +125,7 @@ class TestCartesianPoint2DFromPose:
         assert projected.reference_frame is frame
         np.testing.assert_allclose(
             projected.to_np(),
-            OrthogonalProjection(frame).project(pose.position).to_np(),
+            FramePlaneProjection(frame).project(pose.position).to_np(),
         )
 
     def test_transforms_into_another_plane_frame(self, rotated_mini_world: World):
@@ -137,7 +137,7 @@ class TestCartesianPoint2DFromPose:
         assert projected.reference_frame is root
         np.testing.assert_allclose(
             projected.to_np(),
-            OrthogonalProjection(root).project(pose.position).to_np(),
+            FramePlaneProjection(root).project(pose.position).to_np(),
             atol=1e-12,
         )
 

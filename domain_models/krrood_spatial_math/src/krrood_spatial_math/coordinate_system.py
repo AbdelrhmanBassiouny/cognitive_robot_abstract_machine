@@ -62,6 +62,12 @@ class CartesianFrame(AffineFrame[EuclideanSpaceT, NameT], Interface):
 
 # %% values given in a coordinate system
 
+CoordinateT = TypeVar("CoordinateT")
+"""
+The type a coordinate's real value is stored as, such as a float, or a symbolic
+expression standing for a real number.
+"""
+
 CoordinateSystemT = TypeVar("CoordinateSystemT", bound=CoordinateSystem)
 """
 The kind of coordinate system coordinates are given in.

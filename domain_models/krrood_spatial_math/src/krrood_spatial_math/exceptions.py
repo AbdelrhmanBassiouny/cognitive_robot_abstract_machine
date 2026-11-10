@@ -142,7 +142,7 @@ class FramesOnDifferentPlanesError(NoPlanarTransformationError):
 
     def suggest_correction(self) -> str:
         return (
-            "project the values onto one plane with an OrthogonalProjection instead of "
+            "project the values onto one plane with an FramePlaneProjection instead of "
             "changing their coordinates."
         )
 

@@ -2,13 +2,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from typing_extensions import Self
+
 from krrood.patterns.interface import Interface
-from krrood_spatial_math.affine_point import AffinePoint2D, AffinePoint3D, CoordinateT
+from krrood_spatial_math.affine_line import AffineLine
+from krrood_spatial_math.affine_point import AffinePoint, AffinePointT
+from krrood_spatial_math.affine_vector import AffineVector, AffineVectorT
 from krrood_spatial_math.cartesian_frame_3d import CartesianFrame3D
 from krrood_spatial_math.coordinate_system import (
     AffineCoordinateChange,
     AffineFrame,
     AffineFrameT,
+    CoordinateT,
     RigidCoordinateChange,
 )
 from krrood_spatial_math.space import Space
@@ -29,25 +34,51 @@ class ScalablePlaneFrame(AffineFrame[ScalablePlane, str], Interface):
     """
 
 
-class ScalableSpace(Space, Interface):
-    """
-    A three-dimensional space whose frames differ by scaling and shifting each axis.
-    """
-
-
-class ScalableSpaceFrame(AffineFrame[ScalableSpace, str], Interface):
-    """
-    An affine frame on a :class:`ScalableSpace`, called by a plain name.
-    """
-
-
-# %% points that store their coordinates
+# %% points and vectors that store their coordinates
 
 
 @dataclass
-class StoredAffinePoint2D(AffinePoint2D[AffineFrameT, CoordinateT]):
+class StoredAffineVector(AffineVector[AffineFrameT, CoordinateT]):
     """
-    A point that stores its coordinates and frame as given.
+    A vector that stores its two coordinates and frame as given.
+    """
+
+    x: CoordinateT
+    """
+    The amount along the first axis.
+    """
+
+    y: CoordinateT
+    """
+    The amount along the second axis.
+    """
+
+    coordinate_system: AffineFrameT | None
+    """
+    The frame the coordinates are given in.
+    """
+
+    def __add__(self, other: Self) -> Self:
+        return type(self)(self.x + other.x, self.y + other.y, self.coordinate_system)
+
+    def __sub__(self, other: Self) -> Self:
+        return type(self)(self.x - other.x, self.y - other.y, self.coordinate_system)
+
+    def __mul__(self, factor: CoordinateT) -> Self:
+        return type(self)(self.x * factor, self.y * factor, self.coordinate_system)
+
+
+@dataclass
+class StoredScalablePlaneVector(StoredAffineVector[ScalablePlaneFrame, float]):
+    """
+    A vector on a scalable plane that stores its coordinates as given.
+    """
+
+
+@dataclass
+class StoredAffinePoint(AffinePoint[AffineFrameT, CoordinateT, AffineVectorT]):
+    """
+    A point that stores its two coordinates and frame as given.
     """
 
     x: CoordinateT
@@ -65,45 +96,49 @@ class StoredAffinePoint2D(AffinePoint2D[AffineFrameT, CoordinateT]):
     The frame the coordinates are given in.
     """
 
+    def __sub__(self, other: Self) -> AffineVectorT:
+        vector_type = self.get_type_of_generic_parameter(AffineVectorT)
+        return vector_type(self.x - other.x, self.y - other.y, self.coordinate_system)
+
+    def __add__(self, vector: AffineVectorT) -> Self:
+        return type(self)(self.x + vector.x, self.y + vector.y, self.coordinate_system)
+
 
 @dataclass
-class StoredScalablePlanePoint(StoredAffinePoint2D[ScalablePlaneFrame, float]):
+class StoredScalablePlanePoint(
+    StoredAffinePoint[ScalablePlaneFrame, float, StoredScalablePlaneVector]
+):
     """
     A point on a scalable plane that stores its coordinates as given.
     """
 
 
+# %% lines that store their point and direction
+
+
 @dataclass
-class StoredAffinePoint3D(AffinePoint3D[AffineFrameT, CoordinateT]):
+class StoredAffineLine(AffineLine[AffinePointT, AffineVectorT]):
     """
-    A three-dimensional point that stores its coordinates and frame as given.
-    """
-
-    x: CoordinateT
-    """
-    The first coordinate.
+    A line that stores its point and direction as given.
     """
 
-    y: CoordinateT
+    point: AffinePointT
     """
-    The second coordinate.
-    """
-
-    z: CoordinateT
-    """
-    The third coordinate.
+    The point the line passes through.
     """
 
-    coordinate_system: AffineFrameT | None
+    direction: AffineVectorT
     """
-    The frame the coordinates are given in.
+    The vector the line runs along.
     """
 
 
 @dataclass
-class StoredScalableSpacePoint(StoredAffinePoint3D[ScalableSpaceFrame, float]):
+class StoredScalablePlaneLine(
+    StoredAffineLine[StoredScalablePlanePoint, StoredScalablePlaneVector]
+):
     """
-    A point in a scalable space that stores its coordinates as given.
+    A line on a scalable plane that stores its point and direction as given.
     """
 
 

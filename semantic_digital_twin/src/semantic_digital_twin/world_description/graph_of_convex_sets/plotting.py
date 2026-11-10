@@ -40,7 +40,7 @@ from matplotlib.patches import Rectangle
 from typing_extensions import Iterable, Sequence, Self
 
 from krrood_spatial_math.affine_point import CartesianPoint
-from krrood_spatial_math.spatial_types import CartesianPoint3D, OrthogonalProjection
+from krrood_spatial_math.spatial_types import CartesianPoint3D, FramePlaneProjection
 from semantic_digital_twin.world_description.geometry import (
     AxisAlignedBox,
 )
@@ -372,7 +372,7 @@ class FloorPlan:
     on.
     """
 
-    projection: OrthogonalProjection
+    projection: FramePlaneProjection
     """
     The projection of 3D points onto the plane.
     """
@@ -459,7 +459,7 @@ class NavigationScene:
         """
         :return: The plane the top-down panels draw on.
         """
-        return FloorPlan(OrthogonalProjection(self.search_space.reference_frame))
+        return FloorPlan(FramePlaneProjection(self.search_space.reference_frame))
 
     @property
     def extent(self) -> Footprint:

@@ -19,7 +19,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
 from krrood_spatial_math.spatial_types import (
     CartesianPoint2D,
     CartesianPoint3D,
-    OrthogonalProjection,
+    FramePlaneProjection,
 )
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world import World
@@ -325,7 +325,7 @@ def test_adjacency_is_drawn_through_the_portal_the_sets_share(
     )
 
     floor_plan = FloorPlan(
-        OrthogonalProjection(box_row.graph.search_space.reference_frame)
+        FramePlaneProjection(box_row.graph.search_space.reference_frame)
     )
 
     assert floor_plan.coordinates(adjacency.points).tolist() == [
@@ -343,7 +343,7 @@ def test_the_floor_plan_projects_3d_points_and_keeps_points_on_it():
     world = World()
     with world.modify_world():
         world.add_kinematic_structure_entity(Body(name=PrefixedName("map")))
-    floor_plan = FloorPlan(OrthogonalProjection(world.root))
+    floor_plan = FloorPlan(FramePlaneProjection(world.root))
 
     coordinates = floor_plan.coordinates(
         [

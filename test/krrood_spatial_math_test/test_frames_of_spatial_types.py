@@ -7,7 +7,9 @@ import pytest
 
 from krrood.adapters.json_serializer import from_json, to_json
 import krrood.symbolic_math.symbolic_math as sm
-from krrood_spatial_math.affine_point import AffinePoint3D, CartesianPoint, CoordinateT
+from krrood_spatial_math.affine_line import AffineLine
+from krrood_spatial_math.affine_point import AffinePointT, CartesianPoint
+from krrood_spatial_math.affine_vector import AffineVectorT, CartesianVector
 from krrood_spatial_math.cartesian_frame_3d import (
     CartesianFrame3D,
     ValueInCartesianFrame3D,
@@ -15,6 +17,7 @@ from krrood_spatial_math.cartesian_frame_3d import (
 from krrood_spatial_math.coordinate_system import (
     CoordinateRepresentation,
     CoordinateSystemT,
+    CoordinateT,
     RigidCoordinateChange,
 )
 from krrood_spatial_math.exceptions import (
@@ -24,8 +27,9 @@ from krrood_spatial_math.exceptions import (
 from krrood_spatial_math.spatial_types import (
     AxisAngle,
     HomogeneousTransformationMatrix,
-    OrthogonalProjection,
+    FramePlaneProjection,
     CartesianPoint3D,
+    Line3D,
     Pose3D,
     Pose2D,
     Quaternion,
@@ -87,8 +91,7 @@ def test_a_spatial_values_coordinates_are_given_in_its_reference_frame(
 # %% a point in a frame's space as an affine point
 
 
-def test_a_three_dimensional_point_is_an_affine_point_of_a_cartesian_frame():
-    assert issubclass(CartesianPoint3D, AffinePoint3D)
+def test_a_three_dimensional_point_is_given_in_a_three_dimensional_cartesian_frame():
     assert (
         CartesianPoint3D.get_type_of_generic_parameter(CoordinateSystemT)
         is CartesianFrame3D
@@ -101,6 +104,34 @@ def test_a_three_dimensional_point_is_a_cartesian_point():
 
 def test_a_three_dimensional_point_stores_its_coordinates_as_symbolic_scalars():
     assert CartesianPoint3D.get_type_of_generic_parameter(CoordinateT) is sm.Scalar
+
+
+def test_a_three_dimensional_point_is_moved_by_a_three_dimensional_vector():
+    assert CartesianPoint3D.get_type_of_generic_parameter(AffineVectorT) is Vector3D
+
+
+# %% a vector in a frame's space as a Cartesian vector
+
+
+def test_a_three_dimensional_vector_is_a_cartesian_vector_of_a_three_dimensional_frame():
+    assert issubclass(Vector3D, CartesianVector)
+    assert Vector3D.get_type_of_generic_parameter(CoordinateSystemT) is CartesianFrame3D
+
+
+def test_the_difference_of_two_three_dimensional_points_moves_one_onto_the_other():
+    start = CartesianPoint3D(1, 2, 3)
+    end = CartesianPoint3D(4, 6, 3)
+
+    np.testing.assert_allclose((start + (end - start)).to_np(), end.to_np())
+
+
+# %% a line in a frame's space as an affine line
+
+
+def test_a_three_dimensional_line_runs_through_a_point_along_a_vector():
+    assert issubclass(Line3D, AffineLine)
+    assert Line3D.get_type_of_generic_parameter(AffinePointT) is CartesianPoint3D
+    assert Line3D.get_type_of_generic_parameter(AffineVectorT) is Vector3D
 
 
 # %% a transformation as a change between two frames
@@ -223,7 +254,7 @@ def test_a_transformation_applies_to_a_point_without_a_frame(table_frame, camera
 def test_a_point_projected_onto_another_frames_plane_is_expressed_in_that_frame(
     table_frame, shelf_frame
 ):
-    projection = OrthogonalProjection(plane_frame=shelf_frame)
+    projection = FramePlaneProjection(plane_frame=shelf_frame)
 
     point_on_shelf = projection.project(
         CartesianPoint3D(1, 2, 3, reference_frame=table_frame)

@@ -10,7 +10,9 @@ from typing_extensions import Generic, TypeVar
 
 from krrood.patterns.interface import Interface
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
-from krrood_spatial_math.affine_point import AffinePoint, CoordinateT
+from krrood_spatial_math.affine_line import AffineLine
+from krrood_spatial_math.affine_point import AffinePoint
+from krrood_spatial_math.coordinate_system import CoordinateT
 
 # %% maps from the points of one space to the points of another
 
@@ -24,7 +26,7 @@ TargetPointT = TypeVar("TargetPointT", bound=AffinePoint)
 The kind of point a space map gives, in a frame of its target space.
 """
 
-ProjectionLineT = TypeVar("ProjectionLineT")
+ProjectionLineT = TypeVar("ProjectionLineT", bound=AffineLine)
 """
 The kind of line, such as a straight line or a ray, of the source points a space map
 sends to one target point.
@@ -74,3 +76,18 @@ class SpaceMap(
         :return: The point at ``position_along_line`` on the :meth:`projection_line` of
             ``point``.
         """
+
+
+# %% projections along the normal of a plane
+
+
+class OrthogonalProjection(
+    SpaceMap[SourcePointT, TargetPointT, ProjectionLineT, CoordinateT], Interface
+):
+    """
+    Sends each point of a space onto a plane in it, straight along the plane's normal.
+
+    The :meth:`projection_line` of a point on the plane is the normal through it, whose
+    direction is of unit length, so the position along that line is the height above the
+    plane.
+    """

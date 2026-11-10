@@ -11,10 +11,17 @@ import pytest
 
 from krrood.patterns.exceptions import InterfaceInstantiationError
 from krrood_spatial_math.affine_point import AffinePoint
-from krrood_spatial_math.space_map import SourcePointT, SpaceMap, TargetPointT
+from krrood_spatial_math.affine_line import AffineLine
+from krrood_spatial_math.space_map import (
+    OrthogonalProjection,
+    ProjectionLineT,
+    SourcePointT,
+    SpaceMap,
+    TargetPointT,
+)
 from krrood_spatial_math.spatial_types import (
     CartesianPoint2D,
-    OrthogonalProjection,
+    FramePlaneProjection,
 )
 
 from .dataset.frames import NamedFrame
@@ -40,7 +47,7 @@ class SpaceMapCase:
 
 
 @pytest.fixture(
-    params=[OrthogonalProjection],
+    params=[FramePlaneProjection],
     ids=lambda space_map_type: space_map_type.__name__,
 )
 def space_map_case(request: pytest.FixtureRequest) -> SpaceMapCase:
@@ -114,3 +121,23 @@ def test_a_space_map_sends_affine_points_to_affine_points(point_parameter: objec
     Both the points a space map takes and those it gives are points given in a frame.
     """
     assert point_parameter.__bound__ is AffinePoint
+
+
+def test_a_space_map_sends_points_along_straight_lines():
+    assert ProjectionLineT.__bound__ is AffineLine
+
+
+# %% projections along the normal of a plane
+
+
+def test_an_orthogonal_projection_cannot_be_instantiated():
+    with pytest.raises(InterfaceInstantiationError):
+        OrthogonalProjection()
+
+
+def test_an_orthogonal_projection_is_a_space_map():
+    assert issubclass(OrthogonalProjection, SpaceMap)
+
+
+def test_the_projection_onto_a_frames_plane_is_an_orthogonal_projection():
+    assert issubclass(FramePlaneProjection, OrthogonalProjection)

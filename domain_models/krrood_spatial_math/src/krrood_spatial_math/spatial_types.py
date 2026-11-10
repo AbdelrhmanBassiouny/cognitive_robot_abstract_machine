@@ -27,14 +27,13 @@ from krrood_spatial_math.cartesian_frame_3d import (
     ValueInCartesianFrame3D,
 )
 from krrood_spatial_math.coordinate_system import (
+    CartesianFrameT,
     CoordinateRepresentation,
     RigidCoordinateChange,
 )
-from krrood_spatial_math.affine_point import (
-    AffinePoint2D,
-    AffinePoint3D,
-    CartesianPoint,
-)
+from krrood_spatial_math.affine_line import AffineLine
+from krrood_spatial_math.affine_point import CartesianPoint
+from krrood_spatial_math.affine_vector import CartesianVector
 from krrood_spatial_math.exceptions import (
     FramesOnDifferentPlanesError,
     InsufficientVectorsError,
@@ -44,7 +43,7 @@ from krrood_spatial_math.exceptions import (
     XAxisNormalToPlaneError,
 )
 from krrood_spatial_math.space import EuclideanSpace2D, EuclideanSpace3D
-from krrood_spatial_math.space_map import SpaceMap
+from krrood_spatial_math.space_map import OrthogonalProjection
 
 
 class _ConstantMatrixParts(ca.SX, Enum):
@@ -286,9 +285,10 @@ class SymbolicSpatialType(ABC):
 
 
 @dataclass(eq=False, repr=False)
-class SpatialChange(SymbolicSpatialType, ABC):
+class SpatialChange(SymbolicSpatialType, RigidCoordinateChange[CartesianFrameT], ABC):
     """
-    A spatial type that changes coordinates given in its :attr:`child_frame` into its
+    A rigid change, as a symbolic matrix, of coordinates given in a frame derived from
+    its :attr:`child_frame` into the same kind of frame derived from its
     :attr:`~SymbolicSpatialType.reference_frame`.
     """
 
@@ -417,9 +417,8 @@ class MatrixProductAction(TransformationOperand, RotationOperand, Mixin):
 @dataclass(eq=False, init=False, repr=False)
 class HomogeneousTransformationMatrix(
     sm.SymbolicMathType,
-    SpatialChange,
+    SpatialChange[CartesianFrame3D],
     SubclassJSONSerializer,
-    RigidCoordinateChange[CartesianFrame3D],
     TransformationOperand,
     RotationOperand,
 ):
@@ -1236,7 +1235,7 @@ class RotationMatrix(
 
 
 @dataclass(eq=False)
-class XYPlane2D(EuclideanSpace2D):
+class FramePlane(EuclideanSpace2D):
     """
     The plane through the origin of a three-dimensional frame that the frame's x- and
     y-axes span.
@@ -1264,7 +1263,7 @@ class XYPlane2D(EuclideanSpace2D):
         return self.frame_3d.space
 
     def __eq__(self, other: object) -> bool:
-        if not isinstance(other, XYPlane2D):
+        if not isinstance(other, FramePlane):
             return NotImplemented
         if other.frame_3d == self.frame_3d:
             return True
@@ -1288,7 +1287,7 @@ class XYPlane2D(EuclideanSpace2D):
 
 
 @dataclass(unsafe_hash=True)
-class XYPlaneFrame2D(CartesianFrame2D[NameT]):
+class PlanarFrame(CartesianFrame2D[NameT]):
     """
     The frame on the x-y plane of a three-dimensional frame that has that frame's
     origin, x-axis and y-axis.
@@ -1304,8 +1303,8 @@ class XYPlaneFrame2D(CartesianFrame2D[NameT]):
     """
 
     @property
-    def space(self) -> XYPlane2D:
-        return XYPlane2D(self.frame_3d)
+    def space(self) -> FramePlane:
+        return FramePlane(self.frame_3d)
 
     @property
     def name(self) -> NameT:
@@ -1320,10 +1319,10 @@ class XYPlaneFrame2D(CartesianFrame2D[NameT]):
         return uuid5(self.frame_3d.id, type(self).__name__)
 
 
-class ValueOnXYPlane2D(CoordinateRepresentation[CartesianFrame2D], Mixin):
+class ValueOnFramePlane(CoordinateRepresentation[CartesianFrame2D], Mixin):
     """
     A value, such as a point or a pose, on the x-y plane of its reference frame, given
-    in the :class:`XYPlaneFrame2D` of that frame.
+    in the :class:`PlanarFrame` of that frame.
     """
 
     reference_frame: CartesianFrame3D | None
@@ -1333,548 +1332,10 @@ class ValueOnXYPlane2D(CoordinateRepresentation[CartesianFrame2D], Mixin):
     """
 
     @property
-    def coordinate_system(self) -> XYPlaneFrame2D | None:
+    def coordinate_system(self) -> PlanarFrame | None:
         if self.reference_frame is None:
             return None
-        return XYPlaneFrame2D(self.reference_frame)
-
-
-@dataclass(eq=False, init=False, repr=False)
-class CartesianPoint3D(
-    sm.SymbolicMathType,
-    SymbolicSpatialType,
-    MatrixProductAction,
-    ValueInCartesianFrame3D,
-    SubclassJSONSerializer,
-    AffinePoint3D[CartesianFrame3D, sm.Scalar],
-    CartesianPoint[CartesianFrame3D, sm.Scalar],
-):
-    """
-    Represents a 3D point with reference frame handling.
-
-    This class provides a representation of a point in 3D space, including support
-    for operations such as addition, subtraction, projection onto planes/lines, and
-    distance calculations. It incorporates a reference frame for kinematic computations
-    and facilitates mathematical operations essential for 3D geometry modeling.
-
-    .. note:: this is represented as a 4d vector, where the last entry is always a 1.
-    """
-
-    def __init__(
-        self,
-        x: sm.ScalarData = 0,
-        y: sm.ScalarData = 0,
-        z: sm.ScalarData = 0,
-        reference_frame: CartesianFrame3D | None = None,
-    ):
-        """
-
-        :param x: X-coordinate of the point. Defaults to 0.
-        :param y: Y-coordinate of the point. Defaults to 0.
-        :param z: Z-coordinate of the point. Defaults to 0.
-        :param reference_frame:
-        """
-        self.casadi_sx = sm.to_sx([x, y, z, 1])
-        self.reference_frame = reference_frame
-        super().__post_init__()
-
-    def _verify_type(self):
-        if self.shape == (3, 1):
-            casadi_sx = ca.SX.zeros(4)
-            casadi_sx[:3, 0] = self._casadi_sx
-            self._casadi_sx = casadi_sx
-        elif self.shape != (4, 1):
-            raise WrongDimensionsError(
-                expected_dimensions=(4, 1), actual_dimensions=self.shape
-            )
-        self._casadi_sx[3, 0] = 1
-
-    @classmethod
-    def from_iterable(
-        cls,
-        data: sm.VectorData,
-        reference_frame: CartesianFrame3D | None = None,
-    ) -> CartesianPoint3D:
-        """
-        Creates an instance of CartesianPoint3D from provided iterable data.
-
-        This class method is used to construct a CartesianPoint3D object by processing the given
-        data and optionally assigning a reference frame. The data can represent
-        different array-like objects compatible with the desired format for a CartesianPoint3D
-        instance. The provided iterable or array should follow a 1D structure to avoid
-        raised errors.
-
-        :param data: The array-like data or object such as a list, tuple, or numpy array
-            used to initialize the CartesianPoint3D instance.
-        :param reference_frame: A reference to a `CartesianFrame3D` object,
-            representing the frame of reference for the CartesianPoint3D instance. If the data has
-            a `reference_frame` attribute, and this parameter is not specified, it will
-            be taken from the data.
-        :return: Returns an instance of CartesianPoint3D initialized with the processed data and
-            an optional reference frame.
-        """
-        if isinstance(data, SymbolicSpatialType) and reference_frame is None:
-            reference_frame = data.reference_frame
-        result = cls.from_casadi_sx(copy(sm.to_sx(data)))
-        result.reference_frame = reference_frame
-        return result
-
-    @classmethod
-    def _from_constant_json(cls, data: dict[str, Any], **kwargs) -> Self:
-        reference_frame = cls._parse_optional_frame_from_json(
-            data, frame=SpatialFrameKey.REFERENCE, **kwargs
-        )
-        return cls.from_iterable(
-            data["data"][:3],
-            reference_frame=reference_frame,
-        )
-
-    @classmethod
-    def create_with_variables(
-        cls, name: str, resolver: Callable[[], list[float] | np.ndarray] | None = None
-    ) -> Self:
-        """
-        Creates a Vector3D object with float variables in all relevant entries.
-
-        :param name: Name for the variables.
-        :param resolver: Callable that returns the actual vector when called.
-        :return: Vector3D object with float variables.
-        """
-        x = sm.FloatVariable(name=f"{name}.x")
-        y = sm.FloatVariable(name=f"{name}.y")
-        z = sm.FloatVariable(name=f"{name}.z")
-        result = cls(
-            x=x,
-            y=y,
-            z=z,
-            reference_frame=None,
-        )
-        if resolver is not None:
-            x.resolve = lambda: resolver()[0]
-            y.resolve = lambda: resolver()[1]
-            z.resolve = lambda: resolver()[2]
-        return result
-
-    def _constant_to_json(self) -> dict[str, Any]:
-        return {
-            "data": self.to_np().tolist(),
-        }
-
-    def norm(self) -> sm.Scalar:
-        return sm.Scalar.from_casadi_sx(ca.norm_2(self[:3].casadi_sx))
-
-    @property
-    def x(self) -> sm.Scalar:
-        return self[0]
-
-    @x.setter
-    def x(self, value: sm.ScalarData):
-        self[0] = value
-
-    @property
-    def y(self) -> sm.Scalar:
-        return self[1]
-
-    @y.setter
-    def y(self, value: sm.ScalarData):
-        self[1] = value
-
-    @property
-    def z(self) -> sm.Scalar:
-        return self[2]
-
-    @z.setter
-    def z(self, value: sm.ScalarData):
-        self[2] = value
-
-    def __add__(self, other: Vector3D) -> CartesianPoint3D:
-        """
-        :raises ReferenceFrameMismatchError: If ``other`` is given in another frame.
-        """
-        if isinstance(other, Vector3D):
-            self.ensure_same_reference_frame(other, "the added Vector3D")
-            result = CartesianPoint3D.from_casadi_sx(
-                ca.SX.binary(ca.OP_ADD, self.casadi_sx, other.casadi_sx)
-            )
-        else:
-            return NotImplemented
-        result.reference_frame = self.reference_frame
-        return result
-
-    @overload
-    def __sub__(self, other: CartesianPoint3D) -> Vector3D: ...
-
-    @overload
-    def __sub__(self, other: Vector3D) -> CartesianPoint3D: ...
-
-    def __sub__(self, other):
-        """
-        :raises ReferenceFrameMismatchError: If ``other`` is given in another frame.
-        """
-        if isinstance(other, CartesianPoint3D):
-            self.ensure_same_reference_frame(other, "the subtracted CartesianPoint3D")
-            result = Vector3D.from_casadi_sx(
-                ca.SX.binary(ca.OP_SUB, self.casadi_sx, other.casadi_sx)
-            )
-        elif isinstance(other, Vector3D):
-            self.ensure_same_reference_frame(other, "the subtracted Vector3D")
-            result = CartesianPoint3D.from_casadi_sx(
-                ca.SX.binary(ca.OP_SUB, self.casadi_sx, other.casadi_sx)
-            )
-        else:
-            return NotImplemented
-        result.reference_frame = self.reference_frame
-        return result
-
-    def __neg__(self) -> CartesianPoint3D:
-        result = CartesianPoint3D.from_casadi_sx(ca.SX.unary(ca.OP_NEG, self.casadi_sx))
-        result.reference_frame = self.reference_frame
-        return result
-
-    def project_to_plane(
-        self, frame_V_plane_vector1: Vector3D, frame_V_plane_vector2: Vector3D
-    ) -> tuple[CartesianPoint3D, sm.Scalar]:
-        """
-        Projects a point onto a plane defined by two vectors.
-
-        This function assumes that all parameters are defined with respect to the same
-        reference frame.
-
-        :param frame_V_plane_vector1: First vector defining the plane
-        :param frame_V_plane_vector2: Second vector defining the plane
-        :return: Tuple of (projected point on the plane, signed distance from point to
-            plane)
-        """
-        normal = frame_V_plane_vector1.cross(frame_V_plane_vector2)
-        normal.scale(1)
-        frame_V_current = self.vector3
-        d = normal @ frame_V_current
-        v: Vector3D = normal * d
-        projection = self - v
-        return projection, d
-
-    def project_to_line(
-        self, line_point: CartesianPoint3D, line_direction: Vector3D
-    ) -> tuple[CartesianPoint3D, sm.Scalar]:
-        """
-        :param line_point: a point that the line intersects, must have the same reference frame as self
-        :param line_direction: the direction of the line, must have the same reference frame as self
-        :return: tuple of (closest point on the line, shortest distance between self and the line)
-        """
-        lp_vector = self - line_point
-        cross_product = lp_vector.cross(line_direction)
-        distance = cross_product.norm() / line_direction.norm()
-
-        line_direction_unit = line_direction / line_direction.norm()
-        projection_length = lp_vector @ line_direction_unit
-        closest_point = line_point + line_direction_unit * projection_length
-
-        return closest_point, distance
-
-    def distance_to_line_segment(
-        self, line_start: CartesianPoint3D, line_end: CartesianPoint3D
-    ) -> tuple[sm.Scalar, CartesianPoint3D]:
-        """
-        All parameters must have the same reference frame as self.
-
-        :param line_start: start of the approached line
-        :param line_end: end of the approached line
-        :return: distance to line, the nearest point on the line
-        """
-        frame_P_current = self
-        frame_P_line_start = line_start
-        frame_P_line_end = line_end
-        frame_V_line_vec = frame_P_line_end - frame_P_line_start
-        pnt_vec = frame_P_current - frame_P_line_start
-        line_len = frame_V_line_vec.norm()
-        line_unitvec = frame_V_line_vec / line_len
-        pnt_vec_scaled = pnt_vec / line_len
-        t = line_unitvec @ pnt_vec_scaled
-        t = sm.limit(t, lower_limit=0.0, upper_limit=1.0)
-        frame_V_offset = frame_V_line_vec * t
-        dist = (frame_V_offset - pnt_vec).norm()
-        frame_P_nearest = frame_P_line_start + frame_V_offset
-        return dist, frame_P_nearest
-
-    def midpoint(self, other: CartesianPoint3D) -> CartesianPoint3D:
-        """
-        :param other: The point to meet halfway.
-        :return: The point midway between this one and ``other``.
-        """
-        return self + (other - self) / 2
-
-    @property
-    def vector3(self) -> Vector3D:
-        """
-        :return: The vector from the origin of the reference frame to this point.
-        """
-        result = Vector3D.from_casadi_sx(copy(self.casadi_sx))
-        result.reference_frame = self.reference_frame
-        return result
-
-    @property
-    def generic_vector(self) -> sm.Vector:
-        """
-        :return: The coordinates of this point as a vector without spatial semantics.
-        """
-        return sm.Vector.from_casadi_sx(copy(self.casadi_sx[:3]))
-
-    def euclidean_distance(self, other: Self) -> sm.Scalar:
-        return self.generic_vector.euclidean_distance(other.generic_vector)
-
-
-@dataclass(eq=False, init=False, repr=False)
-class CartesianPoint2D(
-    sm.SymbolicMathType,
-    SymbolicSpatialType,
-    ValueOnXYPlane2D,
-    SubclassJSONSerializer,
-    AffinePoint2D[CartesianFrame2D, sm.Scalar],
-    CartesianPoint[CartesianFrame2D, sm.Scalar],
-    PlanarTransformationOperand,
-):
-    """
-    Represents a 2D point with reference frame handling.
-
-    Stored as a bare 2×1 symbolic vector ``[x, y]``, with no homogeneous augmentation --
-    the same convention :class:`Pose2D` uses. The point lies on its reference frame's
-    own x-y plane and has no height; it relates to 3D space only through an
-    :class:`OrthogonalProjection` onto that plane, which :meth:`from_cartesian_point_3d`,
-    :meth:`from_pose` and :meth:`to_cartesian_point_3d` apply.
-    """
-
-    def __init__(
-        self,
-        x: sm.ScalarData = 0,
-        y: sm.ScalarData = 0,
-        reference_frame: CartesianFrame3D | None = None,
-    ):
-        """
-        :param x: X-coordinate of the point. Defaults to 0.
-        :param y: Y-coordinate of the point. Defaults to 0.
-        :param reference_frame:
-        """
-        self.casadi_sx = sm.to_sx([x, y])
-        self.reference_frame = reference_frame
-        super().__post_init__()
-
-    @property
-    def x(self) -> sm.Scalar:
-        return self[0]
-
-    @x.setter
-    def x(self, value: sm.ScalarData):
-        self[0] = value
-
-    @property
-    def y(self) -> sm.Scalar:
-        return self[1]
-
-    @y.setter
-    def y(self, value: sm.ScalarData):
-        self[1] = value
-
-    def _verify_type(self):
-        if self.shape != (2, 1):
-            raise WrongDimensionsError(
-                expected_dimensions=(2, 1), actual_dimensions=self.shape
-            )
-
-    @classmethod
-    def from_cartesian_point_3d(
-        cls,
-        point: CartesianPoint3D,
-        plane_frame: CartesianFrame3D | None = None,
-    ) -> CartesianPoint2D:
-        """
-        The :meth:`OrthogonalProjection.project` of ``point`` onto the x-y plane of
-        ``plane_frame``.
-
-        :param point: The point to project.
-        :param plane_frame: The frame whose x-y plane to project onto. Defaults to
-            ``point``'s reference frame.
-        :return: The point on the plane directly below or above ``point``.
-        """
-        frame = plane_frame if plane_frame is not None else point.reference_frame
-        return OrthogonalProjection(frame).project(point)
-
-    @classmethod
-    def from_pose(
-        cls,
-        pose: Pose3D,
-        plane_frame: CartesianFrame3D | None = None,
-    ) -> CartesianPoint2D:
-        """
-        The :meth:`from_cartesian_point_3d` of ``pose``'s position.
-
-        :param pose: The pose whose position to project.
-        :param plane_frame: The frame whose x-y plane to project onto. Defaults to
-            ``pose``'s reference frame.
-        :return: The point on the plane directly below or above ``pose``.
-        """
-        return cls.from_cartesian_point_3d(pose.position, plane_frame)
-
-    def to_cartesian_point_3d(self, height: sm.ScalarData = 0) -> CartesianPoint3D:
-        """
-        The :meth:`OrthogonalProjection.unproject` of this point into its own reference
-        frame.
-
-        :param height: The z-coordinate the point is placed at.
-        :return: The 3D point at ``height`` above this point.
-        """
-        return OrthogonalProjection(self.reference_frame).unproject(self, height)
-
-    @classmethod
-    def _from_constant_json(cls, data: dict[str, Any], **kwargs) -> Self:
-        reference_frame = cls._parse_optional_frame_from_json(
-            data, frame=SpatialFrameKey.REFERENCE, **kwargs
-        )
-        x, y = data["data"][:2]
-        return cls(x=x, y=y, reference_frame=reference_frame)
-
-    def _constant_to_json(self) -> dict[str, Any]:
-        return {
-            "data": self.to_np().tolist(),
-        }
-
-    def transform(
-        self, target_frame_T_reference_frame: HomogeneousTransformationMatrix
-    ) -> CartesianPoint2D:
-        """
-        This point re-expressed in ``target_frame_T_reference_frame``'s reference frame.
-
-        .. warning::
-            Between frames whose x-y planes are not parallel this is not a change of
-            coordinates but a projection: the point is placed at height 0 through an
-            :class:`OrthogonalProjection`, moved, and projected onto the target plane.
-            The height the rotation produced is lost.
-
-        :param target_frame_T_reference_frame: The transformation from this point's
-            reference frame to the frame it should be expressed in.
-        :return: The point in the transformation's reference frame.
-        """
-        return CartesianPoint2D.from_cartesian_point_3d(
-            target_frame_T_reference_frame @ self.to_cartesian_point_3d()
-        )
-
-    def apply_planar_transformation(
-        self, transformation: HomogeneousTransformationMatrix2D
-    ) -> CartesianPoint2D:
-        moved = ca.mtimes(transformation.casadi_sx, ca.vertcat(self.casadi_sx, 1))
-        return CartesianPoint2D(
-            moved[0], moved[1], reference_frame=transformation.reference_frame
-        )
-
-    def euclidean_distance(self, other: Self) -> sm.Scalar:
-        return sm.Vector.from_casadi_sx(self.casadi_sx).euclidean_distance(
-            sm.Vector.from_casadi_sx(other.casadi_sx)
-        )
-
-    def __hash__(self):
-        if self.is_constant():
-            return hash((*self.to_np().tolist(), self.reference_frame))
-        return super().__hash__()
-
-
-@dataclass(eq=False)
-class Line3D:
-    """
-    An infinite straight line in 3D space.
-    """
-
-    point: CartesianPoint3D
-    """
-    A point the line passes through.
-    """
-
-    direction: Vector3D
-    """
-    The direction the line runs in, in the same reference frame as :attr:`point`.
-    """
-
-
-@dataclass(eq=False)
-class LineSegment3D:
-    """
-    A straight line in 3D space between two points.
-    """
-
-    start: CartesianPoint3D
-    """
-    The point the segment runs from.
-    """
-
-    end: CartesianPoint3D
-    """
-    The point the segment runs to, in the same reference frame as :attr:`start`.
-    """
-
-    @property
-    def direction(self) -> Vector3D:
-        """
-        :return: The unit vector from :attr:`start` towards :attr:`end`.
-        """
-        direction = self.end - self.start
-        direction.scale(1)
-        return direction
-
-
-@dataclass
-class OrthogonalProjection(
-    SpaceMap[CartesianPoint3D, CartesianPoint2D, Line3D, sm.ScalarData]
-):
-    """
-    The orthogonal projection of 3D space onto the x-y plane of one frame.
-
-    A point's :meth:`projection_line` is the vertical line through it, and its
-    position along that line is its height above the plane.
-    """
-
-    plane_frame: CartesianFrame3D | None
-    """
-    The frame whose x-y plane points are projected onto.
-
-    ``None`` is the plane of points that have no reference frame. Their coordinates
-    are taken as they are, so such a projection only relates points without a
-    reference frame to each other.
-    """
-
-    def project(self, point: CartesianPoint3D) -> CartesianPoint2D:
-        """
-        :raises ReferenceFrameMismatchError: If exactly one of ``point`` and this
-            projection has no reference frame.
-        """
-        if point.reference_frame is not self.plane_frame:
-            if point.reference_frame is None or self.plane_frame is None:
-                raise ReferenceFrameMismatchError(
-                    expected_frame=self.plane_frame,
-                    actual_frame=point.reference_frame,
-                    context="the projected CartesianPoint3D",
-                )
-            point = self.plane_frame.express_in_own_frame(point)
-        return CartesianPoint2D(point.x, point.y, reference_frame=self.plane_frame)
-
-    def unproject(
-        self, point: CartesianPoint2D, position_along_line: sm.ScalarData = 0
-    ) -> CartesianPoint3D:
-        """
-        :raises ReferenceFrameMismatchError: If ``point`` lies on another frame's plane.
-        """
-        if point.reference_frame is not self.plane_frame:
-            raise ReferenceFrameMismatchError(
-                expected_frame=self.plane_frame,
-                actual_frame=point.reference_frame,
-                context="the unprojected CartesianPoint2D",
-            )
-        return CartesianPoint3D(
-            point.x, point.y, position_along_line, reference_frame=self.plane_frame
-        )
-
-    def projection_line(self, point: CartesianPoint2D) -> Line3D:
-        return Line3D(
-            point=self.unproject(point),
-            direction=Vector3D.Z(reference_frame=self.plane_frame),
-        )
+        return PlanarFrame(self.reference_frame)
 
 
 @dataclass(eq=False, init=False, repr=False)
@@ -1884,6 +1345,7 @@ class Vector3D(
     MatrixProductAction,
     ValueInCartesianFrame3D,
     SubclassJSONSerializer,
+    CartesianVector[CartesianFrame3D, sm.Scalar],
 ):
     """
     Representation of a 3D vector with reference frame support for homogenous
@@ -2263,6 +1725,698 @@ class Vector3D(
         result = CartesianPoint3D.from_casadi_sx(copy(self.casadi_sx))
         result.reference_frame = self.reference_frame
         return result
+
+
+@dataclass(eq=False, init=False, repr=False)
+class CartesianPoint3D(
+    sm.SymbolicMathType,
+    SymbolicSpatialType,
+    MatrixProductAction,
+    ValueInCartesianFrame3D,
+    SubclassJSONSerializer,
+    CartesianPoint[CartesianFrame3D, sm.Scalar, Vector3D],
+):
+    """
+    Represents a 3D point with reference frame handling.
+
+    This class provides a representation of a point in 3D space, including support
+    for operations such as addition, subtraction, projection onto planes/lines, and
+    distance calculations. It incorporates a reference frame for kinematic computations
+    and facilitates mathematical operations essential for 3D geometry modeling.
+
+    .. note:: this is represented as a 4d vector, where the last entry is always a 1.
+    """
+
+    def __init__(
+        self,
+        x: sm.ScalarData = 0,
+        y: sm.ScalarData = 0,
+        z: sm.ScalarData = 0,
+        reference_frame: CartesianFrame3D | None = None,
+    ):
+        """
+
+        :param x: X-coordinate of the point. Defaults to 0.
+        :param y: Y-coordinate of the point. Defaults to 0.
+        :param z: Z-coordinate of the point. Defaults to 0.
+        :param reference_frame:
+        """
+        self.casadi_sx = sm.to_sx([x, y, z, 1])
+        self.reference_frame = reference_frame
+        super().__post_init__()
+
+    def _verify_type(self):
+        if self.shape == (3, 1):
+            casadi_sx = ca.SX.zeros(4)
+            casadi_sx[:3, 0] = self._casadi_sx
+            self._casadi_sx = casadi_sx
+        elif self.shape != (4, 1):
+            raise WrongDimensionsError(
+                expected_dimensions=(4, 1), actual_dimensions=self.shape
+            )
+        self._casadi_sx[3, 0] = 1
+
+    @classmethod
+    def from_iterable(
+        cls,
+        data: sm.VectorData,
+        reference_frame: CartesianFrame3D | None = None,
+    ) -> CartesianPoint3D:
+        """
+        Creates an instance of CartesianPoint3D from provided iterable data.
+
+        This class method is used to construct a CartesianPoint3D object by processing the given
+        data and optionally assigning a reference frame. The data can represent
+        different array-like objects compatible with the desired format for a CartesianPoint3D
+        instance. The provided iterable or array should follow a 1D structure to avoid
+        raised errors.
+
+        :param data: The array-like data or object such as a list, tuple, or numpy array
+            used to initialize the CartesianPoint3D instance.
+        :param reference_frame: A reference to a `CartesianFrame3D` object,
+            representing the frame of reference for the CartesianPoint3D instance. If the data has
+            a `reference_frame` attribute, and this parameter is not specified, it will
+            be taken from the data.
+        :return: Returns an instance of CartesianPoint3D initialized with the processed data and
+            an optional reference frame.
+        """
+        if isinstance(data, SymbolicSpatialType) and reference_frame is None:
+            reference_frame = data.reference_frame
+        result = cls.from_casadi_sx(copy(sm.to_sx(data)))
+        result.reference_frame = reference_frame
+        return result
+
+    @classmethod
+    def _from_constant_json(cls, data: dict[str, Any], **kwargs) -> Self:
+        reference_frame = cls._parse_optional_frame_from_json(
+            data, frame=SpatialFrameKey.REFERENCE, **kwargs
+        )
+        return cls.from_iterable(
+            data["data"][:3],
+            reference_frame=reference_frame,
+        )
+
+    @classmethod
+    def create_with_variables(
+        cls, name: str, resolver: Callable[[], list[float] | np.ndarray] | None = None
+    ) -> Self:
+        """
+        Creates a Vector3D object with float variables in all relevant entries.
+
+        :param name: Name for the variables.
+        :param resolver: Callable that returns the actual vector when called.
+        :return: Vector3D object with float variables.
+        """
+        x = sm.FloatVariable(name=f"{name}.x")
+        y = sm.FloatVariable(name=f"{name}.y")
+        z = sm.FloatVariable(name=f"{name}.z")
+        result = cls(
+            x=x,
+            y=y,
+            z=z,
+            reference_frame=None,
+        )
+        if resolver is not None:
+            x.resolve = lambda: resolver()[0]
+            y.resolve = lambda: resolver()[1]
+            z.resolve = lambda: resolver()[2]
+        return result
+
+    def _constant_to_json(self) -> dict[str, Any]:
+        return {
+            "data": self.to_np().tolist(),
+        }
+
+    def norm(self) -> sm.Scalar:
+        return sm.Scalar.from_casadi_sx(ca.norm_2(self[:3].casadi_sx))
+
+    @property
+    def x(self) -> sm.Scalar:
+        return self[0]
+
+    @x.setter
+    def x(self, value: sm.ScalarData):
+        self[0] = value
+
+    @property
+    def y(self) -> sm.Scalar:
+        return self[1]
+
+    @y.setter
+    def y(self, value: sm.ScalarData):
+        self[1] = value
+
+    @property
+    def z(self) -> sm.Scalar:
+        return self[2]
+
+    @z.setter
+    def z(self, value: sm.ScalarData):
+        self[2] = value
+
+    def __add__(self, other: Vector3D) -> CartesianPoint3D:
+        """
+        :raises ReferenceFrameMismatchError: If ``other`` is given in another frame.
+        """
+        if isinstance(other, Vector3D):
+            self.ensure_same_reference_frame(other, "the added Vector3D")
+            result = CartesianPoint3D.from_casadi_sx(
+                ca.SX.binary(ca.OP_ADD, self.casadi_sx, other.casadi_sx)
+            )
+        else:
+            return NotImplemented
+        result.reference_frame = self.reference_frame
+        return result
+
+    @overload
+    def __sub__(self, other: CartesianPoint3D) -> Vector3D: ...
+
+    @overload
+    def __sub__(self, other: Vector3D) -> CartesianPoint3D: ...
+
+    def __sub__(self, other):
+        """
+        :raises ReferenceFrameMismatchError: If ``other`` is given in another frame.
+        """
+        if isinstance(other, CartesianPoint3D):
+            self.ensure_same_reference_frame(other, "the subtracted CartesianPoint3D")
+            result = Vector3D.from_casadi_sx(
+                ca.SX.binary(ca.OP_SUB, self.casadi_sx, other.casadi_sx)
+            )
+        elif isinstance(other, Vector3D):
+            self.ensure_same_reference_frame(other, "the subtracted Vector3D")
+            result = CartesianPoint3D.from_casadi_sx(
+                ca.SX.binary(ca.OP_SUB, self.casadi_sx, other.casadi_sx)
+            )
+        else:
+            return NotImplemented
+        result.reference_frame = self.reference_frame
+        return result
+
+    def __neg__(self) -> CartesianPoint3D:
+        result = CartesianPoint3D.from_casadi_sx(ca.SX.unary(ca.OP_NEG, self.casadi_sx))
+        result.reference_frame = self.reference_frame
+        return result
+
+    def project_to_plane(
+        self, frame_V_plane_vector1: Vector3D, frame_V_plane_vector2: Vector3D
+    ) -> tuple[CartesianPoint3D, sm.Scalar]:
+        """
+        Projects a point onto a plane defined by two vectors.
+
+        This function assumes that all parameters are defined with respect to the same
+        reference frame.
+
+        :param frame_V_plane_vector1: First vector defining the plane
+        :param frame_V_plane_vector2: Second vector defining the plane
+        :return: Tuple of (projected point on the plane, signed distance from point to
+            plane)
+        """
+        normal = frame_V_plane_vector1.cross(frame_V_plane_vector2)
+        normal.scale(1)
+        frame_V_current = self.vector3
+        d = normal @ frame_V_current
+        v: Vector3D = normal * d
+        projection = self - v
+        return projection, d
+
+    def project_to_line(
+        self, line_point: CartesianPoint3D, line_direction: Vector3D
+    ) -> tuple[CartesianPoint3D, sm.Scalar]:
+        """
+        :param line_point: a point that the line intersects, must have the same reference frame as self
+        :param line_direction: the direction of the line, must have the same reference frame as self
+        :return: tuple of (closest point on the line, shortest distance between self and the line)
+        """
+        lp_vector = self - line_point
+        cross_product = lp_vector.cross(line_direction)
+        distance = cross_product.norm() / line_direction.norm()
+
+        line_direction_unit = line_direction / line_direction.norm()
+        projection_length = lp_vector @ line_direction_unit
+        closest_point = line_point + line_direction_unit * projection_length
+
+        return closest_point, distance
+
+    def distance_to_line_segment(
+        self, line_start: CartesianPoint3D, line_end: CartesianPoint3D
+    ) -> tuple[sm.Scalar, CartesianPoint3D]:
+        """
+        All parameters must have the same reference frame as self.
+
+        :param line_start: start of the approached line
+        :param line_end: end of the approached line
+        :return: distance to line, the nearest point on the line
+        """
+        frame_P_current = self
+        frame_P_line_start = line_start
+        frame_P_line_end = line_end
+        frame_V_line_vec = frame_P_line_end - frame_P_line_start
+        pnt_vec = frame_P_current - frame_P_line_start
+        line_len = frame_V_line_vec.norm()
+        line_unitvec = frame_V_line_vec / line_len
+        pnt_vec_scaled = pnt_vec / line_len
+        t = line_unitvec @ pnt_vec_scaled
+        t = sm.limit(t, lower_limit=0.0, upper_limit=1.0)
+        frame_V_offset = frame_V_line_vec * t
+        dist = (frame_V_offset - pnt_vec).norm()
+        frame_P_nearest = frame_P_line_start + frame_V_offset
+        return dist, frame_P_nearest
+
+    def midpoint(self, other: CartesianPoint3D) -> CartesianPoint3D:
+        """
+        :param other: The point to meet halfway.
+        :return: The point midway between this one and ``other``.
+        """
+        return self + (other - self) / 2
+
+    @property
+    def vector3(self) -> Vector3D:
+        """
+        :return: The vector from the origin of the reference frame to this point.
+        """
+        result = Vector3D.from_casadi_sx(copy(self.casadi_sx))
+        result.reference_frame = self.reference_frame
+        return result
+
+    @property
+    def generic_vector(self) -> sm.Vector:
+        """
+        :return: The coordinates of this point as a vector without spatial semantics.
+        """
+        return sm.Vector.from_casadi_sx(copy(self.casadi_sx[:3]))
+
+    def euclidean_distance(self, other: Self) -> sm.Scalar:
+        return self.generic_vector.euclidean_distance(other.generic_vector)
+
+
+@dataclass(eq=False, init=False, repr=False)
+class Vector2D(
+    sm.SymbolicMathType,
+    SymbolicSpatialType,
+    ValueOnFramePlane,
+    SubclassJSONSerializer,
+    CartesianVector[CartesianFrame2D, sm.Scalar],
+    PlanarTransformationOperand,
+):
+    """
+    A translation within the x-y plane of its reference frame, given in the
+    :class:`PlanarFrame` of that frame.
+
+    Stored as a bare 2×1 symbolic vector ``[x, y]``, like :class:`CartesianPoint2D`.
+    """
+
+    def __init__(
+        self,
+        x: sm.ScalarData = 0,
+        y: sm.ScalarData = 0,
+        reference_frame: CartesianFrame3D | None = None,
+    ):
+        """
+        :param x: The amount along the x-axis.
+        :param y: The amount along the y-axis.
+        :param reference_frame: The frame on whose x-y plane the vector lies.
+        """
+        self.casadi_sx = sm.to_sx([x, y])
+        self.reference_frame = reference_frame
+        super().__post_init__()
+
+    @property
+    def x(self) -> sm.Scalar:
+        return self[0]
+
+    @x.setter
+    def x(self, value: sm.ScalarData):
+        self[0] = value
+
+    @property
+    def y(self) -> sm.Scalar:
+        return self[1]
+
+    @y.setter
+    def y(self, value: sm.ScalarData):
+        self[1] = value
+
+    def _verify_type(self):
+        if self.shape != (2, 1):
+            raise WrongDimensionsError(
+                expected_dimensions=(2, 1), actual_dimensions=self.shape
+            )
+
+    @classmethod
+    def _from_constant_json(cls, data: dict[str, Any], **kwargs) -> Self:
+        reference_frame = cls._parse_optional_frame_from_json(
+            data, frame=SpatialFrameKey.REFERENCE, **kwargs
+        )
+        x, y = data["data"][:2]
+        return cls(x=x, y=y, reference_frame=reference_frame)
+
+    def _constant_to_json(self) -> dict[str, Any]:
+        return {
+            "data": self.to_np().tolist(),
+        }
+
+    def transform(
+        self, target_frame_T_reference_frame: HomogeneousTransformationMatrix
+    ) -> Vector2D:
+        """
+        This vector re-expressed in ``target_frame_T_reference_frame``'s reference frame.
+
+        .. warning::
+            Between frames whose x-y planes are not parallel this is not a change of
+            coordinates but a projection: the vector is turned in 3D space and projected
+            onto the target plane. The height the rotation produced is lost.
+
+        :param target_frame_T_reference_frame: The transformation from this vector's
+            reference frame to the frame it should be expressed in.
+        :return: The vector in the transformation's reference frame.
+        """
+        turned = target_frame_T_reference_frame @ Vector3D(
+            self.x, self.y, 0, reference_frame=self.reference_frame
+        )
+        return Vector2D(turned.x, turned.y, reference_frame=turned.reference_frame)
+
+    def apply_planar_transformation(
+        self, transformation: HomogeneousTransformationMatrix2D
+    ) -> Vector2D:
+        turned = ca.mtimes(transformation.casadi_sx, ca.vertcat(self.casadi_sx, 0))
+        return Vector2D(
+            turned[0], turned[1], reference_frame=transformation.reference_frame
+        )
+
+    def __add__(self, other: Vector2D) -> Vector2D:
+        """
+        :raises ReferenceFrameMismatchError: If ``other`` is given in another frame.
+        """
+        if not isinstance(other, Vector2D):
+            return NotImplemented
+        self.ensure_same_reference_frame(other, "the added Vector2D")
+        return Vector2D(
+            self.x + other.x, self.y + other.y, reference_frame=self.reference_frame
+        )
+
+    def __sub__(self, other: Vector2D) -> Vector2D:
+        """
+        :raises ReferenceFrameMismatchError: If ``other`` is given in another frame.
+        """
+        if not isinstance(other, Vector2D):
+            return NotImplemented
+        self.ensure_same_reference_frame(other, "the subtracted Vector2D")
+        return Vector2D(
+            self.x - other.x, self.y - other.y, reference_frame=self.reference_frame
+        )
+
+    def __mul__(self, factor: sm.ScalarData) -> Vector2D:
+        if not isinstance(factor, sm.ScalarData):
+            return NotImplemented
+        return Vector2D(
+            self.x * factor, self.y * factor, reference_frame=self.reference_frame
+        )
+
+    def norm(self) -> sm.Scalar:
+        return sm.Scalar.from_casadi_sx(ca.norm_2(self.casadi_sx))
+
+    def dot(self, other: Vector2D) -> sm.Scalar:
+        """
+        :raises ReferenceFrameMismatchError: If ``other`` is given in another frame.
+        """
+        self.ensure_same_reference_frame(other, "the multiplied Vector2D")
+        return sm.Scalar.from_casadi_sx(ca.mtimes(self.casadi_sx.T, other.casadi_sx))
+
+
+@dataclass(eq=False, init=False, repr=False)
+class CartesianPoint2D(
+    sm.SymbolicMathType,
+    SymbolicSpatialType,
+    ValueOnFramePlane,
+    SubclassJSONSerializer,
+    CartesianPoint[CartesianFrame2D, sm.Scalar, Vector2D],
+    PlanarTransformationOperand,
+):
+    """
+    Represents a 2D point with reference frame handling.
+
+    Stored as a bare 2×1 symbolic vector ``[x, y]``, with no homogeneous augmentation --
+    the same convention :class:`Pose2D` uses. The point lies on its reference frame's
+    own x-y plane and has no height; it relates to 3D space only through an
+    :class:`FramePlaneProjection` onto that plane, which :meth:`from_cartesian_point_3d`,
+    :meth:`from_pose` and :meth:`to_cartesian_point_3d` apply.
+    """
+
+    def __init__(
+        self,
+        x: sm.ScalarData = 0,
+        y: sm.ScalarData = 0,
+        reference_frame: CartesianFrame3D | None = None,
+    ):
+        """
+        :param x: X-coordinate of the point. Defaults to 0.
+        :param y: Y-coordinate of the point. Defaults to 0.
+        :param reference_frame:
+        """
+        self.casadi_sx = sm.to_sx([x, y])
+        self.reference_frame = reference_frame
+        super().__post_init__()
+
+    @property
+    def x(self) -> sm.Scalar:
+        return self[0]
+
+    @x.setter
+    def x(self, value: sm.ScalarData):
+        self[0] = value
+
+    @property
+    def y(self) -> sm.Scalar:
+        return self[1]
+
+    @y.setter
+    def y(self, value: sm.ScalarData):
+        self[1] = value
+
+    def _verify_type(self):
+        if self.shape != (2, 1):
+            raise WrongDimensionsError(
+                expected_dimensions=(2, 1), actual_dimensions=self.shape
+            )
+
+    @classmethod
+    def from_cartesian_point_3d(
+        cls,
+        point: CartesianPoint3D,
+        plane_frame: CartesianFrame3D | None = None,
+    ) -> CartesianPoint2D:
+        """
+        The :meth:`FramePlaneProjection.project` of ``point`` onto the x-y plane of
+        ``plane_frame``.
+
+        :param point: The point to project.
+        :param plane_frame: The frame whose x-y plane to project onto. Defaults to
+            ``point``'s reference frame.
+        :return: The point on the plane directly below or above ``point``.
+        """
+        frame = plane_frame if plane_frame is not None else point.reference_frame
+        return FramePlaneProjection(frame).project(point)
+
+    @classmethod
+    def from_pose(
+        cls,
+        pose: Pose3D,
+        plane_frame: CartesianFrame3D | None = None,
+    ) -> CartesianPoint2D:
+        """
+        The :meth:`from_cartesian_point_3d` of ``pose``'s position.
+
+        :param pose: The pose whose position to project.
+        :param plane_frame: The frame whose x-y plane to project onto. Defaults to
+            ``pose``'s reference frame.
+        :return: The point on the plane directly below or above ``pose``.
+        """
+        return cls.from_cartesian_point_3d(pose.position, plane_frame)
+
+    def to_cartesian_point_3d(self, height: sm.ScalarData = 0) -> CartesianPoint3D:
+        """
+        The :meth:`FramePlaneProjection.unproject` of this point into its own reference
+        frame.
+
+        :param height: The z-coordinate the point is placed at.
+        :return: The 3D point at ``height`` above this point.
+        """
+        return FramePlaneProjection(self.reference_frame).unproject(self, height)
+
+    @classmethod
+    def _from_constant_json(cls, data: dict[str, Any], **kwargs) -> Self:
+        reference_frame = cls._parse_optional_frame_from_json(
+            data, frame=SpatialFrameKey.REFERENCE, **kwargs
+        )
+        x, y = data["data"][:2]
+        return cls(x=x, y=y, reference_frame=reference_frame)
+
+    def _constant_to_json(self) -> dict[str, Any]:
+        return {
+            "data": self.to_np().tolist(),
+        }
+
+    def transform(
+        self, target_frame_T_reference_frame: HomogeneousTransformationMatrix
+    ) -> CartesianPoint2D:
+        """
+        This point re-expressed in ``target_frame_T_reference_frame``'s reference frame.
+
+        .. warning::
+            Between frames whose x-y planes are not parallel this is not a change of
+            coordinates but a projection: the point is placed at height 0 through an
+            :class:`FramePlaneProjection`, moved, and projected onto the target plane.
+            The height the rotation produced is lost.
+
+        :param target_frame_T_reference_frame: The transformation from this point's
+            reference frame to the frame it should be expressed in.
+        :return: The point in the transformation's reference frame.
+        """
+        return CartesianPoint2D.from_cartesian_point_3d(
+            target_frame_T_reference_frame @ self.to_cartesian_point_3d()
+        )
+
+    def apply_planar_transformation(
+        self, transformation: HomogeneousTransformationMatrix2D
+    ) -> CartesianPoint2D:
+        moved = ca.mtimes(transformation.casadi_sx, ca.vertcat(self.casadi_sx, 1))
+        return CartesianPoint2D(
+            moved[0], moved[1], reference_frame=transformation.reference_frame
+        )
+
+    def __add__(self, vector: Vector2D) -> CartesianPoint2D:
+        """
+        :raises ReferenceFrameMismatchError: If ``vector`` is given in another frame.
+        """
+        if not isinstance(vector, Vector2D):
+            return NotImplemented
+        self.ensure_same_reference_frame(vector, "the added Vector2D")
+        return CartesianPoint2D(
+            self.x + vector.x, self.y + vector.y, reference_frame=self.reference_frame
+        )
+
+    def __sub__(self, other: CartesianPoint2D) -> Vector2D:
+        """
+        :raises ReferenceFrameMismatchError: If ``other`` is given in another frame.
+        """
+        if not isinstance(other, CartesianPoint2D):
+            return NotImplemented
+        self.ensure_same_reference_frame(other, "the subtracted CartesianPoint2D")
+        return Vector2D(
+            self.x - other.x, self.y - other.y, reference_frame=self.reference_frame
+        )
+
+    def euclidean_distance(self, other: Self) -> sm.Scalar:
+        return sm.Vector.from_casadi_sx(self.casadi_sx).euclidean_distance(
+            sm.Vector.from_casadi_sx(other.casadi_sx)
+        )
+
+    def __hash__(self):
+        if self.is_constant():
+            return hash((*self.to_np().tolist(), self.reference_frame))
+        return super().__hash__()
+
+
+@dataclass(eq=False)
+class Line3D(AffineLine[CartesianPoint3D, Vector3D]):
+    """
+    An infinite straight line in 3D space.
+    """
+
+    point: CartesianPoint3D
+    """
+    A point the line passes through.
+    """
+
+    direction: Vector3D
+    """
+    The direction the line runs in, in the same reference frame as :attr:`point`.
+    """
+
+
+@dataclass(eq=False)
+class LineSegment3D:
+    """
+    A straight line in 3D space between two points.
+    """
+
+    start: CartesianPoint3D
+    """
+    The point the segment runs from.
+    """
+
+    end: CartesianPoint3D
+    """
+    The point the segment runs to, in the same reference frame as :attr:`start`.
+    """
+
+    @property
+    def direction(self) -> Vector3D:
+        """
+        :return: The unit vector from :attr:`start` towards :attr:`end`.
+        """
+        direction = self.end - self.start
+        direction.scale(1)
+        return direction
+
+
+@dataclass
+class FramePlaneProjection(
+    OrthogonalProjection[CartesianPoint3D, CartesianPoint2D, Line3D, sm.ScalarData]
+):
+    """
+    The orthogonal projection of 3D space onto the x-y plane of one frame.
+
+    A point's :meth:`projection_line` is the vertical line through it, and its
+    position along that line is its height above the plane.
+    """
+
+    plane_frame: CartesianFrame3D | None
+    """
+    The frame whose x-y plane points are projected onto.
+
+    ``None`` is the plane of points that have no reference frame. Their coordinates
+    are taken as they are, so such a projection only relates points without a
+    reference frame to each other.
+    """
+
+    def project(self, point: CartesianPoint3D) -> CartesianPoint2D:
+        """
+        :raises ReferenceFrameMismatchError: If exactly one of ``point`` and this
+            projection has no reference frame.
+        """
+        if point.reference_frame is not self.plane_frame:
+            if point.reference_frame is None or self.plane_frame is None:
+                raise ReferenceFrameMismatchError(
+                    expected_frame=self.plane_frame,
+                    actual_frame=point.reference_frame,
+                    context="the projected CartesianPoint3D",
+                )
+            point = self.plane_frame.express_in_own_frame(point)
+        return CartesianPoint2D(point.x, point.y, reference_frame=self.plane_frame)
+
+    def unproject(
+        self, point: CartesianPoint2D, position_along_line: sm.ScalarData = 0
+    ) -> CartesianPoint3D:
+        """
+        :raises ReferenceFrameMismatchError: If ``point`` lies on another frame's plane.
+        """
+        if point.reference_frame is not self.plane_frame:
+            raise ReferenceFrameMismatchError(
+                expected_frame=self.plane_frame,
+                actual_frame=point.reference_frame,
+                context="the unprojected CartesianPoint2D",
+            )
+        return CartesianPoint3D(
+            point.x, point.y, position_along_line, reference_frame=self.plane_frame
+        )
+
+    def projection_line(self, point: CartesianPoint2D) -> Line3D:
+        return Line3D(
+            point=self.unproject(point),
+            direction=Vector3D.Z(reference_frame=self.plane_frame),
+        )
 
 
 @dataclass(eq=False, init=False, repr=False)
@@ -3166,7 +3320,7 @@ class Pose3D(
 class Pose2D(
     sm.SymbolicMathType,
     SymbolicSpatialType,
-    ValueOnXYPlane2D,
+    ValueOnFramePlane,
     SubclassJSONSerializer,
     PlanarTransformationOperand,
 ):
@@ -3394,14 +3548,13 @@ class Pose2D(
 @dataclass(eq=False, init=False, repr=False)
 class HomogeneousTransformationMatrix2D(
     sm.SymbolicMathType,
-    SpatialChange,
+    SpatialChange[CartesianFrame2D],
     SubclassJSONSerializer,
-    RigidCoordinateChange[CartesianFrame2D],
     PlanarTransformationOperand,
 ):
     """
     A 3x3 homogeneous matrix of SE(2): the rigid change from the
-    :class:`XYPlaneFrame2D` of its :attr:`~SpatialChange.child_frame` into that of its
+    :class:`PlanarFrame` of its :attr:`~SpatialChange.child_frame` into that of its
     :attr:`~SymbolicSpatialType.reference_frame`, two frames on one plane.
 
     It is only a change of coordinates, never a value given in a frame: the value it
@@ -3439,16 +3592,16 @@ class HomogeneousTransformationMatrix2D(
         self[2, :] = [0, 0, 1]
 
     @property
-    def source_coordinate_system(self) -> XYPlaneFrame2D | None:
+    def source_coordinate_system(self) -> PlanarFrame | None:
         if self.child_frame is None:
             return None
-        return XYPlaneFrame2D(self.child_frame)
+        return PlanarFrame(self.child_frame)
 
     @property
-    def target_coordinate_system(self) -> XYPlaneFrame2D | None:
+    def target_coordinate_system(self) -> PlanarFrame | None:
         if self.reference_frame is None:
             return None
-        return XYPlaneFrame2D(self.reference_frame)
+        return PlanarFrame(self.reference_frame)
 
     # %% construction
 
