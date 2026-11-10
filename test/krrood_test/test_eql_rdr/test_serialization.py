@@ -155,7 +155,7 @@ def test_generated_tree_evaluates_a_bird_case_the_same_as_the_original():
         rebuilt_root, Species.BIRD
     )
     assert knowledge.sufficient_condition_sets[0].evaluate_against(
-        rebuilt_variable, bat
+        shared_variable=rebuilt_variable, case=bat
     )
 
 
@@ -193,7 +193,9 @@ def _template_docstring() -> str:
     locate it for rendering so the expected text has one source rather than a retyped copy.
     Everything from the first placeholder on is dropped, since a Jinja template is not
     parseable Python."""
-    template_source = (Path(_TEMPLATES_DIRECTORY) / _RDR_MODULE_TEMPLATE_NAME).read_text()
+    template_source = (
+        Path(_TEMPLATES_DIRECTORY) / _RDR_MODULE_TEMPLATE_NAME
+    ).read_text()
     return ast.get_docstring(ast.parse(template_source[: template_source.index("{{")]))
 
 
