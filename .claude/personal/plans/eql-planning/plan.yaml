@@ -45,12 +45,10 @@ items:
     from it'
   track: planning-core
   pull_request_number: 541
-  session: https://claude.ai/code/session_018wfiv5yasD7se5ZBXvUw5i
-  blockers:
-    - ""
+  session: https://claude.ai/code/session_01JxHGiPxKXS7dPRev7pcL1M
   depends_on: []
   status: in progress
-  notes: 'In #541 (draft, on #535): state objects, TermReader.instances_of, per-evaluation
+  notes: 'In #541 (draft, on main, merged with main in ff1fa9d22b): state objects, TermReader.instances_of, per-evaluation
     default domains, expression domains as FlatVariable/InstanceFilteredFlatVariable (a(T).from_(expr)
     too). First review addressed in fa1dc1af6e; the owner chose to filter removed objects
     out of list/tuple/set fluent values, captured lists stay unfiltered.
