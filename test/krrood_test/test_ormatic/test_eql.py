@@ -39,6 +39,7 @@ from krrood.entity_query_language.factories import (
     or_,
     contains,
     in_,
+    a,
     an,
     the,
     count,
@@ -769,7 +770,7 @@ def test_set_of(session):
     Verify that set_of translates to SELECT of individual columns.
     """
     b = variable(type_=Body, domain=[])
-    query = an(set_of(b.size))
+    query = a(set_of(b.size))
 
     translator = eql_to_sql(query, session)
     expected = select(BodyDAO.size)
@@ -782,7 +783,7 @@ def test_set_of_with_join(session):
     Verify that set_of with transitive attributes generates correct JOINs.
     """
     pose = variable(type_=KRROODPose, domain=[])
-    query = an(set_of(pose.position.z))
+    query = a(set_of(pose.position.z))
 
     translator = eql_to_sql(query, session)
     expected = select(KRROODPositionDAO.z).join(KRROODPoseDAO.position)
@@ -1052,7 +1053,7 @@ def test_set_of_attribute_evaluate(session, database):
     session.commit()
 
     b = variable(type_=Body, domain=[])
-    query = an(set_of(b.name, b.size))
+    query = a(set_of(b.name, b.size))
 
     translator = eql_to_sql(query, session)
     results = translator.evaluate()
@@ -1372,7 +1373,7 @@ def test_count_all_derives_dao_from_where_clause(session, database):
 
     m = variable(MoveAction, domain=[])
     c = count_all()
-    query = an(set_of(c).where(m.robot_x > 0.5))
+    query = a(set_of(c).where(m.robot_x > 0.5))
 
     translator = eql_to_sql(query, session)
     results = translator.evaluate()
@@ -1404,7 +1405,7 @@ def test_order_by_aggregate(session, database):
 
     b = variable(type_=Body, domain=[])
     c = count(b)
-    query = an(set_of(b.size, c).grouped_by(b.size).ordered_by(c, descending=True))
+    query = a(set_of(b.size, c).grouped_by(b.size).ordered_by(c, descending=True))
 
     translator = eql_to_sql(query, session)
     results = translator.evaluate()

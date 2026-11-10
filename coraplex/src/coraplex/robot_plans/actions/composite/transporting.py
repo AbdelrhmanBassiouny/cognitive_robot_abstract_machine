@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from typing_extensions import Self
 
-from krrood.entity_query_language.factories import a, flat_variable, variable
+from krrood.entity_query_language.factories import a, an, flat_variable, variable
 from coraplex.datastructures.enums import ReachFraction
 from coraplex.locations.locations import ReachabilityLocation
 from cramph.context import StatechartContext
@@ -373,7 +373,7 @@ class MoveAndOpenAction(SequentialAction):
                 face_at=a(FaceAtAction)(target=handle_pose),
                 look_at=a(LookAtAction)(target=handle_pose),
             ),
-            open_container=a(OpenAction)(
+            open_container=an(OpenAction)(
                 grasp=flat_variable(
                     GraspsByCloseness(handle, standing_position, number_of_grasps)
                 ),

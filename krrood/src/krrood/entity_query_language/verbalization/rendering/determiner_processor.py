@@ -51,7 +51,7 @@ class DeterminerProcessor(RewritePass):
     def rewrite(self, leaf: VerbalizationFragment) -> VerbalizationFragment:
         """:return: A lowered noun-phrase leaf; any other leaf passes through unchanged.
 
-        >>> verbalize_expression(a(entity(variable(Robot, []))))
+        >>> verbalize_expression(an(entity(variable(Robot, []))))
         'Find a Robot'
         """
         return self._lower_noun_phrase(leaf) if isinstance(leaf, NounPhrase) else leaf

@@ -523,7 +523,7 @@ class ReferringExpressions:
         :return: An instance with the head-noun map pre-built for *expression*.
 
         >>> first, second = variable(Robot, []), variable(Robot, [])
-        >>> referring = ReferringExpressions.from_expression(an(set_of(first, second)))
+        >>> referring = ReferringExpressions.from_expression(a(set_of(first, second)))
         >>> referring.head_nouns[first._id_]
         'Robot'
         """
@@ -670,7 +670,7 @@ class ReferringExpressions:
         An aggregation source is scanned but excluded, so it falls back to its type label:
 
         >>> transaction = variable(BankTransaction, [])
-        >>> query = a(entity(sum(transaction.amount_details.amount)))
+        >>> query = an(entity(sum(transaction.amount_details.amount)))
         >>> referring = ReferringExpressions.from_expression(query)
         >>> transaction._id_ in referring.head_nouns
         False

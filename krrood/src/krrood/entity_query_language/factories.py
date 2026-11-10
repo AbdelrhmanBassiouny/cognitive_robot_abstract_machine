@@ -706,7 +706,7 @@ def case_when(
     .. code-block:: python
 
         action = variable(MoveAction, domain=[])
-        query = an(set_of(
+        query = a(set_of(
             min(case_when(action.polymorphic_type == 'PickUpActionDAO', action.database_id))
         ))
 

@@ -135,7 +135,7 @@ class VerbalizationPipeline:
         It runs the full path — build the fragment tree, then render it — whereas
         :meth:`verbalize_fragment` renders an already-built fragment.
 
-        >>> VerbalizationPipeline.plain().verbalize(a(entity(variable(Robot, []))))
+        >>> VerbalizationPipeline.plain().verbalize(an(entity(variable(Robot, []))))
         'Find a Robot'
         """
         # Match/Distribution/Probability all resolve, via _get_expression_, to the
@@ -166,7 +166,7 @@ class VerbalizationPipeline:
         :class:`EQLVerbalizer`, it applies this pipeline's renderer (and HTML wrapping) without
         re-building — the step :meth:`verbalize` calls after building.
 
-        >>> tree = EQLVerbalizer().build(a(entity(variable(Robot, []))))
+        >>> tree = EQLVerbalizer().build(an(entity(variable(Robot, []))))
         >>> VerbalizationPipeline.plain().verbalize_fragment(tree)
         'Find a Robot'
         """
@@ -292,10 +292,10 @@ def verbalize_expression(
         derived from the query type as before.
     :return: Plain-text natural-language string.
 
-    >>> verbalize_expression(a(entity(variable(Robot, []))))
+    >>> verbalize_expression(an(entity(variable(Robot, []))))
     'Find a Robot'
     >>> robot = variable(Robot, [])
-    >>> verbalize_expression(a(entity(robot).where(robot.battery > 50)))
+    >>> verbalize_expression(an(entity(robot).where(robot.battery > 50)))
     'Find a Robot whose battery is greater than 50'
     """
     return VerbalizationPipeline.plain().verbalize(expression, backend=backend)

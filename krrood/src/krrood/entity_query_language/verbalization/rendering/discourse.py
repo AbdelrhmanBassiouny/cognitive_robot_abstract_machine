@@ -185,7 +185,7 @@ class DiscourseModel:
 
         >>> from krrood.entity_query_language.verbalization.context import MicroplanningServices
         >>> robot = variable(Robot, [])
-        >>> query = a(entity(robot).where(robot.battery > 50))
+        >>> query = an(entity(robot).where(robot.battery > 50))
         >>> services = MicroplanningServices.from_expression(query)
         >>> model = DiscourseModel.from_expression(query, services.microplan)
         >>> scope = next(node for node in query._all_expressions_ if isinstance(node, Entity))
