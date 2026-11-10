@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import List
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.variable import InstantiatedVariable
@@ -44,7 +43,7 @@ class InstantiatedPlan:
     Display name of the instantiated type (e.g. ``"Drawer"``).
     """
 
-    bindings: List[BindingPlan]
+    bindings: list[BindingPlan]
     """
     Ordered field bindings.
     """
@@ -85,7 +84,7 @@ class InstantiatedPlanner(Planner[InstantiatedVariable, InstantiatedPlan]):
         """
         return getattr(self.node._type_, "__name__", str(self.node._type_))
 
-    def _bindings(self) -> List[BindingPlan]:
+    def _bindings(self) -> list[BindingPlan]:
         """:return: One :class:`BindingPlan` per field binding, in construction order.
 
         >>> connection = variable(FixedConnection, [])
@@ -99,7 +98,7 @@ class InstantiatedPlanner(Planner[InstantiatedVariable, InstantiatedPlan]):
                 is_plural=morphology.is_plural(field_name),
                 value=child,
             )
-            for field_name, child in self.node._child_vars_.items()
+            for field_name, child in self.node._child_variables_.items()
         ]
 
     @staticmethod
@@ -113,10 +112,10 @@ class InstantiatedPlanner(Planner[InstantiatedVariable, InstantiatedPlan]):
         >>> InstantiatedPlanner.has_fragment(inference(Drawer)(container=connection.parent, handle=connection.child))
         False
         """
-        type_ = node._type_
+        factory = node._factory_
         return (
-            isinstance(type_, type)
-            and issubclass(type_, Verbalizable)
-            and type_._verbalization_fragment_.__func__
+            isinstance(factory, type)
+            and issubclass(factory, Verbalizable)
+            and factory._verbalization_fragment_.__func__
             is not Verbalizable._verbalization_fragment_.__func__
         )
