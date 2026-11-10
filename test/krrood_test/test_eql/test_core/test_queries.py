@@ -919,7 +919,7 @@ def test_unsupported_negation(handles_and_containers_world):
         )
 
     with pytest.raises(UnsupportedNegation):
-        query = an(not_(entity(body).where(body.name.endswith("1"))))
+        query = a(not_(entity(body).where(body.name.endswith("1"))))
 
 
 def test_quantified_query(handles_and_containers_world):

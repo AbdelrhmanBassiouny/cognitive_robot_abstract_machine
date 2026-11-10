@@ -26,7 +26,7 @@ from krrood.class_diagrams.collection_kind import CollectionKind
 from krrood.class_diagrams.attribute_introspector import (
     DataclassOnlyIntrospector,
 )
-from krrood.entity_query_language.factories import a, contains, entity, variable
+from krrood.entity_query_language.factories import an, contains, entity, variable
 from krrood.ormatic.utils import classproperty
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood.utils import get_generic_type_parameters
@@ -393,7 +393,7 @@ class AbstractRobotPart(HasRootBody, HasRobotParts, ABC):
         """
         robot_variable = variable(AbstractRobot, self._world.semantic_annotations)
         robot = (
-            a(entity(robot_variable))
+            an(entity(robot_variable))
             .where(contains(robot_variable._robot_parts, self))
             .tolist()
         )

@@ -99,7 +99,7 @@ class ParagraphRenderer(FragmentRenderer):
 
         >>> from krrood.entity_query_language.verbalization.verbalizer import EQLVerbalizer
         >>> robot = variable(Robot, [])
-        >>> tree = EQLVerbalizer().build(a(entity(robot).where(and_(robot.battery > 50, robot.battery < 90))))
+        >>> tree = EQLVerbalizer().build(an(entity(robot).where(and_(robot.battery > 50, robot.battery < 90))))
         >>> ParagraphRenderer().render(tree)
         'Find a Robot whose battery is between 50 and 90'
         """
@@ -164,7 +164,7 @@ class HierarchicalRenderer(FragmentRenderer):
 
         >>> from krrood.entity_query_language.verbalization.verbalizer import EQLVerbalizer
         >>> robot = variable(Robot, [])
-        >>> tree = EQLVerbalizer().build(a(entity(robot).where(and_(robot.battery > 50, robot.battery < 90))))
+        >>> tree = EQLVerbalizer().build(an(entity(robot).where(and_(robot.battery > 50, robot.battery < 90))))
         >>> print(HierarchicalRenderer().render(tree))
         Find a Robot
           - whose battery is between 50 and 90
@@ -207,7 +207,7 @@ class HierarchicalRenderer(FragmentRenderer):
 
         >>> from krrood.entity_query_language.verbalization.verbalizer import EQLVerbalizer
         >>> robot = variable(Robot, [])
-        >>> tree = EQLVerbalizer().build(a(entity(robot).where(and_(robot.battery > 50, robot.battery < 90))))
+        >>> tree = EQLVerbalizer().build(an(entity(robot).where(and_(robot.battery > 50, robot.battery < 90))))
         >>> print(HierarchicalRenderer()._render_item(tree, 0))
         Find a Robot
           - whose battery is between 50 and 90
@@ -236,7 +236,7 @@ class HierarchicalRenderer(FragmentRenderer):
 
         >>> from krrood.entity_query_language.verbalization.verbalizer import EQLVerbalizer
         >>> robot = variable(Robot, [])
-        >>> tree = EQLVerbalizer().build(a(entity(robot).where(and_(robot.battery > 50, robot.battery < 90))))
+        >>> tree = EQLVerbalizer().build(an(entity(robot).where(and_(robot.battery > 50, robot.battery < 90))))
         >>> HierarchicalRenderer()._inline(tree)
         'Find a Robot whose battery is between 50 and 90'
         """

@@ -288,7 +288,7 @@ def test_set_of_vars_are_role_fragments(departments_and_employees_fixture):
     emp = variable(Employee, domain=None)
     dept = emp.department
     avg_salary = eql.average(emp.salary)
-    query = a(eql.set_of(dept, avg_salary).grouped_by(dept))
+    query = an(eql.set_of(dept, avg_salary).grouped_by(dept))
 
     frag = EQLVerbalizer().build(query)
 

@@ -96,7 +96,7 @@ class SetOfRule(PhraseRule):
     SetOf → *"Find v1 and v2 such that …"* (a search), or *"Report …"* / *"For each …
     report …"* when the selection computes aggregates (a report).
 
-    >>> verbalize_expression(an(set_of(variable(Robot, []), variable(Task, []))))
+    >>> verbalize_expression(a(set_of(variable(Robot, []), variable(Task, []))))
     'Find a Robot and a Task'
     """
 
@@ -109,7 +109,7 @@ class SetOfRule(PhraseRule):
         It produces the whole set-of sentence by delegating to the query assembler, which here emits
         *"Find"* followed by the coordinated selection *"a Robot and a Task"*:
 
-        >>> verbalize_expression(an(set_of(variable(Robot, []), variable(Task, []))))
+        >>> verbalize_expression(a(set_of(variable(Robot, []), variable(Task, []))))
         'Find a Robot and a Task'
         """
         return QueryAssembler(context).assemble_set_of(node)

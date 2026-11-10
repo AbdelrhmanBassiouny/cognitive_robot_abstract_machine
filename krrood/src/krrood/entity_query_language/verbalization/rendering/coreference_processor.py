@@ -147,7 +147,7 @@ class CoreferenceProcessor(RealizationPass):
         >>> from krrood.entity_query_language.verbalization.verbalizer import EQLVerbalizer
         >>> from krrood.entity_query_language.verbalization.fragments.base import flatten_fragment_to_plain_text
         >>> robot = variable(Robot, [])
-        >>> query = a(entity(robot))
+        >>> query = an(entity(robot))
         >>> shared = MicroplanningServices.from_expression(robot)
         >>> flatten_fragment_to_plain_text(EQLVerbalizer().build(query, shared))
         'Find a Robot'
@@ -170,7 +170,7 @@ class CoreferenceProcessor(RealizationPass):
         instead re-name the whole *a Mission*):
 
         >>> mission = variable(Mission, [])
-        >>> verbalize_expression(a(entity(mission).where(mission.assigned_to.battery > 50)))
+        >>> verbalize_expression(an(entity(mission).where(mission.assigned_to.battery > 50)))
         'Find a Mission such that the battery of the Robot to which it is assigned is greater than 50'
         """
         if self.discourse.is_scope(fragment.source):
@@ -360,7 +360,7 @@ class CoreferenceProcessor(RealizationPass):
         advances the centre to that Robot:
 
         >>> mission = variable(Mission, [])
-        >>> verbalize_expression(a(entity(mission).where(mission.assigned_to.battery > 50)))
+        >>> verbalize_expression(an(entity(mission).where(mission.assigned_to.battery > 50)))
         'Find a Mission such that the battery of the Robot to which it is assigned is greater than 50'
         """
         reduced_quantity = self._reduced_selected_quantity(possessive_chain)
@@ -420,7 +420,7 @@ class CoreferenceProcessor(RealizationPass):
         *to which it is assigned* is the Mission subject, pied-piped into the relative clause:
 
         >>> mission = variable(Mission, [])
-        >>> verbalize_expression(a(entity(mission).where(mission.assigned_to.battery > 50)))
+        >>> verbalize_expression(an(entity(mission).where(mission.assigned_to.battery > 50)))
         'Find a Mission such that the battery of the Robot to which it is assigned is greater than 50'
         """
         for index in reversed(range(len(parts))):
@@ -449,7 +449,7 @@ class CoreferenceProcessor(RealizationPass):
         why the next clause's attribute reads *its battery* rather than *the battery of the Robot*:
 
         >>> mission = variable(Mission, [])
-        >>> verbalize_expression(a(entity(mission).where(and_(mission.assigned_to.operational, mission.assigned_to.battery > 50))))
+        >>> verbalize_expression(an(entity(mission).where(and_(mission.assigned_to.operational, mission.assigned_to.battery > 50))))
         'Find a Mission such that the Robot to which it is assigned is operational, and its battery is greater than 50'
         """
         relation = self._outermost_relation(parts)
@@ -477,7 +477,7 @@ class CoreferenceProcessor(RealizationPass):
         *the battery of the Robot*:
 
         >>> mission = variable(Mission, [])
-        >>> verbalize_expression(a(entity(mission).where(and_(mission.assigned_to.operational, mission.assigned_to.battery > 50))))
+        >>> verbalize_expression(an(entity(mission).where(and_(mission.assigned_to.operational, mission.assigned_to.battery > 50))))
         'Find a Mission such that the Robot to which it is assigned is operational, and its battery is greater than 50'
         """
         relation = self._outermost_relation(possessive_chain.parts)
@@ -552,7 +552,7 @@ class CoreferenceProcessor(RealizationPass):
         pair distinguisher — *"another"* in *"a Robot … another Robot"*:
 
         >>> robot_one, robot_two = variable(Robot, []), variable(Robot, [])
-        >>> verbalize_expression(a(entity(robot_one).where(robot_one.battery > robot_two.battery)))
+        >>> verbalize_expression(an(entity(robot_one).where(robot_one.battery > robot_two.battery)))
         'Find a Robot whose battery is greater than the battery of another Robot'
         """
         if noun_phrase.referent_id is None:
@@ -607,7 +607,7 @@ class CoreferenceProcessor(RealizationPass):
         >>> from krrood.entity_query_language.verbalization.verbalizer import EQLVerbalizer
         >>> from krrood.entity_query_language.verbalization.fragments.base import flatten_fragment_to_plain_text
         >>> robot = variable(Robot, [])
-        >>> query, shared = a(entity(robot)), MicroplanningServices.from_expression(robot)
+        >>> query, shared = an(entity(robot)), MicroplanningServices.from_expression(robot)
         >>> _ = EQLVerbalizer().build(query, shared)
         >>> flatten_fragment_to_plain_text(EQLVerbalizer().build(query, shared))
         'Find the Robot'

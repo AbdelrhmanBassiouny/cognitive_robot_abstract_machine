@@ -163,7 +163,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         It selects the set-of surface from the plan; the plain search shown has no report or ranking,
         so it assembles the whole *"Find a Robot and a Task"*:
 
-        >>> verbalize_expression(an(set_of(variable(Robot, []), variable(Task, []))))
+        >>> verbalize_expression(a(set_of(variable(Robot, []), variable(Task, []))))
         'Find a Robot and a Task'
         """
         plan = self.plan(node)
@@ -459,7 +459,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         It adds no words of its own: it merely supplies the collaborator that renders the selection
         *"a Robot and a Task"* shown after *"Find"*:
 
-        >>> verbalize_expression(an(set_of(variable(Robot, []), variable(Task, []))))
+        >>> verbalize_expression(a(set_of(variable(Robot, []), variable(Task, []))))
         'Find a Robot and a Task'
         """
         return SelectionAssembler(self.context)

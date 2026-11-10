@@ -109,7 +109,7 @@ class VariableRule(PhraseRule):
         :return: The candidate-set fragment, or ``None`` to fall back to the noun form.
 
         >>> employee = variable(Employee, [])
-        >>> verbalize_expression(a(entity(employee).where(employee.department == variable(str, ["Sales", "Eng"]))))
+        >>> verbalize_expression(an(entity(employee).where(employee.department == variable(str, ["Sales", "Eng"]))))
         "Find an Employee whose department is one of 'Sales' or 'Eng'"
         """
         type_ = node._type_
@@ -184,7 +184,7 @@ class LiteralRule(PhraseRule):
         identity head plus the qualifying detail :meth:`_identifying_fields` supplies:
 
         >>> robot = variable(Robot, [])
-        >>> verbalize_expression(a(entity(robot).where(robot == Robot("R2D2", 80, True))))
+        >>> verbalize_expression(an(entity(robot).where(robot == Robot("R2D2", 80, True))))
         "Find a Robot such that the Robot is a specific Robot with name 'R2D2'"
         """
         value = node._value_
@@ -223,7 +223,7 @@ class LiteralRule(PhraseRule):
         specific Robot"*):
 
         >>> robot = variable(Robot, [])
-        >>> verbalize_expression(a(entity(robot).where(robot == Robot("R2D2", 80, True))))
+        >>> verbalize_expression(an(entity(robot).where(robot == Robot("R2D2", 80, True))))
         "Find a Robot such that the Robot is a specific Robot with name 'R2D2'"
         """
         names = LiteralRule._declared_identifying_names(value)

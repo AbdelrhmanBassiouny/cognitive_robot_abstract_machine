@@ -68,6 +68,7 @@ from krrood.entity_query_language.evaluation_context import (
     set_evaluation_context,
 )
 from krrood.entity_query_language.factories import (
+    a,
     an,
     and_,
     entity,
@@ -179,7 +180,7 @@ def _workload_multi_source() -> int:
     owners = _build_owners(4)
     g = variable(Gadget, domain=gadgets)
     o = variable(Owner, domain=owners)
-    query = an(set_of(g, o).where(and_(g.weight > 1, g.weight < 6, o.name != "Owner0")))
+    query = a(set_of(g, o).where(and_(g.weight > 1, g.weight < 6, o.name != "Owner0")))
     return len(list(query.evaluate()))
 
 
@@ -188,7 +189,7 @@ def _workload_aggregation() -> int:
     SymbolGraph().clear()
     gadgets = _build_gadgets(40)
     g = variable(Gadget, domain=gadgets)
-    query = an(set_of(eql.count(g), eql.max(g.weight, default=0)).where(g.weight > 2))
+    query = a(set_of(eql.count(g), eql.max(g.weight, default=0)).where(g.weight > 2))
     return len(list(query.evaluate()))
 
 

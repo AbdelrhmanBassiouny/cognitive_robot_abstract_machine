@@ -1746,7 +1746,7 @@ def test_where_keeps_is_copula(departments_and_employees_fixture):
     """
     _, _ = departments_and_employees_fixture
     employee = variable(Employee, domain=None)
-    query = a(entity(employee).where(employee.salary > 30000))
+    query = an(entity(employee).where(employee.salary > 30000))
     text = verbalize_expression(query)
 
     where_part = text[text.index("whose") :]
