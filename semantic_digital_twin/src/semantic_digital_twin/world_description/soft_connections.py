@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional, Self
+from typing_extensions import Any, Self
 from uuid import UUID
 
 import krrood.symbolic_math.symbolic_math as sm
@@ -14,11 +14,8 @@ from semantic_digital_twin.world_description.world_entity import (
     Connection,
     KinematicStructureEntity,
 )
-from semantic_digital_twin.spatial_types.spatial_types import (
-    HomogeneousTransformationMatrix,
-)
+from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world import World
-from typing_extensions import Any
 
 
 @dataclass(eq=False)
@@ -93,6 +90,7 @@ class PiecewiseConstantCurvatureConnection(Connection):
         parent_T_connection_expression: HomogeneousTransformationMatrix,
     ) -> Self:
         return self.__class__(
+            name=PrefixedName(self.name.name, prefix=self.name.prefix),
             parent=new_parent,
             child=self.child,
             parent_T_connection_expression=parent_T_connection_expression,
@@ -109,11 +107,9 @@ class PiecewiseConstantCurvatureConnection(Connection):
         parent: KinematicStructureEntity,
         child: KinematicStructureEntity,
         *,
-        name: Optional[PrefixedName] = None,
-        parent_T_connection_expression: Optional[
-            HomogeneousTransformationMatrix
-        ] = None,
-        connection_T_child_expression: Optional[HomogeneousTransformationMatrix] = None,
+        name: PrefixedName | None = None,
+        parent_T_connection_expression: HomogeneousTransformationMatrix | None = None,
+        connection_T_child_expression: HomogeneousTransformationMatrix | None = None,
         kappa_dof_id: UUID,
         phi_dof_id: UUID,
         segment_length: float,
@@ -304,6 +300,7 @@ class CosseratRodConnection(Connection):
         parent_T_connection_expression: HomogeneousTransformationMatrix,
     ) -> Self:
         return self.__class__(
+            name=PrefixedName(self.name.name, prefix=self.name.prefix),
             parent=new_parent,
             child=self.child,
             parent_T_connection_expression=parent_T_connection_expression,
@@ -322,11 +319,9 @@ class CosseratRodConnection(Connection):
         parent: KinematicStructureEntity,
         child: KinematicStructureEntity,
         *,
-        name: Optional[PrefixedName] = None,
-        parent_T_connection_expression: Optional[
-            HomogeneousTransformationMatrix
-        ] = None,
-        connection_T_child_expression: Optional[HomogeneousTransformationMatrix] = None,
+        name: PrefixedName | None = None,
+        parent_T_connection_expression: HomogeneousTransformationMatrix | None = None,
+        connection_T_child_expression: HomogeneousTransformationMatrix | None = None,
         bending_x_dof_id: UUID,
         bending_y_dof_id: UUID,
         torsion_dof_id: UUID,

@@ -332,7 +332,7 @@ class EQLSingleClassRDR:
             target_conclusion=target,
             trace=trace,
             conclusion_domain=self.conclusion_domain,
-            corner_case=self.corner_cases.get(
+            corner_case=self.corner_cases.get_corner_case_for_node(
                 trace.firing_anchor_id if trace is not None else None
             ),
         )
@@ -453,7 +453,7 @@ class EQLSingleClassRDR:
                 conclusion,
             )
 
-        self.corner_cases.record(new_node, context.case_instance)
+        self.corner_cases.record_corner_case(new_node, context.case_instance)
         self._backward_index.invalidate()
 
     # %% fitting a dataset

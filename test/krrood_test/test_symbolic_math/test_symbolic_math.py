@@ -1,5 +1,6 @@
 import copy
 import gc
+import itertools
 import operator
 import weakref
 
@@ -12,13 +13,17 @@ import scipy.sparse as sp
 import krrood.symbolic_math.symbolic_math as sm
 from krrood.adapters.json_serializer import from_json, to_json
 from krrood.symbolic_math.exceptions import (
+    CannotConvertToStringError,
     FloatVariableAlreadyHasResolveError,
     HasFreeVariablesError,
     NotColumnVectorError,
     NotEnoughArgumentsError,
     NotSquareMatrixError,
+    UnhashableExpressionError,
 )
 from krrood.symbolic_math.symbolic_math import VariableParameters
+from krrood.utils import is_hashable
+from ..dataset.symbolic_type_with_inherited_hash import SymbolicTypeWithInheritedHash
 from .reference_implementations import (
     normalize_angle_positive,
     shortest_angular_distance,
@@ -94,6 +99,46 @@ def test_to_sx():
     assert ca.is_equal(sx_list[2], 3)
 
 
+class TestBinaryLogic:
+    """
+    The two-valued logic operators.
+    """
+
+    @pytest.mark.parametrize(
+        "logic_operator, identity",
+        [
+            (sm.logic_and, sm.Scalar.const_true()),
+            (sm.logic_or, sm.Scalar.const_false()),
+        ],
+    )
+    def test_an_operator_combines_any_number_of_arguments(
+        self, logic_operator, identity
+    ):
+        """
+        Chaining several arguments gives the same value as combining them pairwise.
+        """
+        for values in itertools.product([0, 1], repeat=3):
+            arguments = [sm.Scalar(value) for value in values]
+            pairwise = identity
+            for argument in arguments:
+                pairwise = logic_operator(pairwise, argument)
+            assert float(logic_operator(*arguments)) == float(pairwise), f"{values}"
+
+    @pytest.mark.parametrize("logic_operator", [sm.logic_and, sm.logic_or])
+    def test_an_operator_of_one_argument_is_that_argument(self, logic_operator):
+        a = sm.FloatVariable(name="a")
+
+        assert logic_operator(a).free_variables() == [a]
+        assert ca.is_equal(logic_operator(a).casadi_sx, a.casadi_sx)
+
+    @pytest.mark.parametrize("logic_operator", [sm.logic_and, sm.logic_or])
+    def test_an_operator_without_arguments_is_rejected(self, logic_operator):
+        with pytest.raises(NotEnoughArgumentsError) as error:
+            logic_operator()
+        assert error.value.minimum_number_of_arguments == 1
+        assert error.value.actual_number_of_arguments == 0
+
+
 class TestLogic3:
     values = [
         TrinaryTrue,
@@ -106,18 +151,18 @@ class TestLogic3:
             for j in self.values:
                 expected = logic_and(i, j)
                 actual = sm.trinary_logic_and(sm.Scalar(i), sm.Scalar(j))
-                assert (
-                    expected == actual
-                ), f"a={i}, b={j}, expected {expected}, actual {actual}"
+                assert expected == actual, (
+                    f"a={i}, b={j}, expected {expected}, actual {actual}"
+                )
 
     def test_or3(self):
         for i in self.values:
             for j in self.values:
                 expected = logic_or(i, j)
                 actual = sm.trinary_logic_or(sm.Scalar(i), sm.Scalar(j))
-                assert expected == float(
-                    actual
-                ), f"a={i}, b={j}, expected {expected}, actual {actual}"
+                assert expected == float(actual), (
+                    f"a={i}, b={j}, expected {expected}, actual {actual}"
+                )
 
     def test_and3_of_one_argument_is_that_argument(self):
         for i in self.values:
@@ -144,23 +189,6 @@ class TestLogic3:
             expected = logic_not(i)
             actual = sm.trinary_logic_not(sm.Scalar(i))
             assert expected == actual, f"a={i}, expected {expected}, actual {actual}"
-
-    def test_trinary_logic_to_str(self):
-        a = sm.FloatVariable(name="a")
-        b = sm.FloatVariable(name="b")
-        c = sm.FloatVariable(name="c")
-        expression = sm.trinary_logic_and(
-            a, sm.trinary_logic_or(b, sm.trinary_logic_not(c))
-        )
-        expression_str = sm.trinary_logic_to_str(expression)
-        assert expression_str == '("a" and ("b" or not "c"))'
-
-        const_expr = sm.trinary_logic_and(
-            sm.Scalar.const_true(),
-            sm.trinary_logic_or(a, sm.Scalar.const_trinary_unknown()),
-        )
-        const_expr_str = sm.trinary_logic_to_str(const_expr)
-        assert const_expr_str == '("a" or Unknown)'
 
 
 class TestTrinaryPredicates:
@@ -266,6 +294,32 @@ class TestTrinaryPredicates:
 
 
 class TestIfElse:
+    @pytest.mark.parametrize(
+        "guard, selected",
+        [
+            (sm.Scalar.const_true(), True),
+            (sm.Scalar.const_trinary_unknown(), False),
+            (sm.Scalar.const_false(), False),
+        ],
+    )
+    def test_trinary_if_cases_selects_a_case_only_while_its_guard_is_true(
+        self, guard: sm.Scalar, selected: bool
+    ) -> None:
+        """
+        A trinary guard selects its case only while it is True, where :func:`if_cases`
+        would take Unknown for true as well.
+        """
+        a = sm.FloatVariable(name="a")
+        case_result = sm.Scalar(1)
+        else_result = sm.Scalar(2)
+
+        result = sm.trinary_if_cases(
+            cases=[(guard * a, case_result)], else_result=else_result
+        )
+
+        expected = case_result if selected else else_result
+        assert result.substitute([a], [sm.Scalar(1)]).to_np() == expected.to_np()
+
     def test_if_one_arg(self):
         inputs = [
             (sm.FloatVariable(name="muh"), sm.FloatVariable(name="muh2")),
@@ -285,9 +339,9 @@ class TestIfElse:
                 if isinstance(if_result, sm.FloatVariable):
                     assert result_type == sm.Scalar
                     continue
-                assert isinstance(
-                    result, result_type
-                ), f"{type(result)} != {result_type} for {if_function}"
+                assert isinstance(result, result_type), (
+                    f"{type(result)} != {result_type} for {if_function}"
+                )
 
     def test_if_two_arg(self):
         inputs = [
@@ -310,9 +364,9 @@ class TestIfElse:
                 if isinstance(if_result, sm.FloatVariable):
                     assert result_type == sm.Scalar
                     continue
-                assert isinstance(
-                    result, result_type
-                ), f"{type(result)} != {result_type} for {if_function}"
+                assert isinstance(result, result_type), (
+                    f"{type(result)} != {result_type} for {if_function}"
+                )
 
     @pytest.mark.parametrize("condition", bool_values)
     @pytest.mark.parametrize("if_result", numbers)
@@ -501,9 +555,9 @@ class TestFloatVariable:
             result = op(s1, s2)
             assert isinstance(result, sm.Scalar), f"{op.__name__} result is not Scalar"
             f = result.compile()
-            assert f.call_with_kwargs(muh=1, kikariki=2) == op(
-                1, 2
-            ), f"{op.__name__} result is wrong"
+            assert f.call_with_kwargs(muh=1, kikariki=2) == op(1, 2), (
+                f"{op.__name__} result is wrong"
+            )
 
     def test_comparison_operations(self):
         operators = [
@@ -519,9 +573,9 @@ class TestFloatVariable:
             result = op(s1, s2)
             assert isinstance(result, sm.Scalar), f"{op.__name__} result is not Scalar"
             f = result.compile()
-            assert f.call_with_kwargs(muh=1, kikariki=2) == op(
-                1, 2
-            ), f"{op.__name__} result is wrong"
+            assert f.call_with_kwargs(muh=1, kikariki=2) == op(1, 2), (
+                f"{op.__name__} result is wrong"
+            )
 
     def test_back_reference(self):
         v = sm.FloatVariable(name="asdf")
@@ -579,7 +633,6 @@ class TestFloatVariable:
 
 
 class TestExpression:
-
     def test_free_variables(self):
         m = sm.Vector(v := sm.create_float_variables(["a", "b", "c", "d"]))
         assert len(m.free_variables()) == 4
@@ -753,31 +806,69 @@ class TestExpression:
 
 
 class TestSymbolicType:
+    """
+    Behaviour every symbolic type shares, whatever its shape.
+    """
+
     def test_substitute(self):
+        """
+        Substituting variables replaces them throughout the expression.
+        """
         a, b, c, d = sm.create_float_variables(["a", "b", "c", "d"])
         expr = a * b
         expr_substituted = expr.substitute([a, b], [c, d])
         assert expr_substituted == c * d
 
     def test_create_variables(self):
+        """
+        Variables created from names carry those names.
+        """
         result = sm.create_float_variables(["a", "b", "c"])
         assert str(result[0]) == "a"
         assert str(result[1]) == "b"
         assert str(result[2]) == "c"
 
     def test_create_variables2(self):
+        """
+        Variables created from a count are numbered from zero.
+        """
         result = sm.create_float_variables(3)
         assert str(result[0]) == "s_0"
         assert str(result[1]) == "s_1"
         assert str(result[2]) == "s_2"
 
     def test_to_str(self):
+        """
+        The readable form shows the expression in casadi's notation.
+        """
         expr = sm.FloatVariable(name="muh") * sm.Scalar(23)
         assert expr.pretty_str() == [["(23*muh)"]]
 
+    def test_a_scalar_hashes_as_its_casadi_expression(self):
+        """
+        A scalar keeps the hash of the casadi expression it wraps.
+        """
+        scalar = SymbolicTypeWithInheritedHash.from_casadi_sx(ca.SX(2))
+        assert hash(scalar) == hash(scalar.casadi_sx)
+
+    def test_hashing_a_non_scalar_raises_a_type_error(self):
+        """
+        Hashing an expression of more than one entry raises the error for it.
+        """
+        column = SymbolicTypeWithInheritedHash.from_casadi_sx(ca.SX([1, 0, 0]))
+        with pytest.raises(UnhashableExpressionError):
+            hash(column)
+
+    def test_a_non_scalar_is_not_hashable(self):
+        """
+        A check for hashability, which expects a :class:`TypeError`, reports an
+        expression of more than one entry as not hashable.
+        """
+        column = SymbolicTypeWithInheritedHash.from_casadi_sx(ca.SX([1, 0, 0]))
+        assert not is_hashable(column)
+
 
 class TestCompiledFunction:
-
     def test_empty_compiled_function(self):
         expected = np.array([1, 2, 3])
         e = sm.Vector(expected)
@@ -791,6 +882,12 @@ class TestCompiledFunction:
         f = e.compile(sparse=True)
         assert np.allclose(f().toarray(), expected)
         assert np.allclose(f(np.array([], dtype=float)).toarray(), expected)
+
+    def test_function_of_an_expression_without_entries_has_a_representation(
+        self,
+    ) -> None:
+        function = sm.Matrix().compile()
+        assert repr(function.expression) in repr(function)
 
     def test_dense(self):
         s1_value = 420.0
@@ -1154,17 +1251,17 @@ class TestVector:
             expected = op(v1_np, s1_float)
             assert isinstance(result, sm.Vector), f"{op.__name__} result is not Vector"
             assert np.allclose(result, expected), f"{op.__name__} result is wrong"
-            assert (
-                result.shape[0] == expected.shape[0]
-            ), f"{op.__name__} result shape is wrong"
+            assert result.shape[0] == expected.shape[0], (
+                f"{op.__name__} result shape is wrong"
+            )
 
             result = op(v1, v2)
             expected = op(v1_np, v2_np)
             assert isinstance(result, sm.Vector), f"{op.__name__} result is not Vector"
             assert np.allclose(result, expected), f"{op.__name__} result is wrong"
-            assert (
-                result.shape[0] == expected.shape[0]
-            ), f"{op.__name__} result shape is wrong"
+            assert result.shape[0] == expected.shape[0], (
+                f"{op.__name__} result shape is wrong"
+            )
 
     def test_abs(self):
         f1 = sm.Vector([1, -1, -23])
@@ -1532,36 +1629,36 @@ class TestMatrix:
             result = op(m1, s1)
             assert isinstance(result, sm.Matrix), f"{op.__name__} result is not Matrix"
             assert np.allclose(result, expected), f"{op.__name__} result is wrong"
-            assert np.allclose(
-                result, op(m1, s1_float)
-            ), f"{op.__name__} result is wrong"
-            assert (
-                result.shape == expected.shape
-            ), f"{op.__name__} result shape is wrong"
+            assert np.allclose(result, op(m1, s1_float)), (
+                f"{op.__name__} result is wrong"
+            )
+            assert result.shape == expected.shape, (
+                f"{op.__name__} result shape is wrong"
+            )
 
             expected = op(m1_np, v1_np)
             result = op(m1, v1)
             assert isinstance(result, sm.Matrix), f"{op.__name__} result is not Matrix"
             assert np.allclose(result, expected), f"{op.__name__} result is wrong"
-            assert (
-                result.shape == expected.shape
-            ), f"{op.__name__} result shape is wrong"
+            assert result.shape == expected.shape, (
+                f"{op.__name__} result shape is wrong"
+            )
 
             expected = op(m1_np, v1_np)
             result = op(m1, v1)
             assert isinstance(result, sm.Matrix), f"{op.__name__} result is not Matrix"
             assert np.allclose(result, expected), f"{op.__name__} result is wrong"
-            assert (
-                result.shape == expected.shape
-            ), f"{op.__name__} result shape is wrong"
+            assert result.shape == expected.shape, (
+                f"{op.__name__} result shape is wrong"
+            )
 
             expected = op(m1_np, m2_np)
             result = op(m1, m2)
             assert isinstance(result, sm.Matrix), f"{op.__name__} result is not Matrix"
             assert np.allclose(result, expected), f"{op.__name__} result is wrong"
-            assert (
-                result.shape == expected.shape
-            ), f"{op.__name__} result shape is wrong"
+            assert result.shape == expected.shape, (
+                f"{op.__name__} result shape is wrong"
+            )
 
     def test_abs(self):
         f1 = -sm.Matrix.eye(3)

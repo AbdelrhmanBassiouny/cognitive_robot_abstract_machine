@@ -367,7 +367,7 @@ def test_custom_serializer_is_used_by_to_ordered_sources():
     store = CornerCaseStore(serializer=sentinel_serializer)
     node = _make_condition_node()
     case = FlatAnimal(hair=True, legs=4, name="fox")
-    store.record(node, case)
+    store.record_corner_case(node, case)
 
     result = store.to_ordered_sources([node])
 
