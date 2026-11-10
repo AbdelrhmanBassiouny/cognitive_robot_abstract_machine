@@ -232,7 +232,8 @@ expression is a <b>description</b>: a class and a pattern of attributes.</p>
   <tr><td><code>a(Pizza)(toppings=a(CheeseTopping)())</code></td><td>a pizza with a cheese topping</td><td>Pizza(<i>x</i>) ∧ ∃<i>t</i> (hasTopping(<i>x</i>, <i>t</i>) ∧ CheeseTopping(<i>t</i>))</td></tr>
   <tr><td><code>a(Pizza)(toppings=[A, B])</code></td><td>whose topping list is [A, B]</td><td>the whole list: exactly these, in this order</td></tr>
   <tr><td><code>a(PizzaTopping)(spiciness=Spiciness.HOT)</code></td><td>a topping that is hot</td><td>spiciness(<i>t</i>) = hot</td></tr>
-  <tr><td><code>.from_(pizzas)</code></td><td>… among these objects</td><td>the range of <i>x</i></td></tr>
+  <tr><td><code>a(Pizza)</code> without <code>.from_</code></td><td>… among every pizza the robot knows</td><td>the range of <i>x</i> is the registry</td></tr>
+  <tr><td><code>.from_(pizzas)</code></td><td>… among these objects only</td><td>the range of <i>x</i></td></tr>
   <tr><td><code>the(Pizza)(…)</code></td><td><i>the</i> pizza that …</td><td>exactly one object fits</td></tr>
   <tr><td><code>topping = flat_variable(pizza.toppings)</code></td><td>a topping of that pizza</td><td>a variable <i>t</i> with hasTopping(<i>x</i>, <i>t</i>)</td></tr>
   <tr><td><code>HasType(topping, VegetableTopping)</code></td><td>it is a vegetable topping</td><td>VegetableTopping(<i>t</i>)</td></tr>
@@ -387,7 +388,9 @@ pizza has no toppings at all: is every dot on it green?</div>
     <li><span class="mode">paper</span><span>Write the orders that contain a pizza with a hot topping as a formula with
     the free variable <i>o</i>.</span></li>
     <li><span class="mode">notebook</span><span>Write <span class="code">hot_pizzas</span> and
-    <span class="code">hot_orders</span>.</span></li>
+    <span class="code">hot_orders</span>, this time without <span class="code">.from_</span>: the robot then searches
+    its registry, every object of a <span class="code">Symbol</span> class it has created.
+    <span class="code">hot_orders</span> may use <span class="code">hot_pizzas</span>.</span></li>
   </ul>
   <div class="answer only-worksheet"><div></div><div></div></div>
 </section>
@@ -423,8 +426,8 @@ pizza has no toppings at all: is every dot on it green?</div>
 <div class="solution">
   <div class="title">Solution</div>
   <p>Order(<i>o</i>) ∧ ∃<i>x</i> (hasPizza(<i>o</i>, <i>x</i>) ∧ ∃<i>t</i> (hasTopping(<i>x</i>, <i>t</i>) ∧ spiciness(<i>t</i>) = hot))</p>
-  <pre>hot_pizzas = a(Pizza)(toppings=a(PizzaTopping)(spiciness=Spiciness.HOT)).from_(pizzas)
-hot_orders = an(Order)(pizzas=a(Pizza)(toppings=a(PizzaTopping)(spiciness=Spiciness.HOT))).from_(orders)</pre>
+  <pre>hot_pizzas = a(Pizza)(toppings=a(PizzaTopping)(spiciness=Spiciness.HOT))
+hot_orders = an(Order)(pizzas=hot_pizzas)</pre>
   <p>Answers: american_hot_1, and the order of table 1. The <span class="code">set_of</span> query has <b>two</b> answers,
   one per path of Figure 5. An answer is an <b>assignment</b> of values to the free variables that makes the formula
   true. In <span class="code">hot_orders</span>, <i>x</i> and <i>t</i> are bound by ∃: only <i>o</i> is free, and the
@@ -580,6 +583,9 @@ class VeganPizza(VegetarianPizza): ...</pre>
     and the direction that is necessary.</span></li>
     <li><span class="mode predict">predict</span><span>Does the robot accept frozen_1 (mozzarella, ham) and frozen_2
     (tomato, capers) for the green V? Then run 2(b). <span class="blank-line"></span></span></li>
+    <li><span class="mode predict">predict</span><span>The notebook then asks which pizzas are vegetarian twice: once
+    of the registry (no <span class="code">.from_</span>), once of <span class="code">.from_(pizzas)</span>. Do the
+    answers differ? <span class="blank-line"></span></span></li>
   </ul>
   <div class="answer only-worksheet"><div></div><div></div></div>
 </section>
@@ -593,6 +599,9 @@ class VeganPizza(VegetarianPizza): ...</pre>
   every pizza, ∀<i>x</i> (φ(<i>x</i>) → VegetarianPizza(<i>x</i>)): margherita_1, mushroom_1, veggie_1, plain_1 and
   unclosed_1 get the role. The role is a Python object of its own, but it stands for the same pizza: the rule adds a
   fact about something that exists, not a new thing in the kitchen.</p>
+  <p>The registry also answers frozen_2: creating the frozen pizzas to check them entered them in the registry, but
+  they are not on tonight's menu. The registry is everything the robot has created; <span class="code">.from_(…)</span>
+  is the domain the question is about. A check names its domain as <span class="code">.from_([candidate])</span>.</p>
 </div>
 
 <div class="think">
@@ -916,6 +925,8 @@ constructing or sampling (ochre) are different ways of answering it.</div>
     Dana adds “… and a green pepper, I don't mind how hot” (<span class="code">spiciness=...</span>, left open). How
     many pizzas does the kitchen offer? <span class="blank-line"></span></span></li>
     <li><span class="mode">notebook</span><span>Run Act 5.</span></li>
+    <li><span class="mode">paper</span><span>Every pizza the kitchen offered is now in the registry. Which question of
+    tonight would get a different answer if the robot asked it again? <span class="blank-line"></span></span></li>
   </ul>
   <div class="answer only-worksheet"><div></div></div>
 </section>
@@ -935,6 +946,10 @@ constructing or sampling (ochre) are different ways of answering it.</div>
   <p>An answer is now a new object that, added to the interpretation, makes the description true: answering means
   <i>constructing</i> a model instead of checking one. An underspecified description can be made true in several
   ways; the generator enumerates them, a probabilistic backend would rank them by how likely they are.</p>
+  <p>Asked again, the hot pizzas of 1(c) and the vegetarian question put to the registry in 2(b) also find the
+  kitchen's offers, pizzas nobody ordered. Every question with <span class="code">.from_(pizzas)</span> or
+  <span class="code">.from_(orders)</span> keeps its answer. Ask the registry when the question is about everything
+  the robot knows; give a domain when it is about a particular set: tonight's counter, one candidate.</p>
   <div class="figure"><img src="figures/act_5.svg" style="width:94%">
   <div class="caption"><b>Figure 13.</b> The world has grown: a pizza that did not exist at 19:30.</div></div>
 </div>

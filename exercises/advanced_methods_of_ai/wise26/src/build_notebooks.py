@@ -171,7 +171,7 @@ SETUP = [
         """
         import importlib.util, pathlib, subprocess, sys, urllib.request
 
-        SOURCE = "https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/archive/bda57fa931659b2046bf9d2c1216632e532f1249.zip"
+        SOURCE = "https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/archive/a02d68412d851c88e91c9de50c1a49ae3e560b0d.zip"
         WORKSHEET = "https://raw.githubusercontent.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/claude/serene-carson-x3hvx6/exercises/advanced_methods_of_ai/wise26"
 
 
@@ -206,7 +206,9 @@ PROLOGUE = [
         ## Prologue · The world the robot knows
 
         The classes are those of `pizza.owl`, as in Worksheet 2. New are `Guest` and `Order`, because a pizzeria
-        needs to know who gets what. **Run the next three cells; do not edit them.**
+        needs to know who gets what. The four base classes inherit `Symbol`: every object of such a class is
+        entered in the robot's **registry** the moment it is created. **Run the next three cells; do not edit
+        them.**
         """
     ),
     code(
@@ -236,6 +238,7 @@ PROLOGUE = [
             Adjective, Copula, Noun, clause,
         )
         from krrood.patterns.role import Role
+        from krrood.symbol_graph.symbol_graph import Symbol
 
         from kitchen_picture import Colour, KitchenPicture, legend_svg
         """,
@@ -259,7 +262,7 @@ PROLOGUE = [
         # ---- toppings: the class hierarchy of pizza.owl ----
 
         @dataclass(eq=False, repr=False)
-        class PizzaTopping:
+        class PizzaTopping(Symbol):
             spiciness: Spiciness = Spiciness.MILD
 
             def __repr__(self):
@@ -298,7 +301,7 @@ PROLOGUE = [
         # ---- pizzas ----
 
         @dataclass(eq=False, repr=False)
-        class Pizza:
+        class Pizza(Symbol):
             name: str = "a new pizza"
             toppings: list[PizzaTopping] = field(default_factory=list)
 
@@ -315,7 +318,7 @@ PROLOGUE = [
         # ---- new this week: guests and orders ----
 
         @dataclass(eq=False, repr=False)
-        class Guest:
+        class Guest(Symbol):
             name: str
             avoids: set[Allergen] = field(default_factory=set)
 
@@ -324,7 +327,7 @@ PROLOGUE = [
 
 
         @dataclass(eq=False, repr=False)
-        class Order:
+        class Order(Symbol):
             table: int
             guest: Guest
             pizzas: list[Pizza]
@@ -463,7 +466,8 @@ PROLOGUE = [
         | `a(Pizza)(toppings=a(CheeseTopping)())` | a pizza with a cheese topping | `Pizza(x) ∧ ∃t (hasTopping(x, t) ∧ CheeseTopping(t))` |
         | `a(Pizza)(toppings=[A, B])` | a pizza whose topping list is exactly `[A, B]` | the whole list, in this order |
         | `a(PizzaTopping)(spiciness=Spiciness.HOT)` | a topping whose spiciness is hot | `spiciness(t) = hot` |
-        | `.from_(pizzas)` | … among these objects | the domain of `x` |
+        | `a(Pizza)` without `.from_` | … among every pizza the robot knows | the domain is the registry |
+        | `.from_(pizzas)` | … among these objects only | the domain of `x` |
         | `the(...)` | *the* … : exactly one fits | `∃x (φ(x) ∧ ∀y (φ(y) → y = x))` |
         | `flat_variable(pizza.toppings)` | one topping of that pizza | a variable `t` with `hasTopping(x, t)` |
         | `HasType(t, VegetableTopping)` | `t` is a vegetable topping | `VegetableTopping(t)` |
@@ -581,13 +585,15 @@ ACT_1 = [
         objects do: an order has pizzas, a pizza has toppings, a topping has a spiciness.
 
         **Your turn.** Write `hot_pizzas` (the pizzas with some topping whose spiciness is `Spiciness.HOT`) and
-        `hot_orders` (the orders with such a pizza). Use `an(Order)`: the query should read as English.
+        `hot_orders` (the orders with such a pizza). Use `an(Order)`: the query should read as English. This time
+        leave out `.from_`: the robot then searches its registry, which so far holds exactly tonight's objects.
+        A query is itself a description, so `hot_orders` can use `hot_pizzas`.
         """
     ),
     code(
         """
-        hot_pizzas = a(Pizza)(toppings=a(PizzaTopping)(spiciness=Spiciness.HOT)).from_(pizzas)
-        hot_orders = an(Order)(pizzas=a(Pizza)(toppings=a(PizzaTopping)(spiciness=Spiciness.HOT))).from_(orders)
+        hot_pizzas = a(Pizza)(toppings=a(PizzaTopping)(spiciness=Spiciness.HOT))
+        hot_orders = an(Order)(pizzas=hot_pizzas)
 
         show("hot pizzas", hot_pizzas)
         show("orders with a hot pizza", hot_orders)
@@ -834,6 +840,32 @@ ACT_2 = [
         bound, `φ(a)`: a question with the answer yes or no. Classifying gives the role to `margherita_1`,
         `mushroom_1`, `veggie_1`, `plain_1` and `unclosed_1`. A role is a Python object of its own, but it stands
         for the same pizza: the rule adds a fact about something that exists, not a new thing in the kitchen.
+        """
+    ),
+    markdown(
+        """
+        #### Registry or domain?
+
+        The classification above looked only at `.from_(pizzas)`, tonight's counter. The same question can be put
+        to the registry, by leaving `.from_` out.
+
+        **Predict** whether the two answers differ, then run the cell.
+        """
+    ),
+    code(
+        """
+        pizza = a(Pizza)
+        print("in the registry: ", pizza.where(is_vegetarian_pizza(pizza)).tolist())
+        pizza = a(Pizza).from_(pizzas)
+        print("on the counter:  ", pizza.where(is_vegetarian_pizza(pizza)).tolist())
+        """
+    ),
+    note(
+        """
+        The registry also returns `frozen_2`. Creating the frozen pizzas to check them entered them in the
+        registry, but they are not on tonight's menu. The registry is everything the robot has ever created;
+        `.from_(...)` is the domain the question is about. `accepts` puts the domain into words as
+        `.from_([candidate])`: a check is about one object, and nothing else should answer it.
         """
     ),
     markdown(
@@ -1214,6 +1246,27 @@ ACT_5 = [
         Act 1 the description *selected* among existing objects (checking a given interpretation); here it is a
         *specification*, and an answer is a new object that makes it true (constructing a model). Act 5(b) on the
         worksheet goes one step further: a robot plan whose open slots are answered by different backends.
+        """
+    ),
+    markdown(
+        """
+        **Think** (on the worksheet). Every pizza the kitchen offered is now in the registry. Which question of
+        tonight would get a different answer if the robot asked it again now? The next cell asks one of them.
+        """
+    ),
+    code(
+        """
+        print(len(pizzas), "pizzas on the counter,", len(a(Pizza).tolist()), "pizzas in the registry")
+        show("hot pizzas, asked again", a(Pizza)(toppings=a(PizzaTopping)(spiciness=Spiciness.HOT)))
+        """
+    ),
+    note(
+        """
+        The hot pizzas of 1(c) had no `.from_`, so asked again they also find the kitchen's offer whose green
+        pepper is hot, a pizza nobody ordered; so would the vegetarian question asked of the registry in 2(b).
+        Every question with `.from_(pizzas)` or `.from_(orders)` keeps its answer. Ask the registry when the
+        question is about everything the robot knows; give a domain when it is about a particular set, such
+        as tonight's counter or one candidate.
         """
     ),
     markdown(

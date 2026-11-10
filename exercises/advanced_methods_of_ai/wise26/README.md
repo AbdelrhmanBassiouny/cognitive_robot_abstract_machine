@@ -29,7 +29,7 @@ PDF is the tutor's run sheet, with what to discuss at the end of each act and th
 |:-----|:--------|
 | `03-introduction_slides.pdf` | Nine slides for the first 8 minutes. |
 | `03-querying_and_reasoning.pdf` | The worksheet (13 pages; each act starts on a new page). |
-| `03-querying_and_reasoning_solution.pdf` | The run sheet for the tutor, and the worksheet with solutions (19 pages). |
+| `03-querying_and_reasoning_solution.pdf` | The run sheet for the tutor, and the worksheet with solutions (20 pages). |
 | `03-pizza_queries.ipynb` | The student notebook. Cells marked `TODO` are to be filled in; it runs from top to bottom as it is. |
 | `03-pizza_queries_solution.ipynb` | The notebook with solutions, solution notes and its outputs. |
 | `kitchen_picture.py` | Draws the pizzeria with the answers of a query marked on it. |
@@ -102,8 +102,11 @@ notebook ran without errors in about a minute, in an environment of 0.9 GB inclu
 - KRROOD with the `match` semantics for collection-valued attributes (pull request #556, branch
   `fix/eql-match-collection-attributes`); the setup cell installs exactly that commit. On a KRROOD without it, the
   descriptions over the list `toppings`, such as `a(Pizza)(toppings=a(CheeseTopping)())`, match nothing.
+- The fix of pull request #566 (branch `fix/eql-resolved-nested-pattern`), carried onto #556 at commit
+  `a02d68412d`, which the setup cell pins. Without it, `an(Order)(pizzas=hot_pizzas)` returns every order once
+  `hot_pizzas` has been evaluated.
 - `kitchen_picture.py` must lie next to the notebook; the setup cell downloads it if it is missing.
-- Once #556 is merged and released, the commit in the setup cell can be replaced by the release, and the two URLs
+- Once #556 and #566 are merged and released, the commit in the setup cell can be replaced by the release, and the two URLs
   in the setup cell should point to the default branch.
 
 ## Rebuilding
