@@ -136,7 +136,7 @@ def code(text: str, student: str | None = None, tags: list[str] | None = None) -
 SETUP = [
     markdown(
         """
-        # Worksheet 3 · Asking, Describing, Constraining, Inferring
+        # Worksheet 3 · Asking, Defining, Constraining, Deriving, Generating
 
         *Advanced Methods of AI, WiSe 2026/2027 — the notebook of the tutorial.*
 
@@ -146,11 +146,13 @@ SETUP = [
 
         | Act | Story | The description is used as … | Logic |
         |:--|:--|:--|:--|
-        | 1 Asking | "Which pizzas have cheese?" | a question | ∃, ∀, ¬ over one interpretation |
-        | 2 Describing | "Bring me *the* pizza with olives." | a reference | definite descriptions |
+        | 1 Asking | "Which pizzas have cheese?" "Bring me *the* one with olives." | a question | ∃, ∀, ¬ in one interpretation; *the* |
+        | 2 Defining | "Which pizzas may carry the green V?" | a definition | necessary and sufficient conditions, classification |
         | 3 Constraining | "Ben must never get milk." | a constraint | ∀ checked as ¬∃¬ |
-        | 4 Inferring | allergen warnings and menu labels | the body of a rule | rules, exceptions, non-monotonicity |
+        | 4 Deriving | the kitchen writes allergen warnings | the body of a rule that creates objects | ∃ in the head, forward chaining |
         | 5 Generating | Dana orders a pizza that does not exist yet | a specification | constructing a model |
+
+        Acts 1 and 3 *read* the knowledge base; Acts 2, 4 and 5 *write* to it.
 
         **How to work.** Run the cells from top to bottom. Cells marked `TODO` are yours; every cell runs as it
         is, so you can always go on. Before a cell marked **Predict**, write your prediction on the worksheet.
@@ -211,10 +213,13 @@ PROLOGUE = [
         """
         from __future__ import annotations
 
+        import inspect
         from dataclasses import dataclass, field
         from enum import Enum
 
         from IPython.display import SVG, display
+
+        from krrood.class_diagrams.class_diagram import ClassDiagram, HasRoleTaker
 
         from krrood.entity_query_language.backends import (
             EntityQueryLanguageBackend, EntityQueryLanguageGenerativeBackend,
@@ -230,6 +235,7 @@ PROLOGUE = [
         from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
             Adjective, Copula, Noun, clause,
         )
+        from krrood.patterns.role import Role
 
         from kitchen_picture import Colour, KitchenPicture, legend_svg
         """,
@@ -357,13 +363,7 @@ PROLOGUE = [
         ]
 
 
-        # ---- last week's functions (solution of Worksheet 2, Task 3) ----
-
-        def is_cheesy(pizza: Pizza) -> bool:
-            return any(isinstance(t, CheeseTopping) for t in pizza.toppings)
-
-        def is_meaty(pizza: Pizza) -> bool:
-            return any(isinstance(t, MeatTopping) for t in pizza.toppings)
+        # ---- last week's function (solution of Worksheet 2, Task 3) ----
 
         def is_vegetarian(pizza: Pizza) -> bool:
             return not any(isinstance(t, (MeatTopping, FishTopping)) for t in pizza.toppings)
@@ -372,8 +372,8 @@ PROLOGUE = [
     ),
     markdown(
         """
-        The next cell defines how the robot shows its answers: `show` for a question, `refer` for a reference,
-        `check` for a constraint. Run it; reading it is optional.
+        The next cell defines how the robot shows its answers: `show` for a question, `refer` for a question
+        about *the* one object, `check` for a constraint. Run it; reading it is optional.
         """
     ),
     code(
@@ -635,21 +635,13 @@ ACT_1 = [
         had only one answer.
         """
     ),
-]
-
-
-# %% act 2
-
-ACT_2 = [
     markdown(
         """
-        ---
-        ## Act 2 · Describing: *"Bring me the pizza with olives."*
+        ### 1(d) *a* or *the*?
 
-        Commands do not say *which object*; they *describe* it. `a(...)` accepts every object that fits;
-        `the(...)` claims that *exactly one* object fits, and raises an exception otherwise.
-
-        ### 2(a) *a* or *the*?
+        Ben at table 2 waves: *"Bring me the pizza with olives."* A command does not name an object, it
+        describes one. `a(...)` accepts every object that fits; `the(...)` claims that *exactly one* fits and
+        raises an exception otherwise. It is still a question, with one more demand: on the number of answers.
 
         **Predict** what the robot does for each command, then run the cell.
         """
@@ -671,8 +663,6 @@ ACT_2 = [
     ),
     markdown(
         """
-        ### 2(b) Making a description precise
-
         The robot asks back: *"The one with fish or the one without?"* Ben: *"Without fish."*
 
         **Your turn.** Start from *"the pizza with olives"* and add *"and no fish"* with `.where(...)`, so that
@@ -696,9 +686,215 @@ ACT_2 = [
     note(
         """
         `veggie_1`. In logic: `∃t (hasTopping(x, t) ∧ OliveTopping(t)) ∧ ¬∃t' (hasTopping(x, t') ∧
-        FishTopping(t'))`, and exactly one pizza satisfies it tonight. The pattern names the olive, the new
-        variable the topping that must not be a fish: two quantifiers, two variables. A good question back names a
-        property that one candidate has and the other has not.
+        FishTopping(t'))`, and exactly one pizza satisfies it tonight. A good question back names a property that
+        one candidate has and the other has not.
+        """
+    ),
+]
+
+
+# %% act 2
+
+ACT_2 = [
+    markdown(
+        """
+        ---
+        ## Act 2 · Defining: *"Which pizzas may carry the green V?"*
+
+        The chef prints tomorrow's menu, where a green **V** marks a vegetarian pizza. A supplier has also just
+        delivered two frozen pizzas. In Act 1 you *asked* which pizzas are vegetarian; now the word gets a
+        meaning of its own. A **definition** gives a description a name, and the name is then used to check a
+        candidate, to classify every pizza, and to conclude from the label alone.
+
+        ### 2(a) A class declaration already says part of what a thing is
+
+        A Python object keeps the class it was created with: `veggie_1` cannot *become* a `VegetarianPizza`. A
+        label that an existing object takes on is a **role**: an object of its own that stands for the pizza
+        (its *role taker*) and reads every attribute through to it. `Role[Pizza]` declares such a class.
+        """
+    ),
+    code(
+        """
+        @dataclass(eq=False, repr=False)
+        class MenuLabel(Role[Pizza]):
+            def __repr__(self):
+                return f"{type(self).__name__}({self.role_taker})"
+
+        class VegetarianPizza(MenuLabel): ...
+        class VeganPizza(VegetarianPizza): ...
+        class MeatyPizza(MenuLabel): ...
+
+
+        def read_declarations(*classes):
+            # Print what KRROOD reads from the class declarations: superclasses, typed attributes, roles.
+            diagram = ClassDiagram(list(classes))
+            for relation in diagram.inheritance_relations:
+                print(f"every {relation.target.clazz.__name__} is a {relation.source.clazz.__name__}")
+            roles = [relation.source.clazz for relation in diagram.associations if isinstance(relation, HasRoleTaker)]
+            for relation in diagram.associations:
+                source, target = relation.source.clazz, relation.target.clazz.__name__
+                attribute = relation.wrapped_field.field.name
+                if isinstance(relation, HasRoleTaker):
+                    if not any(other is not source and issubclass(source, other) for other in roles):
+                        print(f"every {source.__name__} is a role of one {target}")
+                elif attribute in inspect.get_annotations(source):
+                    if relation.wrapped_field.is_iterable:
+                        print(f"every {source.__name__} has {attribute}, each a {target}")
+                    else:
+                        print(f"every {source.__name__} has a {attribute}, which is a {target}")
+
+
+        read_declarations(PizzaTopping, CheeseTopping, MozzarellaTopping, Pizza, Order, Guest,
+                          MenuLabel, VegetarianPizza, VeganPizza)
+        """
+    ),
+    markdown(
+        """
+        **Your turn.** On the worksheet, write each printed line as a first-order formula. Which of them could
+        ever make an object a `Pizza`, or a `VegetarianPizza`?
+        """
+    ),
+    note(
+        """
+        - `every MozzarellaTopping is a CheeseTopping`: `∀x (MozzarellaTopping(x) → CheeseTopping(x))`.
+        - `every Pizza has toppings, each a PizzaTopping`: `∀x ∀t (Pizza(x) ∧ hasTopping(x, t) → PizzaTopping(t))`.
+        - `every Order has a guest, which is a Guest`: `∀o (Order(o) → Guest(guest(o)))`; `guest` is a function.
+        - `every MenuLabel is a role of one Pizza`: `∀l (MenuLabel(l) → Pizza(roleTaker(l)))`.
+
+        All of them are **necessary** conditions: they say what follows *from* being a C, never when something
+        *is* a C. None can make an object a pizza. In Python the class is asserted when the object is created,
+        and `HasType` is `isinstance`: it reads the asserted class, it never infers one. These were the subclass
+        and range axioms of `pizza.owl`. Python does not check type hints at run time; KRROOD and EQL read them.
+        """
+    ),
+    markdown(
+        """
+        ### 2(b) A definition is necessary *and* sufficient
+
+        The menu's rule:
+
+        > A pizza is vegetarian **if and only if** it has no meat topping and no fish topping.
+        >
+        > `∀x (VegetarianPizza(x) ↔ Pizza(x) ∧ ¬∃t (hasTopping(x, t) ∧ (MeatTopping(t) ∨ FishTopping(t))))`
+
+        Read from right to left, the condition is *sufficient*: whatever satisfies it is vegetarian. Read from
+        left to right, it is *necessary*: whatever is vegetarian satisfies it. In EQL the right-hand side is a
+        condition on one pizza variable, the vegetarian query of Act 1 with a name.
+
+        **Predict** whether the robot accepts `frozen_1` (mozzarella, ham) and `frozen_2` (tomato, capers) for
+        the green V, then run the cell.
+        """
+    ),
+    code(
+        """
+        def has_topping(pizza, *kinds):
+            # The condition that the pizza has a topping of one of these classes: ∃t (hasTopping(x, t) ∧ ...).
+            topping = flat_variable(pizza.toppings)
+            if len(kinds) == 1:
+                return exists(topping, HasType(topping, kinds[0]))
+            return exists(topping, or_(*(HasType(topping, kind) for kind in kinds)))
+
+
+        def is_vegetarian_pizza(pizza):
+            # The definition of VegetarianPizza: a condition on one pizza variable.
+            return not_(has_topping(pizza, MeatTopping, FishTopping))
+
+
+        def accepts(definition, candidate):
+            # Check one candidate: is the definition true of it?
+            pizza = a(Pizza).from_([candidate])
+            return bool(pizza.where(definition(pizza)).tolist())
+
+
+        frozen_1 = Pizza("frozen_1", [MozzarellaTopping(), HamTopping()])
+        frozen_2 = Pizza("frozen_2", [TomatoTopping(), CaperTopping()])
+        for candidate in (frozen_1, frozen_2):
+            print(candidate, "accepted" if accepts(is_vegetarian_pizza, candidate) else "rejected")
+        """,
+    ),
+    markdown(
+        """
+        Checking a candidate asks about *one* given object. **Classifying** asks it of every pizza and writes the
+        answer down: the sufficient direction becomes a rule, `∀x (φ(x) → VegetarianPizza(x))`, and
+        `inference(VegetarianPizza)(role_taker=...)` gives every pizza that fits the role.
+        """
+    ),
+    code(
+        """
+        pizza = a(Pizza).from_(pizzas)
+        vegetarian_pizzas = inference(VegetarianPizza)(role_taker=pizza.where(is_vegetarian_pizza(pizza))).tolist()
+        print(vegetarian_pizzas)
+        print("the role reads through to its pizza:", vegetarian_pizzas[0].toppings)
+        picture(notes=[(label.role_taker, "V") for label in vegetarian_pizzas], title="the green V")
+        """
+    ),
+    note(
+        """
+        `frozen_1` is rejected (ham), `frozen_2` accepted. Checking a candidate is the formula with its variable
+        bound, `φ(a)`: a question with the answer yes or no. Classifying gives the role to `margherita_1`,
+        `mushroom_1`, `veggie_1`, `plain_1` and `unclosed_1`. A role is a Python object of its own, but it stands
+        for the same pizza: the rule adds a fact about something that exists, not a new thing in the kitchen.
+        """
+    ),
+    markdown(
+        """
+        **Think** (on the worksheet). A pizza from the other branch arrives with a green V; nobody wrote down its
+        toppings. What may the robot tell Chidi, who avoids fish? And Ben, who avoids milk?
+        """
+    ),
+    note(
+        """
+        Chidi: it is safe, by the *necessary* direction. `VegetarianPizza(x) → ¬∃t (hasTopping(x, t) ∧
+        FishTopping(t))` follows from the name alone, without looking at the pizza. Ben: nothing, because the
+        definition says nothing about cheese. No query of Act 1 could answer this, since the toppings are
+        unknown. A definition is used in both directions: ← to classify, → to conclude from the class.
+        """
+    ),
+    markdown(
+        """
+        ### 2(c) Rules with exceptions
+
+        The menu gets more labels. The chef's rule of thumb:
+
+        > A pizza without meat and fish is **vegetarian**, *unless* it has no cheese either: then it is
+        > **vegan**. *Otherwise*, if it has meat, it is **meaty**.
+
+        A rule tree states exactly this. `deduced_variable(MenuLabel)` stands for the conclusion; inside
+        `with rules:`, the first `add` is the default conclusion, `refinement(condition)` is the *unless* (it
+        replaces the conclusion where its condition also holds), and `alternative(condition)` is the *otherwise*
+        (tried where the first condition fails). The declaration `class VeganPizza(VegetarianPizza)` of 2(a)
+        already says that every vegan pizza is vegetarian.
+
+        **Predict** the label of each pizza on the worksheet, then run the cell.
+        """
+    ),
+    code(
+        """
+        def label_pizzas():
+            pizza = a(Pizza).from_(pizzas)
+            label = deduced_variable(MenuLabel)
+            rules = entity(label).where(is_vegetarian_pizza(pizza))
+            with rules:
+                add(label, inference(VegetarianPizza)(role_taker=pizza))
+                with refinement(not_(has_topping(pizza, CheeseTopping))):
+                    add(label, inference(VeganPizza)(role_taker=pizza))
+                with alternative(has_topping(pizza, MeatTopping)):
+                    add(label, inference(MeatyPizza)(role_taker=pizza))
+            return rules.tolist()
+
+
+        labels = label_pizzas()
+        print(labels)
+        picture(notes=[(label.role_taker, type(label).__name__.removesuffix("Pizza")) for label in labels], title="menu labels")
+        """
+    ),
+    note(
+        """
+        Vegetarian: `margherita_1`, `mushroom_1`, `unclosed_1`. Vegan: `veggie_1`, `plain_1`. Meaty:
+        `american_hot_1`. **No label:** `napoletana_1` has fish, so the first condition fails, and no meat, so the
+        alternative fails as well. The rules are *silent* about it. Silence is not "no": they never concluded
+        "not vegetarian". The refinement is an *exception*: a more specific conclusion replaces the general one.
+        Trees of this shape are known as ripple-down rules.
         """
     ),
 ]
@@ -723,8 +919,6 @@ ACT_3 = [
     ),
     code(
         """
-        is_cheesy = symbolic_function(is_cheesy)
-        is_meaty = symbolic_function(is_meaty)
         is_vegetarian = symbolic_function(is_vegetarian)
 
         pizza = a(Pizza).from_(pizzas)
@@ -862,14 +1056,15 @@ ACT_4 = [
     markdown(
         """
         ---
-        ## Act 4 · Inferring: *the kitchen writes warnings and labels*
+        ## Act 4 · Deriving: *the kitchen writes allergen warnings*
 
-        ### 4(a) A rule creates facts
+        ### 4(a) A rule creates objects
 
         The predicate of Act 3 computes its answer every time it is asked. A **rule** writes its conclusion down
-        once, as new objects that later queries can use. `inference(AllergenWarning)(pizza=..., allergen=...)`
-        creates one warning for every pizza that fits the description given for `pizza`: the description is the
-        body of the rule, the new warning its head.
+        once, for later queries to use. The labels of Act 2 were such conclusions about pizzas that exist. An
+        allergen warning is different: a slip of paper on the pizza, a *new* object.
+        `inference(AllergenWarning)(pizza=..., allergen=...)` creates one warning for every pizza that fits the
+        description given for `pizza`: the description is the body of the rule, the new warning its head.
 
         > `∀x (Pizza(x) ∧ ∃t (hasTopping(x, t) ∧ CheeseTopping(t)) → ∃w (Warning(w) ∧ about(w, x) ∧ allergen(w) = milk))`
 
@@ -921,73 +1116,15 @@ ACT_4 = [
     note(
         """
         13 warnings: 5 milk, 1 fish, 7 gluten. The head `∃w` is why new objects appear: for every answer of the
-        body, the rule creates a witness. The warnings are now part of the knowledge base and can be queried like
-        pizzas. Deriving all conclusions in advance is *forward chaining* (materialisation); deriving a
-        conclusion only when a question needs it, as the predicate of Act 3 does, is the strategy of *backward
-        chaining*.
+        body, the rule creates a witness. The label rule of Act 2 had no `∃` in its head, `∀x (φ(x) →
+        VegetarianPizza(x))`, and only added facts about the pizzas there are. Deriving all conclusions in advance
+        is *forward chaining* (materialisation); deriving a conclusion only when a question needs it, as the
+        predicate of Act 3 does, is the strategy of *backward chaining*.
         """
     ),
     markdown(
         """
-        ### 4(b) Rules with exceptions
-
-        The menu needs a label for each pizza. The chef's rule of thumb:
-
-        > A pizza without meat and fish is **vegetarian**, *unless* it has no cheese either: then it is
-        > **vegan**. *Otherwise*, if it has meat, it is **meaty**.
-
-        A rule tree states exactly this. `deduced_variable(Label)` stands for the conclusion; inside `with rules:`,
-        the first `add` is the default conclusion, `refinement(condition)` is the *unless* (it replaces the
-        conclusion where its condition also holds), and `alternative(condition)` is the *otherwise* (tried where
-        the first condition fails).
-
-        **Predict** the label of each pizza on the worksheet, then run the cell.
-        """
-    ),
-    code(
-        """
-        @dataclass(eq=False, repr=False)
-        class Label:
-            pizza: Pizza
-
-            def __repr__(self):
-                return f"{type(self).__name__}({self.pizza})"
-
-        class Vegetarian(Label): ...
-        class Vegan(Label): ...
-        class Meaty(Label): ...
-
-
-        def label_pizzas():
-            pizza = a(Pizza).from_(pizzas)
-            label = deduced_variable(Label)
-            rules = entity(label).where(is_vegetarian(pizza))
-            with rules:
-                add(label, inference(Vegetarian)(pizza=pizza))
-                with refinement(not_(is_cheesy(pizza))):
-                    add(label, inference(Vegan)(pizza=pizza))
-                with alternative(is_meaty(pizza)):
-                    add(label, inference(Meaty)(pizza=pizza))
-            return rules.tolist()
-
-
-        labels = label_pizzas()
-        print(labels)
-        picture(notes=[(label.pizza, type(label).__name__) for label in labels], title="menu labels")
-        """
-    ),
-    note(
-        """
-        Vegetarian: `margherita_1`, `mushroom_1`, `unclosed_1`. Vegan: `veggie_1`, `plain_1`. Meaty:
-        `american_hot_1`. **No label:** `napoletana_1` has fish, so the first condition fails, and no meat, so the
-        alternative fails as well. The rules are *silent* about it. Silence is not "no": they never concluded
-        "not vegetarian". The refinement is an *exception*: a more specific conclusion replaces the general one.
-        Trees of this shape are known as ripple-down rules.
-        """
-    ),
-    markdown(
-        """
-        ### 4(c) The world moves on
+        ### 4(b) The world moves on
 
         It is busy. The cook mixes up two tickets and grates parmesan over `veggie_1`, Ben's pizza.
 
@@ -1000,7 +1137,8 @@ ACT_4 = [
 
         check("1. the constraint of Act 3, evaluated now", dangerous)
         print("2. the milk warnings derived in 4(a):", milk_warnings)
-        print("3. the label of veggie_1, derived again:", [label for label in label_pizzas() if label.pizza is veggie_1])
+        print("3. the label of veggie_1, derived again:",
+              [label for label in label_pizzas() if label.role_taker is veggie_1])
         """
     ),
     note(
@@ -1009,9 +1147,10 @@ ACT_4 = [
            mistake, and it is evaluated against the world as it is at the moment it is asked.
         2. The stored milk warnings do not mention `veggie_1`. They were derived at a fixed moment and are stale
            until the rule runs again. Keeping derived facts in line with their reasons is *truth maintenance*.
-        3. `veggie_1` was `Vegan`, now it is `Vegetarian`. A new fact *removed* a conclusion: the reasoning is
-           **non-monotonic**, because the vegan rule relies on the absence of cheese. Classical first-order
-           logic is monotonic: what follows from a set of formulas still follows when formulas are added.
+        3. `veggie_1` was `VeganPizza`, now it is `VegetarianPizza`. A new fact *removed* a conclusion: the
+           reasoning is **non-monotonic**, because the vegan rule relies on the absence of cheese. Classical
+           first-order logic is monotonic: what follows from a set of formulas still follows when formulas are
+           added.
         """
     ),
     code(
@@ -1083,14 +1222,14 @@ ACT_5 = [
         ## The whole picture
 
         Everything the robot found out tonight, in one picture: the answers to the chef's question (Act 1), the
-        violated constraint (Act 3), and the conclusions of the rules (Act 4).
+        menu labels (Act 2), the violated constraint (Act 3) and the warnings (Act 4).
         """
     ),
     code(
         """
         violations = [] if dangerous is ... else [(order, pizza) for order, pizza in rows_of(dangerous)]
         picture(marked=cheesy.tolist(), violations=violations,
-                notes=[(label.pizza, type(label).__name__) for label in label_pizzas()],
+                notes=[(label.role_taker, type(label).__name__.removesuffix("Pizza")) for label in label_pizzas()],
                 title="what the robot knows at 20:00")
         """
     ),

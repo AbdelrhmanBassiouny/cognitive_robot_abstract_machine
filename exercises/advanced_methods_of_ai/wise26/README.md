@@ -1,9 +1,10 @@
-# Worksheet 3: Asking, Describing, Constraining, Inferring
+# Worksheet 3: Asking, Defining, Constraining, Deriving, Generating
 
 Tutorial material for the lecture *Advanced Methods of AI*, WiSe 2026/2027 (90 minutes). It continues Worksheet 2
 (Knowledge Representation) on the same pizza knowledge base and introduces the Entity Query Language (EQL) of
 KRROOD through one story: a service robot in a pizzeria on a Thursday evening. Every act uses the same kind of
-expression, a description, in a different way, and relates it to first-order logic.
+expression, a description, in a different way, and relates it to first-order logic. Asking and constraining *read*
+what the robot knows; defining, deriving and generating *write* to it.
 
 ## The 90 minutes
 
@@ -11,11 +12,11 @@ expression, a description, in a different way, and relates it to first-order log
 |:--|:--|:--|:--|:--|
 | 0–8 | Slides | what we want today, EQL and first-order logic | – | queries as formulas with free variables |
 | 8–12 | Prologue | the pizzeria (Figure 2) | – | an interpretation |
-| 12–34 | 1 Asking | “Which pizzas have cheese?” | a question | ∃, ∀, ¬∃; assignments; closed world |
-| 34–44 | 2 Describing | “Bring me the pizza with olives.” | a reference | definite descriptions (Russell, Strawson) |
-| 44–58 | 3 Constraining | “Ben must never get milk.” | a constraint | ¬∀ ≡ ∃¬; integrity constraint versus axiom |
-| 58–75 | 4 Inferring | warnings and menu labels | the body of a rule | forward chaining, exceptions, non-monotonicity |
-| 75–85 | 5 Generating | Dana orders a new pizza | a specification | constructing a model; one query, several backends |
+| 12–36 | 1 Asking | “Which pizzas have cheese?” “Bring me the one with olives.” | a question | ∃, ∀, ¬∃; assignments; closed world; definite descriptions (Russell, Strawson) |
+| 36–54 | 2 Defining | “Which pizzas may carry the green V?” | a definition | class declarations as necessary conditions; ↔ to check, classify (roles) and conclude; rules with exceptions, non-monotonicity |
+| 54–66 | 3 Constraining | “Ben must never get milk.” | a constraint | ¬∀ ≡ ∃¬; integrity constraint versus axiom |
+| 66–78 | 4 Deriving | the kitchen writes allergen warnings | the body of a rule that creates objects | ∃ in the head, forward chaining, truth maintenance |
+| 78–85 | 5 Generating | Dana orders a new pizza | a specification | constructing a model; one query, several backends |
 | 85–90 | Epilogue | the whole picture | – | summary |
 
 Students start the setup cell of the notebook during the slides, so that EQL is installed when the acts begin.
@@ -26,9 +27,9 @@ PDF is the tutor's run sheet, with what to discuss at the end of each act and th
 
 | File | Purpose |
 |:-----|:--------|
-| `03-introduction_slides.pdf` | Eight slides for the first 8 minutes. |
-| `03-querying_and_reasoning.pdf` | The worksheet (12 pages; each act starts on a new page). |
-| `03-querying_and_reasoning_solution.pdf` | The run sheet for the tutor, and the worksheet with solutions (17 pages). |
+| `03-introduction_slides.pdf` | Nine slides for the first 8 minutes. |
+| `03-querying_and_reasoning.pdf` | The worksheet (13 pages; each act starts on a new page). |
+| `03-querying_and_reasoning_solution.pdf` | The run sheet for the tutor, and the worksheet with solutions (19 pages). |
 | `03-pizza_queries.ipynb` | The student notebook. Cells marked `TODO` are to be filled in; it runs from top to bottom as it is. |
 | `03-pizza_queries_solution.ipynb` | The notebook with solutions, solution notes and its outputs. |
 | `kitchen_picture.py` | Draws the pizzeria with the answers of a query marked on it. |

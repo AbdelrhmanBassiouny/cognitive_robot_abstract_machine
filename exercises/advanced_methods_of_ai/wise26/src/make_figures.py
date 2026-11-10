@@ -61,9 +61,11 @@ def write_figures(folder: Path) -> None:
     violations = [tuple(row.values()) for row in kb["dangerous"].tolist()]
     write("act_3", picture(pizzas, orders, violations=violations))
 
+    act_2 = picture(pizzas, orders)
+    for label in kb["labels"]:
+        act_2.note(label.role_taker, type(label).__name__.removesuffix("Pizza"))
+    write("act_2", act_2)
     act_4 = picture(pizzas, orders)
-    for label in kb["label_pizzas"]():
-        act_4.note(label.pizza, type(label).__name__)
     for warning in kb["warnings"]:
         if warning.allergen.value != "gluten":
             act_4.note(warning.pizza, warning.allergen.value, kb["Colour"].WARNING)
@@ -79,8 +81,8 @@ def write_figures(folder: Path) -> None:
         marked=kb["cheesy"].tolist(),
         violations=violations,
     )
-    for label in kb["label_pizzas"]():
-        whole.note(label.pizza, type(label).__name__)
+    for label in kb["labels"]:
+        whole.note(label.role_taker, type(label).__name__.removesuffix("Pizza"))
     write("whole", whole)
 
 

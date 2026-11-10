@@ -50,7 +50,7 @@
 <!-- 1 -->
 <section class="slide title">
   <div class="kicker">Advanced Methods of AI · Worksheet 3</div>
-  <h1>Asking, Describing, Constraining, Inferring</h1>
+  <h1>Asking, Defining, Constraining, Deriving, Generating</h1>
   <p style="font-size:17pt">Worksheet 3 · querying a knowledge base with the Entity Query Language</p>
   <p class="note"><b>Now:</b> in pairs, open <code>03-pizza_queries.ipynb</code> (link on Stud.IP) and
   run its <b>setup cell</b>. It installs EQL while we talk.</p>
@@ -120,22 +120,41 @@ pizza.where(for_all(topping, HasType(topping, VegetableTopping)))</pre>
 
 <!-- 6 -->
 <section class="slide">
-  <div class="kicker">Today</div>
-  <h1>One description, five uses</h1>
+  <div class="kicker">Logic</div>
+  <h1>A class declaration is already a set of axioms</h1>
+  <pre style="font-size:12.5pt; margin-bottom:3mm">class MozzarellaTopping(CheeseTopping): ...
+class Pizza:
+    toppings: list[PizzaTopping]
+class VegetarianPizza(Role[Pizza]): ...</pre>
   <table style="font-size:12pt">
-    <tr><th style="width:18%">Act</th><th style="width:36%">Story</th><th style="width:22%">The description is …</th><th>Logic</th></tr>
-    <tr><td>1 Asking</td><td>“Which pizzas have cheese?”</td><td>a question</td><td>∃, ∀, ¬ in one interpretation</td></tr>
-    <tr><td>2 Describing</td><td>“Bring me <i>the</i> pizza with olives.”</td><td>a reference</td><td>definite descriptions</td></tr>
-    <tr><td>3 Constraining</td><td>“Ben must never get milk.”</td><td>a constraint</td><td>¬∀ ≡ ∃¬</td></tr>
-    <tr><td>4 Inferring</td><td>allergen warnings, menu labels</td><td>the body of a rule</td><td>rules, exceptions</td></tr>
-    <tr><td>5 Generating</td><td>Dana orders a pizza that does not exist</td><td>a specification</td><td>constructing a model</td></tr>
+    <tr><th style="width:44%">KRROOD reads</th><th>first-order logic</th></tr>
+    <tr><td>a subclass</td><td>∀<i>x</i> (MozzarellaTopping(<i>x</i>) → CheeseTopping(<i>x</i>))</td></tr>
+    <tr><td>a typed attribute</td><td>∀<i>x</i> ∀<i>t</i> (Pizza(<i>x</i>) ∧ hasTopping(<i>x</i>, <i>t</i>) → PizzaTopping(<i>t</i>))</td></tr>
+    <tr><td>a role of a pizza</td><td>∀<i>v</i> (VegetarianPizza(<i>v</i>) → Pizza(roleTaker(<i>v</i>)))</td></tr>
   </table>
-  <p class="small" style="margin-top:3mm; font-size:11pt">The expression stays the same. What changes is where the candidates come from,
-  what is done with those that fit, and <i>who</i> answers: a selecting or a generating backend.</p>
+  <p class="small" style="margin-top:3mm; font-size:11.5pt">All are <i>necessary</i> conditions: what follows from being a C. A
+  <b>definition</b> adds the <i>sufficient</i> one, C(<i>x</i>) ↔ φ(<i>x</i>), and only that lets the robot decide what is a C. (Act 2)</p>
   <div class="footer"><span>Advanced Methods of AI · Worksheet 3</span><span>6</span></div>
 </section>
 
 <!-- 7 -->
+<section class="slide">
+  <div class="kicker">Today</div>
+  <h1>One description, five uses</h1>
+  <table style="font-size:12pt">
+    <tr><th style="width:18%">Act</th><th style="width:36%">Story</th><th style="width:22%">The description is …</th><th>Logic</th></tr>
+    <tr><td>1 Asking</td><td>“Which pizzas have cheese?” “<i>The</i> one with olives.”</td><td>a question</td><td>∃, ∀, ¬ in one interpretation</td></tr>
+    <tr><td>2 Defining</td><td>“Which pizzas may carry the green V?”</td><td>a definition</td><td>↔: check, classify, conclude</td></tr>
+    <tr><td>3 Constraining</td><td>“Ben must never get milk.”</td><td>a constraint</td><td>¬∀ ≡ ∃¬</td></tr>
+    <tr><td>4 Deriving</td><td>the kitchen writes allergen warnings</td><td>the body of a rule</td><td>∃ in the head: new objects</td></tr>
+    <tr><td>5 Generating</td><td>Dana orders a pizza that does not exist</td><td>a specification</td><td>constructing a model</td></tr>
+  </table>
+  <p class="small" style="margin-top:3mm; font-size:11pt">The expression stays the same. Asking and constraining <i>read</i> what the
+  robot knows; defining, deriving and generating <i>write</i> to it. A rule's new objects are forced, a generator's are chosen.</p>
+  <div class="footer"><span>Advanced Methods of AI · Worksheet 3</span><span>7</span></div>
+</section>
+
+<!-- 8 -->
 <section class="slide">
   <div class="kicker">Today</div>
   <h1>Two questions to keep in mind</h1>
@@ -145,10 +164,10 @@ pizza.where(for_all(topping, HasType(topping, VegetableTopping)))</pre>
     <li style="margin-top:5mm"><b>What happens when the world changes?</b> A cook makes a mistake at 19:50.
         Which of the robot's conclusions still hold? (Act 4)</li>
   </ul>
-  <div class="footer"><span>Advanced Methods of AI · Worksheet 3</span><span>7</span></div>
+  <div class="footer"><span>Advanced Methods of AI · Worksheet 3</span><span>8</span></div>
 </section>
 
-<!-- 8 -->
+<!-- 9 -->
 <section class="slide">
   <div class="kicker">Today</div>
   <h1>How we work today</h1>
@@ -162,14 +181,14 @@ pizza.where(for_all(topping, HasType(topping, VegetableTopping)))</pre>
   <p class="small" style="margin-top:3mm">Slides 8′, then:</p>
   <div class="timeline">
     <div style="flex:4"><b>Prologue</b>4′</div>
-    <div style="flex:22"><b>Ask</b>22′</div>
-    <div style="flex:10"><b>Describe</b>10′</div>
-    <div style="flex:14"><b>Constrain</b>14′</div>
-    <div style="flex:17"><b>Infer</b>17′</div>
-    <div style="flex:10"><b>Generate</b>10′</div>
+    <div style="flex:24"><b>Ask</b>24′</div>
+    <div style="flex:18"><b>Define</b>18′</div>
+    <div style="flex:12"><b>Constrain</b>12′</div>
+    <div style="flex:12"><b>Derive</b>12′</div>
+    <div style="flex:7"><b>Generate</b>7′</div>
     <div style="flex:5"><b>Wrap</b>5′</div>
   </div>
-  <div class="footer"><span>Advanced Methods of AI · Worksheet 3</span><span>8</span></div>
+  <div class="footer"><span>Advanced Methods of AI · Worksheet 3</span><span>9</span></div>
 </section>
 
 </body>
