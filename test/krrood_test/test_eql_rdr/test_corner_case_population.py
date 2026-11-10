@@ -59,7 +59,7 @@ def test_the_first_rule_records_the_case_that_seeded_it():
     rdr.fit_case(mammal, Species.mammal, scripted_expert(TRAIT_CONDITIONS))
 
     assert len(rdr.corner_cases.cases) == 1
-    assert rdr.corner_cases.get(_rule_nodes(rdr)[0]._id_) is mammal
+    assert rdr.corner_cases.get_corner_case_for_node(_rule_nodes(rdr)[0]._id_) is mammal
 
 
 def test_an_alternative_records_the_case_no_rule_fired_for():
@@ -71,7 +71,7 @@ def test_an_alternative_records_the_case_no_rule_fired_for():
     rdr.fit_case(bird, Species.bird, expert)
 
     assert len(rdr.corner_cases.cases) == 2
-    assert rdr.corner_cases.get(_rule_nodes(rdr)[1]._id_) is bird
+    assert rdr.corner_cases.get_corner_case_for_node(_rule_nodes(rdr)[1]._id_) is bird
 
 
 def test_a_refinement_records_the_case_the_wrong_rule_fired_for():
@@ -88,7 +88,7 @@ def test_a_refinement_records_the_case_the_wrong_rule_fired_for():
     rdr.fit_case(mammal, Species.mammal, expert)
 
     assert len(rdr.corner_cases.cases) == 2
-    assert rdr.corner_cases.get(_rule_nodes(rdr)[1]._id_) is mammal
+    assert rdr.corner_cases.get_corner_case_for_node(_rule_nodes(rdr)[1]._id_) is mammal
 
 
 def test_bulk_fitting_records_one_case_per_inserted_rule():
