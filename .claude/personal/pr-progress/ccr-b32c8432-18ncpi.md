@@ -1,11 +1,10 @@
-## Plan
-- State objects, default domains through TermReader.instances_of, expression domains as FlatVariable / InstanceFilteredFlatVariable; removed objects filtered from list/tuple/set values
+Plan
+- Settle the open review threads on #541, then let the owner mark it ready.
 
-## Done
-- First review addressed in fa1dc1af6e; 7 of 8 threads resolved
-- Merged main (#535 landed) in ff1fa9d22b and pushed; merge probe clean; test_eql + test_planning 1601 passed
+Done
+- 7ee17e3b44: second review addressed (flattened expression domains with HasType, ExistingValues/InstancesOfType on ReEnterableLazyIterable, removed objects leave every domain except literals, CollectionKind, a(Body), tolist). 5 threads resolved; PR body updated.
 
-## Next
-- Read CI on ff1fa9d22b; the next maintenance pass clears needs-resolution (this run's pass hit the Action race)
-- Last thread stays open: a match in set_of still does not correlate after #915
-- Owner: fold the filtering rule into the roadmap (12-entry limit)
+Next
+- Owner to answer: Variable ranging over an expression (lifts the where-before-from_ order), in this PR or own item? Correlating a match selected in set_of as its own plan item? Filter literals too?
+- Read CI at 7ee17e3b44.
+- Delete parked fork branch ccr-a0dcce67-u1j40w (proxy refuses; owner to do it).
