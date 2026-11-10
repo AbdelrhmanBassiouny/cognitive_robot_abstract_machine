@@ -229,7 +229,7 @@ expression is a <b>description</b>: a class and a pattern of attributes.</p>
 <table class="syntax">
   <tr><th style="width:43%">EQL</th><th style="width:24%">Read it as</th><th>First-order logic</th></tr>
   <tr><td><code>a(Pizza)</code></td><td>some object of class Pizza</td><td>a variable <i>x</i> with Pizza(<i>x</i>)</td></tr>
-  <tr><td><code>a(Pizza)(toppings=a(CheeseTopping)())</code></td><td>a pizza with a cheese topping</td><td>Pizza(<i>x</i>) ∧ ∃<i>t</i> (hasTopping(<i>x</i>, <i>t</i>) ∧ CheeseTopping(<i>t</i>))</td></tr>
+  <tr><td><code>a(Pizza)(toppings=a(CheeseTopping))</code></td><td>a pizza with a cheese topping</td><td>Pizza(<i>x</i>) ∧ ∃<i>t</i> (hasTopping(<i>x</i>, <i>t</i>) ∧ CheeseTopping(<i>t</i>))</td></tr>
   <tr><td><code>a(Pizza)(toppings=[A, B])</code></td><td>whose topping list is [A, B]</td><td>the whole list: exactly these, in this order</td></tr>
   <tr><td><code>a(PizzaTopping)(spiciness=Spiciness.HOT)</code></td><td>a topping that is hot</td><td>spiciness(<i>t</i>) = hot</td></tr>
   <tr><td><code>a(Pizza)</code> without <code>.from_</code></td><td>… among every pizza the robot knows</td><td>the range of <i>x</i> is the registry</td></tr>
@@ -267,7 +267,7 @@ cheese melts. The robot has to find them.</p>
 <section class="task">
   <h3><span class="label">(a)</span> A description is a formula</h3>
   <ul class="steps">
-    <li><span class="mode">paper</span><span>Write <span class="code">a(Pizza)(toppings=a(CheeseTopping)())</span> as a
+    <li><span class="mode">paper</span><span>Write <span class="code">a(Pizza)(toppings=a(CheeseTopping))</span> as a
     first-order formula with the free variable <i>x</i>, and ring the pizzas of Figure 2 that satisfy it.</span></li>
     <li><span class="mode">notebook</span><span>Run 1(a) and compare.</span></li>
   </ul>
@@ -293,7 +293,7 @@ cheese melts. The robot has to find them.</p>
   <span class="code nowrap">pizza = a(Pizza).from_(pizzas)</span> and
   <span class="code nowrap">topping = flat_variable(pizza.toppings)</span>:</p>
 <pre>Q1 = pizza.where(for_all(topping, HasType(topping, VegetableTopping)))
-Q2 = a(Pizza)(toppings=[a(MozzarellaTopping)(), a(TomatoTopping)()]).from_(pizzas)
+Q2 = a(Pizza)(toppings=[a(MozzarellaTopping), a(TomatoTopping)]).from_(pizzas)
 Q3 = pizza.where(not_(exists(topping, HasType(topping, CheeseTopping))))</pre>
   <ul class="steps">
     <li><span class="mode">paper</span><span>Write each query as a formula.</span></li>
@@ -501,7 +501,7 @@ hot_orders = an(Order)(pizzas=hot_pizzas)</pre>
   <p>The robot asks back: “The one with fish, or the one without?” Ben: “Without fish.”</p>
   <ul class="steps">
     <li><span class="mode">paper</span><span>Write the precise description as a formula.</span></li>
-    <li><span class="mode">notebook</span><span>Add the condition to <span class="code">the(Pizza)(toppings=a(OliveTopping)())</span>
+    <li><span class="mode">notebook</span><span>Add the condition to <span class="code">the(Pizza)(toppings=a(OliveTopping))</span>
     with <span class="code">.where(…)</span>, so that <span class="code">the</span> succeeds.</span></li>
   </ul>
   <div class="answer only-worksheet"><div></div><div></div></div>
@@ -511,7 +511,7 @@ hot_orders = an(Order)(pizzas=hot_pizzas)</pre>
   <div class="title">Solution</div>
   <p>Pizza(<i>x</i>) ∧ ∃<i>t</i> (hasTopping(<i>x</i>, <i>t</i>) ∧ OliveTopping(<i>t</i>)) ∧ ¬∃<i>t′</i> (hasTopping(<i>x</i>, <i>t′</i>) ∧
   FishTopping(<i>t′</i>)); tonight only veggie_1 satisfies it.</p>
-  <pre>pizza = the(Pizza)(toppings=a(OliveTopping)()).from_(pizzas)
+  <pre>pizza = the(Pizza)(toppings=a(OliveTopping)).from_(pizzas)
 topping = flat_variable(pizza.toppings)
 olives_without_fish = pizza.where(not_(exists(topping, HasType(topping, FishTopping))))</pre>
   <p>Two quantifiers, two variables: the pattern names the olive, <span class="code">topping</span> ranges over all
@@ -825,7 +825,7 @@ kitchen writes them down once: a slip of paper on each pizza.</p>
   <div class="title">Solution</div>
   <p>The left side of → is the <b>body</b> of the rule: exactly the description of 1(a). The right side is the
   <b>head</b>: for every answer of the body, a new object <i>w</i> is created as the witness of ∃<i>w</i>.</p>
-  <pre>fishy = a(Pizza)(toppings=a(FishTopping)()).from_(pizzas)
+  <pre>fishy = a(Pizza)(toppings=a(FishTopping)).from_(pizzas)
 fish_warnings   = inference(AllergenWarning)(pizza=fishy, allergen=Allergen.FISH).tolist()
 gluten_warnings = inference(AllergenWarning)(pizza=a(Pizza).from_(pizzas), allergen=Allergen.GLUTEN).tolist()</pre>
   <p>13 warnings: 5 milk, 1 fish, 7 gluten. Deriving all conclusions in advance is <b>forward chaining</b>

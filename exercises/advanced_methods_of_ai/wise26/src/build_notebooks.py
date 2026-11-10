@@ -463,7 +463,7 @@ PROLOGUE = [
         | EQL | Read it as | First-order logic |
         |:--|:--|:--|
         | `a(Pizza)` | some object of class `Pizza` | a variable `x` with `Pizza(x)` |
-        | `a(Pizza)(toppings=a(CheeseTopping)())` | a pizza with a cheese topping | `Pizza(x) ∧ ∃t (hasTopping(x, t) ∧ CheeseTopping(t))` |
+        | `a(Pizza)(toppings=a(CheeseTopping))` | a pizza with a cheese topping | `Pizza(x) ∧ ∃t (hasTopping(x, t) ∧ CheeseTopping(t))` |
         | `a(Pizza)(toppings=[A, B])` | a pizza whose topping list is exactly `[A, B]` | the whole list, in this order |
         | `a(PizzaTopping)(spiciness=Spiciness.HOT)` | a topping whose spiciness is hot | `spiciness(t) = hot` |
         | `a(Pizza)` without `.from_` | … among every pizza the robot knows | the domain is the registry |
@@ -495,14 +495,15 @@ ACT_1 = [
 
         ### 1(a) A description is a formula with one free variable
 
-        `a(Pizza)(...)` describes an object by its attributes, `.from_(pizzas)` says where to look. A pattern
-        given for the list `toppings` describes *one element* of the list, so it means *some topping fits*.
+        `a(Pizza)(...)` describes an object by its attributes, `.from_(pizzas)` says where to look. Without a
+        pattern, `a(CheeseTopping)` describes any object of its class. A pattern given for the list `toppings`
+        describes *one element* of the list, so it means *some topping fits*.
         Read the query aloud: *"a pizza with a cheese topping, from the pizzas"*.
         """
     ),
     code(
         """
-        cheesy = a(Pizza)(toppings=a(CheeseTopping)()).from_(pizzas)
+        cheesy = a(Pizza)(toppings=a(CheeseTopping)).from_(pizzas)
         show("cheesy pizzas", cheesy)
         """
     ),
@@ -525,7 +526,7 @@ ACT_1 = [
         only_vegetables = pizza.where(for_all(topping, HasType(topping, VegetableTopping)))
         show("Q1  every topping is a vegetable", only_vegetables)
 
-        exactly_these = a(Pizza)(toppings=[a(MozzarellaTopping)(), a(TomatoTopping)()]).from_(pizzas)
+        exactly_these = a(Pizza)(toppings=[a(MozzarellaTopping), a(TomatoTopping)]).from_(pizzas)
         show("Q2  the toppings are [a mozzarella, a tomato]", exactly_these)
 
         pizza = a(Pizza).from_(pizzas)
@@ -654,9 +655,9 @@ ACT_1 = [
     ),
     code(
         """
-        refer("the pizza with ham", the(Pizza)(toppings=a(HamTopping)()).from_(pizzas))
-        refer("the pizza with fish", the(Pizza)(toppings=a(FishTopping)()).from_(pizzas))
-        refer("the pizza with olives", the(Pizza)(toppings=a(OliveTopping)()).from_(pizzas))
+        refer("the pizza with ham", the(Pizza)(toppings=a(HamTopping)).from_(pizzas))
+        refer("the pizza with fish", the(Pizza)(toppings=a(FishTopping)).from_(pizzas))
+        refer("the pizza with olives", the(Pizza)(toppings=a(OliveTopping)).from_(pizzas))
         """
     ),
     note(
@@ -677,13 +678,13 @@ ACT_1 = [
     ),
     code(
         """
-        pizza = the(Pizza)(toppings=a(OliveTopping)()).from_(pizzas)
+        pizza = the(Pizza)(toppings=a(OliveTopping)).from_(pizzas)
         topping = flat_variable(pizza.toppings)
         olives_without_fish = pizza.where(not_(exists(topping, HasType(topping, FishTopping))))
         refer("the pizza with olives and without fish", olives_without_fish)
         """,
         student="""
-        pizza = the(Pizza)(toppings=a(OliveTopping)()).from_(pizzas)
+        pizza = the(Pizza)(toppings=a(OliveTopping)).from_(pizzas)
         topping = flat_variable(pizza.toppings)
         olives_without_fish = ...   # TODO: pizza.where(...)
         refer("the pizza with olives and without fish", olives_without_fish)
@@ -1117,7 +1118,7 @@ ACT_4 = [
 
         milk_warnings = inference(AllergenWarning)(pizza=cheesy, allergen=Allergen.MILK).tolist()
 
-        fishy = a(Pizza)(toppings=a(FishTopping)()).from_(pizzas)
+        fishy = a(Pizza)(toppings=a(FishTopping)).from_(pizzas)
         fish_warnings = inference(AllergenWarning)(pizza=fishy, allergen=Allergen.FISH).tolist()
         gluten_warnings = inference(AllergenWarning)(pizza=a(Pizza).from_(pizzas), allergen=Allergen.GLUTEN).tolist()
 
@@ -1210,7 +1211,7 @@ ACT_5 = [
     ),
     code(
         """
-        wish = a(Pizza)(toppings=[a(MozzarellaTopping)(), a(TomatoTopping)()]).from_(pizzas)
+        wish = a(Pizza)(toppings=[a(MozzarellaTopping), a(TomatoTopping)]).from_(pizzas)
 
         on_the_counter = list(EntityQueryLanguageBackend().evaluate(wish))
         print("selected from the counter:", on_the_counter)
@@ -1229,7 +1230,7 @@ ACT_5 = [
     ),
     code(
         """
-        open_wish = a(Pizza)(toppings=[a(MozzarellaTopping)(), a(HotGreenPepperTopping)(spiciness=...)])
+        open_wish = a(Pizza)(toppings=[a(MozzarellaTopping), a(HotGreenPepperTopping)(spiciness=...)])
 
         candidates = list(EntityQueryLanguageGenerativeBackend().evaluate(open_wish))
         for candidate in candidates:

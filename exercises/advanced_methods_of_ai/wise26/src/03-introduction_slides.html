@@ -88,11 +88,11 @@
 <section class="slide">
   <div class="kicker">EQL</div>
   <h1>EQL: the same formula, over Python objects</h1>
-  <pre>cheesy = a(Pizza)(toppings=a(CheeseTopping)()).from_(pizzas)</pre>
+  <pre>cheesy = a(Pizza)(toppings=a(CheeseTopping)).from_(pizzas)</pre>
   <table>
     <tr><th style="width:40%">EQL</th><th>first-order logic</th></tr>
     <tr><td><code>a(Pizza)</code></td><td>a variable <i>x</i> with Pizza(<i>x</i>)</td></tr>
-    <tr><td><code>toppings=a(CheeseTopping)()</code></td><td>∃<i>t</i> (hasTopping(<i>x</i>, <i>t</i>) ∧ CheeseTopping(<i>t</i>)): <i>some</i> element of the list</td></tr>
+    <tr><td><code>toppings=a(CheeseTopping)</code></td><td>∃<i>t</i> (hasTopping(<i>x</i>, <i>t</i>) ∧ CheeseTopping(<i>t</i>)): <i>some</i> element of the list</td></tr>
     <tr><td><code>.from_(pizzas)</code></td><td>the objects <i>x</i> ranges over; left out: the registry, every object the robot created</td></tr>
     <tr><td><code>cheesy.tolist()</code></td><td>all values of <i>x</i> that satisfy the formula</td></tr>
   </table>

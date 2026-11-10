@@ -101,7 +101,7 @@ notebook ran without errors in about a minute, in an environment of 0.9 GB inclu
 
 - KRROOD with the `match` semantics for collection-valued attributes (pull request #556, branch
   `fix/eql-match-collection-attributes`); the setup cell installs exactly that commit. On a KRROOD without it, the
-  descriptions over the list `toppings`, such as `a(Pizza)(toppings=a(CheeseTopping)())`, match nothing.
+  descriptions over the list `toppings`, such as `a(Pizza)(toppings=a(CheeseTopping))`, match nothing.
 - The fixes of pull requests #566 and #567, carried onto #556 at commit `a4c474b434`, which the setup cell pins.
   Without #566, `an(Order)(pizzas=hot_pizzas)` returns every order once `hot_pizzas` has been evaluated. Without
   #567, a query evaluated a second time does not see objects created since its first evaluation, so `hot_pizzas`
