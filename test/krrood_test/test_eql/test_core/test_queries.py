@@ -1,7 +1,10 @@
+"""
+Tests of evaluating entity queries: conditions, quantifiers and result shapes.
+"""
+
 import itertools
 from dataclasses import dataclass
 from math import factorial
-from typing import Dict, List
 
 import pytest
 
@@ -62,6 +65,7 @@ from krrood.entity_query_language.utils import (
     cartesian_product_while_passing_the_bindings_around,
 )
 from ...dataset.example_classes import (
+    KRROODPosition,
     KRROODVectorsWithProperty,
 )
 from ...dataset.semantic_world_like_classes import (
@@ -77,14 +81,15 @@ from ...dataset.semantic_world_like_classes import (
     Drawer,
     Cabinet,
 )
+from ...dataset.value_comparisons import IsGreaterThan, IsGreaterThanByMargin
 
 
 def test_variable_from_type_setting(handles_and_containers_world):
     world = handles_and_containers_world
     B = variable_from(world.bodies)
-    assert (
-        B._type_ is None
-    ), "The type of the variable should be None when created only from a domain."
+    assert B._type_ is None, (
+        "The type of the variable should be None when created only from a domain."
+    )
 
 
 def test_empty_conditions(handles_and_containers_world, doors_and_drawers_world):
@@ -120,9 +125,9 @@ def test_reevaluation_of_simple_query(handles_and_containers_world):
     body = variable(Body, domain=world.bodies)
     query = an(entity(body))
     assert len(list(query.evaluate())) == len(world.bodies), "Should generate 6 bodies."
-    assert len(list(query.evaluate())) == len(
-        world.bodies
-    ), "Re-eval: Should generate 6 bodies."
+    assert len(list(query.evaluate())) == len(world.bodies), (
+        "Re-eval: Should generate 6 bodies."
+    )
 
 
 def test_filtering_connections_without_joining_with_parent_or_child_queries(
@@ -159,9 +164,9 @@ def test_generate_with_using_attribute_and_callables(handles_and_containers_worl
 
     handles = list(generate_handles())
     assert len(handles) == 3, "Should generate 3 handles."
-    assert all(
-        isinstance(h, Handle) for h in handles
-    ), "All generated items should be of type Handle."
+    assert all(isinstance(h, Handle) for h in handles), (
+        "All generated items should be of type Handle."
+    )
 
 
 def test_generate_with_using_contains(handles_and_containers_world):
@@ -179,9 +184,9 @@ def test_generate_with_using_contains(handles_and_containers_world):
 
     handles = list(query.evaluate())
     assert len(handles) == 3, "Should generate at least one handle."
-    assert all(
-        isinstance(h, Handle) for h in handles
-    ), "All generated items should be of type Handle."
+    assert all(isinstance(h, Handle) for h in handles), (
+        "All generated items should be of type Handle."
+    )
 
 
 def test_generate_with_using_in(handles_and_containers_world):
@@ -199,9 +204,9 @@ def test_generate_with_using_in(handles_and_containers_world):
 
     handles = list(query.evaluate())
     assert len(handles) == 3, "Should generate at least one handle."
-    assert all(
-        isinstance(h, Handle) for h in handles
-    ), "All generated items should be of type Handle."
+    assert all(isinstance(h, Handle) for h in handles), (
+        "All generated items should be of type Handle."
+    )
 
 
 def test_generate_with_using_and(handles_and_containers_world):
@@ -215,9 +220,9 @@ def test_generate_with_using_and(handles_and_containers_world):
 
     handles = list(query.evaluate())
     assert len(handles) == 1, "Should generate at least one handle."
-    assert all(
-        isinstance(h, Handle) for h in handles
-    ), "All generated items should be of type Handle."
+    assert all(isinstance(h, Handle) for h in handles), (
+        "All generated items should be of type Handle."
+    )
 
 
 def test_generate_with_using_or(handles_and_containers_world):
@@ -233,9 +238,9 @@ def test_generate_with_using_or(handles_and_containers_world):
 
     handles = list(query.evaluate())
     assert len(handles) == 2, "Should generate at least one handle."
-    assert all(
-        isinstance(h, Handle) for h in handles
-    ), "All generated items should be of type Handle."
+    assert all(isinstance(h, Handle) for h in handles), (
+        "All generated items should be of type Handle."
+    )
 
 
 def test_generate_with_using_multi_or(handles_and_containers_world):
@@ -291,13 +296,13 @@ def test_reevaluation_of_or_and_query(handles_and_containers_world):
     )
 
     handles_and_container1 = list(query.evaluate())
-    assert (
-        len(handles_and_container1) == 2
-    ), "Should generate one handle and one container."
+    assert len(handles_and_container1) == 2, (
+        "Should generate one handle and one container."
+    )
     handles_and_container1 = list(query.evaluate())
-    assert (
-        len(handles_and_container1) == 2
-    ), "Re-eval: Should generate one handle and one container."
+    assert len(handles_and_container1) == 2, (
+        "Re-eval: Should generate one handle and one container."
+    )
 
 
 def test_generate_with_and_or(handles_and_containers_world):
@@ -330,9 +335,9 @@ def test_generate_with_multi_and(handles_and_containers_world):
 
     all_solutions = list(generate_container1())
     assert len(all_solutions) == 1, "Should generate one container."
-    assert isinstance(
-        all_solutions[0], Container
-    ), "The generated item should be of type Container."
+    assert isinstance(all_solutions[0], Container), (
+        "The generated item should be of type Container."
+    )
     assert all_solutions[0].name == "Container1"
 
 
@@ -349,18 +354,18 @@ def test_reevaluate_with_multi_and(handles_and_containers_world):
 
     all_solutions = list(query.evaluate())
     assert len(all_solutions) == 1, "Should generate one container."
-    assert isinstance(
-        all_solutions[0], Container
-    ), "The generated item should be of type Container."
+    assert isinstance(all_solutions[0], Container), (
+        "The generated item should be of type Container."
+    )
     assert all_solutions[0].name == "Container1"
     all_solutions = list(query.evaluate())
     assert len(all_solutions) == 1, "Re-eval: Should generate one container."
-    assert isinstance(
-        all_solutions[0], Container
-    ), "Re-eval: The generated item should be of type Container."
-    assert (
-        all_solutions[0].name == "Container1"
-    ), "Re-eval: The generated item should be of type Container."
+    assert isinstance(all_solutions[0], Container), (
+        "Re-eval: The generated item should be of type Container."
+    )
+    assert all_solutions[0].name == "Container1", (
+        "Re-eval: The generated item should be of type Container."
+    )
 
 
 def test_generate_with_more_than_one_source(handles_and_containers_world):
@@ -380,9 +385,9 @@ def test_generate_with_more_than_one_source(handles_and_containers_world):
     )
 
     all_solutions = list(solutions.evaluate())
-    assert (
-        len(all_solutions) == 2
-    ), "Should generate components for two possible drawer."
+    assert len(all_solutions) == 2, (
+        "Should generate components for two possible drawer."
+    )
     for sol in all_solutions:
         assert sol[C] == sol[FC].parent
         assert sol[H] == sol[FC].child
@@ -424,9 +429,9 @@ def test_generate_with_more_than_one_source_optimized(handles_and_containers_wor
     )
 
     all_solutions = list(query.evaluate())
-    assert (
-        len(all_solutions) == 2
-    ), "Should generate components for two possible drawer."
+    assert len(all_solutions) == 2, (
+        "Should generate components for two possible drawer."
+    )
     for sol in all_solutions:
         assert isinstance(sol[FC].parent, Container)
         assert isinstance(sol[FC].child, Handle)
@@ -499,9 +504,9 @@ def test_not_and(handles_and_containers_world):
     all_not_handle1 = list(query.evaluate())
     assert len(all_not_handle1) == 5, "Should generate 7 bodies"
     assert len(equivalent_query.tolist()) == 5, "Should generate 7 bodies"
-    assert all(
-        h.name != "Handle1" for h in all_not_handle1
-    ), "All generated items should satisfy query"
+    assert all(h.name != "Handle1" for h in all_not_handle1), (
+        "All generated items should satisfy query"
+    )
 
 
 def test_not_or(handles_and_containers_world):
@@ -516,9 +521,9 @@ def test_not_or(handles_and_containers_world):
 
     all_not_handle1_or2 = list(query.evaluate())
     assert len(all_not_handle1_or2) == 4, "Should generate 4 bodies"
-    assert all(
-        h.name not in ["Handle1", "Handle2"] for h in all_not_handle1_or2
-    ), "All generated items should satisfy query"
+    assert all(h.name not in ["Handle1", "Handle2"] for h in all_not_handle1_or2), (
+        "All generated items should satisfy query"
+    )
 
 
 def test_not_and_or(handles_and_containers_world):
@@ -582,7 +587,7 @@ def test_generate_with_using_decorated_predicate(handles_and_containers_world):
     world = handles_and_containers_world
 
     @symbolic_function
-    def is_handle(body_: Body):
+    def is_handle(body_: Body) -> bool:
         return body_.name.startswith("Handle")
 
     body = variable(Body, domain=world.bodies)
@@ -591,13 +596,13 @@ def test_generate_with_using_decorated_predicate(handles_and_containers_world):
     query_args = an(entity(body).where(is_handle(body)))
 
     handles = list(query_kwargs.evaluate())
-    assert handles == list(
-        query_args.evaluate()
-    ), "Both queries should generate the same items."
+    assert handles == list(query_args.evaluate()), (
+        "Both queries should generate the same items."
+    )
     assert len(handles) == 3, "Should generate at least one handle."
-    assert all(
-        isinstance(h, Handle) for h in handles
-    ), "All generated items should be of type Handle."
+    assert all(isinstance(h, Handle) for h in handles), (
+        "All generated items should be of type Handle."
+    )
     assert is_handle(world.bodies[0])
 
 
@@ -654,16 +659,16 @@ def test_generate_with_using_inherited_predicate(handles_and_containers_world):
         len([h for h in world.bodies if isinstance(h, Handle)])
     ) + factorial(len([c for c in world.bodies if isinstance(c, Container)]))
     assert len(body_pairs) == expected, "Should generate at least one handle."
-    assert all(
-        HaveSameFirstCharacter(b1, b2, b3)() for b1, b2, b3 in body_pairs
-    ), "All generated items should satisfy the predicate."
+    assert all(HaveSameFirstCharacter(b1, b2, b3)() for b1, b2, b3 in body_pairs), (
+        "All generated items should satisfy the predicate."
+    )
     assert all(
         not HaveSameFirstCharacter(b1, b2, b3)()
         for b1 in world.bodies
         for b2 in world.bodies
         for b3 in world.bodies
         if b1 != b2 and b2 != b3 and b1 != b3 and (b1, b2, b3) not in body_pairs
-    ), ("All not generated items " "should not satisfy the " "predicate.")
+    ), "All not generated items should not satisfy the predicate."
 
 
 def test_select_predicate(handles_and_containers_world):
@@ -695,9 +700,9 @@ def test_select_predicate(handles_and_containers_world):
 
     handle1 = query.tolist()[0]
     assert isinstance(handle1, HasName), "Should generate a handle."
-    assert (
-        handle1.body.name == "Handle1"
-    ), "The generated handle should have the expected name."
+    assert handle1.body.name == "Handle1", (
+        "The generated handle should have the expected name."
+    )
 
 
 def test_is_same_entity_predicate_in_query(handles_and_containers_world):
@@ -746,6 +751,48 @@ def test_literal_predicate(handles_and_containers_world):
         query = the(entity(variable(Body, world.bodies)).where(has_name))
 
 
+def test_predicate_taking_one_variable_attribute_twice():
+    """
+    An attribute filling two arguments of a predicate gives its value to both of them.
+    """
+    values = [0.0, 1.0, 2.0]
+    position = variable(KRROODPosition, [KRROODPosition(x, x, 0.0) for x in values])
+    query = entity(position).where(IsGreaterThan(position.x, position.x))
+
+    assert query.tolist() == []
+
+
+def test_predicate_taking_one_variable_attribute_twice_keeps_what_satisfies_it():
+    """
+    An attribute filling two arguments of a predicate is compared with itself, so a
+    predicate every value satisfies against itself keeps every candidate.
+    """
+    values = [0.0, 1.0, 2.0]
+    positions = [KRROODPosition(x, x, 0.0) for x in values]
+    position = variable(KRROODPosition, positions)
+    query = entity(position).where(
+        IsGreaterThanByMargin(position.x, position.x, margin=-1.0)
+    )
+
+    assert query.tolist() == positions
+
+
+def test_predicate_argument_left_out_takes_its_default():
+    """
+    A predicate argument the query does not pass takes the predicate's default.
+    """
+    values = [0.0, 1.0, 2.0]
+    positions = [KRROODPosition(x, y, 0.0) for x in values for y in values]
+    position = variable(KRROODPosition, positions)
+    query = entity(position).where(IsGreaterThanByMargin(position.x, position.y))
+
+    assert query.tolist() == [
+        candidate
+        for candidate in positions
+        if candidate.x > candidate.y + IsGreaterThanByMargin.margin
+    ]
+
+
 def test_contains_type():
     fb1_fruits = [Apple("apple"), Body("Body1")]
     fb2_fruits = [Body("Body3"), Body("Body2")]
@@ -774,6 +821,52 @@ def test_equivalent_to_contains_type_using_exists():
 
     query_result = list(fruit_box_query.evaluate())
     assert len(query_result) == 1, "Should generate 1 fruit box."
+
+
+@pytest.fixture
+def fruit_boxes_with_and_without_apples() -> list[FruitBox]:
+    """
+    An apple box, a box without apples, a mixed box with an apple, and an empty box.
+    """
+    return [
+        FruitBox("apples", [Apple("apple1")]),
+        FruitBox("bodies", [Body("body1")]),
+        FruitBox("mixed", [Body("body2"), Apple("apple2")]),
+        FruitBox("empty", []),
+    ]
+
+
+def test_exists_over_flat_variable_is_checked_for_each_outer_binding(
+    fruit_boxes_with_and_without_apples,
+):
+    """
+    Every box that holds an apple is selected, not only the first one in the domain.
+    """
+    fruit_box = variable(FruitBox, domain=fruit_boxes_with_and_without_apples)
+    fruit = flat_variable(fruit_box.fruits)
+    query = an(entity(fruit_box).where(exists(fruit, HasType(fruit, Apple))))
+
+    assert query.tolist() == [
+        fruit_boxes_with_and_without_apples[0],
+        fruit_boxes_with_and_without_apples[2],
+    ]
+
+
+def test_negated_exists_over_flat_variable_is_checked_for_each_outer_binding(
+    fruit_boxes_with_and_without_apples,
+):
+    """
+    Every box without an apple is selected, the empty box included, although other boxes
+    hold one.
+    """
+    fruit_box = variable(FruitBox, domain=fruit_boxes_with_and_without_apples)
+    fruit = flat_variable(fruit_box.fruits)
+    query = an(entity(fruit_box).where(not_(exists(fruit, HasType(fruit, Apple)))))
+
+    assert query.tolist() == [
+        fruit_boxes_with_and_without_apples[1],
+        fruit_boxes_with_and_without_apples[3],
+    ]
 
 
 def test_double_not(handles_and_containers_world):
@@ -1175,7 +1268,7 @@ def test_order_by_not_evaluated_variable(handles_and_containers_world):
 def test_ordering_the_query_by_the_query_itself(handles_and_containers_world):
     body = variable(Body, domain=handles_and_containers_world.bodies)
     query = entity(body).where(contains(body.name, "Handle"))
-    ordered_query = an(query.ordered_by(query.name[-1], descending=True))
+    ordered_query = a(query.ordered_by(query.name[-1], descending=True))
     filtered_values = [
         b for b in handles_and_containers_world.bodies if "Handle" in b.name
     ]
@@ -1281,8 +1374,11 @@ def test_subquery_independence():
 
 
 def test_editing_and_rebuilding_original_after_embedding_leaves_subquery_snapshot_unchanged():
-    """Embedding a query as a subquery captures an immutable snapshot, so editing **and rebuilding**
-    the original afterwards does not retroactively change the already-embedded copy."""
+    """
+    Embedding a query as a subquery captures an immutable snapshot, so editing **and
+    rebuilding** the original afterwards does not retroactively change the already-
+    embedded copy.
+    """
     var1 = variable(int, [1, 2, 3, 4])
     inner = entity(var1).where(var1 == 2)
     outer = an(entity(var1).where(var1 != an(inner)))
@@ -1299,8 +1395,10 @@ def test_editing_and_rebuilding_original_after_embedding_leaves_subquery_snapsho
 
 
 def test_editing_distinct_subquery_after_embedding_leaves_snapshot_unchanged():
-    """A subquery that uses distinct is still snapshotted on embedding, so editing and rebuilding the
-    original afterwards does not change the embedded copy."""
+    """
+    A subquery that uses distinct is still snapshotted on embedding, so editing and
+    rebuilding the original afterwards does not change the embedded copy.
+    """
     var1 = variable(int, [1, 2, 3, 4])
     inner = entity(var1).where(var1 == 2).distinct()
     outer = an(entity(var1).where(var1 != an(inner)))
@@ -1315,8 +1413,10 @@ def test_editing_distinct_subquery_after_embedding_leaves_snapshot_unchanged():
 
 
 def test_embedding_a_count_all_subquery_does_not_corrupt_the_original():
-    """Embedding a ``count_all`` query must not corrupt it: re-evaluating the original after embedding
-    still produces correct results."""
+    """
+    Embedding a ``count_all`` query must not corrupt it: re-evaluating the original
+    after embedding still produces correct results.
+    """
     group_variable = variable(int, [10, 20])
     counted = set_of(group_variable, eql.count_all()).grouped_by(group_variable)
 
@@ -1329,8 +1429,11 @@ def test_embedding_a_count_all_subquery_does_not_corrupt_the_original():
 
 
 def test_editing_and_rebuilding_a_count_all_subquery_after_embedding_leaves_snapshot_unchanged():
-    """A ``count_all`` subquery is snapshotted on embedding like any other query, so editing **and
-    rebuilding** the original afterwards does not change the already-embedded copy."""
+    """
+    A ``count_all`` subquery is snapshotted on embedding like any other query, so
+    editing **and rebuilding** the original afterwards does not change the already-
+    embedded copy.
+    """
     group_variable = variable(int, [10, 10, 20])
     counted = set_of(group_variable, eql.count_all()).grouped_by(group_variable)
     outer = an(entity(counted))
@@ -1345,13 +1448,17 @@ def test_editing_and_rebuilding_a_count_all_subquery_after_embedding_leaves_snap
 
 
 def test_embedded_subquery_captures_the_current_product_and_shares_variable_leaves():
-    """The operand embedded for a subquery is the source's compiled product captured at embed time,
-    sharing variable leaves so derived references stay valid. A later edit rebuilds the source into a
-    new product, leaving the already-embedded operand frozen."""
+    """
+    The operand embedded for a subquery is the source's compiled product captured at
+    embed time, sharing variable leaves so derived references stay valid.
+
+    A later edit rebuilds the source into a new product, leaving the already-embedded
+    operand frozen.
+    """
     var1 = variable(int, [1, 2, 3])
     source = entity(var1).where(var1 == 2)
 
-    condition = var1 != an(source)
+    condition = var1 != a(source)
     source.build()
 
     embedded = condition.right
@@ -1421,13 +1528,13 @@ def test_accessing_a_dunder_attribute_symbolically_raises_a_helpful_error():
 
 
 def test_descendants_yields_each_shared_node_only_once():
-    """A node reachable by more than one path is a descendant once, not once per path.
+    """
+    A node reachable by more than one path is a descendant once, not once per path.
 
-    ``and_(v > 1, v < 3)`` makes ``v`` a child of both comparators, so a naive
-    depth-first walk revisits ``v`` (and, in a rule tree, every shared subtree)
-    once per path. On a deep rule-tree DAG this compounds into an exponential
-    traversal that stalls fitting, so ``_descendants_`` must yield every node at
-    most once.
+    ``and_(v > 1, v < 3)`` makes ``v`` a child of both comparators, so a naive depth-
+    first walk revisits ``v`` (and, in a rule tree, every shared subtree) once per path.
+    On a deep rule-tree DAG this compounds into an exponential traversal that stalls
+    fitting, so ``_descendants_`` must yield every node at most once.
     """
     var = variable(int, [1, 2, 3])
     entity(var).where(and_(var > 1, var < 3))
@@ -1448,9 +1555,9 @@ def test_root_caches_all_descendant_ids_for_nested_queries():
     outer = an(entity(var).where(var != inner))
     root = outer._root_
     for descendant in root._descendants_:
-        assert (
-            descendant._id_ in root._expression_id_cache_
-        ), f"{descendant} (id={descendant._id_}) missing from root._expression_id_cache_"
+        assert descendant._id_ in root._expression_id_cache_, (
+            f"{descendant} (id={descendant._id_}) missing from root._expression_id_cache_"
+        )
 
     # Doubly-nested: the inside the inside an
     var2 = variable(int, [1, 2, 3, 4])
@@ -1459,23 +1566,23 @@ def test_root_caches_all_descendant_ids_for_nested_queries():
     outermost = an(entity(var2).where(var2 != middle))
     root2 = outermost._root_
     for descendant in root2._descendants_:
-        assert (
-            descendant._id_ in root2._expression_id_cache_
-        ), f"{descendant} (id={descendant._id_}) missing from root2._expression_id_cache_"
+        assert descendant._id_ in root2._expression_id_cache_, (
+            f"{descendant} (id={descendant._id_}) missing from root2._expression_id_cache_"
+        )
 
 
 def test_indexing_on_dict_field():
     @dataclass
     class ItemWithDictionary:
         name: str
-        attrs: Dict[str, int]
+        attrs: dict[str, int]
 
         def __hash__(self):
             return hash(self.name)
 
     @dataclass(eq=False)
     class WorldWithItems:
-        items: List[ItemWithDictionary]
+        items: list[ItemWithDictionary]
 
         def __hash__(self):
             return hash(id(self))
@@ -1503,7 +1610,7 @@ def test_indexing_2():
 
     @dataclass
     class BodyWithShapes:
-        shapes: List[ShapeWithColor]
+        shapes: list[ShapeWithColor]
 
         def __hash__(self):
             return id(self)
@@ -1549,7 +1656,7 @@ def test_presentation_example():
     class Robot:
         name: str
         battery: int
-        tasks: List[Task]
+        tasks: list[Task]
 
     robots = [
         Robot("Robot1", 100, [Task("Task1", True), Task("Task2", False)]),
@@ -1566,7 +1673,7 @@ def test_empty_data_to_aggregator():
     data = variable(int, [])
 
     @symbolic_function
-    def x_value(x_):
+    def x_value(x_: int) -> int:
         return x_
 
     key = lambda x: x_value(x)
