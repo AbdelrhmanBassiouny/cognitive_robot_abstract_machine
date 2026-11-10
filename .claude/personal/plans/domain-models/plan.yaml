@@ -162,8 +162,13 @@ items:
   pull_request_number: 527
   track: spatial
   status: in_progress
+  blockers:
+    - >-
+      CI on fc22b482 (main 20c49dd4 merged in) not yet read; the red coraplex and physics_simulators
+      jobs on 5c563855 were the runner running out of disk during uv install, not #527. Ready but
+      not promoted: the owner decides whether it is finished.
   depends_on: []
-  session: https://claude.ai/code/session_018wfiv624CCCGJiUfXd4nm7
+  session: https://claude.ai/code/session_01JxHGiNS35j6Nc3GQ87MdyP
   notes: '#527 (on main since #537 landed as cram2#835) holds the casadi-free base per https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS
     (api-break: missing declared attributes fail at definition) and SemDT''s spatial types
     adopting it, from #526 (d5e65ab2): values are ValueInCartesianFrame3D, a CoordinateRepresentation;
