@@ -13,6 +13,7 @@ from typing_extensions import Any, overload, Self, Callable, TypeVar
 import krrood.symbolic_math.symbolic_math as sm
 from krrood.adapters.json_serializer import SubclassJSONSerializer
 from krrood.patterns.identifier_and_name import NameT
+from krrood.patterns.interface import Interface
 from krrood.patterns.mixin import Mixin
 from krrood.symbolic_math.exceptions import (
     WrongDimensionsError,
@@ -113,6 +114,27 @@ class SymbolicSpatialType(ABC):
         :return: The object in the transformation's reference frame.
         """
         return target_frame_T_reference_frame @ self
+
+    def ensure_same_reference_frame(
+        self, other: SymbolicSpatialType, context: str
+    ) -> None:
+        """
+        :param other: A value combined with this one, whose coordinates must be given in
+            the same frame.
+        :param context: What ``other`` is to the operation, for the error message.
+        :raises ReferenceFrameMismatchError: If both values have a reference frame and
+            the frames differ.
+        """
+        if (
+            self.reference_frame is not None
+            and other.reference_frame is not None
+            and other.reference_frame is not self.reference_frame
+        ):
+            raise ReferenceFrameMismatchError(
+                expected_frame=self.reference_frame,
+                actual_frame=other.reference_frame,
+                context=context,
+            )
 
     def to_json(self, **kwargs) -> dict[str, Any]:
         """
@@ -293,6 +315,104 @@ class SpatialChange(SymbolicSpatialType, ABC):
         result.child_frame = self.child_frame
         return result
 
+    def ensure_operand_in_child_frame(self, operand: SymbolicSpatialType) -> None:
+        """
+        :param operand: A value or change this change is applied to.
+        :raises ReferenceFrameMismatchError: If both this change's child frame and the
+            operand's reference frame are set and differ.
+        """
+        if (
+            self.child_frame is not None
+            and operand.reference_frame is not None
+            and operand.reference_frame is not self.child_frame
+        ):
+            raise ReferenceFrameMismatchError(
+                expected_frame=self.child_frame,
+                actual_frame=operand.reference_frame,
+                context=f"the {type(operand).__name__} this change is applied to",
+            )
+
+
+# %% how a change or a rotation acts on a value
+
+
+class TransformationOperand(Interface):
+    """
+    A value or change a :class:`HomogeneousTransformationMatrix` acts on, giving one of
+    the same type.
+    """
+
+    @abstractmethod
+    def apply_transformation(
+        self, transformation: HomogeneousTransformationMatrix
+    ) -> Self:
+        """
+        :param transformation: A transformation whose child frame is this value's
+            reference frame.
+        :return: This value, given in the reference frame of ``transformation``.
+        """
+
+
+class PlanarTransformationOperand(Interface):
+    """
+    A value or change on a plane a :class:`HomogeneousTransformationMatrix2D` acts on,
+    giving one of the same type.
+    """
+
+    @abstractmethod
+    def apply_planar_transformation(
+        self, transformation: HomogeneousTransformationMatrix2D
+    ) -> Self:
+        """
+        :param transformation: A transformation whose child frame is this value's
+            reference frame.
+        :return: This value, on the x-y plane of the reference frame of
+            ``transformation``.
+        """
+
+
+class RotationOperand(Interface):
+    """
+    A value or change a :class:`RotationMatrix` turns about the origin of its reference
+    frame, giving one of the same type.
+    """
+
+    @abstractmethod
+    def apply_rotation(self, rotation: RotationMatrix) -> Self:
+        """
+        :param rotation: The rotation from this value's reference frame to the rotation's
+            reference frame.
+        :return: This value turned by ``rotation``, in the reference frame of
+            ``rotation``.
+        """
+
+
+class MatrixProductAction(TransformationOperand, RotationOperand, Mixin):
+    """
+    Applies transformations and rotations to a value by multiplying its homogeneous
+    coordinates from the left.
+    """
+
+    def apply_transformation(
+        self, transformation: HomogeneousTransformationMatrix
+    ) -> Self:
+        return self._left_product(transformation)
+
+    def apply_rotation(self, rotation: RotationMatrix) -> Self:
+        return self._left_product(rotation)
+
+    def _left_product(
+        self, matrix: HomogeneousTransformationMatrix | RotationMatrix
+    ) -> Self:
+        """
+        :param matrix: The transformation or rotation applied to this value.
+        :return: The product of ``matrix`` and this value, of this value's type, in the
+            reference frame of ``matrix``.
+        """
+        result = type(self).from_casadi_sx(ca.mtimes(matrix.casadi_sx, self.casadi_sx))
+        result.reference_frame = matrix.reference_frame
+        return result
+
 
 @dataclass(eq=False, init=False, repr=False)
 class HomogeneousTransformationMatrix(
@@ -300,6 +420,8 @@ class HomogeneousTransformationMatrix(
     SpatialChange,
     SubclassJSONSerializer,
     RigidCoordinateChange[CartesianFrame3D],
+    TransformationOperand,
+    RotationOperand,
 ):
     """
     Represents a 4x4 transformation matrix used in kinematics and transformations.
@@ -582,44 +704,42 @@ class HomogeneousTransformationMatrix(
     def z(self, value: sm.ScalarData):
         self[2, 3] = value
 
-    def dot(
-        self, other: GenericHomogeneousSpatialType
-    ) -> GenericHomogeneousSpatialType:
+    def dot(self, other: TransformationOperandT) -> TransformationOperandT:
         """
-        The product of this transformation and ``other``.
+        This transformation applied to ``other``, a value given in its child frame or a
+        change into it.
 
-        Composing this transformation onto an orientation is the quaternion product of
-        the two rotations; the translation does not act on an orientation and is
-        dropped.
-
-        :param other: The right-hand operand.
-        :return: The product, in this transformation's reference frame.
-        :raises UnsupportedOperationError: If ``other`` is not a spatial type this
-            transformation multiplies.
+        :param other: The value or change this transformation is applied to.
+        :return: ``other``, given in this transformation's reference frame.
+        :raises UnsupportedOperationError: If this transformation does not act on
+            ``other``.
+        :raises ReferenceFrameMismatchError: If ``other`` is given in a frame other than
+            this transformation's child frame.
         """
-        if isinstance(other, Quaternion):
-            result = self.quaternion.multiply(other)
-            result.reference_frame = self.reference_frame
-            return result
-        if isinstance(
-            other,
-            (
-                Vector3D,
-                CartesianPoint3D,
-                RotationMatrix,
-                HomogeneousTransformationMatrix,
-                Pose3D,
-            ),
-        ):
-            result_sx = ca.mtimes(self.casadi_sx, other.casadi_sx)
-            result = type(other).from_casadi_sx(casadi_sx=result_sx)
-            result.reference_frame = self.reference_frame
-            if isinstance(other, HomogeneousTransformationMatrix):
-                result.child_frame = other.child_frame
-            return result
-        raise UnsupportedOperationError("dot", self, other)
+        if not isinstance(other, TransformationOperand):
+            raise UnsupportedOperationError("dot", self, other)
+        self.ensure_operand_in_child_frame(other)
+        return other.apply_transformation(self)
 
-    def __matmul__(self, other: GenericSpatialType) -> GenericSpatialType:
+    def apply_transformation(
+        self, transformation: HomogeneousTransformationMatrix
+    ) -> HomogeneousTransformationMatrix:
+        return HomogeneousTransformationMatrix(
+            ca.mtimes(transformation.casadi_sx, self.casadi_sx),
+            reference_frame=transformation.reference_frame,
+            child_frame=self.child_frame,
+        )
+
+    def apply_rotation(
+        self, rotation: RotationMatrix
+    ) -> HomogeneousTransformationMatrix:
+        return HomogeneousTransformationMatrix(
+            ca.mtimes(rotation.casadi_sx, self.casadi_sx),
+            reference_frame=rotation.reference_frame,
+            child_frame=self.child_frame,
+        )
+
+    def __matmul__(self, other: TransformationOperandT) -> TransformationOperandT:
         return self.dot(other)
 
     def inverse(self) -> HomogeneousTransformationMatrix:
@@ -717,6 +837,7 @@ class HomogeneousTransformationMatrix(
 class RotationMatrix(
     sm.SymbolicMathType,
     SymbolicSpatialType,
+    MatrixProductAction,
     ValueInCartesianFrame3D,
     SubclassJSONSerializer,
 ):
@@ -895,34 +1016,23 @@ class RotationMatrix(
             reference_frame=self.reference_frame,
         )
 
-    def dot(self, other: GenericRotatableSpatialType) -> GenericRotatableSpatialType:
+    def dot(self, other: RotationOperandT) -> RotationOperandT:
         """
-        The product of this rotation and ``other``.
+        This rotation applied to ``other``, turning it about the origin of its reference
+        frame.
 
-        Composing this rotation onto an orientation is the quaternion product of the
-        two rotations.
-
-        :param other: The right-hand operand.
-        :return: The product, in this rotation's reference frame.
-        :raises UnsupportedOperationError: If ``other`` is not a spatial type this
-            rotation multiplies.
+        :param other: The value or change this rotation is applied to.
+        :return: ``other`` turned, in this rotation's reference frame.
+        :raises UnsupportedOperationError: If this rotation does not act on ``other``.
         """
-        if isinstance(other, Quaternion):
-            result = self.quaternion.multiply(other)
-            result.reference_frame = self.reference_frame
-            return result
-        if isinstance(
-            other, (Vector3D, RotationMatrix, HomogeneousTransformationMatrix, Pose3D)
-        ):
-            result_sx = ca.mtimes(self.casadi_sx, other.casadi_sx)
-            result = type(other).from_casadi_sx(casadi_sx=result_sx)
-            result.reference_frame = self.reference_frame
-            return result
-        raise UnsupportedOperationError("dot", self, other)
+        if not isinstance(other, RotationOperand):
+            raise UnsupportedOperationError("dot", self, other)
+        return other.apply_rotation(self)
 
-    def __matmul__(
-        self, other: GenericRotatableSpatialType
-    ) -> GenericRotatableSpatialType:
+    def __matmul__(self, other: RotationOperandT) -> RotationOperandT:
+        """
+        :meth:`dot`, as the ``@`` operator.
+        """
         return self.dot(other)
 
     @property
@@ -1233,6 +1343,7 @@ class ValueOnXYPlane2D(CoordinateRepresentation[CartesianFrame2D], Mixin):
 class CartesianPoint3D(
     sm.SymbolicMathType,
     SymbolicSpatialType,
+    MatrixProductAction,
     ValueInCartesianFrame3D,
     SubclassJSONSerializer,
     AffinePoint3D[CartesianFrame3D, sm.Scalar],
@@ -1377,7 +1488,11 @@ class CartesianPoint3D(
         self[2] = value
 
     def __add__(self, other: Vector3D) -> CartesianPoint3D:
+        """
+        :raises ReferenceFrameMismatchError: If ``other`` is given in another frame.
+        """
         if isinstance(other, Vector3D):
+            self.ensure_same_reference_frame(other, "the added Vector3D")
             result = CartesianPoint3D.from_casadi_sx(
                 ca.SX.binary(ca.OP_ADD, self.casadi_sx, other.casadi_sx)
             )
@@ -1393,11 +1508,16 @@ class CartesianPoint3D(
     def __sub__(self, other: Vector3D) -> CartesianPoint3D: ...
 
     def __sub__(self, other):
+        """
+        :raises ReferenceFrameMismatchError: If ``other`` is given in another frame.
+        """
         if isinstance(other, CartesianPoint3D):
+            self.ensure_same_reference_frame(other, "the subtracted CartesianPoint3D")
             result = Vector3D.from_casadi_sx(
                 ca.SX.binary(ca.OP_SUB, self.casadi_sx, other.casadi_sx)
             )
         elif isinstance(other, Vector3D):
+            self.ensure_same_reference_frame(other, "the subtracted Vector3D")
             result = CartesianPoint3D.from_casadi_sx(
                 ca.SX.binary(ca.OP_SUB, self.casadi_sx, other.casadi_sx)
             )
@@ -1511,6 +1631,7 @@ class CartesianPoint2D(
     SubclassJSONSerializer,
     AffinePoint2D[CartesianFrame2D, sm.Scalar],
     CartesianPoint[CartesianFrame2D, sm.Scalar],
+    PlanarTransformationOperand,
 ):
     """
     Represents a 2D point with reference frame handling.
@@ -1636,6 +1757,14 @@ class CartesianPoint2D(
             target_frame_T_reference_frame @ self.to_cartesian_point_3d()
         )
 
+    def apply_planar_transformation(
+        self, transformation: HomogeneousTransformationMatrix2D
+    ) -> CartesianPoint2D:
+        moved = ca.mtimes(transformation.casadi_sx, ca.vertcat(self.casadi_sx, 1))
+        return CartesianPoint2D(
+            moved[0], moved[1], reference_frame=transformation.reference_frame
+        )
+
     def euclidean_distance(self, other: Self) -> sm.Scalar:
         return sm.Vector.from_casadi_sx(self.casadi_sx).euclidean_distance(
             sm.Vector.from_casadi_sx(other.casadi_sx)
@@ -1752,6 +1881,7 @@ class OrthogonalProjection(
 class Vector3D(
     sm.SymbolicMathType,
     SymbolicSpatialType,
+    MatrixProductAction,
     ValueInCartesianFrame3D,
     SubclassJSONSerializer,
 ):
@@ -1941,7 +2071,11 @@ class Vector3D(
         self[2] = value
 
     def __add__(self, other: Vector3D) -> Vector3D:
+        """
+        :raises ReferenceFrameMismatchError: If ``other`` is given in another frame.
+        """
         if isinstance(other, Vector3D):
+            self.ensure_same_reference_frame(other, "the added Vector3D")
             result = Vector3D.from_casadi_sx(
                 ca.SX.binary(ca.OP_ADD, self.casadi_sx, other.casadi_sx)
             )
@@ -1951,7 +2085,11 @@ class Vector3D(
         return result
 
     def __sub__(self, other: Vector3D) -> Vector3D:
+        """
+        :raises ReferenceFrameMismatchError: If ``other`` is given in another frame.
+        """
         if isinstance(other, Vector3D):
+            self.ensure_same_reference_frame(other, "the subtracted Vector3D")
             result = Vector3D.from_casadi_sx(
                 ca.SX.binary(ca.OP_SUB, self.casadi_sx, other.casadi_sx)
             )
@@ -2133,6 +2271,8 @@ class Quaternion(
     SymbolicSpatialType,
     ValueInCartesianFrame3D,
     SubclassJSONSerializer,
+    TransformationOperand,
+    RotationOperand,
 ):
     """
     Represents a quaternion, which is a mathematical entity used to encode rotations in
@@ -2357,6 +2497,16 @@ class Quaternion(
             reference_frame=self.reference_frame,
         )
 
+    def apply_transformation(
+        self, transformation: HomogeneousTransformationMatrix
+    ) -> Quaternion:
+        return self.apply_rotation(transformation.rotation_matrix)
+
+    def apply_rotation(self, rotation: RotationMatrix) -> Quaternion:
+        result = rotation.quaternion.multiply(self)
+        result.reference_frame = rotation.reference_frame
+        return result
+
     def multiply(self, q: Quaternion) -> Quaternion:
         return Quaternion(
             x=self.x * q.w + self.y * q.z - self.z * q.y + self.w * q.x,
@@ -2487,6 +2637,8 @@ class AxisAngle(
     SymbolicSpatialType,
     ValueInCartesianFrame3D,
     SubclassJSONSerializer,
+    TransformationOperand,
+    RotationOperand,
 ):
     """
     A rotation by an angle around a unit axis.
@@ -2645,6 +2797,18 @@ class AxisAngle(
         """
         return RotationMatrix.from_axis_angle(self)
 
+    def apply_transformation(
+        self, transformation: HomogeneousTransformationMatrix
+    ) -> AxisAngle:
+        return self.apply_rotation(transformation.rotation_matrix)
+
+    def apply_rotation(self, rotation: RotationMatrix) -> AxisAngle:
+        result = AxisAngle.from_quaternion(
+            rotation.quaternion.multiply(self.quaternion)
+        )
+        result.reference_frame = rotation.reference_frame
+        return result
+
 
 @dataclass(eq=False, init=False, repr=False)
 class Twist(
@@ -2749,9 +2913,14 @@ class Twist(
 class Pose3D(
     sm.SymbolicMathType,
     SymbolicSpatialType,
+    MatrixProductAction,
     ValueInCartesianFrame3D,
     SubclassJSONSerializer,
 ):
+    """
+    A position and an orientation, both given in one reference frame.
+    """
+
     def __init__(
         self,
         position: CartesianPoint3D | None = None,
@@ -2995,7 +3164,11 @@ class Pose3D(
 
 @dataclass(eq=False, init=False, repr=False)
 class Pose2D(
-    sm.SymbolicMathType, SymbolicSpatialType, ValueOnXYPlane2D, SubclassJSONSerializer
+    sm.SymbolicMathType,
+    SymbolicSpatialType,
+    ValueOnXYPlane2D,
+    SubclassJSONSerializer,
+    PlanarTransformationOperand,
 ):
     """
     Represents a 2D pose consisting of an x coordinate, a y coordinate, and a yaw angle.
@@ -3164,6 +3337,14 @@ class Pose2D(
         """
         return Pose2D.from_pose(target_frame_T_reference_frame @ self.pose)
 
+    def apply_planar_transformation(
+        self, transformation: HomogeneousTransformationMatrix2D
+    ) -> Pose2D:
+        flat_pose = HomogeneousTransformationMatrix2D.from_xy_yaw(
+            x=self.x, y=self.y, yaw=self.yaw
+        )
+        return flat_pose.apply_planar_transformation(transformation).pose
+
     @classmethod
     def from_xy_yaw(
         cls,
@@ -3216,6 +3397,7 @@ class HomogeneousTransformationMatrix2D(
     SpatialChange,
     SubclassJSONSerializer,
     RigidCoordinateChange[CartesianFrame2D],
+    PlanarTransformationOperand,
 ):
     """
     A 3x3 homogeneous matrix of SE(2): the rigid change from the
@@ -3371,33 +3553,30 @@ class HomogeneousTransformationMatrix2D(
     # %% acting on values and changes
 
     def __matmul__(
-        self,
-        other: HomogeneousTransformationMatrix2D | CartesianPoint2D | Pose2D,
-    ) -> HomogeneousTransformationMatrix2D | CartesianPoint2D | Pose2D:
+        self, other: PlanarTransformationOperandT
+    ) -> PlanarTransformationOperandT:
         """
         :param other: A change into this change's child frame, or a point or pose given
             in it.
         :return: The change applied after ``other``, or the point or pose given in this
             change's reference frame.
-        :raises UnsupportedOperationError: If ``other`` is none of these.
+        :raises UnsupportedOperationError: If this change does not act on ``other``.
+        :raises ReferenceFrameMismatchError: If ``other`` is given in a frame other than
+            this change's child frame.
         """
-        if isinstance(other, HomogeneousTransformationMatrix2D):
-            return HomogeneousTransformationMatrix2D(
-                ca.mtimes(self.casadi_sx, other.casadi_sx),
-                reference_frame=self.reference_frame,
-                child_frame=other.child_frame,
-            )
-        if isinstance(other, CartesianPoint2D):
-            moved = ca.mtimes(self.casadi_sx, ca.vertcat(other.casadi_sx, 1))
-            return CartesianPoint2D(
-                moved[0], moved[1], reference_frame=self.reference_frame
-            )
-        if isinstance(other, Pose2D):
-            moved = self @ HomogeneousTransformationMatrix2D.from_xy_yaw(
-                x=other.x, y=other.y, yaw=other.yaw
-            )
-            return moved.pose
-        raise UnsupportedOperationError("@", self, other)
+        if not isinstance(other, PlanarTransformationOperand):
+            raise UnsupportedOperationError("@", self, other)
+        self.ensure_operand_in_child_frame(other)
+        return other.apply_planar_transformation(self)
+
+    def apply_planar_transformation(
+        self, transformation: HomogeneousTransformationMatrix2D
+    ) -> HomogeneousTransformationMatrix2D:
+        return HomogeneousTransformationMatrix2D(
+            ca.mtimes(transformation.casadi_sx, self.casadi_sx),
+            reference_frame=transformation.reference_frame,
+            child_frame=self.child_frame,
+        )
 
     def inverse(self) -> HomogeneousTransformationMatrix2D:
         inverse = HomogeneousTransformationMatrix2D(
@@ -3523,19 +3702,19 @@ GenericSpatialType = TypeVar(
     bound=SymbolicSpatialType,
 )
 
-GenericHomogeneousSpatialType = TypeVar(
-    "GenericHomogeneousSpatialType",
-    CartesianPoint3D,
-    Vector3D,
-    HomogeneousTransformationMatrix,
-    RotationMatrix,
-    Quaternion,
-)
+TransformationOperandT = TypeVar("TransformationOperandT", bound=TransformationOperand)
+"""
+The kind of value or change a transformation is applied to.
+"""
 
-GenericRotatableSpatialType = TypeVar(
-    "GenericRotatableSpatialType",
-    Vector3D,
-    HomogeneousTransformationMatrix,
-    RotationMatrix,
-    Quaternion,
+PlanarTransformationOperandT = TypeVar(
+    "PlanarTransformationOperandT", bound=PlanarTransformationOperand
 )
+"""
+The kind of value or change on a plane a planar transformation is applied to.
+"""
+
+RotationOperandT = TypeVar("RotationOperandT", bound=RotationOperand)
+"""
+The kind of value or change a rotation is applied to.
+"""

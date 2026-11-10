@@ -11,7 +11,10 @@ from krrood.symbolic_math.exceptions import (
     WrongDimensionsError,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from krrood_spatial_math.exceptions import SpatialTypesError
+from krrood_spatial_math.exceptions import (
+    ReferenceFrameMismatchError,
+    SpatialTypesError,
+)
 from krrood_spatial_math.spatial_types import (
     AxisAngle,
     RotationMatrix,
@@ -204,12 +207,13 @@ class TestRotationMatrix:
             HomogeneousTransformationMatrix(),
             Pose3D(),
             Quaternion(),
+            AxisAngle(),
+            CartesianPoint3D(x=1, y=1, z=1),
         ]
         does_not_work = [
             sm.FloatVariable(name="s"),
             sm.Scalar(1),
             np.eye(3),
-            CartesianPoint3D(x=1, y=1, z=1),
         ]
 
         for other in works:
@@ -1498,19 +1502,27 @@ class TestTransformationMatrix:
         assert t.reference_frame == reference_frame
         assert t.child_frame == child_frame
 
-        assert (t1 @ t2).reference_frame == reference_frame
-        assert (t1 @ t2).child_frame == child_frame2
-        assert (t2 @ t1).reference_frame == reference_frame2
-        assert (t2 @ t1).child_frame == child_frame
+        child_T_child2 = HomogeneousTransformationMatrix(
+            reference_frame=child_frame, child_frame=child_frame2
+        )
+        assert (t1 @ child_T_child2).reference_frame == reference_frame
+        assert (t1 @ child_T_child2).child_frame == child_frame2
+        with pytest.raises(ReferenceFrameMismatchError):
+            t1 @ t2
+        with pytest.raises(ReferenceFrameMismatchError):
+            t2 @ t1
         assert t1.inverse().reference_frame == child_frame
         assert t1.inverse().child_frame == reference_frame
         assert t1.position.reference_frame == reference_frame
         assert t1.quaternion.reference_frame == reference_frame
         assert t1.rotation_matrix.reference_frame == reference_frame
 
-        assert (t1 @ p).reference_frame == reference_frame
-        assert (t1 @ v).reference_frame == reference_frame
-        assert (t1 @ r).reference_frame == reference_frame
+        for value in [p, v, r]:
+            with pytest.raises(ReferenceFrameMismatchError):
+                t1 @ value
+        for value_type in [CartesianPoint3D, Vector3D, RotationMatrix]:
+            in_child_frame = value_type(reference_frame=child_frame)
+            assert (t1 @ in_child_frame).reference_frame == reference_frame
 
     def test_matmul_type_preservation(self):
         transform = HomogeneousTransformationMatrix()
@@ -1521,6 +1533,7 @@ class TestTransformationMatrix:
             Pose3D(),
             CartesianPoint3D(x=1, y=1, z=1),
             Quaternion(),
+            AxisAngle(),
         ]
         # A 2D type is transformable, but multiplying a 4x4 by a 2- or 3-vector is not
         # an operation, so only its transform() answers -- not the operator.
