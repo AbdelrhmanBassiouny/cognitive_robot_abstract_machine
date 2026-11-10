@@ -1,15 +1,14 @@
-PR #527 (ready, not promoted, base main; #537 landed as cram2#835): krrood_spatial_math's casadi-free base plus SemDT's spatial types adopting it. Plan: domain-models, item planar-point-interface. Decisions: https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS
+PR #527 (ready, not promoted, base main): krrood_spatial_math's casadi-free base, SemDT's spatial types adopting it, and since 2026-11-10 the folded items planar-coordinate-system (#549, closed), spatial-math-imports, projection-interface, spatial-action, frame-checked-arithmetic. Plan: domain-models, item planar-point-interface.
 
 Plan
-- Space > EuclideanSpace (dimension) > EuclideanSpace2D/3D; CoordinateSystem[SpaceT, NameT] > AffineFrame > CartesianFrame > CartesianFrame3D; CoordinateRepresentation (AffinePoint2D/3D, ValueInCartesianFrame3D); CoordinateChange > AffineCoordinateChange > RigidCoordinateChange. Image spaces are krrood_image's (#524).
+- Space > EuclideanSpace2D/3D; CoordinateSystem > AffineFrame > CartesianFrame > CartesianFrame2D/3D; AffinePoint > CartesianPoint; CoordinateChange > Affine > Rigid; SpaceMap (OrthogonalProjection); values implement TransformationOperand, RotationOperand, PlanarTransformationOperand; transforms and point/vector arithmetic check frames.
 
 Done
-- Base interfaces, krrood HasID/HasName, Interface attribute check at definition; #526's adoption re-applied (d5e65ab2, f86b854c); #526 closed.
-- 2026-11-10: merged main 20c49dd4 (fc22b482). Conflict only in spatial_types.py with main's new Twist: Twist names ValueInCartesianFrame3D itself, since SpatialType is no value here. 93 krrood_spatial_math + 175 krrood pattern tests pass locally.
-- CI on 5c563855: coraplex and physics_simulators red from the runner running out of disk in uv install, not this PR; other test jobs green.
+- c409fd69 pushed: main fd82cbc6 merged, #549 folded (59ab32ef), dimension renames (3179534f), SpaceMap (c29899d7), action and frame checks (c409fd69). Q1/Q4/Q5 decided yes by the owner. Local: 558 spatial tests pass; full SemDT 2227 pass, every failure a missing ROS/robot description.
+- PR description and plan updated.
 
 Next
-- Read CI on fc22b482.
-- Two threads stay open by decision: SymbolicSpatialType rename (spatial-math-imports); dropping Point (planar-coordinate-system).
-- Ask the owner whether it is finished before promoting.
-- Stacked #549 and #524 conflict with main's changes on restack onto fc22b482; each needs its own resolve.
+- Read CI on c409fd69, giskardpy above all (mixed-frame arithmetic now raises).
+- Open thread: CartesianPoint2D/Pose2D.transform across planes (owner).
+- Ask the owner whether it is finished before promoting; #524 stacked on it needs its own resolve.
+- Decisions doc SCiXWvLcV7mequpATSTrsS was unreachable from this session: record the fold decisions there.
