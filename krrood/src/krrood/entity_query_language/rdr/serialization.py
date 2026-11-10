@@ -347,9 +347,7 @@ def _emit_expression(
                 or_, _condition_operands(node), variable_names_by_id
             )
         case Not():
-            return _emit_factory_call(
-                not_, [node._children_[0]], variable_names_by_id
-            )
+            return _emit_factory_call(not_, [node._children_[0]], variable_names_by_id)
         case _:
             raise UnsupportedNodeForSerialization(node)
 
@@ -390,7 +388,11 @@ def _emit_rule_body(
         referenced_types.add(type(value))
 
     statements: List[ast.stmt] = [
-        ast.Expr(value=ast_helpers.call(add.__name__, [conclusion_target, _emit_value(value)]))
+        ast.Expr(
+            value=ast_helpers.call(
+                add.__name__, [conclusion_target, _emit_value(value)]
+            )
+        )
     ]
     for branch in decomposed.branches:
         factory = _CONCLUSION_SELECTOR_FACTORY[branch.conclusion_selector_type]
@@ -472,7 +474,10 @@ def rdr_to_python(rdr: EQLSingleClassRDR, case_type_is_local: bool = False) -> s
         _emit_expression(decomposed.base_condition, variable_names_by_id)
     )
     body_statements = _emit_rule_body(
-        rdr.query._conditions_root_, variable_names_by_id, conclusion_target, referenced_types
+        rdr.query._conditions_root_,
+        variable_names_by_id,
+        conclusion_target,
+        referenced_types,
     )
     body = _indent(ast_helpers.unparse_statements(body_statements), "    ")
 
@@ -484,7 +489,7 @@ def rdr_to_python(rdr: EQLSingleClassRDR, case_type_is_local: bool = False) -> s
 
     generator = CodeGenerator(template_directory=_TEMPLATES_DIRECTORY)
     return generator.render(
-        _RDR_MODULE_TEMPLATE_NAME,
+        template_name=_RDR_MODULE_TEMPLATE_NAME,
         factory_import=_FACTORY_IMPORT,
         type_imports=type_imports,
         variable_name=variable_name,
