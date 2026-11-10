@@ -15,13 +15,8 @@ concept-theory/paper	concept-theory
 claude/symbolic-expression-stack-refactor-ridull	dag-facade-hardening
 claude/crollywood-refactor-shared-classes-e8jtm9	domain-models
 claude/krrood-image-depth-segmentation	domain-models
-claude/krrood-spatial-math-projection-interface	domain-models
-claude/krrood-spatial-math-frame-checked-arithmetic	domain-models
-claude/krrood-spatial-math-action	domain-models
-ccr-8eec00ba-u65ka7	domain-models
-claude/krrood-spatial-math-imports	domain-models
-claude/krrood-image-video-on-a-plane	domain-models
 claude/krrspatial-interfaces	domain-models
+claude/krrood-image-video-on-a-plane	domain-models
 claude/krrood-image-coordinate-change	domain-models
 claude/world-as-euclidean-space	domain-models
 claude/perception-typed-images	domain-models
