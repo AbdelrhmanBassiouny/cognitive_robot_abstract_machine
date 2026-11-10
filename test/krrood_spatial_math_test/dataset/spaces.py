@@ -1,3 +1,8 @@
+"""
+Mimic spaces, frames, points, vectors, lines and changes that the krrood_spatial_math
+interface tests run against.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -37,7 +42,7 @@ class ScalablePlaneFrame(AffineFrame[ScalablePlane, str], Interface):
 # %% points and vectors that store their coordinates
 
 
-@dataclass
+@dataclass(kw_only=True)
 class StoredAffineVector(AffineVector[AffineFrameT, CoordinateT]):
     """
     A vector that stores its two coordinates and frame as given.
@@ -59,23 +64,35 @@ class StoredAffineVector(AffineVector[AffineFrameT, CoordinateT]):
     """
 
     def __add__(self, other: Self) -> Self:
-        return type(self)(self.x + other.x, self.y + other.y, self.coordinate_system)
+        return type(self)(
+            x=self.x + other.x,
+            y=self.y + other.y,
+            coordinate_system=self.coordinate_system,
+        )
 
     def __sub__(self, other: Self) -> Self:
-        return type(self)(self.x - other.x, self.y - other.y, self.coordinate_system)
+        return type(self)(
+            x=self.x - other.x,
+            y=self.y - other.y,
+            coordinate_system=self.coordinate_system,
+        )
 
     def __mul__(self, factor: CoordinateT) -> Self:
-        return type(self)(self.x * factor, self.y * factor, self.coordinate_system)
+        return type(self)(
+            x=self.x * factor,
+            y=self.y * factor,
+            coordinate_system=self.coordinate_system,
+        )
 
 
-@dataclass
+@dataclass(kw_only=True)
 class StoredScalablePlaneVector(StoredAffineVector[ScalablePlaneFrame, float]):
     """
     A vector on a scalable plane that stores its coordinates as given.
     """
 
 
-@dataclass
+@dataclass(kw_only=True)
 class StoredAffinePoint(AffinePoint[AffineFrameT, CoordinateT, AffineVectorT]):
     """
     A point that stores its two coordinates and frame as given.
@@ -98,13 +115,21 @@ class StoredAffinePoint(AffinePoint[AffineFrameT, CoordinateT, AffineVectorT]):
 
     def __sub__(self, other: Self) -> AffineVectorT:
         vector_type = self.get_type_of_generic_parameter(parameter=AffineVectorT)
-        return vector_type(self.x - other.x, self.y - other.y, self.coordinate_system)
+        return vector_type(
+            x=self.x - other.x,
+            y=self.y - other.y,
+            coordinate_system=self.coordinate_system,
+        )
 
     def __add__(self, vector: AffineVectorT) -> Self:
-        return type(self)(self.x + vector.x, self.y + vector.y, self.coordinate_system)
+        return type(self)(
+            x=self.x + vector.x,
+            y=self.y + vector.y,
+            coordinate_system=self.coordinate_system,
+        )
 
 
-@dataclass
+@dataclass(kw_only=True)
 class StoredScalablePlanePoint(
     StoredAffinePoint[ScalablePlaneFrame, float, StoredScalablePlaneVector]
 ):
@@ -116,7 +141,7 @@ class StoredScalablePlanePoint(
 # %% lines that store their point and direction
 
 
-@dataclass
+@dataclass(kw_only=True)
 class StoredAffineLine(AffineLine[AffinePointT, AffineVectorT]):
     """
     A line that stores its point and direction as given.
@@ -133,7 +158,7 @@ class StoredAffineLine(AffineLine[AffinePointT, AffineVectorT]):
     """
 
 
-@dataclass
+@dataclass(kw_only=True)
 class StoredScalablePlaneLine(
     StoredAffineLine[StoredScalablePlanePoint, StoredScalablePlaneVector]
 ):
@@ -145,14 +170,14 @@ class StoredScalablePlaneLine(
 # %% coordinate changes of one kind each
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ScalingChange(AffineCoordinateChange[ScalablePlaneFrame]):
     """
     An affine change between two frames of one scalable plane.
     """
 
 
-@dataclass
+@dataclass(kw_only=True)
 class CartesianFrame3DChange(RigidCoordinateChange[CartesianFrame3D]):
     """
     A rigid change between two Cartesian frames, such as from a gripper to the table.

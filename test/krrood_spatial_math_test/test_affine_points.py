@@ -1,3 +1,8 @@
+"""
+The point, vector and line interfaces of an affine space, and the stored mimics that
+implement them.
+"""
+
 from __future__ import annotations
 
 from dataclasses import fields
@@ -85,7 +90,13 @@ def test_a_point_reports_the_kind_of_frame_it_is_given_in():
 
 
 def test_a_point_reports_what_its_coordinates_are_stored_as():
-    assert StoredScalablePlanePoint.get_type_of_generic_parameter(parameter=CoordinateT) is float
+    """
+    The coordinate type a point binds is read back from the class, without an instance.
+    """
+    assert (
+        StoredScalablePlanePoint.get_type_of_generic_parameter(parameter=CoordinateT)
+        is float
+    )
 
 
 def test_a_point_reports_the_kind_of_vector_it_is_moved_by():
@@ -112,15 +123,23 @@ def test_a_points_fields_are_narrowed_to_the_bound_types():
 
 
 def test_the_difference_of_two_points_is_the_vector_between_them():
-    start = StoredScalablePlanePoint(1.0, 2.0, None)
-    end = StoredScalablePlanePoint(4.0, 6.0, None)
+    """
+    Subtracting points gives the vector type the point binds, not another point.
+    """
+    start = StoredScalablePlanePoint(x=1.0, y=2.0, coordinate_system=None)
+    end = StoredScalablePlanePoint(x=4.0, y=6.0, coordinate_system=None)
 
-    assert end - start == StoredScalablePlaneVector(3.0, 4.0, None)
+    assert end - start == StoredScalablePlaneVector(
+        x=3.0, y=4.0, coordinate_system=None
+    )
 
 
 def test_a_point_moved_by_the_difference_to_another_point_reaches_it():
-    start = StoredScalablePlanePoint(1.0, 2.0, None)
-    end = StoredScalablePlanePoint(4.0, 6.0, None)
+    """
+    Point subtraction and point-vector addition undo each other.
+    """
+    start = StoredScalablePlanePoint(x=1.0, y=2.0, coordinate_system=None)
+    end = StoredScalablePlanePoint(x=4.0, y=6.0, coordinate_system=None)
 
     assert start + (end - start) == end
 
