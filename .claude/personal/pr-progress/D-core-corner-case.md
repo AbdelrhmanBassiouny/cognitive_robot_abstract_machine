@@ -1,14 +1,13 @@
 # D-core-corner-case (#65): progress
 
 ## Plan
-- Wait for CI on 8d5d547330; the developer reviews the move.
+- Wait for the developer's next review round; nothing is open on #65.
 
 ## Done
-- 2026-11-10 review fully applied: renames (d2d7ceb990), the serializer moved to krrood.code_generation.dataclass_source (8d5d547330), all four threads replied to and resolved. Carried up the stack through D-deco.
-- a/an sweep opened separately as draft #565.
+- 2026-11-10: all review threads answered and resolved. Serializer moved to `krrood.code_generation.dataclass_source` (8d5d547330); `from_data` removed at the developer's choice (5330bfea28; D-ui-rendering tests 828d5f519e). Stack restacked through D-deco.
 
 ## Next
-- CI on 8d5d547330 not read yet; CI on d2d7ceb990 was 18/18 green.
-- #66: test_serialization.py imports the missing what_do_we_know_about (predates this work).
-- claude/rdr-why-answer-6fnw2o chain: own conflict on explanation.py/observer.py, lacks both changes.
-- integration-conflict label: not re-checked.
+- Read CI on 5330bfea28 (not read yet).
+- Not checked: the integration-conflict label (its combined tree no longer exists); the local suite (`pyjpt` won't install).
+- The claude/rdr-why-answer-6fnw2o chain conflicts on explanation.py/observer.py on its own and lacks this round's changes.
+- #66's test_serialization.py imports `what_do_we_know_about`, which #66 no longer defines (pre-existing).
