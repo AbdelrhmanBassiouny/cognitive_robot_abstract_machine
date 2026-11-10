@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import dataclasses
 import enum
-from dataclasses import asdict, dataclass, field
-from typing_extensions import Any, Type
+from dataclasses import dataclass, field
+from typing_extensions import Any
 
 import pytest
 
@@ -271,41 +271,6 @@ def test_non_serializable_field_raises_case_not_serializable_error(serializer):
         serializer.to_source(case)
 
 
-# %% from_data: reconstructing a case
-
-
-def test_from_data_reconstructs_flat_dataclass(serializer):
-    """
-    ``from_data(asdict(case), CaseType)`` reconstructs a flat dataclass equal to the
-    original.
-
-    Guarantees: round-trip ``asdict`` → ``from_data`` is lossless for flat dataclasses.
-    """
-    case = FlatAnimal(hair=True, legs=4, name="lynx")
-
-    reconstructed = serializer.from_data(asdict(case), FlatAnimal)
-
-    assert reconstructed == case
-    assert isinstance(reconstructed, FlatAnimal)
-
-
-def test_from_data_reconstructs_nested_dataclass(serializer):
-    """
-    ``from_data(asdict(case), CaseType)`` reconstructs a case with a nested dataclass
-    field.
-
-    Guarantees: ``from_data`` recursively converts inner dicts back to their
-    declared dataclass types using ``get_type_hints`` on the outer type.
-    """
-    case = LimbedAnimal(name="panther", limb=Limb(count=4, has_claws=True))
-
-    reconstructed = serializer.from_data(asdict(case), LimbedAnimal)
-
-    assert reconstructed == case
-    assert isinstance(reconstructed, LimbedAnimal)
-    assert isinstance(reconstructed.limb, Limb)
-
-
 # %% the store's serializer is substitutable
 
 
@@ -347,12 +312,6 @@ class SentinelSerializer(ObjectSourceSerializer):
         """
         self.called_with.append(case)
         return ObjectSource(self.SENTINEL, set())
-
-    def from_data(self, data: Any, case_type: Type) -> Any:
-        """
-        Stub: not exercised in CornerCaseStore integration tests.
-        """
-        return data
 
 
 def test_custom_serializer_is_used_by_to_ordered_sources():

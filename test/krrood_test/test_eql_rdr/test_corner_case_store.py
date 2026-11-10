@@ -54,8 +54,7 @@ class TrivialSerializer(ObjectSourceSerializer):
     Pattern: TrivialSerializer — minimal ObjectSourceSerializer that returns str(case).
 
     Replaces the old ``_trivial_emit`` raw callable after the Option A migration.
-    ``to_source`` returns the string representation with an empty referenced-type set;
-    ``from_data`` is a no-op stub (not exercised in Phase 1 tests).
+    ``to_source`` returns the string representation with an empty referenced-type set.
     """
 
     def to_source(self, case: Any) -> Tuple[str, Set[Type]]:
@@ -66,12 +65,6 @@ class TrivialSerializer(ObjectSourceSerializer):
         :return: ``(str(case), set())``.
         """
         return (str(case), set())
-
-    def from_data(self, data: Any, case_type: Type) -> Any:
-        """
-        Stub: not exercised in Phase 1 tests.
-        """
-        return data
 
 
 @dataclass
@@ -98,12 +91,6 @@ class SpySerializer(ObjectSourceSerializer):
         """
         self.received.append(case)
         return (str(case), set())
-
-    def from_data(self, data: Any, case_type: Type) -> Any:
-        """
-        Stub: not exercised in Phase 1 tests.
-        """
-        return data
 
 
 # %% recording a case and reading it back
