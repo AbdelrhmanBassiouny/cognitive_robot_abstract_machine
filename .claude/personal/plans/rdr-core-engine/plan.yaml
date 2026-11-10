@@ -40,9 +40,8 @@ items:
   session: https://claude.ai/code/session_01JxHGiKaQnckii8nWhnKuRh
   blockers:
     - >-
-      Developer decision pending on PR #65's thread: move CaseSource, CaseSerializer and
-      AsdictCaseSerializer to krrood.code_generation under generic names, before or after #66's
-      type_hints.py rename. A repository-wide a/an sweep plus checker is proposed as separate work.
+      On #66, test_serialization.py imports what_do_we_know_about, which #66's backward_inference.py
+      no longer defines; this predates the 2026-11-10 work and will keep #66's krrood tests red.
     - >-
       The `integration-conflict` label (2026-09-30) was measured on a combined tree that no longer
       exists: #64 has since merged into main and this branch merged main (6b3b447f). Not re-checked;
@@ -50,10 +49,10 @@ items:
   depends_on: []
   status: in_progress
   notes: >
-    Targets main since #64 merged. The 2026-11-10 review is applied in d2d7ceb990: CornerCaseStore's
-    record and get are now record_corner_case and get_corner_case_for_node, renamed through the
-    stack too. The claude/rdr-why-answer-6fnw2o chain still uses the old names because its own
-    conflict blocked the restack.
+    Targets main since #64 merged. The 2026-11-10 review is fully applied (d2d7ceb990, 8d5d547330):
+    store methods renamed, the serializer moved to krrood.code_generation.dataclass_source, and the
+    a/an sweep split out as #565. The claude/rdr-why-answer-6fnw2o chain lacks both because of its
+    own conflict.
 - id: D-core-serialization
   title: 'RDR engine: rule-tree unparser (rdr_to_python)'
   branch: D-core-serialization
