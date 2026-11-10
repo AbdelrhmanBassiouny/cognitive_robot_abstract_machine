@@ -26,7 +26,6 @@ claude/krrood-image-coordinate-change	domain-models
 claude/world-as-euclidean-space	domain-models
 claude/perception-typed-images	domain-models
 claude/robokudo-captures	domain-models
-fix/eql-correlated-quantifiers	eql-existential-semantics
 fix/eql-match-collection-attributes	eql-existential-semantics
 fix/eql-match-generation	eql-existential-semantics
 claude/split-performatives-prs-xbluus-agreement	eql-performatives

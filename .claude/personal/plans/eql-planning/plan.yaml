@@ -48,10 +48,10 @@ items:
   session: https://claude.ai/code/session_01JxHGiPxKXS7dPRev7pcL1M
   depends_on: []
   status: in progress
-  notes: 'In #541 (draft, on main, merged with main in ff1fa9d22b): state objects, TermReader.instances_of, per-evaluation
-    default domains, expression domains as FlatVariable/InstanceFilteredFlatVariable (a(T).from_(expr)
-    too). First review addressed in fa1dc1af6e; the owner chose to filter removed objects
-    out of list/tuple/set fluent values, captured lists stay unfiltered.
+  notes: 'In #541 (draft, on main, merged with main in ff1fa9d22b): state objects, TermReader.instances_of,
+    per-evaluation default domains, expression domains as FlatVariable/InstanceFilteredFlatVariable
+    (a(T).from_(expr) too). First review addressed in fa1dc1af6e; the owner chose to filter
+    removed objects out of list/tuple/set fluent values, captured lists stay unfiltered.
 
     Open: a thread asks for match syntax everywhere; the binding test keeps variable() since
     a match in set_of does not correlate (correlated-quantifiers). Unregistered objects are
@@ -88,7 +88,6 @@ items:
   track: planning-core
   depends_on:
   - action-schema-progression
-  - eql-existential-semantics/correlated-quantifiers
   status: not_started
   notes: Test domains write each derived fact that passes the three-part rule (changes during
     a plan, used by a goal or precondition, relational) as an EQL body, not Python.

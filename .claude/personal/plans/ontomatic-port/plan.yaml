@@ -42,8 +42,7 @@ items:
   branch: ormatic-collection-translation
   title: 'ORMatic: translate EQL over collection-valued attributes to SQL'
   track: paper-eql-ormatic
-  depends_on:
-  - eql-existential-semantics/correlated-quantifiers
+  depends_on: []
   status: not_started
   notes: Source commits 5f4cfb9aee, eeeb2e48db.
 - id: ormatic-identifier-selection
@@ -93,7 +92,6 @@ items:
   depends_on:
   - terminology-model
   - descriptor-characteristics
-  - eql-existential-semantics/correlated-quantifiers
   status: not_started
   notes: 'Fixes: sufficient conditions as a disjunction, owl:Thing filler, owl:Nothing, hierarchy
     cycles.'
