@@ -86,7 +86,7 @@ class PreprocessedObject:
 
     pose: Pose3D
     """
-    Pose3D of the object.
+    Pose of the object.
 
     ``roll``/``pitch``/``yaw`` are in radians, as :class:`~krrood_spatial_math.spatial_types.Pose3D`
     requires -- everywhere else in this schema reasons about rotation in degrees, so it is

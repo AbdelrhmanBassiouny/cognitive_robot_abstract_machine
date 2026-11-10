@@ -109,7 +109,7 @@ class MotionDetector(AbstractDetector):
         default_factory=dict, init=False, repr=False
     )
     """
-    Pose3D window per tracked body.
+    Pose window per tracked body.
 
     Owned by this detector rather than shared through the context, so that the window
     always spans ``window_size`` ticks regardless of how many other motion detectors are

@@ -8,6 +8,12 @@ from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
 from krrood_spatial_math.spatial_types import Pose3D
 from semantic_digital_twin.world import World
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.world_description.connections import (
+    FixedConnection,
+    OmniDrive,
+)
+from semantic_digital_twin.world_description.world_entity import Body
 
 
 def _pr2_behind_an_odom(
@@ -75,3 +81,30 @@ def test_pose_in_the_root_connection_parent_frame_is_applied_unchanged():
     robot.set_root_pose(target)
 
     np.testing.assert_allclose(connection.origin.to_np(), target.to_np(), atol=1e-9)
+
+
+# %% drive origin given in another frame than the drive's parent
+
+
+def test_a_drive_origin_given_in_the_world_frame_is_reached_through_a_displaced_odom():
+    world = World()
+    with world.modify_world():
+        root = Body(name=PrefixedName("map"))
+        odometry = Body(name=PrefixedName("odom"))
+        base = Body(name=PrefixedName("base"))
+        world.add_connection(
+            FixedConnection(
+                parent=root,
+                child=odometry,
+                parent_T_connection_expression=_DISPLACED_ODOM,
+            )
+        )
+        drive = OmniDrive.create_with_dofs(world=world, parent=odometry, child=base)
+        world.add_connection(drive)
+    target = HomogeneousTransformationMatrix.from_xyz_rpy(
+        1.3, 2.0, 0.0, yaw=0.25, reference_frame=root
+    )
+
+    drive.origin = target
+
+    np.testing.assert_allclose(base.global_pose.to_np(), target.to_np(), atol=1e-9)

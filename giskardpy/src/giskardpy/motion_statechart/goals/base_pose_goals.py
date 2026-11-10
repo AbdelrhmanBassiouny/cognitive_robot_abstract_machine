@@ -88,7 +88,7 @@ class DrivenBaseGoal(
 
     goal_pose: Pose3D
     """
-    Pose3D to reach.
+    Pose to reach.
     """
 
     weight: float = DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE

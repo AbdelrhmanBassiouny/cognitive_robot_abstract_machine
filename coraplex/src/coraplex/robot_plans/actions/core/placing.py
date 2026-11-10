@@ -57,7 +57,7 @@ class PlaceAction(
 
     target_location: Pose3D
     """
-    Pose3D in the world at which the object should be placed.
+    Pose in the world at which the object should be placed.
     """
 
     grasp_release_threshold: float = 0.1

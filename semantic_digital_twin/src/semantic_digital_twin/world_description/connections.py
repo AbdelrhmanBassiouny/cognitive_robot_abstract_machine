@@ -777,8 +777,15 @@ class WheeledDrive(ActiveConnection, HasUpdateState, ABC):
         the world -- would otherwise see, and be able to overwrite, a pose that
         is only half applied.
 
-        :param transformation: The desired parent-to-child origin.
+        :param transformation: The desired parent-to-child origin. One given in a
+            reference frame is expressed in the parent frame first; one given in none is
+            taken to be expressed in it already.
         """
+        if (
+            isinstance(transformation, HomogeneousTransformationMatrix)
+            and transformation.reference_frame is not None
+        ):
+            transformation = self._world.transform(transformation, self.parent)
         local_kinematics = self._calculate_local_kinematics(transformation)
         position = local_kinematics.position
         roll, pitch, yaw = local_kinematics.rotation_matrix.rpy

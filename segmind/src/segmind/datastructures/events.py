@@ -199,7 +199,7 @@ class AbstractContactEvent(EventWithTrackedObjects, ABC):
 
     world_T_tracked_object: Pose3D = field(init=False)
     """
-    Pose3D of the object, in the world frame.
+    Pose of the object, in the world frame.
     """
 
     with_object_bounding_box: VolumetricBoundingBox | None = field(
@@ -211,7 +211,7 @@ class AbstractContactEvent(EventWithTrackedObjects, ABC):
 
     world_T_with_object: Pose3D | None = field(init=False, default=None)
     """
-    Pose3D of the second object in contact, in the world frame.
+    Pose of the second object in contact, in the world frame.
     """
 
     def __post_init__(self):
