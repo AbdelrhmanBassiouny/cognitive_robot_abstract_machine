@@ -5,7 +5,7 @@ from typing_extensions import Any, TYPE_CHECKING
 from krrood.entity_query_language.cache_data import InstanceFilteredDomain
 from krrood.entity_query_language.core.variable import Literal
 from krrood.entity_query_language.utils import T, is_iterable
-from krrood.symbol_graph.symbol_graph import Symbol, SymbolGraph
+from krrood.symbol_graph.symbol_graph import RegisteredInstances, Symbol
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.core.variable import DomainType
@@ -37,5 +37,5 @@ def _resolve_domain(type_: type[T], domain: DomainType | None) -> DomainType | N
     if domain is not None and is_iterable(domain):
         return InstanceFilteredDomain(type_, domain)
     if domain is None and issubclass(type_, Symbol):
-        return SymbolGraph().get_instances_of_type(type_)
+        return RegisteredInstances(type_=type_)
     return domain
