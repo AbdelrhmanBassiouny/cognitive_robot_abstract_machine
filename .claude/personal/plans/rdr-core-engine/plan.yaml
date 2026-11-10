@@ -115,14 +115,16 @@ items:
   depends_on:
   - d-core-single-class
   status: in_progress
-  session: https://claude.ai/code/session_015bucsUoPW3ktQ1NnTZbbVx
+  session: https://claude.ai/code/session_01JxHGiL16bUxxHg6B3qRSaL
   blockers:
-  - The GroundTruth thread on backend.py:36 is answered and deliberately left open. No dataclass
-    in entity_query_language/rdr/ expresses a per-case ground-truth supplier; the only one
-    that does is ripple_down_rules CaseQuery._target, in the package this split retires.
-  - CI check test_each_lib (semantic_digital_twin) fails on test_multi_sim.py::test_world_sim_state_sync,
-    a physics-settling assertion this pull request's krrood/rdr files cannot reach. It is
-    not this branch's work and cannot be fixed inside it.
+    - >-
+      The GroundTruth thread on backend.py:39 waits on the owner's pick of its three options (keep
+      the alias, wrap it in a frozen dataclass, or make the alias generic). No dataclass in
+      entity_query_language/rdr/ expresses a per-case ground-truth supplier.
+    - >-
+      CI on 61f78fa6 not checked: krrood and semantic_digital_twin were still running at the
+      2026-11-10 resolve. That restack brought main's pytest-rerunfailures down, the remedy for
+      flaky test_world_sim_state_sync. Zoo-dataset tests not run locally.
   notes: The underspecified-query RDR backend, and the stack tip. `RDRBackend` inherits `QueryBackend`,
     whose whole ABC is `evaluate(expression)`; neither concrete base fits, since `SelectiveBackend`
     raises on exactly the ellipsis matches this backend exists for and `GenerativeBackend`
