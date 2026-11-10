@@ -102,11 +102,12 @@ notebook ran without errors in about a minute, in an environment of 0.9 GB inclu
 - KRROOD with the `match` semantics for collection-valued attributes (pull request #556, branch
   `fix/eql-match-collection-attributes`); the setup cell installs exactly that commit. On a KRROOD without it, the
   descriptions over the list `toppings`, such as `a(Pizza)(toppings=a(CheeseTopping)())`, match nothing.
-- The fix of pull request #566 (branch `fix/eql-resolved-nested-pattern`), carried onto #556 at commit
-  `a02d68412d`, which the setup cell pins. Without it, `an(Order)(pizzas=hot_pizzas)` returns every order once
-  `hot_pizzas` has been evaluated.
+- The fixes of pull requests #566 and #567, carried onto #556 at commit `a4c474b434`, which the setup cell pins.
+  Without #566, `an(Order)(pizzas=hot_pizzas)` returns every order once `hot_pizzas` has been evaluated. Without
+  #567, a query evaluated a second time does not see objects created since its first evaluation, so `hot_pizzas`
+  asked again in Act 5 misses the kitchen's offers.
 - `kitchen_picture.py` must lie next to the notebook; the setup cell downloads it if it is missing.
-- Once #556 and #566 are merged and released, the commit in the setup cell can be replaced by the release, and the two URLs
+- Once #556, #566 and #567 are merged and released, the commit in the setup cell can be replaced by the release, and the two URLs
   in the setup cell should point to the default branch.
 
 ## Rebuilding

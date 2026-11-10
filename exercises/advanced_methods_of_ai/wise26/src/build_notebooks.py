@@ -171,7 +171,7 @@ SETUP = [
         """
         import importlib.util, pathlib, subprocess, sys, urllib.request
 
-        SOURCE = "https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/archive/a02d68412d851c88e91c9de50c1a49ae3e560b0d.zip"
+        SOURCE = "https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/archive/a4c474b434d4b623badfe2b32bdacdb3f6b5c982.zip"
         WORKSHEET = "https://raw.githubusercontent.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/claude/serene-carson-x3hvx6/exercises/advanced_methods_of_ai/wise26"
 
 
@@ -1251,19 +1251,21 @@ ACT_5 = [
     markdown(
         """
         **Think** (on the worksheet). Every pizza the kitchen offered is now in the registry. Which question of
-        tonight would get a different answer if the robot asked it again now? The next cell asks one of them.
+        tonight would get a different answer if the robot asked it again now? The next cell asks `hot_pizzas` of
+        1(c) again.
         """
     ),
     code(
         """
         print(len(pizzas), "pizzas on the counter,", len(a(Pizza).tolist()), "pizzas in the registry")
-        show("hot pizzas, asked again", a(Pizza)(toppings=a(PizzaTopping)(spiciness=Spiciness.HOT)))
+        show("hot pizzas, asked again", hot_pizzas)
         """
     ),
     note(
         """
-        The hot pizzas of 1(c) had no `.from_`, so asked again they also find the kitchen's offer whose green
-        pepper is hot, a pizza nobody ordered; so would the vegetarian question asked of the registry in 2(b).
+        `hot_pizzas` has no `.from_`, and every evaluation reads the registry as it is then: asked again, it also
+        finds the kitchen's offer whose green pepper is hot, a pizza nobody ordered. So would the vegetarian
+        question asked of the registry in 2(b).
         Every question with `.from_(pizzas)` or `.from_(orders)` keeps its answer. Ask the registry when the
         question is about everything the robot knows; give a domain when it is about a particular set, such
         as tonight's counter or one candidate.
