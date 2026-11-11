@@ -4,18 +4,13 @@ name: Upstream reviews
 
 on:
   push:
-    branches: [basstler/upstream-reviews]
-    paths: [request.json]
+    branches: ["basstler/upstream-reviews-requests/**"]
 
 permissions:
   contents: write
 
-concurrency:
-  group: basstler-upstream-reviews
-  cancel-in-progress: false
-
 jobs:
   read:
-    uses: KAOS-repositories/basstler/.github/workflows/upstream-reviews-action.yml@v3.15.2
+    uses: KAOS-repositories/basstler/.github/workflows/upstream-reviews-action.yml@v3.15.3
     with:
-      basstler_branch_or_tag: v3.15.2
+      basstler_branch_or_tag: v3.15.3
