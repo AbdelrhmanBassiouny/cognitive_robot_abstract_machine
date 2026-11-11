@@ -29,7 +29,7 @@ PDF is the tutor's run sheet, with what to discuss at the end of each act and th
 |:-----|:--------|
 | `03-introduction_slides.pdf` | Nine slides for the first 8 minutes. |
 | `03-querying_and_reasoning.pdf` | The worksheet (13 pages; each act starts on a new page). |
-| `03-querying_and_reasoning_solution.pdf` | The run sheet for the tutor, and the worksheet with solutions (20 pages). |
+| `03-querying_and_reasoning_solution.pdf` | The run sheet for the tutor, and the worksheet with solutions (21 pages). |
 | `03-pizza_queries.ipynb` | The student notebook. Cells marked `TODO` are to be filled in; it runs from top to bottom as it is. |
 | `03-pizza_queries_solution.ipynb` | The notebook with solutions, solution notes and its outputs. |
 | `kitchen_picture.py` | Draws the pizzeria with the answers of a query marked on it. |
@@ -107,7 +107,7 @@ notebook ran without errors in about a minute, in an environment of 0.9 GB inclu
   it, such a path matches nothing.
 - Variables over an expression, `a(PizzaTopping).from_(pizza.toppings)` (pull request #541, upstream #922, merged
   into #605). Without it, the topping is bound to the expression object instead of each topping.
-- The patterns `every(...)` and `no(...)` (pull request #606, stacked on #605 at commit `8cb1a50ab2`, which the
+- The patterns `every_is(...)` and `none_is(...)` (pull request #606, stacked on #605 at commit `2754b688f8`, which the
   setup cell pins).
   Without #566, `an(Order)(pizzas=hot_pizzas)` returns every order once `hot_pizzas` has been evaluated. Without
   #567, a query evaluated a second time does not see objects created since its first evaluation, so `hot_pizzas`

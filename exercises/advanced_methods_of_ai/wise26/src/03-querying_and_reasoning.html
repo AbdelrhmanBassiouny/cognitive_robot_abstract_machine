@@ -235,7 +235,7 @@ expression is a <b>description</b>: a class and a pattern of attributes.</p>
   <tr><td><code>a(Pizza)</code> without <code>.from_</code></td><td>… among every pizza the robot knows</td><td>the range of <i>x</i> is the registry</td></tr>
   <tr><td><code>.from_(pizzas)</code></td><td>… among these objects only</td><td>the range of <i>x</i></td></tr>
   <tr><td><code>the(Pizza)(…)</code></td><td><i>the</i> pizza that …</td><td>exactly one object fits</td></tr>
-  <tr><td><code>every(…)</code>, <code>no(…)</code> in place of <code>a(…)</code></td><td>every, no topping is …</td><td>∀<i>t</i> (hasTopping → …), ¬∃<i>t</i> (…)</td></tr>
+  <tr><td><code>every_is(…)</code>, <code>none_is(…)</code> in place of <code>a(…)</code></td><td>every, no topping is …</td><td>∀<i>t</i> (hasTopping → …), ¬∃<i>t</i> (…)</td></tr>
   <tr><td><code>a(PizzaTopping).from_(pizza.toppings)</code></td><td>a topping of that pizza</td><td>a variable <i>t</i> with hasTopping(<i>x</i>, <i>t</i>)</td></tr>
   <tr><td><code>exists(t, φ)</code>, <code>for_all(t, φ)</code>, <code>HasType(t, C)</code></td><td>some, every topping …; <i>t</i> is a C</td><td>∃<i>t</i> φ, ∀<i>t</i> φ; C(<i>t</i>)</td></tr>
   <tr><td><code>not_(φ)</code>, <code>or_(φ, ψ)</code>, <code>.where(φ, ψ)</code></td><td>not, or, and</td><td>¬φ, φ ∨ ψ, φ ∧ ψ</td></tr>
@@ -288,11 +288,11 @@ cheese melts. The robot has to find them.</p>
 
 <section class="task">
   <h3><span class="label">(b)</span> Some, only, none</h3>
-  <p><span class="code">a(…)</span> in a pattern says <i>some topping is …</i>; <span class="code">every(…)</span> and
-  <span class="code">no(…)</span> take its place for <i>every</i> and <i>no</i> topping:</p>
-<pre>Q1 = a(Pizza)(toppings=every(VegetableTopping)).from_(pizzas)
+  <p><span class="code">a(…)</span> in a pattern says <i>some topping is …</i>; <span class="code">every_is(…)</span> and
+  <span class="code">none_is(…)</span> take its place for <i>every</i> and <i>no</i> topping:</p>
+<pre>Q1 = a(Pizza)(toppings=every_is(VegetableTopping)).from_(pizzas)
 Q2 = a(Pizza)(toppings=[a(MozzarellaTopping), a(TomatoTopping)]).from_(pizzas)
-Q3 = a(Pizza)(toppings=no(CheeseTopping)).from_(pizzas)</pre>
+Q3 = a(Pizza)(toppings=none_is(CheeseTopping)).from_(pizzas)</pre>
   <ul class="steps">
     <li><span class="mode">paper</span><span>Write each query as a formula.</span></li>
     <li><span class="mode predict">predict</span><span>Mark which pizzas each query returns. Then run 1(b).</span></li>
@@ -439,7 +439,7 @@ hot_orders = an(Order)(pizzas=hot_pizzas)</pre>
   order is returned once, however many witnesses there are.</p>
   <p>No, it returns every pizza: <span class="code">not_</span> negates the condition on <i>one</i> topping, and on
   plain_1 the condition is false (closed world). <i>No hot topping</i> needs ¬∃, as in (b):
-  <span class="code">toppings=no(PizzaTopping)(spiciness=Spiciness.HOT)</span>.</p>
+  <span class="code">toppings=none_is(PizzaTopping)(spiciness=Spiciness.HOT)</span>.</p>
 </div>
 
 <section class="task newpage">

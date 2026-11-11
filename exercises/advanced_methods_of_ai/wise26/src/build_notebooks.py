@@ -171,7 +171,7 @@ SETUP = [
         """
         import importlib.util, pathlib, subprocess, sys, urllib.request
 
-        SOURCE = "https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/archive/8cb1a50ab223f585c4f82a6ce243b55a1ce54967.zip"
+        SOURCE = "https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/archive/2754b688f8fab60361c2ce91cdd5f0fa7cbe014b.zip"
         WORKSHEET = "https://raw.githubusercontent.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/claude/serene-carson-x3hvx6/exercises/advanced_methods_of_ai/wise26"
 
 
@@ -228,7 +228,7 @@ PROLOGUE = [
         )
         from krrood.entity_query_language.exceptions import MultipleSolutionFound, NoSolutionFound
         from krrood.entity_query_language.factories import (
-            a, an, the, every, no, entity, set_of,
+            a, an, the, every_is, none_is, entity, set_of,
             or_, not_, exists, for_all, HasType,
             inference, deduced_variable, add, refinement, alternative,
         )
@@ -464,8 +464,8 @@ PROLOGUE = [
         |:--|:--|:--|
         | `a(Pizza)` | some object of class `Pizza` | a variable `x` with `Pizza(x)` |
         | `a(Pizza)(toppings=a(CheeseTopping))` | a pizza with a cheese topping | `Pizza(x) ∧ ∃t (hasTopping(x, t) ∧ CheeseTopping(t))` |
-        | `toppings=every(VegetableTopping)` | … whose every topping is a vegetable | `∀t (hasTopping(x, t) → VegetableTopping(t))` |
-        | `toppings=no(CheeseTopping)` | … with no cheese topping | `¬∃t (hasTopping(x, t) ∧ CheeseTopping(t))` |
+        | `toppings=every_is(VegetableTopping)` | … whose every topping is a vegetable | `∀t (hasTopping(x, t) → VegetableTopping(t))` |
+        | `toppings=none_is(CheeseTopping)` | … with no cheese topping | `¬∃t (hasTopping(x, t) ∧ CheeseTopping(t))` |
         | `a(Pizza)(toppings=[A, B])` | a pizza whose topping list is exactly `[A, B]` | the whole list, in this order |
         | `a(PizzaTopping)(spiciness=Spiciness.HOT)` | a topping whose spiciness is hot | `spiciness(t) = hot` |
         | `a(Pizza)` without `.from_` | … among every pizza the robot knows | the domain is the registry |
@@ -514,7 +514,7 @@ ACT_1 = [
         """
         ### 1(b) Some, only, none
 
-        `a(...)` in a pattern says *some topping is …*. `every(...)` and `no(...)` take its place to say *every
+        `a(...)` in a pattern says *some topping is …*. `every_is(...)` and `none_is(...)` take its place to say *every
         topping is …* and *no topping is …*. Each query below introduces its own variables, just as every formula
         binds its own.
 
@@ -524,13 +524,13 @@ ACT_1 = [
     ),
     code(
         """
-        only_vegetables = a(Pizza)(toppings=every(VegetableTopping)).from_(pizzas)
+        only_vegetables = a(Pizza)(toppings=every_is(VegetableTopping)).from_(pizzas)
         show("Q1  every topping is a vegetable", only_vegetables)
 
         exactly_these = a(Pizza)(toppings=[a(MozzarellaTopping), a(TomatoTopping)]).from_(pizzas)
         show("Q2  the toppings are [a mozzarella, a tomato]", exactly_these)
 
-        no_cheese = a(Pizza)(toppings=no(CheeseTopping)).from_(pizzas)
+        no_cheese = a(Pizza)(toppings=none_is(CheeseTopping)).from_(pizzas)
         show("Q3  no topping is a cheese", no_cheese)
         """
     ),
@@ -644,8 +644,8 @@ ACT_1 = [
         `not_` negates the condition on *the* topping the path names, so on a pizza with toppings it reads
         `∃t (hasTopping(x, t) ∧ spiciness(t) ≠ hot)`: `american_hot_1` has a mozzarella, which is not hot.
         `plain_1` has no topping at all: a condition on a topping that does not exist is false (closed world), so
-        its negation is true. *No hot topping* is `no`, as in 1(b):
-        `a(Pizza)(toppings=no(PizzaTopping)(spiciness=Spiciness.HOT))`.
+        its negation is true. *No hot topping* is `none_is`, as in 1(b):
+        `a(Pizza)(toppings=none_is(PizzaTopping)(spiciness=Spiciness.HOT))`.
         """
     ),
     markdown(
