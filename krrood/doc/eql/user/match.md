@@ -182,6 +182,20 @@ On an attribute holding one value, `every_is(Type)` is the same as `a(Type)`, an
 does not match the pattern. A pattern made with `every_is` or `none_is` describes elements of an attribute, so evaluating one
 on its own raises {py:class}`~krrood.entity_query_language.exceptions.ElementQuantifierWithoutAttribute`.
 
+### A union of classes with `a(TypeA | TypeB)`
+
+A pattern names a union of classes as Python writes it, `TypeA | TypeB`, and matches an object of any one of them, as
+`isinstance` does. This works with `a`, `every_is` and `none_is`:
+
+```python
+# Students taking no course that is a seminar or a lab
+a(Student)(takes_course=none_is(SeminarCourse | LabCourse)).from_(students)
+```
+
+The pattern describes the nearest common base class of the union, here `Course`: its keyword arguments and
+`.where(...)` conditions are read on that class, and a generative backend constructs that class, so it yields only the
+objects that happen to be of a class of the union.
+
 ## Full Example: Finding Connected Parts
 
 This example demonstrates how to find a complex structural relationship using nested matches.

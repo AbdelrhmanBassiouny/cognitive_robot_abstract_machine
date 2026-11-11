@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from functools import cached_property, lru_cache
 from inspect import isclass
+from types import UnionType
 from typing_extensions import (
     Callable,
     Generic,
@@ -36,7 +37,11 @@ from typing_extensions import (
 
 import rustworkx as rx
 
-from krrood.class_diagrams.utils import get_type_hints_of_object
+from krrood.class_diagrams.utils import (
+    common_base_class,
+    get_type_hints_of_object,
+    is_union_annotation,
+)
 from krrood.class_diagrams.wrapped_field import WrappedField
 from krrood.entity_query_language.core.base_expressions import (
     Bindings,
@@ -358,6 +363,12 @@ class Match(
     describes.
     """
 
+    _type_union_: UnionType | None = field(init=False, default=None)
+    """
+    The union of classes the matched object is an instance of one of, when the pattern
+    names a union; the matched type is then their nearest common base class.
+    """
+
     _domain_: DomainType | None = field(default=None, init=False)
     """
     The instances the match ranges over.
@@ -370,9 +381,15 @@ class Match(
         """
         Take the matched type from :attr:`_factory_` when none was declared.
 
+        A union of classes given as :attr:`_factory_` becomes :attr:`_type_union_`, and
+        its nearest common base class the factory.
+
         :raises MatchTypeCannotBeDetermined: If :attr:`_factory_` names no type it
             builds.
         """
+        if is_union_annotation(self._factory_):
+            self._type_union_ = self._factory_
+            self._factory_ = common_base_class(list(get_args(self._factory_))) or object
         if self._declared_type_ is not None:
             return
         self._declared_type_ = self._type_built_by_(self._factory_)
@@ -495,6 +512,7 @@ class Match(
         """
         parent = parent or self
         self._update_fields_(variable, parent)
+        self._conditions_.extend(self._type_union_conditions_)
         if variable is not None and self._domain_ is not None:
             self._conditions_.append(
                 Comparator(
@@ -651,7 +669,11 @@ class Match(
 
         self._variable_._update_domain_(instances)
         selection = entity(self._variable_)
-        conditions = [*self._conditions_on_stated_values_, *self._where_conditions_]
+        conditions = [
+            *self._type_union_conditions_,
+            *self._conditions_on_stated_values_,
+            *self._where_conditions_,
+        ]
         if conditions:
             selection = selection.where(*conditions)
         return selection
@@ -715,6 +737,16 @@ class Match(
             attribute_match.construct_value_from_bindings(bindings)
             for attribute_match in attribute_matches
         )
+
+    @property
+    def _type_union_conditions_(self) -> list[ConditionType]:
+        """
+        :return: The condition that the matched object is an instance of a class of
+            :attr:`_type_union_`, or none when the pattern names a single class.
+        """
+        if self._type_union_ is None:
+            return []
+        return [HasType(self._variable_, self._type_union_)]
 
     @property
     def _conditions_on_stated_values_(self) -> Iterator[ConditionType]:

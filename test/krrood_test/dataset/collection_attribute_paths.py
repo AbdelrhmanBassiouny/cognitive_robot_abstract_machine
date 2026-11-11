@@ -126,3 +126,15 @@ class Fruit(Product):
     """
     A product that is a fruit.
     """
+
+
+@dataclass(eq=False)
+class Vegetable(Product):
+    """
+    A product that is a vegetable.
+    """
+
+    grows_underground: bool = False
+    """
+    Whether the eaten part grows below the ground, as a carrot does.
+    """
