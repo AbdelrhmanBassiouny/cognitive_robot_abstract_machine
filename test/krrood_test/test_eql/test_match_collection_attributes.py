@@ -315,6 +315,22 @@ def test_pattern_evaluated_before_it_is_nested_still_restricts_the_elements():
     assert names_of(pattern.from_(students).evaluate()) == ["Once", "Twice"]
 
 
+def test_condition_on_a_pattern_before_it_is_nested_restricts_the_elements():
+    """
+    A condition given to a pattern with ``where`` before it is nested is matched only by
+    elements that satisfy it.
+    """
+    seminar, other = CampusCourse("Seminar"), CampusCourse("Other")
+    students = [
+        CampusStudent(role_taker=CampusMember("Seminar"), takes_course={seminar}),
+        CampusStudent(role_taker=CampusMember("Other"), takes_course={other}),
+    ]
+    course = a(CampusCourse).from_([seminar, other])
+    course.where(course.name == "Seminar")
+    pattern = a(CampusStudent)(takes_course=course)
+    assert names_of(pattern.from_(students).evaluate()) == ["Seminar"]
+
+
 def test_pattern_of_a_subtype_filters_the_elements_by_type():
     """
     A pattern of a subclass of the element type is matched only by elements of that
