@@ -16,8 +16,10 @@ from functools import cached_property, wraps
 
 from typing_extensions import Iterable, Any, TYPE_CHECKING, Callable, Self, Iterator
 
+from krrood.entity_query_language.core.absence import Absence
 from krrood.entity_query_language.core.mapped_variable import (
     CanBehaveLikeAVariable,
+    CollectionElement,
     Index,
     MappedVariable,
 )
@@ -60,6 +62,7 @@ from krrood.entity_query_language.evaluation_context import get_evaluation_conte
 from krrood.entity_query_language.core.variable import (
     InstantiatedVariable,
     ExternallySetVariable,
+    Variable,
 )
 from krrood.entity_query_language.enums import DomainSource
 from krrood.entity_query_language.exceptions import (
@@ -79,8 +82,10 @@ from krrood.entity_query_language._monitoring import (
 from krrood.entity_query_language.utils import (
     T,
 )
+from krrood.utils import ensure_hashable
 
 if TYPE_CHECKING:
+    from krrood.entity_query_language.evaluation_context import EvaluationContext
     from krrood.entity_query_language.factories import ConditionType
     from krrood.entity_query_language.backends import QueryBackend
     from krrood.entity_query_language.ground_term import TermReader
@@ -259,11 +264,12 @@ class Query(
         next :meth:`build` recomputes them. Called by every modifier method.
         """
         self._dirty_ = True
-        # ``_group_`` and ``_distinct_on_ids_`` are cached_property values stored in ``__dict__``;
-        # popping the keys invalidates them so they recompute from the new modifier state on next
-        # access. Assigning ``None`` would instead cache ``None`` and keep returning it.
+        # These cached_property values are stored in ``__dict__``; popping the keys invalidates
+        # them so they recompute from the new modifier state on next access. Assigning ``None``
+        # would instead cache ``None`` and keep returning it.
         self.__dict__.pop("_group_", None)
         self.__dict__.pop("_distinct_on_ids_", None)
+        self.__dict__.pop("_ids_identifying_a_result_", None)
 
     def evaluate(
         self, backend: QueryBackend | None = None, state: TermReader | None = None
@@ -672,11 +678,24 @@ class Query(
             yield from self._produce_results_(sources)
             return
 
-        cached_stream = evaluation_context.subquery_result_cache.get_or_create(
+        yield from self._evaluate_as_nested_subquery_(sources, evaluation_context)
+
+    def _evaluate_as_nested_subquery_(
+        self, sources: OperationResult, evaluation_context: EvaluationContext
+    ) -> Iterator[OperationResult]:
+        """
+        Evaluate this query nested inside another query's evaluation, as a scope of its
+        own: it ignores *sources*, and its results are computed once per evaluation and
+        replayed to every outer row.
+
+        :param sources: The bindings of the enclosing query.
+        :param evaluation_context: The active evaluation context.
+        :return: This query's results for the enclosing row.
+        """
+        yield from evaluation_context.subquery_result_cache.get_or_create(
             self._id_,
             lambda: CachedResultStream(self._produce_results_(OperationResult({}))),
         )
-        yield from cached_stream
 
     def _is_nested_subquery_(self, evaluation_context) -> bool:
         """
@@ -697,7 +716,9 @@ class Query(
         results = (
             self._get_operation_result_(result)
             for result in self._apply_results_mapping_(
-                self._evaluate_product_(sources),
+                self._results_once_per_reported_values_(
+                    self._results_reporting_a_value_(self._evaluate_product_(sources))
+                ),
             )
         )
         for transformer in self._result_transformers_:
@@ -706,6 +727,72 @@ class Query(
 
         if self._seen_results is not None:
             self._seen_results.clear()
+
+    def _results_reporting_a_value_(
+        self, results: Iterator[OperationResult]
+    ) -> Iterator[OperationResult]:
+        """
+        :param results: The rows of this query's product.
+        :return: The rows, without those whose every selected value is an absent element
+            (see :class:`~krrood.entity_query_language.core.absence.Absence`).
+        """
+        for result in results:
+            if self._selected_variables_ and all(
+                result[selected._id_] is Absence.NO_ELEMENT
+                for selected in self._selected_variables_
+            ):
+                continue
+            yield result
+
+    def _results_once_per_reported_values_(
+        self, results: Iterator[OperationResult]
+    ) -> Iterator[OperationResult]:
+        """
+        :param results: The rows of this query's product.
+        :return: The rows, each given once however many elements of a collection that a
+            condition reads through (see
+            :class:`~krrood.entity_query_language.core.mapped_variable.CollectionElement`)
+            and the selection does not report satisfied the conditions.
+        """
+        if self._ids_identifying_a_result_ is None:
+            yield from results
+            return
+        seen_results = set()
+        for result in results:
+            identity = tuple(
+                ensure_hashable(result.bindings.get(id_))
+                for id_ in self._ids_identifying_a_result_
+            )
+            if identity in seen_results:
+                continue
+            seen_results.add(identity)
+            yield result
+
+    @cached_property
+    def _ids_identifying_a_result_(self) -> tuple[uuid.UUID, ...] | None:
+        """
+        The identifiers of what tells one result of this query from another: its
+        variables, its selection and the collection elements the selection reports,
+        or ``None`` when every collection element in it is reported.
+        """
+        descendants = list(self._descendants_)
+        reported = {
+            expression._id_
+            for selected in self._selected_variables_
+            for expression in (selected, *selected._descendants_)
+        }
+        if not any(
+            isinstance(expression, CollectionElement)
+            and expression._id_ not in reported
+            for expression in descendants
+        ):
+            return None
+        variables = (
+            expression._id_
+            for expression in descendants
+            if isinstance(expression, Variable)
+        )
+        return tuple(dict.fromkeys((*variables, *reported)))
 
     @cached_property
     def _result_transformers_(self) -> list[ResultTransformer]:
@@ -762,7 +849,14 @@ class Query(
         :return: The operation result.
         """
         return OperationResult(
-            {v._id_: child_result[v._id_] for v in self._selected_variables_},
+            {
+                v._id_: (
+                    None
+                    if child_result[v._id_] is Absence.NO_ELEMENT
+                    else child_result[v._id_]
+                )
+                for v in self._selected_variables_
+            },
             self,
             child_result,
         )
@@ -1151,3 +1245,33 @@ class Entity(Query[T]):
                 if chain_root(child)._id_ not in group_key_root_ids
             ]
         return super().aggregated_selections(group_key_root_ids)
+
+
+@dataclass(eq=False, repr=False)
+class MatchedEntity(Entity[T]):
+    """
+    The query a :class:`~krrood.entity_query_language.query.match.Match` stands for.
+
+    A match describes an entity of the query it is part of rather than a scope of its
+    own, so nested in another query it is evaluated under that query's bindings, and
+    passes its own on: a variable that occurs both inside and outside of it takes one
+    value per row.
+    """
+
+    def _evaluate_as_nested_subquery_(
+        self, sources: OperationResult, evaluation_context: EvaluationContext
+    ) -> Iterator[OperationResult]:
+        """
+        Evaluate this query under *sources*, unlike
+        :meth:`Query._evaluate_as_nested_subquery_`.
+        """
+        yield from self._produce_results_(sources)
+
+    def _get_operation_result_(self, child_result: OperationResult) -> OperationResult:
+        """
+        Keep every binding of *child_result* besides the one
+        :meth:`Entity._get_operation_result_` gives.
+        """
+        operation_result = super()._get_operation_result_(child_result)
+        operation_result.bindings = child_result.bindings | operation_result.bindings
+        return operation_result

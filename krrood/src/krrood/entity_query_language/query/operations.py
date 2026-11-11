@@ -14,6 +14,7 @@ from functools import cached_property, lru_cache
 
 from typing_extensions import Tuple, Any, Iterator, Iterable, Dict, Hashable
 
+from krrood.entity_query_language.core.absence import Absence
 from krrood.entity_query_language.operators.aggregators import (
     Aggregator,
     Count,
@@ -173,7 +174,6 @@ class GroupedBy(MultiArityExpressionThatPerformsACartesianProduct):
         group_key_count = defaultdict(lambda: 0)
 
         for res in self._evaluate_product_(sources):
-
             group_key = tuple(
                 ensure_hashable(res[var._id_]) for var in self.variables_to_group_by
             )
@@ -217,7 +217,9 @@ class GroupedBy(MultiArityExpressionThatPerformsACartesianProduct):
             else:
                 if id_ not in group:
                     group[id_] = []
-                group[id_].append(val)
+                # An absent element is no value to aggregate.
+                if val is not Absence.NO_ELEMENT:
+                    group[id_].append(val)
 
     @memoize
     def is_already_grouped(self, var_id: uuid.UUID) -> bool:

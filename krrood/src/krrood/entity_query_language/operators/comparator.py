@@ -14,6 +14,7 @@ from dataclasses import dataclass
 
 from typing_extensions import Callable, Any, ClassVar, Iterable
 
+from krrood.entity_query_language.core.absence import Absence
 from krrood.entity_query_language.core.base_expressions import (
     OperationResult,
     SymbolicExpression,
@@ -24,6 +25,7 @@ from krrood.entity_query_language.operators.set_operations import (
     PerformsCartesianProduct,
 )
 from krrood.entity_query_language.utils import is_iterable, make_set
+from krrood.ormatic.utils import classproperty
 
 
 @dataclass(eq=False, repr=False)
@@ -47,6 +49,15 @@ class Comparator(BinaryExpression, PerformsCartesianProduct):
         operator.gt: ">",
         operator.ge: ">=",
     }
+
+    @classproperty
+    def negations(cls) -> frozenset[Callable[[Any, Any], bool]]:
+        """
+        The operations that negate another, and so hold where it does not: on an absent
+        element (:class:`~krrood.entity_query_language.core.absence.Absence`), these
+        hold and every other comparison is false.
+        """
+        return frozenset({operator.ne, not_contains})
 
     @property
     def _product_operands_(self) -> tuple[SymbolicExpression, ...]:
@@ -82,6 +93,10 @@ class Comparator(BinaryExpression, PerformsCartesianProduct):
             self.left._process_result_(child_result),
             self.right._process_result_(child_result),
         )
+        if left_value is Absence.NO_ELEMENT or right_value is Absence.NO_ELEMENT:
+            return self._operation_result_with_value_(
+                self.operation in self.negations, child_result
+            )
         if (
             self.operation in [operator.eq, operator.ne]
             and is_iterable(left_value)
@@ -93,7 +108,18 @@ class Comparator(BinaryExpression, PerformsCartesianProduct):
                 left_value, right_value = tuple(left_value), tuple(right_value)
             else:
                 left_value, right_value = make_set(left_value), make_set(right_value)
-        comparison_result = self.operation(left_value, right_value)
+        return self._operation_result_with_value_(
+            self.operation(left_value, right_value), child_result
+        )
+
+    def _operation_result_with_value_(
+        self, comparison_result: bool, child_result: OperationResult
+    ) -> OperationResult:
+        """
+        :param comparison_result: Whether the comparison holds.
+        :param child_result: The result that has the values of both operands.
+        :return: The result with the comparison bound under this comparator.
+        """
         bindings = copy(child_result.bindings)
         bindings[self._id_] = comparison_result
         return OperationResult(

@@ -1,3 +1,8 @@
+"""
+The phrase rules that verbalize the terms of a query, such as variables, literals and
+flattened collections.
+"""
+
 from __future__ import annotations
 
 import enum
@@ -6,8 +11,9 @@ from dataclasses import fields, is_dataclass
 
 from typing_extensions import Any
 
-from krrood.entity_query_language.core.mapped_variable import FlatVariable
+from krrood.entity_query_language.core.mapped_variable import CollectionElement
 from krrood.entity_query_language.core.variable import (
+    ExpressionDomain,
     ExternallySetVariable,
     Literal,
     Variable,
@@ -70,7 +76,16 @@ class VariableRule(PhraseRule):
     construct = Variable
 
     def build(self, node: Variable, context: RuleContext) -> VerbalizationFragment:
-        """:return: The variable noun phrase (*"a Robot"* / *"the Robot"*)."""
+        """
+        :return: The variable noun phrase (*"a Robot"* / *"the Robot"*), or, for a
+            variable given no type over an expression, the expression's rendering.
+
+        >>> verbalize_expression(variable_from(variable(Worker, []).tasks))
+        'the tasks of a Worker'
+        """
+        domain = node._values_domain_
+        if isinstance(domain, ExpressionDomain) and domain.element_type is None:
+            return context.child(domain.expression, number=context.number)
         if context.as_value:
             choice = self._domain_choice(node, context)
             if choice is not None:
@@ -117,7 +132,7 @@ class VariableRule(PhraseRule):
         if not (is_enum or type_ in _PRIMITIVE_VALUE_TYPES):
             return None
         values = itertools.islice(
-            node._re_enterable_domain_generator_, MAX_SET_MEMBERS + 1
+            node._values_domain_.listed_values, MAX_SET_MEMBERS + 1
         )
         return one_of([RoleFragment.for_literal(value) for value in values])
 
@@ -277,16 +292,19 @@ class ExternalVariableRule(PhraseRule):
         return NounPhrase(head=RoleFragment.for_type(node._type_, text=type_name))
 
 
-class FlatVariableRule(PhraseRule):
+class CollectionElementRule(PhraseRule):
     """
-    A transparent SetOf wrapper → unwrap to its child (forwarding the requested number).
+    The element a path reads through → render the collection it is read from (forwarding
+    the requested number).
 
-    >>> verbalize_expression(FlatVariable(_child_=variable(Worker, []).tasks))
-    'the tasks of a Worker'
+    >>> verbalize_expression(variable(Worker, []).tasks.name)
+    'the name of the tasks of a Worker'
     """
 
-    construct = FlatVariable
+    construct = CollectionElement
 
-    def build(self, node: FlatVariable, context: RuleContext) -> VerbalizationFragment:
-        """:return: The child's rendering, unwrapped from the transparent SetOf wrapper."""
+    def build(
+        self, node: CollectionElement, context: RuleContext
+    ) -> VerbalizationFragment:
+        """:return: The rendering of the collection the element is read from."""
         return context.child(node._child_, number=context.number)

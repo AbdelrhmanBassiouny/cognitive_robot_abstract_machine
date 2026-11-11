@@ -16,6 +16,7 @@ from functools import cached_property
 from typing_extensions import Iterable
 
 from krrood.entity_query_language.core.base_expressions import (
+    Operand,
     OperationResult,
     Selectable,
     SymbolicExpression,
@@ -44,6 +45,16 @@ class QuantifiedConditional(LogicalBinaryOperator, ABC):
     only inside the quantifier, including inside the quantified variable's own domain
     expression, is local to it and is quantified together with the quantified variable.
     """
+
+    def __post_init__(self):
+        """
+        Read the quantified operand as the variable and condition it quantifies with
+        (see :meth:`~krrood.entity_query_language.core.base_expressions.Operand._quantif
+        ier_operands_`).
+        """
+        if isinstance(self.left, Operand):
+            self.left, self.right = self.left._quantifier_operands_(self.right)
+        super().__post_init__()
 
     @property
     def variable(self):
@@ -229,11 +240,17 @@ class ForAll(QuantifiedConditional):
         return values_that_satisfy_condition
 
     def evaluate_condition(self, sources: OperationResult) -> bool:
-        for condition_result in self._evaluate_child_as_condition_(
-            self.condition, sources
-        ):
-            return condition_result.is_true
-        return False
+        """
+        :param sources: A value of the quantified variable, with a candidate solution.
+        :return: Whether any evaluation of the condition under *sources* is true, as
+            :meth:`get_all_candidate_solutions` keeps a solution of any true evaluation.
+        """
+        return any(
+            condition_result.is_true
+            for condition_result in self._evaluate_child_as_condition_(
+                self.condition, sources
+            )
+        )
 
     def _invert_(self):
         return Exists(self.variable, self.condition._invert_())

@@ -318,6 +318,37 @@ class NotNumberLikeFieldError(UsageError):
 
 
 @dataclass
+class AmbiguousCollectionAttribute(UsageError):
+    """
+    Raised when an attribute is read on an expression that holds a collection, and both
+    the collection class and the element type have an attribute of that name, so it is
+    unclear whether the collection or each element is meant.
+    """
+
+    collection: Attribute
+    """
+    The attribute that holds the collection.
+    """
+
+    attribute_name: str
+    """
+    The name both the collection class and the element type have.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"'{self.attribute_name}' of {self.collection._name_} is ambiguous: both its "
+            f"collection and its elements have it."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            f"name the element with flat_variable({self.collection._name_})."
+            f"{self.attribute_name} to read it on each element."
+        )
+
+
+@dataclass
 class MultipleValuesAlongAccessPath(UsageError):
     """
     Raised when a chain is followed from a value outside query evaluation and a step maps

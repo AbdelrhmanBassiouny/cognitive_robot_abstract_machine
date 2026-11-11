@@ -1,3 +1,7 @@
+"""
+A graph of the expressions of a query, for drawing it.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -30,7 +34,6 @@ from krrood.entity_query_language.core.mapped_variable import (
     MappedVariable,
     Attribute,
     Index,
-    FlatVariable,
     Call,
 )
 from krrood.entity_query_language.operators.comparator import Comparator
@@ -198,8 +201,6 @@ class QueryGraph:
                 return f".{expression._name_.split('.')[-1]}"
             case Index():
                 return f"[{expression._name_.split('[')[-1]}"
-            case FlatVariable():
-                return "Flatten"
             case Call():
                 expression: Call
                 positional_labels = [
