@@ -912,7 +912,8 @@ class AttributeMatch(AbstractMatchExpression[T]):
 
         For a collection-valued attribute, a single value or pattern describes one
         element of the collection: a value must be in it, and some element must match a
-        pattern. A pattern evaluated before it was nested still restricts the attribute.
+        pattern. A pattern evaluated before it was nested still restricts the attribute,
+        with the conditions given to it by :meth:`Match.where`.
         """
         attribute = self.attribute
         if not isinstance(self.assigned_value, AbstractMatchExpression):
@@ -927,6 +928,7 @@ class AttributeMatch(AbstractMatchExpression[T]):
                         AND,
                         self._build_condition_on_assigned_value_(),
                         *self.assigned_value._conditions_,
+                        *self.assigned_value._where_conditions_,
                     ),
                 )
             )
