@@ -580,6 +580,12 @@ ACT_1 = [
         `∀t (hasTopping(x, t) → ¬MeatTopping(t) ∧ ¬FishTopping(t))`. `unclosed_1` is in, unlike last week in
         Protégé: the query reads the list as complete, the OWL reasoner does not. Two separate quantifiers
         would each need a topping variable of their own.
+
+        If you got 17 answers, with `american_hot_1` and `napoletana_1` among them, you wrote the condition on
+        `topping` without a quantifier: `pizza.where(not_(HasType(topping, MeatTopping)), ...)`. An unquantified
+        variable means *some*, so that query asks for the pizzas with *at least one* topping that is neither meat
+        nor fish, `∃t (hasTopping(x, t) ∧ ¬MeatTopping(t) ∧ ¬FishTopping(t))`, and lists each pizza once per
+        such topping. `plain_1` drops out because it has no topping at all.
         """
     ),
     markdown(

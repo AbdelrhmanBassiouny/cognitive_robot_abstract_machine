@@ -375,6 +375,11 @@ vegetarian = pizza.where(not_(exists(topping, or_(HasType(topping, MeatTopping),
   with <span class="code">exists</span>; Q1 is likewise <span class="code">pizza.where(for_all(topping, HasType(topping, VegetableTopping)))</span>.</p>
   <p>Answers: margherita_1, mushroom_1, veggie_1, plain_1, unclosed_1; in logic
   ¬∃<i>t</i> (hasTopping(<i>x</i>, <i>t</i>) ∧ (MeatTopping(<i>t</i>) ∨ FishTopping(<i>t</i>))).</p>
+  <p>17 answers, with american_hot_1 and napoletana_1 among them, mean the condition on
+  <span class="code">topping</span> has no quantifier, as in <span class="code nowrap">pizza.where(not_(HasType(topping, MeatTopping)), …)</span>.
+  An unquantified variable means <i>some</i>: that query asks for the pizzas with at least one topping that is neither
+  meat nor fish, ∃<i>t</i> (hasTopping(<i>x</i>, <i>t</i>) ∧ ¬MeatTopping(<i>t</i>) ∧ ¬FishTopping(<i>t</i>)), once per
+  such topping; plain_1, with no topping, drops out.</p>
   <p>Both are right; they answer different questions. The query evaluates the formula in the one interpretation the
   robot has, where the list of toppings is complete (closed world). The reasoner asks whether “vegetarian”
   <i>follows</i> from what was said, i.e. holds in every model of it; there are models in which the pizza also has
