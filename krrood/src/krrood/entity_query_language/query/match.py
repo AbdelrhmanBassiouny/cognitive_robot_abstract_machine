@@ -907,13 +907,11 @@ class AttributeMatch(AbstractMatchExpression[T]):
 
     def _resolve(self):
         """
-        Resolve the attribute assignment by creating the conditions and applying the
-        necessary mappings to the attribute.
+        Resolve the attribute assignment into conditions on the attribute.
 
-        For a collection-valued attribute, a single value or pattern describes one
-        element of the collection: a value must be in it, and some element must match a
-        pattern. A pattern evaluated before it was nested still restricts the attribute,
-        with the conditions given to it by :meth:`Match.where`.
+        On a collection-valued attribute, a value must be in the collection and some
+        element must match a pattern. A pattern evaluated before it was nested still
+        restricts the attribute, with the conditions given to it by :meth:`Match.where`.
         """
         attribute = self.attribute
         if not isinstance(self.assigned_value, AbstractMatchExpression):
