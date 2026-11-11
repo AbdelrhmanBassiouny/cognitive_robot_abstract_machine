@@ -14,6 +14,8 @@ from enum import Enum
 from pathlib import Path
 from textwrap import dedent
 
+from cartoon import Bubble, BubbleKind, Chef, Guest, Look, Mood, Robot, Scene
+
 
 # %% cells
 
@@ -141,6 +143,13 @@ def reference(text: str) -> Cell:
     return Cell(Callout.CHECK.frame(folded), code=False)
 
 
+def cartoon(scene: Scene) -> Cell:
+    """
+    :return: A Markdown cell that shows a cartoon scene of the evening, in both notebooks.
+    """
+    return Cell(scene.to_markdown(), code=False)
+
+
 def code(text: str, student: str | None = None, tags: list[str] | None = None) -> Cell:
     """
     :return: A code cell, with a different student version if one is given.
@@ -157,9 +166,8 @@ SETUP = [
 
         *Advanced Methods of AI, WiSe 2026/2027 — the notebook of the tutorial.*
 
-        Last week you *represented* the pizza world in first-order logic and in Python. Today a service robot in a
-        pizzeria *uses* that knowledge. It does so with one kind of expression, a **description** written in the
-        Entity Query Language (EQL), and the evening shows five things it can do with one:
+        Last week you *represented* the pizza world. Today a service robot *uses* it, with one kind of
+        expression: a **description** in the Entity Query Language (EQL). One evening, five uses:
 
         | Act | Story | The description is used as … | Logic |
         |:--|:--|:--|:--|
@@ -169,16 +177,24 @@ SETUP = [
         | 4&nbsp;Deriving | the kitchen writes allergen warnings | the body of a rule that creates objects | ∃ in the head, forward chaining |
         | 5&nbsp;Generating | Dana orders a pizza that does not exist yet | a specification | constructing a model |
 
-        Acts 1 and 3 *read* the knowledge base; Acts 2, 4 and 5 *write* to it.
+        **How to work.** Run the cells top to bottom; cells marked `TODO` are yours, and every cell runs as it is.
+        Each task names its language: **EQL**, **Python** or **logic** (on the worksheet). Write every
+        **Predict** on the worksheet before you run the cell.
 
-        **How to work.** Run the cells from top to bottom. Cells marked `TODO` are yours; every cell runs as it
-        is, so you can always go on. Every task names the language of its answer: **EQL** (a query),
-        **Python** (ordinary code on real objects) or **logic** (a formula, on the worksheet). Before a cell
-        marked **Predict**, write your prediction on the worksheet. Every answer is drawn as a picture of the
-        pizzeria, and the robot checks your answers: a green box when the answer is right, a red box with a hint
-        when it is not. A wrong answer costs the pizzeria a **fine**; the bill at the end adds them all up, across
-        restarts too. Compare your bill with your neighbours: the lowest wins.
+        The robot checks your answers: green when right, red with a hint when not. Every wrong answer costs the
+        pizzeria a **fine**, and the bill at the end adds them up, across restarts too. Lowest bill wins.
         """
+    ),
+    cartoon(
+        Scene(
+            [Chef(), Robot(), Guest("Ada", look=Look.ADA), Guest("Ben", look=Look.BEN), Guest("Chidi", look=Look.CHIDI)],
+            [
+                Bubble(0, "Welcome! Tonight our new robot serves you."),
+                Bubble(1, "I know every pizza in this kitchen. Just describe what you want!"),
+                Bubble(3, "Does it know I avoid milk?", BubbleKind.THOUGHT),
+            ],
+            caption="Thursday, 19:30. Every wrong answer tonight costs the pizzeria a fine.",
+        )
     ),
     markdown(
         """
@@ -536,9 +552,19 @@ ACT_1 = [
         """
         ---
         ## Act 1 · Asking: *"Which pizzas have cheese?"*
-
-        The chef needs to know which pizzas go back into the oven for a minute, so that the cheese melts.
-
+        """
+    ),
+    cartoon(
+        Scene(
+            [Chef(mood=Mood.WORRIED), Robot(mood=Mood.THINKING)],
+            [
+                Bubble(0, "Which pizzas have cheese? They go back into the oven for a minute, so it melts!"),
+                Bubble(1, "a pizza with a cheese topping, from the pizzas ...", BubbleKind.THOUGHT),
+            ],
+        )
+    ),
+    markdown(
+        """
         ### 1(a) A description is a formula with one free variable
 
         `a(Pizza)(...)` describes an object by its attributes, `.from_(pizzas)` says where to look. Without a
@@ -621,8 +647,21 @@ ACT_1 = [
         """
         ### 1(c) Following the relations
 
-        Ada at table 1 does not like spicy food: *"Is anything hot on my table?"* Patterns nest as deep as the
-        objects do: an order has pizzas, a pizza has toppings, a topping has a spiciness.
+        """
+    ),
+    cartoon(
+        Scene(
+            [Guest("Ada", Mood.WORRIED, Look.ADA), Robot(mood=Mood.THINKING)],
+            [
+                Bubble(0, "I can't stand spicy food. Is anything hot on my table?"),
+                Bubble(1, "order → pizzas → toppings → spiciness", BubbleKind.THOUGHT, code=True),
+            ],
+        )
+    ),
+    markdown(
+        """
+        Patterns nest as deep as the objects do: an order has pizzas, a pizza has toppings, a topping has a
+        spiciness.
 
         **Your turn · EQL.** Write `hot_pizzas` (the pizzas with some topping whose spiciness is `Spiciness.HOT`) and
         `hot_orders` (the orders with such a pizza). Use `an(Order)`: the query should read as English. This time
@@ -714,8 +753,20 @@ ACT_1 = [
         """
         ### 1(d) *a* or *the*?
 
-        Ben at table 2 waves: *"Bring me the pizza with olives."* A command does not name an object, it
-        describes one. `a(...)` accepts every object that fits; `the(...)` claims that *exactly one* fits and
+        """
+    ),
+    cartoon(
+        Scene(
+            [Guest("Ben", Mood.HAPPY, Look.BEN), Robot(mood=Mood.THINKING)],
+            [
+                Bubble(0, "Bring me THE pizza with olives, please!"),
+                Bubble(1, "the pizza ... so exactly one?", BubbleKind.THOUGHT),
+            ],
+        )
+    ),
+    markdown(
+        """
+        A command does not name an object, it describes one. `a(...)` accepts every object that fits; `the(...)` claims that *exactly one* fits and
         raises an exception otherwise. It is still a question, with one more demand: on the number of answers.
 
         **Predict** what the robot does for each command, then run the cell.
@@ -738,8 +789,19 @@ ACT_1 = [
     ),
     markdown(
         """
-        The robot asks back: *"The one with fish or the one without?"* Ben: *"Without fish."*
-
+        """
+    ),
+    cartoon(
+        Scene(
+            [Robot(mood=Mood.WORRIED), Guest("Ben", Mood.SHOCKED, Look.BEN)],
+            [
+                Bubble(0, "There are two. The one with fish or the one without?"),
+                Bubble(1, "Without fish!! Who puts fish next to olives?"),
+            ],
+        )
+    ),
+    markdown(
+        """
         The pattern of `toppings` already names the olive, and an attribute takes one pattern. For a further
         condition, give the topping a name, `topping = a(PizzaTopping).from_(pizza.toppings)`, and quantify over
         it in `.where(...)` with `exists(topping, φ)` or `for_all(topping, φ)`. Q1 is then
@@ -786,10 +848,22 @@ ACT_2 = [
         ---
         ## Act 2 · Defining: *"Which pizzas may carry the green V?"*
 
-        The chef prints tomorrow's menu, where a green **V** marks a vegetarian pizza. A supplier has also just
-        delivered two frozen pizzas. In Act 1 you *asked* which pizzas are vegetarian; now the word gets a
-        meaning of its own. A **definition** gives a description a name, and the name is then used to check a
-        candidate, to classify every pizza, and to conclude from the label alone.
+        """
+    ),
+    cartoon(
+        Scene(
+            [Chef(), Robot(mood=Mood.THINKING), Guest("Supplier", Mood.HAPPY, Look.DANA)],
+            [
+                Bubble(0, "Tomorrow's menu gets a green V on every vegetarian pizza!"),
+                Bubble(2, "Two frozen pizzas for you. Vegetarian? Probably."),
+                Bubble(1, "What does 'vegetarian' mean, exactly?", BubbleKind.THOUGHT),
+            ],
+        )
+    ),
+    markdown(
+        """
+        A **definition** gives a description a name. The name is then used to check a candidate, to classify
+        every pizza, and to conclude from the label alone.
 
         ### 2(a) A class declaration already says part of what a thing is
 
@@ -969,11 +1043,23 @@ ACT_2 = [
         """
         ### 2(c) Rules with exceptions
 
-        The menu gets more labels. The chef's rule of thumb:
-
-        > A pizza without meat and fish is **vegetarian**, *unless* it has no cheese either: then it is
-        > **vegan**. *Otherwise*, if it has meat, it is **meaty**.
-
+        """
+    ),
+    cartoon(
+        Scene(
+            [Chef(mood=Mood.HAPPY), Robot(mood=Mood.THINKING)],
+            [
+                Bubble(
+                    0,
+                    "No meat, no fish: vegetarian. Unless there is no cheese either: then vegan! "
+                    "Otherwise, with meat: meaty.",
+                ),
+                Bubble(1, "a default, an exception, an otherwise ...", BubbleKind.THOUGHT),
+            ],
+        )
+    ),
+    markdown(
+        """
         A rule tree states exactly this. `deduced_variable(MenuLabel)` stands for the conclusion; inside
         `with rules:`, the first `add` is the default conclusion, `refinement(condition)` is the *unless* (it
         replaces the conclusion where its condition also holds), and `alternative(condition)` is the *otherwise*
@@ -1023,8 +1109,21 @@ ACT_3 = [
         ---
         ## Act 3 · Constraining: *"Ben must never get milk."*
 
-        Ben avoids milk. Nothing in the knowledge base says *"napoletana_1 contains milk"*. It has to be computed:
-        mozzarella is a cheese, cheese contains milk, the pizza has that topping.
+        """
+    ),
+    cartoon(
+        Scene(
+            [Guest("Ben", Mood.WORRIED, Look.BEN), Robot(mood=Mood.THINKING), Chef(mood=Mood.WORRIED)],
+            [
+                Bubble(0, "I avoid milk. Last time I ended up in hospital."),
+                Bubble(2, "Nobody ever wrote down which pizza has milk!"),
+                Bubble(1, "mozzarella → cheese → milk ...", BubbleKind.THOUGHT, code=True),
+            ],
+        )
+    ),
+    markdown(
+        """
+        Nothing in the knowledge base says *"napoletana_1 contains milk"*. It has to be computed.
 
         ### 3(a) Knowledge as a function
 
@@ -1146,7 +1245,19 @@ ACT_3 = [
         """
         ### 3(c) A constraint is a query that must have no answer
 
-        That was a *question*. The kitchen also has a *rule that must never be broken*:
+        """
+    ),
+    cartoon(
+        Scene(
+            [Chef(mood=Mood.WORRIED), Robot(mood=Mood.THINKING)],
+            [
+                Bubble(0, "Rule number one: no plate ever reaches a guest who cannot eat it!"),
+                Bubble(1, "So I look for a plate that breaks it, and hope I find none.", BubbleKind.THOUGHT),
+            ],
+        )
+    ),
+    markdown(
+        """
 
         > Every pizza of an order is safe for the guest of that order:
         > `∀o ∀x (hasPizza(o, x) → IsSafeFor(x, guest(o)))`
@@ -1192,9 +1303,21 @@ ACT_4 = [
 
         ### 4(a) A rule creates objects
 
-        The predicate of Act 3 computes its answer every time it is asked. A **rule** writes its conclusion down
-        once, for later queries to use. The labels of Act 2 were such conclusions about pizzas that exist. An
-        allergen warning is different: a slip of paper on the pizza, a *new* object.
+        """
+    ),
+    cartoon(
+        Scene(
+            [Chef(), Robot(mood=Mood.HAPPY)],
+            [
+                Bubble(0, "From now on, every pizza leaves with a slip of paper: its allergens!"),
+                Bubble(1, "I write them all once, and everyone can read them later.", BubbleKind.THOUGHT),
+            ],
+        )
+    ),
+    markdown(
+        """
+        A **rule** writes its conclusion down once, for later queries to use. An allergen warning is a *new*
+        object: a slip of paper on the pizza.
         `inference(AllergenWarning)(pizza=..., allergen=...)` creates one warning for every pizza that fits the
         description given for `pizza`: the description is the body of the rule, the new warning its head.
 
@@ -1260,7 +1383,20 @@ ACT_4 = [
         """
         ### 4(b) The world moves on
 
-        It is busy. The cook mixes up two tickets and grates parmesan over `veggie_1`, Ben's pizza.
+        """
+    ),
+    cartoon(
+        Scene(
+            [Chef(mood=Mood.SHOCKED), Guest("Ben", Mood.SHOCKED, Look.BEN), Robot(mood=Mood.WORRIED)],
+            [
+                Bubble(0, "Oops. I grated parmesan over Ben's veggie_1."),
+                Bubble(1, "Is that MY pizza?!", BubbleKind.THOUGHT),
+                Bubble(2, "Which of my answers are still true?", BubbleKind.THOUGHT),
+            ],
+        )
+    ),
+    markdown(
+        """
 
         **Predict** what each of the three outputs says, then run the cell. Which of them protects Ben?
         """
@@ -1316,10 +1452,23 @@ ACT_5 = [
         ---
         ## Act 5 · Generating: *"A pizza with mozzarella and tomato, please."*
 
-        Dana sits down at table 4 and orders *"a pizza with mozzarella and tomato, nothing else"*. That is a
-        description, exactly like those of Act 1. What changes is *who answers it*. A query is a symbolic object;
-        a **backend** is something that answers it. The one you used so far *selects* existing objects that
-        fit; a generative backend *constructs* a new object that fits. Below, one and the same `wish` goes to both.
+        """
+    ),
+    cartoon(
+        Scene(
+            [Guest("Dana", Mood.HAPPY, Look.DANA), Robot(mood=Mood.THINKING), Chef()],
+            [
+                Bubble(0, "A pizza with mozzarella and tomato, nothing else, please."),
+                Bubble(2, "Take one from the counter, or shall I bake a new one?"),
+                Bubble(1, "select one ... or make one?", BubbleKind.THOUGHT),
+            ],
+        )
+    ),
+    markdown(
+        """
+        Dana's order is a description like those of Act 1; what changes is *who answers it*. A **backend**
+        answers a query: the one so far *selects* existing objects, a generative backend *constructs* a new one.
+        The same `wish` goes to both.
         """
     ),
     code(
@@ -1337,8 +1486,20 @@ ACT_5 = [
     ),
     markdown(
         """
-        A description usually leaves things open. Dana adds: *"and a green pepper, I don't mind how hot"*. `...`
-        marks what she left open.
+        """
+    ),
+    cartoon(
+        Scene(
+            [Guest("Dana", Mood.HAPPY, Look.DANA), Chef(mood=Mood.THINKING)],
+            [
+                Bubble(0, "Oh, and a green pepper. I don't mind how hot!"),
+                Bubble(1, "Mild, medium or hot, then?", BubbleKind.THOUGHT),
+            ],
+        )
+    ),
+    markdown(
+        """
+        A description usually leaves things open. `...` marks what Dana left open.
 
         **Predict:** how many pizzas does the kitchen offer?
         """
@@ -1410,10 +1571,18 @@ ACT_5 = [
         ---
         ## The bill
 
-        Every wrong answer tonight cost the pizzeria a fine: hospital bills, lost guests, a lawyer. Here is the
-        total. It keeps every fine since you first ran the notebook, even across restarts, and a wrong answer
-        costs only once. Compare it with your neighbours: the lowest bill wins.
+        It keeps every fine since you first ran the notebook, even across restarts; a wrong answer costs only once.
         """
+    ),
+    cartoon(
+        Scene(
+            [Chef(mood=Mood.SHOCKED), Robot(mood=Mood.WORRIED), Guest("Ben", Mood.HAPPY, Look.BEN)],
+            [
+                Bubble(0, "Hospital bills, a lawyer, an ambulance ... let's see tonight's bill."),
+                Bubble(1, "Please be zero. Please be zero.", BubbleKind.THOUGHT),
+                Bubble(2, "Compare with your neighbours: the lowest bill wins!"),
+            ],
+        )
     ),
     code(
         """
