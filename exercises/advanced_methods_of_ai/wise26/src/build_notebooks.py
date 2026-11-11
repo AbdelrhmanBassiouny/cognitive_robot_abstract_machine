@@ -854,8 +854,8 @@ ACT_2 = [
         Scene(
             [Chef(), Robot(mood=Mood.THINKING), Guest("Supplier", Mood.HAPPY, Look.DANA)],
             [
-                Bubble(0, "Tomorrow's menu gets a green V on every vegetarian pizza!"),
-                Bubble(2, "Two frozen pizzas for you. Vegetarian? Probably."),
+                Bubble(0, "Are your frozen pizzas vegetarian? They need a green V on the menu!"),
+                Bubble(2, "Probably? I never looked at the toppings."),
                 Bubble(1, "What does 'vegetarian' mean, exactly?", BubbleKind.THOUGHT),
             ],
         )
