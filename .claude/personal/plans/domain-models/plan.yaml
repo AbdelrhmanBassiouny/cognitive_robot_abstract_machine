@@ -58,72 +58,15 @@ items:
   status: not_started
   depends_on:
   - krrimage
-  - projection-interface
   - planar-point-interface
   branch: claude/krrood-image-depth-segmentation
-  notes: Moves cram2#761's (merged) SemDT CameraModel family into krrood_image's
-    camera extra as a PerspectiveProjection SpaceMap onto the sensor's ImagePlane. The pixel
-    coordinate system is an AffineFrame (undistorted images; a distorted one is a plain CoordinateSystem);
+  notes: Moves cram2#761's (merged) SemDT CameraModel family into krrood_image's camera extra
+    as a PerspectiveProjection SpaceMap onto the sensor's ImagePlane. The pixel coordinate
+    system is an AffineFrame (undistorted images; a distorted one is a plain CoordinateSystem);
     K is a CameraCalibration, an AffineCoordinateChange from the camera's CartesianFrame2D.
     principal_point an ImagePoint; CameraResolution and VideoResolution become Resolution,
     scaled() an ImageCoordinateChange. Adds the Image base (ColorImage, DepthImage, SegmentationImage)
     and Capture, a Role[Image]; Ray3D. Old imports stay.
-- id: projection-interface
-  title: A SpaceMap interface for maps between spaces (project, projection_line, unproject),
-    held by OrthogonalProjection and the camera, with Ray3
-  branch: claude/krrspatial-interfaces
-  track: spatial
-  status: in progress
-  pull_request_number: 527
-  session: https://claude.ai/code/session_01JxHGiNS35j6Nc3GQ87MdyP
-  depends_on:
-  - planar-point-interface
-  notes: 'Folded into #527 (c29899d7): SpaceMap[PreimagePointT, ImagePointT, ProjectionLineT, CoordinateT] in krrood_spatial_math.space_map, implemented by OrthogonalProjection (unproject''s height is now position_along_line); one law suite runs against every implementation. Ray3D is left to krrood_image''s PerspectiveProjection, since no camera projection exists yet.'
-- id: frame-checked-arithmetic
-  title: Arithmetic in krrood_spatial_math checks frames, and a transformation only applies
-    to values in its child frame
-  branch: claude/krrspatial-interfaces
-  track: spatial
-  status: in progress
-  pull_request_number: 527
-  session: https://claude.ai/code/session_01JxHGiNS35j6Nc3GQ87MdyP
-  depends_on:
-  - planar-point-interface
-  notes: 'Folded into #527 (c409fd69): a transformation raises ReferenceFrameMismatchError when its child frame and the operand''s reference frame are both set and differ, and so do point and vector addition and subtraction between two frames. Q1 decided yes by the owner without Simon; test_reference_frames changed to expect the error.'
-- id: spatial-action
-  title: Each spatial value says how a coordinate change acts on it, replacing the operand
-    lists in dot
-  branch: claude/krrspatial-interfaces
-  track: spatial
-  status: in progress
-  pull_request_number: 527
-  session: https://claude.ai/code/session_01JxHGiNS35j6Nc3GQ87MdyP
-  depends_on:
-  - planar-point-interface
-  - planar-coordinate-system
-  notes: 'Folded into #527 (c409fd69): values and changes implement TransformationOperand, RotationOperand or PlanarTransformationOperand, and the dot methods dispatch to them. Q4 and Q5 decided yes by the owner without Simon: a rotation turns a CartesianPoint3D and AxisAngle is an operand.'
-- id: planar-coordinate-system
-  title: CartesianPoint2D and Pose2D are given in a CartesianFrame2D on a EuclideanSpace2D,
-    with planar rigid changes; points of either dimension are typed CartesianPoint
-  branch: claude/krrspatial-interfaces
-  track: spatial
-  status: in progress
-  pull_request_number: 527
-  session: https://claude.ai/code/session_01JxHGiNS35j6Nc3GQ87MdyP
-  depends_on:
-  - planar-point-interface
-  notes: 'Folded into #527 (59ab32ef), which merged #549''s branch; #549 is closed. Open: whether CartesianPoint2D/Pose2D.transform refuse frames on other planes.'
-- id: spatial-math-imports
-  title: The workspace imports spatial types from krrood_spatial_math, with the decided class
-    names (Vector3D, Line3D, Pose3D)
-  branch: claude/krrspatial-interfaces
-  track: spatial
-  status: in progress
-  pull_request_number: 527
-  session: https://claude.ai/code/session_01JxHGiNS35j6Nc3GQ87MdyP
-  depends_on:
-  - planar-point-interface
-  notes: 'Folded into #527 (3179534f): Vector3D, Line3D, LineSegment3D, Pose3D and SymbolicSpatialType across the workspace, with Vector3DMapping and Pose3DMapping; no old names stay importable.'
 - id: video-on-a-plane
   title: Show a video on a plane of the world (a wall, a table top) in a camera image or through
     a projector
@@ -139,16 +82,26 @@ items:
     of its own pickup; the robot''s live capture projected onto the apartment walls while
     it works.'
 - id: planar-point-interface
-  title: 'krrood_spatial_math''s casadi-free base (spaces, coordinate systems and frames, points, coordinate changes, SpaceMap) and SemDT''s spatial types implementing it, with the folded planar, rename, projection, action and frame-check items'
+  title: krrood_spatial_math's casadi-free base (spaces, coordinate systems and frames, points,
+    coordinate changes, SpaceMap) and SemDT's spatial types implementing it, with the folded
+    planar, rename, projection, action and frame-check items
   branch: claude/krrspatial-interfaces
   pull_request_number: 527
   track: spatial
   status: in_progress
   blockers:
-  - 'CI on 32bcb2a3 (main ecc91acd merged) not yet read. Open thread: name of ValueInCartesianFrame3D (owner). Ready, not promoted. #524 must move from PlanarPoint to AffinePoint with a vector type, and conflicts with main.'
+  - 'CI on 32bcb2a3 (main ecc91acd merged) not yet read. Open thread: name of ValueInCartesianFrame3D
+    (owner). Ready, not promoted. #524 must move from PlanarPoint to AffinePoint with a vector
+    type, and conflicts with main.'
   depends_on: []
   session: https://claude.ai/code/session_01JxHGiNS35j6Nc3GQ87MdyP
-  notes: '#527 holds the casadi-free base per https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS and SemDT''s spatial types adopting it, and since 2026-11-10 also planar-coordinate-system (#549), spatial-math-imports, projection-interface, spatial-action and frame-checked-arithmetic (see their notes), and the 2026-11-10 review: AffineVector, AffineLine and the OrthogonalProjection interface, no AffinePoint2D/3D. api-break; migration in the PR description. Next: CI and review, then promote.'
+  notes: '#527 holds the casadi-free base per https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS
+    and SemDT''s spatial types adopting it, and since 2026-11-10 also planar-coordinate-system
+    (#549), spatial-math-imports, projection-interface, spatial-action and frame-checked-arithmetic
+    (see their notes), and the 2026-11-10 review: AffineVector, AffineLine and the OrthogonalProjection
+    interface, no AffinePoint2D/3D. api-break; migration in the PR description. Next: CI and
+    review, then promote. Open (from planar-coordinate-system): whether CartesianPoint2D/Pose2D.transform
+    refuse frames on other planes.'
 - id: image-coordinate-change
   title: krrood_image's ImageCoordinateChange (scale and shift per axis) for crops and resizes,
     with cv2 resampling
