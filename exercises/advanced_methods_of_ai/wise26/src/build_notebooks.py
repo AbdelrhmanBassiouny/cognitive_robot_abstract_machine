@@ -79,6 +79,7 @@ class Callout(Enum):
     TASK = ("#4a7fb5", "rgba(74, 127, 181, 0.13)")
     PREDICT = ("#c38d2c", "rgba(195, 141, 44, 0.14)")
     SOLUTION = ("#8a97a8", "rgba(138, 151, 168, 0.13)")
+    CHECK = ("#4f9a6b", "rgba(79, 154, 107, 0.13)")
 
     def frame(self, text: str) -> str:
         """
@@ -98,7 +99,7 @@ def styled(text: str) -> str:
     """
     paragraphs = dedent(text).strip("\n").split("\n\n")
     for index, paragraph in enumerate(paragraphs):
-        if paragraph.startswith(("**Your turn.**", "**How to work.**")):
+        if paragraph.startswith(("**Your turn", "**How to work.**")):
             paragraphs[index] = Callout.TASK.frame(paragraph)
         elif paragraph.startswith("**Predict"):
             paragraphs[index] = Callout.PREDICT.frame(paragraph)
@@ -126,6 +127,18 @@ def note(text: str) -> Cell:
         code=False,
         only_solution=True,
     )
+
+
+def reference(text: str) -> Cell:
+    """
+    :return: A folded box below a task that tells the student what a correct answer gives, shown in both notebooks.
+    """
+    folded = (
+        "<details>\n<summary><b>Check your result</b> (open it after running the cell)</summary>\n\n"
+        + dedent(text).strip("\n")
+        + "\n\n</details>"
+    )
+    return Cell(Callout.CHECK.frame(folded), code=False)
 
 
 def code(text: str, student: str | None = None, tags: list[str] | None = None) -> Cell:
@@ -159,8 +172,10 @@ SETUP = [
         Acts 1 and 3 *read* the knowledge base; Acts 2, 4 and 5 *write* to it.
 
         **How to work.** Run the cells from top to bottom. Cells marked `TODO` are yours; every cell runs as it
-        is, so you can always go on. Before a cell marked **Predict**, write your prediction on the worksheet.
-        Every answer is drawn as a picture of the pizzeria.
+        is, so you can always go on. Every task names the language of its answer: **EQL** (a query),
+        **Python** (ordinary code on real objects) or **logic** (a formula, on the worksheet). Before a cell
+        marked **Predict**, write your prediction on the worksheet. Below every task, *Check your result* tells
+        you how many answers to expect. Every answer is drawn as a picture of the pizzeria.
         """
     ),
     markdown(
@@ -556,8 +571,8 @@ ACT_1 = [
         A pattern can also name several classes at once, written as for `isinstance`: `MeatTopping | FishTopping`
         is a topping that is a meat topping *or* a fish topping.
 
-        **Your turn.** The menu marks the vegetarian pizzas. Write `vegetarian`: the pizzas with no meat topping
-        and no fish topping. Hint: *one* `none_is`.
+        **Your turn · EQL.** The menu marks the vegetarian pizzas. Write `vegetarian`: the pizzas with no meat
+        topping and no fish topping. Hint: *one* `none_is`.
         """
     ),
     code(
@@ -570,6 +585,7 @@ ACT_1 = [
         show("vegetarian pizzas", vegetarian)
         """,
     ),
+    reference("**5 answers.** Fewer? Check `plain_1` and `unclosed_1`."),
     note(
         """
         Five pizzas: `margherita_1`, `mushroom_1`, `veggie_1`, `plain_1`, `unclosed_1`. In logic:
@@ -586,7 +602,7 @@ ACT_1 = [
         Ada at table 1 does not like spicy food: *"Is anything hot on my table?"* Patterns nest as deep as the
         objects do: an order has pizzas, a pizza has toppings, a topping has a spiciness.
 
-        **Your turn.** Write `hot_pizzas` (the pizzas with some topping whose spiciness is `Spiciness.HOT`) and
+        **Your turn · EQL.** Write `hot_pizzas` (the pizzas with some topping whose spiciness is `Spiciness.HOT`) and
         `hot_orders` (the orders with such a pizza). Use `an(Order)`: the query should read as English. This time
         leave out `.from_`: the robot then searches its registry, which so far holds exactly tonight's objects.
         A query is itself a description, so `hot_orders` can use `hot_pizzas`.
@@ -608,6 +624,7 @@ ACT_1 = [
         show("orders with a hot pizza", hot_orders)
         """,
     ),
+    reference("**1 hot pizza** and **1 order**, even though that pizza has two hot toppings."),
     note(
         """
         `american_hot_1` and the order of table 1:
@@ -707,7 +724,7 @@ ACT_1 = [
         it in `.where(...)` with `exists(topping, φ)` or `for_all(topping, φ)`. Q1 is then
         `pizza.where(for_all(topping, HasType(topping, VegetableTopping)))`.
 
-        **Your turn.** Start from *"the pizza with olives"* and add *"and no fish"* with `.where(...)`, so that
+        **Your turn · EQL.** Start from *"the pizza with olives"* and add *"and no fish"* with `.where(...)`, so that
         `the` succeeds.
         """
     ),
@@ -724,6 +741,10 @@ ACT_1 = [
         olives_without_fish = ...   # TODO: pizza.where(...)
         refer("the pizza with olives and without fish", olives_without_fish)
         """,
+    ),
+    reference(
+        "**Exactly 1 pizza**, printed without an exception. If the robot still asks back, your condition "
+        "allows a pizza with fish."
     ),
     note(
         """
@@ -797,10 +818,11 @@ ACT_2 = [
     ),
     markdown(
         """
-        **Your turn.** On the worksheet, write each printed line as a first-order formula. Which of them could
-        ever make an object a `Pizza`, or a `VegetarianPizza`?
+        **Your turn · logic.** On the worksheet, write each printed line as a first-order formula. Which of them
+        could ever make an object a `Pizza`, or a `VegetarianPizza`?
         """
     ),
+    reference("**8 formulas**, one per printed line."),
     note(
         """
         - `every MozzarellaTopping is a CheeseTopping`: `∀x (MozzarellaTopping(x) → CheeseTopping(x))`.
@@ -1002,8 +1024,11 @@ ACT_3 = [
     ),
     markdown(
         """
-        **Your turn.** Complete `allergens`: a pizza with a cheese topping contains `Allergen.MILK`, a pizza with a
-        fish topping contains `Allergen.FISH`. Every pizza contains gluten, because of its base.
+        **Your turn · Python.** Complete `allergens`: a pizza with a cheese topping contains `Allergen.MILK`, a
+        pizza with a fish topping contains `Allergen.FISH`. Every pizza contains gluten, because of its base.
+        Inside the function, `pizza` is a real `Pizza` object, not a query: write ordinary Python, with
+        `pizza.toppings`, `isinstance` and `any`, and no `a(...)`, `HasType` or `.where`. `symbolic_function` makes
+        it usable in queries afterwards.
         """
     ),
     code(
@@ -1025,7 +1050,7 @@ ACT_3 = [
         @symbolic_function
         def allergens(pizza: Pizza) -> set[Allergen]:
             found = {Allergen.GLUTEN}
-            # TODO: add Allergen.MILK and Allergen.FISH where they apply
+            # TODO (plain Python): add Allergen.MILK and Allergen.FISH where they apply
             return found
 
 
@@ -1033,6 +1058,7 @@ ACT_3 = [
             print(f"{each_pizza.name:16}", sorted(allergen.value for allergen in allergens(each_pizza)))
         """,
     ),
+    reference("**7 lines**, one per pizza: gluten on all 7, milk on 5, fish on 1."),
     markdown(
         """
         ### 3(b) A computed relation
@@ -1042,9 +1068,13 @@ ACT_3 = [
         arguments, `__call__` decides whether it holds, and `_verbalization_fragment_` tells EQL how to say it in
         English.
 
-        **Your turn.** Complete `__call__`: a pizza is safe for a guest if it contains none of the allergens the
-        guest avoids. Note that the query uses *one* variable `pizza` twice: in `.where` and as the argument of the
-        predicate. Writing `a(Pizza)` a second time would introduce a second, unrelated pizza.
+        **Your turn · Python.** Complete `__call__`: a pizza is safe for a guest if it contains none of the
+        allergens the guest avoids. It runs on real objects: `self.pizza` is a `Pizza` and `self.guest` a `Guest`,
+        so write ordinary Python that returns `True` or `False`. `allergens` from 3(a) works here too, and gives
+        a `set`.
+
+        The query below the class is given. It uses *one* variable `pizza` twice: in `.where` and as the
+        argument of the predicate. Writing `a(Pizza)` a second time would introduce a second, unrelated pizza.
         """
     ),
     code(
@@ -1072,7 +1102,7 @@ ACT_3 = [
             guest: Guest
 
             def __call__(self) -> bool:
-                return True   # TODO
+                return True   # TODO (plain Python): True if the pizza is safe for the guest
 
             @classmethod
             def _verbalization_fragment_(cls, fields):   # how EQL says it in English; do not edit
@@ -1083,6 +1113,7 @@ ACT_3 = [
         show("what can Ben eat?", pizza.where(IsSafeFor(pizza, ben)))
         """,
     ),
+    reference("**2 answers.** All 7? Your `__call__` still returns `True` for every pizza."),
     markdown(
         """
         ### 3(c) A constraint is a query that must have no answer
@@ -1095,7 +1126,7 @@ ACT_3 = [
         Its negation is `∃o ∃x (hasPizza(o, x) ∧ ¬IsSafeFor(x, guest(o)))`. The constraint holds exactly when this
         query has **no** answer, and if it has one, the answer names the culprit.
 
-        **Your turn.** Write `dangerous`: the pairs of an order and one of its pizzas that is not safe for the
+        **Your turn · EQL.** Write `dangerous`: the pairs of an order and one of its pizzas that is not safe for the
         guest of that order. **Predict** the answer first.
         """
     ),
@@ -1113,6 +1144,7 @@ ACT_3 = [
         check("every pizza is safe for its guest", dangerous)
         """,
     ),
+    reference("**1 violation**: one pair of an order and a pizza."),
     note(
         """
         One violation: table 2, Ben, `napoletana_1` (mozzarella, hence milk). The query does not only say *that*
@@ -1141,7 +1173,7 @@ ACT_4 = [
 
         > `∀x (Pizza(x) ∧ ∃t (hasTopping(x, t) ∧ CheeseTopping(t)) → ∃w (Warning(w) ∧ about(w, x) ∧ allergen(w) = milk))`
 
-        **Your turn.** The milk rule is given. Write the rule for fish, and the rule that *every* pizza carries a
+        **Your turn · EQL.** The milk rule is given. Write the rule for fish, and the rule that *every* pizza carries a
         gluten warning (its body is just `a(Pizza).from_(pizzas)`). **Predict** the number of warnings.
         """
     ),
@@ -1186,6 +1218,7 @@ ACT_4 = [
         picture(warnings=[(warning.pizza, warning.allergen.value) for warning in warnings], title="derived warnings")
         """,
     ),
+    reference("**13 warnings**: 5 for milk, 1 for fish, 7 for gluten."),
     note(
         """
         13 warnings: 5 milk, 1 fish, 7 gluten. The head `∃w` is why new objects appear: for every answer of the
