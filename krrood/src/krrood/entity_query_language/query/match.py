@@ -992,11 +992,11 @@ class AttributeMatch(AbstractMatchExpression[T]):
 
     def _resolve(self):
         """
-        Resolve the attribute assignment into conditions on the attribute.
+        Resolve the attribute assignment into conditions on the attribute: on a
+        collection, a value must be in it, and as many elements as the pattern's
+        :class:`ElementQuantifier` states must match a pattern.
 
-        On a collection-valued attribute, a value must be in the collection, and as many
-        elements as the pattern's :class:`ElementQuantifier` states must match a
-        pattern. A pattern evaluated before it was nested keeps its :meth:`Match.where`
+        A pattern evaluated before it was nested keeps its :meth:`Match.where`
         conditions.
         """
         attribute = self.attribute
