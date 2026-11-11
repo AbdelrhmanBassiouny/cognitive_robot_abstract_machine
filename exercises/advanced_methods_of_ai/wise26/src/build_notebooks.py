@@ -171,7 +171,7 @@ SETUP = [
         """
         import importlib.util, pathlib, subprocess, sys, urllib.request
 
-        SOURCE = "https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/archive/2754b688f8fab60361c2ce91cdd5f0fa7cbe014b.zip"
+        SOURCE = "https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/archive/2ec20a0f732f8eb4f82df4a055b3ac4ecad0f8c5.zip"
         WORKSHEET = "https://raw.githubusercontent.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/claude/serene-carson-x3hvx6/exercises/advanced_methods_of_ai/wise26"
 
 
@@ -466,6 +466,7 @@ PROLOGUE = [
         | `a(Pizza)(toppings=a(CheeseTopping))` | a pizza with a cheese topping | `Pizza(x) ∧ ∃t (hasTopping(x, t) ∧ CheeseTopping(t))` |
         | `toppings=every_is(VegetableTopping)` | … whose every topping is a vegetable | `∀t (hasTopping(x, t) → VegetableTopping(t))` |
         | `toppings=none_is(CheeseTopping)` | … with no cheese topping | `¬∃t (hasTopping(x, t) ∧ CheeseTopping(t))` |
+        | `none_is(MeatTopping \\| FishTopping)` | … with no meat or fish topping | `¬∃t (hasTopping(x, t) ∧ (MeatTopping(t) ∨ FishTopping(t)))` |
         | `a(Pizza)(toppings=[A, B])` | a pizza whose topping list is exactly `[A, B]` | the whole list, in this order |
         | `a(PizzaTopping)(spiciness=Spiciness.HOT)` | a topping whose spiciness is hot | `spiciness(t) = hot` |
         | `a(Pizza)` without `.from_` | … among every pizza the robot knows | the domain is the registry |
@@ -548,28 +549,20 @@ ACT_1 = [
     ),
     markdown(
         """
-        A pattern names one class per attribute. For a condition the patterns cannot state, give the topping a
-        name, `topping = a(PizzaTopping).from_(pizza.toppings)`, and quantify over it in `.where(...)` with
-        `exists(topping, φ)` or `for_all(topping, φ)`. Q1 is then
-        `pizza.where(for_all(topping, HasType(topping, VegetableTopping)))`.
+        A pattern can also name several classes at once, written as for `isinstance`: `MeatTopping | FishTopping`
+        is a topping that is a meat topping *or* a fish topping.
 
         **Your turn.** The menu marks the vegetarian pizzas. Write `vegetarian`: the pizzas with no meat topping
-        and no fish topping. Hint: *one* `exists` whose condition is an `or_(...)`.
+        and no fish topping. Hint: *one* `none_is`.
         """
     ),
     code(
         """
-        pizza = a(Pizza).from_(pizzas)
-        topping = a(PizzaTopping).from_(pizza.toppings)
-        vegetarian = pizza.where(
-            not_(exists(topping, or_(HasType(topping, MeatTopping), HasType(topping, FishTopping))))
-        )
+        vegetarian = a(Pizza)(toppings=none_is(MeatTopping | FishTopping)).from_(pizzas)
         show("vegetarian pizzas", vegetarian)
         """,
         student="""
-        pizza = a(Pizza).from_(pizzas)
-        topping = a(PizzaTopping).from_(pizza.toppings)
-        vegetarian = ...   # TODO: pizza.where(...)
+        vegetarian = ...   # TODO: a(Pizza)(toppings=...).from_(pizzas)
         show("vegetarian pizzas", vegetarian)
         """,
     ),
@@ -578,14 +571,8 @@ ACT_1 = [
         Five pizzas: `margherita_1`, `mushroom_1`, `veggie_1`, `plain_1`, `unclosed_1`. In logic:
         `Pizza(x) ∧ ¬∃t (hasTopping(x, t) ∧ (MeatTopping(t) ∨ FishTopping(t)))`, equivalently
         `∀t (hasTopping(x, t) → ¬MeatTopping(t) ∧ ¬FishTopping(t))`. `unclosed_1` is in, unlike last week in
-        Protégé: the query reads the list as complete, the OWL reasoner does not. Two separate quantifiers
-        would each need a topping variable of their own.
-
-        If you got 17 answers, with `american_hot_1` and `napoletana_1` among them, you wrote the condition on
-        `topping` without a quantifier: `pizza.where(not_(HasType(topping, MeatTopping)), ...)`. An unquantified
-        variable means *some*, so that query asks for the pizzas with *at least one* topping that is neither meat
-        nor fish, `∃t (hasTopping(x, t) ∧ ¬MeatTopping(t) ∧ ¬FishTopping(t))`, and lists each pizza once per
-        such topping. `plain_1` drops out because it has no topping at all.
+        Protégé: the query reads the list as complete, the OWL reasoner does not. The union puts the `∨` inside
+        the one quantifier; `toppings` takes one value, so two `none_is` patterns cannot both be given.
         """
     ),
     markdown(
@@ -711,6 +698,11 @@ ACT_1 = [
         """
         The robot asks back: *"The one with fish or the one without?"* Ben: *"Without fish."*
 
+        The pattern of `toppings` already names the olive, and an attribute takes one pattern. For a further
+        condition, give the topping a name, `topping = a(PizzaTopping).from_(pizza.toppings)`, and quantify over
+        it in `.where(...)` with `exists(topping, φ)` or `for_all(topping, φ)`. Q1 is then
+        `pizza.where(for_all(topping, HasType(topping, VegetableTopping)))`.
+
         **Your turn.** Start from *"the pizza with olives"* and add *"and no fish"* with `.where(...)`, so that
         `the` succeeds.
         """
@@ -734,6 +726,11 @@ ACT_1 = [
         `veggie_1`. In logic: `∃t (hasTopping(x, t) ∧ OliveTopping(t)) ∧ ¬∃t' (hasTopping(x, t') ∧
         FishTopping(t'))`, and exactly one pizza satisfies it tonight. A good question back names a property that
         one candidate has and the other has not.
+
+        If the robot still asks back, you wrote the condition on `topping` without a quantifier:
+        `pizza.where(not_(HasType(topping, FishTopping)))`. An unquantified variable means *some*, so that query
+        asks for a pizza with *at least one* topping that is not fish, `∃t (hasTopping(x, t) ∧ ¬FishTopping(t))`,
+        which `napoletana_1` has too.
         """
     ),
 ]

@@ -107,8 +107,8 @@ notebook ran without errors in about a minute, in an environment of 0.9 GB inclu
   it, such a path matches nothing.
 - Variables over an expression, `a(PizzaTopping).from_(pizza.toppings)` (pull request #541, upstream #922, merged
   into #605). Without it, the topping is bound to the expression object instead of each topping.
-- The patterns `every_is(...)` and `none_is(...)` (pull request #606, stacked on #605 at commit `2754b688f8`, which the
-  setup cell pins).
+- The patterns `every_is(...)` and `none_is(...)`, and a union of classes such as `MeatTopping | FishTopping` in a
+  pattern (pull request #606, stacked on #605 at commit `2ec20a0f73`, which the setup cell pins).
   Without #566, `an(Order)(pizzas=hot_pizzas)` returns every order once `hot_pizzas` has been evaluated. Without
   #567, a query evaluated a second time does not see objects created since its first evaluation, so `hot_pizzas`
   asked again in Act 5 misses the kitchen's offers.

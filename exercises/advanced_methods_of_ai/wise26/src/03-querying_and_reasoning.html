@@ -368,18 +368,11 @@ pizza has no toppings at all: is every dot on it green?</div>
 
 <div class="solution">
   <div class="title">Solution</div>
-  <pre>pizza = a(Pizza).from_(pizzas)
-topping = a(PizzaTopping).from_(pizza.toppings)
-vegetarian = pizza.where(not_(exists(topping, or_(HasType(topping, MeatTopping), HasType(topping, FishTopping)))))</pre>
-  <p>A pattern names one class per attribute, so <i>no meat and no fish</i> names the topping and quantifies over it
-  with <span class="code">exists</span>; Q1 is likewise <span class="code">pizza.where(for_all(topping, HasType(topping, VegetableTopping)))</span>.</p>
+  <pre>vegetarian = a(Pizza)(toppings=none_is(MeatTopping | FishTopping)).from_(pizzas)</pre>
+  <p><i>No meat and no fish</i> is one quantifier over a union of classes: an attribute takes one pattern, so two
+  <span class="code">none_is</span> patterns cannot both be given for <span class="code">toppings</span>.</p>
   <p>Answers: margherita_1, mushroom_1, veggie_1, plain_1, unclosed_1; in logic
   ¬∃<i>t</i> (hasTopping(<i>x</i>, <i>t</i>) ∧ (MeatTopping(<i>t</i>) ∨ FishTopping(<i>t</i>))).</p>
-  <p>17 answers, with american_hot_1 and napoletana_1 among them, mean the condition on
-  <span class="code">topping</span> has no quantifier, as in <span class="code nowrap">pizza.where(not_(HasType(topping, MeatTopping)), …)</span>.
-  An unquantified variable means <i>some</i>: that query asks for the pizzas with at least one topping that is neither
-  meat nor fish, ∃<i>t</i> (hasTopping(<i>x</i>, <i>t</i>) ∧ ¬MeatTopping(<i>t</i>) ∧ ¬FishTopping(<i>t</i>)), once per
-  such topping; plain_1, with no topping, drops out.</p>
   <p>Both are right; they answer different questions. The query evaluates the formula in the one interpretation the
   robot has, where the list of toppings is complete (closed world). The reasoner asks whether “vegetarian”
   <i>follows</i> from what was said, i.e. holds in every model of it; there are models in which the pizza also has
@@ -529,6 +522,9 @@ topping = a(PizzaTopping).from_(pizza.toppings)
 olives_without_fish = pizza.where(not_(exists(topping, HasType(topping, FishTopping))))</pre>
   <p>Two quantifiers, two variables: the pattern names the olive, <span class="code">topping</span> ranges over all
   toppings. A good question back names a property that one candidate has and the other has not.</p>
+  <p>If the robot still asks back, the condition on <span class="code">topping</span> has no quantifier, as in
+  <span class="code nowrap">pizza.where(not_(HasType(topping, FishTopping)))</span>. An unquantified variable means
+  <i>some</i>: that asks for a pizza with at least one topping that is not fish, which napoletana_1 has too.</p>
   <p>Whether a description refers also depends on the <b>domain</b>: “the pizza with cheese” does not refer tonight,
   but “the pizza with cheese of table 3” does (mushroom_1). People narrow the domain by context until “the” works; a
   robot adds that context to the description, for example <span class="code">.from_(order_of_table_3.pizzas)</span>.</p>
