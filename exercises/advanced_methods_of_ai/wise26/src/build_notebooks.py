@@ -72,19 +72,23 @@ class Cell:
 
 class Callout(Enum):
     """
-    The kinds of framed paragraph in the Markdown cells, each with its border and fill colour.
+    The kinds of framed paragraph in the Markdown cells, each with its border colour and a translucent tint of it.
+    The text keeps the colour of the notebook's theme, so a box reads on light and dark themes alike.
     """
 
-    TASK = ("#1f3a5f", "#eaf0f6")
-    PREDICT = ("#9c6b1f", "#f8f2e6")
-    SOLUTION = ("#7d8a9b", "#f3f5f7")
+    TASK = ("#4a7fb5", "rgba(74, 127, 181, 0.13)")
+    PREDICT = ("#c38d2c", "rgba(195, 141, 44, 0.14)")
+    SOLUTION = ("#8a97a8", "rgba(138, 151, 168, 0.13)")
 
     def frame(self, text: str) -> str:
         """
         :return: The Markdown text inside a box with a coloured left border; without styles, the text alone.
         """
         border, fill = self.value
-        style = f"border-left: 5px solid {border}; background-color: {fill}; padding: 6px 14px"
+        style = (
+            f"border-left: 5px solid {border}; background-color: {fill}; border-radius: 0 8px 8px 0; "
+            "padding: 2px 20px; margin: 14px 0; line-height: 1.6"
+        )
         return f'<div style="{style}">\n\n{text}\n\n</div>'
 
 
@@ -101,7 +105,7 @@ def styled(text: str) -> str:
         elif paragraph.startswith(("---\n## ", "# ")):
             heading = paragraph.removeprefix("---\n")
             paragraphs[index] = (
-                f'<hr style="border: 0; border-top: 6px solid #1f3a5f; margin: 0">\n\n{heading}'
+                f'<hr style="border: 0; border-top: 4px solid #4a7fb5; margin: 28px 0 0">\n\n{heading}'
             )
     return "\n\n".join(paragraphs)
 
@@ -146,11 +150,11 @@ SETUP = [
 
         | Act | Story | The description is used as … | Logic |
         |:--|:--|:--|:--|
-        | 1 Asking | "Which pizzas have cheese?" "Bring me *the* one with olives." | a question | ∃, ∀, ¬ in one interpretation; *the* |
-        | 2 Defining | "Which pizzas may carry the green V?" | a definition | necessary and sufficient conditions, classification |
-        | 3 Constraining | "Ben must never get milk." | a constraint | ∀ checked as ¬∃¬ |
-        | 4 Deriving | the kitchen writes allergen warnings | the body of a rule that creates objects | ∃ in the head, forward chaining |
-        | 5 Generating | Dana orders a pizza that does not exist yet | a specification | constructing a model |
+        | 1&nbsp;Asking | "Which pizzas have cheese?" "Bring me *the* one with olives." | a question | ∃, ∀, ¬ in one interpretation; *the* |
+        | 2&nbsp;Defining | "Which pizzas may carry the green V?" | a definition | necessary and sufficient conditions, classification |
+        | 3&nbsp;Constraining | "Ben must never get milk." | a constraint | ∀ checked as ¬∃¬ |
+        | 4&nbsp;Deriving | the kitchen writes allergen warnings | the body of a rule that creates objects | ∃ in the head, forward chaining |
+        | 5&nbsp;Generating | Dana orders a pizza that does not exist yet | a specification | constructing a model |
 
         Acts 1 and 3 *read* the knowledge base; Acts 2, 4 and 5 *write* to it.
 
@@ -466,7 +470,7 @@ PROLOGUE = [
         | `a(Pizza)(toppings=a(CheeseTopping))` | a pizza with a cheese topping | `Pizza(x) ∧ ∃t (hasTopping(x, t) ∧ CheeseTopping(t))` |
         | `toppings=every_is(VegetableTopping)` | … whose every topping is a vegetable | `∀t (hasTopping(x, t) → VegetableTopping(t))` |
         | `toppings=none_is(CheeseTopping)` | … with no cheese topping | `¬∃t (hasTopping(x, t) ∧ CheeseTopping(t))` |
-        | `none_is(MeatTopping \\| FishTopping)` | … with no meat or fish topping | `¬∃t (hasTopping(x, t) ∧ (MeatTopping(t) ∨ FishTopping(t)))` |
+        | <code>none_is(MeatTopping &#124; FishTopping)</code> | … with no meat or fish topping | `¬∃t (hasTopping(x, t) ∧ (MeatTopping(t) ∨ FishTopping(t)))` |
         | `a(Pizza)(toppings=[A, B])` | a pizza whose topping list is exactly `[A, B]` | the whole list, in this order |
         | `a(PizzaTopping)(spiciness=Spiciness.HOT)` | a topping whose spiciness is hot | `spiciness(t) = hot` |
         | `a(Pizza)` without `.from_` | … among every pizza the robot knows | the domain is the registry |
