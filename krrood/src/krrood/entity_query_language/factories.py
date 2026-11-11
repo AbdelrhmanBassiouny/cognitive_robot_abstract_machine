@@ -74,6 +74,7 @@ from krrood.entity_query_language.predicate import (
     symbolic_function,
 )
 from krrood.entity_query_language.query.match import (
+    ElementQuantifier,
     Match,
 )
 from krrood.entity_query_language.query.quantifiers import (
@@ -621,6 +622,37 @@ def the(
     :return: The applied quantifier or the constructed match.
     """
     return _quantify_or_build_match(entity_, The, None, target_type=target_type)
+
+
+# %% Patterns over the elements of a collection
+
+
+def every(type_: type[T] | Callable[..., T]) -> Union[T, Match[T]]:
+    """
+    A pattern that every element of the collection attribute it is the value of matches:
+    each element is of *type_* and satisfies the pattern, as no element of an empty
+    collection fails to. On an attribute holding one value it is the same as :func:`a`.
+
+    :param type_: The type every element is of, or a factory building it.
+    :return: The pattern, to be given keyword arguments and conditions like :func:`a`.
+    """
+    match_ = a(type_)
+    match_._element_quantifier_ = ElementQuantifier.EVERY
+    return match_
+
+
+def no(type_: type[T] | Callable[..., T]) -> Union[T, Match[T]]:
+    """
+    A pattern that no element of the collection attribute it is the value of matches:
+    no element is of *type_* and satisfies the pattern, as an empty collection has none.
+    On an attribute holding one value, that value does not match the pattern.
+
+    :param type_: The type no matching element is of, or a factory building it.
+    :return: The pattern, to be given keyword arguments and conditions like :func:`a`.
+    """
+    match_ = a(type_)
+    match_._element_quantifier_ = ElementQuantifier.NO
+    return match_
 
 
 # %% Rules

@@ -19,6 +19,7 @@ import uuid
 from abc import ABC, abstractmethod
 from collections import deque
 from dataclasses import dataclass, field
+from enum import Enum, auto
 from functools import cached_property, lru_cache
 from inspect import isclass
 from typing_extensions import (
@@ -61,6 +62,7 @@ from krrood.entity_query_language.evaluable import Evaluable
 from krrood.entity_query_language.exceptions import (
     CalledMatchAfterResolution,
     CalledMatchMultipleTimes,
+    ElementQuantifierWithoutAttribute,
     MatchTypeCannotBeDetermined,
     PositionalArgumentsInMatchPattern,
     NoAttributeWithAccessPathName,
@@ -72,7 +74,7 @@ from krrood.entity_query_language.operators.core_logical_operators import (
     AND,
     chained_logic,
 )
-from krrood.entity_query_language.operators.logical_quantifiers import Exists
+from krrood.entity_query_language.operators.logical_quantifiers import Exists, ForAll
 from krrood.entity_query_language.predicate import HasType, length
 from krrood.entity_query_language.query.quantifiers import An, ResultQuantifier
 from krrood.entity_query_language.query.query import MatchedEntity
@@ -84,8 +86,66 @@ from krrood.rustworkx_utils.rxnode import RWXNode
 from krrood.symbol_graph.helpers import get_field_type_endpoint, get_wrapped_field
 
 if TYPE_CHECKING:
+    from krrood.entity_query_language.backends import QueryBackend
     from krrood.entity_query_language.factories import ConditionType
+    from krrood.entity_query_language.ground_term import TermReader
     from krrood.entity_query_language.query.query import Entity, Query
+
+
+# %% element quantifiers
+
+
+class ElementQuantifier(Enum):
+    """
+    How many elements of a collection attribute a pattern given as its value describes.
+    """
+
+    SOME = auto()
+    """
+    At least one element matches the pattern.
+    """
+
+    EVERY = auto()
+    """
+    Every element matches the pattern, which an empty collection satisfies.
+    """
+
+    NO = auto()
+    """
+    No element matches the pattern, which an empty collection satisfies.
+    """
+
+    def condition_on_elements(
+        self, element: CanBehaveLikeAVariable, condition: ConditionType
+    ) -> SymbolicExpression:
+        """
+        :param element: A variable over the elements of a collection.
+        :param condition: The condition of the pattern on *element*.
+        :return: The condition that this many elements satisfy *condition*.
+        """
+        match self:
+            case ElementQuantifier.SOME:
+                return Exists(element, condition)
+            case ElementQuantifier.EVERY:
+                return ForAll(element, condition)
+            case ElementQuantifier.NO:
+                return Exists(element, condition)._invert_()
+
+    def conditions_on_value(
+        self, conditions: list[ConditionType]
+    ) -> list[ConditionType]:
+        """
+        :param conditions: The conditions of the pattern on an attribute holding one
+            value.
+        :return: The conditions that the value satisfies as this many elements of a
+            collection of it alone would.
+        """
+        if self is ElementQuantifier.NO:
+            return [chained_logic(AND, *conditions)._invert_()]
+        return conditions
+
+
+# %% match expressions
 
 
 @dataclass
@@ -288,6 +348,14 @@ class Match(
 
     Defaults to ``An`` (zero or more results); set to ``The`` when built via
     ``the(...)``.
+    """
+
+    _element_quantifier_: ElementQuantifier = field(
+        init=False, default=ElementQuantifier.SOME
+    )
+    """
+    How many elements of the collection attribute this pattern is the value of it
+    describes.
     """
 
     _domain_: DomainType | None = field(default=None, init=False)
@@ -518,6 +586,22 @@ class Match(
             return
 
         self._variable_._update_domain_(_resolve_domain(self._type_, self._domain_))
+
+    def evaluate(
+        self, backend: QueryBackend | None = None, state: TermReader | None = None
+    ) -> Iterator:
+        """
+        Overrides :meth:`~krrood.entity_query_language.evaluable.Evaluable.evaluate`: a
+        pattern that states how many elements of an attribute match is not evaluated on
+        its own.
+
+        :raises ElementQuantifierWithoutAttribute: If this pattern was made with
+            :func:`~krrood.entity_query_language.factories.every` or
+            :func:`~krrood.entity_query_language.factories.no`.
+        """
+        if self._element_quantifier_ is not ElementQuantifier.SOME:
+            raise ElementQuantifierWithoutAttribute(self)
+        return super().evaluate(backend=backend, state=state)
 
     def _evaluate_natively_(self) -> Iterator:
         """
@@ -920,21 +1004,19 @@ class AttributeMatch(AbstractMatchExpression[T]):
             self._conditions_.append(self._build_condition_on_assigned_value_())
             return
 
+        element_quantifier = self.assigned_value._element_quantifier_
         if self.assigned_value._resolved_:
             self._conditions_.append(
-                Exists(
-                    self.assigned_variable,
-                    chained_logic(
-                        AND,
-                        self._build_condition_on_assigned_value_(),
-                        *self.assigned_value._conditions_,
-                    ),
-                )
+                self._condition_on_resolved_pattern_(element_quantifier)
             )
             return
 
         if not self._states_an_element_of_the_attribute_:
-            self._conditions_.extend(self._resolve_pattern_against_(attribute))
+            self._conditions_.extend(
+                element_quantifier.conditions_on_value(
+                    self._resolve_pattern_against_(attribute)
+                )
+            )
             return
 
         element = Variable(_domain_=attribute)
@@ -942,9 +1024,39 @@ class AttributeMatch(AbstractMatchExpression[T]):
         # stands for one element of the collection rather than the whole collection.
         self._variable_ = element
         self._conditions_.append(
-            Exists(
+            element_quantifier.condition_on_elements(
                 element, chained_logic(AND, *self._resolve_pattern_against_(element))
             )
+        )
+
+    def _condition_on_resolved_pattern_(
+        self, element_quantifier: ElementQuantifier
+    ) -> SymbolicExpression:
+        """
+        :param element_quantifier: How many elements of the attribute the pattern
+            describes.
+        :return: The condition that that many elements of the attribute are values of
+            the assigned pattern, which was resolved before it was nested, satisfying its
+            conditions and its :meth:`Match.where` conditions.
+        """
+        pattern_value = self.assigned_variable
+        pattern_holds = chained_logic(
+            AND,
+            *self.assigned_value._conditions_,
+            *self.assigned_value._where_conditions_,
+        )
+        if (
+            element_quantifier is ElementQuantifier.EVERY
+            and self._states_an_element_of_the_attribute_
+        ):
+            element = Variable(_domain_=self.attribute)
+            return ForAll(
+                element,
+                Exists(pattern_value, AND(pattern_value == element, pattern_holds)),
+            )
+        return element_quantifier.condition_on_elements(
+            pattern_value,
+            AND(self._build_condition_on_assigned_value_(), pattern_holds),
         )
 
     def _resolve_pattern_against_(
@@ -958,7 +1070,10 @@ class AttributeMatch(AbstractMatchExpression[T]):
         """
         self.assigned_value.resolve(variable, self)
         conditions = []
-        if self.is_type_filter_needed:
+        quantifier_states_the_type = (
+            self.assigned_value._element_quantifier_ is not ElementQuantifier.SOME
+        )
+        if self.is_type_filter_needed or quantifier_states_the_type:
             conditions.append(HasType(variable, self.assigned_value._type_))
         conditions.extend(self.assigned_value._conditions_)
         return conditions

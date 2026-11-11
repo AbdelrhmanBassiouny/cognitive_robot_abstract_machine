@@ -157,6 +157,31 @@ An attribute declared as an optional collection, such as `Optional[set[Course]]`
 collection (`None`) counts as empty: it contains no value and no element matches a pattern. `attr=None` still compares
 the attribute to `None`.
 
+### Every element and no element with `every(Type)` and `no(Type)`
+
+`every` and `no` take the place of `a` in a nested pattern to say how many elements match it:
+
+- `attr=every(Type)(...)` matches when **every** element of the collection is a `Type` that matches the pattern.
+- `attr=no(Type)(...)` matches when **no** element of the collection is a `Type` that matches the pattern.
+
+An empty or absent collection satisfies both, since it has no element that fails them. The type is stated of each
+element rather than used to pick some: `courses=every(SeminarCourse)` matches the students all of whose courses are
+seminars. Conditions given with `.where(...)` belong to the pattern, so they too hold of every element, or of none:
+
+```python
+# Students all of whose courses are taught by a dean
+a(Student)(takes_course=every(Course)(is_taught_by=a(Person)(is_dean_of=an(Organization)())))
+
+# Students taking no course worth more than 6 credits
+heavy = no(Course)
+heavy.where(heavy.credits > 6)
+a(Student)(takes_course=heavy).from_(students)
+```
+
+On an attribute holding one value, `every(Type)` is the same as `a(Type)`, and `no(Type)(...)` matches when the value
+does not match the pattern. A pattern made with `every` or `no` describes elements of an attribute, so evaluating one
+on its own raises {py:class}`~krrood.entity_query_language.exceptions.ElementQuantifierWithoutAttribute`.
+
 ## Full Example: Finding Connected Parts
 
 This example demonstrates how to find a complex structural relationship using nested matches.
@@ -202,4 +227,6 @@ print(f"Found connection: {result.parent.name} <-> {result.child.name}")
 ## API Reference
 - {py:func}`~krrood.entity_query_language.factories.an`
 - {py:func}`~krrood.entity_query_language.factories.the`
+- {py:func}`~krrood.entity_query_language.factories.every`
+- {py:func}`~krrood.entity_query_language.factories.no`
 - {py:class}`~krrood.entity_query_language.query.match.Match`

@@ -85,7 +85,8 @@ variable over the parts is needed, and the path behaves as follows:
   the element type both have raises
   {py:class}`~krrood.entity_query_language.exceptions.AmbiguousCollectionAttribute`.
 
-To say *no* part or *every* part, quantify over a named element:
+To say *no* part or *every* part, use the patterns `no(ExamplePart)(...)` and `every(ExamplePart)(...)` of
+[matching](match.md), or quantify over a named element:
 
 ```python
 part = variable_from(robot.parts)

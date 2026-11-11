@@ -116,3 +116,13 @@ class Tally(Symbol):
     """
     The marks of the tally.
     """
+
+
+# %% subtypes of an element
+
+
+@dataclass(eq=False)
+class Fruit(Product):
+    """
+    A product that is a fruit.
+    """

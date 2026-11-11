@@ -318,6 +318,36 @@ class NotNumberLikeFieldError(UsageError):
 
 
 @dataclass
+class ElementQuantifierWithoutAttribute(UsageError):
+    """
+    Raised when a pattern made with :func:`~krrood.entity_query_language.factories.every`
+    or :func:`~krrood.entity_query_language.factories.no` is not the value of an
+    attribute of another pattern, so there are no elements whose number it states.
+    """
+
+    pattern: Match
+    """
+    The pattern that is quantified over the elements of no attribute.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.pattern._element_quantifier_.name.lower()}"
+            f"({self.pattern._type_.__name__}) "
+            f"states how many elements of an attribute match, but it is not the value "
+            f"of an attribute of another pattern."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            f"give it as the value of a collection attribute, as in "
+            f"a(Shelf)(products=every(Product)(...)), or write "
+            f"a({self.pattern._type_.__name__}) "
+            f"for a pattern of its own."
+        )
+
+
+@dataclass
 class AmbiguousCollectionAttribute(UsageError):
     """
     Raised when an attribute is read on an expression that holds a collection, and both
@@ -343,7 +373,7 @@ class AmbiguousCollectionAttribute(UsageError):
 
     def suggest_correction(self) -> str:
         return (
-            f"name the element with flat_variable({self.collection._name_})."
+            f"name the element with variable_from({self.collection._name_})."
             f"{self.attribute_name} to read it on each element."
         )
 
