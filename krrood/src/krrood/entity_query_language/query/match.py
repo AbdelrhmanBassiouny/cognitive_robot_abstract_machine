@@ -609,8 +609,8 @@ class Match(
         its own.
 
         :raises ElementQuantifierWithoutAttribute: If this pattern was made with
-            :func:`~krrood.entity_query_language.factories.every` or
-            :func:`~krrood.entity_query_language.factories.no`.
+            :func:`~krrood.entity_query_language.factories.every_is` or
+            :func:`~krrood.entity_query_language.factories.none_is`.
         """
         if self._element_quantifier_ is not ElementQuantifier.SOME:
             raise ElementQuantifierWithoutAttribute(self)

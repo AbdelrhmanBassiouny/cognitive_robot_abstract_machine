@@ -627,7 +627,7 @@ def the(
 # %% Patterns over the elements of a collection
 
 
-def every(type_: type[T] | Callable[..., T]) -> Union[T, Match[T]]:
+def every_is(type_: type[T] | Callable[..., T]) -> Union[T, Match[T]]:
     """
     A pattern that every element of the collection attribute it is the value of matches:
     each element is of *type_* and satisfies the pattern, as no element of an empty
@@ -641,7 +641,7 @@ def every(type_: type[T] | Callable[..., T]) -> Union[T, Match[T]]:
     return match_
 
 
-def no(type_: type[T] | Callable[..., T]) -> Union[T, Match[T]]:
+def none_is(type_: type[T] | Callable[..., T]) -> Union[T, Match[T]]:
     """
     A pattern that no element of the collection attribute it is the value of matches:
     no element is of *type_* and satisfies the pattern, as an empty collection has none.

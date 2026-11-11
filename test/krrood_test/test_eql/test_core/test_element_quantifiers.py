@@ -1,5 +1,5 @@
 """
-Tests for the patterns :func:`every` and :func:`no`, which state how many elements of a
+Tests for the patterns :func:`every_is` and :func:`none_is`, which state how many elements of a
 collection attribute match a pattern, as :func:`a` states that some element does.
 """
 
@@ -10,7 +10,7 @@ from dataclasses import dataclass
 import pytest
 
 from krrood.entity_query_language.exceptions import ElementQuantifierWithoutAttribute
-from krrood.entity_query_language.factories import a, every, no
+from krrood.entity_query_language.factories import a, every_is, none_is
 
 from ...dataset.collection_attribute_paths import Colour, Fruit, Product, Shelf
 from ...dataset.journeys import Journey, Route, Stop
@@ -80,28 +80,30 @@ def test_every_element_matches_the_pattern(store):
     """
     Every product of a shelf is red, vacuously so for the empty shelf.
     """
-    shelves = a(Shelf)(products=every(Product)(colour=Colour.RED)).from_(store.shelves)
+    shelves = a(Shelf)(products=every_is(Product)(colour=Colour.RED)).from_(
+        store.shelves
+    )
 
     assert shelves.tolist() == [store.empty_shelf, store.red_fruit_shelf]
 
 
 def test_every_element_is_of_the_pattern_type(store):
     """
-    The type of :func:`every` is stated of every element, not used to pick some.
+    The type of :func:`every_is` is stated of every element, not used to pick some.
     """
-    shelves = a(Shelf)(products=every(Fruit)).from_(store.shelves)
+    shelves = a(Shelf)(products=every_is(Fruit)).from_(store.shelves)
 
     assert shelves.tolist() == [store.empty_shelf, store.red_fruit_shelf]
 
 
-def test_every_on_a_single_value_matches_like_a(store):
+def test_every_is_on_a_single_value_matches_like_a(store):
     """
-    On a field holding one object, every is the same as a.
+    On a field holding one object, :func:`every_is` is the same as :func:`a`.
     """
     harbour = Stop("harbour")
     journeys = [Journey("by sea", Route([harbour])), Journey("overland", Route())]
 
-    every_route = a(Journey)(route=every(Route)(stops=[harbour])).from_(journeys)
+    every_route = a(Journey)(route=every_is(Route)(stops=[harbour])).from_(journeys)
     a_route = a(Journey)(route=a(Route)(stops=[harbour])).from_(journeys)
 
     assert every_route.tolist() == a_route.tolist() == [journeys[0]]
@@ -114,19 +116,21 @@ def test_no_element_matches_the_pattern(store):
     """
     No product of a shelf is red, vacuously so for the empty shelf.
     """
-    shelves = a(Shelf)(products=no(Product)(colour=Colour.RED)).from_(store.shelves)
+    shelves = a(Shelf)(products=none_is(Product)(colour=Colour.RED)).from_(
+        store.shelves
+    )
 
     assert shelves.tolist() == [store.empty_shelf, store.green_shelf]
 
 
-def test_no_on_a_single_value_negates_the_pattern(store):
+def test_none_is_on_a_single_value_negates_the_pattern(store):
     """
-    On a field holding one object, no states that the object does not match.
+    On a field holding one object, :func:`none_is` states that the object does not match.
     """
     harbour = Stop("harbour")
     journeys = [Journey("by sea", Route([harbour])), Journey("overland", Route())]
 
-    result = a(Journey)(route=no(Route)(stops=[harbour])).from_(journeys)
+    result = a(Journey)(route=none_is(Route)(stops=[harbour])).from_(journeys)
 
     assert result.tolist() == [journeys[1]]
 
@@ -136,9 +140,9 @@ def test_no_on_a_single_value_negates_the_pattern(store):
 
 def test_condition_on_every_element(store):
     """
-    A condition given to :func:`every` with :meth:`where` holds of every element.
+    A condition given to :func:`every_is` with :meth:`where` holds of every element.
     """
-    light = every(Product)
+    light = every_is(Product)
     light.where(light.weight < 0.15)
 
     shelves = a(Shelf)(products=light).from_(store.shelves)
@@ -148,9 +152,9 @@ def test_condition_on_every_element(store):
 
 def test_condition_on_no_element(store):
     """
-    A condition given to :func:`no` with :meth:`where` holds of no element.
+    A condition given to :func:`none_is` with :meth:`where` holds of no element.
     """
-    heavy = no(Product)
+    heavy = none_is(Product)
     heavy.where(heavy.weight > 0.15)
 
     shelves = a(Shelf)(products=heavy).from_(store.shelves)
@@ -161,7 +165,7 @@ def test_condition_on_no_element(store):
 # %% misuse
 
 
-@pytest.mark.parametrize("quantifier", [every, no])
+@pytest.mark.parametrize("quantifier", [every_is, none_is])
 def test_element_quantifier_outside_an_attribute_is_rejected(store, quantifier):
     """
     A pattern that is not the value of an attribute has no elements to quantify.

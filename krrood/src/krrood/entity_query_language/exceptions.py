@@ -320,8 +320,8 @@ class NotNumberLikeFieldError(UsageError):
 @dataclass
 class ElementQuantifierWithoutAttribute(UsageError):
     """
-    Raised when a pattern made with :func:`~krrood.entity_query_language.factories.every`
-    or :func:`~krrood.entity_query_language.factories.no` is not the value of an
+    Raised when a pattern made with :func:`~krrood.entity_query_language.factories.every_is`
+    or :func:`~krrood.entity_query_language.factories.none_is` is not the value of an
     attribute of another pattern, so there are no elements whose number it states.
     """
 
@@ -341,7 +341,7 @@ class ElementQuantifierWithoutAttribute(UsageError):
     def suggest_correction(self) -> str:
         return (
             f"give it as the value of a collection attribute, as in "
-            f"a(Shelf)(products=every(Product)(...)), or write "
+            f"a(Shelf)(products=every_is(Product)(...)), or write "
             f"a({self.pattern._type_.__name__}) "
             f"for a pattern of its own."
         )
