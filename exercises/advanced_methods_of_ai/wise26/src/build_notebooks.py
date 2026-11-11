@@ -81,7 +81,7 @@ class Callout(Enum):
     TASK = ("#4a7fb5", "rgba(74, 127, 181, 0.13)")
     PREDICT = ("#c38d2c", "rgba(195, 141, 44, 0.14)")
     SOLUTION = ("#8a97a8", "rgba(138, 151, 168, 0.13)")
-    CHECK = ("#4f9a6b", "rgba(79, 154, 107, 0.13)")
+    PEN_BREAK = ("#7a5aa6", "rgba(122, 90, 166, 0.13)")
 
     def frame(self, text: str) -> str:
         """
@@ -97,7 +97,8 @@ class Callout(Enum):
 
 def styled(text: str) -> str:
     """
-    :return: The Markdown text with tasks and predictions framed and the rule above an act drawn in the theme colour.
+    :return: The Markdown text with tasks, predictions and pen breaks framed and the rule above an act drawn in the
+        theme colour.
     """
     paragraphs = dedent(text).strip("\n").split("\n\n")
     for index, paragraph in enumerate(paragraphs):
@@ -105,6 +106,8 @@ def styled(text: str) -> str:
             paragraphs[index] = Callout.TASK.frame(paragraph)
         elif paragraph.startswith("**Predict"):
             paragraphs[index] = Callout.PREDICT.frame(paragraph)
+        elif paragraph.startswith("**Pen break"):
+            paragraphs[index] = Callout.PEN_BREAK.frame(paragraph)
         elif paragraph.startswith(("---\n## ", "# ")):
             heading = paragraph.removeprefix("---\n")
             paragraphs[index] = (
@@ -131,23 +134,19 @@ def note(text: str) -> Cell:
     )
 
 
-def reference(text: str) -> Cell:
-    """
-    :return: A folded box below a task that tells the student what a correct answer gives, shown in both notebooks.
-    """
-    folded = (
-        "<details>\n<summary><b>Check your result</b> (open it after running the cell)</summary>\n\n"
-        + dedent(text).strip("\n")
-        + "\n\n</details>"
-    )
-    return Cell(Callout.CHECK.frame(folded), code=False)
-
-
 def cartoon(scene: Scene) -> Cell:
     """
     :return: A Markdown cell that shows a cartoon scene of the evening, in both notebooks.
     """
     return Cell(scene.to_markdown(), code=False)
+
+
+def guesses(solution: str, student: str) -> Cell:
+    """
+    :return: A code cell in which the student writes a prediction before running the cell that answers it; the
+        solution notebook shows the right guesses.
+    """
+    return Cell(solution, student_source=student)
 
 
 def code(text: str, student: str | None = None, tags: list[str] | None = None) -> Cell:
@@ -178,11 +177,13 @@ SETUP = [
         | 5&nbsp;Generating | Dana orders a pizza that does not exist yet | a specification | constructing a model |
 
         **How to work.** Run the cells top to bottom; cells marked `TODO` are yours, and every cell runs as it is.
-        Each task names its language: **EQL**, **Python** or **logic** (on the worksheet). Write every
-        **Predict** on the worksheet before you run the cell.
+        Before a **Predict** cell runs, type your guess into the cell above it: the robot then tells you what
+        surprised you, and why. A guess is never fined.
 
         The robot checks your answers: green when right, red with a hint when not. Every wrong answer costs the
         pizzeria a **fine**, and the bill at the end adds them up, across restarts too.
+
+        Three times tonight the tutor calls a **pen break**: laptops aside, and you write the logic on the sheet.
         """
     ),
     cartoon(
@@ -277,7 +278,7 @@ PROLOGUE = [
         from krrood.patterns.role import Role
         from krrood.symbol_graph.symbol_graph import Symbol
 
-        from answer_check import AnswerChecker, Task
+        from answer_check import AnswerChecker, HowManyFit, Prediction, Predictions, Task
         from kitchen_picture import Colour, KitchenPicture, legend_svg
         """,
         tags=["knowledge-base"],
@@ -415,7 +416,7 @@ PROLOGUE = [
         """
         The next cell defines how the robot shows its answers: `show` for a question, `refer` for a question
         about *the* one object, `check` for a constraint. Given a `Task`, they also check the answer against the
-        solution. Run it; reading it is optional.
+        solution; given a `Prediction`, they compare it with your `guess`. Run it; reading it is optional.
         """
     ),
     code(
@@ -439,6 +440,7 @@ PROLOGUE = [
 
 
         checker = AnswerChecker()
+        predictions = Predictions()
 
 
         def grade(task, answers):
@@ -447,7 +449,18 @@ PROLOGUE = [
                 display(checker.check(task, None if answers is None else [str(answer) for answer in answers]))
 
 
-        def show(title, query, task=None):
+        def guess(prediction, value):
+            # Note your prediction, before you run the cell that answers it.
+            display(predictions.record(prediction, value))
+
+
+        def reveal(prediction, found):
+            # Compare your guess with what the robot found, and say why it is so.
+            if prediction is not None:
+                display(predictions.reveal(prediction, found))
+
+
+        def show(title, query, task=None, prediction=None):
             # A question: print every answer and ring it in the picture.
             if query is ...:
                 print(f"{title}: TODO")
@@ -458,10 +471,12 @@ PROLOGUE = [
             for row in rows:
                 print("   ", row[0] if len(row) == 1 else row)
             picture(marked=[value for row in rows for value in row], title=title)
-            grade(task, [", ".join(str(value) for value in row) for row in rows])
+            answers = [", ".join(str(value) for value in row) for row in rows]
+            grade(task, answers)
+            reveal(prediction, answers)
 
 
-        def refer(title, description, task=None):
+        def refer(title, description, task=None, prediction=None):
             # A reference: the description must pick out exactly one object.
             if description is ...:
                 print(f"{title}: TODO")
@@ -472,18 +487,21 @@ PROLOGUE = [
             except NoSolutionFound:
                 print(f"{title}: nothing fits. The description does not refer.")
                 grade(task, [])
+                reveal(prediction, HowManyFit.NONE)
                 return
             except MultipleSolutionFound:
                 print(f"{title}: more than one object fits. The robot has to ask back.")
                 if task is not None:
                     display(checker.check_ambiguous(task))
+                reveal(prediction, HowManyFit.SEVERAL)
                 return
             print(f"{title}: {referent}")
             picture(marked=[referent], title=title)
             grade(task, [referent])
+            reveal(prediction, HowManyFit.ONE)
 
 
-        def check(title, constraint, task=None):
+        def check(title, constraint, task=None, prediction=None):
             # A constraint: every answer is a violation; the picture draws it in red.
             if constraint is ...:
                 print(f"{title}: TODO")
@@ -497,7 +515,9 @@ PROLOGUE = [
             violations = [(order, pizza) for row in rows for order in row if isinstance(order, Order)
                           for pizza in row if isinstance(pizza, Pizza)]
             picture(violations=violations, title=title)
-            grade(task, [", ".join(str(value) for value in row) for row in rows])
+            answers = [", ".join(str(value) for value in row) for row in rows]
+            grade(task, answers)
+            reveal(prediction, answers)
 
 
         display(SVG(legend_svg()))
@@ -516,7 +536,7 @@ PROLOGUE = [
         """
         ### EQL in one table
 
-        Keep this table at hand; it is also on page 3 of the worksheet.
+        Keep this table at hand.
 
         | EQL | Read it as | First-order logic |
         |:--|:--|:--|
@@ -587,20 +607,34 @@ ACT_1 = [
         topping is …* and *no topping is …*. Each query below introduces its own variables, just as every formula
         binds its own.
 
-        **Predict** on the worksheet which pizzas each query returns, then run the cell. Watch `plain_1` (no
-        toppings) and `unclosed_1` (only mozzarella).
+        **Predict** which pizzas each query of the cell after next returns: type your guesses into the next
+        cell and run it, then run the queries. Watch `plain_1` (no toppings) and `unclosed_1` (only mozzarella).
         """
+    ),
+    guesses(
+        """
+        guess(Prediction.EVERY_TOPPING_A_VEGETABLE, {"veggie_1", "plain_1"})
+        guess(Prediction.EXACTLY_MOZZARELLA_AND_TOMATO, {"margherita_1"})
+        guess(Prediction.NO_CHEESE, {"veggie_1", "plain_1"})
+        """,
+        """
+        # TODO: in place of each ..., the set of the names of the pizzas, such as {"name_1", "name_2"}
+        guess(Prediction.EVERY_TOPPING_A_VEGETABLE, ...)
+        guess(Prediction.EXACTLY_MOZZARELLA_AND_TOMATO, ...)
+        guess(Prediction.NO_CHEESE, ...)
+        """,
     ),
     code(
         """
         only_vegetables = a(Pizza)(toppings=every_is(VegetableTopping)).from_(pizzas)
-        show("Q1  every topping is a vegetable", only_vegetables)
+        show("Q1  every topping is a vegetable", only_vegetables, prediction=Prediction.EVERY_TOPPING_A_VEGETABLE)
 
         exactly_these = a(Pizza)(toppings=[a(MozzarellaTopping), a(TomatoTopping)]).from_(pizzas)
-        show("Q2  the toppings are [a mozzarella, a tomato]", exactly_these)
+        show("Q2  the toppings are [a mozzarella, a tomato]", exactly_these,
+             prediction=Prediction.EXACTLY_MOZZARELLA_AND_TOMATO)
 
         no_cheese = a(Pizza)(toppings=none_is(CheeseTopping)).from_(pizzas)
-        show("Q3  no topping is a cheese", no_cheese)
+        show("Q3  no topping is a cheese", no_cheese, prediction=Prediction.NO_CHEESE)
         """
     ),
     note(
@@ -700,8 +734,18 @@ ACT_1 = [
         `.where(...)` it filters: the pizza is kept when one of its toppings passes, and returned once. Every
         writing of the same path means the same topping.
 
-        **Predict** what the second query returns. Is it the pizzas with *no* hot topping? Watch `plain_1`.
+        **Predict** what the second query of the cell after next returns. Is it the pizzas with *no* hot topping?
+        Watch `plain_1`.
         """
+    ),
+    guesses(
+        """
+        guess(Prediction.SOME_TOPPING_NOT_HOT, {"margherita_1", "napoletana_1", "american_hot_1", "mushroom_1",
+                                                "veggie_1", "plain_1", "unclosed_1"})
+        """,
+        """
+        guess(Prediction.SOME_TOPPING_NOT_HOT, ...)   # TODO: the set of the names of the pizzas
+        """,
     ),
     code(
         """
@@ -709,7 +753,8 @@ ACT_1 = [
         show("a topping is hot", pizza.where(pizza.toppings.spiciness == Spiciness.HOT))
 
         pizza = a(Pizza).from_(pizzas)
-        show("a topping is not hot", pizza.where(not_(pizza.toppings.spiciness == Spiciness.HOT)))
+        show("a topping is not hot", pizza.where(not_(pizza.toppings.spiciness == Spiciness.HOT)),
+             prediction=Prediction.SOME_TOPPING_NOT_HOT)
         """
     ),
     note(
@@ -731,6 +776,14 @@ ACT_1 = [
         **Predict:** how many answers, and why not one?
         """
     ),
+    guesses(
+        """
+        guess(Prediction.HOT_TOPPING_BINDINGS, 2)
+        """,
+        """
+        guess(Prediction.HOT_TOPPING_BINDINGS, ...)   # TODO: a number
+        """,
+    ),
     code(
         """
         order = an(Order).from_(orders)
@@ -738,7 +791,7 @@ ACT_1 = [
         topping = a(PizzaTopping).from_(pizza.toppings)       # a topping of that pizza
 
         what_is_hot = set_of(order.guest, pizza, topping).where(topping.spiciness == Spiciness.HOT)
-        show("who gets which hot topping", what_is_hot)
+        show("who gets which hot topping", what_is_hot, prediction=Prediction.HOT_TOPPING_BINDINGS)
         """
     ),
     note(
@@ -769,14 +822,31 @@ ACT_1 = [
         A command does not name an object, it describes one. `a(...)` accepts every object that fits; `the(...)` claims that *exactly one* fits and
         raises an exception otherwise. It is still a question, with one more demand: on the number of answers.
 
-        **Predict** what the robot does for each command, then run the cell.
+        **Predict** what the robot does for each command: `HowManyFit.NONE`, `HowManyFit.ONE` or
+        `HowManyFit.SEVERAL`.
         """
+    ),
+    guesses(
+        """
+        guess(Prediction.THE_PIZZA_WITH_HAM, HowManyFit.NONE)
+        guess(Prediction.THE_PIZZA_WITH_FISH, HowManyFit.ONE)
+        guess(Prediction.THE_PIZZA_WITH_OLIVES, HowManyFit.SEVERAL)
+        """,
+        """
+        # TODO: in place of each ..., HowManyFit.NONE, HowManyFit.ONE or HowManyFit.SEVERAL
+        guess(Prediction.THE_PIZZA_WITH_HAM, ...)
+        guess(Prediction.THE_PIZZA_WITH_FISH, ...)
+        guess(Prediction.THE_PIZZA_WITH_OLIVES, ...)
+        """,
     ),
     code(
         """
-        refer("the pizza with ham", the(Pizza)(toppings=a(HamTopping)).from_(pizzas))
-        refer("the pizza with fish", the(Pizza)(toppings=a(FishTopping)).from_(pizzas))
-        refer("the pizza with olives", the(Pizza)(toppings=a(OliveTopping)).from_(pizzas))
+        refer("the pizza with ham", the(Pizza)(toppings=a(HamTopping)).from_(pizzas),
+              prediction=Prediction.THE_PIZZA_WITH_HAM)
+        refer("the pizza with fish", the(Pizza)(toppings=a(FishTopping)).from_(pizzas),
+              prediction=Prediction.THE_PIZZA_WITH_FISH)
+        refer("the pizza with olives", the(Pizza)(toppings=a(OliveTopping)).from_(pizzas),
+              prediction=Prediction.THE_PIZZA_WITH_OLIVES)
         """
     ),
     note(
@@ -835,6 +905,28 @@ ACT_1 = [
         `pizza.where(not_(HasType(topping, FishTopping)))`. An unquantified variable means *some*, so that query
         asks for a pizza with *at least one* topping that is not fish, `∃t (hasTopping(x, t) ∧ ¬FishTopping(t))`,
         which `napoletana_1` has too.
+        """
+    ),
+    markdown(
+        """
+        ---
+        ## Pen break 1
+        """
+    ),
+    cartoon(
+        Scene(
+            [Chef(mood=Mood.HAPPY), Robot(mood=Mood.HAPPY)],
+            [
+                Bubble(0, "Pens out, everyone! The robot needs five minutes to cool down."),
+                Bubble(1, "recharging ... ∃ ∀ ¬ ...", BubbleKind.THOUGHT),
+            ],
+        )
+    ),
+    markdown(
+        """
+        **Pen break 1 · on paper.** Put the laptop aside and take the sheet, *Pen break 1: Asking*. Write for five
+        minutes, alone or with your neighbour. Then the tutor writes an answer on the board and takes your
+        questions, and you come back here for Act 2.
         """
     ),
 ]
@@ -909,23 +1001,8 @@ ACT_2 = [
     ),
     markdown(
         """
-        **Your turn · logic.** On the worksheet, write each printed line as a first-order formula. Which of them
-        could ever make an object a `Pizza`, or a `VegetarianPizza`?
-        """
-    ),
-    reference(
-        """
-        You should have one formula per printed line. Each kind of line has its own pattern:
-
-        | Printed line | Becomes |
-        |:--|:--|
-        | `every A is a B` | an implication between two classes: `∀x (MozzarellaTopping(x) → CheeseTopping(x))` |
-        | `every A has r, each a B` | a *relation* `r(x, y)` between an `A` and each of its `B`s |
-        | `every A has a r, which is a B` | a *function* `r(x)` whose value is a `B` |
-        | `every A is a role of one B` | a *function* from the role to the one `B` that takes it |
-
-        For the question: look at which class names stand on the right of `→`, and ask what must already be
-        true about an object before that formula says anything about it.
+        Each printed line is a statement about every object of a class. In pen break 2 you will write them as
+        formulas.
         """
     ),
     note(
@@ -955,9 +1032,17 @@ ACT_2 = [
         left to right, it is *necessary*: whatever is vegetarian satisfies it. In EQL the right-hand side is a
         condition on one pizza variable, the vegetarian query of Act 1 with a name.
 
-        **Predict** whether the robot accepts `frozen_1` (mozzarella, ham) and `frozen_2` (tomato, capers) for
-        the green V, then run the cell.
+        **Predict** which of `frozen_1` (mozzarella, ham) and `frozen_2` (tomato, capers) the robot accepts for
+        the green V.
         """
+    ),
+    guesses(
+        """
+        guess(Prediction.ACCEPTED_FROZEN_PIZZAS, {"frozen_2"})
+        """,
+        """
+        guess(Prediction.ACCEPTED_FROZEN_PIZZAS, ...)   # TODO: the set of the names of the accepted pizzas
+        """,
     ),
     code(
         """
@@ -987,6 +1072,7 @@ ACT_2 = [
         for candidate, verdict in verdicts:
             print(candidate, verdict)
         picture(notes=verdicts, more_pizzas=[frozen_1, frozen_2], title="two frozen pizzas, checked")
+        reveal(Prediction.ACCEPTED_FROZEN_PIZZAS, [candidate for candidate, verdict in verdicts if verdict == "accepted"])
         """,
     ),
     markdown(
@@ -1020,15 +1106,29 @@ ACT_2 = [
         The classification above looked only at `.from_(pizzas)`, tonight's counter. The same question can be put
         to the registry, by leaving `.from_` out.
 
-        **Predict** whether the two answers differ, then run the cell.
+        **Predict** which pizzas the registry answers that the counter does not; the empty set `set()` if none.
         """
+    ),
+    guesses(
+        """
+        guess(Prediction.ONLY_IN_THE_REGISTRY, {"frozen_2"})
+        """,
+        """
+        guess(Prediction.ONLY_IN_THE_REGISTRY, ...)   # TODO: a set of names, or set()
+        """,
     ),
     code(
         """
         pizza = a(Pizza)
-        show("vegetarian, in the registry", pizza.where(is_vegetarian_pizza(pizza)))
+        in_the_registry = pizza.where(is_vegetarian_pizza(pizza))
+        show("vegetarian, in the registry", in_the_registry)
+
         pizza = a(Pizza).from_(pizzas)
-        show("vegetarian, on the counter", pizza.where(is_vegetarian_pizza(pizza)))
+        on_the_counter = pizza.where(is_vegetarian_pizza(pizza))
+        show("vegetarian, on the counter", on_the_counter)
+
+        reveal(Prediction.ONLY_IN_THE_REGISTRY,
+               {str(each) for each in in_the_registry.tolist()} - {str(each) for each in on_the_counter.tolist()})
         """
     ),
     note(
@@ -1037,20 +1137,6 @@ ACT_2 = [
         registry, but they are not on tonight's menu. The registry is everything the robot has ever created;
         `.from_(...)` is the domain the question is about. `accepts` puts the domain into words as
         `.from_([candidate])`: a check is about one object, and nothing else should answer it.
-        """
-    ),
-    markdown(
-        """
-        **Think** (on the worksheet). A pizza from the other branch arrives with a green V; nobody wrote down its
-        toppings. What may the robot tell Chidi, who avoids fish? And Ben, who avoids milk?
-        """
-    ),
-    note(
-        """
-        Chidi: it is safe, by the *necessary* direction. `VegetarianPizza(x) → ¬∃t (hasTopping(x, t) ∧
-        FishTopping(t))` follows from the name alone, without looking at the pizza. Ben: nothing, because the
-        definition says nothing about cheese. No query of Act 1 could answer this, since the toppings are
-        unknown. A definition is used in both directions: ← to classify, → to conclude from the class.
         """
     ),
     markdown(
@@ -1080,8 +1166,23 @@ ACT_2 = [
         (tried where the first condition fails). The declaration `class VeganPizza(VegetarianPizza)` of 2(a)
         already says that every vegan pizza is vegetarian.
 
-        **Predict** the label of each pizza on the worksheet, then run the cell.
+        **Predict** the label of each pizza: `"Vegetarian"`, `"Vegan"`, `"Meaty"`, or `None` for no label.
         """
+    ),
+    guesses(
+        """
+        guess(Prediction.MENU_LABELS, {
+            "margherita_1": "Vegetarian", "napoletana_1": None, "american_hot_1": "Meaty", "mushroom_1": "Vegetarian",
+            "veggie_1": "Vegan", "plain_1": "Vegan", "unclosed_1": "Vegetarian",
+        })
+        """,
+        """
+        # TODO: in place of each ..., "Vegetarian", "Vegan", "Meaty" or None
+        guess(Prediction.MENU_LABELS, {
+            "margherita_1": ..., "napoletana_1": ..., "american_hot_1": ..., "mushroom_1": ...,
+            "veggie_1": ..., "plain_1": ..., "unclosed_1": ...,
+        })
+        """,
     ),
     code(
         """
@@ -1101,6 +1202,9 @@ ACT_2 = [
         labels = label_pizzas()
         print(labels)
         picture(notes=[(label.role_taker, type(label).__name__.removesuffix("Pizza")) for label in labels], title="menu labels")
+        reveal(Prediction.MENU_LABELS, {each_pizza.name: next((type(label).__name__ for label in labels
+                                                               if label.role_taker is each_pizza), None)
+                                        for each_pizza in pizzas})
         """
     ),
     note(
@@ -1272,15 +1376,15 @@ ACT_3 = [
     ),
     markdown(
         """
+        > Every pizza of an order is safe for the guest of that order.
 
-        > Every pizza of an order is safe for the guest of that order:
-        > `∀o ∀x (hasPizza(o, x) → IsSafeFor(x, guest(o)))`
-
-        Its negation is `∃o ∃x (hasPizza(o, x) ∧ ¬IsSafeFor(x, guest(o)))`. The constraint holds exactly when this
-        query has **no** answer, and if it has one, the answer names the culprit.
+        The rule is broken exactly when there is a counterexample: an order, and one of its pizzas that is not safe
+        for the guest of that order. So the robot checks the rule as a query for counterexamples. The rule holds
+        when this query has **no** answer, and if it has one, the answer names the culprit. In pen break 2 you
+        will write both as formulas.
 
         **Your turn · EQL.** Write `dangerous`: the pairs of an order and one of its pizzas that is not safe for the
-        guest of that order. **Predict** the answer first.
+        guest of that order.
         """
     ),
     code(
@@ -1302,6 +1406,27 @@ ACT_3 = [
         One violation: table 2, Ben, `napoletana_1` (mozzarella, hence milk). The query does not only say *that*
         the constraint is broken; the binding says *where*, so the robot knows which plate not to serve.
         `order.guest` follows a relation from the order to its guest, like the term `guest(o)` in the formula.
+        """
+    ),
+    markdown(
+        """
+        ---
+        ## Pen break 2
+        """
+    ),
+    cartoon(
+        Scene(
+            [Robot(mood=Mood.WORRIED), Chef(mood=Mood.HAPPY)],
+            [
+                Bubble(0, "My fan is very loud. Could somebody else think for a minute?"),
+                Bubble(1, "Pens out! Definitions and rules, by hand this time."),
+            ],
+        )
+    ),
+    markdown(
+        """
+        **Pen break 2 · on paper.** Laptops aside: the sheet, *Pen break 2: Defining and constraining*. Five
+        minutes of writing, then the board and your questions, then Act 4.
         """
     ),
 ]
@@ -1338,7 +1463,7 @@ ACT_4 = [
         > `∀x (Pizza(x) ∧ ∃t (hasTopping(x, t) ∧ CheeseTopping(t)) → ∃w (Warning(w) ∧ about(w, x) ∧ allergen(w) = milk))`
 
         **Your turn · EQL.** The milk rule is given. Write the rule for fish, and the rule that *every* pizza carries a
-        gluten warning (its body is just `a(Pizza).from_(pizzas)`). **Predict** the number of warnings.
+        gluten warning (its body is just `a(Pizza).from_(pizzas)`).
         """
     ),
     code(
@@ -1412,25 +1537,40 @@ ACT_4 = [
     markdown(
         """
 
-        **Predict** what each of the three outputs says, then run the cell. Which of them protects Ben?
+        **Predict** what each of the three outputs of the cell after next says. Which of them protects Ben?
         """
+    ),
+    guesses(
+        """
+        guess(Prediction.VIOLATIONS_AFTER_THE_PARMESAN, 2)
+        guess(Prediction.MILK_WARNING_ON_VEGGIE, False)
+        guess(Prediction.LABEL_OF_VEGGIE, "Vegetarian")
+        """,
+        """
+        guess(Prediction.VIOLATIONS_AFTER_THE_PARMESAN, ...)   # TODO: how many violations the constraint finds
+        guess(Prediction.MILK_WARNING_ON_VEGGIE, ...)          # TODO: True or False
+        guess(Prediction.LABEL_OF_VEGGIE, ...)                 # TODO: "Vegetarian", "Vegan", "Meaty" or None
+        """,
     ),
     code(
         """
         # The cook adds ParmesanTopping to the three toppings veggie_1 had.
         veggie_1.toppings = [TomatoTopping(), OliveTopping(), MushroomTopping(), ParmesanTopping()]
 
-        check("1. the constraint of Act 3, evaluated now", dangerous)
+        check("1. the constraint of Act 3, evaluated now", dangerous,
+              prediction=Prediction.VIOLATIONS_AFTER_THE_PARMESAN)
 
         print("2. the milk warnings derived in 4(a):", milk_warnings)
         picture(warnings=[(warning.pizza, warning.allergen.value) for warning in milk_warnings],
                 title="2. the milk warnings derived in 4(a)")
+        reveal(Prediction.MILK_WARNING_ON_VEGGIE, any(warning.pizza is veggie_1 for warning in milk_warnings))
 
         labels_now = label_pizzas()
-        print("3. the label of veggie_1, derived again:",
-              [label for label in labels_now if label.role_taker is veggie_1])
+        label_of_veggie = [type(label).__name__ for label in labels_now if label.role_taker is veggie_1]
+        print("3. the label of veggie_1, derived again:", label_of_veggie)
         picture(notes=[(label.role_taker, type(label).__name__.removesuffix("Pizza")) for label in labels_now],
                 title="3. the menu labels, derived again")
+        reveal(Prediction.LABEL_OF_VEGGIE, label_of_veggie[0] if label_of_veggie else None)
         """
     ),
     note(
@@ -1483,7 +1623,17 @@ ACT_5 = [
         Dana's order is a description like those of Act 1; what changes is *who answers it*. A **backend**
         answers a query: the one so far *selects* existing objects, a generative backend *constructs* a new one.
         The same `wish` goes to both.
+
+        **Predict** which pizzas the counter answers.
         """
+    ),
+    guesses(
+        """
+        guess(Prediction.FROM_THE_COUNTER, {"margherita_1"})
+        """,
+        """
+        guess(Prediction.FROM_THE_COUNTER, ...)   # TODO: the set of the names of the pizzas
+        """,
     ),
     code(
         """
@@ -1496,6 +1646,7 @@ ACT_5 = [
         print("made by the kitchen:      ", from_the_kitchen, from_the_kitchen[0].toppings)
 
         picture(marked=on_the_counter + from_the_kitchen, title="selected (on the counter) and made (new)")
+        reveal(Prediction.FROM_THE_COUNTER, on_the_counter)
         """
     ),
     markdown(
@@ -1518,6 +1669,14 @@ ACT_5 = [
         **Predict:** how many pizzas does the kitchen offer?
         """
     ),
+    guesses(
+        """
+        guess(Prediction.OFFERS_FOR_THE_OPEN_WISH, 3)
+        """,
+        """
+        guess(Prediction.OFFERS_FOR_THE_OPEN_WISH, ...)   # TODO: a number
+        """,
+    ),
     code(
         """
         open_wish = a(Pizza)(toppings=[a(MozzarellaTopping), a(HotGreenPepperTopping)(spiciness=...)])
@@ -1530,27 +1689,35 @@ ACT_5 = [
         picture(marked=candidates[:1], more_orders=[Order(4, dana, candidates[:1])], more_pizzas=candidates,
                 notes=[(candidate, f"pepper {candidate.toppings[1].spiciness.name.lower()}") for candidate in candidates],
                 title="pizzas that did not exist before; Dana gets the first")
+        reveal(Prediction.OFFERS_FOR_THE_OPEN_WISH, candidates)
         """
     ),
     note(
         """
         Three pizzas, one per value of `Spiciness`: the generator fills the open slot in every possible way. In
         Act 1 the description *selected* among existing objects (checking a given interpretation); here it is a
-        *specification*, and an answer is a new object that makes it true (constructing a model). Act 5(b) on the
-        worksheet goes one step further: a robot plan whose open slots are answered by different backends.
+        *specification*, and an answer is a new object that makes it true (constructing a model). Pen break 3
+        goes one step further: a robot plan whose open slots are answered by different backends.
         """
     ),
     markdown(
         """
-        **Think** (on the worksheet). Every pizza the kitchen offered is now in the registry. Which question of
-        tonight would get a different answer if the robot asked it again now? The next cell asks `hot_pizzas` of
-        1(c) again.
+        Every pizza the kitchen offered is now in the registry. **Predict:** how many pizzas does `hot_pizzas` of
+        1(c) find if the robot asks it again now?
         """
+    ),
+    guesses(
+        """
+        guess(Prediction.HOT_PIZZAS_NOW, 2)
+        """,
+        """
+        guess(Prediction.HOT_PIZZAS_NOW, ...)   # TODO: a number
+        """,
     ),
     code(
         """
         print(len(pizzas), "pizzas on the counter,", len(a(Pizza).tolist()), "pizzas in the registry")
-        show("hot pizzas, asked again", hot_pizzas)
+        show("hot pizzas, asked again", hot_pizzas, prediction=Prediction.HOT_PIZZAS_NOW)
         """
     ),
     note(
@@ -1578,6 +1745,27 @@ ACT_5 = [
         picture(marked=cheesy.tolist(), violations=violations,
                 notes=[(label.role_taker, type(label).__name__.removesuffix("Pizza")) for label in label_pizzas()],
                 title="what the robot knows at 20:00")
+        """
+    ),
+    markdown(
+        """
+        ---
+        ## Pen break 3
+        """
+    ),
+    cartoon(
+        Scene(
+            [Chef(mood=Mood.HAPPY), Robot(mood=Mood.THINKING)],
+            [
+                Bubble(0, "The kitchen closes in ten minutes. Last pen break!"),
+                Bubble(1, "What did I actually do with a description tonight?", BubbleKind.THOUGHT),
+            ],
+        )
+    ),
+    markdown(
+        """
+        **Pen break 3 · on paper.** Laptops aside: the sheet, *Pen break 3: Deriving, generating, and the whole
+        evening*. Then the board, and then the bill below.
         """
     ),
     markdown(

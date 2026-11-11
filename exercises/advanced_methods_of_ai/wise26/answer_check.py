@@ -5,50 +5,61 @@ green when the answer is right, red with a hint when it is not, grey while the t
 The solution is stored as fingerprints of the answers, not as the answers, so reading this file does not solve a task.
 An answer is the text the notebook prints for it, such as ``napoletana_1`` or ``Order(table 2), napoletana_1``.
 Every wrong answer costs the pizzeria a fine; the fines are kept in a file, so they add up across kernel restarts.
+
+Predictions are not fined: a student writes a guess before running a cell, and the cell then shows what surprised
+them and why.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+from abc import ABC, abstractmethod
 from collections import Counter
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import Enum, StrEnum
 from html import escape
 from pathlib import Path
 
 from krrood.adapters.json_serializer import from_json, to_json
+from typing_extensions import Any
 
 # %% verdicts
 
 
 class VerdictKind(Enum):
-    """The outcomes of a check, each with the border colour of its box and a translucent tint of it, so that the box
-    reads on light and dark notebook themes alike."""
+    """The outcomes of a check or a prediction, each with the border colour of
+    its box and a translucent tint of it, so that the box reads on light and
+    dark notebook themes alike."""
 
     CORRECT = ("#4f9a6b", "rgba(79, 154, 107, 0.13)")
     WRONG = ("#c0504d", "rgba(192, 80, 77, 0.15)")
     UNANSWERED = ("#8a97a8", "rgba(138, 151, 168, 0.13)")
+    SURPRISE = ("#c38d2c", "rgba(195, 141, 44, 0.14)")
 
 
 @dataclass
 class Verdict:
-    """The result of checking one answer, shown by the notebook as a coloured box."""
+    """The result of checking one answer, shown by the notebook as a coloured
+    box."""
 
     kind: VerdictKind
-    """Whether the answer is right, wrong, or not given yet; decides the colour of the box."""
+    """Whether the answer is right, wrong, or not given yet; decides the colour
+    of the box."""
 
     headline: str
     """The first line of the box, in bold."""
 
     story: str = ""
-    """What happened in the pizzeria because of the answer, with a hint where the answer is wrong."""
+    """What happened in the pizzeria because of the answer, with a hint where
+    the answer is wrong."""
 
     fine: int = 0
     """The fine in euros that the answer costs the pizzeria."""
 
     fine_note: str = ""
-    """The line about the fine and the total so far, written once the fine is booked."""
+    """The line about the fine and the total so far, written once the fine is
+    booked."""
 
     def _repr_html_(self) -> str:
         border, fill = self.kind.value
@@ -72,10 +83,12 @@ class Verdict:
 
 @dataclass(frozen=True)
 class Expectation:
-    """The solution of one task and what the pizzeria makes of a wrong answer."""
+    """The solution of one task and what the pizzeria makes of a wrong
+    answer."""
 
     fingerprints: tuple[str, ...]
-    """The :meth:`fingerprint` of every answer of the solution, once per time it is an answer."""
+    """The :meth:`fingerprint` of every answer of the solution, once per time
+    it is an answer."""
 
     singular: str
     """The noun for one answer, as in *you missed 1 pizza*."""
@@ -90,7 +103,8 @@ class Expectation:
     """What happens when answers of the solution are missing."""
 
     extra_story: str
-    """What happens when there are answers the solution does not have, or more than one object fits a reference."""
+    """What happens when there are answers the solution does not have, or more
+    than one object fits a reference."""
 
     missing_fine: int
     """The fine in euros for an answer with missing answers."""
@@ -99,7 +113,8 @@ class Expectation:
     """The fine in euros for an answer with answers that do not belong."""
 
     starter_fingerprints: tuple[str, ...] = ()
-    """The :attr:`fingerprints` of what the starting code of the task gives, which is not yet an attempt."""
+    """The :attr:`fingerprints` of what the starting code of the task gives,
+    which is not yet an attempt."""
 
     @staticmethod
     def fingerprint(answer: str) -> str:
@@ -176,7 +191,8 @@ class Expectation:
 
 
 class Task(Enum):
-    """The tasks of the notebook whose answer can be checked, each with its solution."""
+    """The tasks of the notebook whose answer can be checked, each with its
+    solution."""
 
     VEGETARIAN_PIZZAS = Expectation(
         fingerprints=(
@@ -340,6 +356,305 @@ class Task(Enum):
     )
 
 
+# %% predictions
+
+
+class HowManyFit(StrEnum):
+    """How many objects fit a description that demands exactly one, and what
+    the robot does then."""
+
+    NONE = "none fits: the robot reports that there is no such pizza"
+    ONE = "one fits: the robot brings it"
+    SEVERAL = "several fit: the robot asks back"
+
+
+@dataclass(frozen=True)
+class AnswerShape(ABC):
+    """What a prediction is about, which decides how a guess is compared with
+    what the robot found."""
+
+    @abstractmethod
+    def normalized(self, value: Any) -> Any:
+        """
+        :return: The value in the form in which a guess and the robot's answer are compared.
+        """
+
+    @abstractmethod
+    def surprise(self, guess: Any, found: Any) -> str:
+        """
+        :param guess: The normalized guess.
+        :param found: The normalized answer of the robot, different from the guess.
+        :return: What the robot found that the guess did not expect.
+        """
+
+    @staticmethod
+    def spelled(value: Any) -> str:
+        """
+        :return: The value as the notebook prints it: a set as its sorted elements, a truth value as yes or no,
+            ``None`` as *none* and ``...`` as *no guess*.
+        """
+        if isinstance(value, (set, frozenset)):
+            return ", ".join(sorted(value)) if value else "nothing"
+        if isinstance(value, bool):
+            return "yes" if value else "no"
+        if value is None:
+            return "none"
+        if value is ...:
+            return "no guess"
+        return str(value)
+
+
+@dataclass(frozen=True)
+class Names(AnswerShape):
+    """The objects a query returns, compared as a set of their names."""
+
+    def normalized(self, value: Any) -> frozenset[str]:
+        if isinstance(value, str):
+            return frozenset({value})
+        return frozenset(str(element) for element in value)
+
+    def surprise(self, guess: frozenset[str], found: frozenset[str]) -> str:
+        lines = []
+        if found - guess:
+            lines.append(f"The robot also found {self.spelled(found - guess)}.")
+        if guess - found:
+            pronoun = "it" if len(guess - found) == 1 else "them"
+            lines.append(
+                f"You expected {self.spelled(guess - found)}, but the robot did not return {pronoun}."
+            )
+        return " ".join(lines)
+
+
+@dataclass(frozen=True)
+class Count(AnswerShape):
+    """The number of answers of a query."""
+
+    def normalized(self, value: Any) -> int:
+        return value if isinstance(value, int) else len(value)
+
+    def surprise(self, guess: int, found: int) -> str:
+        return f"You guessed {guess}, the robot found {found}."
+
+
+@dataclass(frozen=True)
+class Value(AnswerShape):
+    """One value, such as yes or no, or the name of a label; a label is
+    compared without its suffix *Pizza*, and *none* or *no label* is no label
+    at all."""
+
+    def normalized(self, value: Any) -> Any:
+        if isinstance(value, Enum) or not isinstance(value, str):
+            return value
+        text = value.strip().lower().removesuffix("pizza")
+        return None if text in ("", "none", "no label") else text
+
+    def surprise(self, guess: Any, found: Any) -> str:
+        return f"Your guess: {self.spelled(guess)}. The robot: {self.spelled(found)}."
+
+
+@dataclass(frozen=True)
+class Labels(AnswerShape):
+    """The label of every pizza, compared pizza by pizza; ``None`` is a pizza
+    without a label."""
+
+    def normalized(self, value: dict[str, Any]) -> dict[str, Any]:
+        return {name: Value().normalized(label) for name, label in value.items()}
+
+    def surprise(self, guess: dict[str, Any], found: dict[str, Any]) -> str:
+        differences = [
+            f"{name} (you: {self.spelled(guess[name])}; the robot: {self.spelled(label)})"
+            for name, label in found.items()
+            if guess.get(name, ...) is not ... and guess[name] != label
+        ]
+        unguessed = [name for name in found if guess.get(name, ...) is ...]
+        lines = []
+        if differences:
+            lines.append("Different from your guess: " + ", ".join(differences) + ".")
+        if unguessed:
+            lines.append("No guess for " + ", ".join(unguessed) + ".")
+        return " ".join(lines)
+
+
+@dataclass(frozen=True)
+class Question:
+    """One prediction the notebook asks for: what is predicted, and why the
+    answer is what it is."""
+
+    topic: str
+    """What the student predicts, completing the sentence *You predicted
+    ...*."""
+
+    shape: AnswerShape
+    """How the guess is compared with what the robot found."""
+
+    explanation: str
+    """Why the robot's answer is what it is, shown once the answer is
+    revealed."""
+
+
+class Prediction(Enum):
+    """The predictions of the notebook, each made in a cell before the cell
+    that reveals the answer."""
+
+    EVERY_TOPPING_A_VEGETABLE = Question(
+        "the pizzas Q1 returns",
+        Names(),
+        "plain_1 has no toppings at all, so none of its toppings is a counterexample: every topping it has is a "
+        "vegetable (vacuous truth).",
+    )
+    EXACTLY_MOZZARELLA_AND_TOMATO = Question(
+        "the pizzas Q2 returns",
+        Names(),
+        "A list of patterns describes the whole list: a mozzarella, then a tomato, and nothing else. mushroom_1 "
+        "has a third topping, unclosed_1 only one.",
+    )
+    NO_CHEESE = Question(
+        "the pizzas Q3 returns",
+        Names(),
+        "Nobody ever wrote down that veggie_1 has no cheese. The robot reads the list of toppings as complete: "
+        "what is not listed is not there (closed world).",
+    )
+    SOME_TOPPING_NOT_HOT = Question(
+        "the pizzas of the second query",
+        Names(),
+        "not_ negates the condition on one topping: the query asks for a pizza with some topping that is not hot. "
+        "Every pizza with a mild topping has one, the American Hot too; and on plain_1 the condition on a topping "
+        "it does not have is false, so its negation is true. No hot topping at all is none_is.",
+    )
+    HOT_TOPPING_BINDINGS = Question(
+        "the number of answers",
+        Count(),
+        "An answer is a binding of every selected variable. The American Hot has two hot toppings, so there are "
+        "two bindings; hot_orders hid the pizza and the topping under ∃ and had one answer.",
+    )
+    THE_PIZZA_WITH_HAM = Question(
+        "what happens for the pizza with ham",
+        Value(),
+        "No pizza has ham: there is nothing that the pizza with ham could refer to.",
+    )
+    THE_PIZZA_WITH_FISH = Question(
+        "what happens for the pizza with fish",
+        Value(),
+        "Exactly one pizza has fish, napoletana_1: the description refers, and the robot brings it.",
+    )
+    THE_PIZZA_WITH_OLIVES = Question(
+        "what happens for the pizza with olives",
+        Value(),
+        "napoletana_1 and veggie_1 both have olives. Picking one of them at random would be a guess, not "
+        "obedience, so the robot asks back.",
+    )
+    ACCEPTED_FROZEN_PIZZAS = Question(
+        "the frozen pizzas that get the green V",
+        Names(),
+        "frozen_1 has ham, frozen_2 only tomato and capers. Checking one candidate binds the variable of the "
+        "definition: a question whose answer is yes or no.",
+    )
+    ONLY_IN_THE_REGISTRY = Question(
+        "the pizzas the registry adds to the counter's answer",
+        Names(),
+        "Creating the frozen pizzas to check them entered them in the registry. Without .from_, the robot asks "
+        "about everything it has ever created, so frozen_2 is vegetarian there, although it is not on tonight's "
+        "menu.",
+    )
+    MENU_LABELS = Question(
+        "the label of every pizza",
+        Labels(),
+        "napoletana_1 has fish, so it is not vegetarian by the first rule, and no meat, so the alternative fails "
+        "as well: the rules are silent about it. Silence is not no: they never said it is not vegetarian.",
+    )
+    VIOLATIONS_AFTER_THE_PARMESAN = Question(
+        "the number of violations of the constraint",
+        Count(),
+        "The constraint is a query, evaluated against the world as it is now: Ben's veggie_1 has cheese since a "
+        "minute ago, and is a second violation.",
+    )
+    MILK_WARNING_ON_VEGGIE = Question(
+        "whether veggie_1 has a milk warning",
+        Value(),
+        "The warnings were written down in 4(a), before the parmesan, and nobody ran the rule again. A stored "
+        "conclusion goes stale when its reasons change; keeping it up to date is called truth maintenance.",
+    )
+    LABEL_OF_VEGGIE = Question(
+        "the label of veggie_1",
+        Value(),
+        "Vegan needs a pizza without cheese. A fact was added and a conclusion was withdrawn: reasoning in which "
+        "more knowledge can remove a conclusion is non-monotonic.",
+    )
+    FROM_THE_COUNTER = Question(
+        "what the counter answers",
+        Names(),
+        "The counter selects among the pizzas that exist: margherita_1 is exactly a mozzarella and a tomato. The "
+        "kitchen answers the same description by making a new pizza.",
+    )
+    OFFERS_FOR_THE_OPEN_WISH = Question(
+        "the number of pizzas the kitchen offers",
+        Count(),
+        "Dana left the spiciness open, so the kitchen fills the open slot in every possible way: one pizza for "
+        "each value of Spiciness.",
+    )
+    HOT_PIZZAS_NOW = Question(
+        "the number of hot pizzas now",
+        Count(),
+        "hot_pizzas has no .from_: it asks the registry as it is now, and the kitchen's offer with a hot green "
+        "pepper is in it, a pizza nobody ordered. A question with .from_(pizzas) keeps its answer.",
+    )
+
+
+@dataclass
+class Predictions:
+    """The guesses of one student, kept while the notebook runs, and the
+    comparison with what the robot finds."""
+
+    guesses: dict[Prediction, Any] = field(default_factory=dict)
+    """The guess for every prediction made so far, as the student wrote it."""
+
+    def record(self, prediction: Prediction, guess: Any) -> Verdict:
+        """Keep the guess, unless it is still ``...``, or a set of labels that
+        are all still ``...``.
+
+        :return: A box that confirms the guess.
+        """
+        if guess is ... or (
+            isinstance(guess, dict) and all(label is ... for label in guess.values())
+        ):
+            return Verdict(
+                VerdictKind.UNANSWERED,
+                "Still TODO: type your guess in place of ..., then run the cell.",
+            )
+        self.guesses[prediction] = guess
+        return Verdict(
+            VerdictKind.SURPRISE,
+            "Your guess is noted. Now run the next cell.",
+            f"You predicted {prediction.value.topic}: {AnswerShape.spelled(guess)}.",
+        )
+
+    def reveal(self, prediction: Prediction, found: Any) -> Verdict:
+        """
+        :param found: What the robot found, in the shape of the prediction.
+        :return: A box that compares the guess with what the robot found and explains the answer.
+        """
+        if prediction not in self.guesses:
+            return Verdict(
+                VerdictKind.UNANSWERED,
+                "You did not guess. Make your guess in the cell above, then run both cells again.",
+                "A wrong guess is where you learn the most, and nobody fines a guess.",
+            )
+        question = prediction.value
+        guess = question.shape.normalized(self.guesses[prediction])
+        answer = question.shape.normalized(found)
+        if guess == answer:
+            return Verdict(
+                VerdictKind.CORRECT,
+                f"Spot on! You predicted {question.topic}.",
+                question.explanation,
+            )
+        return Verdict(
+            VerdictKind.SURPRISE,
+            f"Surprise! {question.shape.surprise(guess, answer)}",
+            question.explanation,
+        )
+
+
 # %% fines
 
 
@@ -351,8 +666,8 @@ class Fine:
     """The task that was answered wrongly."""
 
     attempt: str
-    """The fingerprint of all answers of the attempt together, so that running the same wrong answer again costs
-    nothing."""
+    """The fingerprint of all answers of the attempt together, so that running
+    the same wrong answer again costs nothing."""
 
     amount: int
     """The fine in euros."""
@@ -360,7 +675,8 @@ class Fine:
 
 @dataclass
 class FineBook:
-    """Every fine of one student, kept in a JSON file next to the notebook so that it survives kernel restarts."""
+    """Every fine of one student, kept in a JSON file next to the notebook so
+    that it survives kernel restarts."""
 
     fines: list[Fine] = field(default_factory=list)
     """The fines, in the order they were booked."""
@@ -375,7 +691,8 @@ class FineBook:
 
 @dataclass
 class AnswerChecker:
-    """Checks the answers of the notebook's tasks and books a fine for every new wrong answer."""
+    """Checks the answers of the notebook's tasks and books a fine for every
+    new wrong answer."""
 
     fines_file: Path = Path("fines.json")
     """The file the fines are kept in."""
@@ -406,9 +723,11 @@ class AnswerChecker:
         return self.book_fine(task, "ambiguous", task.value.ambiguity_verdict())
 
     def book_fine(self, task: Task, attempt: str, verdict: Verdict) -> Verdict:
-        """Book the fine of the verdict, unless the same attempt at the task was already fined.
+        """Book the fine of the verdict, unless the same attempt at the task
+        was already fined.
 
-        :return: The verdict with a note on the fine and the total so far.
+        :return: The verdict with a note on the fine and the total so
+            far.
         """
         if verdict.kind is not VerdictKind.WRONG:
             return verdict
@@ -433,7 +752,8 @@ class AnswerChecker:
 
 @dataclass
 class Bill:
-    """The bill of the evening, shown at the end of the notebook: every fine, and the guests' decision to waive them."""
+    """The bill of the evening, shown at the end of the notebook: every fine,
+    and the guests' decision to waive them."""
 
     book: FineBook
     """The fines on the bill."""

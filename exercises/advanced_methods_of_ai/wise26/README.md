@@ -11,29 +11,32 @@ what the robot knows; defining, deriving and generating *write* to it.
 | Time | Part | Story | The description is … | Logic |
 |:--|:--|:--|:--|:--|
 | 0–8 | Slides | what we want today, EQL and first-order logic | – | queries as formulas with free variables |
-| 8–12 | Prologue | the pizzeria (Figure 2) | – | an interpretation |
-| 12–36 | 1 Asking | “Which pizzas have cheese?” “Bring me the one with olives.” | a question | ∃, ∀, ¬∃; assignments; closed world; definite descriptions (Russell, Strawson) |
-| 36–54 | 2 Defining | “Which pizzas may carry the green V?” | a definition | class declarations as necessary conditions; ↔ to check, classify (roles) and conclude; rules with exceptions, non-monotonicity |
-| 54–66 | 3 Constraining | “Ben must never get milk.” | a constraint | ¬∀ ≡ ∃¬; integrity constraint versus axiom |
-| 66–78 | 4 Deriving | the kitchen writes allergen warnings | the body of a rule that creates objects | ∃ in the head, forward chaining, truth maintenance |
-| 78–85 | 5 Generating | Dana orders a new pizza | a specification | constructing a model; one query, several backends |
-| 85–90 | Epilogue | the whole picture | – | summary |
+| 8–30 | Prologue, 1 Asking | the pizzeria; “Which pizzas have cheese?” “Bring me the one with olives.” | a question | an interpretation; ∃, ∀, ¬∃; assignments; closed world; definite descriptions (Russell, Strawson) |
+| 30–37 | Pen break 1 | | | |
+| 37–49 | 2 Defining | “Which pizzas may carry the green V?” | a definition | class declarations as necessary conditions; ↔ to check, classify (roles) and conclude; rules with exceptions |
+| 49–57 | 3 Constraining | “Ben must never get milk.” | a constraint | ¬∀ ≡ ∃¬; integrity constraint versus axiom |
+| 57–64 | Pen break 2 | | | |
+| 64–73 | 4 Deriving | the kitchen writes allergen warnings | the body of a rule that creates objects | ∃ in the head, forward chaining, truth maintenance, non-monotonicity |
+| 73–79 | 5 Generating | Dana orders a new pizza | a specification | constructing a model; one query, several backends |
+| 79–90 | Pen break 3 | the whole evening | – | summary |
 
 Students start the setup cell of the notebook during the slides, so that EQL is installed when the acts begin.
-Every task follows the same rhythm: predict on paper, run in the notebook, discuss. The first page of the solution
-PDF is the tutor's run sheet, with what to discuss at the end of each act and the sentence that leads to the next.
+The evening happens in the notebook: students type a guess before each prediction cell, and the cell then shows
+what surprised them and why. Three times the tutor calls a **pen break**: laptops aside, students write the logic on
+the sheet for five minutes, then the tutor writes an answer on the board and takes questions. The first page of the
+solution PDF is the tutor's run sheet; after each pen break it lists the notebook's surprises to discuss.
 
 ## Files
 
 | File | Purpose |
 |:-----|:--------|
 | `03-introduction_slides.pdf` | Nine slides for the first 8 minutes. |
-| `03-querying_and_reasoning.pdf` | The worksheet (13 pages; each act starts on a new page). |
-| `03-querying_and_reasoning_solution.pdf` | The run sheet for the tutor, and the worksheet with solutions (21 pages). |
+| `03-querying_and_reasoning.pdf` | The sheet for the three pen breaks (7 pages; each pen break starts on a new page). |
+| `03-querying_and_reasoning_solution.pdf` | The run sheet for the tutor, and the sheet with solutions and what to discuss after each pen break (12 pages). |
 | `03-pizza_queries.ipynb` | The student notebook. Cells marked `TODO` are to be filled in; it runs from top to bottom as it is. |
 | `03-pizza_queries_solution.ipynb` | The notebook with solutions, solution notes and its outputs. |
 | `kitchen_picture.py` | Draws the pizzeria with the answers of a query marked on it. |
-| `answer_check.py` | Checks the answers of the tasks against fingerprints of the solution, shows a green or red box, and books a fine for every new wrong answer in `fines.json`. |
+| `answer_check.py` | Checks the answers of the tasks against fingerprints of the solution, shows a green or red box, and books a fine for every new wrong answer in `fines.json`; compares each guess of a prediction with what the robot found, without a fine. |
 | `requirements.txt` | The packages the notebook needs besides KRROOD, `random_events` and `probabilistic_model`. |
 | `src/build_notebooks.py` | Writes both notebooks from one source. |
 | `src/make_figures.py` | Runs the solution notebook and draws the pictures of the pizzeria into `src/figures`. |
