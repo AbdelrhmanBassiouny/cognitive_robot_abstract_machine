@@ -924,8 +924,8 @@ ACT_1 = [
     ),
     markdown(
         """
-        **Pen break 1 · on paper.** Put the laptop aside and take the sheet, *Pen break 1: Asking*. Write for five
-        minutes, alone or with your neighbour. Then the tutor writes an answer on the board and takes your
+        **Pen break 1 · on paper.** Put the laptop aside and take the sheet, *Pen break 1: Asking*. Write for about
+        six minutes, alone or with your neighbour. Then the tutor writes an answer on the board and takes your
         questions, and you come back here for Act 2.
         """
     ),
@@ -1001,8 +1001,8 @@ ACT_2 = [
     ),
     markdown(
         """
-        Each printed line is a statement about every object of a class. In pen break 2 you will write them as
-        formulas.
+        Each printed line is a statement about every object of a class: it says what follows *from* being a
+        `Pizza`, never when something *is* one.
         """
     ),
     note(
@@ -1425,7 +1425,7 @@ ACT_3 = [
     ),
     markdown(
         """
-        **Pen break 2 · on paper.** Laptops aside: the sheet, *Pen break 2: Defining and constraining*. Five
+        **Pen break 2 · on paper.** Laptops aside: the sheet, *Pen break 2: Defining and constraining*. About six
         minutes of writing, then the board and your questions, then Act 4.
         """
     ),
@@ -1696,8 +1696,7 @@ ACT_5 = [
         """
         Three pizzas, one per value of `Spiciness`: the generator fills the open slot in every possible way. In
         Act 1 the description *selected* among existing objects (checking a given interpretation); here it is a
-        *specification*, and an answer is a new object that makes it true (constructing a model). Pen break 3
-        goes one step further: a robot plan whose open slots are answered by different backends.
+        *specification*, and an answer is a new object that makes it true (constructing a model).
         """
     ),
     markdown(
@@ -1764,8 +1763,8 @@ ACT_5 = [
     ),
     markdown(
         """
-        **Pen break 3 · on paper.** Laptops aside: the sheet, *Pen break 3: Deriving, generating, and the whole
-        evening*. Then the board, and then the bill below.
+        **Pen break 3 · on paper.** Laptops aside: the sheet, *Pen break 3: Deriving, and the whole evening*.
+        Then the board, and then the bill below.
         """
     ),
     markdown(

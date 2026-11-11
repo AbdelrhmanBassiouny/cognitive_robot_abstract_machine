@@ -11,19 +11,19 @@ what the robot knows; defining, deriving and generating *write* to it.
 | Time | Part | Story | The description is … | Logic |
 |:--|:--|:--|:--|:--|
 | 0–8 | Slides | what we want today, EQL and first-order logic | – | queries as formulas with free variables |
-| 8–30 | Prologue, 1 Asking | the pizzeria; “Which pizzas have cheese?” “Bring me the one with olives.” | a question | an interpretation; ∃, ∀, ¬∃; assignments; closed world; definite descriptions (Russell, Strawson) |
-| 30–37 | Pen break 1 | | | |
-| 37–49 | 2 Defining | “Which pizzas may carry the green V?” | a definition | class declarations as necessary conditions; ↔ to check, classify (roles) and conclude; rules with exceptions |
-| 49–57 | 3 Constraining | “Ben must never get milk.” | a constraint | ¬∀ ≡ ∃¬; integrity constraint versus axiom |
-| 57–64 | Pen break 2 | | | |
-| 64–73 | 4 Deriving | the kitchen writes allergen warnings | the body of a rule that creates objects | ∃ in the head, forward chaining, truth maintenance, non-monotonicity |
-| 73–79 | 5 Generating | Dana orders a new pizza | a specification | constructing a model; one query, several backends |
-| 79–90 | Pen break 3 | the whole evening | – | summary |
+| 8–28 | Prologue, 1 Asking | the pizzeria; “Which pizzas have cheese?” “Bring me the one with olives.” | a question | an interpretation; ∃, ∀, ¬∃; assignments; closed world; definite descriptions (Russell, Strawson) |
+| 28–38 | Pen break 1 | | | |
+| 38–50 | 2 Defining | “Which pizzas may carry the green V?” | a definition | class declarations as necessary conditions; ↔ to check, classify (roles) and conclude; rules with exceptions |
+| 50–58 | 3 Constraining | “Ben must never get milk.” | a constraint | ¬∀ ≡ ∃¬; integrity constraint versus axiom |
+| 58–68 | Pen break 2 | | | |
+| 68–75 | 4 Deriving | the kitchen writes allergen warnings | the body of a rule that creates objects | ∃ in the head, forward chaining, truth maintenance, non-monotonicity |
+| 75–80 | 5 Generating | Dana orders a new pizza | a specification | constructing a model; one query, several backends |
+| 80–90 | Pen break 3 | the whole evening | – | summary |
 
 Students start the setup cell of the notebook during the slides, so that EQL is installed when the acts begin.
 The evening happens in the notebook: students type a guess before each prediction cell, and the cell then shows
 what surprised them and why. Three times the tutor calls a **pen break**: laptops aside, students write the logic on
-the sheet for five minutes, then the tutor writes an answer on the board and takes questions. The first page of the
+the sheet for about six minutes (two tasks per break), then the tutor writes an answer on the board and takes questions. The first page of the
 solution PDF is the tutor's run sheet; after each pen break it lists the notebook's surprises to discuss.
 
 ## Files
@@ -31,8 +31,8 @@ solution PDF is the tutor's run sheet; after each pen break it lists the noteboo
 | File | Purpose |
 |:-----|:--------|
 | `03-introduction_slides.pdf` | Nine slides for the first 8 minutes. |
-| `03-querying_and_reasoning.pdf` | The sheet for the three pen breaks (7 pages; each pen break starts on a new page). |
-| `03-querying_and_reasoning_solution.pdf` | The run sheet for the tutor, and the sheet with solutions and what to discuss after each pen break (12 pages). |
+| `03-querying_and_reasoning.pdf` | The sheet for the three pen breaks (4 pages; each pen break starts on a new page). |
+| `03-querying_and_reasoning_solution.pdf` | The run sheet for the tutor, and the sheet with solutions and what to discuss after each pen break (9 pages). |
 | `03-pizza_queries.ipynb` | The student notebook. Cells marked `TODO` are to be filled in; it runs from top to bottom as it is. |
 | `03-pizza_queries_solution.ipynb` | The notebook with solutions, solution notes and its outputs. |
 | `kitchen_picture.py` | Draws the pizzeria with the answers of a query marked on it. |
