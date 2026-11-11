@@ -231,7 +231,7 @@ expression is a <b>description</b>: a class and a pattern of attributes.</p>
   <tr><td><code>a(Pizza)</code></td><td>some object of class Pizza</td><td>a variable <i>x</i> with Pizza(<i>x</i>)</td></tr>
   <tr><td><code>a(Pizza)(toppings=a(CheeseTopping))</code></td><td>a pizza with a cheese topping</td><td>Pizza(<i>x</i>) ∧ ∃<i>t</i> (hasTopping(<i>x</i>, <i>t</i>) ∧ CheeseTopping(<i>t</i>))</td></tr>
   <tr><td><code>a(Pizza)(toppings=[A, B])</code></td><td>whose topping list is [A, B]</td><td>the whole list: exactly these, in this order</td></tr>
-  <tr><td><code>a(PizzaTopping)(spiciness=Spiciness.HOT)</code></td><td>a topping that is hot</td><td>spiciness(<i>t</i>) = hot</td></tr>
+  <tr><td><code>a(Guest)(name="Ada")</code></td><td>a guest named Ada</td><td>name(<i>g</i>) = Ada</td></tr>
   <tr><td><code>a(Pizza)</code> without <code>.from_</code></td><td>… among every pizza the robot knows</td><td>the range of <i>x</i> is the registry</td></tr>
   <tr><td><code>.from_(pizzas)</code></td><td>… among these objects only</td><td>the range of <i>x</i></td></tr>
   <tr><td><code>the(Pizza)(…)</code></td><td><i>the</i> pizza that …</td><td>exactly one object fits</td></tr>

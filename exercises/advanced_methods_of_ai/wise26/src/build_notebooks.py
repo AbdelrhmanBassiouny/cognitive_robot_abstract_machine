@@ -174,8 +174,10 @@ SETUP = [
         **How to work.** Run the cells from top to bottom. Cells marked `TODO` are yours; every cell runs as it
         is, so you can always go on. Every task names the language of its answer: **EQL** (a query),
         **Python** (ordinary code on real objects) or **logic** (a formula, on the worksheet). Before a cell
-        marked **Predict**, write your prediction on the worksheet. Below every task, *Check your result* tells
-        you how many answers to expect. Every answer is drawn as a picture of the pizzeria.
+        marked **Predict**, write your prediction on the worksheet. Every answer is drawn as a picture of the
+        pizzeria, and the robot checks your answers: a green box when the answer is right, a red box with a hint
+        when it is not. A wrong answer costs the pizzeria a **fine**; the bill at the end adds them all up, across
+        restarts too. Compare your bill with your neighbours: the lowest wins.
         """
     ),
     markdown(
@@ -183,7 +185,7 @@ SETUP = [
         ## Setup
 
         Run the next cell first. On a new machine it installs EQL (part of the library KRROOD) and the drawing
-        helper `kitchen_picture.py`. That takes one to two minutes; afterwards the cell does nothing.
+        helpers `kitchen_picture.py` and `answer_check.py`. That takes one to two minutes; afterwards the cell does nothing.
         """
     ),
     code(
@@ -203,7 +205,7 @@ SETUP = [
                 raise RuntimeError("The installation failed; see the output above.")
 
 
-        for helper in ("kitchen_picture.py", "requirements.txt"):
+        for helper in ("kitchen_picture.py", "answer_check.py", "requirements.txt"):
             if not pathlib.Path(helper).exists():
                 urllib.request.urlretrieve(f"{WORKSHEET}/{helper}", helper)
 
@@ -259,6 +261,7 @@ PROLOGUE = [
         from krrood.patterns.role import Role
         from krrood.symbol_graph.symbol_graph import Symbol
 
+        from answer_check import AnswerChecker, Task
         from kitchen_picture import Colour, KitchenPicture, legend_svg
         """,
         tags=["knowledge-base"],
@@ -395,7 +398,8 @@ PROLOGUE = [
     markdown(
         """
         The next cell defines how the robot shows its answers: `show` for a question, `refer` for a question
-        about *the* one object, `check` for a constraint. Run it; reading it is optional.
+        about *the* one object, `check` for a constraint. Given a `Task`, they also check the answer against the
+        solution. Run it; reading it is optional.
         """
     ),
     code(
@@ -418,39 +422,56 @@ PROLOGUE = [
                     for answer in query.tolist()]
 
 
-        def show(title, query):
+        checker = AnswerChecker()
+
+
+        def grade(task, answers):
+            # Compare the answers with the solution of the task: green if right, red with a hint and a fine if not.
+            if task is not None:
+                display(checker.check(task, None if answers is None else [str(answer) for answer in answers]))
+
+
+        def show(title, query, task=None):
             # A question: print every answer and ring it in the picture.
             if query is ...:
                 print(f"{title}: TODO")
+                grade(task, None)
                 return
             rows = rows_of(query)
             print(f"{title}: {len(rows)} answer(s)")
             for row in rows:
                 print("   ", row[0] if len(row) == 1 else row)
             picture(marked=[value for row in rows for value in row], title=title)
+            grade(task, [", ".join(str(value) for value in row) for row in rows])
 
 
-        def refer(title, description):
+        def refer(title, description, task=None):
             # A reference: the description must pick out exactly one object.
             if description is ...:
                 print(f"{title}: TODO")
+                grade(task, None)
                 return
             try:
                 [(referent,)] = rows_of(description)
             except NoSolutionFound:
                 print(f"{title}: nothing fits. The description does not refer.")
+                grade(task, [])
                 return
             except MultipleSolutionFound:
                 print(f"{title}: more than one object fits. The robot has to ask back.")
+                if task is not None:
+                    display(checker.check_ambiguous(task))
                 return
             print(f"{title}: {referent}")
             picture(marked=[referent], title=title)
+            grade(task, [referent])
 
 
-        def check(title, constraint):
+        def check(title, constraint, task=None):
             # A constraint: every answer is a violation; the picture draws it in red.
             if constraint is ...:
                 print(f"{title}: TODO")
+                grade(task, None)
                 return
             rows = rows_of(constraint)
             if not rows:
@@ -460,6 +481,7 @@ PROLOGUE = [
             violations = [(order, pizza) for row in rows for order in row if isinstance(order, Order)
                           for pizza in row if isinstance(pizza, Pizza)]
             picture(violations=violations, title=title)
+            grade(task, [", ".join(str(value) for value in row) for row in rows])
 
 
         display(SVG(legend_svg()))
@@ -486,14 +508,14 @@ PROLOGUE = [
         | `a(Pizza)(toppings=a(CheeseTopping))` | a pizza with a cheese topping | `Pizza(x) ∧ ∃t (hasTopping(x, t) ∧ CheeseTopping(t))` |
         | `toppings=every_is(VegetableTopping)` | … whose every topping is a vegetable | `∀t (hasTopping(x, t) → VegetableTopping(t))` |
         | `toppings=none_is(CheeseTopping)` | … with no cheese topping | `¬∃t (hasTopping(x, t) ∧ CheeseTopping(t))` |
-        | <code>none_is(MeatTopping &#124; FishTopping)</code> | … with no meat or fish topping | `¬∃t (hasTopping(x, t) ∧ (MeatTopping(t) ∨ FishTopping(t)))` |
+        | <code>none_is(OliveTopping &#124; CaperTopping)</code> | … with no olive or caper topping | `¬∃t (hasTopping(x, t) ∧ (OliveTopping(t) ∨ CaperTopping(t)))` |
         | `a(Pizza)(toppings=[A, B])` | a pizza whose topping list is exactly `[A, B]` | the whole list, in this order |
-        | `a(PizzaTopping)(spiciness=Spiciness.HOT)` | a topping whose spiciness is hot | `spiciness(t) = hot` |
+        | `a(PizzaTopping)(spiciness=Spiciness.MILD)` | a topping whose spiciness is mild | `spiciness(t) = mild` |
         | `a(Pizza)` without `.from_` | … among every pizza the robot knows | the domain is the registry |
         | `.from_(pizzas)` | … among these objects only | the domain of `x` |
         | `the(...)` | *the* … : exactly one fits | `∃x (φ(x) ∧ ∀y (φ(y) → y = x))` |
         | `a(PizzaTopping).from_(pizza.toppings)` | a topping of that pizza, with a name | a variable `t` with `hasTopping(x, t)` |
-        | `pizza.where(pizza.toppings.spiciness == Spiciness.HOT)` | a pizza with a hot topping | `∃t (hasTopping(x, t) ∧ spiciness(t) = hot)` |
+        | `pizza.where(pizza.toppings.spiciness == Spiciness.MILD)` | a pizza with a mild topping | `∃t (hasTopping(x, t) ∧ spiciness(t) = mild)` |
         | `HasType(t, VegetableTopping)` | `t` is a vegetable topping | `VegetableTopping(t)` |
         | `exists(t, φ)`, `for_all(t, φ)` | some / every `t` satisfies `φ` | `∃t φ`, `∀t φ` (over the toppings of `x`) |
         | `not_(φ)`, `or_(φ, ψ)`, `.where(φ, ψ)` | not, or, and | `¬φ`, `φ ∨ ψ`, `φ ∧ ψ` |
@@ -569,8 +591,8 @@ ACT_1 = [
     ),
     markdown(
         """
-        A pattern can also name several classes at once, written as for `isinstance`: `MeatTopping | FishTopping`
-        is a topping that is a meat topping *or* a fish topping.
+        A pattern can also name several classes at once, written as for `isinstance`: `OliveTopping | CaperTopping`
+        is a topping that is an olive topping *or* a caper topping.
 
         **Your turn · EQL.** The menu marks the vegetarian pizzas. Write `vegetarian`: the pizzas with no meat
         topping and no fish topping. Hint: *one* `none_is`.
@@ -579,14 +601,13 @@ ACT_1 = [
     code(
         """
         vegetarian = a(Pizza)(toppings=none_is(MeatTopping | FishTopping)).from_(pizzas)
-        show("vegetarian pizzas", vegetarian)
+        show("vegetarian pizzas", vegetarian, Task.VEGETARIAN_PIZZAS)
         """,
         student="""
         vegetarian = ...   # TODO: a(Pizza)(toppings=...).from_(pizzas)
-        show("vegetarian pizzas", vegetarian)
+        show("vegetarian pizzas", vegetarian, Task.VEGETARIAN_PIZZAS)
         """,
     ),
-    reference("**5 answers.** Fewer? Check `plain_1` and `unclosed_1`."),
     note(
         """
         Five pizzas: `margherita_1`, `mushroom_1`, `veggie_1`, `plain_1`, `unclosed_1`. In logic:
@@ -614,18 +635,17 @@ ACT_1 = [
         hot_pizzas = a(Pizza)(toppings=a(PizzaTopping)(spiciness=Spiciness.HOT))
         hot_orders = an(Order)(pizzas=hot_pizzas)
 
-        show("hot pizzas", hot_pizzas)
-        show("orders with a hot pizza", hot_orders)
+        show("hot pizzas", hot_pizzas, Task.HOT_PIZZAS)
+        show("orders with a hot pizza", hot_orders, Task.HOT_ORDERS)
         """,
         student="""
         hot_pizzas = ...   # TODO
         hot_orders = ...   # TODO
 
-        show("hot pizzas", hot_pizzas)
-        show("orders with a hot pizza", hot_orders)
+        show("hot pizzas", hot_pizzas, Task.HOT_PIZZAS)
+        show("orders with a hot pizza", hot_orders, Task.HOT_ORDERS)
         """,
     ),
-    reference("**1 hot pizza** and **1 order**, even though that pizza has two hot toppings."),
     note(
         """
         `american_hot_1` and the order of table 1:
@@ -734,18 +754,14 @@ ACT_1 = [
         pizza = the(Pizza)(toppings=a(OliveTopping)).from_(pizzas)
         topping = a(PizzaTopping).from_(pizza.toppings)
         olives_without_fish = pizza.where(not_(exists(topping, HasType(topping, FishTopping))))
-        refer("the pizza with olives and without fish", olives_without_fish)
+        refer("the pizza with olives and without fish", olives_without_fish, Task.OLIVES_WITHOUT_FISH)
         """,
         student="""
         pizza = the(Pizza)(toppings=a(OliveTopping)).from_(pizzas)
         topping = a(PizzaTopping).from_(pizza.toppings)
         olives_without_fish = ...   # TODO: pizza.where(...)
-        refer("the pizza with olives and without fish", olives_without_fish)
+        refer("the pizza with olives and without fish", olives_without_fish, Task.OLIVES_WITHOUT_FISH)
         """,
-    ),
-    reference(
-        "**Exactly 1 pizza**, printed without an exception. If the robot still asks back, your condition "
-        "allows a pizza with fish."
     ),
     note(
         """
@@ -1052,6 +1068,8 @@ ACT_3 = [
         picture(notes=[(each_pizza, allergen.value) for each_pizza in pizzas
                        for allergen in sorted(allergens(each_pizza), key=lambda allergen: allergen.value)],
                 title="allergens")
+        grade(Task.ALLERGENS, [f"{each_pizza}: {allergen.value}" for each_pizza in pizzas
+                               for allergen in allergens(each_pizza)])
         """,
         student="""
         @symbolic_function
@@ -1066,9 +1084,10 @@ ACT_3 = [
         picture(notes=[(each_pizza, allergen.value) for each_pizza in pizzas
                        for allergen in sorted(allergens(each_pizza), key=lambda allergen: allergen.value)],
                 title="allergens")
+        grade(Task.ALLERGENS, [f"{each_pizza}: {allergen.value}" for each_pizza in pizzas
+                               for allergen in allergens(each_pizza)])
         """,
     ),
-    reference("**7 lines**, one per pizza: gluten on all 7, milk on 5, fish on 1."),
     markdown(
         """
         ### 3(b) A computed relation
@@ -1103,7 +1122,7 @@ ACT_3 = [
 
 
         pizza = a(Pizza).from_(pizzas)
-        show("what can Ben eat?", pizza.where(IsSafeFor(pizza, ben)))
+        show("what can Ben eat?", pizza.where(IsSafeFor(pizza, ben)), Task.SAFE_FOR_BEN)
         """,
         student="""
         @dataclass(eq=False)
@@ -1120,10 +1139,9 @@ ACT_3 = [
 
 
         pizza = a(Pizza).from_(pizzas)
-        show("what can Ben eat?", pizza.where(IsSafeFor(pizza, ben)))
+        show("what can Ben eat?", pizza.where(IsSafeFor(pizza, ben)), Task.SAFE_FOR_BEN)
         """,
     ),
-    reference("**2 answers.** All 7? Your `__call__` still returns `True` for every pizza."),
     markdown(
         """
         ### 3(c) A constraint is a query that must have no answer
@@ -1145,16 +1163,15 @@ ACT_3 = [
         order = an(Order).from_(orders)
         pizza = a(Pizza).from_(order.pizzas)
         dangerous = set_of(order, pizza).where(not_(IsSafeFor(pizza, order.guest)))
-        check("every pizza is safe for its guest", dangerous)
+        check("every pizza is safe for its guest", dangerous, Task.DANGEROUS_PLATES)
         """,
         student="""
         order = an(Order).from_(orders)
         pizza = a(Pizza).from_(order.pizzas)
         dangerous = ...   # TODO: set_of(order, pizza).where(...)
-        check("every pizza is safe for its guest", dangerous)
+        check("every pizza is safe for its guest", dangerous, Task.DANGEROUS_PLATES)
         """,
     ),
-    reference("**1 violation**: one pair of an order and a pizza."),
     note(
         """
         One violation: table 2, Ben, `napoletana_1` (mozzarella, hence milk). The query does not only say *that*
@@ -1207,6 +1224,7 @@ ACT_4 = [
         warnings = milk_warnings + fish_warnings + gluten_warnings
         print(len(warnings), "warnings")
         picture(warnings=[(warning.pizza, warning.allergen.value) for warning in warnings], title="derived warnings")
+        grade(Task.ALLERGEN_WARNINGS, warnings)
         """,
         student="""
         @dataclass(eq=False, repr=False)
@@ -1226,9 +1244,9 @@ ACT_4 = [
         warnings = milk_warnings + fish_warnings + gluten_warnings
         print(len(warnings), "warnings")
         picture(warnings=[(warning.pizza, warning.allergen.value) for warning in warnings], title="derived warnings")
+        grade(Task.ALLERGEN_WARNINGS, warnings)
         """,
     ),
-    reference("**13 warnings**: 5 for milk, 1 for fish, 7 for gluten."),
     note(
         """
         13 warnings: 5 milk, 1 fish, 7 gluten. The head `∃w` is why new objects appear: for every answer of the
@@ -1385,6 +1403,21 @@ ACT_5 = [
         picture(marked=cheesy.tolist(), violations=violations,
                 notes=[(label.role_taker, type(label).__name__.removesuffix("Pizza")) for label in label_pizzas()],
                 title="what the robot knows at 20:00")
+        """
+    ),
+    markdown(
+        """
+        ---
+        ## The bill
+
+        Every wrong answer tonight cost the pizzeria a fine: hospital bills, lost guests, a lawyer. Here is the
+        total. It keeps every fine since you first ran the notebook, even across restarts, and a wrong answer
+        costs only once. Compare it with your neighbours: the lowest bill wins.
+        """
+    ),
+    code(
+        """
+        display(checker.bill())
         """
     ),
 ]

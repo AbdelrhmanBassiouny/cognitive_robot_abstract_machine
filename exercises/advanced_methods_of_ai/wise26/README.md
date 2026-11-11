@@ -33,6 +33,7 @@ PDF is the tutor's run sheet, with what to discuss at the end of each act and th
 | `03-pizza_queries.ipynb` | The student notebook. Cells marked `TODO` are to be filled in; it runs from top to bottom as it is. |
 | `03-pizza_queries_solution.ipynb` | The notebook with solutions, solution notes and its outputs. |
 | `kitchen_picture.py` | Draws the pizzeria with the answers of a query marked on it. |
+| `answer_check.py` | Checks the answers of the tasks against fingerprints of the solution, shows a green or red box, and books a fine for every new wrong answer in `fines.json`. |
 | `requirements.txt` | The packages the notebook needs besides KRROOD, `random_events` and `probabilistic_model`. |
 | `src/build_notebooks.py` | Writes both notebooks from one source. |
 | `src/make_figures.py` | Runs the solution notebook and draws the pictures of the pizzeria into `src/figures`. |
@@ -76,7 +77,7 @@ Nothing is installed on the student's computer.
    curl -LsSf https://astral.sh/uv/install.sh | sh
    ```
 
-3. Put the notebook, `kitchen_picture.py` and `requirements.txt` in a folder of their own (outside a clone of
+3. Put the notebook, `kitchen_picture.py`, `answer_check.py` and `requirements.txt` in a folder of their own (outside a clone of
    this repository), open a terminal in it and run:
 
    ```bash
@@ -112,7 +113,8 @@ notebook ran without errors in about a minute, in an environment of 0.9 GB inclu
   Without #566, `an(Order)(pizzas=hot_pizzas)` returns every order once `hot_pizzas` has been evaluated. Without
   #567, a query evaluated a second time does not see objects created since its first evaluation, so `hot_pizzas`
   asked again in Act 5 misses the kitchen's offers.
-- `kitchen_picture.py` must lie next to the notebook; the setup cell downloads it if it is missing.
+- `kitchen_picture.py` and `answer_check.py` must lie next to the notebook; the setup cell downloads them if they are missing.
+- The fines of a student are kept in `fines.json` next to the notebook; delete it to start a new bill.
 - Once #556, #566, #567, #541, #605 and #606 are merged and released, the commit in the setup cell can be replaced by the release, and the two URLs
   in the setup cell should point to the default branch.
 

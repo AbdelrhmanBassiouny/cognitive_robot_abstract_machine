@@ -112,8 +112,8 @@ pizza.where(for_all(topping, HasType(topping, VegetableTopping)))</pre>
   <p class="formula" style="font-size:16pt; margin:0 0 4mm; padding:2.5mm">Pizza(<i>x</i>) ∧ ∀<i>t</i> (hasTopping(<i>x</i>, <i>t</i>) → VegetableTopping(<i>t</i>))</p>
   <ul style="font-size:13.5pt">
     <li style="font-size:13.5pt; margin-bottom:1.5mm">In a pattern, <code>a(…)</code> says <i>some</i>; <code>every_is(…)</code>, <code>none_is(…)</code> say <i>every</i>, <i>no</i>. Both queries are one formula.</li>
-    <li style="font-size:13.5pt; margin-bottom:1.5mm">Other conditions: name the topping, then <code>for_all</code> or <code>not_(exists(…))</code>.</li>
-    <li style="font-size:13.5pt; margin-bottom:1.5mm">A path, <code>pizza.toppings.spiciness == HOT</code>, filters on <i>a</i> topping.</li>
+    <li style="font-size:13.5pt; margin-bottom:1.5mm">Other conditions: name the topping, then quantify over it with <code>exists</code> or <code>for_all</code>.</li>
+    <li style="font-size:13.5pt; margin-bottom:1.5mm">A path, <code>pizza.toppings.spiciness == MILD</code>, filters on <i>a</i> topping.</li>
     <li style="font-size:13.5pt">Every <code>a(…)</code> is a variable of its own; <code>set_of(x, y)</code> returns several at once.</li>
   </ul>
   <div class="footer"><span>Advanced Methods of AI · Worksheet 3</span><span>5</span></div>
