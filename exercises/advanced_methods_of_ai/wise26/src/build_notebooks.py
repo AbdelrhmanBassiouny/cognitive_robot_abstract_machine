@@ -400,10 +400,11 @@ PROLOGUE = [
     ),
     code(
         """
-        def picture(marked=(), violations=(), notes=(), warnings=(), title="", more_orders=()):
+        def picture(marked=(), violations=(), notes=(), warnings=(), title="", more_orders=(), more_pizzas=()):
             # Draw the pizzeria; ring the marked objects, draw violations in red, write notes below the pizzas.
+            # more_pizzas are drawn after the counter as new pizzas, even if nothing rings them.
             kitchen = KitchenPicture(pizzas, orders + list(more_orders), marked=list(marked),
-                                     violations=list(violations), title=title)
+                                     new_pizzas=list(more_pizzas), violations=list(violations), title=title)
             for pizza, text in notes:
                 kitchen.note(pizza, text)
             for pizza, text in warnings:
@@ -877,8 +878,11 @@ ACT_2 = [
 
         frozen_1 = Pizza("frozen_1", [MozzarellaTopping(), HamTopping()])
         frozen_2 = Pizza("frozen_2", [TomatoTopping(), CaperTopping()])
-        for candidate in (frozen_1, frozen_2):
-            print(candidate, "accepted" if accepts(is_vegetarian_pizza, candidate) else "rejected")
+        verdicts = [(candidate, "accepted" if accepts(is_vegetarian_pizza, candidate) else "rejected")
+                    for candidate in (frozen_1, frozen_2)]
+        for candidate, verdict in verdicts:
+            print(candidate, verdict)
+        picture(notes=verdicts, more_pizzas=[frozen_1, frozen_2], title="two frozen pizzas, checked")
         """,
     ),
     markdown(
@@ -918,9 +922,9 @@ ACT_2 = [
     code(
         """
         pizza = a(Pizza)
-        print("in the registry: ", pizza.where(is_vegetarian_pizza(pizza)).tolist())
+        show("vegetarian, in the registry", pizza.where(is_vegetarian_pizza(pizza)))
         pizza = a(Pizza).from_(pizzas)
-        print("on the counter:  ", pizza.where(is_vegetarian_pizza(pizza)).tolist())
+        show("vegetarian, on the counter", pizza.where(is_vegetarian_pizza(pizza)))
         """
     ),
     note(
@@ -1045,6 +1049,9 @@ ACT_3 = [
 
         for each_pizza in pizzas:
             print(f"{each_pizza.name:16}", sorted(allergen.value for allergen in allergens(each_pizza)))
+        picture(notes=[(each_pizza, allergen.value) for each_pizza in pizzas
+                       for allergen in sorted(allergens(each_pizza), key=lambda allergen: allergen.value)],
+                title="allergens")
         """,
         student="""
         @symbolic_function
@@ -1056,6 +1063,9 @@ ACT_3 = [
 
         for each_pizza in pizzas:
             print(f"{each_pizza.name:16}", sorted(allergen.value for allergen in allergens(each_pizza)))
+        picture(notes=[(each_pizza, allergen.value) for each_pizza in pizzas
+                       for allergen in sorted(allergens(each_pizza), key=lambda allergen: allergen.value)],
+                title="allergens")
         """,
     ),
     reference("**7 lines**, one per pizza: gluten on all 7, milk on 5, fish on 1."),
@@ -1239,12 +1249,20 @@ ACT_4 = [
     ),
     code(
         """
-        veggie_1.toppings.append(ParmesanTopping())
+        # The cook adds ParmesanTopping to the three toppings veggie_1 had.
+        veggie_1.toppings = [TomatoTopping(), OliveTopping(), MushroomTopping(), ParmesanTopping()]
 
         check("1. the constraint of Act 3, evaluated now", dangerous)
+
         print("2. the milk warnings derived in 4(a):", milk_warnings)
+        picture(warnings=[(warning.pizza, warning.allergen.value) for warning in milk_warnings],
+                title="2. the milk warnings derived in 4(a)")
+
+        labels_now = label_pizzas()
         print("3. the label of veggie_1, derived again:",
-              [label for label in label_pizzas() if label.role_taker is veggie_1])
+              [label for label in labels_now if label.role_taker is veggie_1])
+        picture(notes=[(label.role_taker, type(label).__name__.removesuffix("Pizza")) for label in labels_now],
+                title="3. the menu labels, derived again")
         """
     ),
     note(
@@ -1261,8 +1279,12 @@ ACT_4 = [
     ),
     code(
         """
-        veggie_1.toppings.pop()   # the cook bakes Ben a new veggie_1
+        # The cook bakes Ben a new veggie_1: ParmesanTopping is gone, the three toppings stay.
+        veggie_1.toppings = [TomatoTopping(), OliveTopping(), MushroomTopping()]
+
         check("the constraint, after the new veggie_1", dangerous)
+        picture(notes=[(label.role_taker, type(label).__name__.removesuffix("Pizza")) for label in label_pizzas()],
+                title="the menu labels, after the new veggie_1")
         """
     ),
 ]
@@ -1291,6 +1313,8 @@ ACT_5 = [
 
         from_the_kitchen = list(EntityQueryLanguageGenerativeBackend().evaluate(wish))
         print("made by the kitchen:      ", from_the_kitchen, from_the_kitchen[0].toppings)
+
+        picture(marked=on_the_counter + from_the_kitchen, title="selected (on the counter) and made (new)")
         """
     ),
     markdown(
@@ -1310,8 +1334,9 @@ ACT_5 = [
             print(candidate, [(topping, topping.spiciness.name) for topping in candidate.toppings])
 
         dana = Guest("Dana")
-        picture(marked=candidates[:1], more_orders=[Order(4, dana, candidates[:1])],
-                title="a pizza that did not exist before")
+        picture(marked=candidates[:1], more_orders=[Order(4, dana, candidates[:1])], more_pizzas=candidates,
+                notes=[(candidate, f"pepper {candidate.toppings[1].spiciness.name.lower()}") for candidate in candidates],
+                title="pizzas that did not exist before; Dana gets the first")
         """
     ),
     note(

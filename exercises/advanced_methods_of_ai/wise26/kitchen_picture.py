@@ -97,6 +97,11 @@ class KitchenPicture:
     Pizzas, orders and guests to ring as answers of a query. Pizzas not on the counter are drawn as new ones.
     """
 
+    new_pizzas: list[Any] = field(default_factory=list)
+    """
+    Pizzas that are not on the counter, drawn after it as new ones even if no order or answer contains them.
+    """
+
     violations: list[tuple[Any, Any]] = field(default_factory=list)
     """
     Pairs of an order and one of its pizzas whose line is drawn as a violated constraint.
@@ -145,7 +150,7 @@ class KitchenPicture:
         arranged.extend(
             pizza for pizza in self.pizzas if not self.contains(arranged, pizza)
         )
-        new = [pizza for order in self.orders for pizza in order.pizzas] + [
+        new = [pizza for order in self.orders for pizza in order.pizzas] + self.new_pizzas + [
             thing
             for thing in self.marked
             if type(thing).__name__ not in ("Order", "Guest")
