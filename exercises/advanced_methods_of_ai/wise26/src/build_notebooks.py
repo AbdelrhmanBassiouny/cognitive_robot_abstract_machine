@@ -182,7 +182,7 @@ SETUP = [
         **Predict** on the worksheet before you run the cell.
 
         The robot checks your answers: green when right, red with a hint when not. Every wrong answer costs the
-        pizzeria a **fine**, and the bill at the end adds them up, across restarts too. Lowest bill wins.
+        pizzeria a **fine**, and the bill at the end adds them up, across restarts too.
         """
     ),
     cartoon(
@@ -1576,11 +1576,10 @@ ACT_5 = [
     ),
     cartoon(
         Scene(
-            [Chef(mood=Mood.SHOCKED), Robot(mood=Mood.WORRIED), Guest("Ben", Mood.HAPPY, Look.BEN)],
+            [Chef(mood=Mood.SHOCKED), Robot(mood=Mood.WORRIED)],
             [
                 Bubble(0, "Hospital bills, a lawyer, an ambulance ... let's see tonight's bill."),
                 Bubble(1, "Please be zero. Please be zero.", BubbleKind.THOUGHT),
-                Bubble(2, "Compare with your neighbours: the lowest bill wins!"),
             ],
         )
     ),
@@ -1588,6 +1587,30 @@ ACT_5 = [
         """
         display(checker.bill())
         """
+    ),
+    markdown(
+        """
+        The guests have one more thing to say.
+        """
+    ),
+    cartoon(
+        Scene(
+            [
+                Guest("Ada", look=Look.ADA),
+                Guest("Ben", look=Look.BEN),
+                Robot(),
+                Guest("Chidi", look=Look.CHIDI),
+                Guest("Dana", look=Look.DANA),
+            ],
+            [
+                Bubble(0, "Everybody burns their tongue once. No fine from me!"),
+                Bubble(1, "In the end you found my safe pizza. Thank you!"),
+                Bubble(3, "We all learn by getting things wrong. Keep going!"),
+                Bubble(4, "My new pizza was perfect. See you next week!"),
+                Bubble(2, "They forgave every fine!", BubbleKind.THOUGHT),
+            ],
+            caption="The guests waived every fine: you are still learning, and they are on your side.",
+        )
     ),
 ]
 

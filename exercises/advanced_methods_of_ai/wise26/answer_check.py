@@ -433,30 +433,45 @@ class AnswerChecker:
 
 @dataclass
 class Bill:
-    """The bill of the evening, shown at the end of the notebook so that students can compare their totals."""
+    """The bill of the evening, shown at the end of the notebook: every fine, and the guests' decision to waive them."""
 
     book: FineBook
     """The fines on the bill."""
 
     def _repr_html_(self) -> str:
-        kind = VerdictKind.WRONG if self.book.total else VerdictKind.CORRECT
-        border, fill = kind.value
+        border, fill = VerdictKind.CORRECT.value
         style = (
             f"border-left: 5px solid {border}; background-color: {fill}; border-radius: 0 8px 8px 0; "
             "padding: 8px 20px; margin: 8px 0; line-height: 1.6"
         )
         rows = "".join(
             f"<tr><td>{escape(fine.task.name.lower().replace('_', ' '))}</td>"
-            f"<td style='text-align: right'>€{fine.amount}</td></tr>"
+            f"<td style='text-align: right'><s>€{fine.amount}</s></td></tr>"
             for fine in self.book.fines
         )
         table = f"<table>{rows}</table>" if rows else ""
-        return f'<div style="{style}"><b>{escape(repr(self))}</b>{table}</div>'
+        return f'<div style="{style}"><b>{escape(self.total_line)}</b>{table}{escape(self.verdict_line)}</div>'
 
     def __repr__(self) -> str:
+        return f"{self.total_line} {self.verdict_line}"
+
+    @property
+    def total_line(self) -> str:
+        """
+        :return: The first line of the bill: the total of the fines.
+        """
         if not self.book.fines:
-            return "The bill of the evening: €0. Not a single fine; the pizzeria's insurance sends flowers."
+            return "The bill of the evening: €0."
+        return f"The bill of the evening: €{self.book.total} in {len(self.book.fines)} fine(s)."
+
+    @property
+    def verdict_line(self) -> str:
+        """
+        :return: The last line of the bill: what the guests decided.
+        """
+        if not self.book.fines:
+            return "Not a single fine. The guests send their compliments to the robot."
         return (
-            f"The bill of the evening: €{self.book.total} in {len(self.book.fines)} fine(s). "
-            "Compare it with your neighbours: the lowest bill wins."
+            "But the guests talked it over and waived every euro: you are still learning, "
+            "and they are on your side. You owe nothing."
         )

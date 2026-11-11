@@ -390,8 +390,11 @@ class Scene:
         """
         placed = []
         for bubble in self.bubbles:
+            widest = 330.0 if len(self.characters) <= 3 else slot - 20
             width = min(
-                330.0, self.width - 24.0, max(150.0, 44 + 7.0 * len(bubble.text))
+                widest,
+                self.width - 24.0,
+                max(min(150.0, widest), 44 + 7.0 * len(bubble.text)),
             )
             characters_per_line = max(
                 10, int((width - 24) / (7.4 if bubble.code else 6.9))
@@ -399,10 +402,14 @@ class Scene:
             height = 22 + 17 * len(textwrap.wrap(bubble.text, characters_per_line))
             gap = 34 if bubble.kind is BubbleKind.THOUGHT else 22
             top = -self.characters[bubble.speaker].head_top - gap - height
-            centre = self.free_centre(xs[bubble.speaker], top, width, height, placed)
+            margin = 30 if bubble.kind is BubbleKind.THOUGHT else 12
+            centre = self.free_centre(
+                xs[bubble.speaker], top, width, height, placed, margin
+            )
             if centre is None:
                 centre = min(
-                    max(xs[bubble.speaker], width / 2 + 30), self.width - width / 2 - 30
+                    max(xs[bubble.speaker], width / 2 + margin),
+                    self.width - width / 2 - margin,
                 )
                 for _, other_centre, other_top, other_width, other_height in sorted(
                     placed, key=lambda item: -item[2]
@@ -428,12 +435,15 @@ class Scene:
         width: float,
         height: float,
         placed: list[tuple],
+        margin: float,
     ) -> float | None:
         """
         :return: The centre nearest to the speaker at which the bubble overlaps no placed bubble and still lies
             above its speaker, or ``None`` if there is none.
+
+        :param margin: The least distance between the bubble and the edge of the picture.
         """
-        lowest, highest = width / 2 + 30, self.width - width / 2 - 30
+        lowest, highest = width / 2 + margin, self.width - width / 2 - margin
         for shift in sorted(
             range(-int(width / 2) + 24, int(width / 2) - 23, 8), key=abs
         ):
