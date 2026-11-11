@@ -913,7 +913,21 @@ ACT_2 = [
         could ever make an object a `Pizza`, or a `VegetarianPizza`?
         """
     ),
-    reference("**8 formulas**, one per printed line."),
+    reference(
+        """
+        You should have one formula per printed line. Each kind of line has its own pattern:
+
+        | Printed line | Becomes |
+        |:--|:--|
+        | `every A is a B` | an implication between two classes: `∀x (MozzarellaTopping(x) → CheeseTopping(x))` |
+        | `every A has r, each a B` | a *relation* `r(x, y)` between an `A` and each of its `B`s |
+        | `every A has a r, which is a B` | a *function* `r(x)` whose value is a `B` |
+        | `every A is a role of one B` | a *function* from the role to the one `B` that takes it |
+
+        For the question: look at which class names stand on the right of `→`, and ask what must already be
+        true about an object before that formula says anything about it.
+        """
+    ),
     note(
         """
         - `every MozzarellaTopping is a CheeseTopping`: `∀x (MozzarellaTopping(x) → CheeseTopping(x))`.
