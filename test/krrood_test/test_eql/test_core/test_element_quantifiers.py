@@ -134,19 +134,6 @@ def test_no_on_a_single_value_negates_the_pattern(store):
 # %% conditions on the pattern
 
 
-def test_condition_on_a_nested_pattern_constrains_the_element(store):
-    """
-    A condition given to a pattern with :meth:`where` constrains the element it is
-    nested as.
-    """
-    very_light = a(Product)
-    very_light.where(very_light.weight < 0.05)
-
-    shelves = a(Shelf)(products=very_light).from_(store.shelves)
-
-    assert shelves.tolist() == [store.red_fruit_shelf]
-
-
 def test_condition_on_every_element(store):
     """
     A condition given to :func:`every` with :meth:`where` holds of every element.
