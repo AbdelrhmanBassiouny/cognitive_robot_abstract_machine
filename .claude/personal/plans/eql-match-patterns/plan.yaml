@@ -1,0 +1,46 @@
+schema_version: 1
+id: eql-match-patterns
+title: Extend the EQL match pattern language
+description: >
+  Grow the match patterns past #606 (every_is, none_is, unions of classes a(A | B)):
+  a union of whole patterns, each side with its own keyword arguments and conditions,
+  and generative backends that respect every_is and none_is.
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 607
+waves:
+  - id: patterns
+    name: Patterns after every_is, none_is and class unions
+tracks:
+  - id: syntax
+    name: Pattern syntax
+    wave: patterns
+  - id: generation
+    name: Generation
+    wave: patterns
+items:
+  - id: pattern-union
+    branch: feature/eql-pattern-union
+    title: A union of patterns, a(X)(...) | a(Y)(...)
+    track: syntax
+    depends_on: []
+    status: not started
+    notes: >
+      new-feature, stacked on #606 (feature/eql-every-and-no-patterns) until it lands.
+      One pattern matching an object that fits either side, usable wherever a pattern
+      goes, e.g. none_is(a(MeatTopping) | a(PizzaTopping)(spiciness=HOT)). Settle at
+      kickoff: what from_, where and keywords applied after | mean; the combined
+      variable's type (nearest common base, as for class unions); resolving both sides
+      against one variable; generation. Touches query/match.py, factories.py,
+      doc/eql/user/match.md, a new test in test_eql/test_core.
+
+  - id: generative-element-quantifiers
+    branch: feature/eql-generative-element-quantifiers
+    title: Generative backends respect every_is and none_is
+    track: generation
+    depends_on: []
+    status: not started
+    notes: >
+      new-feature, stacked on #606 until it lands. EntityQueryLanguageGenerativeBackend
+      and ProbabilisticBackend construct an every_is/none_is pattern as for a(...):
+      every_is must constrain each constructed element, none_is exclude matching ones.
+      Touches backends.py and query/match.py, with tests.
