@@ -38,7 +38,7 @@ from krrood.class_diagrams.utils import (
     get_type_hints_of_object,
     is_union_annotation,
 )
-from krrood.class_diagrams.collection_kind import CollectionKind
+from krrood.class_diagrams.collection_kind import CollectionKind, DeclaredValueKind
 from krrood.utils import module_and_class_name, is_builtin_type
 
 if TYPE_CHECKING:
@@ -219,6 +219,25 @@ class WrappedField:
             ),
             None,
         )
+
+    @cached_property
+    def declared_value_kind(self) -> DeclaredValueKind:
+        """
+        Whether the field's annotation declares a collection, one value, or neither.
+
+        Of a union's members other than ``None``, one that declares nothing makes the
+        union declare nothing, and otherwise one collection makes it a collection.
+        """
+        kinds = {
+            DeclaredValueKind.from_annotation(annotation)
+            for annotation in self._union_members_
+            if annotation is not NoneType
+        }
+        if not kinds or DeclaredValueKind.UNDECLARED in kinds:
+            return DeclaredValueKind.UNDECLARED
+        if DeclaredValueKind.COLLECTION in kinds:
+            return DeclaredValueKind.COLLECTION
+        return DeclaredValueKind.SINGLE_VALUE
 
     @cached_property
     def _union_members_(self) -> tuple[Any, ...]:

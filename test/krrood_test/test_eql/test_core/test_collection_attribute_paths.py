@@ -1,6 +1,6 @@
 """
 Tests for reading an attribute of the elements of a collection through a path, such as
-``shelf.products.colour``, without naming the element with ``flat_variable``.
+``shelf.products.colour``, without naming the element with ``variable_from``.
 """
 
 from __future__ import annotations
@@ -20,12 +20,12 @@ from krrood.entity_query_language.factories import (
     count,
     entity,
     exists,
-    flat_variable,
     for_all,
     not_,
     or_,
     set_of,
     variable,
+    variable_from,
 )
 
 from ...dataset.collection_attribute_paths import (
@@ -189,12 +189,12 @@ def test_conditions_on_same_path_constrain_same_element(store):
     assert green_apple.tolist() == []
 
 
-def test_flat_variable_names_another_element(store):
+def test_variable_over_the_collection_names_another_element(store):
     """
-    A flat variable ranges over the products independently of the path.
+    A variable over the products ranges over them independently of the path.
     """
     shelf = variable(Shelf, store.shelves)
-    other_product = flat_variable(shelf.products)
+    other_product = variable_from(shelf.products)
     green_and_apple = an(
         entity(shelf).where(
             shelf.products.colour == Colour.GREEN, other_product.name == "apple"
@@ -293,7 +293,7 @@ def test_universal_quantifier_over_empty_collection_holds(store):
     Every product of an empty shelf is green, vacuously.
     """
     shelf = variable(Shelf, store.shelves)
-    product = flat_variable(shelf.products)
+    product = variable_from(shelf.products)
     all_green = an(
         entity(shelf).where(for_all(product, product.colour == Colour.GREEN))
     )
@@ -305,7 +305,7 @@ def test_negated_existential_quantifier_over_empty_collection_holds(store):
     An empty shelf has no red product.
     """
     shelf = variable(Shelf, store.shelves)
-    product = flat_variable(shelf.products)
+    product = variable_from(shelf.products)
     no_red = an(
         entity(shelf).where(not_(exists(product, product.colour == Colour.RED)))
     )
@@ -333,7 +333,7 @@ def test_universal_quantifier_body_reads_some_element_per_value(warehouses):
     A path in a universal body asks for some product of each shelf.
     """
     warehouse = variable(Warehouse, warehouses)
-    shelf = flat_variable(warehouse.shelves)
+    shelf = variable_from(warehouse.shelves)
     every_shelf_has_red = an(
         entity(warehouse).where(for_all(shelf, shelf.products.colour == Colour.RED))
     )
@@ -345,7 +345,7 @@ def test_existential_quantifier_body_reads_some_element(warehouses):
     A path in an existential body asks for some product of some shelf.
     """
     warehouse = variable(Warehouse, warehouses)
-    shelf = flat_variable(warehouse.shelves)
+    shelf = variable_from(warehouse.shelves)
     some_shelf_has_green = an(
         entity(warehouse).where(exists(shelf, shelf.products.colour == Colour.GREEN))
     )
@@ -403,3 +403,23 @@ def test_count_of_elements_is_zero_for_empty_collection(store):
     assert {row[shelf].name: row[product_count] for row in rows} == {
         shelf_.name: len(shelf_.products) for shelf_ in store.shelves
     }
+
+
+# %% domains read through a path
+
+
+def test_domain_read_through_a_path_skips_the_absent_element(warehouses):
+    """
+    A warehouse without shelves gives a variable over its shelves' products no value.
+    """
+    warehouse = variable(Warehouse, warehouses)
+    product = variable_from(warehouse.shelves.products)
+
+    rows = set_of(warehouse, product).tolist()
+
+    assert [(row[warehouse], row[product]) for row in rows] == [
+        (warehouse_, product_)
+        for warehouse_ in warehouses
+        for shelf_ in warehouse_.shelves
+        for product_ in shelf_.products
+    ]
