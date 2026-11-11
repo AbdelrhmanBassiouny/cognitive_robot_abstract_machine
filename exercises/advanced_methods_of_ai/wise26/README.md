@@ -12,13 +12,13 @@ what the robot knows; defining, deriving and generating *write* to it.
 |:--|:--|:--|:--|:--|
 | 0–8 | Slides | what we want today, EQL and first-order logic | – | queries as formulas with free variables |
 | 8–28 | Prologue, 1 Asking | the pizzeria; “Which pizzas have cheese?” “Bring me the one with olives.” | a question | an interpretation; ∃, ∀, ¬∃; assignments; closed world; definite descriptions (Russell, Strawson) |
-| 28–38 | Pen break 1 | | | |
+| 28–38 | Pen break 1 | which pizzas satisfy ∃¬, ¬∃, ∀¬; would OWL agree with Q3? | – | ∃¬ ≠ ¬∃ ≡ ∀¬, vacuous truth; closed versus open world |
 | 38–50 | 2 Defining | “Which pizzas may carry the green V?” | a definition | class declarations as necessary conditions; ↔ to check, classify (roles) and conclude; rules with exceptions |
 | 50–58 | 3 Constraining | “Ben must never get milk.” | a constraint | ¬∀ ≡ ∃¬; integrity constraint versus axiom |
-| 58–68 | Pen break 2 | | | |
+| 58–68 | Pen break 2 | the green V on unknown toppings; “every order has a pizza” | – | ↔ in both directions; ¬∀ ≡ ∃¬, and what a counterexample can name |
 | 68–75 | 4 Deriving | the kitchen writes allergen warnings | the body of a rule that creates objects | ∃ in the head, forward chaining, truth maintenance, non-monotonicity |
 | 75–80 | 5 Generating | Dana orders a new pizza | a specification | constructing a model; one query, several backends |
-| 80–90 | Pen break 3 | the whole evening | – | summary |
+| 80–90 | Pen break 3 | how many warnings; Ben's allergy as all five uses | – | free variables of a rule's body; the five uses side by side |
 
 Students start the setup cell of the notebook during the slides, so that EQL is installed when the acts begin.
 The evening happens in the notebook: students type a guess before each prediction cell, and the cell then shows
