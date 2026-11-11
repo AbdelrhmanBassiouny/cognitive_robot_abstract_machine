@@ -41,17 +41,16 @@ items:
   track: image
   status: in_progress
   blockers:
-  - '#527''s merge (with main) conflicts in geometry.py: main has #761''s HSV Color, krrimage.color
-    the old one. Re-move Color as #761 left it, then merge #527.'
+  - '#527 not yet merged into cram2.'
   depends_on:
   - planar-point-interface
-  session: https://claude.ai/code/session_01J17aVY3vyQM8goACbkHkcp
-  notes: '#524 on #527: krrood_image.coordinates owns ImagePlane and ImageCoordinateSystem,
-    which becomes an AffineFrame once #527 adds it; ImagePoint implements AffinePoint2D[ImageCoordinateSystem,
-    float] (was PlanarPoint); Pixel stays a grid cell. Pushed a4e9bbdb. Rename krrimage to
-    krrood_image here once #527''s rename is merged in. cram2#761 rewrites SemDT''s Color:
-    #524 lands after it and moves Color as #761 left it; ask before dropping the setters.
-    Whichever of #524 and the adopt PR lands second merges the README entries.'
+  session: https://claude.ai/code/session_01JxHGiM2mprwspsz9viDuqf
+  notes: 'Handed over to a student, working in their own fork of cram2 (plan: https://claude.ai/artifact/B6CFhypVTivS8majdp34xA,
+    explainer: https://claude.ai/artifact/BHXvkTMLZQdpUzA1Beqcdt). #524 is the code source only:
+    port krrimage onto #527''s head as krrood_image in a fresh branch, ImageCoordinateSystem an
+    AffineFrame, ImagePoint an AffinePoint; move Color as cram2 main has it (#761 merged). Draft
+    PR in the student''s fork until #527 is in cram2, then rebase on main and open to cram2; its
+    number replaces 524 here.'
 - id: image-extensions
   title: Depth and segmentation images, camera intrinsics, SemDT's CameraResolution and VideoResolution
     collapsed into Resolution
@@ -62,7 +61,7 @@ items:
   - projection-interface
   - planar-point-interface
   branch: claude/krrood-image-depth-segmentation
-  notes: Waits for cram2#761, then moves its SemDT CameraModel family into krrood_image's
+  notes: Moves cram2#761's (merged) SemDT CameraModel family into krrood_image's
     camera extra as a PerspectiveProjection SpaceMap onto the sensor's ImagePlane. The pixel
     coordinate system is an AffineFrame (undistorted images; a distorted one is a plain CoordinateSystem);
     K is a CameraCalibration, an AffineCoordinateChange from the camera's CartesianFrame2D.
