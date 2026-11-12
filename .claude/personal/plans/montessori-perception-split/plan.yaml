@@ -23,41 +23,28 @@ tracks:
   wave: split
   description: Imports nothing else in
 items:
-- id: network-limits-on-main
-  title: Land the large-message link check on main
-  branch: claude/clever-carson-wp7c09
-  track: standalone
-  depends_on: []
-  status: done
-  pull_request_number: 487
-  session: https://claude.ai/code/session_01HMdRorbzSe9pWVXLCKk8mX
-  notes: 'experiments/network_limits.py and its test, off main. Reshaped over three review
-    rounds (latest a4b815ce4): unmet_requirements() returns an EQL query on
-    LargeMessageReceiver, so the files no longer match #202. All 10 threads resolved.
-    Promotion link recorded on #487 (promotion-link-sent); waiting on CI and the developer
-    clicking Create.'
 - id: shape-vocabulary-on-main
   title: Land the Montessori shape vocabulary, the board's hole geometry and the piece set
   branch: claude/ecstatic-knuth-curscv
   track: stack
   blockers:
-    - >-
-      Waiting on re-review of cram2#804 at a0ed6304d. Its 3 threads (Hue classproperties, Polygon2D
-      fields) are fixed but unanswered there: replies on the upstream are the developer's. The
-      circle's corner count became a circle() parameter, not a field.
+  - 'Waiting on CI and re-review of cram2#804 at 36aec5dad, which unified this layer with
+    main''s Tracy Montessori demo (api-break for main''s demo and Mesh.triangular_prism).
+    cram2#804''s description predates it, and its 3 outdated threads are unanswered: both
+    are the developer''s to do upstream.'
   depends_on: []
   status: in_progress
   pull_request_number: 488
-  session: https://claude.ai/code/session_01GESraow875svtqq3zJ7JZ1
-  notes: >
-    montessori semantics, exceptions, hole_geometry (+ resources/board.stl), pieces; SemDT
-    geometry.py, shape_collection.py, exceptions.py; their tests - 14 files (list on #488). Off
-    main, cut from #202 at 880368fd3 (geometry.py = main's file plus #202's additions). Promoted
-    upstream as cram2#804.
+  session: https://claude.ai/code/session_01JxHGiMeCJRVXzPpv26S5vx
+  notes: 'Shape-sorting vocabulary in semantic_digital_twin (ShapeSortingPiece + Cube/Cylinder/...Piece,
+    ShapeSortingHole, ShapeSortingBoard; shape_sorting_toy/ board mesh, hole reading, PieceSet,
+    PieceColor; Polygon2D, Color.hue_distance, convex footprint), shared with main''s coraplex
+    Tracy demo; experiments keeps PieceColorMatcher. No longer a verbatim cut of #202: #202
+    adopts these names when it merges main and this layer. Promoted upstream as cram2#804.
 
-    The pieces.py:203 thread's EQL observation matching is tracked as
-    observation-matched-against-the-piece-set (knowledge-directed-requests); the thread only awaits
-    the developer closing it.
+    pieces.py:203 thread''s EQL matching is item observation-matched-against-the-piece-set.
+
+    '
 - id: simulated-world-on-main
   title: Land the simulated Montessori world
   branch: null
@@ -123,12 +110,11 @@ items:
   track: stack
   depends_on:
   - captures-on-main
-  - network-limits-on-main
   status: not_started
   notes: 'perception/node.py, markers.py, recordings.py, watch_camera.py, capture_from_bag.py,
     tracy_experiments/equipment.py and tracy_experiments/__init__.py - 7 files, ~1,770 lines,
     all importing rclpy, so nothing here can run their tests. The item is to merge the top
     of the stack, and network-limits-on-main''s branch, into montessori_perception_on_main
-    (node.py''s check_large_messages_can_arrive() call becomes
-    LargeMessageReceiver().check_messages_can_arrive(), per #487), retarget #202''s base to captures-on-main''s branch, and
-    rewrite #202''s description to cover only this layer.'
+    (node.py''s check_large_messages_can_arrive() call becomes LargeMessageReceiver().check_messages_can_arrive(),
+    per #487), retarget #202''s base to captures-on-main''s branch, and rewrite #202''s description
+    to cover only this layer.'
