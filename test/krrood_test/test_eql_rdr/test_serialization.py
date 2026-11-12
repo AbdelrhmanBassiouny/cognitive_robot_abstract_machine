@@ -155,7 +155,7 @@ def test_generated_tree_evaluates_a_bird_case_the_same_as_the_original():
         rebuilt_root, Species.BIRD
     )
     assert knowledge.sufficient_condition_sets[0].evaluate_against(
-        rebuilt_variable, bat
+        shared_variable=rebuilt_variable, case=bat
     )
 
 
@@ -193,7 +193,9 @@ def _template_docstring() -> str:
     locate it for rendering so the expected text has one source rather than a retyped copy.
     Everything from the first placeholder on is dropped, since a Jinja template is not
     parseable Python."""
-    template_source = (Path(_TEMPLATES_DIRECTORY) / _RDR_MODULE_TEMPLATE_NAME).read_text()
+    template_source = (
+        Path(_TEMPLATES_DIRECTORY) / _RDR_MODULE_TEMPLATE_NAME
+    ).read_text()
     return ast.get_docstring(ast.parse(template_source[: template_source.index("{{")]))
 
 
@@ -215,7 +217,7 @@ def test_recorded_corner_case_is_embedded_in_the_generated_source():
     rdr = _flat_tree_rdr()
     rule_node = walk_rules_in_emission_order(rdr.query._conditions_root_)[0]
     corner_case = Animal("cat", has_fur=True, can_fly=False)
-    rdr.corner_cases.record(rule_node, corner_case)
+    rdr.corner_cases.record_corner_case(rule_node, corner_case)
 
     source = rdr_to_python(rdr)
     namespace = _exec_generated_module(source)
@@ -227,7 +229,7 @@ def test_recorded_corner_case_with_an_enum_field_round_trips_through_the_generat
     rdr = _flat_tree_rdr()
     rule_node = walk_rules_in_emission_order(rdr.query._conditions_root_)[0]
     corner_case = Animal("cat", has_fur=True, can_fly=False, habitat=Species.MAMMAL)
-    rdr.corner_cases.record(rule_node, corner_case)
+    rdr.corner_cases.record_corner_case(rule_node, corner_case)
 
     source = rdr_to_python(rdr)
     namespace = _exec_generated_module(source)

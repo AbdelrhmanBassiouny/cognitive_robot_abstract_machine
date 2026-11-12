@@ -387,7 +387,7 @@ class TestSaveRdrWithCasePreservesCornerCases(unittest.TestCase):
         """
         Each restored corner case must equal (``==``) the case used during fitting.
 
-        Verifies that ``AsdictCaseSerializer`` faithfully reconstructs the ``Animal``
+        Verifies that ``DataclassConstructorSerializer`` faithfully reconstructs the ``Animal``
         dataclass through the constructor-source round-trip path.
         """
         rdr = _build_two_rule_rdr()
@@ -401,8 +401,10 @@ class TestSaveRdrWithCasePreservesCornerCases(unittest.TestCase):
         ordered_after = walk_rules_in_emission_order(loaded.conditions_root)
         self.assertEqual(len(ordered_before), len(ordered_after))
         for node_before, node_after in zip(ordered_before, ordered_after):
-            original_case = rdr.corner_cases.get(node_before._id_)
-            restored_case = loaded.corner_cases.get(node_after._id_)
+            original_case = rdr.corner_cases.get_corner_case_for_node(node_before._id_)
+            restored_case = loaded.corner_cases.get_corner_case_for_node(
+                node_after._id_
+            )
             self.assertIsNotNone(
                 original_case,
                 "Each fitted rule must have a recorded corner case",

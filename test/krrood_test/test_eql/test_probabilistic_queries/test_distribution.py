@@ -11,10 +11,10 @@ from ._fixtures import Coin, build_three_independent_variables_circuit
 
 def test_distribution_conditions_and_truncates():
     circuit, var_a, var_b, var_c = build_three_independent_variables_circuit()
-    backend = ProbabilisticBackend(model_registry=DictRegistry({Coin: circuit}))
+    backend = ProbabilisticBackend(model_registry=DictRegistry(models={Coin: circuit}))
 
     x = a(Coin)(a=..., b=..., c=1.5)
-    x.where(x.variable.a > 0.2)
+    x.where(x.a > 0.2)
     result = distribution_of(x).first(backend=backend)
 
     # a=..., b=... are free; c=1.5 conditions the circuit (a point mass at 1.5, not
@@ -34,11 +34,11 @@ def test_distribution_conditions_and_truncates():
 
 def test_distribution_narrowed_to_selected_variables():
     circuit, var_a, var_b, var_c = build_three_independent_variables_circuit()
-    backend = ProbabilisticBackend(model_registry=DictRegistry({Coin: circuit}))
+    backend = ProbabilisticBackend(model_registry=DictRegistry(models={Coin: circuit}))
 
     x = a(Coin)(a=..., b=..., c=1.5)
-    x.where(x.variable.a > 0.2)
-    result = distribution_of(x, marginalize_for=(x.variable.a,)).first(backend=backend)
+    x.where(x.a > 0.2)
+    result = distribution_of(x, marginalize_for=(x.a,)).first(backend=backend)
 
     assert {v.name for v in result.variables} == {"Coin.a"}
     a_range = SimpleEvent.from_data({var_a: closed(0.2, 1)}).as_composite_set()
@@ -47,7 +47,7 @@ def test_distribution_narrowed_to_selected_variables():
 
 def test_distribution_no_conditions_or_where_is_the_full_joint():
     circuit, var_a, var_b, var_c = build_three_independent_variables_circuit()
-    backend = ProbabilisticBackend(model_registry=DictRegistry({Coin: circuit}))
+    backend = ProbabilisticBackend(model_registry=DictRegistry(models={Coin: circuit}))
 
     x = a(Coin)(a=..., b=..., c=...)
     result = distribution_of(x).first(backend=backend)

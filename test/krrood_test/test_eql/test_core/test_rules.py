@@ -14,8 +14,8 @@ from krrood.entity_query_language.factories import (
     add,
 )
 from krrood.entity_query_language.core.variable import Literal
-from krrood.entity_query_language.core.base_expressions import (
-    OperationResult,
+from krrood.entity_query_language.core.base_expressions import OperationResult
+from krrood.entity_query_language.evaluation_context import (
     _evaluation_context_var,
     get_evaluation_context,
     set_evaluation_context,
@@ -62,16 +62,16 @@ def test_generate_drawers_from_direct_condition(handles_and_containers_world):
     )
 
     with condition:
-        Add(drawers, inference(Drawer)(handle=handle, container=container))
+        Add(left=drawers, right=inference(Drawer)(handle=handle, container=container))
 
     assert condition._conditions_root_ is condition
 
     solutions_gen = condition.evaluate()
     all_solutions = list(solutions_gen)
 
-    assert (
-        len(all_solutions) == 2
-    ), "Should generate components for two possible drawer."
+    assert len(all_solutions) == 2, (
+        "Should generate components for two possible drawer."
+    )
     assert all(isinstance(d[drawers], Drawer) for d in all_solutions)
     assert all_solutions[0][drawers].handle.name == "Handle3"
     assert all_solutions[0][drawers].container.name == "Container3"
@@ -136,10 +136,10 @@ def test_conditions_root_resolves_for_a_rule_condition_reused_as_another_querys_
     query = an(entity(views).where(body == fixed_connection.parent))
 
     with query:
-        Add(views, inference(Door)(handle=handle, body=body))
+        Add(left=views, right=inference(Door)(handle=handle, body=body))
         refinement_condition = body.size > 1
         with refinement(refinement_condition):
-            Add(views, inference(Door)(handle=handle, body=body))
+            Add(left=views, right=inference(Door)(handle=handle, body=body))
 
     assert len(refinement_condition._parents_) == 1
 
@@ -167,20 +167,20 @@ def test_conditions_root_resolves_after_insert_at_clones_an_already_parented_con
     views = deduced_variable(View)
     query = an(entity(views).where(body == fixed_connection.parent))
     with query:
-        Add(views, inference(Door)(handle=handle, body=body))
+        Add(left=views, right=inference(Door)(handle=handle, body=body))
     anchor = query._conditions_root_
 
     other_views = deduced_variable(View)
     other_query = an(entity(other_views).where(handle == fixed_connection.child))
     with other_query:
-        Add(other_views, inference(Door)(handle=handle, body=body))
+        Add(left=other_views, right=inference(Door)(handle=handle, body=body))
     already_parented_condition = other_query._conditions_root_
 
     # This is the live-growth API (the one insert_refinement/insert_alternative call) rather
     # than the with-refinement(...) DSL, so it exercises _node_for_new_position_'s cloning
     # branch directly: already_parented_condition already has a parent (other_query's Where),
     # so insert_at must splice in a clone rather than reusing the node in place.
-    new_condition = Refinement.insert_at(anchor, already_parented_condition)
+    new_condition = Refinement.insert_at(already_parented_condition, anchor=anchor)
 
     assert new_condition is not already_parented_condition
     assert already_parented_condition._conditions_root_ is already_parented_condition, (
@@ -224,7 +224,7 @@ def test_splicing_beside_a_condition_the_new_branch_wraps_leaves_the_branch_alon
     query = an(entity(drawers).where(correct))
     query.build()
 
-    Alternative.insert_at(query._conditions_root_, incorrect)
+    Alternative.insert_at(incorrect, anchor=query._conditions_root_)
 
     assert any(child is correct for child in incorrect._children_), (
         "the branch being spliced in still reads the attribute it was written over, "
@@ -257,7 +257,7 @@ def test_a_rule_whose_condition_the_next_rule_wraps_is_still_answered():
         add(views, inference(Door)(handle=drawer.handle, body=drawer.container))
     query.build()
 
-    spliced = Alternative.insert_at(query._conditions_root_, incorrect)
+    spliced = Alternative.insert_at(incorrect, anchor=query._conditions_root_)
     with spliced:
         add(
             views,
@@ -289,14 +289,14 @@ def test_generate_drawers_from_query(handles_and_containers_world):
     )
 
     with query:
-        Add(drawers, inference(Drawer)(handle=handle, container=container))
+        Add(left=drawers, right=inference(Drawer)(handle=handle, container=container))
 
     solutions = query.evaluate()
     all_solutions = list(solutions)
 
-    assert (
-        len(all_solutions) == 2
-    ), "Should generate components for two possible drawer."
+    assert len(all_solutions) == 2, (
+        "Should generate components for two possible drawer."
+    )
     assert all(isinstance(d, Drawer) for d in all_solutions)
     assert all_solutions[0].handle.name == "Handle3"
     assert all_solutions[0].container.name == "Container3"
@@ -318,9 +318,12 @@ def test_rule_tree_with_a_refinement(doors_and_drawers_world):
     )
 
     with query:
-        Add(drawers_and_doors, inference(Drawer)(handle=handle, container=body))
+        Add(
+            left=drawers_and_doors,
+            right=inference(Drawer)(handle=handle, container=body),
+        )
         with refinement(body.size > 1):
-            Add(drawers_and_doors, inference(Door)(handle=handle, body=body))
+            Add(left=drawers_and_doors, right=inference(Door)(handle=handle, body=body))
 
     all_solutions = list(query.evaluate())
     assert len(all_solutions) == 3, "Should generate 1 drawer and 1 door."
@@ -351,16 +354,18 @@ def test_rule_tree_with_multiple_refinements(doors_and_drawers_world):
     )
 
     with query:
-        Add(views, inference(Drawer)(handle=handle, container=body))
+        Add(left=views, right=inference(Drawer)(handle=handle, container=body))
         with refinement(body.size > 1):
-            Add(views, inference(Door)(handle=handle, body=body))
+            Add(left=views, right=inference(Door)(handle=handle, body=body))
             with alternative(
                 body == revolute_connection.child,
                 container == revolute_connection.parent,
             ):
                 Add(
-                    views,
-                    inference(Wardrobe)(handle=handle, body=body, container=container),
+                    left=views,
+                    right=inference(Wardrobe)(
+                        handle=handle, body=body, container=container
+                    ),
                 )
 
     all_solutions = list(query.evaluate())
@@ -394,11 +399,11 @@ def test_rule_tree_with_an_alternative(doors_and_drawers_world):
     )
 
     with query:
-        Add(views, inference(Drawer)(handle=handle, container=body))
+        Add(left=views, right=inference(Drawer)(handle=handle, container=body))
         with alternative(
             body == revolute_connection.parent, handle == revolute_connection.child
         ):
-            Add(views, inference(Door)(handle=handle, body=body))
+            Add(left=views, right=inference(Door)(handle=handle, body=body))
 
     all_solutions = list(query.evaluate())
     assert len(all_solutions) == 4, "Should generate 3 drawers, 1 door"
@@ -436,11 +441,11 @@ def test_rule_tree_with_multiple_alternatives(doors_and_drawers_world):
     )
 
     with query:
-        Add(views, inference(Drawer)(handle=handle, container=body))
+        Add(left=views, right=inference(Drawer)(handle=handle, container=body))
         with alternative(
             revolute_connection.parent == body, revolute_connection.child == handle
         ):
-            Add(views, inference(Door)(handle=handle, body=body))
+            Add(left=views, right=inference(Door)(handle=handle, body=body))
         with alternative(
             fixed_connection.parent == body,
             fixed_connection.child == handle,
@@ -448,8 +453,10 @@ def test_rule_tree_with_multiple_alternatives(doors_and_drawers_world):
             container == revolute_connection.parent,
         ):
             Add(
-                views,
-                inference(Wardrobe)(handle=handle, body=body, container=container),
+                left=views,
+                right=inference(Wardrobe)(
+                    handle=handle, body=body, container=container
+                ),
             )
 
     all_solutions = list(query.evaluate())
@@ -479,7 +486,7 @@ def test_rule_tree_with_multiple_alternatives_optimized(doors_and_drawers_world)
     query = an(
         entity(views)
         .where(
-            HasType(fixed_connection.child, Handle),
+            HasType(variable=fixed_connection.child, types_=Handle),
             fixed_connection.parent == prismatic_connection.child,
         )
         .distinct()
@@ -487,26 +494,26 @@ def test_rule_tree_with_multiple_alternatives_optimized(doors_and_drawers_world)
 
     with query:
         Add(
-            views,
-            inference(Drawer)(
+            left=views,
+            right=inference(Drawer)(
                 handle=fixed_connection.child, container=fixed_connection.parent
             ),
         )
-        with alternative(HasType(revolute_connection.child, Handle)):
+        with alternative(HasType(variable=revolute_connection.child, types_=Handle)):
             Add(
-                views,
-                inference(Door)(
+                left=views,
+                right=inference(Door)(
                     handle=revolute_connection.child, body=revolute_connection.parent
                 ),
             )
         with alternative(
             fixed_connection,
             fixed_connection.parent == revolute_connection.child,
-            HasType(revolute_connection.parent, Container),
+            HasType(variable=revolute_connection.parent, types_=Container),
         ):
             Add(
-                views,
-                inference(Wardrobe)(
+                left=views,
+                right=inference(Wardrobe)(
                     handle=fixed_connection.child,
                     body=fixed_connection.parent,
                     container=revolute_connection.parent,
@@ -551,19 +558,21 @@ def test_rule_tree_with_multiple_alternatives_better_rule_tree(doors_and_drawers
 
     with query:
         with refinement(prismatic_connection.child == body):
-            Add(views, inference(Drawer)(handle=handle, container=body))
+            Add(left=views, right=inference(Drawer)(handle=handle, container=body))
             with alternative(
                 body == revolute_connection.child,
                 container == revolute_connection.parent,
             ):
                 Add(
-                    views,
-                    inference(Wardrobe)(handle=handle, body=body, container=container),
+                    left=views,
+                    right=inference(Wardrobe)(
+                        handle=handle, body=body, container=container
+                    ),
                 )
         with alternative(
             revolute_connection.parent == body, revolute_connection.child == handle
         ):
-            Add(views, inference(Door)(handle=handle, body=body))
+            Add(left=views, right=inference(Door)(handle=handle, body=body))
 
     all_solutions = list(query.evaluate())
     assert len(all_solutions) == 3, "Should generate 1 drawer, 1 door and 1 wardrobe."
@@ -594,7 +603,7 @@ def test_rule_tree_with_multiple_alternatives_better_rule_tree_optimized(
     query = an(
         entity(views)
         .where(
-            HasType(fixed_connection.child, Handle),
+            HasType(variable=fixed_connection.child, types_=Handle),
         )
         .distinct()
     )
@@ -602,27 +611,27 @@ def test_rule_tree_with_multiple_alternatives_better_rule_tree_optimized(
     with query:
         with refinement(prismatic_connection.child == fixed_connection.parent):
             Add(
-                views,
-                inference(Drawer)(
+                left=views,
+                right=inference(Drawer)(
                     handle=fixed_connection.child, container=fixed_connection.parent
                 ),
             )
             with alternative(
                 fixed_connection.parent == revolute_connection.child,
-                HasType(revolute_connection.parent, Container),
+                HasType(variable=revolute_connection.parent, types_=Container),
             ):
                 Add(
-                    views,
-                    inference(Wardrobe)(
+                    left=views,
+                    right=inference(Wardrobe)(
                         handle=fixed_connection.child,
                         body=fixed_connection.parent,
                         container=revolute_connection.parent,
                     ),
                 )
-        with next_rule(HasType(revolute_connection.child, Handle)):
+        with next_rule(HasType(variable=revolute_connection.child, types_=Handle)):
             Add(
-                views,
-                inference(Door)(
+                left=views,
+                right=inference(Door)(
                     handle=revolute_connection.child, body=revolute_connection.parent
                 ),
             )
@@ -672,10 +681,10 @@ def test_rule_with_grouped_by(inferred_cabinets_world):
 @pytest.fixture
 def rule_tree_doc_example_connections():
     return [
-        ExampleConnection(1, "c1"),
-        ExampleConnection(2, "c2"),
-        ExampleConnection(3, "c3"),
-        ExampleConnection(4, "m4"),
+        ExampleConnection(type_code=1, name="c1"),
+        ExampleConnection(type_code=2, name="c2"),
+        ExampleConnection(type_code=3, name="c3"),
+        ExampleConnection(type_code=4, name="m4"),
     ]
 
 
@@ -685,12 +694,20 @@ def rule_tree_doc_example_connections():
         (
             2,
             og_set := {
-                ExampleFixedView(ExampleConnection(1, "c1")),
-                ExampleView(ExampleConnection(2, "c2")),
-                ExampleView(ExampleConnection(3, "c3")),
+                ExampleFixedView(connection=ExampleConnection(type_code=1, name="c1")),
+                ExampleView(connection=ExampleConnection(type_code=2, name="c2")),
+                ExampleView(connection=ExampleConnection(type_code=3, name="c3")),
             },
         ),
-        (4, og_set | {ExampleRevoluteView(ExampleConnection(4, "m4"))}),
+        (
+            4,
+            og_set
+            | {
+                ExampleRevoluteView(
+                    connection=ExampleConnection(type_code=4, name="m4")
+                )
+            },
+        ),
     ],
 )
 def test_doc_example(rule_tree_doc_example_connections, alternative_code, result_set):
@@ -736,9 +753,11 @@ def test_conclusions_of_type_returns_matching_conclusions(handles_and_containers
     )
 
     with condition:
-        added = Add(drawers, inference(Drawer)(handle=handle, container=container))
+        added = Add(
+            left=drawers, right=inference(Drawer)(handle=handle, container=container)
+        )
 
-    assert condition.conclusions_of_type(Add) == [added]
+    assert condition.conclusions_of_type(conclusion_type=Add) == [added]
 
 
 def test_conclusions_of_type_is_empty_without_matching_conclusions(
@@ -751,7 +770,7 @@ def test_conclusions_of_type_is_empty_without_matching_conclusions(
     world = handles_and_containers_world
     fixed_connection = variable(FixedConnection, domain=world.connections)
 
-    assert fixed_connection.conclusions_of_type(Add) == []
+    assert fixed_connection.conclusions_of_type(conclusion_type=Add) == []
 
 
 def test_unwrapped_value_strips_literal_wrapper(handles_and_containers_world):
@@ -765,7 +784,7 @@ def test_unwrapped_value_strips_literal_wrapper(handles_and_containers_world):
     condition = container == container
 
     with condition:
-        added = Add(drawers, literal)
+        added = Add(left=drawers, right=literal)
 
     assert added.unwrapped_value == "drawer-value"
 
@@ -785,7 +804,7 @@ def test_unwrapped_value_returns_non_literal_right_unchanged(
 
     with condition:
         conclusion_value = inference(Drawer)(handle=handle, container=container)
-        added = Add(drawers, conclusion_value)
+        added = Add(left=drawers, right=conclusion_value)
 
     assert added.unwrapped_value is conclusion_value
 
@@ -803,10 +822,14 @@ def test_rule_tree_anchors_when_where_condition_is_reused_in_a_sibling():
     failed.
     """
     correct_drawer = Drawer(
-        handle=Handle("Handle1"), container=Container("Container1"), correct=True
+        handle=Handle(name="Handle1"),
+        container=Container(name="Container1"),
+        correct=True,
     )
     incorrect_drawer = Drawer(
-        handle=Handle("Handle2"), container=Container("Container2"), correct=False
+        handle=Handle(name="Handle2"),
+        container=Container(name="Container2"),
+        correct=False,
     )
     drawer = variable(Drawer, domain=[correct_drawer, incorrect_drawer])
     views = deduced_variable(View)
@@ -818,9 +841,9 @@ def test_rule_tree_anchors_when_where_condition_is_reused_in_a_sibling():
             add(views, inference(Door)(handle=drawer.handle, body=drawer.container))
 
     all_solutions = list(query.evaluate())
-    assert (
-        len(all_solutions) == 2
-    ), "The base branch and its reused-condition alternative must both fire."
+    assert len(all_solutions) == 2, (
+        "The base branch and its reused-condition alternative must both fire."
+    )
     assert {(door.handle.name, door.body.name) for door in all_solutions} == {
         ("Handle1", "Container1"),
         ("Handle2", "Container2"),
@@ -864,10 +887,14 @@ def test_nested_refinement_fires_when_its_anchor_was_attached_in_an_earlier_bran
     detaches it from the rule tree, so its conclusion never replaces the one it refines.
     """
     correct_drawer = Drawer(
-        handle=Handle("Handle1"), container=Container("Container1"), correct=True
+        handle=Handle(name="Handle1"),
+        container=Container(name="Container1"),
+        correct=True,
     )
     incorrect_drawer = Drawer(
-        handle=Handle("Handle2"), container=Container("Container2"), correct=False
+        handle=Handle(name="Handle2"),
+        container=Container(name="Container2"),
+        correct=False,
     )
     drawer = variable(Drawer, domain=[correct_drawer, incorrect_drawer])
     views = deduced_variable(View)
@@ -917,17 +944,19 @@ def test_conclusions_fire_without_an_active_evaluation_context(
     )
 
     with condition:
-        Add(drawers, inference(Drawer)(handle=handle, container=container))
+        Add(left=drawers, right=inference(Drawer)(handle=handle, container=container))
 
     assert condition._conditions_root_ is condition
 
     raw_result = next(
         result
-        for result in condition._evaluate__(OperationResult({}))
+        for result in condition._evaluate__(sources=OperationResult(bindings={}))
         if not result.is_false
     )
 
-    processed_result = condition._evaluate_conclusions_and_update_bindings_(raw_result)
+    processed_result = condition._evaluate_conclusions_and_update_bindings_(
+        current_result=raw_result
+    )
 
     assert drawers._id_ in processed_result.bindings
     assert isinstance(processed_result.bindings[drawers._id_], Drawer)
@@ -940,12 +969,9 @@ def test_conclusions_fire_with_a_pre_installed_evaluation_context(
     A conclusion must still fire when an ``EvaluationContext`` is already active.
 
     Callers like RDR's ``classify_case``/``trace_case`` install an ``EvaluationContext``
-    before calling ``.evaluate()``, so ``_evaluate_``'s ``owns_an_evaluation_context``
-    is ``False`` for every node in that pass.
-    ``active_conditions_root.set_active_root_if_not_set()`` must still run in that case --
-    previously it was skipped entirely (nested inside the ``owns_an_evaluation_context``
-    branch), so the active conditions root was never set and conclusions never fired
-    under RDR classification.
+    before evaluating, so no node of the pass starts a context of its own. The active
+    conditions root must still be set in that case; otherwise no node is the active root
+    and no conclusion fires.
     """
     world = handles_and_containers_world
     container = variable(Container, domain=world.bodies)
@@ -958,13 +984,13 @@ def test_conclusions_fire_with_a_pre_installed_evaluation_context(
     )
 
     with condition:
-        Add(drawers, inference(Drawer)(handle=handle, container=container))
+        Add(left=drawers, right=inference(Drawer)(handle=handle, container=container))
 
     pre_installed_context = create_default_evaluation_context()
     token = set_evaluation_context(pre_installed_context)
     try:
         assert get_evaluation_context() is pre_installed_context
-        results = list(condition._evaluate_(OperationResult({})))
+        results = list(condition._evaluate_(sources=OperationResult(bindings={})))
     finally:
         _evaluation_context_var.reset(token)
 
@@ -991,9 +1017,9 @@ def test_conclusions_respect_a_bare_attribute_conditions_root_truthiness():
 
     conclusion = variable(Body, domain=[])
     with condition:
-        Add(conclusion, inference(Body)(name="conclusion_fired"))
+        Add(left=conclusion, right=inference(Body)(name="conclusion_fired"))
 
-    results = list(condition._evaluate_(OperationResult({})))
+    results = list(condition._evaluate_(sources=OperationResult(bindings={})))
 
     fired = [result for result in results if conclusion._id_ in result.bindings]
     assert len(fired) == 1

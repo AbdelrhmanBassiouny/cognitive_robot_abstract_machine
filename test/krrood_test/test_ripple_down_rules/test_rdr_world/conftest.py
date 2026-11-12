@@ -1,7 +1,8 @@
+from dataclasses import dataclass
 from os.path import dirname
+from pathlib import Path
 
 import pytest
-from typing_extensions import Type
 
 from ..conf.world.handles_and_containers import HandlesAndContainersWorld
 from ..datasets import *
@@ -23,7 +24,7 @@ def get_possible_drawers() -> List[Drawer]:
     world = handles_and_containers_world()
     for handle in [body for body in world.bodies if isinstance(body, Handle)]:
         for container in [body for body in world.bodies if isinstance(body, Container)]:
-            view = Drawer(handle, container, world=world)
+            view = Drawer(handle=handle, container=container, world=world)
             all_possible_drawers.append(view)
     return all_possible_drawers
 
@@ -32,10 +33,10 @@ def get_possible_drawers() -> List[Drawer]:
 def drawer_case_queries() -> List[CaseQuery]:
     case_queries = [
         CaseQuery(
-            possible_drawer,
-            "correct",
-            (bool,),
-            True,
+            original_case=possible_drawer,
+            attribute_name="correct",
+            _attribute_types=(bool,),
+            mutually_exclusive=True,
             default_value=False,
         )
         for possible_drawer in get_possible_drawers()
@@ -43,11 +44,11 @@ def drawer_case_queries() -> List[CaseQuery]:
     return case_queries
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ExpertConfig:
     filename: str
     use_loaded_answers: bool
-    expert_type: Type[Expert] = field(default=Human)
+    expert_type: type[Expert] = field(default=Human)
 
 
 @pytest.fixture
@@ -62,7 +63,7 @@ def expert():
         filename = os.path.join(
             dirname(__file__), "../test_expert_answers", conf.filename
         )
-        human.load_answers(filename)
+        human.load_answers(path=filename)
         return human
 
     return _create
@@ -73,7 +74,9 @@ def drawer_cabinet_human_expert(expert) -> Human:
     """
     Fixture to create an expert for drawer and cabinet views.
     """
-    conf = ExpertConfig("drawer_cabinet_expert_answers_fit", use_loaded_answers=True)
+    conf = ExpertConfig(
+        filename="drawer_cabinet_expert_answers_fit", use_loaded_answers=True
+    )
     return expert(conf)
 
 
@@ -83,7 +86,9 @@ def drawer_cabinet_ai_expert(expert) -> Human:
     Fixture to create an expert for drawer and cabinet views.
     """
     conf = ExpertConfig(
-        "drawer_cabinet_ai_expert_answers_fit", use_loaded_answers=False, expert_type=AI
+        filename="drawer_cabinet_ai_expert_answers_fit",
+        use_loaded_answers=False,
+        expert_type=AI,
     )
     return expert(conf)
 
@@ -94,7 +99,7 @@ def drawer_expert(expert) -> Human:
     Fixture to create an expert for drawer views.
     """
     conf = ExpertConfig(
-        "correct_drawer_rdr_expert_answers_fit", use_loaded_answers=True
+        filename="correct_drawer_rdr_expert_answers_fit", use_loaded_answers=True
     )
     return expert(conf)
 
@@ -105,15 +110,15 @@ def drawer_case_query() -> CaseQuery:
     Create a CaseQuery for the given view type in the provided world.
     """
     return CaseQuery(
-        handles_and_containers_world(),
-        "views",
-        (Drawer,),
-        False,
+        original_case=handles_and_containers_world(),
+        attribute_name="views",
+        _attribute_types=(Drawer,),
+        mutually_exclusive=False,
     )
 
 
 def possibilities_rdr_verification(rdr: GeneralRDR, case_query: CaseQuery) -> None:
-    conclusions = rdr.classify(case_query.original_case)[case_query.attribute_name]
+    conclusions = rdr.classify(case=case_query.original_case)[case_query.attribute_name]
     assert (
         len([v for v in conclusions if isinstance(v, case_query.core_attribute_type)])
         > 0
@@ -126,7 +131,7 @@ def drawer_rdr(drawer_case_query, drawer_cabinet_human_expert) -> GeneralRDR:
     Fixture to create a GeneralRDR for drawer views.
     """
     rdr = GeneralRDR()
-    rdr.fit_case(drawer_case_query, expert=drawer_cabinet_human_expert)
+    rdr.fit_case(case_query=drawer_case_query, expert=drawer_cabinet_human_expert)
     possibilities_rdr_verification(rdr, drawer_case_query)
     return rdr
 
@@ -152,15 +157,15 @@ def get_drawer_cabinet_rdr(world: World, expert: Expert) -> GeneralRDR:
     rdr = GeneralRDR()
     for view in [Drawer, Cabinet]:
         rdr.fit_case(
-            CaseQuery(
-                world,
-                "views",
-                (view,),
-                False,
+            case_query=CaseQuery(
+                original_case=world,
+                attribute_name="views",
+                _attribute_types=(view,),
+                mutually_exclusive=False,
             ),
             expert=expert,
         )
-    found_views = rdr.classify(world)
+    found_views = rdr.classify(case=world)
     for view in [Drawer, Cabinet]:
         assert len([v for v in found_views["views"] if isinstance(v, view)]) > 0
     return rdr
@@ -169,7 +174,46 @@ def get_drawer_cabinet_rdr(world: World, expert: Expert) -> GeneralRDR:
 @pytest.fixture
 def correct_drawer_rdr(drawer_case_queries, drawer_expert) -> GeneralRDR:
     rdr = GeneralRDR()
-    rdr.fit(drawer_case_queries, expert=drawer_expert, animate_tree=False)
+    rdr.fit(case_queries=drawer_case_queries, expert=drawer_expert, animate_tree=False)
     for case_query in drawer_case_queries:
-        assert is_matching(rdr.classify, case_query)
+        assert is_matching(lambda case: rdr.classify(case=case), case_query)
     return rdr
+
+
+# %% a model saved for the test that reads it
+
+
+@dataclass(kw_only=True)
+class SavedRDRModel:
+    """
+    A classifier written to disk, and what a test needs to read it back.
+    """
+
+    directory: Path
+    """
+    The directory the model was written into.
+    """
+
+    name: str
+    """
+    The name the model was written under.
+    """
+
+    def load(self) -> GeneralRDR:
+        """
+        :return: The classifier read back from the written model.
+        """
+        return GeneralRDR.load(load_dir=str(self.directory), model_name=self.name)
+
+
+@pytest.fixture
+def saved_drawer_cabinet_rdr(request, drawer_cabinet_rdr) -> SavedRDRModel:
+    """
+    Write the drawer and cabinet classifier to a directory named after the test asking
+    for it, so a test reading a saved model neither waits on another test having written
+    one nor writes the path a test running beside it is writing.
+    """
+    directory = Path(__file__).parent.parent / "test_results" / request.node.name
+    return SavedRDRModel(
+        directory=directory, name=drawer_cabinet_rdr.save(save_dir=str(directory))
+    )
