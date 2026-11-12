@@ -50,15 +50,15 @@ from cramph.context import ContextExtension, StatechartContext
 from cramph.node import StatechartNode
 from cramph.statechart import Statechart
 from cramph.world_modification_nodes import MoveBranch
-from giskardpy.motion_statechart.goals.collision_avoidance import (
+from giskardpy.motion_statechart.tasks.collision_avoidance import (
     UpdateTemporaryCollisionRules,
 )
-from giskardpy.motion_statechart.goals.grasped_mechanism import (
+from giskardpy.motion_statechart.tasks.grasped_mechanism import (
     ArticulateGraspedMechanism,
 )
 from giskardpy.motion_statechart.monitors.feature_monitors import DistanceMonitor
 from giskardpy.motion_statechart.monitors.joint_monitors import JointPositionReached
-from krrood.entity_query_language.factories import a, flat_variable, variable
+from krrood.entity_query_language.factories import a, variable_from, variable
 from krrood.entity_query_language.query.match import Match
 from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
@@ -566,7 +566,7 @@ class GarmiCleanUpDemonstration(RobotDemonstration):
         where_the_robot_stands = variable(
             Pose3D, domain=[Pose3D(reference_frame=arm._robot.root)]
         )
-        return flat_variable(
+        return variable_from(
             GraspsByCloseness(
                 graspable=graspable,
                 standing_position=where_the_robot_stands,

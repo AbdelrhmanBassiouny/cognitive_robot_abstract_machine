@@ -10,7 +10,7 @@ regenerate_orm_interfaces()
 
 import pytest
 
-from giskardpy.middleware.ros2.utils.utils_for_tests import GiskardTester
+from giskardpy.middleware.ros2.giskard_tester import GiskardTester
 from giskardpy.motion_statechart.graph_node import EndMotion
 from giskardpy.motion_statechart.monitors.overwrite_state_monitors import (
     SetSeedConfiguration,
@@ -195,7 +195,7 @@ def pr2_with_box(pr2_world_copy) -> World:
 
 
 @pytest.fixture()
-def giskard_factory(init_rospy, robot: GiskardTester):
+def giskard_factory(init_background_node, robot: GiskardTester):
     def _create_giskard(seed_joint_state: dict[str, float]) -> GiskardTester:
         parse_seed_joint_state = {
             robot.api.world.get_connection_by_name(name): target
@@ -335,6 +335,17 @@ def prismatic_world_with_acceleration_limit(request):
     """
     return _make_prismatic_world(
         [_symmetric_prismatic_limits(request.param, 1, acceleration=ACCELERATION_LIMIT)]
+    )
+
+
+@pytest.fixture()
+def prismatic_bot_with_acceleration_limit():
+    """
+    A prismatic joint like :func:`prismatic_bot` with an acceleration limit of its own,
+    which brakes with a jerk limit far below the one of the default braking time.
+    """
+    return _make_prismatic_world(
+        [_symmetric_prismatic_limits(1, 1, acceleration=ACCELERATION_LIMIT)]
     )
 
 
