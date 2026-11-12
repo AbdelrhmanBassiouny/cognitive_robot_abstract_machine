@@ -45,19 +45,22 @@ items:
     from it'
   track: planning-core
   pull_request_number: 541
-  session: https://claude.ai/code/session_01JxHGiPxKXS7dPRev7pcL1M
+  session: https://claude.ai/code/session_01JxHGiMCdQj7yottsuUjkGi
+  blockers:
+    - >-
+      Upstream cram2#922 has one unresolved thread: tomsch420 at
+      krrood/src/krrood/planning/state.py:74 suggests a frozendict for
+      added_objects/removed_objects. Python 3.12 has none in the standard library, so it needs a new
+      dependency, which the owner has to approve.
   depends_on: []
   status: in progress
-  notes: 'In #541 (draft, on main, merged with main in ff1fa9d22b): state objects, TermReader.instances_of,
-    per-evaluation default domains, expression domains as FlatVariable/InstanceFilteredFlatVariable
-    (a(T).from_(expr) too). First review addressed in fa1dc1af6e; the owner chose to filter
-    removed objects out of list/tuple/set fluent values, captured lists stay unfiltered.
+  notes: >
+    In #541 (merged with main b0e961c745 in 258d5dcb92, keyword-only as main requires; upstream
+    cram2#922, approved by tomsch420 and LucaKro).
 
-    Open: a thread asks for match syntax everywhere; the binding test keeps variable() since
-    a match in set_of does not correlate (correlated-quantifiers). Unregistered objects are
-    left to action-schema-progression.
-
-    '
+    Next: the owner decides on frozendict for added_objects/removed_objects (new dependency) and on
+    renaming the with_* methods krrood check flags (with_facts is #535's API). Literal filtering
+    stays open on the fork. Unregistered objects are left to action-schema-progression.
 - id: action-schema-progression
   branch: eql-planning/action-schema-progression
   title: ActionSchema with an EQL precondition and assignment effects, applied to a State
