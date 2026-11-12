@@ -11,9 +11,10 @@ resemble) so causal-specific code has its own, easily reviewable surface, mirror
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing_extensions import TYPE_CHECKING, Any, Iterable, List
+from typing_extensions import TYPE_CHECKING, Any, Iterable, Self
 
 import random_events.variable
+from random_events.product_algebra import Event
 from krrood.entity_query_language.core.base_expressions import (
     BinaryExpression,
     OperationResult,
@@ -28,14 +29,39 @@ from krrood.entity_query_language.operators.core_logical_operators import (
 )
 
 if TYPE_CHECKING:
+    from probabilistic_model.causal_structure.identification import Identification
     from krrood.entity_query_language.core.mapped_variable import Attribute
-    from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
-        ProbabilisticCircuit,
+    from probabilistic_model.probabilistic_circuit.probabilistic_circuit_representation import (
+        ProbabilisticCircuitRepresentation,
     )
 
 
-@dataclass(eq=False, repr=False)
-class Cause(Literal):
+@dataclass(kw_only=True, eq=False, repr=False)
+class CausalRoleMarker(Literal):
+    """
+    Marks a keyword argument of a match pattern as a variable whose value the query
+    searches for rather than one it observes. Always wraps ``Ellipsis``.
+
+    Each kind is written as one shared instance with no type of its own, so every
+    attribute it marks gets a fresh copy carrying that attribute's type, and marking
+    several attributes never makes them interfere.
+    """
+
+    _value_: Any = field(default=Ellipsis, init=False)
+
+    def _as_assigned_variable_(self, *, attribute_type: type | None) -> Self:
+        """
+        :param attribute_type: The type of the attribute this marks.
+        :return: This marker if it already has a type, otherwise a fresh copy of it
+            carrying the attribute's type.
+        """
+        if self._type_ is not None:
+            return self
+        return type(self)(_type_=attribute_type)
+
+
+@dataclass(kw_only=True, eq=False, repr=False)
+class Cause(CausalRoleMarker):
     """
     Marks a :class:`~krrood.entity_query_language.query.match.Match` keyword argument as
     a ``do()``-intervention target searched for by the query, rather than an observed
@@ -43,20 +69,9 @@ class Cause(Literal):
 
     ``arm=cause`` means: find the value of ``arm`` whose intervention (Pearl's
     ``do(arm=value)``) best explains the effect declared via
-    :meth:`~krrood.entity_query_language.query.match.Match.causes_effect`. Always wraps
-    ``Ellipsis`` -- there is no pinned-value form; pin a value with a plain assignment
-    (``arm=0.3``) instead.
-
-    :data:`cause` is a single shared instance written directly into every ``cause``
-    kwarg (``arm=cause``); it carries no attribute-specific type of its own until one
-    is attached. :meth:`AttributeMatch.assigned_variable
-    <krrood.entity_query_language.query.match.AttributeMatch.assigned_variable>`
-    returns a fresh, per-attribute copy with the type filled in rather than mutating
-    this shared instance, so multiple ``cause``-marked fields on the same query never
-    interfere with each other.
+    :meth:`~krrood.entity_query_language.query.match.Match.causes_effect`. There is no
+    pinned-value form; pin a value with a plain assignment (``arm=0.3``) instead.
     """
-
-    _value_: Any = field(default=Ellipsis, init=False)
 
     def __repr__(self) -> str:
         return "cause"
@@ -69,8 +84,8 @@ Marks a :class:`~krrood.entity_query_language.query.match.Match` keyword argumen
 """
 
 
-@dataclass(eq=False, repr=False)
-class Confounder(Literal):
+@dataclass(kw_only=True, eq=False, repr=False)
+class Confounder(CausalRoleMarker):
     """
     Marks a :class:`~krrood.entity_query_language.query.match.Match` keyword argument
     as a variable to adjust for when searching a :class:`Cause` intervention -- Pearl's
@@ -79,16 +94,8 @@ class Confounder(Literal):
 
     ``season=confounder`` means: season is a common cause of the searched
     :class:`Cause` and the declared effect, and must be summed back out rather than
-    left baked into the correlation between them. Always wraps ``Ellipsis``, the same
-    as :class:`Cause`.
-
-    :data:`confounder` is a single shared instance, for the same reason as
-    :data:`cause`: :meth:`AttributeMatch.assigned_variable
-    <krrood.entity_query_language.query.match.AttributeMatch.assigned_variable>`
-    returns a fresh, per-attribute copy rather than mutating it.
+    left baked into the correlation between them.
     """
-
-    _value_: Any = field(default=Ellipsis, init=False)
 
     def __repr__(self) -> str:
         return "confounder"
@@ -102,7 +109,7 @@ variable to adjust for when searching a :class:`Cause` intervention -- see
 """
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(kw_only=True, eq=False, repr=False)
 class CausesEffect(LogicalOperator, UnaryExpression):
     """
     Tags a condition as the effect side of a causal query.
@@ -115,7 +122,7 @@ class CausesEffect(LogicalOperator, UnaryExpression):
     optimize for.
     """
 
-    cause_attributes: List[Attribute] = field(default_factory=list, kw_only=True)
+    cause_attributes: list[Attribute] = field(default_factory=list, kw_only=True)
     """
     The ``cause``-marked attribute(s) this effect condition explains, so its
     verbalization can name them (*"the arm causes its outcome to be SUCCESS"*) instead
@@ -131,25 +138,30 @@ class CausesEffect(LogicalOperator, UnaryExpression):
             not isinstance(self._child_, BinaryExpression)
             or not self._child_._is_equality_literal_comparator_or_conjunction_()
         ):
-            raise CausesEffectRequiresEqualityComparator(self._child_)
+            raise CausesEffectRequiresEqualityComparator(condition=self._child_)
 
     def _evaluate__(
         self,
+        *,
         sources: OperationResult,
     ) -> Iterable[OperationResult]:
-        for child_result in self._evaluate_child_as_condition_(self._child_, sources):
+        for child_result in self._evaluate_child_as_condition_(
+            child=self._child_, sources=sources
+        ):
             yield self._build_operation_result_with_truth_(
-                child_result.is_true, child_result.bindings, child_result
+                truth=child_result.is_true,
+                bindings=child_result.bindings,
+                child_result=child_result,
             )
 
 
-@dataclass
+@dataclass(kw_only=True)
 class CauseEffectVariables:
     """
     The cause candidates and effect variable a ``cause`` search resolves to.
     """
 
-    cause_variables: List[random_events.variable.Variable]
+    cause_variables: list[random_events.variable.Variable]
     """
     The variable(s) a ``cause`` intervention is searched over.
 
@@ -165,18 +177,22 @@ class CauseEffectVariables:
     The variable a ``causes_effect(...)`` condition declares as the effect.
     """
 
-    confounder_variables: List[random_events.variable.Variable]
+    adjustment_variables_by_cause: dict[
+        random_events.variable.Variable, list[random_events.variable.Variable]
+    ]
     """
-    Variables assigned a ``confounder`` marker: Pearl's backdoor-criterion adjustment
-    set, summed back out of each cause candidate's interventional probability so it is
-    not left baked into the correlation between cause and effect.
+    Per cause candidate, the variables its interventional search adjusts for: Pearl's
+    backdoor-criterion adjustment set, summed back out of the candidate's interventional
+    probability so it is not left baked into the correlation between cause and effect.
+    They are the variables marked ``confounder``, and those a learned causal structure
+    chose for the candidate.
 
-    Empty for a query with no confounders declared, so the interventional search falls
-    back to an empty adjustment set.
+    Empty for a candidate with neither, so its search falls back to an empty adjustment
+    set.
     """
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ScoredIntervention:
     """
     One cause candidate's best-region search result, scored for comparison against the
@@ -198,9 +214,114 @@ class ScoredIntervention:
     that region happens to cover: the higher one is the better explanation.
     """
 
-    narrowed_circuit: ProbabilisticCircuit
+    narrowed_circuit: ProbabilisticCircuitRepresentation
     """
     The interventional joint, truncated to the effect condition and this candidate's
     best region -- what the query samples from if this candidate turns out to be the
     primary cause.
+
+    Of the circuit type the causal circuit was read from.
+    """
+
+
+@dataclass(kw_only=True)
+class CandidateAdjustment:
+    """
+    One set of a query's variables that the effect of a cause may be identified by
+    adjusting for.
+    """
+
+    variables: list[random_events.variable.Variable]
+    """
+    The variables to adjust for.
+    """
+
+
+@dataclass(kw_only=True)
+class AdjustmentCandidates:
+    """
+    What a learned causal structure says one cause candidate adjusts for.
+    """
+
+    cause_variable: random_events.variable.Variable
+    """
+    The cause candidate.
+    """
+
+    identification: Identification
+    """
+    What the structure says about the effect of the cause.
+    """
+
+    adjustments: list[CandidateAdjustment]
+    """
+    Each set the effect may be identified by adjusting for: the one chosen set if the
+    effect is identified, one per candidate if it is partially identified, none if it is
+    not identified.
+    """
+
+    @property
+    def variables(self) -> list[random_events.variable.Variable]:
+        """
+        :return: The variables of every candidate, each once, in order of first use.
+        """
+        return list(
+            dict.fromkeys(
+                variable
+                for adjustment in self.adjustments
+                for variable in adjustment.variables
+            )
+        )
+
+
+@dataclass(kw_only=True)
+class RegionRange:
+    """
+    The effect's probability under an intervention setting the cause to one region,
+    across every candidate adjustment set.
+    """
+
+    cause_region: Event
+    """
+    The region of the cause.
+    """
+
+    lowest_effect_probability: float
+    """
+    The lowest probability of the effect across the candidates.
+    """
+
+    highest_effect_probability: float
+    """
+    The highest probability of the effect across the candidates.
+    """
+
+
+@dataclass(kw_only=True)
+class InterventionalRange:
+    """
+    The range an effect's interventional probability lies in, per region of one cause,
+    when the learned causal structure identifies it only up to a few candidate
+    adjustment sets.
+    """
+
+    cause_variable: random_events.variable.Variable
+    """
+    The cause.
+    """
+
+    candidate_adjustments: list[CandidateAdjustment]
+    """
+    The candidate adjustment sets the range is taken across.
+    """
+
+    includes_no_effect: bool
+    """
+    Whether the range also takes in the effect's probability without any intervention,
+    since in some graph the structure stands for the cause does not cause it at all.
+    """
+
+    regions: list[RegionRange]
+    """
+    The range per region of the cause.
     """

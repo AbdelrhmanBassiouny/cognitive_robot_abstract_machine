@@ -22,28 +22,21 @@ def test_drawer_cabinet_ai_rdr(drawer_cabinet_ai_rdr):
 
 
 def test_save_and_load_drawer_cabinet_rdr(
-    handles_and_containers_world, drawer_cabinet_rdr
+    handles_and_containers_world, drawer_cabinet_rdr, saved_drawer_cabinet_rdr
 ):
     world = handles_and_containers_world
-    filename = os.path.join(
-        dirname(__file__), "..", "test_results", "world_drawer_cabinet_rdr"
-    )
-    model_name = drawer_cabinet_rdr.save(filename)
-    loaded_rdr = GeneralRDR.load(filename, model_name=model_name)
-    assert drawer_cabinet_rdr.classify(world) == loaded_rdr.classify(world)
+    loaded_rdr = saved_drawer_cabinet_rdr.load()
+    assert drawer_cabinet_rdr.classify(case=world) == loaded_rdr.classify(case=world)
     # assert world.bodies == loaded_rdr.start_rules[0].corner_case.bodies
 
 
 def test_draw_evaluated_tree_for_drawer_cabinet_rdr(
-    handles_and_containers_world, drawer_cabinet_rdr
+    handles_and_containers_world, saved_drawer_cabinet_rdr
 ):
     world = handles_and_containers_world
-    filename = os.path.join(
-        dirname(__file__), "..", "test_results", "world_drawer_cabinet_rdr"
-    )
-    loaded_rdr = GeneralRDR.load(filename, model_name="world_rdr")
-    loaded_rdr.classify(world)
-    loaded_rdr.render_evaluated_rule_tree("drawer_cabinet_rdr_evaluated_tree")
+    loaded_rdr = saved_drawer_cabinet_rdr.load()
+    loaded_rdr.classify(case=world)
+    loaded_rdr.render_evaluated_rule_tree(filename="drawer_cabinet_rdr_evaluated_tree")
     assert True  # If no exception is raised, the test passes
 
 
@@ -52,9 +45,9 @@ def test_write_drawer_cabinet_rdr_to_python_file(
 ):
     rdrs_dir = os.path.join(dirname(__file__), "..", "test_generated_rdrs", "view_rdr")
     os.makedirs(rdrs_dir, exist_ok=True)
-    drawer_cabinet_rdr._write_to_python(rdrs_dir)
+    drawer_cabinet_rdr._write_to_python(model_dir=rdrs_dir)
     loaded_rdr_classifier = drawer_cabinet_rdr.get_rdr_classifier_from_python_file(
-        rdrs_dir
+        package_name=rdrs_dir
     )
     found_views = loaded_rdr_classifier(handles_and_containers_world)
     assert len([v for v in found_views["views"] if isinstance(v, Drawer)]) == 1
@@ -71,9 +64,9 @@ def test_write_drawer_rdr_to_python_file(correct_drawer_rdr, drawer_case_queries
         dirname(__file__), "..", "test_generated_rdrs", "drawer_rdr"
     )
     os.makedirs(rdrs_dir, exist_ok=True)
-    correct_drawer_rdr._write_to_python(rdrs_dir)
+    correct_drawer_rdr._write_to_python(model_dir=rdrs_dir)
     loaded_rdr_classifier = correct_drawer_rdr.get_rdr_classifier_from_python_file(
-        rdrs_dir
+        package_name=rdrs_dir
     )
     for case_query in drawer_case_queries:
         assert is_matching(loaded_rdr_classifier, case_query)

@@ -2,8 +2,8 @@
 :meth:`MappedVariable.apply_mapping_on_external_root` follows a chain from a value
 outside query evaluation, which is how features are read off an instance.
 
-These tests pin what it does when a step along the way maps one value to several, and
-when a step maps it to none.
+These tests pin what it does when a step along the way maps one value to several, when a
+step maps it to none, and when it meets a pattern standing for an instance.
 """
 
 import pytest
@@ -13,9 +13,9 @@ from krrood.entity_query_language.exceptions import (
     NoValueAlongAccessPath,
     ReadOnlyMapping,
 )
-from krrood.entity_query_language.factories import flat_variable, variable
+from krrood.entity_query_language.factories import a, flat_variable, variable
 
-from ...dataset.semantic_world_like_classes import Cabinet
+from ...dataset.semantic_world_like_classes import Cabinet, Container, Drawer, Handle
 
 # %% following a chain of one-to-one mappings
 
@@ -27,7 +27,9 @@ def test_chain_of_attributes_reaches_its_value(handles_and_containers_world):
     cabinet = cabinets[0]
     chain = variable(Cabinet, domain=cabinets).container.name
 
-    assert chain.apply_mapping_on_external_root(cabinet) == cabinet.container.name
+    assert (
+        chain.apply_mapping_on_external_root(instance=cabinet) == cabinet.container.name
+    )
 
 
 def test_chain_through_an_index_by_a_value_reaches_its_value(
@@ -44,7 +46,8 @@ def test_chain_through_an_index_by_a_value_reaches_its_value(
     chain = variable(Cabinet, domain=cabinets).drawers[0].handle.name
 
     assert (
-        chain.apply_mapping_on_external_root(cabinet) == cabinet.drawers[0].handle.name
+        chain.apply_mapping_on_external_root(instance=cabinet)
+        == cabinet.drawers[0].handle.name
     )
 
 
@@ -66,7 +69,7 @@ def test_chain_through_an_index_by_an_expression_has_no_single_value(
     chain = variable(Cabinet, domain=cabinets).drawers[position].handle.name
 
     with pytest.raises(MultipleValuesAlongAccessPath):
-        chain.apply_mapping_on_external_root(cabinet)
+        chain.apply_mapping_on_external_root(instance=cabinet)
 
 
 def test_chain_through_a_flattened_attribute_has_no_single_value(
@@ -83,7 +86,7 @@ def test_chain_through_a_flattened_attribute_has_no_single_value(
     chain = flat_variable(variable(Cabinet, domain=cabinets).drawers).handle.name
 
     with pytest.raises(MultipleValuesAlongAccessPath):
-        chain.apply_mapping_on_external_root(cabinet)
+        chain.apply_mapping_on_external_root(instance=cabinet)
 
 
 def test_chain_through_a_flattened_attribute_is_rejected_whatever_the_collection_holds(
@@ -101,7 +104,7 @@ def test_chain_through_a_flattened_attribute_is_rejected_whatever_the_collection
     chain = flat_variable(variable(Cabinet, domain=cabinets).drawers).handle.name
 
     with pytest.raises(MultipleValuesAlongAccessPath):
-        chain.apply_mapping_on_external_root(cabinet)
+        chain.apply_mapping_on_external_root(instance=cabinet)
 
 
 # %% a step that maps one value to none
@@ -121,7 +124,7 @@ def test_chain_through_an_index_nothing_is_stored_under_reaches_no_value(
     chain = variable(Cabinet, domain=cabinets).drawers[1].handle.name
 
     with pytest.raises(NoValueAlongAccessPath):
-        chain.apply_mapping_on_external_root(cabinet)
+        chain.apply_mapping_on_external_root(instance=cabinet)
 
 
 def test_a_step_that_reaches_no_value_is_reported_the_same_from_inside_a_generator(
@@ -139,10 +142,72 @@ def test_a_step_that_reaches_no_value_is_reported_the_same_from_inside_a_generat
     chain = variable(Cabinet, domain=cabinets).drawers[1].handle.name
 
     def following_it():
-        yield chain.apply_mapping_on_external_root(cabinet)
+        yield chain.apply_mapping_on_external_root(instance=cabinet)
 
     with pytest.raises(NoValueAlongAccessPath):
         list(following_it())
+
+
+# %% a pattern along the chain
+
+
+def test_chain_through_a_pattern_reaches_the_value_it_states():
+    """
+    A pattern stands for the instance it describes, so a step on it reaches the value
+    the pattern states for that attribute.
+    """
+    handle = Handle(name="Handle1")
+    cabinet = Cabinet(
+        container=Container(name="Container1"),
+        drawers=[a(Drawer)(handle=handle, container=Container(name="Container2"))],
+    )
+    chain = variable(Cabinet, domain=[cabinet]).drawers[0].handle
+
+    assert chain.apply_mapping_on_external_root(instance=cabinet) is handle
+
+
+def test_chain_through_a_pattern_stating_a_pattern_reaches_the_inner_stated_value():
+    """
+    A pattern stated inside a pattern stands for its instance too, so the chain keeps
+    reading stated values until it reaches the end.
+    """
+    handle_name = "Handle1"
+    cabinet = Cabinet(
+        container=Container(name="Container1"),
+        drawers=[a(Drawer)(handle=a(Handle)(name=handle_name))],
+    )
+    chain = variable(Cabinet, domain=[cabinet]).drawers[0].handle.name
+
+    assert chain.apply_mapping_on_external_root(instance=cabinet) is handle_name
+
+
+def test_chain_written_on_a_pattern_reaches_the_value_it_states():
+    """
+    A pattern reads like the instance it describes, so a chain written on the pattern
+    itself, applied back to it, reaches the values it states.
+    """
+    handle_name = "Handle1"
+    drawer = a(Drawer)(handle=a(Handle)(name=handle_name))
+
+    assert (
+        drawer.handle.name.apply_mapping_on_external_root(instance=drawer)
+        is handle_name
+    )
+
+
+def test_chain_through_a_pattern_that_does_not_state_the_attribute_reaches_no_value():
+    """
+    A pattern that leaves an attribute unstated gives the chain no value to follow,
+    which is reported like any other step that reaches nothing.
+    """
+    cabinet = Cabinet(
+        container=Container(name="Container1"),
+        drawers=[a(Drawer)(container=Container(name="Container2"))],
+    )
+    chain = variable(Cabinet, domain=[cabinet]).drawers[0].handle
+
+    with pytest.raises(NoValueAlongAccessPath):
+        chain.apply_mapping_on_external_root(instance=cabinet)
 
 
 # %% writing through a chain
@@ -162,7 +227,7 @@ def test_setting_through_an_index_by_a_value_writes_that_element(
     replacement = cabinet.drawers[1]
     chain = variable(Cabinet, domain=cabinets).drawers[0]
 
-    chain._set_external_root_instance_value_(cabinet, replacement)
+    chain._set_external_root_instance_value_(instance=cabinet, value=replacement)
 
     assert cabinet.drawers[0] is replacement
 
@@ -182,7 +247,9 @@ def test_setting_through_an_index_by_an_expression_is_not_supported(
     chain = variable(Cabinet, domain=cabinets).drawers[position]
 
     with pytest.raises(ReadOnlyMapping):
-        chain._set_external_root_instance_value_(cabinet, cabinet.drawers[1])
+        chain._set_external_root_instance_value_(
+            instance=cabinet, value=cabinet.drawers[1]
+        )
 
 
 def test_setting_through_a_flattened_attribute_has_no_single_value(
@@ -199,7 +266,7 @@ def test_setting_through_a_flattened_attribute_has_no_single_value(
     chain = flat_variable(variable(Cabinet, domain=cabinets).drawers).handle.name
 
     with pytest.raises(MultipleValuesAlongAccessPath):
-        chain._set_external_root_instance_value_(cabinet, "Handle9")
+        chain._set_external_root_instance_value_(instance=cabinet, value="Handle9")
 
 
 def test_setting_through_a_step_that_reaches_no_value_is_reported(
@@ -216,4 +283,6 @@ def test_setting_through_a_step_that_reaches_no_value_is_reported(
     chain = variable(Cabinet, domain=cabinets).drawers[1].handle
 
     with pytest.raises(NoValueAlongAccessPath):
-        chain._set_external_root_instance_value_(cabinet, cabinet.drawers[0].handle)
+        chain._set_external_root_instance_value_(
+            instance=cabinet, value=cabinet.drawers[0].handle
+        )

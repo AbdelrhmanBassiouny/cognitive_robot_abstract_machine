@@ -14,7 +14,7 @@ def test_confounder_is_a_confounder_instance_with_no_type_of_its_own():
 # %% flowing through Match (backfilled with a fresh, per-attribute copy on resolution)
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Trial:
     treatment: float
     season: str
@@ -23,7 +23,7 @@ class Trial:
 def _confounder_attribute_match(match):
     [attribute_match] = [
         attribute_match
-        for attribute_match in match.matches_with_variables
+        for attribute_match in match._matches_with_variables_
         if attribute_match.name_from_variable_access_path == "Trial.season"
     ]
     return attribute_match
@@ -46,7 +46,7 @@ def test_two_confounder_marked_attributes_resolve_to_distinct_objects():
     match = a(Trial)(treatment=confounder, season=confounder)
     [treatment_match, season_match] = [
         attribute_match
-        for attribute_match in match.matches_with_variables
+        for attribute_match in match._matches_with_variables_
         if attribute_match.name_from_variable_access_path
         in ("Trial.treatment", "Trial.season")
     ]

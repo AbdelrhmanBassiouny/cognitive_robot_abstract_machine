@@ -80,7 +80,7 @@ from krrood.entity_query_language.rdr.serialization import (
     ModelSaver,
     TemporaryModelSaver,
 )
-from krrood.entity_query_language.rdr.underspecified import RDRMatchParser
+from krrood.entity_query_language.rdr.underspecified import RippleDownRulesMatchParser
 from krrood.entity_query_language.scope import (
     attach_definition_scope,
     capture_caller_scope,
@@ -184,7 +184,7 @@ class EQLSingleClassRDR:
         :param underspecified_query: For example ``an(Animal)(species=...)``.
         :return: An RDR predicting the query's single underspecified attribute.
         """
-        statement = RDRMatchParser(underspecified_query)
+        statement = RippleDownRulesMatchParser(match=underspecified_query)
         return cls(statement.case_type, statement.target_attribute_name)
 
     # %% classification
@@ -332,7 +332,7 @@ class EQLSingleClassRDR:
             target_conclusion=target,
             trace=trace,
             conclusion_domain=self.conclusion_domain,
-            corner_case=self.corner_cases.get(
+            corner_case=self.corner_cases.get_corner_case_for_node(
                 trace.firing_anchor_id if trace is not None else None
             ),
         )
@@ -453,7 +453,7 @@ class EQLSingleClassRDR:
                 conclusion,
             )
 
-        self.corner_cases.record(new_node, context.case_instance)
+        self.corner_cases.record_corner_case(new_node, context.case_instance)
         self._backward_index.invalidate()
 
     # %% fitting a dataset
@@ -577,4 +577,6 @@ class EQLSingleClassRDR:
         :param conclusion: The conclusion value to work backwards from.
         :return: The sufficient condition sets for ``conclusion``.
         """
-        return self._backward_index.query(self.conditions_root, conclusion)
+        return self._backward_index.query(
+            expression=self.conditions_root, conclusion_value=conclusion
+        )
