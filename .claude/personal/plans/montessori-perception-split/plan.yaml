@@ -28,17 +28,16 @@ items:
   branch: claude/ecstatic-knuth-curscv
   track: stack
   blockers:
-  - 'Waiting on CI and re-review of cram2#804 at 36aec5dad, which unified this layer with
-    main''s Tracy Montessori demo (api-break for main''s demo and Mesh.triangular_prism).
-    cram2#804''s description predates it, and its 3 outdated threads are unanswered: both
-    are the developer''s to do upstream.'
+  - 'Waiting on CI at a958c9e117 and the developer''s call on two open #488 threads
+    (generality; PieceColor as a Color enum). cram2#804''s description and its 3 outdated
+    threads are the developer''s to update upstream.'
   depends_on: []
   status: in_progress
   pull_request_number: 488
   session: https://claude.ai/code/session_01JxHGiMeCJRVXzPpv26S5vx
   notes: 'Shape-sorting vocabulary in semantic_digital_twin (ShapeSortingPiece + Cube/Cylinder/...Piece,
-    ShapeSortingHole, ShapeSortingBoard; shape_sorting_toy/ board mesh, hole reading, PieceSet,
-    PieceColor; Polygon2D, Color.hue_distance, convex footprint), shared with main''s coraplex
+    ShapeSortingHole, ShapeSortingBoard, all in shape_sorting_toy/ with the board mesh, hole
+    specifications, PieceSet, PieceColor; Polygon2D, Color.hue_distance, convex footprint), shared with main''s coraplex
     Tracy demo; experiments keeps PieceColorMatcher. No longer a verbatim cut of #202: #202
     adopts these names when it merges main and this layer. Promoted upstream as cram2#804.
 
