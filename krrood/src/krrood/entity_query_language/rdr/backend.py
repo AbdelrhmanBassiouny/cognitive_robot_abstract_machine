@@ -3,7 +3,7 @@ RDR backend for underspecified EQL queries.
 
 An underspecified ``Match`` marks the attribute to infer with ``...``, filters the
 domain with its concrete keyword arguments, and supplies the instances to complete —
-``an(Animal)(milk=True, species=...).from_(animals)``. This backend answers such a query
+``an(Animal)(milk=True, species=...).from_(domain=animals)``. This backend answers such a query
 by inferring the marked attribute on each instance the filter keeps.
 
 It keeps one :class:`~krrood.entity_query_language.rdr.single_class.EQLSingleClassRDR`
@@ -34,7 +34,7 @@ from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.rdr.exceptions import QueryIsNotAMatch
 from krrood.entity_query_language.rdr.expert import Expert
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
-from krrood.entity_query_language.rdr.underspecified import RDRMatchParser
+from krrood.entity_query_language.rdr.underspecified import RippleDownRulesMatchParser
 
 GroundTruth = Callable[[Any], Any]
 """
@@ -122,7 +122,7 @@ class RDRBackend(QueryBackend):
         :raises QueryIsNotAMatch: If the expression marks no attribute with ``...``.
         """
         if not isinstance(expression, Match):
-            raise QueryIsNotAMatch(expression)
+            raise QueryIsNotAMatch(expression=expression)
         return iter(self.fill(expression))
 
     def fit(self, query: Match, ground_truth: Optional[GroundTruth] = None) -> Self:
@@ -134,7 +134,7 @@ class RDRBackend(QueryBackend):
         :param ground_truth: Labels each case; ``None`` has the expert label them.
         :return: This backend, for chaining.
         """
-        self._fit(RDRMatchParser(query), ground_truth)
+        self._fit(RippleDownRulesMatchParser(match=query), ground_truth)
         return self
 
     def infer(
@@ -149,7 +149,7 @@ class RDRBackend(QueryBackend):
         :return: One binding per case, of the query's own variable to the instance and
             of its underspecified attribute to the inferred value.
         """
-        statement = RDRMatchParser(query)
+        statement = RippleDownRulesMatchParser(match=query)
         attribute = statement.single_target().attribute
         for inferred in self._inferences(statement, ground_truth):
             yield UnificationDict(
@@ -169,7 +169,7 @@ class RDRBackend(QueryBackend):
         :param ground_truth: Used only if there is no model yet and one must be fitted.
         :return: The instances that were filled, in the order the query yielded them.
         """
-        statement = RDRMatchParser(query)
+        statement = RippleDownRulesMatchParser(match=query)
         attribute_name = statement.target_attribute_name
         filled: List[Any] = []
         for inferred in self._inferences(statement, ground_truth):
@@ -178,7 +178,7 @@ class RDRBackend(QueryBackend):
         return filled
 
     def _inferences(
-        self, statement: RDRMatchParser, ground_truth: Optional[GroundTruth]
+        self, statement: RippleDownRulesMatchParser, ground_truth: Optional[GroundTruth]
     ) -> Iterator[InferredCase]:
         """
         Classify each case the statement keeps, fitting a model first if there is none.
@@ -193,7 +193,7 @@ class RDRBackend(QueryBackend):
             yield InferredCase(case=case, conclusion=model.classify(case))
 
     def _fitted_model_for(
-        self, statement: RDRMatchParser, ground_truth: Optional[GroundTruth]
+        self, statement: RippleDownRulesMatchParser, ground_truth: Optional[GroundTruth]
     ) -> EQLSingleClassRDR:
         """
         :param statement: The underspecified query being answered.
@@ -206,7 +206,7 @@ class RDRBackend(QueryBackend):
         return self._fit(statement, ground_truth)
 
     def _fit(
-        self, statement: RDRMatchParser, ground_truth: Optional[GroundTruth]
+        self, statement: RippleDownRulesMatchParser, ground_truth: Optional[GroundTruth]
     ) -> EQLSingleClassRDR:
         """
         Fit the statement's model over the cases its concrete constraints keep.
@@ -226,7 +226,7 @@ class RDRBackend(QueryBackend):
         model.fit(cases, targets, self.expert)
         return model
 
-    def _model_for(self, statement: RDRMatchParser) -> EQLSingleClassRDR:
+    def _model_for(self, statement: RippleDownRulesMatchParser) -> EQLSingleClassRDR:
         """
         :param statement: The underspecified query being answered.
         :return: The model for the statement's attribute, created empty if there is none.
@@ -237,7 +237,7 @@ class RDRBackend(QueryBackend):
         return self.models[key]
 
     @staticmethod
-    def _key_for(statement: RDRMatchParser) -> ModelKey:
+    def _key_for(statement: RippleDownRulesMatchParser) -> ModelKey:
         """
         :param statement: The underspecified query being answered.
         :return: The key its model is filed under.
