@@ -90,18 +90,17 @@ items:
   track: spatial
   status: in_progress
   blockers:
-  - 'CI on 32bcb2a3 (main ecc91acd merged) not yet read. Open thread: name of ValueInCartesianFrame3D
-    (owner). Ready, not promoted. #524 must move from PlanarPoint to AffinePoint with a vector
-    type, and conflicts with main.'
+  - 'CI on 203c33f2 not read. Upstream review state not checked (upstream-reviews Action
+    crashed). Owner to decide: krrood check flags dot, euclidean_distance, projection_line,
+    unproject as positional.'
+  - '#524 must move to Point/Vector and the Dimensional names.'
   depends_on: []
   session: https://claude.ai/code/session_01JxHGiNS35j6Nc3GQ87MdyP
-  notes: '#527 holds the casadi-free base per https://claude.ai/artifact/SCiXWvLcV7mequpATSTrsS
-    and SemDT''s spatial types adopting it, and since 2026-11-10 also planar-coordinate-system
-    (#549), spatial-math-imports, projection-interface, spatial-action and frame-checked-arithmetic
-    (see their notes), and the 2026-11-10 review: AffineVector, AffineLine and the OrthogonalProjection
-    interface, no AffinePoint2D/3D. api-break; migration in the PR description. Next: CI and
-    review, then promote. Open (from planar-coordinate-system): whether CartesianPoint2D/Pose2D.transform
-    refuse frames on other planes.'
+  notes: '#527: the casadi-free base and SemDT adopting it, with the planar, imports, projection,
+    action and frame-check items folded in. The 2026-11-12 review decisions are in the roadmap
+    rules and the PR. api-break; migration in the PR description. Next: CI, review, promote.
+    Open: whether CartesianPoint2Dimensional/Pose2Dimensional.transform refuse frames on
+    other planes.'
 - id: image-coordinate-change
   title: krrood_image's ImageCoordinateChange (scale and shift per axis) for crops and resizes,
     with cv2 resampling
