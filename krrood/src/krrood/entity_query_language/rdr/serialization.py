@@ -21,6 +21,7 @@ from uuid import UUID
 from typing_extensions import Any, Callable, Dict, List, Optional, Set, Type, Union
 
 from krrood.code_generation import ast_helpers
+from krrood.code_generation.dataclass_source import ObjectSource
 from krrood.code_generation.function_case import FunctionCaseGenerator
 from krrood.code_generation.generator import CodeGenerator
 from krrood.code_generation.imports import get_imports_from_types
@@ -43,7 +44,7 @@ from krrood.entity_query_language.factories import (
 )
 from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.operators.core_logical_operators import AND, OR, Not
-from krrood.entity_query_language.rdr.corner_case import CaseSource, CornerCaseStore
+from krrood.entity_query_language.rdr.corner_case import CornerCaseStore
 from krrood.entity_query_language.rdr.exceptions import (
     EmptyRuleTreeError,
     UnsupportedNodeForSerialization,
@@ -346,9 +347,7 @@ def _emit_expression(
                 or_, _condition_operands(node), variable_names_by_id
             )
         case Not():
-            return _emit_factory_call(
-                not_, [node._children_[0]], variable_names_by_id
-            )
+            return _emit_factory_call(not_, [node._children_[0]], variable_names_by_id)
         case _:
             raise UnsupportedNodeForSerialization(node)
 
@@ -389,7 +388,11 @@ def _emit_rule_body(
         referenced_types.add(type(value))
 
     statements: List[ast.stmt] = [
-        ast.Expr(value=ast_helpers.call(add.__name__, [conclusion_target, _emit_value(value)]))
+        ast.Expr(
+            value=ast_helpers.call(
+                add.__name__, [conclusion_target, _emit_value(value)]
+            )
+        )
     ]
     for branch in decomposed.branches:
         factory = _CONCLUSION_SELECTOR_FACTORY[branch.conclusion_selector_type]
@@ -405,7 +408,7 @@ def _emit_rule_body(
 
 
 def _render_corner_cases_source(
-    corner_case_sources: Dict[int, CaseSource], referenced_types: Set[type]
+    corner_case_sources: Dict[int, ObjectSource], referenced_types: Set[type]
 ) -> str:
     """Render the ``{index: constructor, ...}`` corner-case dict literal.
 
@@ -471,7 +474,10 @@ def rdr_to_python(rdr: EQLSingleClassRDR, case_type_is_local: bool = False) -> s
         _emit_expression(decomposed.base_condition, variable_names_by_id)
     )
     body_statements = _emit_rule_body(
-        rdr.query._conditions_root_, variable_names_by_id, conclusion_target, referenced_types
+        rdr.query._conditions_root_,
+        variable_names_by_id,
+        conclusion_target,
+        referenced_types,
     )
     body = _indent(ast_helpers.unparse_statements(body_statements), "    ")
 
@@ -483,7 +489,7 @@ def rdr_to_python(rdr: EQLSingleClassRDR, case_type_is_local: bool = False) -> s
 
     generator = CodeGenerator(template_directory=_TEMPLATES_DIRECTORY)
     return generator.render(
-        _RDR_MODULE_TEMPLATE_NAME,
+        template_name=_RDR_MODULE_TEMPLATE_NAME,
         factory_import=_FACTORY_IMPORT,
         type_imports=type_imports,
         variable_name=variable_name,
@@ -531,7 +537,7 @@ def save_rdr_with_case(rdr: EQLSingleClassRDR, path: str) -> str:
 
     if isinstance(rdr.case_type, type) and issubclass(rdr.case_type, FunctionCase):
         class_source = FunctionCaseGenerator().generate(
-            rdr.case_type.function,
+            function=rdr.case_type.function,
             class_name=rdr.case_type.__name__,
         )
         rule_source = rdr_to_python(rdr, case_type_is_local=True)

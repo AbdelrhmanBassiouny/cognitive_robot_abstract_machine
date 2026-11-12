@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import Any, Tuple, Type
+from typing_extensions import Any
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.exceptions import DataclassException
@@ -14,7 +14,7 @@ from krrood.exceptions import DataclassException
 # %% branch-semantics dispatch
 
 
-@dataclass
+@dataclass(kw_only=True)
 class AmbiguousBranchSemanticsError(DataclassException):
     """
     Two or more branch-semantics classes are equally specific for the same conclusion
@@ -24,7 +24,9 @@ class AmbiguousBranchSemanticsError(DataclassException):
     """
 
     selector: object
-    """The conclusion selector node being dispatched when the collision occurred."""
+    """
+    The conclusion selector node being dispatched when the collision occurred.
+    """
 
     candidates: list[type]
     """
@@ -45,7 +47,7 @@ class AmbiguousBranchSemanticsError(DataclassException):
 # %% underspecified inference targets
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ExpertAbort(DataclassException):
     """
     Raised by
@@ -65,7 +67,7 @@ class ExpertAbort(DataclassException):
         return ""
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ConclusionSelectorAsConditionError(DataclassException):
     """Raised when a
     :class:`~krrood.entity_query_language.rules.conclusion_selector.ConclusionSelector` is
@@ -81,7 +83,7 @@ class ConclusionSelectorAsConditionError(DataclassException):
         return ""
 
 
-@dataclass
+@dataclass(kw_only=True)
 class NoInferenceTarget(DataclassException):
     """
     Raised when an underspecified ``Match`` has no ``...`` attribute to infer.
@@ -99,7 +101,7 @@ class NoInferenceTarget(DataclassException):
         return "Mark the attribute to infer with `...`, e.g. an(Animal)(species=...)."
 
 
-@dataclass
+@dataclass(kw_only=True)
 class MultipleInferenceTargets(DataclassException):
     """
     Raised when a single-class RDR is handed more than one ``...`` attribute.
@@ -120,7 +122,7 @@ class MultipleInferenceTargets(DataclassException):
         return "Use a separate RDR per attribute (or a future MultiClassRDR)."
 
 
-@dataclass
+@dataclass(kw_only=True)
 class UnsupportedInferenceTarget(DataclassException):
     """
     Raised when an ``...`` attribute is an unbounded iterable.
@@ -150,7 +152,7 @@ class UnsupportedInferenceTarget(DataclassException):
         return "This will be supported by a future MultiClassRDR."
 
 
-@dataclass
+@dataclass(kw_only=True)
 class UndeclaredInferenceTarget(DataclassException):
     """
     Raised when an ``...`` attribute is not a declared field of the case type, so the
@@ -180,39 +182,7 @@ class UndeclaredInferenceTarget(DataclassException):
         )
 
 
-# %% corner-case serialization
-
-
-@dataclass
-class CaseNotSerializableError(DataclassException):
-    """
-    Raised when a :class:`~krrood.entity_query_language.rdr.corner_case.CaseSerializer`
-    cannot emit constructor source for a value.
-    """
-
-    value: Any
-    """
-    The field value that could not be serialized.
-    """
-
-    supported_types: Tuple[Type, ...]
-    """
-    The scalar types the serializer does support (``None`` and nested dataclasses are
-    always supported in addition to these, so are not part of this list).
-    """
-
-    def error_message(self) -> str:
-        type_names = ", ".join(
-            supported_type.__name__ for supported_type in self.supported_types
-        )
-        return (
-            f"Cannot serialize value of type {type(self.value).__name__!r} to Python "
-            f"constructor source. Only None, {type_names} members, and nested "
-            "dataclasses are supported."
-        )
-
-    def suggest_correction(self) -> str:
-        return "For other types, implement a custom CaseSerializer."
+# %% rule-tree serialization
 
 
 @dataclass
