@@ -1,11 +1,10 @@
-Plan (2026-11-12 review, decided with owner):
-- SpatialChange -> SymbolicSpatialChange; SymbolicSpatialValue (+ planar) replaces ValueInCartesianFrame3D/ValueOnFramePlane
-- Operands -> SpecialEuclideanGroupAction / SpecialOrthogonalGroupAction / PlanarSpecialEuclideanGroupAction; MatrixProductAction -> HomogeneousCoordinates; Quaternion/AxisAngle share Orientation
-- OrthogonalProjection: abstract plane_normal + foot_point, template projection_line/unproject
-- AffinePoint/AffineVector/AffineLine -> Point/Vector/Line; norm/dot/distance on CartesianFrame
-- SpaceMap stays points-only (reply on thread)
-- 2D/3D -> 2Dimensional/3Dimensional on spatial-math names only (classes, modules, methods, fields, mappings)
+Plan:
+- CI on 203c33f2, owner re-review, then promote
 Done:
-- main de8c8320 merged (b95b26153); 6 conflicts resolved
+- main de8c8320 merged (b95b26153); 2026-11-12 review design (623324310); Dimensional rename (203c33f2e); pushed
+- 21 threads replied inline; 16 resolved, 5 left open (Generic listing, SpaceMap points-only, 3x why x-y)
+- PR description, class diagram and plan record updated
 Next:
-- implement the plan above, tests, push via maintenance push, reply inline per thread, update PR description and plan
+- read CI on 203c33f2
+- owner: positional dot/euclidean_distance/projection_line/unproject flagged by krrood check
+- upstream review state not checked (upstream-reviews Action KeyError 'error')
