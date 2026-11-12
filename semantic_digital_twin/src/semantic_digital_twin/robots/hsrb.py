@@ -50,7 +50,7 @@ from semantic_digital_twin.robots.robot_parts import (
     EndEffector,
     ServoedRobotPart,
 )
-from krrood_spatial_math.spatial_types import Vector3
+from krrood_spatial_math.spatial_types import Vector3Dimensional
 from semantic_digital_twin.world_description.connection_properties import (
     DriveServos,
     JointDrive,
@@ -160,9 +160,9 @@ class HSRBGripper(
     @classproperty
     def squeeze(cls) -> float:
         """
-        Half the hand's widest opening of 13.7 cm, so the fingers are sent shut: the hand
-        grips with as much force as its motor builds up from how far it is sent past
-        what it holds, and its finger springs give way on top of that.
+        Half the hand's widest opening of 13.7 cm, so the fingers are sent shut: the
+        hand grips with as much force as its motor builds up from how far it is sent
+        past what it holds, and its finger springs give way on top of that.
         """
         return 0.07
 
@@ -220,12 +220,12 @@ class HSRBGripper(
         return [gripper_open, gripper_close]
 
     @property
-    def approach_axis(self) -> Vector3:
-        return Vector3.Z(reference_frame=self.tool_frame)
+    def approach_axis(self) -> Vector3Dimensional:
+        return Vector3Dimensional.Z(reference_frame=self.tool_frame)
 
     @property
-    def closing_axis(self) -> Vector3:
-        return Vector3.NEGATIVE_Y(reference_frame=self.tool_frame)
+    def closing_axis(self) -> Vector3Dimensional:
+        return Vector3Dimensional.NEGATIVE_Y(reference_frame=self.tool_frame)
 
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(
@@ -560,8 +560,8 @@ class HSRBMobileBase(
         return HSRBTopic.ODOMETRY
 
     @classproperty
-    def forward_axis(cls) -> Vector3:
-        return Vector3.X()
+    def forward_axis(cls) -> Vector3Dimensional:
+        return Vector3Dimensional.X()
 
     full_body_controlled: bool = field(default=True, kw_only=True)
 

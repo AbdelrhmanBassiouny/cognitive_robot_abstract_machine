@@ -36,9 +36,9 @@ from semantic_digital_twin.specifications.connections import (
 )
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Point3,
+    CartesianPoint3Dimensional,
     RotationMatrix,
-    Vector3,
+    Vector3Dimensional,
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
@@ -241,7 +241,7 @@ class UsdAxis(StrEnum):
     Y = "Y"
     Z = "Z"
 
-    def vector(self, reference_frame: Body) -> Vector3:
+    def vector(self, reference_frame: Body) -> Vector3Dimensional:
         """
         :param reference_frame: The frame the returned vector is expressed in.
         :return: The unit vector this axis token denotes.
@@ -251,7 +251,7 @@ class UsdAxis(StrEnum):
             UsdAxis.Y: (0.0, 1.0, 0.0),
             UsdAxis.Z: (0.0, 0.0, 1.0),
         }
-        return Vector3(*unit_vectors[self], reference_frame=reference_frame)
+        return Vector3Dimensional(*unit_vectors[self], reference_frame=reference_frame)
 
 
 @dataclass
@@ -929,7 +929,9 @@ class USDParser(WorldModelParser):
 
         return Inertial(
             mass=mass,
-            center_of_mass=Point3(*center_of_mass, reference_frame=body),
+            center_of_mass=CartesianPoint3Dimensional(
+                *center_of_mass, reference_frame=body
+            ),
             inertia=inertia_tensor,
         )
 

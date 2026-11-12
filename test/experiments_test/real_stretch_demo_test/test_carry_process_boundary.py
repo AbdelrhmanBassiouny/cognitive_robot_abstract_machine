@@ -10,7 +10,10 @@ from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from cramph.context import StatechartContext
 from cramph.data_types import LifeCycleValues
 from cramph.statechart import Statechart
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Pose
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Pose3Dimensional,
+)
 from semantic_digital_twin.adapters.ros.world_synchronizer import WorldSynchronizer
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.stretch import Stretch
@@ -53,7 +56,9 @@ def test_a_carry_runs_against_a_controller_in_another_process(
     )
     carry = CarryAction(
         navigate=NavigateAction(
-            target_location=Pose.from_xyz_rpy(x=0.3, reference_frame=stretch.root)
+            target_location=Pose3Dimensional.from_xyz_rpy(
+                x=0.3, reference_frame=stretch.root
+            )
         ),
         holding_arms=[arm],
     )

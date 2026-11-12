@@ -29,7 +29,7 @@ from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.semantic_annotations.mixins import HasGraspCandidates
 from semantic_digital_twin.robots.robot_parts import Arm, EndEffector
 from krrood_spatial_math.spatial_types import RotationMatrix
-from krrood_spatial_math.spatial_types import Pose
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +162,7 @@ class PickUpAction(
         """
         grasp = GraspCandidate(
             graspable,
-            Pose(
+            Pose3Dimensional(
                 orientation=RotationMatrix.from_rpy(pitch=np.pi / 2).quaternion,
                 reference_frame=graspable.root,
             ),
@@ -332,7 +332,7 @@ class FixateObjectAction(ParallelAction):
                 name="Keep the gripper in place",
                 root_link=self.world.root,
                 tip_link=tool_frame,
-                goal_pose=Pose(reference_frame=tool_frame),
+                goal_pose=Pose3Dimensional(reference_frame=tool_frame),
                 # Holding on has to matter more than keeping clear of what is held.
                 weight=DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE,
             )

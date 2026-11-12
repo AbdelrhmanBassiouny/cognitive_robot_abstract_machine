@@ -5,7 +5,10 @@ from random_events.interval import closed
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.datastructures.variables import SpatialVariables
 from semantic_digital_twin.robots.hsrb import HSRB
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Point3
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    CartesianPoint3Dimensional,
+)
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
@@ -161,6 +164,8 @@ def test_contains(pr2_apartment_state_reset):
         -0.5, -1, 0, 0.5, 1, 1, pr2_apartment_state_reset.root.global_pose
     )
 
-    point = Point3(0, 0, 0, reference_frame=pr2_apartment_state_reset.root)
+    point = CartesianPoint3Dimensional(
+        0, 0, 0, reference_frame=pr2_apartment_state_reset.root
+    )
 
     assert bb.contains(point)

@@ -4,7 +4,10 @@ from abc import ABC, abstractmethod
 from dataclasses import field, dataclass
 
 import krrood.symbolic_math.symbolic_math as sm
-from krrood_spatial_math.spatial_types import Point3, Vector3
+from krrood_spatial_math.spatial_types import (
+    CartesianPoint3Dimensional,
+    Vector3Dimensional,
+)
 from semantic_digital_twin.world_description.geometry import Color
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
@@ -35,11 +38,15 @@ class FeatureFunctionGoal(ConvergingTask, ABC):
     """
     The static reference link. Defines the fixed frame of reference.
     """
-    controlled_feature: Point3 | Vector3 = field(init=False)
+    controlled_feature: CartesianPoint3Dimensional | Vector3Dimensional = field(
+        init=False
+    )
     """
     The geometric feature (point or vector) that is being controlled, expressed in the tip link frame.
     """
-    reference_feature: Point3 | Vector3 = field(init=False)
+    reference_feature: CartesianPoint3Dimensional | Vector3Dimensional = field(
+        init=False
+    )
     """
     The geometric feature (point or vector) that serves as reference, expressed in the root link frame.
     """
@@ -47,11 +54,14 @@ class FeatureFunctionGoal(ConvergingTask, ABC):
     @abstractmethod
     def get_controlled_and_reference_features(
         self,
-    ) -> tuple[Point3 | Vector3, Point3 | Vector3]:
+    ) -> tuple[
+        CartesianPoint3Dimensional | Vector3Dimensional,
+        CartesianPoint3Dimensional | Vector3Dimensional,
+    ]:
         """
         Return the controlled and reference features.
 
-        :return: Tuple (controlled_feature, reference_feature), each a Point3 or Vector3.
+        :return: Tuple (controlled_feature, reference_feature), each a CartesianPoint3Dimensional or Vector3Dimensional.
         """
         raise NotImplementedError
 
@@ -70,7 +80,7 @@ class FeatureFunctionGoal(ConvergingTask, ABC):
         root_T_tip = self.context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
         )
-        if isinstance(self.controlled_feature, Point3):
+        if isinstance(self.controlled_feature, CartesianPoint3Dimensional):
             self.root_P_controlled_feature = root_T_tip @ tip_controlled_feature
             feature_debug_expressions.append(
                 DebugExpression(
@@ -79,7 +89,7 @@ class FeatureFunctionGoal(ConvergingTask, ABC):
                     color=Color.from_rgba(red=1, green=0, blue=0, opacity=1),
                 )
             )
-        elif isinstance(self.controlled_feature, Vector3):
+        elif isinstance(self.controlled_feature, Vector3Dimensional):
             self.root_V_controlled_feature = root_T_tip @ tip_controlled_feature
             self.root_V_controlled_feature.visualisation_frame = (
                 self.controlled_feature.visualisation_frame
@@ -92,7 +102,7 @@ class FeatureFunctionGoal(ConvergingTask, ABC):
                 )
             )
 
-        if isinstance(self.reference_feature, Point3):
+        if isinstance(self.reference_feature, CartesianPoint3Dimensional):
             self.root_P_reference_feature = root_reference_feature
             feature_debug_expressions.append(
                 DebugExpression(
@@ -101,7 +111,7 @@ class FeatureFunctionGoal(ConvergingTask, ABC):
                     color=Color.from_rgba(red=0, green=1, blue=0, opacity=1),
                 )
             )
-        elif isinstance(self.reference_feature, Vector3):
+        elif isinstance(self.reference_feature, Vector3Dimensional):
             self.root_V_reference_feature = root_reference_feature
             self.root_V_reference_feature.visualisation_frame = (
                 self.reference_feature.visualisation_frame
@@ -128,11 +138,11 @@ class AlignPerpendicular(FeatureFunctionGoal):
     Completion occurs when |current_angle - π/2| < `threshold`.
     """
 
-    tip_normal: Vector3
+    tip_normal: Vector3Dimensional
     """
     The normal vector to be controlled, defined in the tip link frame.
     """
-    reference_normal: Vector3
+    reference_normal: Vector3Dimensional
     """
     The reference normal vector to align against, defined in the root link frame.
     """
@@ -181,11 +191,11 @@ class HeightGoal(FeatureFunctionGoal):
     along the z-axis of the map frame.
     """
 
-    tip_point: Point3
+    tip_point: CartesianPoint3Dimensional
     """
     Tip point to be controlled.
     """
-    reference_point: Point3
+    reference_point: CartesianPoint3Dimensional
     """
     Reference point to measure the distance against.
     """
@@ -222,7 +232,7 @@ class HeightGoal(FeatureFunctionGoal):
         artifacts = MotionNodeArtifacts()
         expr = (
             self.root_P_controlled_feature - self.root_P_reference_feature
-        ) @ Vector3.Z()
+        ) @ Vector3Dimensional.Z()
 
         artifacts.constraints.add_inequality_constraint(
             cruise_velocity=self.cruise_velocity,
@@ -245,11 +255,11 @@ class DistanceGoal(FeatureFunctionGoal):
     measured in the x-y-plane of the map frame.
     """
 
-    tip_point: Point3
+    tip_point: CartesianPoint3Dimensional
     """
     Tip point to be controlled.
     """
-    reference_point: Point3
+    reference_point: CartesianPoint3Dimensional
     """
     Reference point to measure the distance against.
     """
@@ -320,11 +330,11 @@ class ReachPoint(FeatureFunctionGoal):
     Drives a controlled point on the tip onto a reference point.
     """
 
-    tip_point: Point3
+    tip_point: CartesianPoint3Dimensional
     """
     The point to be controlled, defined in the tip link frame.
     """
-    reference_point: Point3
+    reference_point: CartesianPoint3Dimensional
     """
     The target point to reach, defined in the root link frame.
     """
@@ -341,7 +351,9 @@ class ReachPoint(FeatureFunctionGoal):
     Distance at or below which the goal is considered achieved, in meters.
     """
 
-    def get_controlled_and_reference_features(self) -> tuple[Point3, Point3]:
+    def get_controlled_and_reference_features(
+        self,
+    ) -> tuple[CartesianPoint3Dimensional, CartesianPoint3Dimensional]:
         return self.tip_point, self.reference_point
 
     def build_artifacts(self) -> MotionNodeArtifacts:
@@ -370,11 +382,11 @@ class AngleGoal(FeatureFunctionGoal):
     `lower_angle` and `upper_angle`.
     """
 
-    tip_vector: Vector3
+    tip_vector: Vector3Dimensional
     """
     Tip vector to be controlled.
     """
-    reference_vector: Vector3
+    reference_vector: Vector3Dimensional
     """
     Reference vector to measure the angle against.
     """

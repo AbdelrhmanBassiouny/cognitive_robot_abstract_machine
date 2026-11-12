@@ -5,10 +5,10 @@ from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from krrood_spatial_math.spatial_types import (
     AxisAngle,
     HomogeneousTransformationMatrix,
-    Pose,
+    Pose3Dimensional,
     Quaternion,
     RotationMatrix,
-    Vector3,
+    Vector3Dimensional,
 )
 from semantic_digital_twin.world_description.world_entity import Body
 from .reference_implementations import (
@@ -40,14 +40,19 @@ def axis_and_angle_of(axis_angle: AxisAngle) -> tuple[np.ndarray, float]:
         lambda axis, angle: RotationMatrix.from_axis_angle(AxisAngle(axis, angle)),
         lambda axis, angle: Quaternion.from_axis_angle(AxisAngle(axis, angle)),
         HomogeneousTransformationMatrix.from_xyz_axis_angle,
-        Pose.from_xyz_axis_angle,
+        Pose3Dimensional.from_xyz_axis_angle,
     ],
-    ids=["RotationMatrix", "Quaternion", "HomogeneousTransformationMatrix", "Pose"],
+    ids=[
+        "RotationMatrix",
+        "Quaternion",
+        "HomogeneousTransformationMatrix",
+        "Pose3Dimensional",
+    ],
 )
 def test_axis_angle_of_a_rotation_is_the_one_it_was_built_from(
     rotation_from_axis_angle, axis, angle
 ):
-    rotation = rotation_from_axis_angle(axis=Vector3(*axis), angle=angle)
+    rotation = rotation_from_axis_angle(axis=Vector3Dimensional(*axis), angle=angle)
 
     actual_axis, actual_angle = axis_and_angle_of(rotation.axis_angle)
 
@@ -73,7 +78,7 @@ def test_axis_angle_keeps_the_reference_frame_of_the_rotation():
 
 @pytest.mark.parametrize("axis, angle", rotations)
 def test_axis_angle_converts_into_the_rotation_it_describes(axis, angle):
-    axis_angle = AxisAngle(axis=Vector3(*axis), angle=angle)
+    axis_angle = AxisAngle(axis=Vector3Dimensional(*axis), angle=angle)
 
     assert np.allclose(
         axis_angle.rotation_matrix.to_np(),
@@ -91,7 +96,7 @@ def test_axis_angle_without_arguments_is_the_identity_rotation():
 
 @pytest.mark.parametrize("axis, angle", rotations)
 def test_axis_angle_survives_json(axis, angle):
-    axis_angle = AxisAngle(axis=Vector3(*axis), angle=angle)
+    axis_angle = AxisAngle(axis=Vector3Dimensional(*axis), angle=angle)
 
     restored = AxisAngle.from_json(data=axis_angle.to_json())
 

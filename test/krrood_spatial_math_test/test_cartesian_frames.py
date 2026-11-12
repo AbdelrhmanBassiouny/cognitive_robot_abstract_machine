@@ -3,39 +3,77 @@ from __future__ import annotations
 import pytest
 
 from krrood.patterns.exceptions import InterfaceInstantiationError
-from krrood.patterns.identifier_and_name import HasID, HasName
-from krrood_spatial_math.cartesian_frame_3d import (
-    CartesianFrame3D,
-    CartesianFrame3DReference,
+from krrood_spatial_math.cartesian_frame_2_dimensional import CartesianFrame2Dimensional
+from krrood_spatial_math.cartesian_frame_3_dimensional import (
+    CartesianFrame3Dimensional,
+    CartesianFrame3DimensionalReference,
 )
-from krrood_spatial_math.exceptions import MissingCartesianFrame3DResolver
+from krrood_spatial_math.coordinate_system import CartesianFrame, SpaceT
+from krrood_spatial_math.exceptions import MissingCartesianFrame3DimensionalResolver
+from krrood_spatial_math.space import (
+    EuclideanSpace2Dimensional,
+    EuclideanSpace3Dimensional,
+)
 
-from .dataset.frames import KnownFrames
+from .dataset.frames import KnownFrames, ThingFrame
 
 # %% the frame interface
 
 
 def test_a_three_dimensional_cartesian_frame_cannot_be_instantiated():
     with pytest.raises(InterfaceInstantiationError):
-        CartesianFrame3D()
+        CartesianFrame3Dimensional()
 
 
-@pytest.mark.parametrize("trait", [HasID, HasName])
-def test_a_three_dimensional_cartesian_frame_is_identified_and_named(trait):
-    assert issubclass(CartesianFrame3D, trait)
+def test_a_three_dimensional_cartesian_frame_is_a_cartesian_frame():
+    assert issubclass(CartesianFrame3Dimensional, CartesianFrame)
+
+
+def test_a_three_dimensional_cartesian_frame_charts_three_dimensional_euclidean_space():
+    assert (
+        CartesianFrame3Dimensional.get_type_of_generic_parameter(parameter=SpaceT)
+        is EuclideanSpace3Dimensional
+    )
 
 
 def test_a_three_dimensional_cartesian_frame_declares_expressing_values_in_it():
-    assert CartesianFrame3D.__abstractmethods__ == {
-        CartesianFrame3D.express_in_own_frame.__name__
+    assert CartesianFrame3Dimensional.__abstractmethods__ == {
+        CartesianFrame3Dimensional.express_in_own_frame.__name__
     }
+
+
+def test_a_frame_can_extend_an_object_named_before_it_is_identified():
+    assert issubclass(ThingFrame, CartesianFrame3Dimensional)
+
+
+# %% the frame interface of a plane
+
+
+def test_a_two_dimensional_cartesian_frame_cannot_be_instantiated():
+    with pytest.raises(InterfaceInstantiationError):
+        CartesianFrame2Dimensional()
+
+
+def test_a_two_dimensional_cartesian_frame_is_a_cartesian_frame():
+    assert issubclass(CartesianFrame2Dimensional, CartesianFrame)
+
+
+def test_a_two_dimensional_cartesian_frame_charts_two_dimensional_euclidean_space():
+    assert (
+        CartesianFrame2Dimensional.get_type_of_generic_parameter(parameter=SpaceT)
+        is EuclideanSpace2Dimensional
+    )
+
+
+def test_a_two_dimensional_cartesian_frame_is_no_three_dimensional_one():
+    assert not issubclass(CartesianFrame2Dimensional, CartesianFrame3Dimensional)
 
 
 # %% referring to a frame in a serialized value
 
 
 def test_a_reference_resolves_to_the_readers_frame(table_frame):
-    reference = CartesianFrame3DReference(subject="reference_frame")
+    reference = CartesianFrame3DimensionalReference(subject="reference_frame")
     data = {}
     reference.write(data=data, identified_object=table_frame)
     known_frames = KnownFrames()
@@ -45,9 +83,9 @@ def test_a_reference_resolves_to_the_readers_frame(table_frame):
 
 
 def test_a_reference_cannot_be_resolved_without_a_resolver(table_frame):
-    reference = CartesianFrame3DReference(subject="reference_frame")
+    reference = CartesianFrame3DimensionalReference(subject="reference_frame")
     data = {}
     reference.write(data=data, identified_object=table_frame)
 
-    with pytest.raises(MissingCartesianFrame3DResolver):
+    with pytest.raises(MissingCartesianFrame3DimensionalResolver):
         reference.resolve(data=data)

@@ -71,7 +71,10 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Milk,
 )
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
-from krrood_spatial_math.spatial_types import Point3, Pose
+from krrood_spatial_math.spatial_types import (
+    CartesianPoint3Dimensional,
+    Pose3Dimensional,
+)
 from semantic_digital_twin.specifications.connections import (
     Connection6DoFSpecification,
 )
@@ -204,12 +207,12 @@ class ScenePlacement:
             self.x, self.y, self.z, pitch=self.pitch, yaw=self.yaw
         )
 
-    def pose(self, reference_frame: KinematicStructureEntity) -> Pose:
+    def pose(self, reference_frame: KinematicStructureEntity) -> Pose3Dimensional:
         """
         :param reference_frame: The frame the placement is given in.
         :return: The placement as a pose in `reference_frame`.
         """
-        return Pose.from_xyz_rpy(
+        return Pose3Dimensional.from_xyz_rpy(
             self.x,
             self.y,
             self.z,
@@ -375,13 +378,13 @@ class GarmiCleanUpDemonstration(RobotDemonstration):
         [milk] = world.get_semantic_annotations_by_type(Milk)
         milk_grasp = GraspCandidate(
             graspable=milk,
-            grasp_pose=Pose.from_xyz_quaternion(
+            grasp_pose=Pose3Dimensional.from_xyz_quaternion(
                 quat_z=1, quat_w=0, reference_frame=milk.root
             ),
         )
         handle_grasp = GraspCandidate(
             graspable=drawer.handle,
-            grasp_pose=Pose.from_xyz_quaternion(
+            grasp_pose=Pose3Dimensional.from_xyz_quaternion(
                 quat_y=0.707107,
                 quat_z=0.707107,
                 quat_w=0,
@@ -508,8 +511,12 @@ class GarmiCleanUpDemonstration(RobotDemonstration):
                 name="Left hand near the handle",
                 root_link=handle_grasp.graspable.root,
                 tip_link=left_hand.tool_frame,
-                reference_point=Point3(reference_frame=handle_grasp.graspable.root),
-                tip_point=Point3(reference_frame=left_hand.tool_frame),
+                reference_point=CartesianPoint3Dimensional(
+                    reference_frame=handle_grasp.graspable.root
+                ),
+                tip_point=CartesianPoint3Dimensional(
+                    reference_frame=left_hand.tool_frame
+                ),
                 lower_limit=0.0,
                 upper_limit=HandDistance.HANDLE_CONTACT.value,
             ),
@@ -562,7 +569,7 @@ class GarmiCleanUpDemonstration(RobotDemonstration):
         # A variable, so the grasps are ranked when the statement is grounded, from
         # where the robot stands then.
         where_the_robot_stands = variable(
-            Pose, domain=[Pose(reference_frame=arm._robot.root)]
+            Pose3Dimensional, domain=[Pose3Dimensional(reference_frame=arm._robot.root)]
         )
         return variable_from(
             GraspsByCloseness(
@@ -576,7 +583,7 @@ class GarmiCleanUpDemonstration(RobotDemonstration):
         self,
         milk: Milk,
         milk_grasp: GraspCandidate,
-        milk_in_drawer: Pose,
+        milk_in_drawer: Pose3Dimensional,
         storage_drawer: KinematicStructureEntity,
         right_arm: Arm,
     ) -> list[StatechartNode | Match]:

@@ -31,8 +31,8 @@ from semantic_digital_twin.exceptions import WorldEntityNotFoundError
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     RotationMatrix,
-    Point3,
-    Vector3,
+    CartesianPoint3Dimensional,
+    Vector3Dimensional,
 )
 from semantic_digital_twin.world import World, Body
 from semantic_digital_twin.world_description.connection_properties import JointDynamics
@@ -353,7 +353,7 @@ class MJCFParser(WorldModelParser):
 
         return Inertial(
             mass=mujoco_body.mass,
-            center_of_mass=Point3.from_iterable(mujoco_body.ipos),
+            center_of_mass=CartesianPoint3Dimensional.from_iterable(mujoco_body.ipos),
             inertia=inertia_tensor,
         )
 
@@ -607,7 +607,7 @@ class MJCFParser(WorldModelParser):
                 )
             else:
                 joint_to_child_body_transform = child_body_to_joint_transform.inverse()
-                joint_axis = Vector3(
+                joint_axis = Vector3Dimensional(
                     mujoco_joint.axis[0],
                     mujoco_joint.axis[1],
                     mujoco_joint.axis[2],

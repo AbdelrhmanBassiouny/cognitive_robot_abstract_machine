@@ -51,10 +51,10 @@ from semantic_digital_twin.exceptions import (
 )
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Point3,
+    CartesianPoint3Dimensional,
     Quaternion,
     RotationMatrix,
-    Vector3,
+    Vector3Dimensional,
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
@@ -254,7 +254,7 @@ class InertialConverter:
     The mass of the body.
     """
 
-    inertia_pos: Point3
+    inertia_pos: CartesianPoint3Dimensional
     """
     The position of the inertia frame relative to the body frame [x, y, z].
     """
@@ -1061,7 +1061,8 @@ class MujocoCamera(MultiSimCamera):
 
     @staticmethod
     def _look_at_rotation(
-        camera_position: Point3, target_position: Point3
+        camera_position: CartesianPoint3Dimensional,
+        target_position: CartesianPoint3Dimensional,
     ) -> RotationMatrix:
         """
         Computes the world-frame orientation of a camera at ``camera_position`` looking at
@@ -1074,9 +1075,9 @@ class MujocoCamera(MultiSimCamera):
         """
         forward = target_position - camera_position
         forward.scale(1)
-        up_hint = Vector3.Z()
+        up_hint = Vector3Dimensional.Z()
         if abs(float(forward.dot(up_hint).to_np().item())) > 0.99:
-            up_hint = Vector3.Y()
+            up_hint = Vector3Dimensional.Y()
 
         z_axis = -forward
         x_axis = up_hint.cross(z_axis)
@@ -1099,13 +1100,13 @@ class MujocoCamera(MultiSimCamera):
         :param distance_factor: Multiplier applied to the box's bounding diagonal to place the camera.
         :return: The framing camera's world-frame pose.
         """
-        minimum = Point3.from_iterable(bounds[0])
-        maximum = Point3.from_iterable(bounds[1])
+        minimum = CartesianPoint3Dimensional.from_iterable(bounds[0])
+        maximum = CartesianPoint3Dimensional.from_iterable(bounds[1])
         diagonal_vector = maximum - minimum
         center = minimum + diagonal_vector * 0.5
         diagonal = float(diagonal_vector.norm().to_np().item())
         distance = max(diagonal, minimum_distance) * distance_factor
-        direction = Vector3.from_iterable([1.0, -1.0, 1.0])
+        direction = Vector3Dimensional.from_iterable([1.0, -1.0, 1.0])
         direction.scale(1)
         position = center + direction * distance
         rotation = cls._look_at_rotation(position, center)

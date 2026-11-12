@@ -19,9 +19,9 @@ from semantic_digital_twin.exceptions import (
 )
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Point3,
+    CartesianPoint3Dimensional,
     RotationMatrix,
-    Vector3,
+    Vector3Dimensional,
 )
 from semantic_digital_twin.utils import (
     suppress_stdout_stderr,
@@ -328,7 +328,7 @@ class URDFParser(WorldModelParser):
             parent_T_connection_expression=parent_T_connection,
             multiplier=multiplier,
             offset=offset,
-            axis=Vector3(*urdf_joint_axis(joint), reference_frame=parent),
+            axis=Vector3Dimensional(*urdf_joint_axis(joint), reference_frame=parent),
             raw_dof=dof,
             dynamics=self.parse_dynamics(joint),
         )
@@ -410,7 +410,9 @@ class URDFParser(WorldModelParser):
 
         return Inertial(
             mass=link.inertial.mass,
-            center_of_mass=Point3(*center_of_mass, reference_frame=body),
+            center_of_mass=CartesianPoint3Dimensional(
+                *center_of_mass, reference_frame=body
+            ),
             inertia=inertia_in_link_frame,
         )
 

@@ -47,7 +47,10 @@ from semantic_digital_twin.robots.robot_parts import (
     Finger,
     RobotCamera,
 )
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Vector3Dimensional,
+)
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
@@ -240,12 +243,12 @@ class DAiSyLeftGripper(
         return [gripper_open, gripper_close]
 
     @property
-    def approach_axis(self) -> Vector3:
-        return Vector3.Z(reference_frame=self.tool_frame)
+    def approach_axis(self) -> Vector3Dimensional:
+        return Vector3Dimensional.Z(reference_frame=self.tool_frame)
 
     @property
-    def closing_axis(self) -> Vector3:
-        return Vector3.X(reference_frame=self.tool_frame)
+    def closing_axis(self) -> Vector3Dimensional:
+        return Vector3Dimensional.X(reference_frame=self.tool_frame)
 
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(
@@ -316,12 +319,12 @@ class DAiSyRightGripper(
         return [gripper_open, gripper_close]
 
     @property
-    def approach_axis(self) -> Vector3:
-        return Vector3.Z(reference_frame=self.tool_frame)
+    def approach_axis(self) -> Vector3Dimensional:
+        return Vector3Dimensional.Z(reference_frame=self.tool_frame)
 
     @property
-    def closing_axis(self) -> Vector3:
-        return Vector3.X(reference_frame=self.tool_frame)
+    def closing_axis(self) -> Vector3Dimensional:
+        return Vector3Dimensional.X(reference_frame=self.tool_frame)
 
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(

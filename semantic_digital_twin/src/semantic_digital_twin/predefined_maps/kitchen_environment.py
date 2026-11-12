@@ -51,8 +51,8 @@ from semantic_digital_twin.specifications.semantic_annotations import (
 )
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Point3,
-    Vector3,
+    CartesianPoint3Dimensional,
+    Vector3Dimensional,
 )
 from semantic_digital_twin.utils import create_cache_dir
 from semantic_digital_twin.world import World
@@ -778,7 +778,7 @@ class KitchenEnvironment(WorldSource):
 
     @staticmethod
     def _door_hinge_specification(
-        axis: Vector3,
+        axis: Vector3Dimensional,
         hinge_T_door: HomogeneousTransformationMatrix,
         lower_angle: float = 0.0,
         upper_angle: float = np.pi / 2,
@@ -809,7 +809,7 @@ class KitchenEnvironment(WorldSource):
         :param travel: How far the drawer can be pulled out, in m.
         """
         return PrismaticConnectionSpecification(
-            axis=Vector3.NEGATIVE_X(),
+            axis=Vector3Dimensional.NEGATIVE_X(),
             dof_limits=DegreeOfFreedomLimits.from_position_range_and_speed(
                 lower_position=0.0,
                 upper_position=travel,
@@ -1087,7 +1087,7 @@ class KitchenEnvironment(WorldSource):
                 name="fridge_door",
                 world_root_T_self=hinge_world_pose @ hinge_T_fridge_door,
                 parent_connection_specification=self._door_hinge_specification(
-                    axis=Vector3.Z(), hinge_T_door=hinge_T_fridge_door
+                    axis=Vector3Dimensional.Z(), hinge_T_door=hinge_T_fridge_door
                 ),
                 scale=Scale(
                     x=door_thickness,
@@ -1354,7 +1354,7 @@ class KitchenEnvironment(WorldSource):
                 name="module_1_door",
                 world_root_T_self=module_1_hinge_world_pose @ hinge_T_module_1_door,
                 parent_connection_specification=self._door_hinge_specification(
-                    axis=Vector3.Z(), hinge_T_door=hinge_T_module_1_door
+                    axis=Vector3Dimensional.Z(), hinge_T_door=hinge_T_module_1_door
                 ),
                 scale=Scale(
                     x=module_1_door_thickness,
@@ -1431,7 +1431,8 @@ class KitchenEnvironment(WorldSource):
                 name="dishwasher_door",
                 world_root_T_self=module_2_hinge_world_pose @ hinge_T_module_2_door,
                 parent_connection_specification=self._door_hinge_specification(
-                    axis=Vector3.NEGATIVE_Y(), hinge_T_door=hinge_T_module_2_door
+                    axis=Vector3Dimensional.NEGATIVE_Y(),
+                    hinge_T_door=hinge_T_module_2_door,
                 ),
                 scale=Scale(
                     x=module_2_door_thickness,
@@ -1747,7 +1748,7 @@ class KitchenEnvironment(WorldSource):
                 world_root_T_self=oven_cabinet_hinge_world_pose
                 @ hinge_T_oven_cabinet_door,
                 parent_connection_specification=self._door_hinge_specification(
-                    axis=Vector3.Z(), hinge_T_door=hinge_T_oven_cabinet_door
+                    axis=Vector3Dimensional.Z(), hinge_T_door=hinge_T_oven_cabinet_door
                 ),
                 scale=Scale(
                     x=center_door_thickness,
@@ -1874,7 +1875,7 @@ class KitchenEnvironment(WorldSource):
                 name="oven_door",
                 world_root_T_self=oven_hinge_world_pose @ hinge_T_oven_door,
                 parent_connection_specification=self._door_hinge_specification(
-                    axis=Vector3.NEGATIVE_Y(), hinge_T_door=hinge_T_oven_door
+                    axis=Vector3Dimensional.NEGATIVE_Y(), hinge_T_door=hinge_T_oven_door
                 ),
                 scale=Scale(x=0.02, y=center_width, z=center_oven_height),
             )
@@ -2220,7 +2221,7 @@ class KitchenEnvironment(WorldSource):
                     name=f"cupboard_door_{side}",
                     world_root_T_self=hinge_pose @ hinge_T_door,
                     parent_connection_specification=self._door_hinge_specification(
-                        axis=Vector3.Z(),
+                        axis=Vector3Dimensional.Z(),
                         hinge_T_door=hinge_T_door,
                         lower_angle=limits[0],
                         upper_angle=limits[1],
@@ -2547,31 +2548,31 @@ class KitchenEnvironment(WorldSource):
 
         with world.modify_world():
             kitchen_floor_polytope = [
-                Point3(0, 0, 0),
-                Point3(0, 3.334, 0),
-                Point3(5.214, 3.334, 0),
-                Point3(5.214, 0, 0),
+                CartesianPoint3Dimensional(0, 0, 0),
+                CartesianPoint3Dimensional(0, 3.334, 0),
+                CartesianPoint3Dimensional(5.214, 3.334, 0),
+                CartesianPoint3Dimensional(5.214, 0, 0),
             ]
 
             living_room_floor_polytope = [
-                Point3(0, 0, 0),
-                Point3(0, 2.801, 0),
-                Point3(5.214, 2.801, 0),
-                Point3(5.214, 0, 0),
+                CartesianPoint3Dimensional(0, 0, 0),
+                CartesianPoint3Dimensional(0, 2.801, 0),
+                CartesianPoint3Dimensional(5.214, 2.801, 0),
+                CartesianPoint3Dimensional(5.214, 0, 0),
             ]
 
             bed_room_floor_polytope = [
-                Point3(0, 0, 0),
-                Point3(0, 2.67, 0.0),
-                Point3(2.50, 2.67, 0.0),
-                Point3(2.50, 0, 0.0),
+                CartesianPoint3Dimensional(0, 0, 0),
+                CartesianPoint3Dimensional(0, 2.67, 0.0),
+                CartesianPoint3Dimensional(2.50, 2.67, 0.0),
+                CartesianPoint3Dimensional(2.50, 0, 0.0),
             ]
 
             office_floor_polytope = [
-                Point3(0, 0, 0),
-                Point3(0, 2.67, 0),
-                Point3(2.705, 2.67, 0),
-                Point3(2.705, 0, 0),
+                CartesianPoint3Dimensional(0, 0, 0),
+                CartesianPoint3Dimensional(0, 2.67, 0),
+                CartesianPoint3Dimensional(2.705, 2.67, 0),
+                CartesianPoint3Dimensional(2.705, 0, 0),
             ]
 
             kitchen_floor = Floor.create_with_new_body_from_polytope_in_world(

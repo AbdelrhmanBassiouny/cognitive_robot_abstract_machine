@@ -12,7 +12,7 @@ from giskardpy.motion_statechart.graph_node import (
     MotionNodeArtifacts,
     DebugExpression,
 )
-from krrood_spatial_math.spatial_types import Vector3
+from krrood_spatial_math.spatial_types import Vector3Dimensional
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import EndEffector
 from semantic_digital_twin.world_description.geometry import Color
@@ -41,12 +41,12 @@ class AlignPlanes(ConvergingTask):
     Tip link of the kinematic chain.
     """
 
-    goal_normal: Vector3
+    goal_normal: Vector3Dimensional
     """
     Normal vector of the goal plane.
     """
 
-    tip_normal: Vector3
+    tip_normal: Vector3Dimensional
     """
     Normal vector of the tip plane.
     """
@@ -136,12 +136,12 @@ class KeepHeldBodyUpright(AlignPlanes):
     The tool frame of :attr:`end_effector`.
     """
 
-    goal_normal: Vector3 = field(init=False)
+    goal_normal: Vector3Dimensional = field(init=False)
     """
     The z-axis of :attr:`root_link`.
     """
 
-    tip_normal: Vector3 = field(init=False)
+    tip_normal: Vector3Dimensional = field(init=False)
     """
     The z-axis of the held body in the tool frame, as bound when this task starts.
     """
@@ -157,7 +157,7 @@ class KeepHeldBodyUpright(AlignPlanes):
         """
         super().set_up()
         self.tip_link = self.end_effector.tool_frame
-        self.goal_normal = Vector3.Z(reference_frame=self.root_link)
+        self.goal_normal = Vector3Dimensional.Z(reference_frame=self.root_link)
         self._tool_T_held_body = ForwardKinematicsBinding(
             name=PrefixedName("tool_T_held_body", str(self.name)),
             root=self.tip_link,
@@ -165,7 +165,7 @@ class KeepHeldBodyUpright(AlignPlanes):
             float_variable_data=self.context.float_variable_data,
         )
         self._tool_T_held_body.bind(self.context.world)
-        self.tip_normal = self._tool_T_held_body.root_T_tip @ Vector3.Z(
+        self.tip_normal = self._tool_T_held_body.root_T_tip @ Vector3Dimensional.Z(
             reference_frame=self.tip_link
         )
 

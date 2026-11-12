@@ -33,12 +33,12 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Floor,
 )
 from krrood_spatial_math.spatial_types import (
-    Pose,
+    Pose3Dimensional,
     HomogeneousTransformationMatrix,
-    Point2,
-    Point3,
+    CartesianPoint2Dimensional,
+    CartesianPoint3Dimensional,
     RotationMatrix,
-    Vector3,
+    Vector3Dimensional,
 )
 from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
 
@@ -72,7 +72,7 @@ class NavigateAction(DrivesBase, GoalAction):
     Navigates the Robot to a position.
     """
 
-    target_location: Pose
+    target_location: Pose3Dimensional
     """
     Where the robot should stand, and which way it should face given as the pose's
     x-axis.
@@ -93,7 +93,7 @@ class LookAtAction(ParallelAction):
     relative to a body that moves.
     """
 
-    target: Pose
+    target: Pose3Dimensional
     """
     Position at which the robot should look, given as 6D pose.
     """
@@ -113,7 +113,7 @@ class LookAtAction(ParallelAction):
         )
         return [pointing, *self.keep_base_still()]
 
-    def _world_P_target(self) -> Point3:
+    def _world_P_target(self) -> CartesianPoint3Dimensional:
         """
         :return: Where :attr:`target` is in the world frame, as an expression of where
             the body it is given relative to stands while the look runs.
@@ -136,7 +136,7 @@ class FaceAtAction(ParallelAction):
     the target from wherever an earlier action left it.
     """
 
-    target: Pose
+    target: Pose3Dimensional
     """
     What to face; only its horizontal position matters.
     """
@@ -147,7 +147,7 @@ class FaceAtAction(ParallelAction):
                 root_link=self.world.root,
                 tip_link=self.robot.root,
                 goal_point=self._target_at_base_height(),
-                pointing_axis=Vector3(
+                pointing_axis=Vector3Dimensional(
                     *self.robot.mobile_base.forward_axis.to_np()[:3],
                     reference_frame=self.robot.root,
                 ),
@@ -155,11 +155,11 @@ class FaceAtAction(ParallelAction):
             CartesianPosition(
                 root_link=self.world.root,
                 tip_link=self.robot.root,
-                goal_point=Point3(reference_frame=self.robot.root),
+                goal_point=CartesianPoint3Dimensional(reference_frame=self.robot.root),
             ),
         ]
 
-    def _target_at_base_height(self) -> Point3:
+    def _target_at_base_height(self) -> CartesianPoint3Dimensional:
         """
         :return: :attr:`target` moved vertically to the height of the base, which can
             only turn about the vertical and so can only point level.
@@ -181,7 +181,7 @@ class PathPlanningNavigateAction(DrivesBase, SequentialAction):
     those added during navigation.
     """
 
-    target: Pose
+    target: Pose3Dimensional
     """
     Where the robot should stand at the end of the path, with its base.
     """
@@ -237,7 +237,7 @@ class PathPlanningNavigateAction(DrivesBase, SequentialAction):
             and extent.max_z <= float(base_pose.z)
         )
 
-    def _path(self) -> list[Pose]:
+    def _path(self) -> list[Pose3Dimensional]:
         """
         The poses the robot drives to, one per leg of the path.
 
@@ -260,15 +260,17 @@ class PathPlanningNavigateAction(DrivesBase, SequentialAction):
         ).z
         poses = [
             HomogeneousTransformationMatrix.from_point_rotation_matrix(
-                Point3(waypoint.x, waypoint.y, base_height, waypoint.reference_frame),
+                CartesianPoint3Dimensional(
+                    waypoint.x, waypoint.y, base_height, waypoint.reference_frame
+                ),
                 RotationMatrix.from_vectors(
-                    x=Vector3(
+                    x=Vector3Dimensional(
                         next_waypoint.x - waypoint.x,
                         next_waypoint.y - waypoint.y,
                         0,
                         reference_frame=waypoint.reference_frame,
                     ),
-                    z=Vector3.Z(),
+                    z=Vector3Dimensional.Z(),
                     reference_frame=waypoint.reference_frame,
                 ),
                 reference_frame=waypoint.reference_frame,
@@ -277,7 +279,7 @@ class PathPlanningNavigateAction(DrivesBase, SequentialAction):
         ]
         return poses + [self.target]
 
-    def _waypoints(self) -> list[Point2]:
+    def _waypoints(self) -> list[CartesianPoint2Dimensional]:
         """
         The points the robot travels through to get from where it stands to the target.
 
@@ -292,7 +294,8 @@ class PathPlanningNavigateAction(DrivesBase, SequentialAction):
             bloat_obstacles=self.robot.mobile_base.base_radius,
         )
         return free_space.path_from_to(
-            Point2.from_pose(base_pose), Point2.from_pose(self.target)
+            CartesianPoint2Dimensional.from_pose(base_pose),
+            CartesianPoint2Dimensional.from_pose(self.target),
         )
 
 
@@ -331,7 +334,7 @@ class ElevatorNavigation(ReattachesBranches, SequentialAction):
             PausedUntilTrue(
                 monitor=self._elevator_open_at_floor(self._current_floor),
                 monitored_node=NavigateAction(
-                    target_location=Pose.from_xyz_rpy(
+                    target_location=Pose3Dimensional.from_xyz_rpy(
                         z=self._height_in_cabin,
                         reference_frame=self.elevator.root,
                     )
@@ -370,7 +373,7 @@ class ElevatorNavigation(ReattachesBranches, SequentialAction):
 
     @property
     def _pose_infront_of_elevator(self):
-        return Pose.from_xyz_rpy(
+        return Pose3Dimensional.from_xyz_rpy(
             x=self.elevator.hole_direction[0]
             * (self.elevator.scale.x / 2 + self.exit_clearance),
             z=self._height_in_cabin,

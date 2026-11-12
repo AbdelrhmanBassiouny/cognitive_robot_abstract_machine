@@ -24,7 +24,10 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Door,
     Oven,
 )
-from krrood_spatial_math.spatial_types import Vector3, HomogeneousTransformationMatrix
+from krrood_spatial_math.spatial_types import (
+    Vector3Dimensional,
+    HomogeneousTransformationMatrix,
+)
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
     FixedConnection,
@@ -86,7 +89,7 @@ class ConnectionModificationTestCase(unittest.TestCase):
             dof = DegreeOfFreedom(name=PrefixedName("dofyboi"))
             w.add_degree_of_freedom(dof)
             connection = RevoluteConnection(
-                b1, b2, axis=Vector3.from_iterable([0, 0, 1]), raw_dof=dof
+                b1, b2, axis=Vector3Dimensional.from_iterable([0, 0, 1]), raw_dof=dof
             )
             w.add_connection(connection)
         assert connection.dof.has_hardware_interface is False
@@ -114,7 +117,7 @@ class ConnectionModificationTestCase(unittest.TestCase):
                 PrismaticConnection(
                     parent=b2,
                     child=b3,
-                    axis=Vector3.from_iterable([0, 0, 1]),
+                    axis=Vector3Dimensional.from_iterable([0, 0, 1]),
                     raw_dof=dof,
                 )
             )
@@ -452,7 +455,7 @@ def test_revert_add_degree_of_freedom():
         dof = DegreeOfFreedom(name=PrefixedName("dof"))
         world.add_degree_of_freedom(dof)
         connection = RevoluteConnection(
-            b1, b2, axis=Vector3.from_iterable([0, 0, 1]), raw_dof=dof
+            b1, b2, axis=Vector3Dimensional.from_iterable([0, 0, 1]), raw_dof=dof
         )
         world.add_connection(connection)
 
@@ -482,7 +485,7 @@ def test_revert_remove_degree_of_freedom():
         dof = DegreeOfFreedom(name=PrefixedName("dof"))
         world.add_degree_of_freedom(dof)
         connection = RevoluteConnection(
-            b1, b2, axis=Vector3.from_iterable([0, 0, 1]), raw_dof=dof
+            b1, b2, axis=Vector3Dimensional.from_iterable([0, 0, 1]), raw_dof=dof
         )
         world.add_connection(connection)
     with world.modify_world():
@@ -594,12 +597,12 @@ def test_revert_set_dofs_has_hardware_interface_restores_per_dof_previous_value(
         world.add_degree_of_freedom(dof2)
         world.add_connection(
             RevoluteConnection(
-                b1, b2, axis=Vector3.from_iterable([0, 0, 1]), raw_dof=dof1
+                b1, b2, axis=Vector3Dimensional.from_iterable([0, 0, 1]), raw_dof=dof1
             )
         )
         world.add_connection(
             RevoluteConnection(
-                b2, b3, axis=Vector3.from_iterable([0, 0, 1]), raw_dof=dof2
+                b2, b3, axis=Vector3Dimensional.from_iterable([0, 0, 1]), raw_dof=dof2
             )
         )
     with world.modify_world():

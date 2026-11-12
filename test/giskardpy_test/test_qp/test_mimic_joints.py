@@ -11,7 +11,7 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList, JointState
 from semantic_digital_twin.robots.hsrb import HSRBJoint
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
-from krrood_spatial_math.spatial_types import Pose
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
 
@@ -142,7 +142,9 @@ def test_lifting_the_gripper_lifts_the_torso_along(
                 "base_footprint"
             ),
             tip_link=gripper,
-            goal_pose=Pose.from_xyz_axis_angle(z=gripper_lift, reference_frame=gripper),
+            goal_pose=Pose3Dimensional.from_xyz_axis_angle(
+                z=gripper_lift, reference_frame=gripper
+            ),
         ),
     )
 
@@ -178,7 +180,9 @@ def test_lifting_the_head_drives_the_joint_the_torso_mimics(
                 "base_footprint"
             ),
             tip_link=head,
-            goal_pose=Pose.from_xyz_axis_angle(z=head_lift, reference_frame=head),
+            goal_pose=Pose3Dimensional.from_xyz_axis_angle(
+                z=head_lift, reference_frame=head
+            ),
         ),
     )
 

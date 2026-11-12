@@ -21,8 +21,8 @@ A `DebugExpression`
 (`giskardpy.motion_statechart.graph_node.DebugExpression`) wraps three things:
 
 - a `name`, used as the label in every debugging tool,
-- an `expression` — either a `Scalar` or a spatial type (`Point3`, `Vector3`, `Quaternion`,
-  `RotationMatrix`, `HomogeneousTransformationMatrix`, or `Pose`), and
+- an `expression` — either a `Scalar` or a spatial type (`CartesianPoint3Dimensional`, `Vector3Dimensional`, `Quaternion`,
+  `RotationMatrix`, `HomogeneousTransformationMatrix`, or `Pose3Dimensional`), and
 - a `color`, used when the expression is rendered.
 
 A node registers a debug expression by appending it to `artifacts.debug_expressions` inside its
@@ -82,7 +82,7 @@ executor.compile(motion_statechart)
 
 On `compile()`, the extension builds the publisher and attaches it to the statechart. Each
 expression's `name` becomes the marker namespace and label, so individual expressions can be
-toggled on and off in RViz's display tree. `Vector3` expressions are anchored to their
+toggled on and off in RViz's display tree. `Vector3Dimensional` expressions are anchored to their
 `visualisation_frame` so the arrow is drawn at the right body.
 
 This is the right tool for spatial reasoning: comparing a goal pose against the current pose,
@@ -95,7 +95,7 @@ Each spatial type renders as a different marker, and the `<task name>/goal` (gre
 ---
 width: 600px
 ---
-A `Pose` is drawn as a coordinate frame. Here `CartesianPose/goal` and `CartesianPose/current`
+A `Pose3Dimensional` is drawn as a coordinate frame. Here `CartesianPose/goal` and `CartesianPose/current`
 show the target and actual end-effector pose side by side.
 ```
 
@@ -103,7 +103,7 @@ show the target and actual end-effector pose side by side.
 ---
 width: 600px
 ---
-A `Point3` is drawn as a sphere — `CartesianPosition/goal` (green) and
+A `CartesianPoint3Dimensional` is drawn as a sphere — `CartesianPosition/goal` (green) and
 `CartesianPosition/current` (red).
 ```
 
@@ -111,7 +111,7 @@ A `Point3` is drawn as a sphere — `CartesianPosition/goal` (green) and
 ---
 width: 500px
 ---
-A `Vector3` is drawn as an arrow anchored to its `visualisation_frame`. Here the green
+A `Vector3Dimensional` is drawn as an arrow anchored to its `visualisation_frame`. Here the green
 `Pointing/goal` and red `Pointing/current` arrows show where the robot should point versus
 where it currently points.
 ```
@@ -149,14 +149,14 @@ The lifecycle is:
   `MissingExecutorExtensionError` if the executor has no `DebugExpressionRecording`.
 
 The plot has one subplot per expression and one line per scalar component, sharing a common time
-axis — for example a `Point3` produces four lines (its homogeneous `x, y, z, w` components). The
+axis — for example a `CartesianPoint3Dimensional` produces four lines (its homogeneous `x, y, z, w` components). The
 plotter exposes a few layout knobs: `subplot_height_in_cm`, `second_width_in_cm`, and `legend`.
 
 ```{figure} img/test_pointing_debug_expressions.png
 ---
 width: 600px
 ---
-An example plot for a pointing task: the `Pointing/goal` and `Pointing/current` `Vector3`
+An example plot for a pointing task: the `Pointing/goal` and `Pointing/current` `Vector3Dimensional`
 expressions, each split into their four homogeneous components, show the goal vector and the
 current vector converging over the motion.
 ```

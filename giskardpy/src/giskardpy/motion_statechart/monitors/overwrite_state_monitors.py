@@ -6,7 +6,7 @@ from typing_extensions import Self
 import krrood.symbolic_math.symbolic_math as sm
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
-from krrood_spatial_math.spatial_types import Pose
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 from semantic_digital_twin.world_description.connections import (
     OmniDrive,
 )
@@ -69,7 +69,7 @@ class SetOdometry(SucceedsOnObservingTrue, MotionStatechartNode, MobileBasePoseG
 
     @classmethod
     def moving_base_of(
-        cls, robot: AbstractRobot, goal_pose: Pose, threshold: float
+        cls, robot: AbstractRobot, goal_pose: Pose3Dimensional, threshold: float
     ) -> Self:
         """
         Differs from :meth:`MobileBasePoseGoal.moving_base_of` in setting the odometry

@@ -38,7 +38,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Whisk,
 )
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
-from krrood_spatial_math.spatial_types import Pose
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import Box, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
@@ -192,7 +192,9 @@ def test_wiping_action_around_target_pose(tool_action_world):
     action = WipingAction(
         arm=robot.right_arm,
         tool=sponge,
-        target_pose=Pose.from_xyz_rpy(x=2.4, y=2.2, z=1.0, reference_frame=world.root),
+        target_pose=Pose3Dimensional.from_xyz_rpy(
+            x=2.4, y=2.2, z=1.0, reference_frame=world.root
+        ),
     )
     goals = _tool_path_goals(action, extensions)
 
@@ -380,7 +382,9 @@ def test_a_wipe_counts_as_done_once_the_tool_reached_its_final_waypoint(
     action = WipingAction(
         arm=robot.right_arm,
         tool=sponge,
-        target_pose=Pose.from_xyz_rpy(x=2.4, y=2.2, z=1.0, reference_frame=world.root),
+        target_pose=Pose3Dimensional.from_xyz_rpy(
+            x=2.4, y=2.2, z=1.0, reference_frame=world.root
+        ),
     )
 
     expand(action, extensions)
@@ -410,12 +414,14 @@ def test_a_spread_wipe_is_done_only_once_the_tool_followed_its_path(
         arm=robot.right_arm,
         tool=Sponge(root=held_sponge),
         technique=WipingTechnique.SPREAD,
-        target_pose=Pose.from_xyz_rpy(x=2.4, y=2.2, z=1.1, reference_frame=world.root),
+        target_pose=Pose3Dimensional.from_xyz_rpy(
+            x=2.4, y=2.2, z=1.1, reference_frame=world.root
+        ),
     )
     plan = Sequence(
         nodes=[
             NavigateAction(
-                target_location=Pose.from_xyz_rpy(
+                target_location=Pose3Dimensional.from_xyz_rpy(
                     x=1.85, y=2.2, reference_frame=world.root
                 )
             ),
@@ -477,7 +483,7 @@ def wipe_stuck_away_from_its_final_waypoint(
         arm=robot.right_arm,
         tool=Sponge(root=held_sponge),
         technique=WipingTechnique.SPREAD,
-        target_pose=Pose.from_xyz_rpy(
+        target_pose=Pose3Dimensional.from_xyz_rpy(
             x=sponge_position[0],
             y=sponge_position[1] + distance,
             z=sponge_position[2],

@@ -15,7 +15,10 @@ import cv2
 import numpy
 import open3d
 import trimesh
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Pose
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Pose3Dimensional,
+)
 from py_trees.common import Status
 from semantic_digital_twin.world_description.geometry import Color, Mesh
 from typing_extensions import TYPE_CHECKING, Self
@@ -130,9 +133,9 @@ class PosedObject:
     Class name of the object's mesh.
     """
 
-    pose: Pose
+    pose: Pose3Dimensional
     """
-    Pose of the mesh in the camera frame.
+    Pose3Dimensional of the mesh in the camera frame.
     """
 
     mask_region: Rect
@@ -155,7 +158,7 @@ class PreviousFramePoses:
 
     def take_match(
         self, class_name: str, mask_region: Rect, minimum_overlap: float
-    ) -> Pose | None:
+    ) -> Pose3Dimensional | None:
         """
         Remove and return the pose of the unmatched object of a class whose mask region
         overlaps most with a mask region of the current frame.
@@ -314,12 +317,12 @@ class PoseVisualization:
     Named geometries of the 3D view.
     """
 
-    def draw(self, shape: Mesh, pose: Pose, label: str) -> None:
+    def draw(self, shape: Mesh, pose: Pose3Dimensional, label: str) -> None:
         """
         Draw a posed mesh into the color image and add it to the 3D view.
 
         :param shape: The mesh.
-        :param pose: Pose of the mesh in the camera frame.
+        :param pose: Pose3Dimensional of the mesh in the camera frame.
         :param label: Unique text identifying the object.
         """
         bounding_box = self.bounding_box(shape, pose)
@@ -339,11 +342,11 @@ class PoseVisualization:
             )
 
     def bounding_box(
-        self, shape: Mesh, pose: Pose
+        self, shape: Mesh, pose: Pose3Dimensional
     ) -> open3d.geometry.OrientedBoundingBox:
         """
         :param shape: The mesh.
-        :param pose: Pose of the mesh in the camera frame.
+        :param pose: Pose3Dimensional of the mesh in the camera frame.
         :return: The bounding box of the posed mesh in :attr:`frame`.
         """
         if self.frame is VisualizationFrame.SMALLEST_BOUNDING_BOX:
@@ -361,11 +364,13 @@ class PoseVisualization:
         )
         return create_oriented_bounding_box(mesh_box.scale.to_np(), box_pose.to_np())
 
-    def axes_pose(self, shape: Mesh, pose: Pose) -> HomogeneousTransformationMatrix:
+    def axes_pose(
+        self, shape: Mesh, pose: Pose3Dimensional
+    ) -> HomogeneousTransformationMatrix:
         """
         :param shape: The mesh.
-        :param pose: Pose of the mesh in the camera frame.
-        :return: Pose of the drawn axes in the camera frame.
+        :param pose: Pose3Dimensional of the mesh in the camera frame.
+        :return: Pose3Dimensional of the drawn axes in the camera frame.
         """
         smallest_box_pose = HomogeneousTransformationMatrix(
             data=shape.mesh.bounding_box_oriented.primitive.transform
@@ -411,7 +416,7 @@ class PoseVisualization:
         Draw the x, y and z axes of a pose in red, green and blue into the color image,
         unless the end of an axis is not in front of the camera.
 
-        :param axes_pose: Pose of the axes in the camera frame.
+        :param axes_pose: Pose3Dimensional of the axes in the camera frame.
         """
         pose_matrix = axes_pose.to_np()
         rotation, translation = pose_matrix[:3, :3], pose_matrix[:3, 3]
@@ -461,10 +466,12 @@ class PoseVisualization:
             cv2.LINE_AA,
         )
 
-    def posed_mesh(self, shape: Mesh, pose: Pose) -> open3d.geometry.TriangleMesh:
+    def posed_mesh(
+        self, shape: Mesh, pose: Pose3Dimensional
+    ) -> open3d.geometry.TriangleMesh:
         """
         :param shape: The mesh.
-        :param pose: Pose of the mesh in the camera frame.
+        :param pose: Pose3Dimensional of the mesh in the camera frame.
         :return: The mesh in the camera frame, painted in :attr:`object_mesh_color`.
         """
         posed_mesh = trimesh_to_o3d_mesh(shape.mesh)
@@ -483,7 +490,7 @@ class PoseVisualization:
         return round(blue * maximum), round(green * maximum), round(red * maximum)
 
 
-# %% Pose requests
+# %% Pose3Dimensional requests
 
 
 @dataclass(eq=False)
@@ -507,7 +514,7 @@ class PoseRequest:
     The object hypothesis in the current frame.
     """
 
-    previous_pose: Pose | None = None
+    previous_pose: Pose3Dimensional | None = None
     """
     Known pose of the mesh in the camera frame to track from, or ``None`` to estimate the
     pose.
@@ -531,9 +538,9 @@ class EstimatedPose:
     The request the pose was determined for.
     """
 
-    pose: Pose
+    pose: Pose3Dimensional
     """
-    Pose of the mesh in the camera frame.
+    Pose3Dimensional of the mesh in the camera frame.
     """
 
     @property
@@ -579,11 +586,11 @@ class PoseCandidate:
 
     def to_request(
         self,
-        previous_pose: Pose | None = None,
+        previous_pose: Pose3Dimensional | None = None,
         pose_annotation: PoseAnnotation | None = None,
     ) -> PoseRequest:
         """
-        :param previous_pose: Pose to track from, or ``None`` to estimate the pose.
+        :param previous_pose: Pose3Dimensional to track from, or ``None`` to estimate the pose.
         :param pose_annotation: Annotation receiving the new pose, or ``None`` to add one.
         :return: The request to pose the object hypothesis.
         """
@@ -596,7 +603,7 @@ class PoseCandidate:
         )
 
 
-# %% Pose update modes
+# %% Pose3Dimensional update modes
 
 
 @dataclass
@@ -669,7 +676,7 @@ class TrackingPoseUpdateMode(PoseUpdateMode, ABC):
         """
         pose_annotation = candidate.pose_annotation
         return candidate.to_request(
-            previous_pose=Pose.from_xyz_quaternion(
+            previous_pose=Pose3Dimensional.from_xyz_quaternion(
                 *pose_annotation.translation, *pose_annotation.rotation
             ),
             pose_annotation=(
@@ -779,7 +786,7 @@ class FoundationPoseAnnotator(ThreadedAnnotator):
 
         parameters = Parameters()
         """
-        Pose estimation and visualization defaults.
+        Pose3Dimensional estimation and visualization defaults.
         """
 
     pose_estimator: MeshBasedPoseEstimator = field(kw_only=True)
@@ -794,7 +801,7 @@ class FoundationPoseAnnotator(ThreadedAnnotator):
 
     descriptor: Descriptor = field(default_factory=Descriptor)
     """
-    Pose estimation and visualization configuration.
+    Pose3Dimensional estimation and visualization configuration.
     """
 
     class_meshes: ObjectClassMeshes = field(init=False, repr=False)
@@ -825,7 +832,7 @@ class FoundationPoseAnnotator(ThreadedAnnotator):
     @record_time
     def compute(self) -> Status:
         """
-        Pose the classified object hypotheses of the CAS and visualize the poses.
+        Pose3Dimensional the classified object hypotheses of the CAS and visualize the poses.
 
         :return: ``Status.SUCCESS`` after processing the frame.
         """
@@ -963,13 +970,13 @@ class FoundationPoseAnnotator(ThreadedAnnotator):
         ]
         return mask
 
-    def object_pose(self, request: PoseRequest) -> Pose | None:
+    def object_pose(self, request: PoseRequest) -> Pose3Dimensional | None:
         """
         Track the pose of a request from its previous pose if the tracked pose is
         plausible, and estimate it otherwise.
 
         :param request: The object hypothesis to pose.
-        :return: Pose of the mesh in the camera frame, or ``None`` if none was found.
+        :return: Pose3Dimensional of the mesh in the camera frame, or ``None`` if none was found.
         """
         self.pose_estimator.select_mesh(request.class_mesh.estimator_mesh_file)
         if request.previous_pose is not None:
@@ -984,7 +991,9 @@ class FoundationPoseAnnotator(ThreadedAnnotator):
             )
         return self.pose_estimator.estimate_pose(request.object_observation)
 
-    def is_plausible_track(self, request: PoseRequest, tracked_pose: Pose) -> bool:
+    def is_plausible_track(
+        self, request: PoseRequest, tracked_pose: Pose3Dimensional
+    ) -> bool:
         """
         :param request: The tracked object hypothesis.
         :param tracked_pose: Tracked pose of the mesh in the camera frame.

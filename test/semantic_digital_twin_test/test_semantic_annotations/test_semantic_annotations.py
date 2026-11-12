@@ -411,7 +411,10 @@ def test_kinematic_chain_with_root_equal_tip_has_no_connections():
         world.add_kinematic_structure_entity(root)
         world.add_kinematic_structure_entity(link)
         joint = RevoluteConnection.create_with_dofs(
-            world=world, parent=root, child=link, axis=Vector3.Z(reference_frame=root)
+            world=world,
+            parent=root,
+            child=link,
+            axis=Vector3Dimensional.Z(reference_frame=root),
         )
         world.add_connection(joint)
         chain = ReviewKinematicChain(
@@ -511,7 +514,7 @@ class DrawerWithSlidingHandle:
                 parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
                     x=HANDLE_OFFSET_X, reference_frame=case
                 ),
-                axis=Vector3.X(reference_frame=case),
+                axis=Vector3Dimensional.X(reference_frame=case),
             )
             world.add_connection(handle_connection)
             world.add_semantic_annotation(handle)

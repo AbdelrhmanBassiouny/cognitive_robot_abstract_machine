@@ -16,8 +16,8 @@ import numpy
 from krrood.ormatic.utils import classproperty
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Point2,
-    Pose,
+    CartesianPoint2Dimensional,
+    Pose3Dimensional,
 )
 from robokudo_foundation_pose_tensorrt import FoundationPose, ensure_engines
 from semantic_digital_twin.datastructures.camera_model import (
@@ -120,7 +120,9 @@ class FoundationPoseEstimator(MeshBasedPoseEstimator):
     def select_mesh(self, mesh_file: Path) -> None:
         self.foundation_pose.set_mesh(mesh_file_path=str(mesh_file))
 
-    def estimate_pose(self, object_observation: ObjectObservation) -> Pose | None:
+    def estimate_pose(
+        self, object_observation: ObjectObservation
+    ) -> Pose3Dimensional | None:
         frame = object_observation.frame
         result = self.foundation_pose.estimate(
             rgb=frame.color_image,
@@ -134,8 +136,8 @@ class FoundationPoseEstimator(MeshBasedPoseEstimator):
         return HomogeneousTransformationMatrix(data=pose_matrix).pose
 
     def track_pose(
-        self, object_observation: ObjectObservation, previous_pose: Pose
-    ) -> Pose:
+        self, object_observation: ObjectObservation, previous_pose: Pose3Dimensional
+    ) -> Pose3Dimensional:
         frame = object_observation.frame
         pose_matrix, _, _ = self.foundation_pose.track(
             rgb=frame.color_image,
@@ -172,7 +174,9 @@ class FoundationPoseEstimator(MeshBasedPoseEstimator):
                 image_resolution=resolution,
                 focal_length_x=focal_length,
                 focal_length_y=focal_length,
-                principal_point=Point2(x=float(center_x), y=float(center_y)),
+                principal_point=CartesianPoint2Dimensional(
+                    x=float(center_x), y=float(center_y)
+                ),
             ),
         )
         return ObjectObservation(frame=frame, mask=mask)

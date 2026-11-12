@@ -20,11 +20,11 @@ from semantic_digital_twin.datastructures.lidar_reading import LidarReading
 from semantic_digital_twin.datastructures.scan_pattern import ScanPattern
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Point3,
-    Vector3,
+    CartesianPoint3Dimensional,
+    Vector3Dimensional,
     Quaternion,
 )
-from krrood_spatial_math.spatial_types import Pose
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import (
     Color,
@@ -66,11 +66,11 @@ class TransformStampedToSemDTConverter(
 
 @dataclass
 class PoseStampedToSemDTConverter(
-    Ros2ToSemDTConverter[geometry_msgs.PoseStamped, Pose]
+    Ros2ToSemDTConverter[geometry_msgs.PoseStamped, Pose3Dimensional]
 ):
     @classmethod
-    def convert(cls, data: geometry_msgs.PoseStamped, world: World) -> Pose:
-        result = Pose.from_xyz_quaternion(
+    def convert(cls, data: geometry_msgs.PoseStamped, world: World) -> Pose3Dimensional:
+        result = Pose3Dimensional.from_xyz_quaternion(
             pos_x=data.pose.position.x,
             pos_y=data.pose.position.y,
             pos_z=data.pose.position.z,
@@ -87,10 +87,10 @@ class PoseStampedToSemDTConverter(
 
 
 @dataclass
-class PoseToSemDTConverter(Ros2ToSemDTConverter[geometry_msgs.Pose, Pose]):
+class PoseToSemDTConverter(Ros2ToSemDTConverter[geometry_msgs.Pose, Pose3Dimensional]):
     @classmethod
-    def convert(cls, data: geometry_msgs.Pose, world: World) -> Pose:
-        result = Pose.from_xyz_quaternion(
+    def convert(cls, data: geometry_msgs.Pose, world: World) -> Pose3Dimensional:
+        result = Pose3Dimensional.from_xyz_quaternion(
             pos_x=data.position.x,
             pos_y=data.position.y,
             pos_z=data.position.z,
@@ -104,11 +104,11 @@ class PoseToSemDTConverter(Ros2ToSemDTConverter[geometry_msgs.Pose, Pose]):
 
 @dataclass
 class PointStampedToSemDTConverter(
-    Ros2ToSemDTConverter[geometry_msgs.PointStamped, Point3]
+    Ros2ToSemDTConverter[geometry_msgs.PointStamped, CartesianPoint3Dimensional]
 ):
     @classmethod
     def convert(cls, data: OutputType, world: World) -> InputType:
-        result = Point3(
+        result = CartesianPoint3Dimensional(
             data.point.x,
             data.point.y,
             data.point.z,
@@ -122,11 +122,13 @@ class PointStampedToSemDTConverter(
 
 @dataclass
 class Vector3StampedToSemDTConverter(
-    Ros2ToSemDTConverter[geometry_msgs.Vector3Stamped, Vector3]
+    Ros2ToSemDTConverter[geometry_msgs.Vector3Stamped, Vector3Dimensional]
 ):
     @classmethod
-    def convert(cls, data: geometry_msgs.Vector3Stamped, world: World) -> Vector3:
-        result = Vector3(
+    def convert(
+        cls, data: geometry_msgs.Vector3Stamped, world: World
+    ) -> Vector3Dimensional:
+        result = Vector3Dimensional(
             data.vector.x,
             data.vector.y,
             data.vector.z,

@@ -14,7 +14,7 @@ from typing_extensions import TYPE_CHECKING
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     RotationMatrix,
-    Vector3,
+    Vector3Dimensional,
 )
 from semantic_digital_twin.exceptions import GraspNotOnObjectError
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
@@ -65,7 +65,9 @@ class AxialGrasp(ObjectRelativeGrasp):
         root_V_axis = axis.direction
         main_axis_index = int(np.argmax(np.abs(root_V_axis.to_np()[:3])))
         root_V_reference = (
-            Vector3.NEGATIVE_Y() if main_axis_index == 2 else Vector3.NEGATIVE_Z()
+            Vector3Dimensional.NEGATIVE_Y()
+            if main_axis_index == 2
+            else Vector3Dimensional.NEGATIVE_Z()
         )
         root_V_reference = root_V_reference - root_V_axis * root_V_reference.dot(
             root_V_axis

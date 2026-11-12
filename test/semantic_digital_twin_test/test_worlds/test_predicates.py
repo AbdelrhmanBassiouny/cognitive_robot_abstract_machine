@@ -48,7 +48,7 @@ from semantic_digital_twin.reasoning.robot_predicates import (
 )
 from semantic_digital_twin.robots.robot_parts import Camera, EndEffector, TCamera
 from semantic_digital_twin.robots.pr2 import PR2
-from krrood_spatial_math.spatial_types import Pose
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 from semantic_digital_twin.testing import *
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
@@ -644,7 +644,9 @@ def test_region_is_occupied(pr2_world_state_reset) -> None:
     )
     assert not PlaceIsOccupied(
         box=target_box,
-        pose=Pose.from_xyz_rpy(2.5, 2, 0, reference_frame=pr2_world_state_reset.root),
+        pose=Pose3Dimensional.from_xyz_rpy(
+            2.5, 2, 0, reference_frame=pr2_world_state_reset.root
+        ),
         world=pr2_world_state_reset,
     )()
 
@@ -659,7 +661,7 @@ def test_region_is_occupied(pr2_world_state_reset) -> None:
 
     assert not PlaceIsOccupied(
         box=target_box,
-        pose=Pose.from_xyz_rpy(
+        pose=Pose3Dimensional.from_xyz_rpy(
             3.5, 2.5, 1, 0, reference_frame=pr2_world_state_reset.root
         ),
         world=pr2_world_state_reset,
@@ -671,12 +673,16 @@ def test_is_pose_free_for_robot(pr2_apartment_state_reset) -> None:
     view = pr2_apartment_state_reset.get_semantic_annotations_by_type(PR2)[0]
     assert is_pose_free_for_robot(
         view,
-        Pose.from_xyz_rpy(2, -2, 0, reference_frame=pr2_apartment_state_reset.root),
+        Pose3Dimensional.from_xyz_rpy(
+            2, -2, 0, reference_frame=pr2_apartment_state_reset.root
+        ),
     )
 
     assert not is_pose_free_for_robot(
         view,
-        Pose.from_xyz_rpy(3, 2, 0, reference_frame=pr2_apartment_state_reset.root),
+        Pose3Dimensional.from_xyz_rpy(
+            3, 2, 0, reference_frame=pr2_apartment_state_reset.root
+        ),
     )
 
     view.root.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
@@ -685,12 +691,16 @@ def test_is_pose_free_for_robot(pr2_apartment_state_reset) -> None:
 
     assert is_pose_free_for_robot(
         view,
-        Pose.from_xyz_rpy(2, -2, 0, reference_frame=pr2_apartment_state_reset.root),
+        Pose3Dimensional.from_xyz_rpy(
+            2, -2, 0, reference_frame=pr2_apartment_state_reset.root
+        ),
     )
 
     assert is_pose_free_for_robot(
         view,
-        Pose.from_xyz_rpy(2.1, -2.1, 0, reference_frame=pr2_apartment_state_reset.root),
+        Pose3Dimensional.from_xyz_rpy(
+            2.1, -2.1, 0, reference_frame=pr2_apartment_state_reset.root
+        ),
     )
 
 
@@ -698,7 +708,9 @@ def test_is_pose_free_for_robot_with_robot_pose(pr2_apartment_state_reset) -> No
     view = pr2_apartment_state_reset.get_semantic_annotations_by_type(PR2)[0]
     assert is_pose_free_for_robot(
         view,
-        Pose.from_xyz_rpy(2, -2, 0, reference_frame=pr2_apartment_state_reset.root),
+        Pose3Dimensional.from_xyz_rpy(
+            2, -2, 0, reference_frame=pr2_apartment_state_reset.root
+        ),
     )
 
     assert is_pose_free_for_robot(
@@ -741,12 +753,12 @@ def test_empty_gripper_is_not_holding_something():
         """
 
         @property
-        def approach_axis(self) -> Vector3:
-            return Vector3.X(reference_frame=self.tool_frame)
+        def approach_axis(self) -> Vector3Dimensional:
+            return Vector3Dimensional.X(reference_frame=self.tool_frame)
 
         @property
-        def closing_axis(self) -> Vector3:
-            return Vector3.Y(reference_frame=self.tool_frame)
+        def closing_axis(self) -> Vector3Dimensional:
+            return Vector3Dimensional.Y(reference_frame=self.tool_frame)
 
         def setup_hardware_interfaces(self):
             pass

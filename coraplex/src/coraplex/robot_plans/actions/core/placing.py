@@ -33,7 +33,7 @@ from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.reasoning.robot_predicates import is_body_gripped
 from semantic_digital_twin.robots.robot_parts import Arm
 from semantic_digital_twin.semantic_annotations.mixins import HasGraspCandidates
-from krrood_spatial_math.spatial_types import Pose
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
@@ -55,7 +55,7 @@ class PlaceAction(
     The annotation of the object that should be placed.
     """
 
-    target_location: Pose
+    target_location: Pose3Dimensional
     """
     Pose in the world at which the object should be placed.
     """
@@ -112,7 +112,9 @@ class PlaceAction(
             *self._retract_steps(arm, poses.pre_grasp),
         ]
 
-    def _retract_steps(self, arm: Arm, retract_pose: Pose) -> list[StatechartNode]:
+    def _retract_steps(
+        self, arm: Arm, retract_pose: Pose3Dimensional
+    ) -> list[StatechartNode]:
         """
         :param arm: The arm that placed the object.
         :param retract_pose: Where its tool frame withdraws to.

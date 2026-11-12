@@ -187,7 +187,7 @@ corresponding `Body` constructors:
 from importlib.resources import files
 from pathlib import Path
 
-from krrood_spatial_math.spatial_types import Point3
+from krrood_spatial_math.spatial_types import CartesianPoint3Dimensional
 
 resources = Path(files("semantic_digital_twin")).parent.parent / "resources"
 
@@ -206,7 +206,7 @@ crate = BodySpecification.from_event("crate", outer - inner).spawn(world)
 # The convex hull of a point cloud.
 hull = BodySpecification.from_3d_points(
     "hull",
-    [Point3(0, 0, 0), Point3(0.2, 0, 0), Point3(0, 0.2, 0), Point3(0, 0, 0.2)],
+    [CartesianPoint3Dimensional(0, 0, 0), CartesianPoint3Dimensional(0.2, 0, 0), CartesianPoint3Dimensional(0, 0.2, 0), CartesianPoint3Dimensional(0, 0, 0.2)],
 ).spawn(world)
 
 assert len(milk_mesh.collision.shapes) == 1
@@ -293,14 +293,14 @@ rotation to its translation.
 from semantic_digital_twin.specifications.connections import (
     PrismaticConnectionSpecification,
 )
-from krrood_spatial_math.spatial_types import Vector3
+from krrood_spatial_math.spatial_types import Vector3Dimensional
 
 world = World.create_with_root_body()
 
 drawer = BodySpecification.box(
     name="drawer",
     scale=Scale(0.4, 0.5, 0.2),
-    connection_specification=PrismaticConnectionSpecification(axis=Vector3.Z()),
+    connection_specification=PrismaticConnectionSpecification(axis=Vector3Dimensional.Z()),
 ).spawn(world)
 
 assert isinstance(drawer.parent_connection, PrismaticConnection)
@@ -403,7 +403,7 @@ drawer = SemanticAnnotationWithRootSpecification(
     root_specification=BodySpecification.box(
         "drawer",
         Scale(0.4, 0.5, 0.2),
-        connection_specification=PrismaticConnectionSpecification(axis=Vector3.X()),
+        connection_specification=PrismaticConnectionSpecification(axis=Vector3Dimensional.X()),
     ),
 ).spawn(world)
 
@@ -584,7 +584,7 @@ door = Door.get_annotation_specification(
     "door",
     Door.get_default_root_kinematic_structure_entity_specification(scale=Scale(0.03, 1, 2)),
     parent_connection_specification=RevoluteConnectionSpecification(
-        axis=Vector3.Z(), connection_T_child=hinge_T_door
+        axis=Vector3Dimensional.Z(), connection_T_child=hinge_T_door
     ),
 ).spawn(world)
 assert isinstance(door.movable_joint, RevoluteConnection)

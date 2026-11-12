@@ -14,12 +14,12 @@ from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from cramph.node import NodeArtifacts
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from krrood_spatial_math.spatial_types import (
-    Point3,
-    Vector3,
+    CartesianPoint3Dimensional,
+    Vector3Dimensional,
     RotationMatrix,
     HomogeneousTransformationMatrix,
 )
-from krrood_spatial_math.spatial_types import SpatialType
+from krrood_spatial_math.spatial_types import SymbolicSpatialType
 from semantic_digital_twin.world_description.world_entity import Body
 
 
@@ -54,7 +54,7 @@ class RootRelativeGoalMonitor(EndedByOwner, MotionStatechartNode, ABC):
 
     @property
     @abstractmethod
-    def goal(self) -> SpatialType:
+    def goal(self) -> SymbolicSpatialType:
         """
         :return: The goal spatial object, expressed in its own reference frame.
         """
@@ -72,7 +72,7 @@ class RootRelativeGoalMonitor(EndedByOwner, MotionStatechartNode, ABC):
         )
         self._forward_kinematics_binding.bind(self.context.world)
 
-    def resolve_root_goal(self) -> SpatialType:
+    def resolve_root_goal(self) -> SymbolicSpatialType:
         """
         Express the goal in the root link frame, captured relative to the goal reference
         frame via a forward kinematics binding.
@@ -148,7 +148,7 @@ class PositionReached(RootRelativeGoalMonitor):
     Link that should reach the goal point.
     """
 
-    goal_point: Point3
+    goal_point: CartesianPoint3Dimensional
     """
     Target 3D point to reach.
     """
@@ -159,7 +159,7 @@ class PositionReached(RootRelativeGoalMonitor):
     """
 
     @property
-    def goal(self) -> Point3:
+    def goal(self) -> CartesianPoint3Dimensional:
         return self.goal_point
 
     def build_artifacts(self) -> NodeArtifacts:
@@ -220,7 +220,7 @@ class PointingAt(EndedByOwner, MotionStatechartNode):
     Link whose pointing axis is checked.
     """
 
-    goal_point: Point3
+    goal_point: CartesianPoint3Dimensional
     """
     Point the tip link should point at.
     """
@@ -230,7 +230,7 @@ class PointingAt(EndedByOwner, MotionStatechartNode):
     Reference link the goal point is expressed in.
     """
 
-    pointing_axis: Vector3
+    pointing_axis: Vector3Dimensional
     """
     Axis of the tip link that should point at the goal point.
     """
@@ -278,12 +278,12 @@ class VectorsAligned(EndedByOwner, MotionStatechartNode):
     Link the tip normal is expressed in.
     """
 
-    goal_normal: Vector3
+    goal_normal: Vector3Dimensional
     """
     Reference normal the tip normal should align with.
     """
 
-    tip_normal: Vector3
+    tip_normal: Vector3Dimensional
     """
     Normal of the tip link that should align with the goal normal.
     """
@@ -329,12 +329,12 @@ class DistanceToLine(EndedByOwner, MotionStatechartNode):
     Link whose distance to the line is checked.
     """
 
-    center_point: Point3
+    center_point: CartesianPoint3Dimensional
     """
     Center of the line segment.
     """
 
-    line_axis: Vector3
+    line_axis: Vector3Dimensional
     """
     Direction of the line segment.
     """

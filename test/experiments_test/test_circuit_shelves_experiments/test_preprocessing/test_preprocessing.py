@@ -48,9 +48,9 @@ from experiments.shelf_generation_experiments.shelf_schema import (
 )
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Point2,
-    Pose,
-    Pose2D,
+    CartesianPoint2Dimensional,
+    Pose3Dimensional,
+    Pose2Dimensional,
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import (
@@ -107,7 +107,7 @@ def _eg_object(
         place_id=place_id,
         object_type=object_type,
         scale=Scale(x=length, y=width, z=height),
-        pose=Pose.from_xyz_rpy(
+        pose=Pose3Dimensional.from_xyz_rpy(
             x=x, y=y, z=z, roll=0.0, pitch=0.0, yaw=math.radians(yaw)
         ),
         source_id=source_id or f"{object_id}_src",
@@ -141,7 +141,7 @@ def _object_2d(
     return RelationalCircuitExperimentObject2D(
         object_type=object_type,
         scale=Scale(x=0.1, y=0.1, z=0.1),
-        pose=Pose2D.from_xy_yaw(x=x, y=y, yaw=0.0),
+        pose=Pose2Dimensional.from_xy_yaw(x=x, y=y, yaw=0.0),
         source_id=object_id,
         name=object_id,
     )
@@ -297,7 +297,9 @@ def test_position_is_corrected_to_the_meshs_bounding_box_center(
     measurements = MeshMeasurements(source_id_to_path={"book_src": scene_directory})
 
     corrected = measurements.corrected_position(
-        source_id="book_src", position=Point2(x=1.0, y=2.0), yaw_degrees=0.0
+        source_id="book_src",
+        position=CartesianPoint2Dimensional(x=1.0, y=2.0),
+        yaw_degrees=0.0,
     )
 
     assert corrected.is_mesh_corrected
@@ -335,7 +337,9 @@ def test_position_correction_is_rotated_by_the_objects_own_yaw(
     measurements = MeshMeasurements(source_id_to_path={"book_src": scene_directory})
 
     corrected = measurements.corrected_position(
-        source_id="book_src", position=Point2(x=0.0, y=0.0), yaw_degrees=90.0
+        source_id="book_src",
+        position=CartesianPoint2Dimensional(x=0.0, y=0.0),
+        yaw_degrees=90.0,
     )
 
     assert float(corrected.position.x) == pytest.approx(0.0, abs=1e-9)
@@ -351,7 +355,9 @@ def test_position_falls_back_to_the_recorded_one_without_a_cached_mesh() -> None
     measurements = MeshMeasurements(source_id_to_path={})
 
     corrected = measurements.corrected_position(
-        source_id="missing_src", position=Point2(x=0.3, y=0.1), yaw_degrees=0.0
+        source_id="missing_src",
+        position=CartesianPoint2Dimensional(x=0.3, y=0.1),
+        yaw_degrees=0.0,
     )
 
     assert not corrected.is_mesh_corrected
@@ -369,7 +375,9 @@ def test_mesh_is_measured_once_per_source_id(tmp_path: Path) -> None:
 
     for _ in range(3):
         measurements.corrected_position(
-            source_id="book_src", position=Point2(x=0.0, y=0.0), yaw_degrees=0.0
+            source_id="book_src",
+            position=CartesianPoint2Dimensional(x=0.0, y=0.0),
+            yaw_degrees=0.0,
         )
 
     assert measurements.measured_mesh_count == 1
@@ -920,10 +928,10 @@ class _ObjectSnapshot:
     The comparable content of an :class:`RelationalCircuitExperimentObject2D`, standing
     in for it in an equality check.
 
-    :attr:`RelationalCircuitExperimentObject2D.pose` is a :class:`Pose2D`, whose casadi-
-    backed equality falls back to identity, so two independently built shelf trees never
-    compare equal even when numerically identical -- this snapshot picks out only the
-    plain values that matter instead.
+    :attr:`RelationalCircuitExperimentObject2D.pose` is a :class:`Pose2Dimensional`,
+    whose casadi- backed equality falls back to identity, so two independently built
+    shelf trees never compare equal even when numerically identical -- this snapshot
+    picks out only the plain values that matter instead.
     """
 
     object_type: ObjectType

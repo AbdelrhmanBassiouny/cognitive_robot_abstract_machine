@@ -20,7 +20,10 @@ from semantic_digital_twin.robots.robot_parts import Arm
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Milk,
 )
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Pose
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Pose3Dimensional,
+)
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
     FixedConnection,
@@ -152,7 +155,7 @@ def setup_world() -> World:
 
 
 def _make_sine_scan_poses(
-    anchor: Pose,
+    anchor: Pose3Dimensional,
     lanes: int = 6,
     lane_spacing: float = 0.03,
     y_span: float = 0.18,
@@ -160,7 +163,7 @@ def _make_sine_scan_poses(
     wiggles: float = 1.0,
     points_per_lane: int = 16,
     lane_axis: str = "z",
-) -> list[Pose]:
+) -> list[Pose3Dimensional]:
     """
     Generates a set of 3D poses following a sine wave pattern for scanning purposes.
 
@@ -211,7 +214,7 @@ def _make_sine_scan_poses(
 
     y_min = y0 - 0.5 * y_span
     y_max = y0 + 0.5 * y_span
-    poses: list[Pose] = []
+    poses: list[Pose3Dimensional] = []
 
     if lane_axis not in ("x", "z"):
         raise ValueError(f"lane_axis must be 'x' or 'z', got: {lane_axis}")
@@ -234,7 +237,7 @@ def _make_sine_scan_poses(
 
         for x, y, z in zip(xc, yc, zc):
             poses.append(
-                Pose.from_xyz_quaternion(
+                Pose3Dimensional.from_xyz_quaternion(
                     float(x),
                     float(y),
                     float(z),

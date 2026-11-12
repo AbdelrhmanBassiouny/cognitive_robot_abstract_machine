@@ -33,8 +33,14 @@ from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
 )
 from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from krrood_spatial_math.spatial_types import Vector3, HomogeneousTransformationMatrix
-from krrood_spatial_math.spatial_types import Point3, Pose
+from krrood_spatial_math.spatial_types import (
+    Vector3Dimensional,
+    HomogeneousTransformationMatrix,
+)
+from krrood_spatial_math.spatial_types import (
+    CartesianPoint3Dimensional,
+    Pose3Dimensional,
+)
 from semantic_digital_twin.world_description.derivatives import DerivativeMap
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
@@ -87,7 +93,7 @@ def test_default_weight_survives_a_json_round_trip(mini_world: World) -> None:
     node = CartesianPositionStraight(
         root_link=root,
         tip_link=tip,
-        goal_point=Point3(1, 0, 0, reference_frame=root),
+        goal_point=CartesianPoint3Dimensional(1, 0, 0, reference_frame=root),
     )
     new_json_data = json.loads(json.dumps(to_json(node)))
     tracker = WorldEntityWithIDKwargsTracker.from_world(mini_world)
@@ -108,7 +114,7 @@ def test_executing_json_parsed_statechart(tmp_path):
         )
         world.add_degree_of_freedom(dof)
         root_C_tip = RevoluteConnection(
-            parent=root, child=tip, axis=Vector3.Z(), raw_dof=dof
+            parent=root, child=tip, axis=Vector3Dimensional.Z(), raw_dof=dof
         )
         world.add_connection(root_C_tip)
 
@@ -118,7 +124,7 @@ def test_executing_json_parsed_statechart(tmp_path):
         )
         world.add_degree_of_freedom(dof)
         root_C_tip2 = RevoluteConnection(
-            parent=root, child=tip2, axis=Vector3.Z(), raw_dof=dof
+            parent=root, child=tip2, axis=Vector3Dimensional.Z(), raw_dof=dof
         )
         world.add_connection(root_C_tip2)
 
@@ -253,7 +259,9 @@ def test_an_expanded_differential_drive_goal_reaches_its_pose_after_a_json_round
     A goal expands when it joins, so what is sent is its expanded steps, whose
     orientations are expressions over the base's forward kinematics.
     """
-    goal_pose = Pose.from_xyz_rpy(x=0.5, reference_frame=cylinder_bot_diff_world.root)
+    goal_pose = Pose3Dimensional.from_xyz_rpy(
+        x=0.5, reference_frame=cylinder_bot_diff_world.root
+    )
     statechart = Statechart(context=_create_executor(cylinder_bot_diff_world).context)
     statechart.add_node(
         goal := DifferentialDriveBaseGoal(
@@ -298,7 +306,7 @@ def test_an_expanded_differential_drive_goal_binds_its_goal_frame_after_a_json_r
             mobile_base=cylinder_bot_diff_world.get_semantic_annotations_by_type(
                 MobileBase
             )[0],
-            goal_pose=Pose.from_xyz_rpy(
+            goal_pose=Pose3Dimensional.from_xyz_rpy(
                 x=1, reference_frame=cylinder_bot_diff_world.root
             ),
             threshold=0.05,
@@ -309,7 +317,7 @@ def test_an_expanded_differential_drive_goal_binds_its_goal_frame_after_a_json_r
             mobile_base=cylinder_bot_diff_world.get_semantic_annotations_by_type(
                 MobileBase
             )[0],
-            goal_pose=Pose.from_xyz_rpy(x=0.5, reference_frame=bot),
+            goal_pose=Pose3Dimensional.from_xyz_rpy(x=0.5, reference_frame=bot),
             threshold=0.05,
         )
     )

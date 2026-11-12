@@ -31,10 +31,10 @@ from giskardpy.motion_statechart.weights import DefaultWeights, VelocityScale
 from krrood.symbolic_math.symbolic_math import Scalar, trinary_if_cases
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Point3,
-    Pose,
+    CartesianPoint3Dimensional,
+    Pose3Dimensional,
     RotationMatrix,
-    Vector3,
+    Vector3Dimensional,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
@@ -62,7 +62,7 @@ class DrivenBaseTask(ConvergingTask, ABC):
     The body the drive carries.
     """
 
-    goal_pose: Pose
+    goal_pose: Pose3Dimensional
     """
     Where the base should end up.
     """
@@ -81,7 +81,7 @@ class DrivenBaseTask(ConvergingTask, ABC):
         return self.base.parent_kinematic_structure_entity
 
     @property
-    def parent_T_goal(self) -> Pose:
+    def parent_T_goal(self) -> Pose3Dimensional:
         """
         :return: :attr:`goal_pose` relative to :attr:`drive_parent`.
         """
@@ -206,13 +206,13 @@ class BaseHeading(DrivenBaseRotation):
         parent_V_base_to_goal.scale(1)
         return RotationMatrix.from_vectors(
             x=parent_V_base_to_goal,
-            z=Vector3.Z(reference_frame=self.drive_parent),
+            z=Vector3Dimensional.Z(reference_frame=self.drive_parent),
             reference_frame=self.drive_parent,
         )
 
     def parent_P_viewpoint(
         self, parent_T_base: HomogeneousTransformationMatrix
-    ) -> Point3:
+    ) -> CartesianPoint3Dimensional:
         """
         :param parent_T_base: The pose of the base relative to the drive's parent.
         :return: The point relative to the drive's parent the base faces the position of
@@ -264,7 +264,7 @@ class BaseTurnTowardsGoalPosition(BaseHeading):
 
     def parent_P_viewpoint(
         self, parent_T_base: HomogeneousTransformationMatrix
-    ) -> Point3:
+    ) -> CartesianPoint3Dimensional:
         return self._parent_T_start_binding.root_T_tip.position
 
 
@@ -280,7 +280,7 @@ class MobileBasePoseGoal(ABC):
     @classmethod
     @abstractmethod
     def moving_base_of(
-        cls, robot: AbstractRobot, goal_pose: Pose, threshold: float
+        cls, robot: AbstractRobot, goal_pose: Pose3Dimensional, threshold: float
     ) -> Self:
         """
         :param robot: The robot whose base is put at `goal_pose`.
@@ -317,9 +317,9 @@ class DrivenBaseGoal(
     The base moved, by the drive attaching its robot to its parent.
     """
 
-    goal_pose: Pose
+    goal_pose: Pose3Dimensional
     """
-    Pose to reach.
+    Pose3Dimensional to reach.
     """
 
     weight: float = DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE
@@ -377,7 +377,7 @@ class DrivenBaseGoal(
 
     @classmethod
     def moving_base_of(
-        cls, robot: AbstractRobot, goal_pose: Pose, threshold: float
+        cls, robot: AbstractRobot, goal_pose: Pose3Dimensional, threshold: float
     ) -> Self:
         """
         Differs from :meth:`MobileBasePoseGoal.moving_base_of` in requiring `robot` to

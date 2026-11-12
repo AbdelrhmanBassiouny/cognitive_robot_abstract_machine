@@ -7,8 +7,15 @@ from typing_extensions import TYPE_CHECKING
 from krrood.exceptions import DataclassException
 
 if TYPE_CHECKING:
-    from krrood_spatial_math.cartesian_frame_3d import CartesianFrame3D
-    from krrood_spatial_math.spatial_types import SpatialType, Vector3
+    from krrood_spatial_math.cartesian_frame_3_dimensional import (
+        CartesianFrame3Dimensional,
+    )
+    from krrood_spatial_math.coordinate_system import CoordinateSystem
+    from krrood_spatial_math.spatial_types import (
+        Pose3Dimensional,
+        SymbolicSpatialType,
+        Vector3Dimensional,
+    )
 
 # %% spatial types
 
@@ -26,9 +33,9 @@ class InsufficientVectorsError(SpatialTypesError):
     Raised when a rotation matrix is constructed from fewer than two vectors.
     """
 
-    x: Vector3 | None
-    y: Vector3 | None
-    z: Vector3 | None
+    x: Vector3Dimensional | None
+    y: Vector3Dimensional | None
+    z: Vector3Dimensional | None
 
     def error_message(self) -> str:
         return (
@@ -45,12 +52,12 @@ class InsufficientVectorsError(SpatialTypesError):
 
 @dataclass
 class ReferenceFrameMismatchError(SpatialTypesError):
-    expected_frame: CartesianFrame3D | None
+    expected_frame: CoordinateSystem | None
     """
     The frame the operation requires, or ``None`` if it requires no frame.
     """
 
-    actual_frame: CartesianFrame3D | None
+    actual_frame: CoordinateSystem | None
     """
     The frame that was found instead, or ``None`` if the value has no frame.
     """
@@ -64,12 +71,12 @@ class ReferenceFrameMismatchError(SpatialTypesError):
         checked_value = self.context or "the given value"
         return (
             f"Expected {checked_value} to be expressed in "
-            f"{self._describe(self.expected_frame)}, "
-            f"but it is expressed in {self._describe(self.actual_frame)}."
+            f"{self._describe(frame=self.expected_frame)}, "
+            f"but it is expressed in {self._describe(frame=self.actual_frame)}."
         )
 
     @staticmethod
-    def _describe(frame: CartesianFrame3D | None) -> str:
+    def _describe(*, frame: CoordinateSystem | None) -> str:
         """
         :param frame: The frame to describe.
         :return: The frame as it reads in the error message.
@@ -93,7 +100,7 @@ class MissingReferenceFrameError(SpatialTypesError):
     though it is required for the current operation.
     """
 
-    spatial_type: SpatialType
+    spatial_type: SymbolicSpatialType
     """
     Spatial type that lacks a reference frame.
     """
@@ -105,30 +112,115 @@ class MissingReferenceFrameError(SpatialTypesError):
         return "construct it with an explicit reference frame."
 
 
-# %% serialized Cartesian frames
+# %% values and changes on the x-y plane of a frame
 
 
 @dataclass
-class MissingCartesianFrame3DResolver(SpatialTypesError):
+class NoPlanarTransformationError(SpatialTypesError):
     """
-    Raised when a serialized spatial type refers to a three-dimensional Cartesian frame,
-    but nothing was given to deserialize it with that finds the frame.
+    A change between two three-dimensional frames has no rigid counterpart between the
+    frames on their x-y planes.
     """
 
-    frame_id_key: str
+    reference_frame: CartesianFrame3Dimensional | None
     """
-    Where the identifier of the frame sits in the serialized spatial type.
+    The frame the change turns coordinates into.
+    """
+
+    child_frame: CartesianFrame3Dimensional | None
+    """
+    The frame the change turns coordinates from.
+    """
+
+
+@dataclass
+class FramesOnDifferentPlanesError(NoPlanarTransformationError):
+    """
+    Raised when the x-y planes of two frames are different planes, so no change between
+    frames on one plane relates them.
     """
 
     def error_message(self) -> str:
         return (
-            f"The serialized spatial type refers to a frame by "
-            f"'{self.frame_id_key}', but the keyword arguments of from_json carry no "
-            f"CartesianFrame3DResolver."
+            f"The x-y plane of {self.child_frame} is not the x-y plane of "
+            f"{self.reference_frame}: their z-axes are not parallel, or the child's "
+            f"origin is off the reference frame's plane."
         )
 
     def suggest_correction(self) -> str:
         return (
-            "pass a CartesianFrame3DResolver that knows the frame among the keyword "
+            "project the values onto one plane with an FramePlaneProjection instead of "
+            "changing their coordinates."
+        )
+
+
+@dataclass
+class MirroredPlaneFramesError(NoPlanarTransformationError):
+    """
+    Raised when two frames span one plane but their z-axes point to opposite sides of
+    it, so the frames on that plane have opposite handedness and the change between them
+    is a reflection, not a rigid change.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.child_frame} and {self.reference_frame} span one x-y plane, but "
+            f"their z-axes point in opposite directions."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "relate frames whose z-axes point the same way, for instance by turning one "
+            "of them half a turn about its x-axis."
+        )
+
+
+@dataclass
+class XAxisNormalToPlaneError(SpatialTypesError):
+    """
+    Raised when a pose is flattened onto a plane its x-axis is normal to, so the x-axis
+    gives the flattened pose no heading.
+    """
+
+    pose: Pose3Dimensional
+    """
+    The pose that was flattened.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The x-axis of {self.pose} is normal to the x-y plane of "
+            f"{self.pose.reference_frame}, so it has no heading on that plane."
+        )
+
+    def suggest_correction(self) -> str:
+        return "flatten the pose onto a plane its x-axis is not normal to."
+
+
+# %% serialized Cartesian frames
+
+
+@dataclass
+class MissingCartesianFrame3DimensionalResolver(SpatialTypesError):
+    """
+    Raised when a serialized coordinate representation refers to a three-dimensional
+    Cartesian frame, but nothing was given to deserialize it with that finds the frame.
+    """
+
+    frame_id_key: str
+    """
+    Where the identifier of the frame sits in the serialized coordinate representation.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The serialized coordinate representation refers to a frame by "
+            f"'{self.frame_id_key}', but the keyword arguments of from_json carry no "
+            f"CartesianFrame3DimensionalResolver."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "pass a CartesianFrame3DimensionalResolver that knows the frame among the keyword "
             "arguments of from_json."
         )

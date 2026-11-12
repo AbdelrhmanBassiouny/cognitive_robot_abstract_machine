@@ -21,7 +21,10 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     ShelfLayer,
     Cabinet,
 )
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Pose2D
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Pose2Dimensional,
+)
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import Connection6DoF
 from semantic_digital_twin.world_description.geometry import (
@@ -53,7 +56,7 @@ class RelationalCircuitExperimentObject2D(SpawnSpecification[Body]):
     Physical dimensions of the object.
     """
 
-    pose: Pose2D
+    pose: Pose2Dimensional
     """
     Pose of the object relative to the centre of the shelf layer's content frame.
     """

@@ -128,11 +128,11 @@ from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.robots.robot_parts import AbstractRobot, EndEffector
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Point3,
+    CartesianPoint3Dimensional,
     RotationMatrix,
-    Vector3,
+    Vector3Dimensional,
 )
-from krrood_spatial_math.spatial_types import Pose
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection1DOF,
@@ -173,24 +173,24 @@ def _robot(world: World) -> AbstractRobot:
     return world.get_semantic_annotations_by_type(AbstractRobot)[0]
 
 
-def _point(world: World) -> Point3:
-    return Point3(0.1, 0.2, 0.3, reference_frame=_root(world))
+def _point(world: World) -> CartesianPoint3Dimensional:
+    return CartesianPoint3Dimensional(0.1, 0.2, 0.3, reference_frame=_root(world))
 
 
-def _tip_point(world: World) -> Point3:
-    return Point3(0.0, 0.0, 0.1, reference_frame=_tip(world))
+def _tip_point(world: World) -> CartesianPoint3Dimensional:
+    return CartesianPoint3Dimensional(0.0, 0.0, 0.1, reference_frame=_tip(world))
 
 
-def _root_axis(world: World) -> Vector3:
-    return Vector3.Z(reference_frame=_root(world))
+def _root_axis(world: World) -> Vector3Dimensional:
+    return Vector3Dimensional.Z(reference_frame=_root(world))
 
 
-def _tip_axis(world: World) -> Vector3:
-    return Vector3.X(reference_frame=_tip(world))
+def _tip_axis(world: World) -> Vector3Dimensional:
+    return Vector3Dimensional.X(reference_frame=_tip(world))
 
 
-def _pose(world: World) -> Pose:
-    return Pose.from_xyz_rpy(x=0.1, yaw=0.2, reference_frame=_root(world))
+def _pose(world: World) -> Pose3Dimensional:
+    return Pose3Dimensional.from_xyz_rpy(x=0.1, yaw=0.2, reference_frame=_root(world))
 
 
 def _transformation(world: World) -> HomogeneousTransformationMatrix:
@@ -495,7 +495,9 @@ def _cartesian_cases() -> list[NodeRoundTripCase]:
                     tip_link=_tip(world),
                     tip_P_tool=_tip_point(world),
                     root_P_start=_point(world),
-                    root_P_end=Point3(0.1, 0.2, 0.5, reference_frame=_root(world)),
+                    root_P_end=CartesianPoint3Dimensional(
+                        0.1, 0.2, 0.5, reference_frame=_root(world)
+                    ),
                 )
             ],
             WorldFixture.PR2_WORLD,

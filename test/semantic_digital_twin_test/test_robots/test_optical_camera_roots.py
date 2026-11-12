@@ -19,7 +19,10 @@ from semantic_digital_twin.robots.daisy import DAiSyCamera
 from semantic_digital_twin.robots.armar7 import AzureKinectRGB
 from semantic_digital_twin.robots.unitree_g1 import D435
 from semantic_digital_twin.robots.robot_parts import Camera, RobotCamera
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Vector3Dimensional,
+)
 from semantic_digital_twin.testing import ray_test_world
 from semantic_digital_twin.world_description.world_entity import Body
 from semantic_digital_twin.world import World
@@ -38,7 +41,9 @@ def test_camera_root_defines_optical_forward_direction(table_world: World) -> No
             resolution=CameraResolution(), field_of_view=FieldOfView()
         ),
     )
-    np.testing.assert_array_equal(camera.viewing_direction.to_np(), Vector3.Z().to_np())
+    np.testing.assert_array_equal(
+        camera.viewing_direction.to_np(), Vector3Dimensional.Z().to_np()
+    )
     assert camera.viewing_direction.reference_frame is camera.root
 
 

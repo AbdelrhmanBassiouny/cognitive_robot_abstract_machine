@@ -6,7 +6,10 @@ import krrood.symbolic_math.symbolic_math as sm
 from cramph.node import EndedByOwner
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from cramph.node import NodeArtifacts
-from krrood_spatial_math.spatial_types import Point3, Vector3
+from krrood_spatial_math.spatial_types import (
+    CartesianPoint3Dimensional,
+    Vector3Dimensional,
+)
 from semantic_digital_twin.world_description.world_entity import Body
 
 
@@ -21,9 +24,13 @@ class FeatureFunctionMonitor(EndedByOwner, MotionStatechartNode):
     """Link the controlled feature is attached to."""
     root_link: Body
     """Link the reference feature is attached to."""
-    reference_feature: Point3 | Vector3 = field(init=False)
+    reference_feature: CartesianPoint3Dimensional | Vector3Dimensional = field(
+        init=False
+    )
     """Reference feature, typically the target for `controlled_feature`."""
-    controlled_feature: Point3 | Vector3 = field(init=False)
+    controlled_feature: CartesianPoint3Dimensional | Vector3Dimensional = field(
+        init=False
+    )
     """Controlled feature, typically moved towards `reference_feature`."""
 
     def build_artifacts(self) -> NodeArtifacts:
@@ -41,14 +48,14 @@ class FeatureFunctionMonitor(EndedByOwner, MotionStatechartNode):
         root_T_tip = self.context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
         )
-        if isinstance(self.controlled_feature, Point3):
+        if isinstance(self.controlled_feature, CartesianPoint3Dimensional):
             self.root_P_controlled_feature = root_T_tip @ tip_controlled_feature
-        elif isinstance(self.controlled_feature, Vector3):
+        elif isinstance(self.controlled_feature, Vector3Dimensional):
             self.root_V_controlled_feature = root_T_tip @ tip_controlled_feature
 
-        if isinstance(self.reference_feature, Point3):
+        if isinstance(self.reference_feature, CartesianPoint3Dimensional):
             self.root_P_reference_feature = root_reference_feature
-        if isinstance(self.reference_feature, Vector3):
+        if isinstance(self.reference_feature, Vector3Dimensional):
             self.root_V_reference_feature = root_reference_feature
 
         return NodeArtifacts()
@@ -61,9 +68,9 @@ class HeightMonitor(FeatureFunctionMonitor):
     the root z-axis is within ``[lower_limit, upper_limit]``.
     """
 
-    reference_point: Point3
+    reference_point: CartesianPoint3Dimensional
     """Reference point to measure the height against."""
-    tip_point: Point3
+    tip_point: CartesianPoint3Dimensional
     """Controlled point whose height is checked."""
     lower_limit: float
     """Lower bound for the height difference in meters."""
@@ -77,7 +84,7 @@ class HeightMonitor(FeatureFunctionMonitor):
 
         distance = (
             self.root_P_controlled_feature - self.root_P_reference_feature
-        ) @ Vector3.Z()
+        ) @ Vector3Dimensional.Z()
         artifacts.observation = sm.logic_and(
             distance >= self.lower_limit,
             distance <= self.upper_limit,
@@ -92,9 +99,9 @@ class PerpendicularMonitor(FeatureFunctionMonitor):
     ``threshold``.
     """
 
-    reference_normal: Vector3
+    reference_normal: Vector3Dimensional
     """Reference normal to check perpendicularity against."""
-    tip_normal: Vector3
+    tip_normal: Vector3Dimensional
     """Controlled normal."""
     threshold: float = 0.01
     """Threshold on the dot product of the two normals."""
@@ -116,9 +123,9 @@ class DistanceMonitor(FeatureFunctionMonitor):
     reference point is within ``[lower_limit, upper_limit]``.
     """
 
-    reference_point: Point3
+    reference_point: CartesianPoint3Dimensional
     """Reference point to measure the distance against."""
-    tip_point: Point3
+    tip_point: CartesianPoint3Dimensional
     """Controlled point whose distance is checked."""
     lower_limit: float
     """Lower bound for the distance in meters."""
@@ -147,9 +154,9 @@ class AngleMonitor(FeatureFunctionMonitor):
     ``[lower_angle, upper_angle]``.
     """
 
-    reference_vector: Vector3
+    reference_vector: Vector3Dimensional
     """Reference vector to measure the angle against."""
-    tip_vector: Vector3
+    tip_vector: Vector3Dimensional
     """Controlled vector."""
     lower_angle: float
     """Lower bound for the angle in radians."""

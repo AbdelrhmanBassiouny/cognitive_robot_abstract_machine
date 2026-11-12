@@ -20,7 +20,7 @@ from krrood_spatial_math.spatial_types import (
     AxisAngle,
     HomogeneousTransformationMatrix,
     RotationMatrix,
-    Vector3,
+    Vector3Dimensional,
 )
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 
@@ -594,7 +594,9 @@ class ConstraintBuilder:
         """
         rotation_cap = self.max_rotation_velocity * self.dt
 
-        hack = RotationMatrix.from_axis_angle(AxisAngle(Vector3.Z(), -0.0001))
+        hack = RotationMatrix.from_axis_angle(
+            AxisAngle(Vector3Dimensional.Z(), -0.0001)
+        )
         root_R_tip = root_T_tip.rotation_matrix.dot(hack)
         q_actual = HomogeneousTransformationMatrix(self.target).quaternion
         q_goal = root_R_tip.quaternion

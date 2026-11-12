@@ -23,7 +23,10 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Wall,
     Wardrobe,
 )
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Vector3Dimensional,
+)
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedomLimits,
@@ -32,7 +35,6 @@ from semantic_digital_twin.world_description.geometry import Scale
 from semantic_digital_twin.world_source import WorldSource
 
 # %% apartment
-
 
 
 @dataclass
@@ -201,7 +203,7 @@ class ApartmentEnvironment(WorldSource):
                     ),
                 ),
                 parent_connection_specification=RevoluteConnectionSpecification(
-                    axis=Vector3.Z(),
+                    axis=Vector3Dimensional.Z(),
                     dof_limits=DegreeOfFreedomLimits.from_position_range_and_speed(
                         lower_position=min(0.0, opening_angle),
                         upper_position=max(0.0, opening_angle),

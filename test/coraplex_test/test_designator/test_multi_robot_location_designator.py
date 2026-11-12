@@ -7,7 +7,7 @@ from typing_extensions import Generator, List, Tuple
 
 
 from coraplex.locations.locations import ReachabilityLocation, VisibilityLocation
-from krrood_spatial_math.spatial_types import Pose
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 from cramph.composites import Parallel, Sequence, TryAll, TryInOrder
 from cramph.threaded_nodes import FunctionCall
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction, MoveTorsoAction
@@ -117,7 +117,7 @@ def multiple_robot_simple_apartment_context(
     snapshot.restore()
 
 
-def _floor_distance(pose: Pose, body) -> float:
+def _floor_distance(pose: Pose3Dimensional, body) -> float:
     """
     :return: How far `pose` stands from `body` along the floor.
     """
@@ -125,7 +125,7 @@ def _floor_distance(pose: Pose, body) -> float:
     return float(np.linalg.norm(offset))
 
 
-def _assert_faces(pose: Pose, body) -> None:
+def _assert_faces(pose: Pose3Dimensional, body) -> None:
     """
     Assert that a robot standing at `pose` has `body` straight ahead.
     """
@@ -151,7 +151,7 @@ def test_new_reachability_location_body(
     arm = right_or_only_arm(robot)
     milk = world.get_body_by_name("milk.stl")
     location = ReachabilityLocation(
-        Pose(reference_frame=milk),
+        Pose3Dimensional(reference_frame=milk),
         arm,
         context=context_of(extensions),
     )
@@ -199,7 +199,7 @@ def test_visibility_location_body(multiple_robot_simple_apartment_context):
     world.notify_state_change()
 
     location = VisibilityLocation(
-        Pose(reference_frame=world.get_body_by_name("milk.stl")),
+        Pose3Dimensional(reference_frame=world.get_body_by_name("milk.stl")),
         context=context_of(extensions),
     )
 

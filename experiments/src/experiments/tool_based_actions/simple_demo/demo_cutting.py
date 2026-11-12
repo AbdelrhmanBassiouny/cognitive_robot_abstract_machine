@@ -19,7 +19,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     CuttingKnife,
 )
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
-from krrood_spatial_math.spatial_types import Pose
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 
 from coraplex.datastructures.enums import CuttingTechnique
 from coraplex.robot_plans.actions.composite.tool_based import CuttingAction
@@ -76,7 +76,7 @@ def main() -> None:
             ParkArmsAction(arms=pr2.all_arms),
             MoveTorsoAction(torso_state=TorsoState.HIGH),
             NavigateAction(
-                target_location=Pose.from_xyz_rpy(
+                target_location=Pose3Dimensional.from_xyz_rpy(
                     *BASE_POSITION_XYZ, reference_frame=world.root
                 )
             ),

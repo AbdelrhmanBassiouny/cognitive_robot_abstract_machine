@@ -15,7 +15,7 @@ from semantic_digital_twin.part_finding.locating import LocatedFacesFinder
 from semantic_digital_twin.part_finding.splitting import PartSplitter
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Bowl, Rim
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
-from krrood_spatial_math.spatial_types import Pose
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 
 from ..conftest import SAMPLING_SEED
 from ..plan_running import context_of, robot_extensions
@@ -160,7 +160,7 @@ def test_transporting_a_bowl_grasps_it_at_its_rim(pr2_and_bowl):
     world, robot, bowl = pr2_and_bowl
     transport = TransportAction.from_graspable_by_closest_grasps(
         bowl,
-        Pose.from_xyz_rpy(5.0, 3.3, 0.75, reference_frame=world.root),
+        Pose3Dimensional.from_xyz_rpy(5.0, 3.3, 0.75, reference_frame=world.root),
         robot.left_arm,
         context_of(robot_extensions(robot)),
     )

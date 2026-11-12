@@ -1,5 +1,8 @@
 from giskardpy.motion_statechart.tasks.pointing import Pointing, PointingCone
-from krrood_spatial_math.spatial_types import Point3, Vector3
+from krrood_spatial_math.spatial_types import (
+    CartesianPoint3Dimensional,
+    Vector3Dimensional,
+)
 from semantic_digital_twin.world import World
 from test.giskardpy_test.test_motion_statechart.debug_expression_helpers import (
     CURRENT_COLOR,
@@ -21,8 +24,8 @@ class TestPointingDebugExpressions:
         task = Pointing(
             root_link=root,
             tip_link=tip,
-            goal_point=Point3(x=1, reference_frame=root),
-            pointing_axis=Vector3(x=1, reference_frame=tip),
+            goal_point=CartesianPoint3Dimensional(x=1, reference_frame=root),
+            pointing_axis=Vector3Dimensional(x=1, reference_frame=tip),
             name="point",
         )
 
@@ -31,8 +34,8 @@ class TestPointingDebugExpressions:
 
         goal = debug_expression_by_name(artifacts.debug_expressions, "point/goal")
         current = debug_expression_by_name(artifacts.debug_expressions, "point/current")
-        assert isinstance(goal.expression, Vector3)
-        assert isinstance(current.expression, Vector3)
+        assert isinstance(goal.expression, Vector3Dimensional)
+        assert isinstance(current.expression, Vector3Dimensional)
         assert goal.color == GOAL_COLOR
         assert current.color == CURRENT_COLOR
 
@@ -42,8 +45,8 @@ class TestPointingDebugExpressions:
         task = PointingCone(
             root_link=root,
             tip_link=tip,
-            goal_point=Point3(x=1, reference_frame=root),
-            pointing_axis=Vector3(x=1, reference_frame=tip),
+            goal_point=CartesianPoint3Dimensional(x=1, reference_frame=root),
+            pointing_axis=Vector3Dimensional(x=1, reference_frame=tip),
             cone_theta=0.1,
             name="cone",
         )
@@ -53,7 +56,7 @@ class TestPointingDebugExpressions:
 
         goal = debug_expression_by_name(artifacts.debug_expressions, "cone/goal")
         current = debug_expression_by_name(artifacts.debug_expressions, "cone/current")
-        assert isinstance(goal.expression, Vector3)
-        assert isinstance(current.expression, Vector3)
+        assert isinstance(goal.expression, Vector3Dimensional)
+        assert isinstance(current.expression, Vector3Dimensional)
         assert goal.color == GOAL_COLOR
         assert current.color == CURRENT_COLOR

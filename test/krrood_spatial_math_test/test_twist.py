@@ -5,11 +5,11 @@ import json
 import numpy as np
 
 from krrood.adapters.json_serializer import from_json, to_json
-from krrood_spatial_math.cartesian_frame_3d import ValueInCartesianFrame3D
+from krrood_spatial_math.spatial_types import SymbolicSpatialValue
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     Twist,
-    Vector3,
+    Vector3Dimensional,
 )
 
 from .dataset.frames import KnownFrames
@@ -34,7 +34,7 @@ def test_a_twist_has_six_entries():
 def test_a_twist_turns_by_the_axis_scaled_by_the_angle():
     axis, angle = np.array([0.0, 1.0, 0.0]), 0.7
     start_T_end = HomogeneousTransformationMatrix.from_xyz_axis_angle(
-        axis=Vector3(*axis), angle=angle
+        axis=Vector3Dimensional(*axis), angle=angle
     )
 
     twist = Twist.from_transformation(start_T_end)
@@ -52,7 +52,7 @@ def test_no_rotation_is_the_zero_rotation_vector():
 
 def test_a_rotation_is_stated_by_an_angle_of_at_most_half_a_turn():
     three_quarter_turn = HomogeneousTransformationMatrix.from_xyz_axis_angle(
-        axis=Vector3.X(), angle=1.5 * np.pi
+        axis=Vector3Dimensional.X(), angle=1.5 * np.pi
     )
 
     twist = Twist.from_transformation(three_quarter_turn)
@@ -78,7 +78,7 @@ def test_a_twist_is_built_from_constants():
 
 
 def test_a_twist_is_a_value_given_in_a_cartesian_frame():
-    assert issubclass(Twist, ValueInCartesianFrame3D)
+    assert issubclass(Twist, SymbolicSpatialValue)
 
 
 def test_a_twist_is_expressed_in_the_frame_of_the_transformation(table_frame):

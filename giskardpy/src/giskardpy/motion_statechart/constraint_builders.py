@@ -12,9 +12,9 @@ from giskardpy.qp.constraint import LargeNumber
 from giskardpy.qp.constraint_collection import ConstraintCollection
 from krrood_spatial_math.spatial_types import (
     AxisAngle,
-    Point3,
+    CartesianPoint3Dimensional,
     Quaternion,
-    Vector3,
+    Vector3Dimensional,
     RotationMatrix,
 )
 
@@ -52,8 +52,8 @@ class GeometricConstraintBuilder:
 
     def add_point_goal_constraints(
         self,
-        frame_P_current: Point3,
-        frame_P_goal: Point3,
+        frame_P_current: CartesianPoint3Dimensional,
+        frame_P_goal: CartesianPoint3Dimensional,
         cruise_velocity: sm.ScalarData,
         quadratic_weight: sm.ScalarData,
         name: str | None = None,
@@ -118,8 +118,8 @@ class GeometricConstraintBuilder:
 
     def add_vector_goal_constraints(
         self,
-        frame_V_current: Vector3,
-        frame_V_goal: Vector3,
+        frame_V_current: Vector3Dimensional,
+        frame_V_goal: Vector3Dimensional,
         cruise_velocity: sm.ScalarData,
         quadratic_weight: sm.ScalarData = DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE,
         name: str | None = None,
@@ -237,7 +237,9 @@ class GeometricConstraintBuilder:
         # avoid singularity
         # the sign determines in which direction the robot moves when in singularity.
         # -0.0001 preserves the old behavior from before this goal was refactored
-        hack = RotationMatrix.from_axis_angle(AxisAngle(Vector3.Z(), -0.0001))
+        hack = RotationMatrix.from_axis_angle(
+            AxisAngle(Vector3Dimensional.Z(), -0.0001)
+        )
         frame_R_current = frame_R_current.dot(hack)
         current_quaternion = frame_R_current.quaternion
         goal_quaternion = frame_R_goal.quaternion
@@ -251,7 +253,7 @@ class GeometricConstraintBuilder:
 
     def add_translational_velocity_limit(
         self,
-        frame_P_current: Point3,
+        frame_P_current: CartesianPoint3Dimensional,
         max_velocity: sm.ScalarData,
         quadratic_weight: sm.ScalarData,
         max_violation: sm.ScalarData = np.inf,

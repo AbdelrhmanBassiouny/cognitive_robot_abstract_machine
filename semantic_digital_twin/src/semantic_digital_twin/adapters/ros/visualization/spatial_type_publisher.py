@@ -17,7 +17,7 @@ from semantic_digital_twin.adapters.ros.visualization.spatial_type_marker_render
     SpatialTypeVisualization,
 )
 from semantic_digital_twin.callbacks.callback import StateChangeCallback
-from krrood_spatial_math.spatial_types import SpatialType
+from krrood_spatial_math.spatial_types import SymbolicSpatialType
 from semantic_digital_twin.world_description.geometry import Color
 
 if TYPE_CHECKING:
@@ -161,7 +161,7 @@ class SpatialTypePublisher(StateChangeCallback, HasROS2Node):
     def publish_once(
         cls,
         *,
-        spatial_type: SpatialType,
+        spatial_type: SymbolicSpatialType,
         node: Node,
         color: Color | None = None,
         label: str | None = None,

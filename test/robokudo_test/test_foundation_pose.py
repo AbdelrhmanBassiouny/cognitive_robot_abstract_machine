@@ -7,7 +7,10 @@ from pathlib import Path
 import numpy
 import pytest
 import trimesh
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Pose
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Pose3Dimensional,
+)
 from py_trees.common import Status
 from robokudo.annotators.exceptions import (
     DuplicateObjectClassMesh,
@@ -59,15 +62,17 @@ class ScriptedPoseEstimator(MeshBasedPoseEstimator):
     Answers every estimate and track with a preset pose and records what it was asked.
     """
 
-    estimated_pose: Pose | None = field(
+    estimated_pose: Pose3Dimensional | None = field(
         default_factory=lambda: object_pose_at_depth(0.5)
     )
     """
-    Pose every estimate returns.
+    Pose3Dimensional every estimate returns.
     """
-    tracked_pose: Pose = field(default_factory=lambda: object_pose_at_depth(0.6))
+    tracked_pose: Pose3Dimensional = field(
+        default_factory=lambda: object_pose_at_depth(0.6)
+    )
     """
-    Pose every track returns.
+    Pose3Dimensional every track returns.
     """
     loaded_mesh_files: list[Path] = field(default_factory=list)
     """
@@ -81,7 +86,7 @@ class ScriptedPoseEstimator(MeshBasedPoseEstimator):
     """
     Observation of every :meth:`estimate_pose` call, in order.
     """
-    previous_poses: list[Pose] = field(default_factory=list)
+    previous_poses: list[Pose3Dimensional] = field(default_factory=list)
     """
     Previous pose of every :meth:`track_pose` call, in order.
     """
@@ -92,25 +97,27 @@ class ScriptedPoseEstimator(MeshBasedPoseEstimator):
     def select_mesh(self, mesh_file: Path) -> None:
         self.selected_mesh_files.append(mesh_file)
 
-    def estimate_pose(self, object_observation: ObjectObservation) -> Pose | None:
+    def estimate_pose(
+        self, object_observation: ObjectObservation
+    ) -> Pose3Dimensional | None:
         self.estimated_object_observations.append(object_observation)
         return self.estimated_pose
 
     def track_pose(
-        self, object_observation: ObjectObservation, previous_pose: Pose
-    ) -> Pose:
+        self, object_observation: ObjectObservation, previous_pose: Pose3Dimensional
+    ) -> Pose3Dimensional:
         self.previous_poses.append(previous_pose)
         return self.tracked_pose
 
 
-def object_pose_at_depth(depth: float) -> Pose:
+def object_pose_at_depth(depth: float) -> Pose3Dimensional:
     """
-    :return: Pose of an object on the optical axis, ``depth`` meters in front of the camera.
+    :return: Pose3Dimensional of an object on the optical axis, ``depth`` meters in front of the camera.
     """
-    return Pose.from_xyz_quaternion(pos_z=depth)
+    return Pose3Dimensional.from_xyz_quaternion(pos_z=depth)
 
 
-# %% Pose estimators with and without meshes
+# %% Pose3Dimensional estimators with and without meshes
 
 
 @dataclass
@@ -119,12 +126,14 @@ class PoseEstimatorWithoutMeshes(ObjectPoseEstimator):
     Poses objects without knowing any mesh.
     """
 
-    def estimate_pose(self, object_observation: ObjectObservation) -> Pose | None:
+    def estimate_pose(
+        self, object_observation: ObjectObservation
+    ) -> Pose3Dimensional | None:
         return object_pose_at_depth(0.5)
 
     def track_pose(
-        self, object_observation: ObjectObservation, previous_pose: Pose
-    ) -> Pose:
+        self, object_observation: ObjectObservation, previous_pose: Pose3Dimensional
+    ) -> Pose3Dimensional:
         return previous_pose
 
 
@@ -308,12 +317,12 @@ def annotator(
 
 
 def add_pose_annotation(
-    object_hypothesis: ObjectHypothesis, pose: Pose
+    object_hypothesis: ObjectHypothesis, pose: Pose3Dimensional
 ) -> PoseAnnotation:
     """
     Give an object hypothesis a pose annotation of an unrotated pose.
 
-    :param pose: Pose whose translation the annotation gets.
+    :param pose: Pose3Dimensional whose translation the annotation gets.
     """
     pose_annotation = PoseAnnotation()
     pose_annotation.translation = pose.position.to_np()[:3].tolist()
@@ -507,7 +516,7 @@ def test_match_requires_the_minimum_overlap(scene: FlatSurfaceScene):
     assert previous_frame_poses.unmatched_objects == [distant]
 
 
-# %% Pose update modes
+# %% Pose3Dimensional update modes
 
 
 @pytest.mark.parametrize(
@@ -622,7 +631,7 @@ def test_object_of_unknown_class_is_not_posed(
     assert pose_estimator.estimated_object_observations == []
 
 
-# %% Pose annotations
+# %% Pose3Dimensional annotations
 
 
 def test_pose_annotation_reaches_the_world_through_the_camera_pose_of_the_cas(
@@ -760,7 +769,9 @@ def test_track_leaving_the_mask_is_estimated_anew(
     annotator: FoundationPoseAnnotator,
     pose_estimator: ScriptedPoseEstimator,
 ):
-    pose_estimator.tracked_pose = Pose.from_xyz_quaternion(pos_x=0.5, pos_z=0.5)
+    pose_estimator.tracked_pose = Pose3Dimensional.from_xyz_quaternion(
+        pos_x=0.5, pos_z=0.5
+    )
     object_hypothesis = scene.add_object_hypothesis(annotator)
     add_pose_annotation(object_hypothesis, object_pose_at_depth(0.4))
 
@@ -889,7 +900,7 @@ def test_axes_reaching_behind_the_camera_are_not_drawn(
     annotator: FoundationPoseAnnotator,
 ):
     visualization = visualization_of(annotator, VisualizationFrame.MESH)
-    pose_facing_the_camera = Pose.from_xyz_quaternion(
+    pose_facing_the_camera = Pose3Dimensional.from_xyz_quaternion(
         0.0, 0.0, 0.05, 1.0, 0.0, 0.0, 0.0
     )
 

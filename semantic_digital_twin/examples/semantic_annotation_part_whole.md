@@ -48,7 +48,7 @@ drawer hangs from, which `drawer.movable_joint` returns.
 ```{code-cell} ipython3
 import numpy as np
 
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3
+from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3Dimensional
 from semantic_digital_twin.specifications.connections import (
     PrismaticConnectionSpecification,
 )
@@ -72,7 +72,7 @@ with world.modify_world():
         world=world,
         world_root_T_self=HomogeneousTransformationMatrix(),
         parent_connection_specification=PrismaticConnectionSpecification(
-            axis=Vector3.X()
+            axis=Vector3Dimensional.X()
         ),
     )
     handle = Handle.create_with_new_body_in_world(

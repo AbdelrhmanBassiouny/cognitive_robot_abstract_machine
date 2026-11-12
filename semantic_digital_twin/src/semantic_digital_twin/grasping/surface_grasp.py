@@ -8,9 +8,9 @@ from typing_extensions import TYPE_CHECKING
 
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Point3,
+    CartesianPoint3Dimensional,
     RotationMatrix,
-    Vector3,
+    Vector3Dimensional,
 )
 from semantic_digital_twin.exceptions import GraspNotOnObjectError
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
@@ -67,7 +67,7 @@ class SurfaceGrasp(ObjectRelativeGrasp):
         root_P_surface = self._surface_point(graspable, root_V_outward)
         if root_P_surface is None:
             raise GraspNotOnObjectError(grasp=self, graspable=graspable)
-        root_V_approach = Vector3.NEGATIVE_Z() * math.cos(
+        root_V_approach = Vector3Dimensional.NEGATIVE_Z() * math.cos(
             self.pitch
         ) - root_V_outward * math.sin(self.pitch)
         root_V_across = root_V_outward - root_V_approach * root_V_outward.dot(
@@ -92,15 +92,15 @@ class SurfaceGrasp(ObjectRelativeGrasp):
         """
         return self._surface_point(graspable, self._outward_direction()) is not None
 
-    def _outward_direction(self) -> Vector3:
+    def _outward_direction(self) -> Vector3Dimensional:
         """
         :return: ``root_V_outward``.
         """
-        return Vector3(math.cos(self.yaw), math.sin(self.yaw), 0.0)
+        return Vector3Dimensional(math.cos(self.yaw), math.sin(self.yaw), 0.0)
 
     def _surface_point(
-        self, graspable: HasGraspCandidates, root_V_outward: Vector3
-    ) -> Point3 | None:
+        self, graspable: HasGraspCandidates, root_V_outward: Vector3Dimensional
+    ) -> CartesianPoint3Dimensional | None:
         """
         :param graspable: The object whose grasp surface the ray is cast against.
         :param root_V_outward: The horizontal direction the ray comes from.
@@ -118,6 +118,6 @@ class SurfaceGrasp(ObjectRelativeGrasp):
         )
         if len(locations) == 0:
             return None
-        return Point3(
+        return CartesianPoint3Dimensional(
             *locations[int(np.argmin(np.linalg.norm(locations - origin, axis=1)))]
         )

@@ -11,14 +11,17 @@ from unittest.mock import Mock
 import numpy as np
 import pytest
 
-from krrood_spatial_math.spatial_types import Point2
+from krrood_spatial_math.spatial_types import CartesianPoint2Dimensional
 from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
 from semantic_digital_twin.datastructures.camera_rendering import RayIntersections
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import Camera
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Vector3Dimensional,
+)
 from semantic_digital_twin.testing import ray_test_world
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
@@ -58,7 +61,7 @@ def test_viewing_direction_uses_optical_root(optical_camera: Camera) -> None:
     Positive optical z is the camera's root-relative viewing direction.
     """
     np.testing.assert_array_equal(
-        optical_camera.viewing_direction.to_np(), Vector3.Z().to_np()
+        optical_camera.viewing_direction.to_np(), Vector3Dimensional.Z().to_np()
     )
     assert optical_camera.viewing_direction.reference_frame is optical_camera.root
 
@@ -197,7 +200,7 @@ def test_render_preserves_off_center_projection(
         image_resolution=CameraResolution(width=8, height=6),
         focal_length_x=10.0,
         focal_length_y=12.0,
-        principal_point=Point2(x=2.0, y=1.0),
+        principal_point=CartesianPoint2Dimensional(x=2.0, y=1.0),
     )
     optical_camera.camera_model = model
     tracer = optical_camera.root._world.ray_tracer

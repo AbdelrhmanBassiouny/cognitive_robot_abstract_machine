@@ -41,12 +41,12 @@ from krrood.symbolic_math.symbolic_math import (
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from krrood_spatial_math.spatial_types import (
-    Point3,
+    CartesianPoint3Dimensional,
     RotationMatrix,
     HomogeneousTransformationMatrix,
-    Vector3,
+    Vector3Dimensional,
 )
-from krrood_spatial_math.spatial_types import Pose, SpatialType
+from krrood_spatial_math.spatial_types import Pose3Dimensional, SymbolicSpatialType
 from semantic_digital_twin.world_description.geometry import Color
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
@@ -117,8 +117,8 @@ class CartesianTask(ConvergingTask, ABC):
     def add_goal_and_current_debug_expressions(
         self,
         artifacts: MotionNodeArtifacts,
-        goal: SpatialType,
-        current: SpatialType,
+        goal: SymbolicSpatialType,
+        current: SymbolicSpatialType,
     ) -> None:
         """
         Register a goal and a current spatial expression for visualization.
@@ -148,7 +148,7 @@ class CartesianPosition(CartesianTask):
     .. warning:: This task does not constrain orientation.
     """
 
-    goal_point: Point3
+    goal_point: CartesianPoint3Dimensional
     """Target 3D point to reach."""
     threshold: float = 0.01
     """Distance threshold for goal achievement in meters."""
@@ -203,17 +203,17 @@ class DistanceAlongAxis(ConvergingTask):
     The frame :attr:`axis` is fixed in.
     """
 
-    reference_point: Point3
+    reference_point: CartesianPoint3Dimensional
     """
     The point the distance is measured from, in the frame of the link it is fixed on.
     """
 
-    tip_point: Point3
+    tip_point: CartesianPoint3Dimensional
     """
     The point the distance is measured to, in the frame of the link it is fixed on.
     """
 
-    axis: Vector3
+    axis: Vector3Dimensional
     """
     The unit direction the distance is measured along, in :attr:`root_link`.
     """
@@ -261,7 +261,7 @@ class CartesianPositionTrajectory(CartesianTask):
     .. warning:: the trajectory is assumed to be dense and smooth.
     """
 
-    goal_points: list[Point3]
+    goal_points: list[CartesianPoint3Dimensional]
     """Target 3D point to reach."""
     _goal_points_np: np.ndarray = field(init=False, repr=False)
     """Goal points in numpy format."""
@@ -285,7 +285,9 @@ class CartesianPositionTrajectory(CartesianTask):
     cruise_velocity: float | None = DefaultCruiseVelocity.TRANSLATION
     """Sets how fast the goal is approached, in m/s; not strictly enforced."""
 
-    goal_reference_frame_P_current_target_point: Point3 = field(init=False, repr=False)
+    goal_reference_frame_P_current_target_point: CartesianPoint3Dimensional = field(
+        init=False, repr=False
+    )
     """Symbolic expression representing the current target point in the goal reference frame."""
 
     remaining_distance: FloatVariable = field(init=False, repr=False)
@@ -513,8 +515,10 @@ class CartesianPositionTrajectory(CartesianTask):
         Initialize the symbolic expression representing the current target point in the goal reference frame.
         :param float_variable_data: The FloatVariableData instance to register the expression with.
         """
-        self.goal_reference_frame_P_current_target_point = Point3.create_with_variables(
-            "goal_reference_frame_P_current_target_point"
+        self.goal_reference_frame_P_current_target_point = (
+            CartesianPoint3Dimensional.create_with_variables(
+                "goal_reference_frame_P_current_target_point"
+            )
         )
         self.goal_reference_frame_P_current_target_point.reference_frame = (
             self.goal_reference_frame
@@ -537,7 +541,7 @@ class CartesianPositionStraight(CartesianTask):
     line towards the goal, useful for tasks requiring linear trajectories.
     """
 
-    goal_point: Point3
+    goal_point: CartesianPoint3Dimensional
     """Target 3D point to reach."""
 
     cruise_velocity: float = DefaultCruiseVelocity.TRANSLATION
@@ -716,7 +720,7 @@ class CartesianPose(Parallel):
     tip_link: KinematicStructureEntity
     """End link that should reach the goal pose."""
 
-    goal_pose: Pose
+    goal_pose: Pose3Dimensional
     """The goal pose."""
 
     cruise_linear_velocity: float = DefaultCruiseVelocity.TRANSLATION
@@ -959,7 +963,7 @@ class RigidCoupling(Task):
     def _keep_at_rest(
         self,
         artifacts: MotionNodeArtifacts,
-        vector: Point3 | Vector3,
+        vector: CartesianPoint3Dimensional | Vector3Dimensional,
         velocity_scale: float,
         name: str,
     ) -> None:

@@ -57,7 +57,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Handle,
     Milk,
 )
-from krrood_spatial_math.spatial_types import Pose
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.world_entity import Body
@@ -350,8 +350,12 @@ def test_underspecified_action(apartment_world_pr2_copy_with_context):
     action = a(NavigateAction)(
         target_location=variable_from(
             [
-                Pose.from_xyz_quaternion(1, -1, 0, reference_frame=world.root),
-                Pose.from_xyz_quaternion(2, -1, 0, reference_frame=world.root),
+                Pose3Dimensional.from_xyz_quaternion(
+                    1, -1, 0, reference_frame=world.root
+                ),
+                Pose3Dimensional.from_xyz_quaternion(
+                    2, -1, 0, reference_frame=world.root
+                ),
             ]
         ),
     )
@@ -371,7 +375,7 @@ def test_underspecified_action_with_ellipsis(apartment_world_pr2_copy_with_conte
     world, robot, extensions = apartment_world_pr2_copy_with_context
     extensions = with_grounding(extensions, query_backend=ProbabilisticBackend())
     action = a(NavigateAction)(
-        target_location=a(Pose.from_xyz_rpy)(
+        target_location=a(Pose3Dimensional.from_xyz_rpy)(
             x=...,
             y=...,
             z=0.0,
@@ -401,10 +405,10 @@ def test_underspecified_language(apartment_world_pr2_copy_with_context):
                 target_location=(
                     target_locations := variable_from(
                         [
-                            Pose.from_xyz_quaternion(
+                            Pose3Dimensional.from_xyz_quaternion(
                                 1, 0, 0, reference_frame=world.root
                             ),
-                            Pose.from_xyz_quaternion(
+                            Pose3Dimensional.from_xyz_quaternion(
                                 2, 0, 0, reference_frame=world.root
                             ),
                         ]
@@ -926,7 +930,9 @@ def test_a_trial_puts_a_differentially_driven_base_at_its_goal(
     copied = trial._copy()
     trial_executor = trial._trial_executor(copied)
     navigation = NavigateAction(
-        target_location=Pose.from_xyz_rpy(2.0, 2.0, 0.0, reference_frame=copied.root)
+        target_location=Pose3Dimensional.from_xyz_rpy(
+            2.0, 2.0, 0.0, reference_frame=copied.root
+        )
     )
 
     trial_executor.prepare(statechart_of(trial_executor, navigation))

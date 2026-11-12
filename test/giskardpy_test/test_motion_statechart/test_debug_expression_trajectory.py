@@ -14,7 +14,7 @@ from giskardpy.motion_statechart.plotters.debug_expression_trajectory_plotter im
 from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPosition
 from krrood.symbolic_math.symbolic_math import Scalar
 from semantic_digital_twin.exceptions import NonMonotonicTimeError
-from krrood_spatial_math.spatial_types import Point3
+from krrood_spatial_math.spatial_types import CartesianPoint3Dimensional
 from semantic_digital_twin.world import World
 from giskardpy.motion_control import DebugExpressionRecording
 from giskardpy.motion_control import MotionControl
@@ -35,7 +35,7 @@ def _build_motion_statechart(
     goal = CartesianPosition(
         root_link=root,
         tip_link=tip,
-        goal_point=Point3(x=1, reference_frame=root),
+        goal_point=CartesianPoint3Dimensional(x=1, reference_frame=root),
         name="cart_pos",
     )
     motion_statechart.add_node(goal)
@@ -83,7 +83,7 @@ class TestDebugExpressionRecording:
             for recorded in trajectory.recorded_debug_expressions
             if recorded.name == "cart_pos/current"
         )
-        # A Point3 evaluates to four homogeneous components.
+        # A CartesianPoint3Dimensional evaluates to four homogeneous components.
         assert current.values.shape[1] == 4
         # The recorded tip position should actually change while the bot moves.
         assert not np.allclose(current.values[0], current.values[-1])

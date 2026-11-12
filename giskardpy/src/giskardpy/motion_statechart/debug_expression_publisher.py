@@ -11,7 +11,7 @@ from semantic_digital_twin.adapters.ros.visualization.spatial_type_marker_render
 from semantic_digital_twin.adapters.ros.visualization.spatial_type_publisher import (
     SpatialTypePublisher,
 )
-from krrood_spatial_math.spatial_types import SpatialType, Vector3
+from krrood_spatial_math.spatial_types import SymbolicSpatialType, Vector3Dimensional
 from cramph.executor import StatechartExecutor, TickingExecutorExtension
 from semantic_digital_twin.world import World
 from giskardpy.motion_statechart.graph_node import DebugExpression
@@ -49,7 +49,7 @@ class DebugExpressionPublisher:
         requests = [
             self._to_request(debug_expression)
             for debug_expression in DebugExpression.collect_from(statechart)
-            if isinstance(debug_expression.expression, SpatialType)
+            if isinstance(debug_expression.expression, SymbolicSpatialType)
         ]
         if self._publisher is None:
             self._publisher = SpatialTypePublisher(node=self.node, _world=self.world)
@@ -70,12 +70,14 @@ class DebugExpressionPublisher:
             label=debug_expression.name,
         )
 
-    def _anchored_expression(self, expression: SpatialType) -> SpatialType:
+    def _anchored_expression(
+        self, expression: SymbolicSpatialType
+    ) -> SymbolicSpatialType:
         """
         Express a vector in its visualisation frame so the rendered arrow points
         correctly.
         """
-        if not isinstance(expression, Vector3):
+        if not isinstance(expression, Vector3Dimensional):
             return expression
         visualisation_frame = expression.visualisation_frame
         reference_frame = expression.reference_frame
