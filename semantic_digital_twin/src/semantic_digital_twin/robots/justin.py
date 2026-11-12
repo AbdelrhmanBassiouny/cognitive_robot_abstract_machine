@@ -35,7 +35,10 @@ from semantic_digital_twin.robots.robot_parts import (
 )
 from semantic_digital_twin.datastructures.camera_model import FieldOfViewCameraModel
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3D
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Vector3Dimensional,
+)
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
@@ -302,12 +305,12 @@ class JustinLeftHand(
         return [gripper_open, gripper_close]
 
     @property
-    def approach_axis(self) -> Vector3D:
-        return Vector3D.Z(reference_frame=self.tool_frame)
+    def approach_axis(self) -> Vector3Dimensional:
+        return Vector3Dimensional.Z(reference_frame=self.tool_frame)
 
     @property
-    def closing_axis(self) -> Vector3D:
-        return Vector3D.NEGATIVE_X(reference_frame=self.tool_frame)
+    def closing_axis(self) -> Vector3Dimensional:
+        return Vector3Dimensional.NEGATIVE_X(reference_frame=self.tool_frame)
 
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(
@@ -352,12 +355,12 @@ class JustinRightHand(
         return [gripper_open, gripper_close]
 
     @property
-    def approach_axis(self) -> Vector3D:
-        return Vector3D.Z(reference_frame=self.tool_frame)
+    def approach_axis(self) -> Vector3Dimensional:
+        return Vector3Dimensional.Z(reference_frame=self.tool_frame)
 
     @property
-    def closing_axis(self) -> Vector3D:
-        return Vector3D.X(reference_frame=self.tool_frame)
+    def closing_axis(self) -> Vector3Dimensional:
+        return Vector3Dimensional.X(reference_frame=self.tool_frame)
 
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(
@@ -490,8 +493,8 @@ class JustinTorso(
 @dataclass(eq=False)
 class JustinMobileBase(MobileBase[OmniDrive], HasTorso[JustinTorso]):
     @classproperty
-    def forward_axis(cls) -> Vector3D:
-        return Vector3D.X()
+    def forward_axis(cls) -> Vector3Dimensional:
+        return Vector3Dimensional.X()
 
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(

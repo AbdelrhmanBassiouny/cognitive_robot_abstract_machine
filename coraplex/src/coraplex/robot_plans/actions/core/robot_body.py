@@ -11,7 +11,7 @@ from semantic_digital_twin.collision_checking.collision_rules import (
 )
 from semantic_digital_twin.robots.robot_part_mixins import HasTwoFingers
 from semantic_digital_twin.robots.robot_parts import Arm, EndEffector
-from krrood_spatial_math.spatial_types import Pose3D
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 
 from coraplex.datastructures.trajectory import PoseTrajectory
 from coraplex.robot_plans.actions.base import (
@@ -204,7 +204,7 @@ class FollowToolCenterPointPathAction(MovesToolCenterPoint, ParallelAction):
         )
         return [waypoints, *self.keep_base_still()]
 
-    def _waypoint_goal(self, target: Pose3D) -> CartesianPose:
+    def _waypoint_goal(self, target: Pose3Dimensional) -> CartesianPose:
         """
         :param target: The waypoint the tool center point passes through.
         :return: The task reaching that waypoint.
@@ -231,7 +231,7 @@ class MoveManipulatorAction(MovesToolCenterPoint, GoalAction):
     Move the end_effector to a specific pose.
     """
 
-    target_pose: Pose3D
+    target_pose: Pose3Dimensional
     """
     The pose where the end_effector should be moved to.
     """

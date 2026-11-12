@@ -26,13 +26,13 @@ from semantic_digital_twin.adapters.ros.visualization.exceptions import (
 )
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    CartesianPoint3D,
-    Pose3D,
-    Pose2D,
+    CartesianPoint3Dimensional,
+    Pose3Dimensional,
+    Pose2Dimensional,
     Quaternion,
     RotationMatrix,
     SymbolicSpatialType,
-    Vector3D,
+    Vector3Dimensional,
 )
 from semantic_digital_twin.world_description.geometry import Color
 
@@ -202,7 +202,9 @@ class SpatialTypeMarkerRenderer(Generic[SpatialTypeInput], SubClassSafeGeneric, 
 
 
 @dataclass
-class CartesianPoint3DMarkerRenderer(SpatialTypeMarkerRenderer[CartesianPoint3D]):
+class CartesianPoint3DimensionalMarkerRenderer(
+    SpatialTypeMarkerRenderer[CartesianPoint3Dimensional]
+):
     """Renders a point as a single sphere at its current position."""
 
     @classmethod
@@ -227,7 +229,7 @@ class CartesianPoint3DMarkerRenderer(SpatialTypeMarkerRenderer[CartesianPoint3D]
 
 
 @dataclass
-class Vector3MarkerRenderer(SpatialTypeMarkerRenderer[Vector3D]):
+class Vector3MarkerRenderer(SpatialTypeMarkerRenderer[Vector3Dimensional]):
     """Renders a vector as a single arrow anchored at the origin of its visualisation frame."""
 
     @classmethod
@@ -257,12 +259,12 @@ class Vector3MarkerRenderer(SpatialTypeMarkerRenderer[Vector3D]):
 
 
 @dataclass
-class PoseLikeMarkerRenderer(SpatialTypeMarkerRenderer[Pose3D]):
+class PoseLikeMarkerRenderer(SpatialTypeMarkerRenderer[Pose3Dimensional]):
     """Renders any orientation-carrying spatial type as an RGB axis triad with an optional label."""
 
     _renderable_types: ClassVar[tuple[type[SymbolicSpatialType], ...]] = (
-        Pose3D,
-        Pose2D,
+        Pose3Dimensional,
+        Pose2Dimensional,
         HomogeneousTransformationMatrix,
         RotationMatrix,
         Quaternion,
@@ -345,7 +347,7 @@ class PoseLikeMarkerRenderer(SpatialTypeMarkerRenderer[Pose3D]):
             return np.zeros(3), spatial_type.evaluate()
         if isinstance(spatial_type, RotationMatrix):
             return np.zeros(3), spatial_type.quaternion.evaluate()
-        if isinstance(spatial_type, Pose2D):
+        if isinstance(spatial_type, Pose2Dimensional):
             spatial_type = spatial_type.pose
         return (
             spatial_type.position.evaluate()[:3],

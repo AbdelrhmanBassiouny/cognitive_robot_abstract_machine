@@ -14,13 +14,15 @@ from krrood_spatial_math.coordinate_system import (
     CartesianFrame,
     CoordinateRepresentationT,
 )
-from krrood_spatial_math.exceptions import MissingCartesianFrame3DResolver
-from krrood_spatial_math.space import EuclideanSpace3D
+from krrood_spatial_math.exceptions import MissingCartesianFrame3DimensionalResolver
+from krrood_spatial_math.space import EuclideanSpace3Dimensional
 
 # %% frames that positions and directions are expressed in
 
 
-class CartesianFrame3D(CartesianFrame[EuclideanSpace3D, NameT], Interface):
+class CartesianFrame3Dimensional(
+    CartesianFrame[EuclideanSpace3Dimensional, NameT], Interface
+):
     """
     A right-handed Cartesian frame on a three-dimensional Euclidean space, in metres,
     such as the frame of a robot's body.
@@ -36,7 +38,7 @@ class CartesianFrame3D(CartesianFrame[EuclideanSpace3D, NameT], Interface):
         """
 
 
-class CartesianFrame3DResolver(Interface):
+class CartesianFrame3DimensionalResolver(Interface):
     """
     Finds the Cartesian frames serialized coordinate representations refer to, while one
     JSON document is deserialized.
@@ -45,7 +47,7 @@ class CartesianFrame3DResolver(Interface):
     """
 
     @abstractmethod
-    def get(self, key: UUID, name: Any = None) -> CartesianFrame3D:
+    def get(self, key: UUID, name: Any = None) -> CartesianFrame3Dimensional:
         """
         :param key: The identifier the document refers to the frame with.
         :param name: The name the reference to the frame went by, which says which frame
@@ -58,27 +60,28 @@ class CartesianFrame3DResolver(Interface):
 
 
 @dataclass
-class CartesianFrame3DReference(ObjectReference):
+class CartesianFrame3DimensionalReference(ObjectReference):
     """
-    How a serialized coordinate representation points at a :class:`CartesianFrame3D`.
+    How a serialized coordinate representation points at a
+    :class:`CartesianFrame3Dimensional`.
     """
 
-    def resolve(self, *, data: dict[str, Any], **kwargs) -> CartesianFrame3D:
+    def resolve(self, *, data: dict[str, Any], **kwargs) -> CartesianFrame3Dimensional:
         """
         :param data: The serialized spatial type that refers to the frame.
         :param kwargs: The keyword arguments of the ``from_json`` call, which carry the
-            :class:`CartesianFrame3DResolver` that finds the frame.
+            :class:`CartesianFrame3DimensionalResolver` that finds the frame.
         :return: The frame the serialized spatial type refers to.
-        :raises MissingCartesianFrame3DResolver: If the kwargs carry no
-            :class:`CartesianFrame3DResolver`.
+        :raises MissingCartesianFrame3DimensionalResolver: If the kwargs carry no
+            :class:`CartesianFrame3DimensionalResolver`.
         """
         resolvers = [
             value
             for value in kwargs.values()
-            if isinstance(value, CartesianFrame3DResolver)
+            if isinstance(value, CartesianFrame3DimensionalResolver)
         ]
         if not resolvers:
-            raise MissingCartesianFrame3DResolver(frame_id_key=self.id_key)
+            raise MissingCartesianFrame3DimensionalResolver(frame_id_key=self.id_key)
         return resolvers[0].get(
             key=from_json(data[self.id_key]), name=from_json(data.get(self.name_key))
         )

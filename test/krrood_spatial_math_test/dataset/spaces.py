@@ -13,7 +13,7 @@ from krrood.patterns.interface import Interface
 from krrood_spatial_math.line import Line
 from krrood_spatial_math.point import Point, PointT
 from krrood_spatial_math.vector import Vector, VectorT
-from krrood_spatial_math.cartesian_frame_3d import CartesianFrame3D
+from krrood_spatial_math.cartesian_frame_3_dimensional import CartesianFrame3Dimensional
 from krrood_spatial_math.coordinate_system import (
     AffineCoordinateChange,
     AffineFrame,
@@ -186,7 +186,9 @@ class ScalingChange(AffineCoordinateChange[ScalablePlaneFrame]):
 
 
 @dataclass(kw_only=True)
-class CartesianFrame3DChange(RigidCoordinateChange[CartesianFrame3D]):
+class CartesianFrame3DimensionalChange(
+    RigidCoordinateChange[CartesianFrame3Dimensional]
+):
     """
     A rigid change between two Cartesian frames, such as from a gripper to the table.
     """

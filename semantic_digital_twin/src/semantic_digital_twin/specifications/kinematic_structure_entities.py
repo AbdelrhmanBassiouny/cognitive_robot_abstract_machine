@@ -15,7 +15,7 @@ from random_events.product_algebra import Event
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    CartesianPoint3D,
+    CartesianPoint3Dimensional,
 )
 from semantic_digital_twin.specifications.base import SpawnSpecification
 from semantic_digital_twin.specifications.connections import (
@@ -424,7 +424,7 @@ class KinematicStructureEntitySpecification(
     def from_3d_points(
         cls,
         name: str,
-        points_3d: list[CartesianPoint3D],
+        points_3d: list[CartesianPoint3Dimensional],
         minimum_thickness: float = 0.005,
         singular_value_ratio_tolerance: float = 1e-7,
         parent_T_self: HomogeneousTransformationMatrix | None = None,

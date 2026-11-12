@@ -9,7 +9,7 @@ from cramph.composites import Sequence
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
-from krrood_spatial_math.spatial_types import Pose3D
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 
 from .conftest import expand
 
@@ -35,7 +35,7 @@ def test_pick_up_takes_the_grasp_it_is_given(pr2_apartment_context):
     world, view, extensions = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
     given = GraspCandidate(
-        milk, Pose3D.from_xyz_rpy(yaw=np.pi / 3, reference_frame=milk.root)
+        milk, Pose3Dimensional.from_xyz_rpy(yaw=np.pi / 3, reference_frame=milk.root)
     )
 
     pick_up = PickUpAction(grasp=given, arm=view.left_arm)
@@ -52,7 +52,7 @@ def test_pick_up_reaches_for_the_grasp_it_settled_on(pr2_apartment_context):
     world, view, extensions = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
     given = GraspCandidate(
-        milk, Pose3D.from_xyz_rpy(yaw=np.pi / 3, reference_frame=milk.root)
+        milk, Pose3Dimensional.from_xyz_rpy(yaw=np.pi / 3, reference_frame=milk.root)
     )
 
     pick_up = PickUpAction(grasp=given, arm=view.left_arm)

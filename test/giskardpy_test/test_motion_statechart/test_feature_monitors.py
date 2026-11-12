@@ -15,7 +15,10 @@ from giskardpy.motion_statechart.tasks.feature_functions import (
     AngleGoal,
     AlignPerpendicular,
 )
-from krrood_spatial_math.spatial_types import CartesianPoint3D, Vector3D
+from krrood_spatial_math.spatial_types import (
+    CartesianPoint3Dimensional,
+    Vector3Dimensional,
+)
 from semantic_digital_twin.world import World
 from giskardpy.motion_control import MotionControl
 from cramph.context import StatechartContext
@@ -46,8 +49,8 @@ def test_height_monitor(pr2_world_state_reset: World):
     root = pr2_world_state_reset.get_kinematic_structure_entity_by_name(
         "base_footprint"
     )
-    tip_point = CartesianPoint3D(0, 0, 0, reference_frame=tip)
-    reference_point = CartesianPoint3D(0, 0, 0, reference_frame=root)
+    tip_point = CartesianPoint3Dimensional(0, 0, 0, reference_frame=tip)
+    reference_point = CartesianPoint3Dimensional(0, 0, 0, reference_frame=root)
     lower_limit, upper_limit = 0.3, 0.5
 
     executor = _create_executor(pr2_world_state_reset)
@@ -83,8 +86,8 @@ def test_distance_monitor(pr2_world_state_reset: World):
     root = pr2_world_state_reset.get_kinematic_structure_entity_by_name(
         "base_footprint"
     )
-    tip_point = CartesianPoint3D(0, 0, 0, reference_frame=tip)
-    reference_point = CartesianPoint3D(0, 0, 0, reference_frame=root)
+    tip_point = CartesianPoint3Dimensional(0, 0, 0, reference_frame=tip)
+    reference_point = CartesianPoint3Dimensional(0, 0, 0, reference_frame=root)
     lower_limit, upper_limit = 0.4, 0.6
 
     executor = _create_executor(pr2_world_state_reset)
@@ -118,8 +121,8 @@ def test_angle_monitor(pr2_world_state_reset: World):
         "r_gripper_tool_frame"
     )
     root = pr2_world_state_reset.get_kinematic_structure_entity_by_name("odom_combined")
-    tip_vector = Vector3D.Y(reference_frame=tip)
-    reference_vector = Vector3D.X(reference_frame=root)
+    tip_vector = Vector3Dimensional.Y(reference_frame=tip)
+    reference_vector = Vector3Dimensional.X(reference_frame=root)
     lower_angle, upper_angle = radians(30), radians(32)
 
     executor = _create_executor(pr2_world_state_reset)
@@ -153,8 +156,8 @@ def test_perpendicular_monitor(pr2_world_state_reset: World):
         "r_gripper_tool_frame"
     )
     root = pr2_world_state_reset.get_kinematic_structure_entity_by_name("odom_combined")
-    tip_normal = Vector3D.X(reference_frame=tip)
-    reference_normal = Vector3D.X(reference_frame=root)
+    tip_normal = Vector3Dimensional.X(reference_frame=tip)
+    reference_normal = Vector3Dimensional.X(reference_frame=root)
 
     executor = _create_executor(pr2_world_state_reset)
     statechart = Statechart(context=executor.context)

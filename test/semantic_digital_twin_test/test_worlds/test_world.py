@@ -41,7 +41,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Milk,
     Drawer,
 )
-from krrood_spatial_math.spatial_types import Vector3D
+from krrood_spatial_math.spatial_types import Vector3Dimensional
 from semantic_digital_twin.world_description.derivatives import (
     Derivatives,
     DerivativeMap,
@@ -49,7 +49,7 @@ from semantic_digital_twin.world_description.derivatives import (
 
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Pose2D,
+    Pose2Dimensional,
     RotationMatrix,
 )
 from semantic_digital_twin.testing import StateChangeCounter, world_setup  # noqa: F401
@@ -564,7 +564,7 @@ def test_compute_relative_pose(world_setup):
 
 def test_transform_a_pose_2d(world_setup):
     """
-    A Pose2D carries no z, roll or pitch, so transforming one answers with the
+    A Pose2Dimensional carries no z, roll or pitch, so transforming one answers with the
     transformed 3D pose flattened back onto the target frame's plane.
     """
     world, l1, l2, bf, r1, r2 = world_setup
@@ -572,15 +572,15 @@ def test_transform_a_pose_2d(world_setup):
     world.state[connection.dof.id].position = 1.0
     world.notify_state_change()
 
-    pose_2d = Pose2D.from_xy_yaw(x=2.0, y=0.5, yaw=0.3, reference_frame=l2)
+    pose_2d = Pose2Dimensional.from_xy_yaw(x=2.0, y=0.5, yaw=0.3, reference_frame=l2)
 
     relative_pose_2d = world.transform(pose_2d, l1)
 
-    assert isinstance(relative_pose_2d, Pose2D)
+    assert isinstance(relative_pose_2d, Pose2Dimensional)
     assert relative_pose_2d.reference_frame == l1
     np.testing.assert_array_almost_equal(
         relative_pose_2d.to_np(),
-        Pose2D.from_pose(world.transform(pose_2d.pose, l1)).to_np(),
+        Pose2Dimensional.from_pose(world.transform(pose_2d.pose, l1)).to_np(),
     )
 
 
@@ -1663,7 +1663,7 @@ def test_overwrite_dof_limits_mimic(world_setup):
             child=body,
             offset=23,
             multiplier=-2,
-            axis=Vector3D(0, 0, 1),
+            axis=Vector3Dimensional(0, 0, 1),
             raw_dof=connection.raw_dof,
         )
         world.add_body(body)
@@ -1776,14 +1776,14 @@ def test_dof_removal_simple():
     body2 = Body(name=PrefixedName("body2"))
     with world.modify_world():
         c = RevoluteConnection.create_with_dofs(
-            world=world, parent=body1, child=body2, axis=Vector3D.Z()
+            world=world, parent=body1, child=body2, axis=Vector3Dimensional.Z()
         )
         world.add_connection(c)
     with world.modify_world():
         world.remove_connection(c)
 
         c2 = RevoluteConnection.create_with_dofs(
-            world=world, parent=body1, child=body2, axis=Vector3D.Z()
+            world=world, parent=body1, child=body2, axis=Vector3Dimensional.Z()
         )
         world.add_connection(c2)
 
@@ -2604,14 +2604,14 @@ def test_robot_velocity_limit_setup_does_not_touch_environment_joints():
             world=world,
             parent=robot_base,
             child=robot_link,
-            axis=Vector3D.Z(reference_frame=robot_base),
+            axis=Vector3Dimensional.Z(reference_frame=robot_base),
         )
         world.add_connection(robot_joint)
         drawer_joint = PrismaticConnection.create_with_dofs(
             world=world,
             parent=root,
             child=drawer_body,
-            axis=Vector3D.X(reference_frame=root),
+            axis=Vector3Dimensional.X(reference_frame=root),
             dof_limits=env_limits,
         )
         world.add_connection(drawer_joint)
@@ -3151,7 +3151,7 @@ def test_replace_with_transfers_degrees_of_freedom_and_state():
             world=other_world,
             parent=other_world.root,
             child=child_body,
-            axis=Vector3D.Z(),
+            axis=Vector3Dimensional.Z(),
         )
         other_world.add_connection(conn)
     other_world.state[conn.dof.id].position = 0.75

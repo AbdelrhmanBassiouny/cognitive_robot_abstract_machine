@@ -38,9 +38,9 @@ from experiments.shelf_generation_experiments.shelf_schema import (
 )
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    CartesianPoint2D,
-    Pose3D,
-    Pose2D,
+    CartesianPoint2Dimensional,
+    Pose3Dimensional,
+    Pose2Dimensional,
 )
 from semantic_digital_twin.world_description.geometry import (
     Scale,
@@ -84,11 +84,11 @@ class PreprocessedObject:
     The scale of the object.
     """
 
-    pose: Pose3D
+    pose: Pose3Dimensional
     """
     Pose of the object.
 
-    ``roll``/``pitch``/``yaw`` are in radians, as :class:`~krrood_spatial_math.spatial_types.Pose3D`
+    ``roll``/``pitch``/``yaw`` are in radians, as :class:`~krrood_spatial_math.spatial_types.Pose3Dimensional`
     requires -- everywhere else in this schema reasons about rotation in degrees, so it is
     converted at the boundary where a value enters or leaves this field.
     """
@@ -139,7 +139,7 @@ class PreprocessedObject:
         """
         corrected = measurements.corrected_position(
             source_id=sage10k_object.source_id,
-            position=CartesianPoint2D(
+            position=CartesianPoint2Dimensional(
                 x=sage10k_object.position.x, y=sage10k_object.position.y
             ),
             yaw_degrees=sage10k_object.rotation.z,
@@ -154,7 +154,7 @@ class PreprocessedObject:
                 y=sage10k_object.dimensions.width,
                 z=sage10k_object.dimensions.height,
             ),
-            pose=Pose3D.from_xyz_rpy(
+            pose=Pose3Dimensional.from_xyz_rpy(
                 x=corrected.position.x,
                 y=corrected.position.y,
                 z=sage10k_object.position.z,
@@ -440,7 +440,7 @@ class ShelfExtractor:
 
     @staticmethod
     def _is_within_shelf_footprint(
-        position: CartesianPoint2D,
+        position: CartesianPoint2Dimensional,
         shelf: PreprocessedObject,
         maximum_relative_x: float,
         maximum_relative_y: float,
@@ -460,7 +460,7 @@ class ShelfExtractor:
         :param maximum_relative_y: Half the shelf's length, inset by the margin.
         :return: Whether the position falls within the inset footprint.
         """
-        world_offset = CartesianPoint2D(
+        world_offset = CartesianPoint2Dimensional(
             x=position.x - shelf.pose.x, y=position.y - shelf.pose.y
         )
         shelf_T_world = HomogeneousTransformationMatrix.from_xyz_rpy(
@@ -508,7 +508,7 @@ class ShelfExtractor:
         content_frame_yaw_radians = RelationalCircuitExperimentShelf.content_frame_yaw(
             float(shelf.pose.yaw)
         )
-        world_offset = CartesianPoint2D(
+        world_offset = CartesianPoint2Dimensional(
             x=object_.pose.x - shelf.pose.x, y=object_.pose.y - shelf.pose.y
         )
         content_T_world = HomogeneousTransformationMatrix.from_xyz_rpy(
@@ -521,7 +521,7 @@ class ShelfExtractor:
         return RelationalCircuitExperimentObject2D(
             object_type=object_.object_type,
             scale=object_.scale,
-            pose=Pose2D.from_xy_yaw(
+            pose=Pose2Dimensional.from_xy_yaw(
                 x=local_offset.x, y=local_offset.y, yaw=yaw_radians
             ),
             source_id=object_.source_id,
@@ -623,7 +623,7 @@ class ShelfExtractor:
             for object_ in members
             if object_.position_is_mesh_corrected
             and ShelfExtractor._is_within_shelf_footprint(
-                CartesianPoint2D(x=object_.pose.x, y=object_.pose.y),
+                CartesianPoint2Dimensional(x=object_.pose.x, y=object_.pose.y),
                 shelf,
                 maximum_relative_x,
                 maximum_relative_y,

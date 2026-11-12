@@ -10,7 +10,7 @@ from dataclasses import fields
 import pytest
 
 from krrood.patterns.exceptions import InterfaceInstantiationError
-from krrood_spatial_math.cartesian_frame_3d import CartesianFrame3D
+from krrood_spatial_math.cartesian_frame_3_dimensional import CartesianFrame3Dimensional
 from krrood_spatial_math.coordinate_system import (
     AffineFrame,
     AffineFrameT,
@@ -22,7 +22,10 @@ from krrood_spatial_math.coordinate_system import (
 from krrood_spatial_math.exceptions import ReferenceFrameMismatchError
 from krrood_spatial_math.line import Line
 from krrood_spatial_math.point import MetricPoint, Point, PointT
-from krrood_spatial_math.spatial_types import CartesianPoint3D, Vector3D
+from krrood_spatial_math.spatial_types import (
+    CartesianPoint3Dimensional,
+    Vector3Dimensional,
+)
 from krrood_spatial_math.vector import MetricVector, Vector, VectorT
 
 from .dataset.frames import NamedFrame
@@ -164,44 +167,51 @@ def test_a_lines_fields_are_narrowed_to_the_bound_types():
 
 
 def test_a_cartesian_frame_kind_measures_a_vectors_length_without_a_frame():
-    assert float(CartesianFrame3D.norm(vector=Vector3D(3, 4, 0))) == 5.0
+    assert (
+        float(CartesianFrame3Dimensional.norm(vector=Vector3Dimensional(3, 4, 0)))
+        == 5.0
+    )
 
 
 def test_a_cartesian_frame_kind_measures_the_angle_between_two_vectors():
-    product = CartesianFrame3D.inner_product(
-        first=Vector3D(1, 2, 3), second=Vector3D(4, 5, 6)
+    product = CartesianFrame3Dimensional.inner_product(
+        first=Vector3Dimensional(1, 2, 3), second=Vector3Dimensional(4, 5, 6)
     )
     assert float(product) == 32.0
 
 
 def test_a_cartesian_frame_kind_measures_the_distance_between_two_points():
-    distance = CartesianFrame3D.distance(
-        first=CartesianPoint3D(1, 2, 3), second=CartesianPoint3D(4, 6, 3)
+    distance = CartesianFrame3Dimensional.distance(
+        first=CartesianPoint3Dimensional(1, 2, 3),
+        second=CartesianPoint3Dimensional(4, 6, 3),
     )
     assert float(distance) == 5.0
 
 
 def test_a_vectors_length_is_the_one_its_frame_kind_measures():
-    vector = Vector3D(1, 2, 2)
-    assert float(vector.norm()) == float(CartesianFrame3D.norm(vector=vector))
+    vector = Vector3Dimensional(1, 2, 2)
+    assert float(vector.norm()) == float(CartesianFrame3Dimensional.norm(vector=vector))
 
 
 def test_a_vectors_inner_product_is_the_one_its_frame_kind_measures():
-    first, second = Vector3D(1, 0, 2), Vector3D(3, 1, 1)
+    first, second = Vector3Dimensional(1, 0, 2), Vector3Dimensional(3, 1, 1)
     assert float(first.dot(second)) == float(
-        CartesianFrame3D.inner_product(first=first, second=second)
+        CartesianFrame3Dimensional.inner_product(first=first, second=second)
     )
 
 
 def test_a_points_distance_is_the_one_its_frame_kind_measures():
-    first, second = CartesianPoint3D(0, 0, 0), CartesianPoint3D(1, 2, 2)
+    first, second = (
+        CartesianPoint3Dimensional(0, 0, 0),
+        CartesianPoint3Dimensional(1, 2, 2),
+    )
     assert float(first.euclidean_distance(second)) == float(
-        CartesianFrame3D.distance(first=first, second=second)
+        CartesianFrame3Dimensional.distance(first=first, second=second)
     )
 
 
 def test_vectors_of_two_frames_have_no_inner_product():
-    first = Vector3D(1, 0, 0, reference_frame=NamedFrame(name="table"))
-    second = Vector3D(1, 0, 0, reference_frame=NamedFrame(name="gripper"))
+    first = Vector3Dimensional(1, 0, 0, reference_frame=NamedFrame(name="table"))
+    second = Vector3Dimensional(1, 0, 0, reference_frame=NamedFrame(name="gripper"))
     with pytest.raises(ReferenceFrameMismatchError):
         first.dot(second)

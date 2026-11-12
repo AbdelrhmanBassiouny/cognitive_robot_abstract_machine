@@ -14,7 +14,7 @@ from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.datastructures.variables import SpatialVariables
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    CartesianPoint3D,
+    CartesianPoint3Dimensional,
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
@@ -103,7 +103,7 @@ class GraphOfConvexSets(Generic[PointT, SearchSpaceT], SubClassSafeGeneric, ABC)
 
 def translate_event_to(
     event: Event,
-    position: CartesianPoint3D,
+    position: CartesianPoint3Dimensional,
 ) -> Event:
     """
     Translates an event by a given position.

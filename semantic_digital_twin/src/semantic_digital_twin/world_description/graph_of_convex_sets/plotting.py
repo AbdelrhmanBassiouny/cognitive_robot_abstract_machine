@@ -40,7 +40,10 @@ from matplotlib.patches import Rectangle
 from typing_extensions import Iterable, Sequence, Self
 
 from krrood_spatial_math.point import MetricPoint
-from krrood_spatial_math.spatial_types import CartesianPoint3D, FramePlaneProjection
+from krrood_spatial_math.spatial_types import (
+    CartesianPoint3Dimensional,
+    FramePlaneProjection,
+)
 from semantic_digital_twin.world_description.geometry import (
     AxisAlignedBox,
 )
@@ -286,7 +289,7 @@ class NavigationPath:
         :return: Whether these waypoints carry a z-coordinate, so the path is planned in
             3D rather than on a floor plan.
         """
-        return isinstance(self.waypoints[0], CartesianPoint3D)
+        return isinstance(self.waypoints[0], CartesianPoint3Dimensional)
 
     @property
     def length(self) -> float:
@@ -386,7 +389,7 @@ class FloorPlan:
         points_on_plane = [
             (
                 self.projection.project(point)
-                if isinstance(point, CartesianPoint3D)
+                if isinstance(point, CartesianPoint3Dimensional)
                 else point
             )
             for point in points

@@ -31,8 +31,8 @@ from krrood.patterns.caching import memoize
 from krrood.symbolic_math.symbolic_math import Matrix
 from krrood.utils import get_full_class_name
 from krrood.patterns.identifier_and_name import HasID, HasName
-from krrood_spatial_math.cartesian_frame_3d import CartesianFrame3D
-from krrood_spatial_math.space import EuclideanSpace3D
+from krrood_spatial_math.cartesian_frame_3_dimensional import CartesianFrame3Dimensional
+from krrood_spatial_math.space import EuclideanSpace3Dimensional
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
     WorldEntityReference,
     WorldEntityWithIDKwargsTracker,
@@ -49,8 +49,8 @@ from semantic_digital_twin.world_description.connection_properties import (
 from krrood_spatial_math.spatial_types import (
     GenericSpatialType,
     HomogeneousTransformationMatrix,
-    CartesianPoint3D,
-    Pose3D,
+    CartesianPoint3Dimensional,
+    Pose3Dimensional,
 )
 from semantic_digital_twin.utils import camel_case_split
 from semantic_digital_twin.world_description.geometry import Mesh
@@ -375,7 +375,7 @@ class WorldEntityWithSimulatorProperties(WorldEntityWithID, HasSimulatorProperti
 
 @dataclass(eq=False)
 class KinematicStructureEntity(
-    WorldEntityWithSimulatorProperties, CartesianFrame3D[PrefixedName], ABC
+    WorldEntityWithSimulatorProperties, CartesianFrame3Dimensional[PrefixedName], ABC
 ):
     """
     An entity that is part of the kinematic structure of the world.
@@ -397,7 +397,7 @@ class KinematicStructureEntity(
         self.index = None
 
     @property
-    def space(self) -> EuclideanSpace3D | None:
+    def space(self) -> EuclideanSpace3Dimensional | None:
         """
         Always ``None``: the space the bodies of a world chart is not modelled yet.
         """
@@ -414,14 +414,14 @@ class KinematicStructureEntity(
         """
 
     @property
-    def center_of_mass(self) -> CartesianPoint3D:
+    def center_of_mass(self) -> CartesianPoint3Dimensional:
         """
         Computes the center of mass of this KinematicStructureEntity.
         """
         # Center of mass in the body's local frame (collision geometry)
         com_local: np.ndarray[np.float64] = self.combined_mesh.center_mass  # (3,)
         # Transform to world frame using the body's global pose
-        com = CartesianPoint3D(
+        com = CartesianPoint3Dimensional(
             x=com_local[0],
             y=com_local[1],
             z=com_local[2],
@@ -440,11 +440,11 @@ class KinematicStructureEntity(
         return self._world.compute_forward_kinematics(self._world.root, self)
 
     @property
-    def global_pose(self) -> Pose3D:
+    def global_pose(self) -> Pose3Dimensional:
         """
-        Computes the Pose3D of the KinematicStructureEntity in the world frame.
+        Computes the Pose3Dimensional of the KinematicStructureEntity in the world frame.
 
-        :return: Pose3D representing the global pose.
+        :return: Pose3Dimensional representing the global pose.
         """
         return self._world.compute_forward_kinematics(self._world.root, self).pose
 
@@ -495,7 +495,7 @@ class KinematicStructureEntity(
     def from_3d_points(
         cls,
         name: PrefixedName,
-        points_3d: list[CartesianPoint3D],
+        points_3d: list[CartesianPoint3Dimensional],
         minimum_thickness: float = 0.005,
         singular_value_ratio_tolerance: float = 1e-7,
     ) -> Self:

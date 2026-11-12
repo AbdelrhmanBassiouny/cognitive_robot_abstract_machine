@@ -11,7 +11,7 @@ from segmind.datastructures.object_tracker import (
     ObjectTrackerFactory,
 )
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Aperture
-from krrood_spatial_math.spatial_types import Pose3D
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
 from semantic_digital_twin.world_description.world_entity import Body
 
@@ -129,12 +129,12 @@ class MotionEvent(EventWithTrackedObjects, ABC):
     vice versa.
     """
 
-    world_T_start_pose: Pose3D = field(kw_only=True)
+    world_T_start_pose: Pose3Dimensional = field(kw_only=True)
     """
     The pose of the object at the start of the event, in the world frame.
     """
 
-    world_T_current_pose: Pose3D = field(kw_only=True)
+    world_T_current_pose: Pose3Dimensional = field(kw_only=True)
     """
     The pose of the object at the end of the event, in the world frame.
     """
@@ -197,7 +197,7 @@ class AbstractContactEvent(EventWithTrackedObjects, ABC):
     Bounding box of the object.
     """
 
-    world_T_tracked_object: Pose3D = field(init=False)
+    world_T_tracked_object: Pose3Dimensional = field(init=False)
     """
     Pose of the object, in the world frame.
     """
@@ -209,7 +209,7 @@ class AbstractContactEvent(EventWithTrackedObjects, ABC):
     Bounding box of the second object in contact.
     """
 
-    world_T_with_object: Pose3D | None = field(init=False, default=None)
+    world_T_with_object: Pose3Dimensional | None = field(init=False, default=None)
     """
     Pose of the second object in contact, in the world frame.
     """

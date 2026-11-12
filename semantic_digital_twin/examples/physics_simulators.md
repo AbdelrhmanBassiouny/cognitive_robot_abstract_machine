@@ -196,7 +196,7 @@ from semantic_digital_twin.adapters.multi_sim import MujocoSim
 from semantic_digital_twin.adapters.ros.tf_publisher import TFPublisher
 from semantic_digital_twin.adapters.ros.visualization.viz_marker import VizMarkerPublisher
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3D
+from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3Dimensional
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
     Connection6DoF,
@@ -314,7 +314,7 @@ def spawn_arm(spawn_world: World, root_body: Body) -> RevoluteConnection:
             name=dof.name,
             parent=root_body,
             child=spawn_arm_body,
-            axis=Vector3D.Z(reference_frame=spawn_arm_body),
+            axis=Vector3Dimensional.Z(reference_frame=spawn_arm_body),
             dof_id=dof.id,
             parent_T_connection_expression=connection_origin,
         )

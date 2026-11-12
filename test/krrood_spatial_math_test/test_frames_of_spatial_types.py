@@ -10,7 +10,7 @@ import krrood.symbolic_math.symbolic_math as sm
 from krrood_spatial_math.line import Line
 from krrood_spatial_math.point import PointT, MetricPoint
 from krrood_spatial_math.vector import VectorT, MetricVector
-from krrood_spatial_math.cartesian_frame_3d import CartesianFrame3D
+from krrood_spatial_math.cartesian_frame_3_dimensional import CartesianFrame3Dimensional
 from krrood_spatial_math.coordinate_system import (
     CoordinateRepresentation,
     CoordinateSystemT,
@@ -18,7 +18,7 @@ from krrood_spatial_math.coordinate_system import (
     RigidCoordinateChange,
 )
 from krrood_spatial_math.exceptions import (
-    MissingCartesianFrame3DResolver,
+    MissingCartesianFrame3DimensionalResolver,
     ReferenceFrameMismatchError,
 )
 from krrood_spatial_math.spatial_types import (
@@ -26,13 +26,13 @@ from krrood_spatial_math.spatial_types import (
     AxisAngle,
     HomogeneousTransformationMatrix,
     FramePlaneProjection,
-    CartesianPoint3D,
-    Line3D,
-    Pose3D,
-    Pose2D,
+    CartesianPoint3Dimensional,
+    Line3Dimensional,
+    Pose3Dimensional,
+    Pose2Dimensional,
     Quaternion,
     RotationMatrix,
-    Vector3D,
+    Vector3Dimensional,
 )
 
 from .dataset.frames import KnownFrames
@@ -55,12 +55,12 @@ def shelf_frame(table_frame) -> MountedFrame:
 
 
 spatial_values = [
-    CartesianPoint3D,
-    Vector3D,
+    CartesianPoint3Dimensional,
+    Vector3Dimensional,
     Quaternion,
     AxisAngle,
     RotationMatrix,
-    Pose3D,
+    Pose3Dimensional,
 ]
 
 
@@ -73,7 +73,7 @@ def test_a_value_in_a_cartesian_frame_is_a_coordinate_representation():
     assert issubclass(SymbolicSpatialValue, CoordinateRepresentation)
     assert (
         SymbolicSpatialValue.get_type_of_generic_parameter(parameter=CoordinateSystemT)
-        is CartesianFrame3D
+        is CartesianFrame3Dimensional
     )
 
 
@@ -91,40 +91,45 @@ def test_a_spatial_values_coordinates_are_given_in_its_reference_frame(
 
 def test_a_three_dimensional_point_is_given_in_a_three_dimensional_cartesian_frame():
     assert (
-        CartesianPoint3D.get_type_of_generic_parameter(parameter=CoordinateSystemT)
-        is CartesianFrame3D
+        CartesianPoint3Dimensional.get_type_of_generic_parameter(
+            parameter=CoordinateSystemT
+        )
+        is CartesianFrame3Dimensional
     )
 
 
 def test_a_three_dimensional_point_is_a_cartesian_point():
-    assert issubclass(CartesianPoint3D, MetricPoint)
+    assert issubclass(CartesianPoint3Dimensional, MetricPoint)
 
 
 def test_a_three_dimensional_point_stores_its_coordinates_as_symbolic_scalars():
     assert (
-        CartesianPoint3D.get_type_of_generic_parameter(parameter=CoordinateT)
+        CartesianPoint3Dimensional.get_type_of_generic_parameter(parameter=CoordinateT)
         is sm.Scalar
     )
 
 
 def test_a_three_dimensional_point_is_moved_by_a_three_dimensional_vector():
-    assert CartesianPoint3D.get_type_of_generic_parameter(parameter=VectorT) is Vector3D
+    assert (
+        CartesianPoint3Dimensional.get_type_of_generic_parameter(parameter=VectorT)
+        is Vector3Dimensional
+    )
 
 
 # %% a vector in a frame's space as a Cartesian vector
 
 
 def test_a_three_dimensional_vector_is_a_cartesian_vector_of_a_three_dimensional_frame():
-    assert issubclass(Vector3D, MetricVector)
+    assert issubclass(Vector3Dimensional, MetricVector)
     assert (
-        Vector3D.get_type_of_generic_parameter(parameter=CoordinateSystemT)
-        is CartesianFrame3D
+        Vector3Dimensional.get_type_of_generic_parameter(parameter=CoordinateSystemT)
+        is CartesianFrame3Dimensional
     )
 
 
 def test_the_difference_of_two_three_dimensional_points_moves_one_onto_the_other():
-    start = CartesianPoint3D(1, 2, 3)
-    end = CartesianPoint3D(4, 6, 3)
+    start = CartesianPoint3Dimensional(1, 2, 3)
+    end = CartesianPoint3Dimensional(4, 6, 3)
 
     np.testing.assert_allclose((start + (end - start)).to_np(), end.to_np())
 
@@ -133,9 +138,15 @@ def test_the_difference_of_two_three_dimensional_points_moves_one_onto_the_other
 
 
 def test_a_three_dimensional_line_runs_through_a_point_along_a_vector():
-    assert issubclass(Line3D, Line)
-    assert Line3D.get_type_of_generic_parameter(parameter=PointT) is CartesianPoint3D
-    assert Line3D.get_type_of_generic_parameter(parameter=VectorT) is Vector3D
+    assert issubclass(Line3Dimensional, Line)
+    assert (
+        Line3Dimensional.get_type_of_generic_parameter(parameter=PointT)
+        is CartesianPoint3Dimensional
+    )
+    assert (
+        Line3Dimensional.get_type_of_generic_parameter(parameter=VectorT)
+        is Vector3Dimensional
+    )
 
 
 # %% a transformation as a change between two frames
@@ -154,7 +165,7 @@ def test_a_transformation_binds_cartesian_frames_as_its_coordinate_systems():
         HomogeneousTransformationMatrix.get_type_of_generic_parameter(
             parameter=CoordinateSystemT
         )
-        is CartesianFrame3D
+        is CartesianFrame3Dimensional
     )
 
 
@@ -208,7 +219,7 @@ def test_composed_transformations_change_from_the_first_source_to_the_last_targe
 def test_a_transformation_from_parts_in_different_frames_raises(
     table_frame, camera_frame
 ):
-    position = CartesianPoint3D(1, 2, 3, reference_frame=table_frame)
+    position = CartesianPoint3Dimensional(1, 2, 3, reference_frame=table_frame)
     rotation = RotationMatrix.from_rpy(yaw=0.5, reference_frame=camera_frame)
 
     with pytest.raises(ReferenceFrameMismatchError):
@@ -222,7 +233,7 @@ def test_a_transformed_point_is_expressed_in_the_transformations_frame(
         x=1, reference_frame=table_frame, child_frame=camera_frame
     )
 
-    point_in_table = table_T_camera @ CartesianPoint3D(
+    point_in_table = table_T_camera @ CartesianPoint3Dimensional(
         0, 2, 3, reference_frame=camera_frame
     )
 
@@ -236,7 +247,7 @@ def test_a_point_changed_there_and_back_keeps_its_coordinates(
     table_T_camera = HomogeneousTransformationMatrix.from_xyz_rpy(
         x=1, y=2, yaw=0.5, reference_frame=table_frame, child_frame=camera_frame
     )
-    point_in_camera = CartesianPoint3D(0, 2, 3, reference_frame=camera_frame)
+    point_in_camera = CartesianPoint3Dimensional(0, 2, 3, reference_frame=camera_frame)
 
     point_copy = table_T_camera.inverse() @ (table_T_camera @ point_in_camera)
 
@@ -249,7 +260,7 @@ def test_a_transformation_applies_to_a_point_without_a_frame(table_frame, camera
         reference_frame=table_frame, child_frame=camera_frame
     )
 
-    point_in_table = table_T_camera @ CartesianPoint3D(0, 2, 3)
+    point_in_table = table_T_camera @ CartesianPoint3Dimensional(0, 2, 3)
 
     assert point_in_table.reference_frame is table_frame
 
@@ -263,7 +274,7 @@ def test_a_point_projected_onto_another_frames_plane_is_expressed_in_that_frame(
     projection = FramePlaneProjection(plane_frame=shelf_frame)
 
     point_on_shelf = projection.project(
-        CartesianPoint3D(1, 2, 3, reference_frame=table_frame)
+        CartesianPoint3Dimensional(1, 2, 3, reference_frame=table_frame)
     )
 
     assert point_on_shelf.reference_frame is shelf_frame
@@ -275,11 +286,11 @@ def test_a_point_projected_onto_another_frames_plane_is_expressed_in_that_frame(
 def test_a_pose_flattened_onto_another_frames_plane_is_expressed_in_that_frame(
     table_frame, shelf_frame
 ):
-    pose_in_table = Pose3D.from_xyz_rpy(
+    pose_in_table = Pose3Dimensional.from_xyz_rpy(
         x=3, y=2, z=5, yaw=0.5, reference_frame=table_frame
     )
 
-    pose_on_shelf = Pose2D.from_pose(pose_in_table, plane_frame=shelf_frame)
+    pose_on_shelf = Pose2Dimensional.from_pose(pose_in_table, plane_frame=shelf_frame)
 
     assert pose_on_shelf.reference_frame is shelf_frame
     assert np.allclose(
@@ -298,7 +309,7 @@ def test_a_pose_flattened_onto_another_frames_plane_is_expressed_in_that_frame(
 
 
 def test_a_deserialized_point_refers_to_the_readers_frame(table_frame):
-    point = CartesianPoint3D(1, 2, 3, reference_frame=table_frame)
+    point = CartesianPoint3Dimensional(1, 2, 3, reference_frame=table_frame)
     data = json.loads(json.dumps(to_json(point)))
     known_frames = KnownFrames()
     known_frames.add(key=table_frame.id, tracked_object=table_frame)
@@ -326,14 +337,14 @@ def test_a_transformation_keeps_both_of_its_frames(table_frame, camera_frame):
 def test_a_point_referring_to_a_frame_cannot_be_read_without_a_resolver(
     table_frame,
 ):
-    data = to_json(CartesianPoint3D(1, 2, 3, reference_frame=table_frame))
+    data = to_json(CartesianPoint3Dimensional(1, 2, 3, reference_frame=table_frame))
 
-    with pytest.raises(MissingCartesianFrame3DResolver):
+    with pytest.raises(MissingCartesianFrame3DimensionalResolver):
         from_json(data)
 
 
 def test_a_point_without_a_frame_is_read_without_a_resolver():
-    point = CartesianPoint3D(1, 2, 3)
+    point = CartesianPoint3Dimensional(1, 2, 3)
 
     point_copy = from_json(to_json(point))
 

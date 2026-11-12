@@ -17,7 +17,10 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Drawer,
     Door,
 )
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3D
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Vector3Dimensional,
+)
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import Scale
 from semantic_digital_twin.world_description.world_entity import Body
@@ -92,7 +95,9 @@ def door_from_body_in_world(door_body: Body, world: World) -> Door:
             world_root_T_self=world_T_handle,
         )
         door.add(handle)
-    door.mount_on_movable_joint(RevoluteConnectionSpecification(axis=Vector3D.Z()))
+    door.mount_on_movable_joint(
+        RevoluteConnectionSpecification(axis=Vector3Dimensional.Z())
+    )
 
     return door
 

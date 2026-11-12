@@ -16,7 +16,10 @@ from giskardpy.motion_statechart.graph_node import ConvergingTask, MotionNodeArt
 from giskardpy.motion_statechart.tasks.align_planes import AlignPlanes
 from giskardpy.motion_statechart.tasks.feature_functions import AngleGoal, ReachPoint
 from krrood.symbolic_math.symbolic_math import logic_and
-from krrood_spatial_math.spatial_types import CartesianPoint3D, Vector3D
+from krrood_spatial_math.spatial_types import (
+    CartesianPoint3Dimensional,
+    Vector3Dimensional,
+)
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
@@ -40,17 +43,17 @@ class StayOnLineTask(ConvergingTask):
     Tip link of the kinematic chain, which the controlled point is attached to.
     """
 
-    tip_P_tool: CartesianPoint3D
+    tip_P_tool: CartesianPoint3Dimensional
     """
     The controlled point.
     """
 
-    root_P_start: CartesianPoint3D
+    root_P_start: CartesianPoint3Dimensional
     """
     Start of the line segment.
     """
 
-    root_P_end: CartesianPoint3D
+    root_P_end: CartesianPoint3Dimensional
     """
     End of the line segment.
     """
@@ -113,22 +116,22 @@ class InsertCylinder(EndedByOwner, CompositeNode):
     Controlled tip of the kinematic chain; the grasped body to insert.
     """
 
-    tip_P_tool: CartesianPoint3D
+    tip_P_tool: CartesianPoint3Dimensional
     """
     The point of the cylinder that leads the insertion.
     """
 
-    hole_point: CartesianPoint3D
+    hole_point: CartesianPoint3Dimensional
     """
     Position of the hole to insert into.
     """
 
-    tip_V_axis: Vector3D
+    tip_V_axis: Vector3Dimensional
     """
     Insertion axis of the cylinder.
     """
 
-    up_axis: Vector3D
+    up_axis: Vector3Dimensional
     """
     Axis pointing out of the hole.
     """

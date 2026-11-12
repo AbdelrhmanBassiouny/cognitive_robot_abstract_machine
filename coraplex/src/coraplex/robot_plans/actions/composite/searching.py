@@ -14,7 +14,7 @@ from cramph.context import StatechartContext
 from cramph.node import StatechartNode
 from krrood.entity_query_language.factories import a, variable
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
-from krrood_spatial_math.spatial_types import Pose3D
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
 from semantic_digital_twin.world_description.world_entity import SemanticAnnotation
 
@@ -66,7 +66,7 @@ class SearchAction(SequentialAction):
     @classmethod
     def looking_around(
         cls,
-        target_location: Pose3D,
+        target_location: Pose3Dimensional,
         object_semantic_annotation: type[SemanticAnnotation],
         context: StatechartContext,
         cross_arm_length: float = 0.5,
@@ -110,7 +110,7 @@ class SearchAction(SequentialAction):
         return cls(
             navigate=a(NavigateAction)(
                 target_location=variable(
-                    Pose3D,
+                    Pose3Dimensional,
                     domain=VisibilityLocation(
                         target_pose=target_location, context=context
                     ),
@@ -119,7 +119,7 @@ class SearchAction(SequentialAction):
             looks=[
                 LookAtAndDetectAction(
                     look_at=LookAtAction(
-                        target=Pose3D.from_xyz_rpy(
+                        target=Pose3Dimensional.from_xyz_rpy(
                             target_location.x + x_offset,
                             target_location.y + y_offset,
                             target_location.z,

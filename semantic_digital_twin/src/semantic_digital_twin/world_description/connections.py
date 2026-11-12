@@ -22,8 +22,8 @@ from semantic_digital_twin.datastructures.types import NpMatrix4x4
 from semantic_digital_twin.exceptions import MissingConnectionAxisError
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Vector3D,
-    CartesianPoint3D,
+    Vector3Dimensional,
+    CartesianPoint3Dimensional,
     Quaternion,
 )
 
@@ -117,7 +117,7 @@ class ActiveConnection1DOF(ActiveConnection, ABC):
     Superclass for active connections with 1 degree of freedom.
     """
 
-    axis: Vector3D = field(kw_only=True)
+    axis: Vector3Dimensional = field(kw_only=True)
     """
     Connection moves along this axis, should be a unit vector.
 
@@ -165,7 +165,7 @@ class ActiveConnection1DOF(ActiveConnection, ABC):
         multiplier: float = 1.0,
         offset: float = 0.0,
         dof_limits: DegreeOfFreedomLimits | None = None,
-        axis: Vector3D | None = None,
+        axis: Vector3Dimensional | None = None,
         dynamics: JointDynamics | None = None,
     ) -> Self:
         """
@@ -422,7 +422,7 @@ class ScrewConnection(ActiveConnection1DOF):
         multiplier: float = 1.0,
         offset: float = 0.0,
         dof_limits: DegreeOfFreedomLimits | None = None,
-        axis: Vector3D | None = None,
+        axis: Vector3Dimensional | None = None,
         dynamics: JointDynamics | None = None,
         screw_pitch: float,
     ) -> Self:
@@ -533,7 +533,7 @@ class Connection6DoF(Connection):
 
     def add_to_world(self, world: World):
         super().add_to_world(world)
-        parent_P_child = CartesianPoint3D(
+        parent_P_child = CartesianPoint3Dimensional(
             x=self.x.variables.position,
             y=self.y.variables.position,
             z=self.z.variables.position,

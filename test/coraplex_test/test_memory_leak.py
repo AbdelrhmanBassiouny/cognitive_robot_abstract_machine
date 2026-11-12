@@ -12,7 +12,7 @@ from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
 )
 from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.robots.pr2 import PR2
-from krrood_spatial_math.spatial_types import Pose3D
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
 from cramph.composites import Sequence
 
@@ -40,7 +40,7 @@ def test_ref_chain_after_copy_with_execute(pr2_apartment_context):
     plan = Sequence(
         nodes=[
             NavigateAction(
-                target_location=Pose3D.from_xyz_rpy(
+                target_location=Pose3Dimensional.from_xyz_rpy(
                     1, -1, 0, reference_frame=copy_world.root
                 )
             )
@@ -65,7 +65,9 @@ def test_ref_chain_after_copy_with_execute_complex_plan(pr2_apartment_context):
     milk = copy_world.get_semantic_annotations_by_type(Milk)[0]
     description = TransportAction.from_graspable_by_closest_grasps(
         milk,
-        Pose3D.from_xyz_quaternion(3.1, 2.2, 0.95, 0.0, 0.0, 1.0, 0.0, world.root),
+        Pose3Dimensional.from_xyz_quaternion(
+            3.1, 2.2, 0.95, 0.0, 0.0, 1.0, 0.0, world.root
+        ),
         copy_robot.right_arm,
         context_of(copy_extensions),
     )

@@ -24,7 +24,7 @@ from semantic_digital_twin.part_finding.splitting import PartSplitter
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     Twist,
-    Vector3D,
+    Vector3Dimensional,
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import Mesh
@@ -52,7 +52,7 @@ class RecordingPerformer(GraspPerformer):
         return GraspResult(
             object_raised=True,
             motion_completed=True,
-            object_displacement=Twist(translation=Vector3D(0.0, 0.0, 0.2)),
+            object_displacement=Twist(translation=Vector3Dimensional(0.0, 0.0, 0.2)),
             slip=Twist(),
         )
 

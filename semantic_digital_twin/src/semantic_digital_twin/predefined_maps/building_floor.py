@@ -13,7 +13,10 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Handle,
     Wall,
 )
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3D
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Vector3Dimensional,
+)
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import Color, Scale
 from semantic_digital_twin.world_description.world_entity import (
@@ -105,7 +108,7 @@ class SingleDoorRoom:
             Door.get_default_root_kinematic_structure_entity_specification(
                 scale=self.door_scale,
                 connection_specification=RevoluteConnectionSpecification(
-                    axis=Vector3D.Z()
+                    axis=Vector3Dimensional.Z()
                 ),
             ),
             part_specifications={

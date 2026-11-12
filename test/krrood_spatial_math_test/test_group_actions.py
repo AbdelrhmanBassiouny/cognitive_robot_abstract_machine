@@ -14,19 +14,19 @@ from krrood_spatial_math.coordinate_system import (
 )
 from krrood_spatial_math.spatial_types import (
     AxisAngle,
-    CartesianPoint3D,
+    CartesianPoint3Dimensional,
     HomogeneousCoordinates,
     HomogeneousTransformationMatrix,
-    HomogeneousTransformationMatrix2D,
+    HomogeneousTransformationMatrix2Dimensional,
     Orientation,
-    Pose3D,
+    Pose3Dimensional,
     Quaternion,
     RotationMatrix,
     SpecialEuclideanGroupAction,
     SpecialOrthogonalGroupAction,
     SymbolicSpatialChange,
     SymbolicSpatialValue,
-    Vector3D,
+    Vector3Dimensional,
 )
 
 # %% the rotation group is a subgroup of the rigid motion group
@@ -38,7 +38,7 @@ def test_whatever_rigid_motions_act_on_rotations_act_on_too():
 
 @pytest.mark.parametrize(
     "spatial_type",
-    [CartesianPoint3D, Vector3D, RotationMatrix, Pose3D],
+    [CartesianPoint3Dimensional, Vector3Dimensional, RotationMatrix, Pose3Dimensional],
 )
 def test_values_stored_as_homogeneous_coordinates_are_moved_by_rigid_motions(
     spatial_type,
@@ -69,7 +69,14 @@ def test_a_transformation_turns_an_orientation_by_its_rotation_only():
 
 
 @pytest.mark.parametrize(
-    "value_type", [CartesianPoint3D, Vector3D, Quaternion, AxisAngle, Pose3D]
+    "value_type",
+    [
+        CartesianPoint3Dimensional,
+        Vector3Dimensional,
+        Quaternion,
+        AxisAngle,
+        Pose3Dimensional,
+    ],
 )
 def test_a_symbolic_value_is_a_coordinate_representation(value_type):
     assert issubclass(value_type, SymbolicSpatialValue)
@@ -78,7 +85,7 @@ def test_a_symbolic_value_is_a_coordinate_representation(value_type):
 
 @pytest.mark.parametrize(
     "change_type",
-    [HomogeneousTransformationMatrix, HomogeneousTransformationMatrix2D],
+    [HomogeneousTransformationMatrix, HomogeneousTransformationMatrix2Dimensional],
 )
 def test_a_symbolic_change_is_a_rigid_change_and_never_a_value(change_type):
     assert issubclass(change_type, SymbolicSpatialChange)

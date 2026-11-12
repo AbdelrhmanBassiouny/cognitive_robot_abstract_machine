@@ -48,8 +48,11 @@ from krrood.ormatic.utils import classproperty
 from krrood.symbol_graph.symbol_graph import Symbol, SymbolGraph
 from krrood.symbolic_math.symbolic_math import logic_and
 from krrood.utils import recursive_subclasses
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3D
-from krrood_spatial_math.spatial_types import Pose3D
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Vector3Dimensional,
+)
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 from semantic_digital_twin.adapters.ros import background_node
 from semantic_digital_twin.collision_checking.collision_rules import (
     AvoidExternalCollisions,
@@ -274,7 +277,9 @@ class BenchmarkRobot(GiskardTester):
         self.api.compile(motion_statechart)
         self.api.execute()
 
-    def add_environment(self, name: str, package_path: str, pose: Pose3D) -> None:
+    def add_environment(
+        self, name: str, package_path: str, pose: Pose3Dimensional
+    ) -> None:
         """
         Load a whole environment into the world, which grows the cost of forward
         kinematics and collision checking.
@@ -404,11 +409,11 @@ class CollisionAvoidanceScenario(BenchmarkScenario):
             CartesianPose(
                 root_link=robot.default_root,
                 tip_link=robot.get_kinematic_structure_entity("r_gripper_tool_frame"),
-                goal_pose=Pose3D.from_xyz_axis_angle(
+                goal_pose=Pose3Dimensional.from_xyz_axis_angle(
                     x=0.8,
                     y=-0.38,
                     z=0.84,
-                    axis=Vector3D.Y(),
+                    axis=Vector3Dimensional.Y(),
                     angle=np.pi / 2.0,
                     reference_frame=robot.default_root,
                 ),
@@ -493,7 +498,7 @@ class KitchenPointingScenario(BenchmarkScenario):
     def build_motion_statechart(self, robot: BenchmarkRobot) -> Statechart:
         camera = robot.get_kinematic_structure_entity("head_mount_kinect_rgb_link")
         map_frame = robot.get_kinematic_structure_entity("map")
-        pointing_axis = Vector3D.X(reference_frame=camera)
+        pointing_axis = Vector3Dimensional.X(reference_frame=camera)
         handle_point = robot.api.world.compute_forward_kinematics(
             root=map_frame,
             tip=robot.get_kinematic_structure_entity("iai_fridge_door_handle"),
@@ -528,7 +533,7 @@ class KitchenPointingScenario(BenchmarkScenario):
                                 ),
                                 goal_pose=HomogeneousTransformationMatrix.from_xyz_axis_angle(
                                     y=2.0,
-                                    axis=Vector3D.Z(),
+                                    axis=Vector3Dimensional.Z(),
                                     angle=1,
                                     reference_frame=robot.get_kinematic_structure_entity(
                                         "base_footprint"

@@ -36,7 +36,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Handle,
 )
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
-from krrood_spatial_math.spatial_types import Pose3D
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import Cylinder
@@ -92,22 +92,24 @@ class KitchenWithFilledDrawer:
         return self.world.get_body_by_name("kitchen_island_surface")
 
     @property
-    def world_T_bowl_goal(self) -> Pose3D:
+    def world_T_bowl_goal(self) -> Pose3Dimensional:
         """
         :return: Where the bowl is set down on the kitchen island.
         """
         return self.world.transform(
-            Pose3D.from_xyz_rpy(x=0.2, z=0.05, reference_frame=self.kitchen_island),
+            Pose3Dimensional.from_xyz_rpy(
+                x=0.2, z=0.05, reference_frame=self.kitchen_island
+            ),
             self.world.root,
         )
 
     @property
-    def world_T_cup_goal(self) -> Pose3D:
+    def world_T_cup_goal(self) -> Pose3Dimensional:
         """
         :return: Where the cup is set down on the kitchen island.
         """
         return self.world.transform(
-            Pose3D.from_xyz_rpy(
+            Pose3Dimensional.from_xyz_rpy(
                 x=0.15, y=0.25, z=0.07, reference_frame=self.kitchen_island
             ),
             self.world.root,
@@ -202,13 +204,13 @@ def transport_plan(kitchen: KitchenWithFilledDrawer) -> Sequence:
         once.
     """
     world, robot = kitchen.world, kitchen.robot
-    in_front_of_the_closed_drawer = Pose3D.from_xyz_rpy(
+    in_front_of_the_closed_drawer = Pose3Dimensional.from_xyz_rpy(
         x=0.4, y=0.7, reference_frame=world.root
     )
-    in_front_of_the_open_drawer = Pose3D.from_xyz_rpy(
+    in_front_of_the_open_drawer = Pose3Dimensional.from_xyz_rpy(
         x=0.3, y=0.89, reference_frame=world.root
     )
-    facing_the_kitchen_island = Pose3D.from_xyz_rpy(
+    facing_the_kitchen_island = Pose3Dimensional.from_xyz_rpy(
         x=-0.25, y=1.85, yaw=np.pi, reference_frame=world.root
     )
     return Sequence(

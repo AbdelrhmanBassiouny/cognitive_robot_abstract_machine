@@ -4,7 +4,7 @@ import pytest
 
 from krrood.patterns.identifier_and_name import NameT
 from krrood.patterns.exceptions import InterfaceInstantiationError
-from krrood_spatial_math.cartesian_frame_3d import CartesianFrame3D
+from krrood_spatial_math.cartesian_frame_3_dimensional import CartesianFrame3Dimensional
 from krrood_spatial_math.coordinate_system import (
     AffineCoordinateChange,
     AffineFrame,
@@ -19,13 +19,13 @@ from krrood_spatial_math.coordinate_system import (
 )
 from krrood_spatial_math.space import (
     EuclideanSpace,
-    EuclideanSpace2D,
-    EuclideanSpace3D,
+    EuclideanSpace2Dimensional,
+    EuclideanSpace3Dimensional,
     Space,
 )
 
 from .dataset.spaces import (
-    CartesianFrame3DChange,
+    CartesianFrame3DimensionalChange,
     ScalablePlane,
     ScalablePlaneFrame,
     ScalingChange,
@@ -35,7 +35,8 @@ from .dataset.spaces import (
 
 
 @pytest.mark.parametrize(
-    "space_kind", [Space, EuclideanSpace, EuclideanSpace2D, EuclideanSpace3D]
+    "space_kind",
+    [Space, EuclideanSpace, EuclideanSpace2Dimensional, EuclideanSpace3Dimensional],
 )
 def test_a_space_cannot_be_instantiated(space_kind):
     with pytest.raises(InterfaceInstantiationError):
@@ -46,17 +47,19 @@ def test_euclidean_space_is_a_space():
     assert issubclass(EuclideanSpace, Space)
 
 
-@pytest.mark.parametrize("space_kind", [EuclideanSpace2D, EuclideanSpace3D])
+@pytest.mark.parametrize(
+    "space_kind", [EuclideanSpace2Dimensional, EuclideanSpace3Dimensional]
+)
 def test_a_space_of_fixed_dimension_is_a_euclidean_space(space_kind):
     assert issubclass(space_kind, EuclideanSpace)
 
 
 def test_a_two_dimensional_euclidean_space_has_two_dimensions():
-    assert EuclideanSpace2D.dimension == 2
+    assert EuclideanSpace2Dimensional.dimension == 2
 
 
 def test_a_three_dimensional_euclidean_space_has_three_dimensions():
-    assert EuclideanSpace3D.dimension == 3
+    assert EuclideanSpace3Dimensional.dimension == 3
 
 
 # %% coordinate systems on spaces
@@ -84,7 +87,10 @@ def test_an_affine_frame_need_not_be_cartesian():
 
 
 def test_an_affine_frame_reports_the_space_it_charts():
-    assert ScalablePlaneFrame.get_type_of_generic_parameter(parameter=SpaceT) is ScalablePlane
+    assert (
+        ScalablePlaneFrame.get_type_of_generic_parameter(parameter=SpaceT)
+        is ScalablePlane
+    )
 
 
 def test_an_affine_frame_reports_the_kind_of_name_it_is_called_by():
@@ -141,12 +147,15 @@ def test_a_rigid_change_changes_between_cartesian_frames():
 
 def test_a_rigid_change_reports_the_kind_of_frame_it_changes():
     assert (
-        CartesianFrame3DChange.get_type_of_generic_parameter(parameter=CartesianFrameT)
-        is CartesianFrame3D
+        CartesianFrame3DimensionalChange.get_type_of_generic_parameter(
+            parameter=CartesianFrameT
+        )
+        is CartesianFrame3Dimensional
     )
 
 
 def test_an_affine_change_reports_the_kind_of_frame_it_changes():
     assert (
-        ScalingChange.get_type_of_generic_parameter(parameter=AffineFrameT) is ScalablePlaneFrame
+        ScalingChange.get_type_of_generic_parameter(parameter=AffineFrameT)
+        is ScalablePlaneFrame
     )

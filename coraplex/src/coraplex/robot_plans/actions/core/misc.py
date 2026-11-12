@@ -19,9 +19,13 @@ from coraplex.robot_plans.mixins import HasApproachesGraspPoses, MovesToolCenter
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     RotationMatrix,
-    Vector3D,
+    Vector3Dimensional,
 )
-from krrood_spatial_math.spatial_types import Pose3D, CartesianPoint3D, Pose2D
+from krrood_spatial_math.spatial_types import (
+    Pose3Dimensional,
+    CartesianPoint3Dimensional,
+    Pose2Dimensional,
+)
 from semantic_digital_twin.robots.robot_parts import EndEffector
 from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
 from semantic_digital_twin.world_description.world_entity import SemanticAnnotation
@@ -148,7 +152,7 @@ class MoveToReach(MovesToolCenterPoint, SequentialAction, HasApproachesGraspPose
     Let the robot move to a position facing the target and reach with a end_effector.
     """
 
-    target_pose_offset_robot: Pose2D
+    target_pose_offset_robot: Pose2Dimensional
     """
     The pose where the robot should stand with regard to the end_effector target pose.
 
@@ -160,7 +164,7 @@ class MoveToReach(MovesToolCenterPoint, SequentialAction, HasApproachesGraspPose
     Additional yaw applied to the orientation facing the target directly.
     """
 
-    reference_T_grasp: Pose3D
+    reference_T_grasp: Pose3Dimensional
     """
     The grasp frame the end effector is to reach.
     """
@@ -185,24 +189,24 @@ class MoveToReach(MovesToolCenterPoint, SequentialAction, HasApproachesGraspPose
         ]
 
     @property
-    def standing_pose(self) -> Pose3D:
+    def standing_pose(self) -> Pose3Dimensional:
         """
         Calculates the pose where the robot should stand to reach the target.
 
         :return: The calculated standing pose on the floor.
         """
         reference_T_target = self.reference_T_grasp.homogeneous_matrix
-        target_V_robot = -Vector3D(
+        target_V_robot = -Vector3Dimensional(
             x=self.target_pose_offset_robot.x, y=self.target_pose_offset_robot.y
         )
         target_V_robot.scale(1.0)
-        world_z = Vector3D.Z()
+        world_z = Vector3Dimensional.Z()
         target_R_robot_pointing_to_target = RotationMatrix.from_vectors(
             x=target_V_robot, z=world_z
         ) @ RotationMatrix.from_rpy(yaw=self.hip_rotation)
 
         target_T_robot = HomogeneousTransformationMatrix.from_point_rotation_matrix(
-            point=CartesianPoint3D(
+            point=CartesianPoint3Dimensional(
                 x=self.target_pose_offset_robot.x,
                 y=self.target_pose_offset_robot.y,
             ),
@@ -211,7 +215,7 @@ class MoveToReach(MovesToolCenterPoint, SequentialAction, HasApproachesGraspPose
         )
         reference_T_robot = reference_T_target @ target_T_robot
         world_T_robot = self.world.transform(reference_T_robot.pose, self.world.root)
-        return Pose3D.from_xyz_rpy(
+        return Pose3Dimensional.from_xyz_rpy(
             x=world_T_robot.x,
             y=world_T_robot.y,
             yaw=world_T_robot.yaw,

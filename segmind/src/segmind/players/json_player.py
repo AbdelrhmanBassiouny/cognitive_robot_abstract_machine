@@ -13,7 +13,7 @@ from trimesh import Geometry
 
 from segmind.players.data_player import FilePlayer, FrameData
 from krrood_spatial_math.spatial_types import RotationMatrix
-from krrood_spatial_math.spatial_types import Pose3D
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
 
@@ -95,7 +95,7 @@ class JSONPlayer(FilePlayer):
 
     def _resume(self): ...
 
-    def get_objects_poses(self, frame_data: FrameData) -> dict[Body, Pose3D]:
+    def get_objects_poses(self, frame_data: FrameData) -> dict[Body, Pose3Dimensional]:
         """
         Extracts the poses of the objects from the frame data.
 
@@ -104,7 +104,7 @@ class JSONPlayer(FilePlayer):
         """
         objects_data = frame_data.objects_data
         obj_id_to_name = self.obj_id_to_name or {}
-        objects_poses: dict[Body, Pose3D] = {}
+        objects_poses: dict[Body, Pose3Dimensional] = {}
         for obj_name, obj_data in objects_data.items():
             body_name = obj_id_to_name.get(int(obj_name))
             if body_name is None:
@@ -118,7 +118,7 @@ class JSONPlayer(FilePlayer):
                 r = np.array(R).reshape(3, 3)
                 R_mat = RotationMatrix(data=r)
                 orientation = R_mat.quaternion.to_np()  # [x, y, z, w]
-                obj_pose = Pose3D.from_xyz_quaternion(
+                obj_pose = Pose3Dimensional.from_xyz_quaternion(
                     pos_x=t[0],
                     pos_y=t[1],
                     pos_z=t[2],

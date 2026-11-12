@@ -14,11 +14,11 @@ from semantic_digital_twin.adapters.ros.msg_converter import (
 )
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    CartesianPoint3D,
-    Vector3D,
+    CartesianPoint3Dimensional,
+    Vector3Dimensional,
     Quaternion,
 )
-from krrood_spatial_math.spatial_types import Pose3D
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 from semantic_digital_twin.world_description.geometry import (
     Box,
     Cylinder,
@@ -59,10 +59,10 @@ class HomogeneousTransformationMatrixToRos2Converter(
 
 @dataclass
 class PoseToRos2StampedConverter(
-    SemDTToRos2Converter[Pose3D, geometry_msgs.PoseStamped]
+    SemDTToRos2Converter[Pose3Dimensional, geometry_msgs.PoseStamped]
 ):
     @classmethod
-    def convert(cls, data: Pose3D) -> geometry_msgs.PoseStamped:
+    def convert(cls, data: Pose3Dimensional) -> geometry_msgs.PoseStamped:
         result = geometry_msgs.PoseStamped()
         if data.reference_frame is not None:
             result.header.frame_id = str(data.reference_frame.name)
@@ -81,9 +81,9 @@ class PoseToRos2StampedConverter(
 
 
 @dataclass
-class PoseToRos2Converter(SemDTToRos2Converter[Pose3D, geometry_msgs.Pose]):
+class PoseToRos2Converter(SemDTToRos2Converter[Pose3Dimensional, geometry_msgs.Pose]):
     @classmethod
-    def convert(cls, data: Pose3D) -> geometry_msgs.Pose:
+    def convert(cls, data: Pose3Dimensional) -> geometry_msgs.Pose:
         result = geometry_msgs.Pose()
         position = data.position.to_np()
         orientation = data.rotation_matrix.quaternion.to_np()
@@ -100,11 +100,11 @@ class PoseToRos2Converter(SemDTToRos2Converter[Pose3D, geometry_msgs.Pose]):
 
 
 @dataclass
-class CartesianPoint3DToRos2Converter(
-    SemDTToRos2Converter[CartesianPoint3D, geometry_msgs.PointStamped]
+class CartesianPoint3DimensionalToRos2Converter(
+    SemDTToRos2Converter[CartesianPoint3Dimensional, geometry_msgs.PointStamped]
 ):
     @classmethod
-    def convert(cls, data: CartesianPoint3D) -> geometry_msgs.PointStamped:
+    def convert(cls, data: CartesianPoint3Dimensional) -> geometry_msgs.PointStamped:
         point_stamped = geometry_msgs.PointStamped()
         if data.reference_frame is not None:
             point_stamped.header.frame_id = str(data.reference_frame.name)
@@ -117,10 +117,10 @@ class CartesianPoint3DToRos2Converter(
 
 @dataclass
 class Vector3ToRos2Converter(
-    SemDTToRos2Converter[Vector3D, geometry_msgs.Vector3Stamped]
+    SemDTToRos2Converter[Vector3Dimensional, geometry_msgs.Vector3Stamped]
 ):
     @classmethod
-    def convert(cls, data: Vector3D) -> geometry_msgs.Vector3Stamped:
+    def convert(cls, data: Vector3Dimensional) -> geometry_msgs.Vector3Stamped:
         vector_stamped = geometry_msgs.Vector3Stamped()
         if data.reference_frame is not None:
             vector_stamped.header.frame_id = str(data.reference_frame.name)

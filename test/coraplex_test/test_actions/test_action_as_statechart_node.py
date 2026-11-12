@@ -59,7 +59,7 @@ from semantic_digital_twin.collision_checking.collision_rules import (
 from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.robots.robot_parts import EndEffector
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
-from krrood_spatial_math.spatial_types import Pose3D
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 from ..conftest import nodes_of_type
 from ..test_designator.test_multi_robot_action_designator import _handle_annotation
 from ...plan_running import (
@@ -704,7 +704,9 @@ def test_a_place_lets_the_gripper_holding_its_object_touch(
     pick_up = PickUpAction(grasp=milk.grasp_candidates()[0], arm=robot.left_arm)
     place = PlaceAction(
         object_designator=milk,
-        target_location=Pose3D.from_xyz_rpy(0.8, -1.9, 0.7, reference_frame=world.root),
+        target_location=Pose3Dimensional.from_xyz_rpy(
+            0.8, -1.9, 0.7, reference_frame=world.root
+        ),
     )
 
     statechart_of(simulated_executor(extensions), Sequence(nodes=[pick_up, place]))
@@ -803,7 +805,9 @@ def test_a_place_reattaches_and_retracts_as_its_own_steps(
     pick_up = PickUpAction(grasp=milk.grasp_candidates()[0], arm=robot.left_arm)
     place = PlaceAction(
         object_designator=milk,
-        target_location=Pose3D.from_xyz_rpy(0.8, -1.9, 0.7, reference_frame=world.root),
+        target_location=Pose3Dimensional.from_xyz_rpy(
+            0.8, -1.9, 0.7, reference_frame=world.root
+        ),
     )
 
     statechart_of(simulated_executor(extensions), Sequence(nodes=[pick_up, place]))

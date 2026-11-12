@@ -33,8 +33,8 @@ from semantic_digital_twin.specifications.connections import (
 )
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    CartesianPoint3D,
-    Vector3D,
+    CartesianPoint3Dimensional,
+    Vector3Dimensional,
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connection_properties import JointDynamics
@@ -616,7 +616,7 @@ class GazeboParser(WorldModelParser):
 
         return Inertial(
             mass=self.parse_float(element, "mass", 1.0),
-            center_of_mass=CartesianPoint3D(
+            center_of_mass=CartesianPoint3Dimensional(
                 *link_T_inertial[:3, 3], reference_frame=body
             ),
             inertia=InertiaTensor(data=inertia),
@@ -774,7 +774,7 @@ class GazeboParser(WorldModelParser):
 
     def parse_axis(
         self, element: ElementTree.Element, joint_name: str, parent_body: Body
-    ) -> Vector3D:
+    ) -> Vector3Dimensional:
         """
         Parses the axis of a ``joint`` element.
 
@@ -789,7 +789,7 @@ class GazeboParser(WorldModelParser):
         """
         axis_element = element.find("axis")
         if axis_element is None:
-            return Vector3D(0, 0, 1, reference_frame=parent_body)
+            return Vector3Dimensional(0, 0, 1, reference_frame=parent_body)
 
         uses_model_frame = axis_element.findtext("use_parent_model_frame", "0")
         if uses_model_frame.strip().lower() in self.truthy_values:
@@ -799,7 +799,7 @@ class GazeboParser(WorldModelParser):
 
         xyz_element = axis_element.find("xyz")
         if xyz_element is None:
-            return Vector3D(0, 0, 1, reference_frame=parent_body)
+            return Vector3Dimensional(0, 0, 1, reference_frame=parent_body)
 
         expressed_in = xyz_element.get("expressed_in", "")
         if expressed_in:
@@ -807,7 +807,7 @@ class GazeboParser(WorldModelParser):
                 joint_name=joint_name, reference=expressed_in
             )
 
-        return Vector3D(
+        return Vector3Dimensional(
             *self.parse_vector(xyz_element.text), reference_frame=parent_body
         )
 

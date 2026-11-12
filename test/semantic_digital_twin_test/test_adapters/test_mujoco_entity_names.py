@@ -20,7 +20,10 @@ from semantic_digital_twin.adapters.multi_sim import (
     SimulatorElementNames,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3D
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Vector3Dimensional,
+)
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connection_properties import ServoGains
 from semantic_digital_twin.world_description.connections import (
@@ -144,7 +147,7 @@ def add_pendulum(world: World, root: Body, sideways_offset: float) -> Pendulum:
             name=PrefixedName("hinge"),
             parent=base,
             child=arm,
-            axis=Vector3D.Z(reference_frame=arm),
+            axis=Vector3Dimensional.Z(reference_frame=arm),
             raw_dof=degree_of_freedom,
         )
         world.add_connection(hinge)
@@ -152,7 +155,7 @@ def add_pendulum(world: World, root: Body, sideways_offset: float) -> Pendulum:
             name=PrefixedName("mirrored_hinge"),
             parent=base,
             child=mirrored_arm,
-            axis=Vector3D.Z(reference_frame=mirrored_arm),
+            axis=Vector3Dimensional.Z(reference_frame=mirrored_arm),
             raw_dof=degree_of_freedom,
             multiplier=-1.0,
         )

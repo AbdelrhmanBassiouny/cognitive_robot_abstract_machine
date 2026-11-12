@@ -11,7 +11,7 @@ from semantic_digital_twin.adapters.ros.visualization.spatial_type_marker_render
 from semantic_digital_twin.adapters.ros.visualization.spatial_type_publisher import (
     SpatialTypePublisher,
 )
-from krrood_spatial_math.spatial_types import SymbolicSpatialType, Vector3D
+from krrood_spatial_math.spatial_types import SymbolicSpatialType, Vector3Dimensional
 from cramph.executor import StatechartExecutor, TickingExecutorExtension
 from semantic_digital_twin.world import World
 from giskardpy.motion_statechart.graph_node import DebugExpression
@@ -77,7 +77,7 @@ class DebugExpressionPublisher:
         Express a vector in its visualisation frame so the rendered arrow points
         correctly.
         """
-        if not isinstance(expression, Vector3D):
+        if not isinstance(expression, Vector3Dimensional):
             return expression
         visualisation_frame = expression.visualisation_frame
         reference_frame = expression.reference_frame

@@ -6,7 +6,7 @@ from semantic_digital_twin.exceptions import ParsingError
 from semantic_digital_twin.robots.pr2 import PR2
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
-from krrood_spatial_math.spatial_types import Pose3D
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 from semantic_digital_twin.world import World
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.world_description.connections import (
@@ -48,7 +48,9 @@ _DISPLACED_ODOM = HomogeneousTransformationMatrix.from_xyz_rpy(
 
 def test_root_reaches_a_world_pose_through_a_displaced_odom():
     world, robot = _pr2_behind_an_odom(_DISPLACED_ODOM)
-    target = Pose3D.from_xyz_rpy(1.3, 2.0, 0.0, yaw=0.25, reference_frame=world.root)
+    target = Pose3Dimensional.from_xyz_rpy(
+        1.3, 2.0, 0.0, yaw=0.25, reference_frame=world.root
+    )
 
     robot.set_root_pose(target)
 
@@ -59,7 +61,9 @@ def test_root_reaches_a_world_pose_through_a_displaced_odom():
 
 def test_root_reaches_a_world_pose_through_an_undisplaced_odom():
     world, robot = _pr2_behind_an_odom(HomogeneousTransformationMatrix())
-    target = Pose3D.from_xyz_rpy(1.3, 2.0, 0.0, yaw=0.25, reference_frame=world.root)
+    target = Pose3Dimensional.from_xyz_rpy(
+        1.3, 2.0, 0.0, yaw=0.25, reference_frame=world.root
+    )
 
     robot.set_root_pose(target)
 
@@ -74,7 +78,7 @@ def test_root_reaches_a_world_pose_through_an_undisplaced_odom():
 def test_pose_in_the_root_connection_parent_frame_is_applied_unchanged():
     world, robot = _pr2_behind_an_odom(_DISPLACED_ODOM)
     connection = robot.root.parent_connection
-    target = Pose3D.from_xyz_rpy(
+    target = Pose3Dimensional.from_xyz_rpy(
         1.3, 2.0, 0.0, yaw=0.25, reference_frame=connection.parent
     )
 

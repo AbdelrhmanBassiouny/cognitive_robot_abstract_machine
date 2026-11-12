@@ -17,8 +17,8 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     SemanticEnvironmentAnnotation,
 )
 from krrood_spatial_math.spatial_types import (
-    CartesianPoint2D,
-    CartesianPoint3D,
+    CartesianPoint2Dimensional,
+    CartesianPoint3Dimensional,
     FramePlaneProjection,
 )
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
@@ -251,9 +251,9 @@ def test_navigation_path_length_sums_its_segments():
 
     corner_path = NavigationPath(
         [
-            CartesianPoint3D(0.0, 0.0, 0.0, reference_frame=world.root),
-            CartesianPoint3D(3.0, 0.0, 0.0, reference_frame=world.root),
-            CartesianPoint3D(3.0, 4.0, 0.0, reference_frame=world.root),
+            CartesianPoint3Dimensional(0.0, 0.0, 0.0, reference_frame=world.root),
+            CartesianPoint3Dimensional(3.0, 0.0, 0.0, reference_frame=world.root),
+            CartesianPoint3Dimensional(3.0, 4.0, 0.0, reference_frame=world.root),
         ]
     )
 
@@ -271,15 +271,15 @@ def test_navigation_path_reports_how_much_of_it_is_vertical():
 
     climbing_path = NavigationPath(
         [
-            CartesianPoint3D(0.0, 0.0, 0.0, reference_frame=world.root),
-            CartesianPoint3D(0.0, 0.0, 2.0, reference_frame=world.root),
-            CartesianPoint3D(1.0, 0.0, 1.5, reference_frame=world.root),
+            CartesianPoint3Dimensional(0.0, 0.0, 0.0, reference_frame=world.root),
+            CartesianPoint3Dimensional(0.0, 0.0, 2.0, reference_frame=world.root),
+            CartesianPoint3Dimensional(1.0, 0.0, 1.5, reference_frame=world.root),
         ]
     )
     level_path = NavigationPath(
         [
-            CartesianPoint3D(0.0, 0.0, 1.0, reference_frame=world.root),
-            CartesianPoint3D(5.0, 0.0, 1.0, reference_frame=world.root),
+            CartesianPoint3Dimensional(0.0, 0.0, 1.0, reference_frame=world.root),
+            CartesianPoint3Dimensional(5.0, 0.0, 1.0, reference_frame=world.root),
         ]
     )
 
@@ -347,8 +347,8 @@ def test_the_floor_plan_projects_3d_points_and_keeps_points_on_it():
 
     coordinates = floor_plan.coordinates(
         [
-            CartesianPoint3D(1.0, 2.0, 3.0, reference_frame=world.root),
-            CartesianPoint2D(4.0, 5.0, reference_frame=world.root),
+            CartesianPoint3Dimensional(1.0, 2.0, 3.0, reference_frame=world.root),
+            CartesianPoint2Dimensional(4.0, 5.0, reference_frame=world.root),
         ]
     )
 

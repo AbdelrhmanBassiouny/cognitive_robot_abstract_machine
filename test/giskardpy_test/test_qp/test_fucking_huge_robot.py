@@ -12,8 +12,11 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import (
 from giskardpy.qp.qp_controller_config import QPControllerConfig
 from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from krrood_spatial_math.spatial_types import CartesianPoint3D
-from krrood_spatial_math.spatial_types import Vector3D, HomogeneousTransformationMatrix
+from krrood_spatial_math.spatial_types import CartesianPoint3Dimensional
+from krrood_spatial_math.spatial_types import (
+    Vector3Dimensional,
+    HomogeneousTransformationMatrix,
+)
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
     RevoluteConnection,
@@ -67,7 +70,7 @@ def robot_factory(fucking_huge_link_length: float, vel_limit: float) -> World:
                 world=world,
                 parent=root,
                 child=link1,
-                axis=Vector3D.Z(),
+                axis=Vector3Dimensional.Z(),
                 dof_limits=dof_limits,
             )
         )
@@ -83,7 +86,7 @@ def robot_factory(fucking_huge_link_length: float, vel_limit: float) -> World:
                 world=world,
                 parent=link1,
                 child=link2,
-                axis=Vector3D.X(),
+                axis=Vector3Dimensional.X(),
                 dof_limits=dof_limits,
                 connection_T_child_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
                     z=fucking_huge_link_length,
@@ -102,7 +105,7 @@ def robot_factory(fucking_huge_link_length: float, vel_limit: float) -> World:
                 world=world,
                 parent=link2,
                 child=link3,
-                axis=Vector3D.X(),
+                axis=Vector3Dimensional.X(),
                 dof_limits=dof_limits,
                 connection_T_child_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
                     z=fucking_huge_link_length,
@@ -122,7 +125,7 @@ def robot_factory(fucking_huge_link_length: float, vel_limit: float) -> World:
                 parent=link3,
                 child=link4,
                 dof_limits=dof_limits,
-                axis=Vector3D.Z(),
+                axis=Vector3Dimensional.Z(),
             )
         )
 
@@ -137,7 +140,7 @@ def robot_factory(fucking_huge_link_length: float, vel_limit: float) -> World:
                 world=world,
                 parent=link4,
                 child=link5,
-                axis=Vector3D.X(),
+                axis=Vector3Dimensional.X(),
                 dof_limits=dof_limits,
             )
         )
@@ -153,7 +156,7 @@ def robot_factory(fucking_huge_link_length: float, vel_limit: float) -> World:
                 world=world,
                 parent=link5,
                 child=eef,
-                axis=Vector3D.Y(),
+                axis=Vector3Dimensional.Y(),
                 dof_limits=dof_limits,
             )
         )
@@ -198,7 +201,9 @@ def execute(link_length: float, vel_limit: float):
                 CartesianPosition(
                     root_link=fucking_huge_robot.root,
                     tip_link=eef,
-                    goal_point=CartesianPoint3D(y=-link_length, reference_frame=eef),
+                    goal_point=CartesianPoint3Dimensional(
+                        y=-link_length, reference_frame=eef
+                    ),
                     cruise_velocity=0.2 * link_length,
                 ),
             ]

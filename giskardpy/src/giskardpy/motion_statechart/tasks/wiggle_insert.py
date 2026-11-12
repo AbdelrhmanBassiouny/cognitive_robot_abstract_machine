@@ -19,8 +19,8 @@ from giskardpy.motion_statechart.graph_node import (
 )
 from krrood_spatial_math.spatial_types import (
     AxisAngle,
-    CartesianPoint3D,
-    Vector3D,
+    CartesianPoint3Dimensional,
+    Vector3Dimensional,
     RotationMatrix,
 )
 from semantic_digital_twin.world_description.world_entity import Body
@@ -46,7 +46,7 @@ class WiggleInsert(ConvergingTask):
     Tip link that is pressed into the hole.
     """
 
-    hole_point: CartesianPoint3D
+    hole_point: CartesianPoint3Dimensional
     """
     Center point of the hole.
     """
@@ -73,7 +73,7 @@ class WiggleInsert(ConvergingTask):
     Default is an untuned preset, not a calibrated value.
     """
 
-    hole_normal: Vector3D | None = None
+    hole_normal: Vector3Dimensional | None = None
     """
     Vector perpendicular to the hole.
 
@@ -152,7 +152,9 @@ class WiggleInsert(ConvergingTask):
     Current translational momentum of the random walk.
     """
 
-    _random_translation: Vector3D = field(default=None, init=False, repr=False)
+    _random_translation: Vector3Dimensional = field(
+        default=None, init=False, repr=False
+    )
     """
     Auxiliary variable holding the current translational noise in the root frame.
     """
@@ -183,7 +185,7 @@ class WiggleInsert(ConvergingTask):
         self._current_vector = np.zeros(3)
         self._vector_momentum = np.zeros(3)
 
-        self._random_translation = Vector3D.create_with_variables(
+        self._random_translation = Vector3Dimensional.create_with_variables(
             f"{self.name}_rand_translation"
         )
         self._random_translation.reference_frame = self.root_link
@@ -211,7 +213,7 @@ class WiggleInsert(ConvergingTask):
             spatial_object=(
                 self.hole_normal
                 if self.hole_normal is not None
-                else Vector3D.Z(reference_frame=self.root_link)
+                else Vector3Dimensional.Z(reference_frame=self.root_link)
             ),
         )
 

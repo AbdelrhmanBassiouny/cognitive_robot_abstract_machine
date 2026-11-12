@@ -13,7 +13,10 @@ from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from krrood.utils import recursive_subclasses
 from semantic_digital_twin.exceptions import MissingConnectionAxisError
 from krrood_spatial_math.exceptions import MissingReferenceFrameError
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3D
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Vector3Dimensional,
+)
 from semantic_digital_twin.world_description.connection_properties import JointDynamics
 from semantic_digital_twin.world_description.connections import (
     Connection6DoF,
@@ -46,7 +49,7 @@ def test_create_with_dofs_threads_parent_T_connection_expression(world_with_two_
             world,
             parent,
             child,
-            axis=Vector3D.Z(),
+            axis=Vector3Dimensional.Z(),
             parent_T_connection_expression=parent_T_connection,
         )
         world.add_connection(connection)
@@ -147,7 +150,7 @@ def test_reference_origin_excludes_joint_state(world_with_two_bodies):
             world,
             parent,
             child,
-            axis=Vector3D.Z(),
+            axis=Vector3Dimensional.Z(),
             parent_T_connection_expression=parent_T_connection,
         )
         world.add_connection(connection)
@@ -224,7 +227,7 @@ def _add_screw_connection(
             world,
             parent,
             child,
-            axis=Vector3D.Z(),
+            axis=Vector3Dimensional.Z(),
             screw_pitch=screw_pitch,
             multiplier=multiplier,
             parent_T_connection_expression=parent_T_connection_expression,
@@ -401,9 +404,9 @@ def test_screw_connection_copy_with_new_parent_preserves_screw_pitch(
         (Connection6DoF, {}),
         (OmniDrive, {}),
         (DifferentialDrive, {}),
-        (RevoluteConnection, {"axis": Vector3D.Z()}),
-        (PrismaticConnection, {"axis": Vector3D.X()}),
-        (ScrewConnection, {"axis": Vector3D.Z(), "screw_pitch": 0.01}),
+        (RevoluteConnection, {"axis": Vector3Dimensional.Z()}),
+        (PrismaticConnection, {"axis": Vector3Dimensional.X()}),
+        (ScrewConnection, {"axis": Vector3Dimensional.Z(), "screw_pitch": 0.01}),
     ],
 )
 def test_copy_with_new_parent_keeps_name(
@@ -470,7 +473,7 @@ def test_create_with_dofs_accepts_the_shared_parameters(connection_type):
         (Connection6DoF, {}),
         (OmniDrive, {}),
         (DifferentialDrive, {}),
-        (RevoluteConnection, {"axis": Vector3D.Z()}),
+        (RevoluteConnection, {"axis": Vector3Dimensional.Z()}),
     ],
 )
 def test_create_with_dofs_rejects_unknown_keyword_argument(
@@ -560,7 +563,7 @@ def test_create_with_dofs_applies_multiplier_and_offset(world_with_two_bodies):
             world,
             parent,
             child,
-            axis=Vector3D.Z(),
+            axis=Vector3Dimensional.Z(),
             multiplier=multiplier,
             offset=offset,
         )
@@ -643,9 +646,15 @@ def test_joint_dynamics_custom_values():
         (Connection6DoF, {}),
         (OmniDrive, {}),
         (DifferentialDrive, {}),
-        (PrismaticConnection, {"axis": Vector3D.Y(), "multiplier": 2.0, "offset": 0.5}),
-        (RevoluteConnection, {"axis": Vector3D.Y(), "multiplier": 2.0, "offset": 0.5}),
-        (ScrewConnection, {"axis": Vector3D.Y(), "screw_pitch": 0.25}),
+        (
+            PrismaticConnection,
+            {"axis": Vector3Dimensional.Y(), "multiplier": 2.0, "offset": 0.5},
+        ),
+        (
+            RevoluteConnection,
+            {"axis": Vector3Dimensional.Y(), "multiplier": 2.0, "offset": 0.5},
+        ),
+        (ScrewConnection, {"axis": Vector3Dimensional.Y(), "screw_pitch": 0.25}),
     ],
 )
 def test_a_connection_survives_a_json_round_trip(

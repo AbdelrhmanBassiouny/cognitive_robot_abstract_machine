@@ -32,7 +32,10 @@ from semantic_digital_twin.exceptions import (
     ConnectionCannotBeTrackedByTfFrameError,
     UnboundMessageTypeError,
 )
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3D
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Vector3Dimensional,
+)
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection1DOF,
@@ -162,10 +165,10 @@ def world_with_two_connections() -> tuple[
         part_body = Body(name=PrefixedName("part_body"))
         other_body = Body(name=PrefixedName("other_body"))
         part_connection = RevoluteConnection.create_with_dofs(
-            world=world, parent=root, child=part_body, axis=Vector3D.Z()
+            world=world, parent=root, child=part_body, axis=Vector3Dimensional.Z()
         )
         other_connection = RevoluteConnection.create_with_dofs(
-            world=world, parent=root, child=other_body, axis=Vector3D.Z()
+            world=world, parent=root, child=other_body, axis=Vector3Dimensional.Z()
         )
         world.add_connection(part_connection)
         world.add_connection(other_connection)

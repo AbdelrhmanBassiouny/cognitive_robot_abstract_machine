@@ -21,7 +21,7 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import (
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.robots.robot_parts import Arm, EndEffector
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
-from krrood_spatial_math.spatial_types import Pose3D
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 from semantic_digital_twin.world_description.world_entity import (
     Body,
     KinematicStructureEntity,
@@ -201,7 +201,7 @@ class MovesToolCenterPoint(Action, ABC):
 
     def tool_center_point_goal(
         self,
-        target: Pose3D,
+        target: Pose3Dimensional,
         arm: Arm,
         max_linear_velocity: float | None = None,
         max_angular_velocity: float | None = None,
@@ -233,7 +233,7 @@ class MovesToolCenterPoint(Action, ABC):
 
     def _reach_target(
         self,
-        target: Pose3D,
+        target: Pose3Dimensional,
         root: KinematicStructureEntity,
         tip: KinematicStructureEntity,
     ) -> MotionStatechartNode:
@@ -329,17 +329,17 @@ class GraspPoseSequence:
     The tool frame goals that approach a grasp, reach it and withdraw from it.
     """
 
-    pre_grasp: Pose3D
+    pre_grasp: Pose3Dimensional
     """
     Where the gripper waits before it moves onto the grasp, clear of the object.
     """
 
-    grasp: Pose3D
+    grasp: Pose3Dimensional
     """
     The tool frame goal at the grasp itself.
     """
 
-    retreat: Pose3D
+    retreat: Pose3Dimensional
     """
     Where the gripper rises to when it leaves the grasp.
     """
@@ -365,7 +365,7 @@ class HasApproachesGraspPoses:
 
     def grasp_pose_sequence(
         self,
-        reference_T_grasp: Pose3D,
+        reference_T_grasp: Pose3Dimensional,
         end_effector: EndEffector,
         grasp: GraspCandidate | None = None,
     ) -> GraspPoseSequence:
@@ -388,8 +388,8 @@ class HasApproachesGraspPoses:
 
     @staticmethod
     def pre_grasp_pose(
-        reference_T_grasp: Pose3D, end_effector: EndEffector, distance: float
-    ) -> Pose3D:
+        reference_T_grasp: Pose3Dimensional, end_effector: EndEffector, distance: float
+    ) -> Pose3Dimensional:
         """
         The goal back along the direction the gripper approaches a grasp from, aimed at
         the point the fingers meet as the grasp itself is.
@@ -419,7 +419,7 @@ class HasApproachesGraspPoses:
         )
 
     @staticmethod
-    def distance_to_boundary(body: Body, reference_T_grasp: Pose3D) -> float:
+    def distance_to_boundary(body: Body, reference_T_grasp: Pose3Dimensional) -> float:
         """
         The distance the gripper has to retrace from a grasp before it leaves the
         bounding box of `body`.
@@ -456,7 +456,9 @@ class HasApproachesGraspPoses:
         ]
         return max(min(distances, default=0.0), 0.0)
 
-    def _retreat_pose(self, reference_T_grasp: Pose3D, tool_goal: Pose3D) -> Pose3D:
+    def _retreat_pose(
+        self, reference_T_grasp: Pose3Dimensional, tool_goal: Pose3Dimensional
+    ) -> Pose3Dimensional:
         """
         The tool frame goal :attr:`retreat_distance` above the grasp along the world's
         z-axis (a grasp frame's own z-axis can lie flat).
@@ -473,7 +475,7 @@ class HasApproachesGraspPoses:
         world_T_lift = HomogeneousTransformationMatrix.from_xyz_rpy(
             z=self.retreat_distance, reference_frame=world.root
         )
-        return Pose3D(
+        return Pose3Dimensional(
             world.transform((world_T_lift @ world_T_grasp).position, target),
             tool_goal.quaternion,
             reference_frame=target,

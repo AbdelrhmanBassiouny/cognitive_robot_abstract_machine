@@ -11,8 +11,8 @@ from typing_extensions import Callable, Generator
 
 from segmind.datastructures.enums import PlayerStatus
 from segmind.episode_player import EpisodePlayer
-from krrood_spatial_math.spatial_types import Vector3D
-from krrood_spatial_math.spatial_types import Pose3D
+from krrood_spatial_math.spatial_types import Vector3Dimensional
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
 
@@ -135,7 +135,7 @@ class DataPlayer(EpisodePlayer, ABC):
                 obj.parent_connection.origin = objects_poses[obj].homogeneous_matrix
 
     @abstractmethod
-    def get_objects_poses(self, frame_data: FrameData) -> dict[Body, Pose3D]:
+    def get_objects_poses(self, frame_data: FrameData) -> dict[Body, Pose3Dimensional]:
         """
         Get the poses of the objects.
 
@@ -161,7 +161,7 @@ class FilePlayer(DataPlayer, ABC):
     The directory containing the models.
     """
 
-    position_shift: Vector3D | None = None
+    position_shift: Vector3Dimensional | None = None
     """
     Position shift that needs to be applied to the objects.
     """

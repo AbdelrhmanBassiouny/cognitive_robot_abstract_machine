@@ -22,8 +22,8 @@ from giskardpy.motion_statechart.tasks.pointing import Pointing
 from krrood_spatial_math.spatial_types import (
     AxisAngle,
     HomogeneousTransformationMatrix,
-    CartesianPoint3D,
-    Vector3D,
+    CartesianPoint3Dimensional,
+    Vector3Dimensional,
     RotationMatrix,
 )
 from semantic_digital_twin.world import World
@@ -54,7 +54,7 @@ def test_position_reached(pr2_world_state_reset: World):
         "r_gripper_tool_frame"
     )
     root = pr2_world_state_reset.get_kinematic_structure_entity_by_name("odom_combined")
-    goal_point = CartesianPoint3D(0.6, -0.3, 1.0, reference_frame=root)
+    goal_point = CartesianPoint3Dimensional(0.6, -0.3, 1.0, reference_frame=root)
 
     executor = _create_executor(pr2_world_state_reset)
     statechart = Statechart(context=executor.context)
@@ -88,7 +88,7 @@ def test_position_reached_binding_policies(
     """
     tip = pr2_world_state_reset.get_kinematic_structure_entity_by_name("base_footprint")
     root = pr2_world_state_reset.get_kinematic_structure_entity_by_name("odom_combined")
-    goal_point = CartesianPoint3D(0.2, 0, 0, reference_frame=tip)
+    goal_point = CartesianPoint3Dimensional(0.2, 0, 0, reference_frame=tip)
 
     executor = _create_executor(pr2_world_state_reset)
     statechart = Statechart(context=executor.context)
@@ -118,7 +118,7 @@ def test_orientation_reached(pr2_world_state_reset: World):
     )
     root = pr2_world_state_reset.get_kinematic_structure_entity_by_name("odom_combined")
     goal_orientation = RotationMatrix.from_axis_angle(
-        AxisAngle(Vector3D.Z(reference_frame=root), 0.3)
+        AxisAngle(Vector3Dimensional.Z(reference_frame=root), 0.3)
     )
     goal_orientation.reference_frame = root
 
@@ -172,8 +172,8 @@ def test_pointing_at(pr2_world_state_reset: World):
         "r_gripper_tool_frame"
     )
     root = pr2_world_state_reset.get_kinematic_structure_entity_by_name("odom_combined")
-    goal_point = CartesianPoint3D(2, 0, 0, reference_frame=root)
-    pointing_axis = Vector3D.X(reference_frame=tip)
+    goal_point = CartesianPoint3Dimensional(2, 0, 0, reference_frame=root)
+    pointing_axis = Vector3Dimensional.X(reference_frame=tip)
 
     executor = _create_executor(pr2_world_state_reset)
     statechart = Statechart(context=executor.context)
@@ -196,8 +196,8 @@ def test_vectors_aligned(pr2_world_state_reset: World):
         "r_gripper_tool_frame"
     )
     root = pr2_world_state_reset.get_kinematic_structure_entity_by_name("odom_combined")
-    goal_normal = Vector3D.X(reference_frame=root)
-    tip_normal = Vector3D.X(reference_frame=tip)
+    goal_normal = Vector3Dimensional.X(reference_frame=root)
+    tip_normal = Vector3Dimensional.X(reference_frame=tip)
 
     executor = _create_executor(pr2_world_state_reset)
     statechart = Statechart(context=executor.context)
@@ -220,8 +220,8 @@ def test_distance_to_line(pr2_world_state_reset: World):
         "r_gripper_tool_frame"
     )
     root = pr2_world_state_reset.get_kinematic_structure_entity_by_name("odom_combined")
-    center_point = CartesianPoint3D(0.6, -0.3, 1.0, reference_frame=root)
-    line_axis = Vector3D.Y(reference_frame=root)
+    center_point = CartesianPoint3Dimensional(0.6, -0.3, 1.0, reference_frame=root)
+    line_axis = Vector3Dimensional.Y(reference_frame=root)
 
     executor = _create_executor(pr2_world_state_reset)
     statechart = Statechart(context=executor.context)

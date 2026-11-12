@@ -29,7 +29,7 @@ from semantic_digital_twin.robots.robot_parts import (
     RobotCamera,
     Sensor,
 )
-from krrood_spatial_math.spatial_types import Vector3D
+from krrood_spatial_math.spatial_types import Vector3Dimensional
 from semantic_digital_twin.spatial_computations.raytracer import RayTracer
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
@@ -92,7 +92,7 @@ def test_robot_camera_accepts_projection_model_and_optical_root(
     )
 
     np.testing.assert_array_equal(
-        camera.viewing_direction.to_np(), Vector3D.Z().to_np()
+        camera.viewing_direction.to_np(), Vector3Dimensional.Z().to_np()
     )
     assert camera.viewing_direction.reference_frame is table_world.root
     assert camera.camera_model is model
@@ -181,7 +181,7 @@ def test_default_stretch_camera_uses_optical_positive_z(
     )
 
     assert np.array_equal(
-        camera.viewing_direction, Vector3D.Z(reference_frame=table_world.root)
+        camera.viewing_direction, Vector3Dimensional.Z(reference_frame=table_world.root)
     )
     assert camera.viewing_direction.reference_frame is table_world.root
 

@@ -35,8 +35,14 @@ from semantic_digital_twin.spatial_computations.ik_solver import (
     MaxIterationsException,
     UnreachableException,
 )
-from krrood_spatial_math.spatial_types import Vector3D, CartesianPoint3D
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Pose3D
+from krrood_spatial_math.spatial_types import (
+    Vector3Dimensional,
+    CartesianPoint3Dimensional,
+)
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Pose3Dimensional,
+)
 from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
 from semantic_digital_twin.world_description.world_entity import (
     Body,
@@ -177,7 +183,7 @@ class Reachable(Predicate):
 
 @symbolic_function
 def compute_euclidean_planar_distance(
-    body1: Body, body2: Body, ignore_dimension: Vector3D
+    body1: Body, body2: Body, ignore_dimension: Vector3Dimensional
 ) -> Scalar:
     """
     Computes the Euclidean distance between two bodies in 2D space, ignoring a specific
@@ -198,13 +204,13 @@ def compute_euclidean_planar_distance(
     body1_position = body1.global_pose.position
     body2_position = body2.global_pose.position
 
-    if np.allclose(ignore_dimension, Vector3D.X()):
+    if np.allclose(ignore_dimension, Vector3Dimensional.X()):
         body1_position.x = 0.0
         body2_position.x = 0.0
-    elif np.allclose(ignore_dimension, Vector3D.Y()):
+    elif np.allclose(ignore_dimension, Vector3Dimensional.Y()):
         body1_position.y = 0.0
         body2_position.y = 0.0
-    elif np.allclose(ignore_dimension, Vector3D.Z()):
+    elif np.allclose(ignore_dimension, Vector3Dimensional.Z()):
         body1_position.z = 0.0
         body2_position.z = 0.0
 
@@ -459,12 +465,12 @@ class PointSpatialRelation(Predicate, ABC):
     Check if the point is spatially related to the other point.
     """
 
-    point: CartesianPoint3D
+    point: CartesianPoint3Dimensional
     """
     The point for which the check should be done.
     """
 
-    other: CartesianPoint3D
+    other: CartesianPoint3Dimensional
     """
     The other point.
     """
@@ -524,7 +530,7 @@ class ViewDependentSpatialRelation(PointSpatialRelation, ABC):
         ref_np = self.point_of_view.to_np()
         front_world = ref_np[:3, index]
         front_norm = front_world / (np.linalg.norm(front_world) + self.eps)
-        front_norm = Vector3D(
+        front_norm = Vector3Dimensional(
             x=front_norm[0],
             y=front_norm[1],
             z=front_norm[2],
@@ -729,7 +735,7 @@ class PlaceIsOccupied(Predicate):
     The stretch of space asked about, in its own local frame.
     """
 
-    pose: Pose3D
+    pose: Pose3Dimensional
     """
     Where that box stands.
     """

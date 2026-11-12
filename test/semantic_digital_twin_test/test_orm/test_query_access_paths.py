@@ -32,20 +32,20 @@ from probabilistic_model.learning.jpt.jpt import JointProbabilityTree
 from krrood_spatial_math.spatial_types import (
     AxisAngle,
     HomogeneousTransformationMatrix,
-    CartesianPoint2D,
-    Pose3D,
-    Pose2D,
+    CartesianPoint2Dimensional,
+    Pose3Dimensional,
+    Pose2Dimensional,
     RotationMatrix,
-    Vector3D,
+    Vector3Dimensional,
 )
 
 # %% rotated instances of every spatial type that stores its rotation as an axis angle
 
 axes = [
-    Vector3D(0.0, 0.0, 1.0),
-    Vector3D(0.0, 1.0, 0.0),
-    Vector3D(1.0, 0.0, 0.0),
-    Vector3D.unit_vector(1.0, 1.0, 1.0),
+    Vector3Dimensional(0.0, 0.0, 1.0),
+    Vector3Dimensional(0.0, 1.0, 0.0),
+    Vector3Dimensional(1.0, 0.0, 0.0),
+    Vector3Dimensional.unit_vector(1.0, 1.0, 1.0),
 ]
 angles = np.linspace(0.2, 2.8, 12)
 
@@ -68,9 +68,9 @@ spatial_types = pytest.mark.parametrize(
             HomogeneousTransformationMatrix,
             HomogeneousTransformationMatrix.from_xyz_axis_angle,
         ),
-        (Pose3D, Pose3D.from_xyz_axis_angle),
+        (Pose3Dimensional, Pose3Dimensional.from_xyz_axis_angle),
     ],
-    ids=["RotationMatrix", "HomogeneousTransformationMatrix", "Pose3D"],
+    ids=["RotationMatrix", "HomogeneousTransformationMatrix", "Pose3Dimensional"],
 )
 
 access_paths = pytest.mark.parametrize(
@@ -175,11 +175,11 @@ def test_the_database_selects_the_same_objects_as_the_domain_model(
 
 
 @pytest.fixture
-def scattered_poses_2d() -> list[Pose2D]:
+def scattered_poses_2d() -> list[Pose2Dimensional]:
     generator = random.Random(0)
     return [
-        Pose2D(
-            position=CartesianPoint2D(
+        Pose2Dimensional(
+            position=CartesianPoint2Dimensional(
                 x=generator.uniform(0.0, 1.0), y=generator.uniform(10.0, 11.0)
             ),
             yaw=generator.uniform(-1.0, 1.0),
@@ -208,8 +208,13 @@ def test_a_pose_2d_built_by_a_query_takes_the_values_sampled_from_the_learned_mo
 
     np.random.seed(0)
     [sampled] = ProbabilisticBackend(
-        model_registry=DictRegistry(models={Pose2D: model}), number_of_samples=1
-    ).evaluate(expression=a(Pose2D)(position=a(CartesianPoint2D)(x=..., y=...), yaw=...))
+        model_registry=DictRegistry(models={Pose2Dimensional: model}),
+        number_of_samples=1,
+    ).evaluate(
+        expression=a(Pose2Dimensional)(
+            position=a(CartesianPoint2Dimensional)(x=..., y=...), yaw=...
+        )
+    )
 
     [actual] = (
         FeatureExtractor.from_instances(instances=[sampled])

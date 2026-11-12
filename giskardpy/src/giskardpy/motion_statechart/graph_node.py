@@ -21,12 +21,12 @@ from krrood.symbolic_math.symbolic_math import (
     Scalar,
 )
 from krrood_spatial_math.spatial_types import (
-    CartesianPoint3D,
-    Vector3D,
+    CartesianPoint3Dimensional,
+    Vector3Dimensional,
     Quaternion,
     RotationMatrix,
     HomogeneousTransformationMatrix,
-    Pose3D,
+    Pose3Dimensional,
 )
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 from semantic_digital_twin.world_description.geometry import Color
@@ -52,12 +52,12 @@ class DebugExpression:
 
     expression: (
         Scalar
-        | CartesianPoint3D
-        | Vector3D
+        | CartesianPoint3Dimensional
+        | Vector3Dimensional
         | Quaternion
         | RotationMatrix
         | HomogeneousTransformationMatrix
-        | Pose3D
+        | Pose3Dimensional
     )
     """
     The tracked expression; spatial types are additionally rendered as RViz markers.

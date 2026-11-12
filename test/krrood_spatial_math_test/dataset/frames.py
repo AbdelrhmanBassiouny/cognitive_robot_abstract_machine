@@ -5,19 +5,19 @@ from uuid import UUID, uuid4
 
 from krrood.adapters.deserialized_object_tracker import DeserializedObjectTracker
 from krrood.patterns.identifier_and_name import HasID, HasName
-from krrood_spatial_math.cartesian_frame_3d import (
-    CartesianFrame3D,
-    CartesianFrame3DResolver,
+from krrood_spatial_math.cartesian_frame_3_dimensional import (
+    CartesianFrame3Dimensional,
+    CartesianFrame3DimensionalResolver,
 )
 from krrood_spatial_math.coordinate_system import CoordinateRepresentationT
 from krrood_spatial_math.exceptions import ReferenceFrameMismatchError
-from krrood_spatial_math.space import EuclideanSpace3D
+from krrood_spatial_math.space import EuclideanSpace3Dimensional
 
 # %% a space frames chart
 
 
 @dataclass(eq=False)
-class Room(EuclideanSpace3D):
+class Room(EuclideanSpace3Dimensional):
     """
     A three-dimensional Euclidean space, told apart from other rooms only by identity.
     """
@@ -27,7 +27,7 @@ class Room(EuclideanSpace3D):
 
 
 @dataclass(eq=False)
-class NamedFrame(CartesianFrame3D[str]):
+class NamedFrame(CartesianFrame3Dimensional[str]):
     """
     A Cartesian frame that only has a name, so it knows no change to any other frame and
     expresses only values already given in it.
@@ -38,7 +38,7 @@ class NamedFrame(CartesianFrame3D[str]):
     What the frame is called.
     """
 
-    space: EuclideanSpace3D | None = None
+    space: EuclideanSpace3Dimensional | None = None
     """
     The space the frame charts.
     """
@@ -63,7 +63,7 @@ class NamedFrame(CartesianFrame3D[str]):
 
 @dataclass
 class KnownFrames(
-    DeserializedObjectTracker[UUID, NamedFrame], CartesianFrame3DResolver
+    DeserializedObjectTracker[UUID, NamedFrame], CartesianFrame3DimensionalResolver
 ):
     """
     The frames the reader of a document already has.
@@ -98,12 +98,12 @@ class IdentifiedNamedThing(NamedThing, HasID):
 
 
 @dataclass(eq=False)
-class ThingFrame(IdentifiedNamedThing, CartesianFrame3D[str]):
+class ThingFrame(IdentifiedNamedThing, CartesianFrame3Dimensional[str]):
     """
     A Cartesian frame that extends an object named before it is identified.
     """
 
-    space: EuclideanSpace3D | None = None
+    space: EuclideanSpace3Dimensional | None = None
     """
     The space the frame charts.
     """

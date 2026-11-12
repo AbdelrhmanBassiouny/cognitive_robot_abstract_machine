@@ -7,9 +7,15 @@ from typing_extensions import TYPE_CHECKING
 from krrood.exceptions import DataclassException
 
 if TYPE_CHECKING:
-    from krrood_spatial_math.cartesian_frame_3d import CartesianFrame3D
+    from krrood_spatial_math.cartesian_frame_3_dimensional import (
+        CartesianFrame3Dimensional,
+    )
     from krrood_spatial_math.coordinate_system import CoordinateSystem
-    from krrood_spatial_math.spatial_types import Pose3D, SymbolicSpatialType, Vector3D
+    from krrood_spatial_math.spatial_types import (
+        Pose3Dimensional,
+        SymbolicSpatialType,
+        Vector3Dimensional,
+    )
 
 # %% spatial types
 
@@ -27,9 +33,9 @@ class InsufficientVectorsError(SpatialTypesError):
     Raised when a rotation matrix is constructed from fewer than two vectors.
     """
 
-    x: Vector3D | None
-    y: Vector3D | None
-    z: Vector3D | None
+    x: Vector3Dimensional | None
+    y: Vector3Dimensional | None
+    z: Vector3Dimensional | None
 
     def error_message(self) -> str:
         return (
@@ -116,12 +122,12 @@ class NoPlanarTransformationError(SpatialTypesError):
     frames on their x-y planes.
     """
 
-    reference_frame: CartesianFrame3D | None
+    reference_frame: CartesianFrame3Dimensional | None
     """
     The frame the change turns coordinates into.
     """
 
-    child_frame: CartesianFrame3D | None
+    child_frame: CartesianFrame3Dimensional | None
     """
     The frame the change turns coordinates from.
     """
@@ -176,7 +182,7 @@ class XAxisNormalToPlaneError(SpatialTypesError):
     gives the flattened pose no heading.
     """
 
-    pose: Pose3D
+    pose: Pose3Dimensional
     """
     The pose that was flattened.
     """
@@ -195,7 +201,7 @@ class XAxisNormalToPlaneError(SpatialTypesError):
 
 
 @dataclass
-class MissingCartesianFrame3DResolver(SpatialTypesError):
+class MissingCartesianFrame3DimensionalResolver(SpatialTypesError):
     """
     Raised when a serialized coordinate representation refers to a three-dimensional
     Cartesian frame, but nothing was given to deserialize it with that finds the frame.
@@ -210,11 +216,11 @@ class MissingCartesianFrame3DResolver(SpatialTypesError):
         return (
             f"The serialized coordinate representation refers to a frame by "
             f"'{self.frame_id_key}', but the keyword arguments of from_json carry no "
-            f"CartesianFrame3DResolver."
+            f"CartesianFrame3DimensionalResolver."
         )
 
     def suggest_correction(self) -> str:
         return (
-            "pass a CartesianFrame3DResolver that knows the frame among the keyword "
+            "pass a CartesianFrame3DimensionalResolver that knows the frame among the keyword "
             "arguments of from_json."
         )

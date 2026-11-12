@@ -47,7 +47,7 @@ from semantic_digital_twin.collision_checking.collision_variable_managers import
     ExternalCollisionVariableManager,
 )
 from semantic_digital_twin.robots.robot_parts import AbstractRobot, EndEffector
-from krrood_spatial_math.spatial_types import Vector3D
+from krrood_spatial_math.spatial_types import Vector3Dimensional
 from semantic_digital_twin.world_description.world_entity import Body
 
 # %% shared by self and external collision avoidance
@@ -94,7 +94,7 @@ class _CollisionAvoidanceTask(ABC, Task):
         return super().required_context_extensions + (MotionControlContext,)
 
     @staticmethod
-    def _weight_while_close(contact_normal: Vector3D) -> Scalar:
+    def _weight_while_close(contact_normal: Vector3Dimensional) -> Scalar:
         """
         :param contact_normal: The contact normal of one avoided collision, zero while no
             collision data was computed for it.

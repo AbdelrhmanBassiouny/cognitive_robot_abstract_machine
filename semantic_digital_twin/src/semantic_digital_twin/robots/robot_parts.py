@@ -93,10 +93,13 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     RotationMatrix,
-    Vector3D,
+    Vector3Dimensional,
 )
 from semantic_digital_twin.world_description.derivatives import DerivativeMap
-from krrood_spatial_math.spatial_types import CartesianPoint3D, Pose3D
+from krrood_spatial_math.spatial_types import (
+    CartesianPoint3Dimensional,
+    Pose3Dimensional,
+)
 from semantic_digital_twin.world_description.connection_properties import JointServo
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection,
@@ -671,13 +674,13 @@ class Camera(Sensor, Generic[TCameraModel], SubClassSafeGeneric):
         return self.camera_model.resolution
 
     @property
-    def viewing_direction(self) -> Vector3D:
+    def viewing_direction(self) -> Vector3Dimensional:
         """
         Return optical positive z expressed in the camera root.
 
         :return: Forward direction with the optical root as its reference frame.
         """
-        return Vector3D.Z(reference_frame=self.root)
+        return Vector3Dimensional.Z(reference_frame=self.root)
 
     @classproperty
     def optical_R_forward_view(cls: type[Camera]) -> HomogeneousTransformationMatrix:
@@ -816,7 +819,7 @@ class EndEffector(AbstractRobotPart, ABC):
 
     @property
     @abstractmethod
-    def approach_axis(self) -> Vector3D:
+    def approach_axis(self) -> Vector3Dimensional:
         """
         The direction the gripper travels toward an object, expressed in
         :attr:`tool_frame`.
@@ -828,7 +831,7 @@ class EndEffector(AbstractRobotPart, ABC):
 
     @property
     @abstractmethod
-    def closing_axis(self) -> Vector3D:
+    def closing_axis(self) -> Vector3Dimensional:
         """
         The axis the fingers close along, expressed in :attr:`tool_frame`.
 
@@ -849,7 +852,7 @@ class EndEffector(AbstractRobotPart, ABC):
             reference_frame=self.tool_frame,
         )
 
-    def tool_frame_goal(self, grasp_pose: Pose3D) -> Pose3D:
+    def tool_frame_goal(self, grasp_pose: Pose3Dimensional) -> Pose3Dimensional:
         """
         Express a grasp frame as a goal for this end effector's tool frame.
 
@@ -860,15 +863,15 @@ class EndEffector(AbstractRobotPart, ABC):
         :return: The pose the tool frame has to reach, in ``grasp_pose``'s frame.
         """
         grasp_R_tool = self.tool_R_grasp.inverse()
-        return Pose3D(
+        return Pose3Dimensional(
             position=grasp_pose.position,
             orientation=(grasp_pose.rotation_matrix @ grasp_R_tool).quaternion,
             reference_frame=grasp_pose.reference_frame,
         )
 
     def tool_frame_goal_for_point(
-        self, tool_P_point: CartesianPoint3D, grasp_pose: Pose3D
-    ) -> Pose3D:
+        self, tool_P_point: CartesianPoint3Dimensional, grasp_pose: Pose3Dimensional
+    ) -> Pose3Dimensional:
         """
         Express a grasp frame as the goal that puts a point of this gripper on it, where
         :meth:`tool_frame_goal` puts the tool frame itself there.
@@ -878,7 +881,7 @@ class EndEffector(AbstractRobotPart, ABC):
         :return: The pose the tool frame has to reach, in ``grasp_pose``'s frame.
         """
         oriented = self.tool_frame_goal(grasp_pose)
-        return Pose3D(
+        return Pose3Dimensional(
             position=grasp_pose.position
             - oriented.rotation_matrix @ tool_P_point.vector3,
             orientation=oriented.quaternion,
@@ -901,7 +904,9 @@ class EndEffector(AbstractRobotPart, ABC):
             raise MoreThanOneBodyHeld(self, children)
         return children[0]
 
-    def held_body_T_grasp_at(self, tool_P_point: CartesianPoint3D) -> Pose3D:
+    def held_body_T_grasp_at(
+        self, tool_P_point: CartesianPoint3Dimensional
+    ) -> Pose3Dimensional:
         """
         The grasp this gripper has on the body it holds, read off the transform between
         the tool frame and that body, with the grasp sitting at a given point of the
@@ -1048,7 +1053,7 @@ class MobileBase(
 
     @classproperty
     @abstractmethod
-    def forward_axis(cls) -> Vector3D:
+    def forward_axis(cls) -> Vector3Dimensional:
         """
         The axis of this base that points where the robot faces.
         """
@@ -1141,9 +1146,11 @@ class MobileBase(
         A heading says where the front should point as its x-axis, so this is what turns
         one into a base pose and, inverted the other way, reads one back off a base pose.
         """
-        return RotationMatrix.from_vectors(x=self.forward_axis, z=Vector3D.Z())
+        return RotationMatrix.from_vectors(
+            x=self.forward_axis, z=Vector3Dimensional.Z()
+        )
 
-    def pose_facing(self, heading: Pose3D) -> Pose3D:
+    def pose_facing(self, heading: Pose3Dimensional) -> Pose3Dimensional:
         """
         The base pose whose :attr:`forward_axis` points along ``heading``.
 
@@ -1448,7 +1455,7 @@ class AbstractRobot(Agent, HasRobotParts, ABC):
             return parent_connection
         return None
 
-    def set_root_pose(self, pose: Pose3D) -> None:
+    def set_root_pose(self, pose: Pose3Dimensional) -> None:
         """
         Place the robot's root at ``pose``.
 

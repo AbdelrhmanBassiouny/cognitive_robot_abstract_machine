@@ -61,7 +61,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Spoon,
 )
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix
-from krrood_spatial_math.spatial_types import Pose3D
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 from semantic_digital_twin.world import World
 
 # %% what the scene is built from
@@ -191,12 +191,12 @@ class PlaceSettingObject:
             ).evaluate()
         )
 
-    def target_location(self, world: World) -> Pose3D:
+    def target_location(self, world: World) -> Pose3Dimensional:
         """
         :param world: The world the table stands in.
         :return: Where on the table the object is laid.
         """
-        return Pose3D.from_xyz_rpy(
+        return Pose3Dimensional.from_xyz_rpy(
             self.along_table,
             self.across_table,
             self.height,

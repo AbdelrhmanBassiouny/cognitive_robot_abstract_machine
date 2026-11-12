@@ -14,8 +14,8 @@ from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from cramph.node import NodeArtifacts
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from krrood_spatial_math.spatial_types import (
-    CartesianPoint3D,
-    Vector3D,
+    CartesianPoint3Dimensional,
+    Vector3Dimensional,
     RotationMatrix,
     HomogeneousTransformationMatrix,
 )
@@ -148,7 +148,7 @@ class PositionReached(RootRelativeGoalMonitor):
     Link that should reach the goal point.
     """
 
-    goal_point: CartesianPoint3D
+    goal_point: CartesianPoint3Dimensional
     """
     Target 3D point to reach.
     """
@@ -159,7 +159,7 @@ class PositionReached(RootRelativeGoalMonitor):
     """
 
     @property
-    def goal(self) -> CartesianPoint3D:
+    def goal(self) -> CartesianPoint3Dimensional:
         return self.goal_point
 
     def build_artifacts(self) -> NodeArtifacts:
@@ -220,7 +220,7 @@ class PointingAt(EndedByOwner, MotionStatechartNode):
     Link whose pointing axis is checked.
     """
 
-    goal_point: CartesianPoint3D
+    goal_point: CartesianPoint3Dimensional
     """
     Point the tip link should point at.
     """
@@ -230,7 +230,7 @@ class PointingAt(EndedByOwner, MotionStatechartNode):
     Reference link the goal point is expressed in.
     """
 
-    pointing_axis: Vector3D
+    pointing_axis: Vector3Dimensional
     """
     Axis of the tip link that should point at the goal point.
     """
@@ -278,12 +278,12 @@ class VectorsAligned(EndedByOwner, MotionStatechartNode):
     Link the tip normal is expressed in.
     """
 
-    goal_normal: Vector3D
+    goal_normal: Vector3Dimensional
     """
     Reference normal the tip normal should align with.
     """
 
-    tip_normal: Vector3D
+    tip_normal: Vector3Dimensional
     """
     Normal of the tip link that should align with the goal normal.
     """
@@ -329,12 +329,12 @@ class DistanceToLine(EndedByOwner, MotionStatechartNode):
     Link whose distance to the line is checked.
     """
 
-    center_point: CartesianPoint3D
+    center_point: CartesianPoint3Dimensional
     """
     Center of the line segment.
     """
 
-    line_axis: Vector3D
+    line_axis: Vector3Dimensional
     """
     Direction of the line segment.
     """

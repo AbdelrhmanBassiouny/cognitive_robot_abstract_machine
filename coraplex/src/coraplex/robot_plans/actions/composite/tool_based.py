@@ -19,9 +19,9 @@ from semantic_digital_twin.robots.robot_parts import Arm
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Tool
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    CartesianPoint3D,
+    CartesianPoint3Dimensional,
 )
-from krrood_spatial_math.spatial_types import Pose3D
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 from semantic_digital_twin.world_description.world_entity import (
     Body,
     KinematicStructureEntity,
@@ -130,20 +130,20 @@ class ToolMotionAction(
 
     @property
     @abstractmethod
-    def _alignment_target(self) -> Body | Pose3D | None:
+    def _alignment_target(self) -> Body | Pose3Dimensional | None:
         """
         :return: The target the tool is aligned with during the motion.
         """
 
     @cached_property
-    def _waypoints(self) -> list[CartesianPoint3D]:
+    def _waypoints(self) -> list[CartesianPoint3Dimensional]:
         """
         :return: The sampled waypoints of the tool path in the world frame.
         """
         _, points, _ = self._build_tool_path().sample(frame=self._path_frame())
         stride = max(1, int(self.pointer_stride))
         waypoints = [
-            CartesianPoint3D(
+            CartesianPoint3Dimensional(
                 x=point[0], y=point[1], z=point[2], reference_frame=self.world.root
             )
             for point in points
@@ -237,7 +237,7 @@ class MixingAction(ToolMotionAction, ParallelAction):
         return self.container.global_pose.homogeneous_matrix
 
     @property
-    def _alignment_target(self) -> Body | Pose3D | None:
+    def _alignment_target(self) -> Body | Pose3Dimensional | None:
         return self.container
 
 
@@ -290,7 +290,7 @@ class CuttingAction(ToolMotionAction, ParallelAction):
         return self.object_to_cut.global_pose.homogeneous_matrix
 
     @property
-    def _alignment_target(self) -> Body | Pose3D | None:
+    def _alignment_target(self) -> Body | Pose3Dimensional | None:
         return self.object_to_cut
 
 
@@ -307,7 +307,7 @@ class WipingAction(ToolMotionAction, TryAllAction):
     If None, ``target_pose`` is used instead.
     """
 
-    target_pose: Pose3D | None = None
+    target_pose: Pose3Dimensional | None = None
     """
     Center pose of the wiping patch.
 
@@ -389,7 +389,7 @@ class WipingAction(ToolMotionAction, TryAllAction):
         return self.target_pose.homogeneous_matrix
 
     @property
-    def _alignment_target(self) -> Body | Pose3D | None:
+    def _alignment_target(self) -> Body | Pose3Dimensional | None:
         if self.surface is not None:
             return self.surface
         return self.target_pose
@@ -503,7 +503,7 @@ class PouringAction(FullBodyControlledAction, MovesToolCenterPoint, SequentialAc
         return float((tool_frame_T_source @ mouth_in_source)[2])
 
     def _approach_direction(
-        self, target_pose: Pose3D, robot_pose: Pose3D
+        self, target_pose: Pose3Dimensional, robot_pose: Pose3Dimensional
     ) -> tuple[float, float]:
         """
         :return: The XY unit vector from the robot toward the target container,
@@ -533,7 +533,7 @@ class PouringAction(FullBodyControlledAction, MovesToolCenterPoint, SequentialAc
             return approach_x, approach_y
         return float(best[0]) / snapped_norm, float(best[1]) / snapped_norm
 
-    def _pour_poses(self) -> tuple[Pose3D, Pose3D]:
+    def _pour_poses(self) -> tuple[Pose3Dimensional, Pose3Dimensional]:
         """
         :return: The pre-pour pose next to the target container's rim and the tilted
             pouring pose.
@@ -582,7 +582,7 @@ class PouringAction(FullBodyControlledAction, MovesToolCenterPoint, SequentialAc
 
     def _pose_from_rotation(
         self, x: float, y: float, z: float, rotation: Rotation
-    ) -> Pose3D:
+    ) -> Pose3Dimensional:
         """
         :param x: X position of the pose in the world frame.
         :param y: Y position of the pose in the world frame.
@@ -591,7 +591,7 @@ class PouringAction(FullBodyControlledAction, MovesToolCenterPoint, SequentialAc
         :return: The pose in the world frame.
         """
         quat_x, quat_y, quat_z, quat_w = rotation.as_quat()
-        return Pose3D.from_xyz_quaternion(
+        return Pose3Dimensional.from_xyz_quaternion(
             pos_x=x,
             pos_y=y,
             pos_z=z,

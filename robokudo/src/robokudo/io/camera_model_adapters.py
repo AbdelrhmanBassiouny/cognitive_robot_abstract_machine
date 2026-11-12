@@ -16,7 +16,7 @@ from robokudo.io.exceptions import (
     CameraDistortionModelMissing,
     UnsupportedCameraDistortionModel,
 )
-from krrood_spatial_math.spatial_types import CartesianPoint2D
+from krrood_spatial_math.spatial_types import CartesianPoint2Dimensional
 from semantic_digital_twin.datastructures.camera_model import (
     CameraDistortion,
     CameraDistortionModel,
@@ -71,7 +71,9 @@ class RosCameraModelAdapter:
             ),
             focal_length_x=camera_info.k[0],
             focal_length_y=camera_info.k[4],
-            principal_point=CartesianPoint2D(x=camera_info.k[2], y=camera_info.k[5]),
+            principal_point=CartesianPoint2Dimensional(
+                x=camera_info.k[2], y=camera_info.k[5]
+            ),
             distortion=distortion,
         )
 

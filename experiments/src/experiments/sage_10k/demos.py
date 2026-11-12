@@ -41,7 +41,11 @@ from semantic_digital_twin.robots.hsrb import HSRB
 from semantic_digital_twin.robots.robot_parts import Arm
 from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
 from semantic_digital_twin.semantic_annotations.mixins import HasGraspCandidates
-from krrood_spatial_math.spatial_types import CartesianPoint3D, Pose3D, Vector3D
+from krrood_spatial_math.spatial_types import (
+    CartesianPoint3Dimensional,
+    Pose3Dimensional,
+    Vector3Dimensional,
+)
 from krrood.symbolic_math.symbolic_math import Scalar
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
@@ -97,7 +101,7 @@ class Sage10kAbstractDemoHSRB:
         obstacles_of_main_entrance = an(
             entity(v).where(
                 compute_euclidean_planar_distance(
-                    v.root, self.main_entrance.root, Vector3D.Z()
+                    v.root, self.main_entrance.root, Vector3Dimensional.Z()
                 )
                 < 0.9
             )
@@ -129,7 +133,7 @@ class Sage10kAbstractDemoHSRB:
                 self.world.remove_semantic_annotation(annotation)
 
     @property
-    def robot_starting_pose(self) -> Pose3D:
+    def robot_starting_pose(self) -> Pose3Dimensional:
         raise NotImplementedError
 
     @cached_property
@@ -166,28 +170,32 @@ class Sage10kGymDemo(Sage10kAbstractDemoHSRB):
     scene_url: ClassVar[str] = Sage10kActionableScenes.GYM
 
     @property
-    def robot_starting_pose(self) -> Pose3D:
-        return Pose3D.from_xyz_rpy(x=3, y=-7, z=0, reference_frame=self.world.root)
+    def robot_starting_pose(self) -> Pose3Dimensional:
+        return Pose3Dimensional.from_xyz_rpy(
+            x=3, y=-7, z=0, reference_frame=self.world.root
+        )
 
     @property
-    def world_P_object_of_interest(self) -> CartesianPoint3D:
-        return CartesianPoint3D(1.03, -0.716, 0.203, reference_frame=self.world.root)
+    def world_P_object_of_interest(self) -> CartesianPoint3Dimensional:
+        return CartesianPoint3Dimensional(
+            1.03, -0.716, 0.203, reference_frame=self.world.root
+        )
 
     @property
-    def pickup_navigation_pose(self) -> Pose3D:
-        return Pose3D.from_xyz_rpy(
+    def pickup_navigation_pose(self) -> Pose3Dimensional:
+        return Pose3Dimensional.from_xyz_rpy(
             0.94, 0.2, 0, yaw=-np.pi / 2, reference_frame=self.world.root
         )
 
     @property
-    def place_pose(self) -> Pose3D:
-        return Pose3D.from_xyz_rpy(
+    def place_pose(self) -> Pose3Dimensional:
+        return Pose3Dimensional.from_xyz_rpy(
             -0.15, 4.55, 0.865, yaw=np.pi / 2, reference_frame=self.world.root
         )
 
     @property
-    def place_navigation_pose(self) -> Pose3D:
-        return Pose3D.from_xyz_rpy(
+    def place_navigation_pose(self) -> Pose3Dimensional:
+        return Pose3Dimensional.from_xyz_rpy(
             -0.12, 4, 0, yaw=np.pi / 2, reference_frame=self.world.root
         )
 
@@ -227,17 +235,17 @@ class Sage10kGymDemo(Sage10kAbstractDemoHSRB):
                 open_door,
                 ParkArmsAction(arms=self.robot.all_arms),
                 NavigateAction(
-                    target_location=Pose3D.from_xyz_rpy(
+                    target_location=Pose3Dimensional.from_xyz_rpy(
                         2.81, -3.76, reference_frame=self.world.root
                     )
                 ),
                 NavigateAction(
-                    target_location=Pose3D.from_xyz_rpy(
+                    target_location=Pose3Dimensional.from_xyz_rpy(
                         -0.75, -3.33, reference_frame=self.world.root
                     )
                 ),
                 NavigateAction(
-                    target_location=Pose3D.from_xyz_rpy(
+                    target_location=Pose3Dimensional.from_xyz_rpy(
                         0, 0.8, reference_frame=self.world.root
                     )
                 ),
@@ -267,8 +275,10 @@ class Sage10kTVStudioDemo(Sage10kAbstractDemoHSRB):
     scene_url: ClassVar[str] = Sage10kActionableScenes.TV_STUDIO
 
     @property
-    def robot_starting_pose(self) -> Pose3D:
-        return Pose3D.from_xyz_rpy(x=12.5, y=3, z=0, reference_frame=self.world.root)
+    def robot_starting_pose(self) -> Pose3Dimensional:
+        return Pose3Dimensional.from_xyz_rpy(
+            x=12.5, y=3, z=0, reference_frame=self.world.root
+        )
 
     @property
     def book_to_pick(self) -> NaturalLanguageWithTypeDescription:
@@ -308,7 +318,7 @@ class Sage10kTVStudioDemo(Sage10kAbstractDemoHSRB):
     def plan(self) -> StatechartNode:
         open_door = Sage10kOpenDoor(door=self.main_entrance)
         mpa = MoveAndPickUpAction.from_standing_position(
-            standing_position=Pose3D.from_xyz_rpy(
+            standing_position=Pose3Dimensional.from_xyz_rpy(
                 x=6.83,
                 y=5.38,
                 z=self.robot.root.global_pose.z,
@@ -332,12 +342,14 @@ class Sage10kCraftsmanLobbyDemo(Sage10kAbstractDemoHSRB):
     scene_url: ClassVar[str] = Sage10kActionableScenes.CRAFTSMAN_LOBBY
 
     @property
-    def robot_starting_pose(self) -> Pose3D:
-        return Pose3D.from_xyz_rpy(x=14, y=6, z=0, reference_frame=self.world.root)
+    def robot_starting_pose(self) -> Pose3Dimensional:
+        return Pose3Dimensional.from_xyz_rpy(
+            x=14, y=6, z=0, reference_frame=self.world.root
+        )
 
     @property
     def pickup_navigation_pose(self):
-        return Pose3D.from_xyz_rpy(
+        return Pose3Dimensional.from_xyz_rpy(
             x=6.83,
             y=5.38,
             z=self.robot.root.global_pose.z,
@@ -384,7 +396,7 @@ class Sage10kCraftsmanLobbyDemo(Sage10kAbstractDemoHSRB):
         """
         Opens the main entrance, picks the book up and places it next to the couch.
         """
-        target_pose = Pose3D.from_xyz_rpy(
+        target_pose = Pose3Dimensional.from_xyz_rpy(
             x=5.48, y=7.46, z=0.8, yaw=-np.pi / 2, reference_frame=self.world.root
         )
         open_door = Sage10kOpenDoor(door=self.main_entrance)
@@ -394,7 +406,7 @@ class Sage10kCraftsmanLobbyDemo(Sage10kAbstractDemoHSRB):
             arm=self.arm,
         )
         mpp = MoveAndPlaceAction.from_standing_position(
-            standing_position=Pose3D.from_xyz_rpy(
+            standing_position=Pose3Dimensional.from_xyz_rpy(
                 x=5.48, y=6.96, reference_frame=self.world.root
             ),
             target_location=target_pose,
@@ -414,12 +426,14 @@ class Sage10kTropicalWarehouse(Sage10kAbstractDemoHSRB):
     scene_url: ClassVar[str] = Sage10kActionableScenes.TROPICAL_WAREHOUSE
 
     @property
-    def robot_starting_pose(self) -> Pose3D:
-        return Pose3D.from_xyz_rpy(x=14, y=4.5, z=0, reference_frame=self.world.root)
+    def robot_starting_pose(self) -> Pose3Dimensional:
+        return Pose3Dimensional.from_xyz_rpy(
+            x=14, y=4.5, z=0, reference_frame=self.world.root
+        )
 
     @property
     def pickup_navigation_pose(self):
-        return Pose3D.from_xyz_rpy(
+        return Pose3Dimensional.from_xyz_rpy(
             x=2.45265, y=7.28, yaw=2.16, reference_frame=self.world.root
         )
 
@@ -428,11 +442,11 @@ class Sage10kTropicalWarehouse(Sage10kAbstractDemoHSRB):
 
         @symbolic_function
         def planar_distance(
-            point1: CartesianPoint3D, point2: CartesianPoint3D
+            point1: CartesianPoint3Dimensional, point2: CartesianPoint3Dimensional
         ) -> Scalar:
             return point1.euclidean_distance(point2)
 
-        point_guess = Pose3D.from_xyz_rpy(
+        point_guess = Pose3Dimensional.from_xyz_rpy(
             x=2.19, y=7.64, z=0.35, reference_frame=self.world.root
         ).position
         target_v = variable(
@@ -453,12 +467,12 @@ class Sage10kTropicalWarehouse(Sage10kAbstractDemoHSRB):
     @property
     def plan(self) -> StatechartNode:
         navigate1 = NavigateAction(
-            target_location=Pose3D.from_xyz_rpy(
+            target_location=Pose3Dimensional.from_xyz_rpy(
                 2.86, 5.89, reference_frame=self.world.root
             )
         )
         navigate2 = NavigateAction(
-            target_location=Pose3D.from_xyz_rpy(
+            target_location=Pose3Dimensional.from_xyz_rpy(
                 2.86, 5.89, reference_frame=self.world.root
             )
         )
@@ -486,12 +500,14 @@ class Sage10kVaporwave(Sage10kAbstractDemoHSRB):
     scene_url: ClassVar[str] = Sage10kActionableScenes.VAPORWAVE
 
     @property
-    def robot_starting_pose(self) -> Pose3D:
-        return Pose3D.from_xyz_rpy(x=4.4, y=10, z=0, reference_frame=self.world.root)
+    def robot_starting_pose(self) -> Pose3Dimensional:
+        return Pose3Dimensional.from_xyz_rpy(
+            x=4.4, y=10, z=0, reference_frame=self.world.root
+        )
 
     @property
     def pickup_navigation_pose(self):
-        return Pose3D.from_xyz_rpy(
+        return Pose3Dimensional.from_xyz_rpy(
             x=0.93235, y=4.74108, yaw=2.90782, reference_frame=self.world.root
         )
 
@@ -500,11 +516,11 @@ class Sage10kVaporwave(Sage10kAbstractDemoHSRB):
 
         @symbolic_function
         def planar_distance(
-            point1: CartesianPoint3D, point2: CartesianPoint3D
+            point1: CartesianPoint3Dimensional, point2: CartesianPoint3Dimensional
         ) -> Scalar:
             return point1.euclidean_distance(point2)
 
-        point_guess = Pose3D.from_xyz_rpy(
+        point_guess = Pose3Dimensional.from_xyz_rpy(
             x=0.468, y=4.87, z=0.528, reference_frame=self.world.root
         ).position
         target_v = variable(
@@ -535,11 +551,11 @@ class Sage10kVaporwave(Sage10kAbstractDemoHSRB):
 
         open_door = Sage10kOpenDoor(door=self.main_entrance)
         park_arms = ParkArmsAction(arms=[self.arm])
-        place_target_pose = Pose3D.from_xyz_rpy(
+        place_target_pose = Pose3Dimensional.from_xyz_rpy(
             x=0.605, y=1.615, z=0.66, reference_frame=self.world.root
         )
         mpp = MoveAndPlaceAction.from_standing_position(
-            standing_position=Pose3D.from_xyz_rpy(
+            standing_position=Pose3Dimensional.from_xyz_rpy(
                 x=0.605, y=2.115, yaw=-1.5708, reference_frame=self.world.root
             ),
             target_location=place_target_pose,
@@ -561,14 +577,14 @@ class Sage10kEclecticResidence(Sage10kAbstractDemoHSRB):
     scene_url: ClassVar[str] = Sage10kActionableScenes.ECLECTIC_RESIDENCE
 
     @property
-    def robot_starting_pose(self) -> Pose3D:
-        return Pose3D.from_xyz_rpy(
+    def robot_starting_pose(self) -> Pose3Dimensional:
+        return Pose3Dimensional.from_xyz_rpy(
             x=1.5, y=8, z=0, yaw=np.pi / 2, reference_frame=self.world.root
         )
 
     @property
     def pickup_navigation_pose(self):
-        return Pose3D.from_xyz_rpy(
+        return Pose3Dimensional.from_xyz_rpy(
             x=2.7337, y=4.60152, yaw=-1.79685, reference_frame=self.world.root
         )
 
@@ -577,11 +593,11 @@ class Sage10kEclecticResidence(Sage10kAbstractDemoHSRB):
 
         @symbolic_function
         def planar_distance(
-            point1: CartesianPoint3D, point2: CartesianPoint3D
+            point1: CartesianPoint3Dimensional, point2: CartesianPoint3Dimensional
         ) -> Scalar:
             return point1.euclidean_distance(point2)
 
-        point_guess = Pose3D.from_xyz_rpy(
+        point_guess = Pose3Dimensional.from_xyz_rpy(
             x=2.66, y=4.35, z=0.442, reference_frame=self.world.root
         ).position
         target_v = variable(
@@ -602,12 +618,12 @@ class Sage10kEclecticResidence(Sage10kAbstractDemoHSRB):
     @property
     def plan(self) -> StatechartNode:
         navigate1 = NavigateAction(
-            target_location=Pose3D.from_xyz_rpy(
+            target_location=Pose3Dimensional.from_xyz_rpy(
                 x=1.27, y=4.45, reference_frame=self.world.root
             )
         )
         navigate2 = NavigateAction(
-            target_location=Pose3D.from_xyz_rpy(
+            target_location=Pose3Dimensional.from_xyz_rpy(
                 x=1.27, y=4.45, reference_frame=self.world.root
             )
         )
@@ -655,7 +671,7 @@ class Sage10kSouthwesternStoreDemo(Sage10kAbstractDemoHSRB):
                 open_door,
                 ParkArmsAction(arms=self.robot.all_arms),
                 NavigateAction(
-                    target_location=Pose3D.from_xyz_rpy(
+                    target_location=Pose3Dimensional.from_xyz_rpy(
                         x=0.81, y=4.81, reference_frame=self.world.root
                     )
                 ),
@@ -666,7 +682,7 @@ class Sage10kSouthwesternStoreDemo(Sage10kAbstractDemoHSRB):
                 ),
                 ParkArmsAction(arms=self.robot.all_arms),
                 NavigateAction(
-                    target_location=Pose3D.from_xyz_rpy(
+                    target_location=Pose3Dimensional.from_xyz_rpy(
                         x=0.81, y=4.81, reference_frame=self.world.root
                     )
                 ),
@@ -678,7 +694,7 @@ class Sage10kSouthwesternStoreDemo(Sage10kAbstractDemoHSRB):
                 ),
                 ParkArmsAction(arms=self.robot.all_arms),
                 NavigateAction(
-                    target_location=Pose3D.from_xyz_rpy(
+                    target_location=Pose3Dimensional.from_xyz_rpy(
                         x=0.48, y=4.81, reference_frame=self.world.root
                     )
                 ),
@@ -690,11 +706,11 @@ class Sage10kSouthwesternStoreDemo(Sage10kAbstractDemoHSRB):
     def object_of_interest(self) -> NaturalLanguageWithTypeDescription:
         @symbolic_function
         def planar_distance(
-            point1: CartesianPoint3D, point2: CartesianPoint3D
+            point1: CartesianPoint3Dimensional, point2: CartesianPoint3Dimensional
         ) -> Scalar:
             return point1.euclidean_distance(point2)
 
-        near_pose = Pose3D.from_xyz_rpy(
+        near_pose = Pose3Dimensional.from_xyz_rpy(
             x=1.7, y=0.49, z=1.17, reference_frame=self.world.root
         )
         v_final = variable(
@@ -713,21 +729,25 @@ class Sage10kSouthwesternStoreDemo(Sage10kAbstractDemoHSRB):
 
     @property
     def robot_starting_pose(self):
-        return Pose3D.from_xyz_rpy(3.8, 6.5)
+        return Pose3Dimensional.from_xyz_rpy(3.8, 6.5)
 
     @property
-    def pickup_navigation_pose(self) -> Pose3D:
-        return Pose3D.from_xyz_rpy(
+    def pickup_navigation_pose(self) -> Pose3Dimensional:
+        return Pose3Dimensional.from_xyz_rpy(
             0.63, 0.70, 0, yaw=np.pi / 2, reference_frame=self.world.root
         )
 
     @property
-    def place_pose(self) -> Pose3D:
-        return Pose3D.from_xyz_rpy(4.41, 4.46, z=0.368, reference_frame=self.world.root)
+    def place_pose(self) -> Pose3Dimensional:
+        return Pose3Dimensional.from_xyz_rpy(
+            4.41, 4.46, z=0.368, reference_frame=self.world.root
+        )
 
     @property
-    def place_navigation_pose(self) -> Pose3D:
-        return Pose3D.from_xyz_rpy(3.99, 4.66, 0, reference_frame=self.world.root)
+    def place_navigation_pose(self) -> Pose3Dimensional:
+        return Pose3Dimensional.from_xyz_rpy(
+            3.99, 4.66, 0, reference_frame=self.world.root
+        )
 
     @cached_property
     def main_entrance(self):
@@ -749,7 +769,7 @@ class Sage10kSouthwesternStoreDemo(Sage10kAbstractDemoHSRB):
         obstacles_of_main_entrance = an(
             entity(v).where(
                 compute_euclidean_planar_distance(
-                    v.root, self.main_entrance.root, Vector3D.Z()
+                    v.root, self.main_entrance.root, Vector3Dimensional.Z()
                 )
                 < 0.9
             )
@@ -780,7 +800,7 @@ class Sage10kBrutalistStoreDemo(Sage10kAbstractDemoHSRB):
                 open_door,
                 ParkArmsAction(arms=self.robot.all_arms),
                 NavigateAction(
-                    target_location=Pose3D.from_xyz_rpy(
+                    target_location=Pose3Dimensional.from_xyz_rpy(
                         x=12, y=8.13, reference_frame=self.world.root
                     )
                 ),
@@ -797,7 +817,7 @@ class Sage10kBrutalistStoreDemo(Sage10kAbstractDemoHSRB):
                     target_location=self.place_pose,
                 ),
                 NavigateAction(
-                    target_location=Pose3D.from_xyz_rpy(
+                    target_location=Pose3Dimensional.from_xyz_rpy(
                         x=12, y=8.13, reference_frame=self.world.root
                     )
                 ),
@@ -809,11 +829,11 @@ class Sage10kBrutalistStoreDemo(Sage10kAbstractDemoHSRB):
     def object_of_interest(self) -> NaturalLanguageWithTypeDescription:
         @symbolic_function
         def planar_distance(
-            point1: CartesianPoint3D, point2: CartesianPoint3D
+            point1: CartesianPoint3Dimensional, point2: CartesianPoint3Dimensional
         ) -> Scalar:
             return point1.euclidean_distance(point2)
 
-        near_pose = Pose3D.from_xyz_rpy(
+        near_pose = Pose3Dimensional.from_xyz_rpy(
             x=8.28, y=0.35, z=0.69, reference_frame=self.world.root
         )
         v_final = variable(
@@ -832,23 +852,23 @@ class Sage10kBrutalistStoreDemo(Sage10kAbstractDemoHSRB):
 
     @property
     def robot_starting_pose(self):
-        return Pose3D.from_xyz_rpy(18.5, 8)
+        return Pose3Dimensional.from_xyz_rpy(18.5, 8)
 
     @property
-    def pickup_navigation_pose(self) -> Pose3D:
-        return Pose3D.from_xyz_rpy(
+    def pickup_navigation_pose(self) -> Pose3Dimensional:
+        return Pose3Dimensional.from_xyz_rpy(
             8.31, 0.82, 0, yaw=np.pi, reference_frame=self.world.root
         )
 
     @property
-    def place_pose(self) -> Pose3D:
-        return Pose3D.from_xyz_rpy(
+    def place_pose(self) -> Pose3Dimensional:
+        return Pose3Dimensional.from_xyz_rpy(
             0.32, 5.81, 0.588, yaw=np.pi / 2, reference_frame=self.world.root
         )
 
     @property
-    def place_navigation_pose(self) -> Pose3D:
-        return Pose3D.from_xyz_rpy(
+    def place_navigation_pose(self) -> Pose3Dimensional:
+        return Pose3Dimensional.from_xyz_rpy(
             0.66, 5.81, 0, yaw=np.pi / 2, reference_frame=self.world.root
         )
 
@@ -881,7 +901,9 @@ class Sage10kAmericanBuffetDemo(Sage10kAbstractDemoHSRB):
         """
         arm = self.arm
         open_door = Sage10kOpenDoor(door=self.main_entrance)
-        navigate = Pose3D.from_xyz_rpy(x=5.14, y=2.85, reference_frame=self.world.root)
+        navigate = Pose3Dimensional.from_xyz_rpy(
+            x=5.14, y=2.85, reference_frame=self.world.root
+        )
 
         plan = Sequence(
             nodes=[
@@ -906,17 +928,21 @@ class Sage10kAmericanBuffetDemo(Sage10kAbstractDemoHSRB):
 
     @property
     def robot_starting_pose(self):
-        return Pose3D.from_xyz_rpy(5.45, 13.00, reference_frame=self.world.root)
+        return Pose3Dimensional.from_xyz_rpy(
+            5.45, 13.00, reference_frame=self.world.root
+        )
 
     @property
     def object_of_interest(self) -> NaturalLanguageWithTypeDescription:
         @symbolic_function
         def planar_distance(
-            point1: CartesianPoint3D, point2: CartesianPoint3D
+            point1: CartesianPoint3Dimensional, point2: CartesianPoint3Dimensional
         ) -> Scalar:
             return point1.euclidean_distance(point2)
 
-        pose = Pose3D.from_xyz_rpy(x=4.06, y=8.64, reference_frame=self.world.root)
+        pose = Pose3Dimensional.from_xyz_rpy(
+            x=4.06, y=8.64, reference_frame=self.world.root
+        )
         v_table = variable(
             NaturalLanguageWithTypeDescription,
             self.world.semantic_annotations,
@@ -943,20 +969,20 @@ class Sage10kAmericanBuffetDemo(Sage10kAbstractDemoHSRB):
         return cup
 
     @property
-    def pickup_navigation_pose(self) -> Pose3D:
-        return Pose3D.from_xyz_rpy(
+    def pickup_navigation_pose(self) -> Pose3Dimensional:
+        return Pose3Dimensional.from_xyz_rpy(
             4.66, 8.62, 0, yaw=0, reference_frame=self.world.root
         )
 
     @property
-    def place_pose(self) -> Pose3D:
-        return Pose3D.from_xyz_rpy(
+    def place_pose(self) -> Pose3Dimensional:
+        return Pose3Dimensional.from_xyz_rpy(
             7.61, 0.997, 0.6, yaw=np.pi / 2, reference_frame=self.world.root
         )
 
     @property
-    def place_navigation_pose(self) -> Pose3D:
-        return Pose3D.from_xyz_rpy(
+    def place_navigation_pose(self) -> Pose3Dimensional:
+        return Pose3Dimensional.from_xyz_rpy(
             7.23, 1.16, 0, yaw=np.pi / 2, reference_frame=self.world.root
         )
 

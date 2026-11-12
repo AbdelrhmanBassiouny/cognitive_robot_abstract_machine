@@ -9,7 +9,7 @@ from krrood_spatial_math.spatial_types import SymbolicSpatialValue
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     Twist,
-    Vector3D,
+    Vector3Dimensional,
 )
 
 from .dataset.frames import KnownFrames
@@ -34,7 +34,7 @@ def test_a_twist_has_six_entries():
 def test_a_twist_turns_by_the_axis_scaled_by_the_angle():
     axis, angle = np.array([0.0, 1.0, 0.0]), 0.7
     start_T_end = HomogeneousTransformationMatrix.from_xyz_axis_angle(
-        axis=Vector3D(*axis), angle=angle
+        axis=Vector3Dimensional(*axis), angle=angle
     )
 
     twist = Twist.from_transformation(start_T_end)
@@ -52,7 +52,7 @@ def test_no_rotation_is_the_zero_rotation_vector():
 
 def test_a_rotation_is_stated_by_an_angle_of_at_most_half_a_turn():
     three_quarter_turn = HomogeneousTransformationMatrix.from_xyz_axis_angle(
-        axis=Vector3D.X(), angle=1.5 * np.pi
+        axis=Vector3Dimensional.X(), angle=1.5 * np.pi
     )
 
     twist = Twist.from_transformation(three_quarter_turn)

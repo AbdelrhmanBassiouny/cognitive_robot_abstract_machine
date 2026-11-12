@@ -64,12 +64,12 @@ from semantic_digital_twin.semantic_annotations.part_whole import (
     IsPartWholeRelationship,
 )
 from krrood_spatial_math.spatial_types import (
-    LineSegment3D,
-    CartesianPoint3D,
+    LineSegment3Dimensional,
+    CartesianPoint3Dimensional,
     HomogeneousTransformationMatrix,
-    Vector3D,
+    Vector3Dimensional,
 )
-from krrood_spatial_math.spatial_types import Pose3D, RotationMatrix
+from krrood_spatial_math.spatial_types import Pose3Dimensional, RotationMatrix
 from semantic_digital_twin.world_description.connections import (
     FixedConnection,
     ActiveConnection1DOF,
@@ -186,9 +186,15 @@ class HasRootKinematicStructureEntity(
         )
 
     @property
-    def min_max_points(self) -> tuple[CartesianPoint3D, CartesianPoint3D]:
-        min = CartesianPoint3D.from_iterable(self.root.combined_mesh.bounds[0])
-        max = CartesianPoint3D.from_iterable(self.root.combined_mesh.bounds[1])
+    def min_max_points(
+        self,
+    ) -> tuple[CartesianPoint3Dimensional, CartesianPoint3Dimensional]:
+        min = CartesianPoint3Dimensional.from_iterable(
+            self.root.combined_mesh.bounds[0]
+        )
+        max = CartesianPoint3Dimensional.from_iterable(
+            self.root.combined_mesh.bounds[1]
+        )
         return min, max
 
     def __hash__(self):
@@ -453,7 +459,7 @@ class HasGraspCandidates(HasRootBody, Mixin):
         return [
             GraspCandidate(
                 self,
-                Pose3D(
+                Pose3Dimensional(
                     orientation=RotationMatrix.from_rpy(yaw=yaw).quaternion,
                     reference_frame=self.root,
                 ),
@@ -509,7 +515,7 @@ class HasGraspCandidates(HasRootBody, Mixin):
             raise NoGraspGeometry(self)
         return trimesh.util.concatenate(surfaces)
 
-    def grasp_axis(self) -> LineSegment3D:
+    def grasp_axis(self) -> LineSegment3Dimensional:
         """
         :return: The axis an elongated object is grasped around, in the root body's
             frame: through the centre of the bounding box of :meth:`grasp_surface`,
@@ -520,9 +526,13 @@ class HasGraspCandidates(HasRootBody, Mixin):
         axis_index = int(np.argmax(highest - lowest))
         start, end = (lowest + highest) / 2, (lowest + highest) / 2
         start[axis_index], end[axis_index] = lowest[axis_index], highest[axis_index]
-        return LineSegment3D(
-            start=CartesianPoint3D.from_iterable(start, reference_frame=self.root),
-            end=CartesianPoint3D.from_iterable(end, reference_frame=self.root),
+        return LineSegment3Dimensional(
+            start=CartesianPoint3Dimensional.from_iterable(
+                start, reference_frame=self.root
+            ),
+            end=CartesianPoint3Dimensional.from_iterable(
+                end, reference_frame=self.root
+            ),
         )
 
     def grasped_part(self) -> HasGraspCandidates:
@@ -748,7 +758,7 @@ class HasMovableJoint(HasRootBody, Mixin, ABC):
 
     @abstractmethod
     def calculate_self_T_movable_joint(
-        self, axis: Vector3D
+        self, axis: Vector3Dimensional
     ) -> HomogeneousTransformationMatrix:
         """
         Calculate where the joint that moves this annotation sits, relative to its root.
@@ -1063,7 +1073,7 @@ class HasSupportingSurface(IsStorageSpace, Mixin):
         vertices = candidates_filtered.vertices
         self_P_supporting_surface = vertices.mean(axis=0)
         points_3d = [
-            CartesianPoint3D(
+            CartesianPoint3Dimensional(
                 x,
                 y,
                 z,
@@ -1131,7 +1141,7 @@ class HasSupportingSurface(IsStorageSpace, Mixin):
         body_to_sample_for: HasRootBody | None = None,
         category_of_interest: type[SemanticAnnotation] | None = None,
         amount: int = 100,
-    ) -> list[CartesianPoint3D]:
+    ) -> list[CartesianPoint3Dimensional]:
         """
         Samples points from a surface around the semantic annotation.
 
@@ -1181,11 +1191,13 @@ class HasSupportingSurface(IsStorageSpace, Mixin):
 
         if category_of_interest:
             return [
-                CartesianPoint3D(*s[1:], reference_frame=self.supporting_surface)
+                CartesianPoint3Dimensional(
+                    *s[1:], reference_frame=self.supporting_surface
+                )
                 for s in samples
             ]
         return [
-            CartesianPoint3D(*s, reference_frame=self.supporting_surface)
+            CartesianPoint3Dimensional(*s, reference_frame=self.supporting_surface)
             for s in samples
         ]
 
@@ -1320,7 +1332,7 @@ class HasSupportingSurface(IsStorageSpace, Mixin):
 
     def spawn_bounding_boxes_as_region(
         self,
-        boxes: BoundingBoxCollection[VolumetricBoundingBox, CartesianPoint3D],
+        boxes: BoundingBoxCollection[VolumetricBoundingBox, CartesianPoint3Dimensional],
         name: PrefixedName | None = None,
         color: Color | None = None,
     ) -> Region:
@@ -1442,7 +1454,7 @@ class HasCaseAsRootBody(HasSupportingSurface, Mixin):
 
     @classproperty
     @abstractmethod
-    def _hole_direction_axis(cls) -> Vector3D:
+    def _hole_direction_axis(cls) -> Vector3Dimensional:
         """
         The unit vector along the direction of the physical hole of the geometry, without
         a reference frame.
@@ -1453,7 +1465,7 @@ class HasCaseAsRootBody(HasSupportingSurface, Mixin):
         """
 
     @property
-    def hole_direction(self) -> Vector3D:
+    def hole_direction(self) -> Vector3Dimensional:
         """
         The direction of the physical hole of the geometry.
 
@@ -1461,7 +1473,7 @@ class HasCaseAsRootBody(HasSupportingSurface, Mixin):
                 ..warning:: This does not describe the axis along, for example, a drawer opens. Its the physical opening where
                 you can put something into the drawer.
         """
-        return Vector3D.from_iterable(
+        return Vector3Dimensional.from_iterable(
             self._hole_direction_axis.to_np(), reference_frame=self.root
         )
 

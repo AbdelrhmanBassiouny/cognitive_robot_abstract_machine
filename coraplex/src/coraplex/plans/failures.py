@@ -11,7 +11,7 @@ from giskardpy.motion_statechart.exceptions import (
 )
 from cramph.exceptions import ExecutionFailure
 from semantic_digital_twin.robots.robot_parts import Arm, EndEffector
-from krrood_spatial_math.spatial_types import Pose3D
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 from semantic_digital_twin.world_description.world_entity import Body
 
 if TYPE_CHECKING:
@@ -175,11 +175,11 @@ class NavigationGoalNotReachedError(PlanFailure):
     Thrown when the navigation goal is not reached.
     """
 
-    current_pose: Pose3D
+    current_pose: Pose3Dimensional
     """
     The current pose of the robot.
     """
-    goal_pose: Pose3D
+    goal_pose: Pose3Dimensional
     """
     The goal pose of the robot.
     """
@@ -225,7 +225,7 @@ class EndEffectorDidNotReachTarget(PlanFailure):
     The end effector that did not reach its target.
     """
 
-    target: Pose3D
+    target: Pose3Dimensional
     """
     The target pose that the end effector did not reach.
     """

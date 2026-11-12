@@ -20,7 +20,7 @@ from krrood_spatial_math.space_map import (
     TargetPointT,
 )
 from krrood_spatial_math.spatial_types import (
-    CartesianPoint2D,
+    CartesianPoint2Dimensional,
     FramePlaneProjection,
 )
 
@@ -40,7 +40,7 @@ class SpaceMapCase:
     The space map under test.
     """
 
-    target_point: CartesianPoint2D
+    target_point: CartesianPoint2Dimensional
     """
     A point of the space map's target space.
     """
@@ -57,7 +57,7 @@ def space_map_case(request: pytest.FixtureRequest) -> SpaceMapCase:
     frame = NamedFrame("plane")
     return SpaceMapCase(
         space_map=request.param(frame),
-        target_point=CartesianPoint2D(1.5, -2.0, reference_frame=frame),
+        target_point=CartesianPoint2Dimensional(1.5, -2.0, reference_frame=frame),
     )
 
 
@@ -149,12 +149,12 @@ def test_an_orthogonal_projection_declares_only_its_plane_and_where_points_lie_o
 
 def test_every_projection_line_of_an_orthogonal_projection_runs_along_the_plane_normal():
     projection = FramePlaneProjection(None)
-    line = projection.projection_line(CartesianPoint2D(1.0, 2.0))
+    line = projection.projection_line(CartesianPoint2Dimensional(1.0, 2.0))
 
     np.testing.assert_array_equal(
         line.direction.to_np(), projection.plane_normal.to_np()
     )
     np.testing.assert_array_equal(
         line.point.to_np(),
-        projection.foot_point(point=CartesianPoint2D(1.0, 2.0)).to_np(),
+        projection.foot_point(point=CartesianPoint2Dimensional(1.0, 2.0)).to_np(),
     )

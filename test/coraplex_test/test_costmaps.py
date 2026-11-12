@@ -15,11 +15,11 @@ from coraplex.locations.costmaps import (
 from krrood.entity_query_language.exceptions import NonPositiveLimitValue
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    CartesianPoint3D,
+    CartesianPoint3Dimensional,
     RotationMatrix,
-    Vector3D,
+    Vector3Dimensional,
 )
-from krrood_spatial_math.spatial_types import Pose3D
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 from ..sampling import SAMPLING_SEED
 
 # ---- Occupancy locations tests ----
@@ -52,7 +52,9 @@ def test_attachment_exclusion(pr2_apartment_context, rclpy_node):
         width=200,
         resolution=0.02,
         robot_view=robot_view,
-        origin=Pose3D.from_xyz_quaternion(-1.5, 1, 0, 0, 0, 0, 1, test_world.root),
+        origin=Pose3Dimensional.from_xyz_quaternion(
+            -1.5, 1, 0, 0, 0, 0, 1, test_world.root
+        ),
         world=test_world,
     )
 
@@ -68,7 +70,7 @@ def test_merge_costmap(pr2_apartment_context):
         width=200,
         resolution=0.02,
         robot_view=robot_view,
-        origin=Pose3D.from_xyz_quaternion(0, 0, 0, 0, 0, 0, 1, world.root),
+        origin=Pose3Dimensional.from_xyz_quaternion(0, 0, 0, 0, 0, 0, 1, world.root),
         world=world,
     )
     o2 = OccupancyCostmap(
@@ -77,7 +79,7 @@ def test_merge_costmap(pr2_apartment_context):
         width=200,
         resolution=0.02,
         robot_view=robot_view,
-        origin=Pose3D.from_xyz_quaternion(0, 0, 0, 0, 0, 0, 1, world.root),
+        origin=Pose3Dimensional.from_xyz_quaternion(0, 0, 0, 0, 0, 0, 1, world.root),
         world=world,
     )
     o3 = o + o2
@@ -96,7 +98,7 @@ def test_a_merged_map_samples_on_the_terms_of_the_map_it_was_merged_into(
     pr2_apartment_context, merge
 ):
     world, robot_view, extensions = pr2_apartment_context
-    origin = Pose3D.from_xyz_quaternion(0, 0, 0, 0, 0, 0, 1, world.root)
+    origin = Pose3Dimensional.from_xyz_quaternion(0, 0, 0, 0, 0, 0, 1, world.root)
     first = GaussianCostmap(
         resolution=0.02,
         height=200,
@@ -135,7 +137,7 @@ def test_occupancy_robot_exclusion(pr2_apartment_context):
         width=400,
         world=world,
         robot_view=robot_view,
-        origin=Pose3D.from_xyz_quaternion(10, 10, 0, 0, 0, 0, 1, world.root),
+        origin=Pose3Dimensional.from_xyz_quaternion(10, 10, 0, 0, 0, 0, 1, world.root),
         distance_to_obstacle=0.3,
     )
     assert np.sum(occupancy_map.map) == 137641
@@ -154,7 +156,7 @@ def test_occupancy_leaves_the_floor_free(pr2_apartment_context):
         width=50,
         world=world,
         robot_view=robot_view,
-        origin=Pose3D.from_xyz_quaternion(1.5, 2, 0, 0, 0, 0, 1, world.root),
+        origin=Pose3Dimensional.from_xyz_quaternion(1.5, 2, 0, 0, 0, 0, 1, world.root),
         distance_to_obstacle=0.1,
     )
 
@@ -166,7 +168,9 @@ def test_gaussian_costmap(pr2_apartment_context):
     world, robot_view, extensions = pr2_apartment_context
     gaussian_map = GaussianCostmap(
         resolution=0.02,
-        origin=Pose3D.from_xyz_quaternion(3.1, 2.2, 0, 0, 0, 1, 0, world.root),
+        origin=Pose3Dimensional.from_xyz_quaternion(
+            3.1, 2.2, 0, 0, 0, 1, 0, world.root
+        ),
         mean=400,
         sigma=150,  # Change back
         world=world,
@@ -196,13 +200,17 @@ def test_a_reachability_map_rates_only_the_side_the_robot_can_reach_from(
         width=400,
         world=world,
         robot_view=robot_view,
-        origin=Pose3D.from_xyz_quaternion(3.0, 2.2, 0, 0, 0, 1, 0, world.root),
+        origin=Pose3Dimensional.from_xyz_quaternion(
+            3.0, 2.2, 0, 0, 0, 1, 0, world.root
+        ),
         distance_to_obstacle=0.3,
     )
 
     gaussian_map = GaussianCostmap(
         resolution=0.02,
-        origin=Pose3D.from_xyz_quaternion(3.0, 2.2, 0, 0, 0, 1, 0, world.root),
+        origin=Pose3Dimensional.from_xyz_quaternion(
+            3.0, 2.2, 0, 0, 0, 1, 0, world.root
+        ),
         mean=400,
         sigma=15,  # Change back
         world=world,
@@ -225,7 +233,7 @@ def test_position_generation(pr2_apartment_context):
     np_map[90:110, 90:110] = 1
     gaussian_map = GaussianCostmap(
         resolution=0.02,
-        origin=Pose3D.from_xyz_quaternion(1, 1, 0, 0, 0, 0, 1, world.root),
+        origin=Pose3Dimensional.from_xyz_quaternion(1, 1, 0, 0, 0, 0, 1, world.root),
         mean=200,
         sigma=15,  # Change back
         world=world,
@@ -246,7 +254,7 @@ def test_segment_map(pr2_apartment_context):
     np_map[20:40, 20:40] = 1
     gaussian_map = GaussianCostmap(
         resolution=0.02,
-        origin=Pose3D.from_xyz_quaternion(1, 1, 0, 0, 0, 0, 1, world.root),
+        origin=Pose3Dimensional.from_xyz_quaternion(1, 1, 0, 0, 0, 0, 1, world.root),
         mean=200,
         sigma=15,
         world=world,
@@ -270,7 +278,7 @@ def test_sample_x_axis(pr2_apartment_context):
 
     gaussian_map = GaussianCostmap(
         resolution=0.02,
-        origin=Pose3D.from_xyz_quaternion(0, 0, 0, 0, 0, 0, 1, world.root),
+        origin=Pose3Dimensional.from_xyz_quaternion(0, 0, 0, 0, 0, 0, 1, world.root),
         mean=200,
         sigma=15,
         world=world,
@@ -291,7 +299,7 @@ def test_sample_x_axis_offset(pr2_apartment_context):
 
     gaussian_map = GaussianCostmap(
         resolution=0.02,
-        origin=Pose3D.from_xyz_quaternion(0, 0, 0, 0, 0, 0, 1, world.root),
+        origin=Pose3Dimensional.from_xyz_quaternion(0, 0, 0, 0, 0, 0, 1, world.root),
         mean=200,
         sigma=15,
         world=world,
@@ -313,7 +321,7 @@ def test_sample_x_axis_offset_non_id(pr2_apartment_context):
 
     gaussian_map = GaussianCostmap(
         resolution=0.02,
-        origin=Pose3D.from_xyz_quaternion(3, 2, 0, 0, 0, 0, 1, world.root),
+        origin=Pose3Dimensional.from_xyz_quaternion(3, 2, 0, 0, 0, 0, 1, world.root),
         mean=200,
         sigma=15,
         world=world,
@@ -334,7 +342,7 @@ def test_sample_to_pose_gau(pr2_apartment_context):
     np_map[120:140, 90:110] = 1
     gaussian_map = GaussianCostmap(
         resolution=0.02,
-        origin=Pose3D.from_xyz_quaternion(3, 2, 0, 0, 0, 0, 1, world.root),
+        origin=Pose3Dimensional.from_xyz_quaternion(3, 2, 0, 0, 0, 0, 1, world.root),
         mean=200,
         sigma=15,
         world=world,
@@ -343,7 +351,7 @@ def test_sample_to_pose_gau(pr2_apartment_context):
 
     gaussian_map2 = GaussianCostmap(
         resolution=0.02,
-        origin=Pose3D.from_xyz_quaternion(3, 2, 0, 0, 0, 0, 1, world.root),
+        origin=Pose3Dimensional.from_xyz_quaternion(3, 2, 0, 0, 0, 0, 1, world.root),
         mean=200,
         sigma=15,
         world=world,
@@ -367,7 +375,7 @@ def test_sample_y_axis(pr2_apartment_context):
     np_map[99:101, :] = 1
     gaussian_map = GaussianCostmap(
         resolution=0.02,
-        origin=Pose3D.from_xyz_quaternion(0, 0, 0, 0, 0, 0, 1, world.root),
+        origin=Pose3Dimensional.from_xyz_quaternion(0, 0, 0, 0, 0, 0, 1, world.root),
         mean=200,
         sigma=15,
         world=world,
@@ -386,7 +394,7 @@ def test_sample_rotated(pr2_apartment_context):
     np_map[120:121, 99:101] = 1
     gaussian_map = GaussianCostmap(
         resolution=0.02,
-        origin=Pose3D.from_xyz_quaternion(0, 0, 0, 0, 0, 0, 1, world.root),
+        origin=Pose3Dimensional.from_xyz_quaternion(0, 0, 0, 0, 0, 0, 1, world.root),
         mean=200,
         sigma=15,
         world=world,
@@ -398,7 +406,9 @@ def test_sample_rotated(pr2_apartment_context):
         assert -0.05 < pose.position.y < 0.05
         assert 0.4 <= pose.position.x <= 0.45
 
-    gaussian_map.origin = Pose3D.from_xyz_quaternion(0, 0, 0, 0, 0, 1, 1, world.root)
+    gaussian_map.origin = Pose3Dimensional.from_xyz_quaternion(
+        0, 0, 0, 0, 0, 1, 1, world.root
+    )
 
     assert len(list(gaussian_map.candidates())) == 2
 
@@ -414,7 +424,7 @@ def test_sample_to_pose(pr2_apartment_context):
     np_map[130, 160] = 1
     gaussian_map = GaussianCostmap(
         resolution=0.02,
-        origin=Pose3D.from_xyz_quaternion(1, 1, 0, 0, 0, 0, 1, world.root),
+        origin=Pose3Dimensional.from_xyz_quaternion(1, 1, 0, 0, 0, 0, 1, world.root),
         mean=200,
         sigma=15,
         world=world,
@@ -437,7 +447,7 @@ def test_sample_highest_first(pr2_apartment_context):
     np_map[120, 120] = 3
     gaussian_map = GaussianCostmap(
         resolution=0.02,
-        origin=Pose3D.from_xyz_quaternion(0, 0, 0, 0, 0, 0, 1, world.root),
+        origin=Pose3Dimensional.from_xyz_quaternion(0, 0, 0, 0, 0, 0, 1, world.root),
         mean=200,
         sigma=15,
         world=world,
@@ -461,7 +471,7 @@ def test_segment_highest_first(pr2_apartment_context):
     np_map[120:125, 120:125] = 2
     gaussian_map = GaussianCostmap(
         resolution=0.02,
-        origin=Pose3D.from_xyz_quaternion(0, 0, 0, 0, 0, 0, 1, world.root),
+        origin=Pose3Dimensional.from_xyz_quaternion(0, 0, 0, 0, 0, 0, 1, world.root),
         mean=200,
         sigma=15,
         world=world,
@@ -481,7 +491,7 @@ def test_segment_empty_map(pr2_apartment_context):
     np_map = np.zeros((200, 200))
     gaussian_map = GaussianCostmap(
         resolution=0.02,
-        origin=Pose3D(reference_frame=world.root),
+        origin=Pose3Dimensional(reference_frame=world.root),
         mean=200,
         sigma=15,
         world=world,
@@ -508,7 +518,7 @@ def _ring_map(world) -> RingCostmap:
         standard_deviation=15,
         distance=0.6,
         world=world,
-        origin=Pose3D.from_xyz_quaternion(0, 0, 0, 0, 0, 0, 1, world.root),
+        origin=Pose3Dimensional.from_xyz_quaternion(0, 0, 0, 0, 0, 0, 1, world.root),
     )
 
 
@@ -636,7 +646,10 @@ def test_a_sampled_candidate_faces_the_maps_origin(pr2_apartment_context):
 
     assert len(sampled) == 5
     for candidate in sampled:
-        facing = RotationMatrix.from_quaternion(candidate.quaternion) @ Vector3D.X()
+        facing = (
+            RotationMatrix.from_quaternion(candidate.quaternion)
+            @ Vector3Dimensional.X()
+        )
         to_origin = ring.origin.position - candidate.position
         assert float(facing.angle_between(to_origin)) == pytest.approx(0, abs=1e-6)
 
@@ -647,11 +660,11 @@ def test_a_sampled_candidate_faces_the_maps_origin(pr2_apartment_context):
 def test_a_candidate_faces_the_maps_origin_from_every_side(pr2_apartment_context, x, y):
     world, _, _ = pr2_apartment_context
     ring = _ring_map(world)
-    position = CartesianPoint3D(x, y, 0, reference_frame=world.root)
+    position = CartesianPoint3Dimensional(x, y, 0, reference_frame=world.root)
 
     facing = (
         RotationMatrix.from_quaternion(ring._orientation_facing_origin(position))
-        @ Vector3D.X()
+        @ Vector3Dimensional.X()
     )
 
     to_origin = ring.origin.position - position

@@ -38,7 +38,7 @@ class EuclideanSpace(Space, Interface):
 # %% Euclidean spaces of a fixed dimension
 
 
-class EuclideanSpace2D(EuclideanSpace, Interface):
+class EuclideanSpace2Dimensional(EuclideanSpace, Interface):
     """
     A two-dimensional Euclidean space, such as the floor a robot drives on.
     """
@@ -48,7 +48,7 @@ class EuclideanSpace2D(EuclideanSpace, Interface):
         return 2
 
 
-class EuclideanSpace3D(EuclideanSpace, Interface):
+class EuclideanSpace3Dimensional(EuclideanSpace, Interface):
     """
     A three-dimensional Euclidean space, such as the physical space a robot's bodies are
     in.

@@ -35,7 +35,7 @@ from ._statements import allowed_intervals
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     Twist,
-    Vector3D,
+    Vector3Dimensional,
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import Mesh
@@ -259,7 +259,7 @@ def small_twist(rng: np.random.Generator, rise: float) -> Twist:
     return Twist.from_transformation(
         HomogeneousTransformationMatrix.from_xyz_axis_angle(
             z=rise,
-            axis=Vector3D(*rotation_vector),
+            axis=Vector3Dimensional(*rotation_vector),
             angle=float(np.linalg.norm(rotation_vector)),
         )
     )
@@ -299,8 +299,8 @@ def test_a_learned_model_answers_with_lifting_grasps(carton, learned_carton_mode
     for grasp in grasps:
         assert grasp.height > LIFTING_HEIGHT
         assert grasp.result.lifted
-        assert isinstance(grasp.result.slip.translation, Vector3D)
-        assert isinstance(grasp.result.slip.rotation_vector, Vector3D)
+        assert isinstance(grasp.result.slip.translation, Vector3Dimensional)
+        assert isinstance(grasp.result.slip.rotation_vector, Vector3Dimensional)
 
 
 def test_a_uniform_prior_cannot_answer_for_lifting_grasps(carton):

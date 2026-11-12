@@ -20,7 +20,7 @@ from robokudo.types.camera import CameraObservation
 from robokudo.types.scene import ObjectHypothesis
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    CartesianPoint2D,
+    CartesianPoint2Dimensional,
 )
 from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
@@ -57,7 +57,9 @@ def detector_on_half_resolution_depth(
         image_resolution=CameraResolution(width=depth_width, height=depth_height),
         focal_length_x=50.0,
         focal_length_y=50.0,
-        principal_point=CartesianPoint2D(x=depth_width / 2, y=depth_height / 2),
+        principal_point=CartesianPoint2Dimensional(
+            x=depth_width / 2, y=depth_height / 2
+        ),
     )
     return detector
 

@@ -53,7 +53,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Milk,
     Spoon,
 )
-from krrood_spatial_math.spatial_types import Pose3D
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 from semantic_digital_twin.world import World
 from ...plan_running import robot_executor, run_plan, simulated_executor, statechart_of
 from ...statechart_json_round_trip import StatechartSentThroughJSON
@@ -61,13 +61,13 @@ from ...statechart_json_round_trip import StatechartSentThroughJSON
 # %% helpers
 
 
-def _pose_in_front_of_the_robot(world, robot) -> Pose3D:
+def _pose_in_front_of_the_robot(world, robot) -> Pose3Dimensional:
     """
     :return: A pose in the world frame, a few centimetres in front of where the robot
         stands now.
     """
     return world.transform(
-        Pose3D.from_xyz_rpy(x=0.05, reference_frame=robot.root), world.root
+        Pose3Dimensional.from_xyz_rpy(x=0.05, reference_frame=robot.root), world.root
     )
 
 
@@ -93,7 +93,7 @@ class RecordingLocationInFrontOfTheRobot(Location):
     Whether the torso stood high, once per sampling.
     """
 
-    def candidates(self) -> Iterator[Pose3D]:
+    def candidates(self) -> Iterator[Pose3Dimensional]:
         torso_high = self.robot.get_torso().get_joint_state_by_type(TorsoState.HIGH)
         self.torso_high_when_sampled.append(torso_high.is_achieved())
         yield _pose_in_front_of_the_robot(self.world, self.robot)
@@ -113,7 +113,8 @@ def test_a_plan_grounding_an_action_mid_sequence_runs_as_one_statechart(
             StatementNode(
                 statement=a(NavigateAction)(
                     target_location=variable(
-                        Pose3D, domain=[_pose_in_front_of_the_robot(world, robot)]
+                        Pose3Dimensional,
+                        domain=[_pose_in_front_of_the_robot(world, robot)],
                     )
                 )
             ),
@@ -144,7 +145,7 @@ def test_an_underspecified_action_is_grounded_against_the_world_the_steps_before
             MoveTorsoAction(torso_state=TorsoState.HIGH),
             StatementNode(
                 statement=a(NavigateAction)(
-                    target_location=variable(Pose3D, domain=location)
+                    target_location=variable(Pose3Dimensional, domain=location)
                 )
             ),
         ]
@@ -192,7 +193,9 @@ def test_a_place_finds_the_grasp_of_the_pick_up_before_it(
     pick_up = PickUpAction(grasp=milk.grasp_candidates()[0], arm=robot.left_arm)
     place = PlaceAction(
         object_designator=milk,
-        target_location=Pose3D.from_xyz_rpy(0.8, -1.9, 0.7, reference_frame=world.root),
+        target_location=Pose3Dimensional.from_xyz_rpy(
+            0.8, -1.9, 0.7, reference_frame=world.root
+        ),
     )
     statechart = Statechart(context=simulated_executor(extensions).context)
 
@@ -209,7 +212,9 @@ def test_a_place_below_a_pausing_composite_finds_the_pick_up_before_that(
     pick_up = PickUpAction(grasp=milk.grasp_candidates()[0], arm=robot.left_arm)
     place = PlaceAction(
         object_designator=milk,
-        target_location=Pose3D.from_xyz_rpy(0.8, -1.9, 0.7, reference_frame=world.root),
+        target_location=Pose3Dimensional.from_xyz_rpy(
+            0.8, -1.9, 0.7, reference_frame=world.root
+        ),
     )
     paused_place = PausedUntilTrue(monitor=ConstTrueNode(), monitored_node=place)
     statechart = Statechart(context=simulated_executor(extensions).context)
@@ -227,7 +232,9 @@ def test_a_place_after_several_pick_ups_uses_the_arm_that_picked_its_object(
     spoon = world.get_semantic_annotations_by_type(Spoon)[0]
     place_milk = PlaceAction(
         object_designator=milk,
-        target_location=Pose3D.from_xyz_rpy(0.8, -1.9, 0.7, reference_frame=world.root),
+        target_location=Pose3Dimensional.from_xyz_rpy(
+            0.8, -1.9, 0.7, reference_frame=world.root
+        ),
     )
     statechart = Statechart(context=simulated_executor(extensions).context)
 
@@ -257,7 +264,9 @@ def test_a_place_after_an_earlier_place_uses_the_arm_that_picked_its_object(
     spoon = world.get_semantic_annotations_by_type(Spoon)[0]
     place_spoon = PlaceAction(
         object_designator=spoon,
-        target_location=Pose3D.from_xyz_rpy(0.8, -1.9, 0.7, reference_frame=world.root),
+        target_location=Pose3Dimensional.from_xyz_rpy(
+            0.8, -1.9, 0.7, reference_frame=world.root
+        ),
     )
     statechart = Statechart(context=simulated_executor(extensions).context)
 
@@ -267,7 +276,7 @@ def test_a_place_after_an_earlier_place_uses_the_arm_that_picked_its_object(
                 PickUpAction(grasp=milk.grasp_candidates()[0], arm=robot.left_arm),
                 PlaceAction(
                     object_designator=milk,
-                    target_location=Pose3D.from_xyz_rpy(
+                    target_location=Pose3Dimensional.from_xyz_rpy(
                         0.8, -1.5, 0.7, reference_frame=world.root
                     ),
                 ),
@@ -390,7 +399,8 @@ def test_a_plan_on_the_robot_is_sent_once_with_the_chooser_grounding_its_actions
             StatementNode(
                 statement=a(NavigateAction)(
                     target_location=variable(
-                        Pose3D, domain=[_pose_in_front_of_the_robot(world, robot)]
+                        Pose3Dimensional,
+                        domain=[_pose_in_front_of_the_robot(world, robot)],
                     )
                 )
             ),
@@ -528,7 +538,9 @@ def test_an_underspecified_action_out_of_candidates_on_the_robot_says_it_is_empt
         lambda ros_node, context: GiskardTickingTheGoalUntilItEnded(),
     )
     plan = StatementNode(
-        statement=a(NavigateAction)(target_location=variable(Pose3D, domain=[]))
+        statement=a(NavigateAction)(
+            target_location=variable(Pose3Dimensional, domain=[])
+        )
     )
     executor = robot_executor(extensions)
     executor.compile(statechart_of(executor, plan))
@@ -574,7 +586,7 @@ def test_an_expanded_action_is_received_with_the_steps_it_runs(
     created again.
     """
     world, robot, extensions = pr2_apartment_context
-    target = Pose3D.from_xyz_rpy(1.0, 0.0, 1.0, reference_frame=world.root)
+    target = Pose3Dimensional.from_xyz_rpy(1.0, 0.0, 1.0, reference_frame=world.root)
     sent = Statechart(context=simulated_executor(extensions).context)
     sent.add_node(
         action := FaceAndLookAtAction(

@@ -5,7 +5,10 @@ from dataclasses import dataclass
 from giskardpy.motion_statechart.cruise_velocities import DefaultCruiseVelocity
 from giskardpy.motion_statechart.weights import DefaultWeights
 from giskardpy.motion_statechart.graph_node import MotionNodeArtifacts, ConvergingTask
-from krrood_spatial_math.spatial_types import CartesianPoint3D, Vector3D
+from krrood_spatial_math.spatial_types import (
+    CartesianPoint3Dimensional,
+    Vector3Dimensional,
+)
 from semantic_digital_twin.world_description.world_entity import Body
 
 
@@ -28,17 +31,17 @@ class GraspBar(ConvergingTask):
     Tip link of the kinematic chain.
     """
 
-    tip_grasp_axis: Vector3D
+    tip_grasp_axis: Vector3Dimensional
     """
     Axis of the tip link that will be aligned with the bar axis.
     """
 
-    bar_center: CartesianPoint3D
+    bar_center: CartesianPoint3Dimensional
     """
     Center of the bar to be grasped.
     """
 
-    bar_axis: Vector3D
+    bar_axis: Vector3Dimensional
     """
     Alignment of the bar to be grasped.
     """

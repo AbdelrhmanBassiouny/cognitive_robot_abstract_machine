@@ -13,9 +13,9 @@ from semantic_digital_twin.adapters.ros.visualization.spatial_type_marker_render
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    CartesianPoint3D,
+    CartesianPoint3Dimensional,
     Quaternion,
-    Vector3D,
+    Vector3Dimensional,
 )
 from krrood_spatial_math.spatial_types import RotationMatrix, SymbolicSpatialType
 from semantic_digital_twin.world_description.world_entity import Body
@@ -30,7 +30,7 @@ def render(spatial_type: SymbolicSpatialType, **kwargs) -> list[Marker]:
 
 def test_point_renders_single_sphere():
     frame = Body(name=PrefixedName("frame"))
-    point = CartesianPoint3D(1, 2, 3, reference_frame=frame)
+    point = CartesianPoint3Dimensional(1, 2, 3, reference_frame=frame)
 
     markers = render(point)
 
@@ -47,7 +47,7 @@ def test_point_renders_single_sphere():
 
 
 def test_point_without_reference_frame_uses_root():
-    markers = render(CartesianPoint3D(0, 0, 0))
+    markers = render(CartesianPoint3Dimensional(0, 0, 0))
 
     assert markers[0].header.frame_id == ROOT_FRAME_NAME
 
@@ -55,7 +55,7 @@ def test_point_without_reference_frame_uses_root():
 def test_vector_renders_arrow_anchored_at_visualisation_frame():
     reference = Body(name=PrefixedName("reference"))
     visualisation = Body(name=PrefixedName("visualisation"))
-    vector = Vector3D(
+    vector = Vector3Dimensional(
         x=1, y=0, z=0, reference_frame=reference, visualisation_frame=visualisation
     )
 
@@ -124,7 +124,9 @@ def test_unsupported_spatial_type_raises():
 
 def test_namespace_and_id_offset_propagate():
     markers = render(
-        CartesianPoint3D(0, 0, 0), namespace="debug/point", marker_id_offset=10
+        CartesianPoint3Dimensional(0, 0, 0),
+        namespace="debug/point",
+        marker_id_offset=10,
     )
 
     assert markers[0].ns == "debug/point"

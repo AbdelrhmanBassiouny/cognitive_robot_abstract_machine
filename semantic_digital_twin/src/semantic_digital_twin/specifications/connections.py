@@ -13,7 +13,10 @@ from krrood.class_diagrams.attribute_introspector import DataclassOnlyIntrospect
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood.utils import get_generic_type_parameters
 from semantic_digital_twin.exceptions import MissingConnectionParentError
-from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Vector3D
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Vector3Dimensional,
+)
 from semantic_digital_twin.specifications.base import NamedSpecification
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
@@ -263,7 +266,7 @@ class ActiveConnection1DOFSpecification(ConnectionSpecification[TConnection], AB
     prismatic or revolute).
     """
 
-    axis: Vector3D = field(kw_only=True)
+    axis: Vector3Dimensional = field(kw_only=True)
     """
     Movement axis of the connection.
 

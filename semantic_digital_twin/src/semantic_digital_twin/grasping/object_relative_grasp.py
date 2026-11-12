@@ -17,7 +17,7 @@ from krrood.parametrization.model_registries import (
     ModelRegistry,
     UniformPriorRegistry,
 )
-from krrood_spatial_math.spatial_types import Twist, Vector3D
+from krrood_spatial_math.spatial_types import Twist, Vector3Dimensional
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 
 if TYPE_CHECKING:
@@ -82,8 +82,8 @@ def _any_twist() -> Match[Twist]:
     :return: A pattern of a twist with every component left free.
     """
     return a(Twist)(
-        translation=a(Vector3D)(x=..., y=..., z=...),
-        rotation_vector=a(Vector3D)(x=..., y=..., z=...),
+        translation=a(Vector3Dimensional)(x=..., y=..., z=...),
+        rotation_vector=a(Vector3Dimensional)(x=..., y=..., z=...),
     )
 
 
