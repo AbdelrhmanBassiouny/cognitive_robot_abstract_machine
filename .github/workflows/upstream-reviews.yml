@@ -11,6 +11,6 @@ permissions:
 
 jobs:
   read:
-    uses: KAOS-repositories/basstler/.github/workflows/upstream-reviews-action.yml@v3.15.3
+    uses: KAOS-repositories/basstler/.github/workflows/upstream-reviews-action.yml@v3.15.6
     with:
-      basstler_branch_or_tag: v3.15.3
+      basstler_branch_or_tag: v3.15.6
