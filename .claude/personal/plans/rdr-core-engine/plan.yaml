@@ -32,41 +32,23 @@ tracks:
   description: Warn, ask an expert or use a default conclusion, and record which of the three
     a conclusion came from.
 items:
-- id: D-core-corner-case
-  title: 'RDR engine: corner-case provenance store'
-  branch: D-core-corner-case
-  pull_request_number: 65
-  track: engine-stack
-  session: https://claude.ai/code/session_01JxHGiKaQnckii8nWhnKuRh
-  blockers:
-    - >-
-      On #66, test_serialization.py imports what_do_we_know_about, which #66's backward_inference.py
-      no longer defines; this predates the 2026-11-10 work and will keep #66's krrood tests red.
-    - >-
-      The `integration-conflict` label (2026-09-30) was measured on a combined tree that no longer
-      exists: #64 has since merged into main and this branch merged main (6b3b447f). Not re-checked;
-      this basstler release has no integration build to re-run it.
-  depends_on: []
-  status: in_progress
-  notes: >
-    Targets main since #64 merged. The 2026-11-10 review is fully applied (d2d7ceb990, 8d5d547330):
-    store methods renamed, the serializer moved to krrood.code_generation.dataclass_source, and the
-    a/an sweep split out as #565. The claude/rdr-why-answer-6fnw2o chain lacks both because of its
-    own conflict.
 - id: D-core-serialization
   title: 'RDR engine: rule-tree unparser (rdr_to_python)'
   branch: D-core-serialization
   pull_request_number: 66
   track: engine-stack
-  depends_on:
-  - D-core-corner-case
+  depends_on: []
   status: in_progress
-  notes: 'The rule-tree unparser, plus the `type_hints.py` to `object_to_source.py` rename
-    its own review asked for. Restacked and cascaded. One finding worth keeping: the rename''s
-    claim to update every importer was narrower than stated, and CI caught `template_file_creator.py`
-    importing the deleted module — a file neither side''s diff touched, so git''s merge never
-    flagged it. That is the failure mode this stack has now hit three times. 2026-08-30: the
-    generated module''s header changed here (`bb01256df`), because this slice owns `templates/rdr_module.py.jinja`.'
+  blockers:
+  - The `integration-conflict` label (2026-09-29) still withholds promotion and nothing clears
+    it automatically; whether that build failed on the stale import fixed in `345b5fbfa` is
+    not checked. Remove it only once a build carrying `345b5fbfa` is green.
+  notes: The rule-tree unparser, plus the `type_hints.py` to `object_to_source.py` rename
+    its own review asked for. Based on `main` since 2026-11-12 (D-core-corner-case merged).
+    `345b5fbfa` follows `main`'s rename of `what_do_we_know_about` to `get_conclusion_sufficient_conditions_from_a_rule_tree`
+    and its keyword-only calls. The stale import had hidden that `rdr_to_python` could not
+    render at all. `save_rdr_with_case`'s `generate(function=...)` call is not covered on
+    this slice. CI on `345b5fbfa` not read.
 - id: D-core-support
   title: 'RDR engine: observer, rule-tree view, and remaining support modules'
   branch: D-core-support
@@ -117,14 +99,12 @@ items:
   status: in_progress
   session: https://claude.ai/code/session_01JxHGiL16bUxxHg6B3qRSaL
   blockers:
-    - >-
-      The GroundTruth thread on backend.py:39 waits on the owner's pick of its three options (keep
-      the alias, wrap it in a frozen dataclass, or make the alias generic). No dataclass in
-      entity_query_language/rdr/ expresses a per-case ground-truth supplier.
-    - >-
-      CI on 61f78fa6 not checked: krrood and semantic_digital_twin were still running at the
-      2026-11-10 resolve. That restack brought main's pytest-rerunfailures down, the remedy for
-      flaky test_world_sim_state_sync. Zoo-dataset tests not run locally.
+  - The GroundTruth thread on backend.py:39 waits on the owner's pick of its three options
+    (keep the alias, wrap it in a frozen dataclass, or make the alias generic). No dataclass
+    in entity_query_language/rdr/ expresses a per-case ground-truth supplier.
+  - 'CI on 61f78fa6 not checked: krrood and semantic_digital_twin were still running at the
+    2026-11-10 resolve. That restack brought main''s pytest-rerunfailures down, the remedy
+    for flaky test_world_sim_state_sync. Zoo-dataset tests not run locally.'
   notes: The underspecified-query RDR backend, and the stack tip. `RDRBackend` inherits `QueryBackend`,
     whose whole ABC is `evaluate(expression)`; neither concrete base fits, since `SelectiveBackend`
     raises on exactly the ellipsis matches this backend exists for and `GenerativeBackend`
