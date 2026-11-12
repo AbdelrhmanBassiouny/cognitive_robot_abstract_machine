@@ -1,10 +1,7 @@
 Plan
-- Answer the 6 review threads of 2026-11-12 on #488 (upstream cram2#804 unchanged: 29/29 green, 3 outdated threads).
-- Move ShapeSortingPiece/its kinds, ShapeSortingHole, ShapeSortingBoard and NoMatchingHoleError into shape_sorting_toy.
-- HoleFootprint -> ShapeSortingBoardMesh.hole_specifications (SemanticAnnotationWithRootSpecification[ShapeSortingHole]); demo spawns a real ShapeSortingBoard with holes and uses hole_for.
-- ShapeSortingBoardMesh becomes Role[FileMesh].
-- PieceColor(Color, Enum); PieceSet.printed -> scaled.
+- Wait on CI at a958c9e117 and the developer's call on two open threads (generality; PieceColor as a Color enum).
 Done
-- Nothing yet this round.
+- Review of 2026-11-12 answered in a958c9e117: toy classes moved to shape_sorting_toy; HoleFootprint -> hole_specifications; ShapeSortingBoardMesh is Role[Mesh]; printed -> scaled. 4 threads resolved.
 Next
-- Implement, test SDT/experiments/ORM, push via maintenance push, reply inline per thread.
+- Read CI at a958c9e117 (coraplex job runs the demo test).
+- cram2#804: developer updates its description and answers its 3 outdated threads.
