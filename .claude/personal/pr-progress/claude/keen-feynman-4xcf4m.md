@@ -9,8 +9,9 @@
   - `DeclarationFile` is a `PathEnumeration`;
   - `NoUserInputOrConclusionForCallableExpression` replaces the `ValueError` in `CallableExpression.__init__`;
   - `VariableVisitor.compares`, which nothing read, is removed.
-- #547 restacked at b122c0104e: keyword-only drawing methods and test calls.
+- 43b14bdce5: `development_tools.md` links `.pre-commit-hooks.yaml` instead of embedding its YAML.
+- #547 restacked at 19dc427447: keyword-only drawing methods and test calls.
 
 ## Next
-- Reply on the 10 upstream threads; the session can't comment upstream.
-- Check CI at 639eb3cd67 and b122c0104e.
+- Post the drafted replies on the 10 upstream threads; thread 7 waits on Bass's choice.
+- Check CI at 43b14bdce5 and 19dc427447.
