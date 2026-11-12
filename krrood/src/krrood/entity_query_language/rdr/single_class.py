@@ -80,7 +80,7 @@ from krrood.entity_query_language.rdr.serialization import (
     ModelSaver,
     TemporaryModelSaver,
 )
-from krrood.entity_query_language.rdr.underspecified import RDRMatchParser
+from krrood.entity_query_language.rdr.underspecified import RippleDownRulesMatchParser
 from krrood.entity_query_language.scope import (
     attach_definition_scope,
     capture_caller_scope,
@@ -184,7 +184,7 @@ class EQLSingleClassRDR:
         :param underspecified_query: For example ``an(Animal)(species=...)``.
         :return: An RDR predicting the query's single underspecified attribute.
         """
-        statement = RDRMatchParser(underspecified_query)
+        statement = RippleDownRulesMatchParser(match=underspecified_query)
         return cls(statement.case_type, statement.target_attribute_name)
 
     # %% classification
@@ -577,4 +577,6 @@ class EQLSingleClassRDR:
         :param conclusion: The conclusion value to work backwards from.
         :return: The sufficient condition sets for ``conclusion``.
         """
-        return self._backward_index.query(self.conditions_root, conclusion)
+        return self._backward_index.query(
+            expression=self.conditions_root, conclusion_value=conclusion
+        )
