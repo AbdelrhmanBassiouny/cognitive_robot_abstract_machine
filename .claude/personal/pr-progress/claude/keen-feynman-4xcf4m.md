@@ -1,12 +1,16 @@
 ## Plan
-- Core is declared once in `[tool.krrood.core-boundary]` of krrood/pyproject.toml: patterns, class_diagrams, symbol_graph, exceptions, utils, singleton, _version. `CoreBoundaryChecker` checks the module-level import graph; a runtime backstop test catches the rest. Source reading lives in `krrood.source_analysis`.
+- Get upstream cram2#904 re-reviewed: tomsch420 and LucaKro requested changes on 9 Nov.
 
 ## Done
-- 8dcc61cb36: Role.is_same_semantic_entity; EQL's IsSameSemanticEntity calls it. EQL kept out of core (would add 28 crossings). Tests + pre-commit green at 8dcc61cb36; merged into #547 (cb45de5c6d).
-- 245f68b570 + 0a78cbaaa7: utils + singleton in core; role_predicates -> EQL; 29d1fd7ff8: source_analysis moves (api-break). 5 crossings in 4 files left.
-- Source-analysis and core-list threads resolved.
+- 779240de9d: merged main b0e961c745 (7 conflicting files). The core boundary code is now keyword-only, as main's new rule requires, and `CodeRuleChecker.violations` now passes `path=`. `Role.is_same_semantic_entity` takes keywords. The duplicate `krrood-check` hook is dropped in favour of main's.
+- 639eb3cd67, upstream review:
+  - a core without `dependencies` no longer raises `KeyError` (mimic `dependency_free_core_distribution`);
+  - `from_json` is now `from_pyproject_json_data` (Bass's choice over the AGENTS.md `from_json` convention);
+  - `DeclarationFile` is a `PathEnumeration`;
+  - `NoUserInputOrConclusionForCallableExpression` replaces the `ValueError` in `CallableExpression.__init__`;
+  - `VariableVisitor.compares`, which nothing read, is removed.
+- #547 restacked at b122c0104e: keyword-only drawing methods and test calls.
 
 ## Next
-- Owner to decide: `krrood check --runtime` mode (thread open).
-- CI at 8dcc61cb36 and #547's cb45de5c6d not read.
-- Labels: suggest new-feature + api-break in place of maintenance.
+- Reply on the 10 upstream threads; the session can't comment upstream.
+- Check CI at 639eb3cd67 and b122c0104e.
