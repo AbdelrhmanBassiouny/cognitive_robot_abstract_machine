@@ -41,14 +41,14 @@ items:
   status: in_progress
   blockers:
   - The `integration-conflict` label (2026-09-29) still withholds promotion and nothing clears
-    it automatically; whether that build failed on the stale import fixed in `345b5fbfa` is
-    not checked. Remove it only once a build carrying `345b5fbfa` is green.
+    it automatically. The pull request's own CI is green at `345b5fbfa` (18/18); removing the label is
+    left to the owner.
   notes: The rule-tree unparser, plus the `type_hints.py` to `object_to_source.py` rename
     its own review asked for. Based on `main` since 2026-11-12 (D-core-corner-case merged).
     `345b5fbfa` follows `main`'s rename of `what_do_we_know_about` to `get_conclusion_sufficient_conditions_from_a_rule_tree`
     and its keyword-only calls. The stale import had hidden that `rdr_to_python` could not
     render at all. `save_rdr_with_case`'s `generate(function=...)` call is not covered on
-    this slice. CI on `345b5fbfa` not read.
+    this slice. CI 18/18 green at `345b5fbfa`.
 - id: D-core-support
   title: 'RDR engine: observer, rule-tree view, and remaining support modules'
   branch: D-core-support
