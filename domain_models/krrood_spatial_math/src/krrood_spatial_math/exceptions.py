@@ -8,6 +8,7 @@ from krrood.exceptions import DataclassException
 
 if TYPE_CHECKING:
     from krrood_spatial_math.cartesian_frame_3d import CartesianFrame3D
+    from krrood_spatial_math.coordinate_system import CoordinateSystem
     from krrood_spatial_math.spatial_types import Pose3D, SymbolicSpatialType, Vector3D
 
 # %% spatial types
@@ -45,12 +46,12 @@ class InsufficientVectorsError(SpatialTypesError):
 
 @dataclass
 class ReferenceFrameMismatchError(SpatialTypesError):
-    expected_frame: CartesianFrame3D | None
+    expected_frame: CoordinateSystem | None
     """
     The frame the operation requires, or ``None`` if it requires no frame.
     """
 
-    actual_frame: CartesianFrame3D | None
+    actual_frame: CoordinateSystem | None
     """
     The frame that was found instead, or ``None`` if the value has no frame.
     """
@@ -64,12 +65,12 @@ class ReferenceFrameMismatchError(SpatialTypesError):
         checked_value = self.context or "the given value"
         return (
             f"Expected {checked_value} to be expressed in "
-            f"{self._describe(self.expected_frame)}, "
-            f"but it is expressed in {self._describe(self.actual_frame)}."
+            f"{self._describe(frame=self.expected_frame)}, "
+            f"but it is expressed in {self._describe(frame=self.actual_frame)}."
         )
 
     @staticmethod
-    def _describe(frame: CartesianFrame3D | None) -> str:
+    def _describe(*, frame: CoordinateSystem | None) -> str:
         """
         :param frame: The frame to describe.
         :return: The frame as it reads in the error message.

@@ -7,13 +7,10 @@ import pytest
 
 from krrood.adapters.json_serializer import from_json, to_json
 import krrood.symbolic_math.symbolic_math as sm
-from krrood_spatial_math.affine_line import AffineLine
-from krrood_spatial_math.affine_point import AffinePointT, CartesianPoint
-from krrood_spatial_math.affine_vector import AffineVectorT, CartesianVector
-from krrood_spatial_math.cartesian_frame_3d import (
-    CartesianFrame3D,
-    ValueInCartesianFrame3D,
-)
+from krrood_spatial_math.line import Line
+from krrood_spatial_math.point import PointT, MetricPoint
+from krrood_spatial_math.vector import VectorT, MetricVector
+from krrood_spatial_math.cartesian_frame_3d import CartesianFrame3D
 from krrood_spatial_math.coordinate_system import (
     CoordinateRepresentation,
     CoordinateSystemT,
@@ -25,6 +22,7 @@ from krrood_spatial_math.exceptions import (
     ReferenceFrameMismatchError,
 )
 from krrood_spatial_math.spatial_types import (
+    SymbolicSpatialValue,
     AxisAngle,
     HomogeneousTransformationMatrix,
     FramePlaneProjection,
@@ -68,13 +66,13 @@ spatial_values = [
 
 @pytest.mark.parametrize("spatial_value", spatial_values)
 def test_a_spatial_value_is_a_value_given_in_a_cartesian_frame(spatial_value):
-    assert issubclass(spatial_value, ValueInCartesianFrame3D)
+    assert issubclass(spatial_value, SymbolicSpatialValue)
 
 
 def test_a_value_in_a_cartesian_frame_is_a_coordinate_representation():
-    assert issubclass(ValueInCartesianFrame3D, CoordinateRepresentation)
+    assert issubclass(SymbolicSpatialValue, CoordinateRepresentation)
     assert (
-        ValueInCartesianFrame3D.get_type_of_generic_parameter(parameter=CoordinateSystemT)
+        SymbolicSpatialValue.get_type_of_generic_parameter(parameter=CoordinateSystemT)
         is CartesianFrame3D
     )
 
@@ -99,23 +97,29 @@ def test_a_three_dimensional_point_is_given_in_a_three_dimensional_cartesian_fra
 
 
 def test_a_three_dimensional_point_is_a_cartesian_point():
-    assert issubclass(CartesianPoint3D, CartesianPoint)
+    assert issubclass(CartesianPoint3D, MetricPoint)
 
 
 def test_a_three_dimensional_point_stores_its_coordinates_as_symbolic_scalars():
-    assert CartesianPoint3D.get_type_of_generic_parameter(parameter=CoordinateT) is sm.Scalar
+    assert (
+        CartesianPoint3D.get_type_of_generic_parameter(parameter=CoordinateT)
+        is sm.Scalar
+    )
 
 
 def test_a_three_dimensional_point_is_moved_by_a_three_dimensional_vector():
-    assert CartesianPoint3D.get_type_of_generic_parameter(parameter=AffineVectorT) is Vector3D
+    assert CartesianPoint3D.get_type_of_generic_parameter(parameter=VectorT) is Vector3D
 
 
 # %% a vector in a frame's space as a Cartesian vector
 
 
 def test_a_three_dimensional_vector_is_a_cartesian_vector_of_a_three_dimensional_frame():
-    assert issubclass(Vector3D, CartesianVector)
-    assert Vector3D.get_type_of_generic_parameter(parameter=CoordinateSystemT) is CartesianFrame3D
+    assert issubclass(Vector3D, MetricVector)
+    assert (
+        Vector3D.get_type_of_generic_parameter(parameter=CoordinateSystemT)
+        is CartesianFrame3D
+    )
 
 
 def test_the_difference_of_two_three_dimensional_points_moves_one_onto_the_other():
@@ -129,9 +133,9 @@ def test_the_difference_of_two_three_dimensional_points_moves_one_onto_the_other
 
 
 def test_a_three_dimensional_line_runs_through_a_point_along_a_vector():
-    assert issubclass(Line3D, AffineLine)
-    assert Line3D.get_type_of_generic_parameter(parameter=AffinePointT) is CartesianPoint3D
-    assert Line3D.get_type_of_generic_parameter(parameter=AffineVectorT) is Vector3D
+    assert issubclass(Line3D, Line)
+    assert Line3D.get_type_of_generic_parameter(parameter=PointT) is CartesianPoint3D
+    assert Line3D.get_type_of_generic_parameter(parameter=VectorT) is Vector3D
 
 
 # %% a transformation as a change between two frames
@@ -147,7 +151,9 @@ def test_a_transformation_is_no_value_given_in_a_frame():
 
 def test_a_transformation_binds_cartesian_frames_as_its_coordinate_systems():
     assert (
-        HomogeneousTransformationMatrix.get_type_of_generic_parameter(parameter=CoordinateSystemT)
+        HomogeneousTransformationMatrix.get_type_of_generic_parameter(
+            parameter=CoordinateSystemT
+        )
         is CartesianFrame3D
     )
 

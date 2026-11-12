@@ -2,12 +2,16 @@ from __future__ import annotations
 
 from abc import abstractmethod
 
-from typing_extensions import Generic, Self, TypeVar
+from typing_extensions import TYPE_CHECKING, Generic, Self, TypeVar
 
 from krrood.patterns.identifier_and_name import HasID, HasName, NameT
 from krrood.patterns.interface import Interface
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood_spatial_math.space import EuclideanSpace, Space
+
+if TYPE_CHECKING:
+    from krrood_spatial_math.point import Point
+    from krrood_spatial_math.vector import Vector
 
 # %% what coordinates are given in
 
@@ -57,7 +61,41 @@ class CartesianFrame(AffineFrame[EuclideanSpaceT, NameT], Interface):
     """
     An affine frame whose axes are perpendicular and one unit of its Euclidean space
     long.
+
+    Every Cartesian frame measures lengths and angles the same way, so the metric belongs
+    to the kind of frame and needs no frame instance.
     """
+
+    @classmethod
+    def inner_product(cls, *, first: Vector, second: Vector) -> CoordinateT:
+        """
+        :param first: A vector given in a frame of this kind.
+        :param second: A vector given in the same frame.
+        :return: The product of both lengths and the cosine of the angle between them.
+        """
+        return sum(
+            first_coordinate * second_coordinate
+            for first_coordinate, second_coordinate in zip(
+                first.coordinates, second.coordinates, strict=True
+            )
+        )
+
+    @classmethod
+    def norm(cls, *, vector: Vector) -> CoordinateT:
+        """
+        :param vector: A vector given in a frame of this kind.
+        :return: The length of ``vector``.
+        """
+        return cls.inner_product(first=vector, second=vector) ** 0.5
+
+    @classmethod
+    def distance(cls, *, first: Point, second: Point) -> CoordinateT:
+        """
+        :param first: A point given in a frame of this kind.
+        :param second: A point given in the same frame.
+        :return: The straight-line distance between both points.
+        """
+        return cls.norm(vector=first - second)
 
 
 # %% values given in a coordinate system
@@ -91,6 +129,14 @@ class CoordinateRepresentation(
     """
     The coordinate system the coordinates are given in; ``None`` where it is not known.
     """
+
+
+CoordinateRepresentationT = TypeVar(
+    "CoordinateRepresentationT", bound=CoordinateRepresentation
+)
+"""
+The kind of value given in a coordinate system.
+"""
 
 
 # %% changing coordinates within one space

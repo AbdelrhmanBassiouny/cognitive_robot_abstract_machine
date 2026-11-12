@@ -10,9 +10,9 @@ from dataclasses import dataclass
 from typing_extensions import Self
 
 from krrood.patterns.interface import Interface
-from krrood_spatial_math.affine_line import AffineLine
-from krrood_spatial_math.affine_point import AffinePoint, AffinePointT
-from krrood_spatial_math.affine_vector import AffineVector, AffineVectorT
+from krrood_spatial_math.line import Line
+from krrood_spatial_math.point import Point, PointT
+from krrood_spatial_math.vector import Vector, VectorT
 from krrood_spatial_math.cartesian_frame_3d import CartesianFrame3D
 from krrood_spatial_math.coordinate_system import (
     AffineCoordinateChange,
@@ -43,7 +43,7 @@ class ScalablePlaneFrame(AffineFrame[ScalablePlane, str], Interface):
 
 
 @dataclass(kw_only=True)
-class StoredAffineVector(AffineVector[AffineFrameT, CoordinateT]):
+class StoredVector(Vector[AffineFrameT, CoordinateT]):
     """
     A vector that stores its two coordinates and frame as given.
     """
@@ -62,6 +62,10 @@ class StoredAffineVector(AffineVector[AffineFrameT, CoordinateT]):
     """
     The frame the coordinates are given in.
     """
+
+    @property
+    def coordinates(self) -> tuple[CoordinateT, CoordinateT]:
+        return self.x, self.y
 
     def __add__(self, other: Self) -> Self:
         return type(self)(
@@ -86,14 +90,14 @@ class StoredAffineVector(AffineVector[AffineFrameT, CoordinateT]):
 
 
 @dataclass(kw_only=True)
-class StoredScalablePlaneVector(StoredAffineVector[ScalablePlaneFrame, float]):
+class StoredScalablePlaneVector(StoredVector[ScalablePlaneFrame, float]):
     """
     A vector on a scalable plane that stores its coordinates as given.
     """
 
 
 @dataclass(kw_only=True)
-class StoredAffinePoint(AffinePoint[AffineFrameT, CoordinateT, AffineVectorT]):
+class StoredPoint(Point[AffineFrameT, CoordinateT, VectorT]):
     """
     A point that stores its two coordinates and frame as given.
     """
@@ -113,15 +117,19 @@ class StoredAffinePoint(AffinePoint[AffineFrameT, CoordinateT, AffineVectorT]):
     The frame the coordinates are given in.
     """
 
-    def __sub__(self, other: Self) -> AffineVectorT:
-        vector_type = self.get_type_of_generic_parameter(parameter=AffineVectorT)
+    @property
+    def coordinates(self) -> tuple[CoordinateT, CoordinateT]:
+        return self.x, self.y
+
+    def __sub__(self, other: Self) -> VectorT:
+        vector_type = self.get_type_of_generic_parameter(parameter=VectorT)
         return vector_type(
             x=self.x - other.x,
             y=self.y - other.y,
             coordinate_system=self.coordinate_system,
         )
 
-    def __add__(self, vector: AffineVectorT) -> Self:
+    def __add__(self, vector: VectorT) -> Self:
         return type(self)(
             x=self.x + vector.x,
             y=self.y + vector.y,
@@ -131,7 +139,7 @@ class StoredAffinePoint(AffinePoint[AffineFrameT, CoordinateT, AffineVectorT]):
 
 @dataclass(kw_only=True)
 class StoredScalablePlanePoint(
-    StoredAffinePoint[ScalablePlaneFrame, float, StoredScalablePlaneVector]
+    StoredPoint[ScalablePlaneFrame, float, StoredScalablePlaneVector]
 ):
     """
     A point on a scalable plane that stores its coordinates as given.
@@ -142,17 +150,17 @@ class StoredScalablePlanePoint(
 
 
 @dataclass(kw_only=True)
-class StoredAffineLine(AffineLine[AffinePointT, AffineVectorT]):
+class StoredLine(Line[PointT, VectorT]):
     """
     A line that stores its point and direction as given.
     """
 
-    point: AffinePointT
+    point: PointT
     """
     The point the line passes through.
     """
 
-    direction: AffineVectorT
+    direction: VectorT
     """
     The vector the line runs along.
     """
@@ -160,7 +168,7 @@ class StoredAffineLine(AffineLine[AffinePointT, AffineVectorT]):
 
 @dataclass(kw_only=True)
 class StoredScalablePlaneLine(
-    StoredAffineLine[StoredScalablePlanePoint, StoredScalablePlaneVector]
+    StoredLine[StoredScalablePlanePoint, StoredScalablePlaneVector]
 ):
     """
     A line on a scalable plane that stores its point and direction as given.

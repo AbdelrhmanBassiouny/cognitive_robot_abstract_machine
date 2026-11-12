@@ -10,23 +10,24 @@ from typing_extensions import Generic, TypeVar
 
 from krrood.patterns.interface import Interface
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
-from krrood_spatial_math.affine_line import AffineLine
-from krrood_spatial_math.affine_point import AffinePoint
 from krrood_spatial_math.coordinate_system import CoordinateT
+from krrood_spatial_math.line import Line
+from krrood_spatial_math.point import Point
+from krrood_spatial_math.vector import Vector
 
 # %% maps from the points of one space to the points of another
 
-SourcePointT = TypeVar("SourcePointT", bound=AffinePoint)
+SourcePointT = TypeVar("SourcePointT", bound=Point)
 """
 The kind of point a space map takes, given in a frame of its source space.
 """
 
-TargetPointT = TypeVar("TargetPointT", bound=AffinePoint)
+TargetPointT = TypeVar("TargetPointT", bound=Point)
 """
 The kind of point a space map gives, in a frame of its target space.
 """
 
-ProjectionLineT = TypeVar("ProjectionLineT", bound=AffineLine)
+ProjectionLineT = TypeVar("ProjectionLineT", bound=Line)
 """
 The kind of line, such as a straight line or a ray, of the source points a space map
 sends to one target point.
@@ -85,9 +86,36 @@ class OrthogonalProjection(
     SpaceMap[SourcePointT, TargetPointT, ProjectionLineT, CoordinateT], Interface
 ):
     """
-    Sends each point of a space onto a plane in it, straight along the plane's normal.
+    Sends each point of a space onto a plane in it, straight along the plane's unit
+    normal, so every projection line runs along that one direction.
 
-    The :meth:`projection_line` of a point on the plane is the normal through it, whose
-    direction is of unit length, so the position along that line is the height above the
-    plane.
+    The position along a projection line is the height above the plane.
     """
+
+    plane_normal: Vector
+    """
+    The vector of unit length, perpendicular to the plane, that every projection line
+    runs along; it points to the side whose heights are positive.
+    """
+
+    @abstractmethod
+    def foot_point(self, *, point: TargetPointT) -> SourcePointT:
+        """
+        :param point: A point of the plane.
+        :return: The same point, given as a point of the source space.
+        """
+
+    def projection_line(self, point: TargetPointT) -> ProjectionLineT:
+        line_type = self.get_type_of_generic_parameter(parameter=ProjectionLineT)
+        return line_type(
+            point=self.foot_point(point=point), direction=self.plane_normal
+        )
+
+    def unproject(
+        self, point: TargetPointT, position_along_line: CoordinateT = 0
+    ) -> SourcePointT:
+        """
+        Differs from :meth:`SpaceMap.unproject` in defaulting ``position_along_line`` to
+        zero, the point on the plane itself.
+        """
+        return self.foot_point(point=point) + self.plane_normal * position_along_line

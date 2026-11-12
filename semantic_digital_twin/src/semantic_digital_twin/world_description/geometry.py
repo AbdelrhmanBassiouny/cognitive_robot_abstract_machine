@@ -31,7 +31,7 @@ from random_events.product_algebra import SimpleEvent
 from semantic_digital_twin.datastructures.variables import SpatialVariables
 from semantic_digital_twin.exceptions import MalformedHexColor
 from semantic_digital_twin.mixin import HasSimulatorProperties
-from krrood_spatial_math.affine_point import CartesianPoint
+from krrood_spatial_math.point import MetricPoint
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     CartesianPoint2D,
@@ -1421,7 +1421,7 @@ class CoordinateBounds(Bounds[npt.NDArray[np.float64]]):
         return SimpleInterval.from_data(t_min, t_max, Bound.CLOSED, Bound.CLOSED)
 
 
-PointT = TypeVar("PointT", bound=CartesianPoint)
+PointT = TypeVar("PointT", bound=MetricPoint)
 """
 The point type an :class:`AxisAlignedBox` subclass is asked about --
 :class:`~krrood_spatial_math.spatial_types.CartesianPoint3D` for a box expressed over

@@ -8,8 +8,8 @@ from krrood.patterns.identifier_and_name import HasID, HasName
 from krrood_spatial_math.cartesian_frame_3d import (
     CartesianFrame3D,
     CartesianFrame3DResolver,
-    ValueInCartesianFrame3DT,
 )
+from krrood_spatial_math.coordinate_system import CoordinateRepresentationT
 from krrood_spatial_math.exceptions import ReferenceFrameMismatchError
 from krrood_spatial_math.space import EuclideanSpace3D
 
@@ -49,8 +49,8 @@ class NamedFrame(CartesianFrame3D[str]):
     """
 
     def express_in_own_frame(
-        self, value: ValueInCartesianFrame3DT
-    ) -> ValueInCartesianFrame3DT:
+        self, value: CoordinateRepresentationT
+    ) -> CoordinateRepresentationT:
         if value.reference_frame is not self:
             raise ReferenceFrameMismatchError(
                 expected_frame=self, actual_frame=value.reference_frame

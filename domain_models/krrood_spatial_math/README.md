@@ -25,14 +25,14 @@ coordinate system. Its base depends on `krrood` alone.
 - `krrood_spatial_math.cartesian_frame_2d`: `CartesianFrame2D`, the right-handed
   Cartesian frame that values on a plane, such as the x-y plane of a
   `CartesianFrame3D`, are given in.
-- `krrood_spatial_math.affine_point`: `AffinePoint`, a point given by its coordinates in
-  an affine frame, and `CartesianPoint`, one given in a Cartesian frame. Each
+- `krrood_spatial_math.point`: `Point`, a point given by its coordinates in
+  an affine frame, and `MetricPoint`, one given in a Cartesian frame. Each
   implementation binds the kind of frame, what its coordinates are stored as and the
   kind of vector that moves it; the frame's space fixes how many coordinates it has.
-- `krrood_spatial_math.affine_vector`: `AffineVector`, a translation of an affine space,
-  and `CartesianVector`, one with a length. The difference of two points is a vector,
+- `krrood_spatial_math.vector`: `Vector`, a translation of an affine space,
+  and `MetricVector`, one with a length. The difference of two points is a vector,
   and a point moved by a vector is a point.
-- `krrood_spatial_math.affine_line`: `AffineLine`, the straight line through a point
+- `krrood_spatial_math.line`: `Line`, the straight line through a point
   along a vector.
 - `krrood_spatial_math.space_map`: `SpaceMap`, a map from the points of one space to
   those of another, such as a camera, and `OrthogonalProjection`, one onto a plane along

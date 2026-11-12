@@ -10,8 +10,8 @@ import numpy as np
 import pytest
 
 from krrood.patterns.exceptions import InterfaceInstantiationError
-from krrood_spatial_math.affine_point import AffinePoint
-from krrood_spatial_math.affine_line import AffineLine
+from krrood_spatial_math.point import Point
+from krrood_spatial_math.line import Line
 from krrood_spatial_math.space_map import (
     OrthogonalProjection,
     ProjectionLineT,
@@ -120,11 +120,11 @@ def test_a_space_map_sends_affine_points_to_affine_points(point_parameter: objec
     """
     Both the points a space map takes and those it gives are points given in a frame.
     """
-    assert point_parameter.__bound__ is AffinePoint
+    assert point_parameter.__bound__ is Point
 
 
 def test_a_space_map_sends_points_along_straight_lines():
-    assert ProjectionLineT.__bound__ is AffineLine
+    assert ProjectionLineT.__bound__ is Line
 
 
 # %% projections along the normal of a plane
@@ -141,3 +141,20 @@ def test_an_orthogonal_projection_is_a_space_map():
 
 def test_the_projection_onto_a_frames_plane_is_an_orthogonal_projection():
     assert issubclass(FramePlaneProjection, OrthogonalProjection)
+
+
+def test_an_orthogonal_projection_declares_only_its_plane_and_where_points_lie_on_it():
+    assert OrthogonalProjection.__abstractmethods__ == {"project", "foot_point"}
+
+
+def test_every_projection_line_of_an_orthogonal_projection_runs_along_the_plane_normal():
+    projection = FramePlaneProjection(None)
+    line = projection.projection_line(CartesianPoint2D(1.0, 2.0))
+
+    np.testing.assert_array_equal(
+        line.direction.to_np(), projection.plane_normal.to_np()
+    )
+    np.testing.assert_array_equal(
+        line.point.to_np(),
+        projection.foot_point(point=CartesianPoint2D(1.0, 2.0)).to_np(),
+    )

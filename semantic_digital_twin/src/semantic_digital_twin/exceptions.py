@@ -41,7 +41,7 @@ if TYPE_CHECKING:
         WorldEntityWithID,
         KinematicStructureEntity,
     )
-    from krrood_spatial_math.affine_point import CartesianPoint
+    from krrood_spatial_math.point import MetricPoint
     from krrood_spatial_math.spatial_types import Vector3D
     from semantic_digital_twin.world_description.degree_of_freedom import (
         DegreeOfFreedomLimits,
@@ -2086,7 +2086,7 @@ class PointOccupiedError(DataclassException):
     Connectivity Graphs.
     """
 
-    point: CartesianPoint
+    point: MetricPoint
     """
     The point that is occupied.
     """

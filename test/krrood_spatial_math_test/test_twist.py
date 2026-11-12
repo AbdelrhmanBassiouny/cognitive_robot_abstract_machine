@@ -5,7 +5,7 @@ import json
 import numpy as np
 
 from krrood.adapters.json_serializer import from_json, to_json
-from krrood_spatial_math.cartesian_frame_3d import ValueInCartesianFrame3D
+from krrood_spatial_math.spatial_types import SymbolicSpatialValue
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     Twist,
@@ -78,7 +78,7 @@ def test_a_twist_is_built_from_constants():
 
 
 def test_a_twist_is_a_value_given_in_a_cartesian_frame():
-    assert issubclass(Twist, ValueInCartesianFrame3D)
+    assert issubclass(Twist, SymbolicSpatialValue)
 
 
 def test_a_twist_is_expressed_in_the_frame_of_the_transformation(table_frame):

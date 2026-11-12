@@ -5,10 +5,9 @@ import pytest
 
 import krrood.symbolic_math.symbolic_math as sm
 from krrood.adapters.json_serializer import from_json, to_json
-from krrood_spatial_math.affine_point import CartesianPoint
-from krrood_spatial_math.affine_vector import AffineVectorT, CartesianVector
+from krrood_spatial_math.point import MetricPoint
+from krrood_spatial_math.vector import VectorT, MetricVector
 from krrood_spatial_math.cartesian_frame_2d import CartesianFrame2D
-from krrood_spatial_math.cartesian_frame_3d import ValueInCartesianFrame3D
 from krrood_spatial_math.coordinate_system import (
     CoordinateSystemT,
     CoordinateT,
@@ -22,6 +21,7 @@ from krrood_spatial_math.exceptions import (
 )
 from krrood_spatial_math.space import EuclideanSpace2D
 from krrood_spatial_math.spatial_types import (
+    SymbolicSpatialValue,
     HomogeneousTransformationMatrix,
     HomogeneousTransformationMatrix2D,
     CartesianPoint2D,
@@ -203,7 +203,7 @@ def test_a_planar_value_without_a_reference_frame_has_no_coordinate_system(
 
 @pytest.mark.parametrize("planar_value", planar_values)
 def test_a_planar_value_is_no_value_given_in_a_three_dimensional_frame(planar_value):
-    assert not issubclass(planar_value, ValueInCartesianFrame3D)
+    assert not issubclass(planar_value, SymbolicSpatialValue)
 
 
 def test_a_two_dimensional_point_is_given_in_a_two_dimensional_cartesian_frame():
@@ -214,7 +214,7 @@ def test_a_two_dimensional_point_is_given_in_a_two_dimensional_cartesian_frame()
 
 
 def test_a_two_dimensional_point_is_a_cartesian_point():
-    assert issubclass(CartesianPoint2D, CartesianPoint)
+    assert issubclass(CartesianPoint2D, MetricPoint)
 
 
 def test_the_euclidean_distance_between_two_dimensional_points_is_measured_on_their_plane():
@@ -225,19 +225,25 @@ def test_the_euclidean_distance_between_two_dimensional_points_is_measured_on_th
 
 
 def test_a_two_dimensional_point_stores_its_coordinates_as_symbolic_scalars():
-    assert CartesianPoint2D.get_type_of_generic_parameter(parameter=CoordinateT) is sm.Scalar
+    assert (
+        CartesianPoint2D.get_type_of_generic_parameter(parameter=CoordinateT)
+        is sm.Scalar
+    )
 
 
 def test_a_two_dimensional_point_is_moved_by_a_two_dimensional_vector():
-    assert CartesianPoint2D.get_type_of_generic_parameter(parameter=AffineVectorT) is Vector2D
+    assert CartesianPoint2D.get_type_of_generic_parameter(parameter=VectorT) is Vector2D
 
 
 # %% vectors on a frame's plane
 
 
 def test_a_two_dimensional_vector_is_a_cartesian_vector_of_a_two_dimensional_frame():
-    assert issubclass(Vector2D, CartesianVector)
-    assert Vector2D.get_type_of_generic_parameter(parameter=CoordinateSystemT) is CartesianFrame2D
+    assert issubclass(Vector2D, MetricVector)
+    assert (
+        Vector2D.get_type_of_generic_parameter(parameter=CoordinateSystemT)
+        is CartesianFrame2D
+    )
 
 
 def test_the_difference_of_two_points_on_a_plane_is_the_vector_between_them(

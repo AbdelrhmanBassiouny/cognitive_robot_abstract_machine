@@ -4,16 +4,15 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from uuid import UUID
 
-from typing_extensions import Any, TypeVar
+from typing_extensions import Any
 
 from krrood.adapters.json_serializer import from_json
 from krrood.adapters.object_reference import ObjectReference
 from krrood.patterns.identifier_and_name import NameT
 from krrood.patterns.interface import Interface
-from krrood.patterns.mixin import Mixin
 from krrood_spatial_math.coordinate_system import (
     CartesianFrame,
-    CoordinateRepresentation,
+    CoordinateRepresentationT,
 )
 from krrood_spatial_math.exceptions import MissingCartesianFrame3DResolver
 from krrood_spatial_math.space import EuclideanSpace3D
@@ -29,36 +28,12 @@ class CartesianFrame3D(CartesianFrame[EuclideanSpace3D, NameT], Interface):
 
     @abstractmethod
     def express_in_own_frame(
-        self, value: ValueInCartesianFrame3DT
-    ) -> ValueInCartesianFrame3DT:
+        self, value: CoordinateRepresentationT
+    ) -> CoordinateRepresentationT:
         """
         :param value: A value in the same space as this frame.
         :return: The same value, given in this frame.
         """
-
-
-class ValueInCartesianFrame3D(CoordinateRepresentation[CartesianFrame3D], Mixin):
-    """
-    A value, such as a point or a pose, given in a :class:`CartesianFrame3D`, its
-    coordinate system.
-    """
-
-    reference_frame: CartesianFrame3D | None
-    """
-    The frame the value is given in, or *None* where the value is given in no frame.
-    """
-
-    @property
-    def coordinate_system(self) -> CartesianFrame3D | None:
-        return self.reference_frame
-
-
-ValueInCartesianFrame3DT = TypeVar(
-    "ValueInCartesianFrame3DT", bound=ValueInCartesianFrame3D
-)
-"""
-The kind of value a Cartesian frame expresses.
-"""
 
 
 class CartesianFrame3DResolver(Interface):

@@ -24,16 +24,15 @@ from krrood_spatial_math.cartesian_frame_2d import CartesianFrame2D
 from krrood_spatial_math.cartesian_frame_3d import (
     CartesianFrame3D,
     CartesianFrame3DReference,
-    ValueInCartesianFrame3D,
 )
 from krrood_spatial_math.coordinate_system import (
     CartesianFrameT,
     CoordinateRepresentation,
     RigidCoordinateChange,
 )
-from krrood_spatial_math.affine_line import AffineLine
-from krrood_spatial_math.affine_point import CartesianPoint
-from krrood_spatial_math.affine_vector import CartesianVector
+from krrood_spatial_math.line import Line
+from krrood_spatial_math.point import MetricPoint
+from krrood_spatial_math.vector import MetricVector
 from krrood_spatial_math.exceptions import (
     FramesOnDifferentPlanesError,
     InsufficientVectorsError,
@@ -285,7 +284,9 @@ class SymbolicSpatialType(ABC):
 
 
 @dataclass(eq=False, repr=False)
-class SpatialChange(SymbolicSpatialType, RigidCoordinateChange[CartesianFrameT], ABC):
+class SymbolicSpatialChange(
+    SymbolicSpatialType, RigidCoordinateChange[CartesianFrameT], ABC
+):
     """
     A rigid change, as a symbolic matrix, of coordinates given in a frame derived from
     its :attr:`child_frame` into the same kind of frame derived from its
@@ -333,18 +334,50 @@ class SpatialChange(SymbolicSpatialType, RigidCoordinateChange[CartesianFrameT],
             )
 
 
+@dataclass(eq=False, repr=False, kw_only=True)
+class SymbolicSpatialValue(
+    SymbolicSpatialType, CoordinateRepresentation[CartesianFrame3D], ABC
+):
+    """
+    A value, as a symbolic matrix, such as a point or a pose, given in its
+    :attr:`~SymbolicSpatialType.reference_frame`, its coordinate system.
+    """
+
+    @property
+    def coordinate_system(self) -> CartesianFrame3D | None:
+        return self.reference_frame
+
+
 # %% how a change or a rotation acts on a value
 
 
-class TransformationOperand(Interface):
+class SpecialOrthogonalGroupAction(Interface):
     """
-    A value or change a :class:`HomogeneousTransformationMatrix` acts on, giving one of
-    the same type.
+    A value or change the rotation group SO(3) acts on: a :class:`RotationMatrix` turns
+    it about the origin of its reference frame, giving one of the same type.
+    """
+
+    @abstractmethod
+    def apply_rotation(self, *, rotation: RotationMatrix) -> Self:
+        """
+        :param rotation: The rotation from this value's reference frame to the rotation's
+            reference frame.
+        :return: This value turned by ``rotation``, in the reference frame of
+            ``rotation``.
+        """
+
+
+class SpecialEuclideanGroupAction(SpecialOrthogonalGroupAction, Interface):
+    """
+    A value or change the rigid motion group SE(3) acts on: a
+    :class:`HomogeneousTransformationMatrix` moves it, giving one of the same type.
+
+    SO(3) is the subgroup of SE(3) that keeps the origin, so it acts on it too.
     """
 
     @abstractmethod
     def apply_transformation(
-        self, transformation: HomogeneousTransformationMatrix
+        self, *, transformation: HomogeneousTransformationMatrix
     ) -> Self:
         """
         :param transformation: A transformation whose child frame is this value's
@@ -353,15 +386,15 @@ class TransformationOperand(Interface):
         """
 
 
-class PlanarTransformationOperand(Interface):
+class PlanarSpecialEuclideanGroupAction(Interface):
     """
-    A value or change on a plane a :class:`HomogeneousTransformationMatrix2D` acts on,
-    giving one of the same type.
+    A value or change on a plane the planar rigid motion group SE(2) acts on: a
+    :class:`HomogeneousTransformationMatrix2D` moves it, giving one of the same type.
     """
 
     @abstractmethod
     def apply_planar_transformation(
-        self, transformation: HomogeneousTransformationMatrix2D
+        self, *, transformation: HomogeneousTransformationMatrix2D
     ) -> Self:
         """
         :param transformation: A transformation whose child frame is this value's
@@ -371,56 +404,53 @@ class PlanarTransformationOperand(Interface):
         """
 
 
-class RotationOperand(Interface):
+class HomogeneousCoordinates(SpecialEuclideanGroupAction, Mixin):
     """
-    A value or change a :class:`RotationMatrix` turns about the origin of its reference
-    frame, giving one of the same type.
-    """
-
-    @abstractmethod
-    def apply_rotation(self, rotation: RotationMatrix) -> Self:
-        """
-        :param rotation: The rotation from this value's reference frame to the rotation's
-            reference frame.
-        :return: This value turned by ``rotation``, in the reference frame of
-            ``rotation``.
-        """
-
-
-class MatrixProductAction(TransformationOperand, RotationOperand, Mixin):
-    """
-    Applies transformations and rotations to a value by multiplying its homogeneous
-    coordinates from the left.
+    A value stored as homogeneous coordinates, which a transformation or a rotation acts
+    on by multiplying them from the left.
     """
 
     def apply_transformation(
-        self, transformation: HomogeneousTransformationMatrix
+        self, *, transformation: HomogeneousTransformationMatrix
     ) -> Self:
-        return self._left_product(transformation)
+        return self._left_product(matrix=transformation)
 
-    def apply_rotation(self, rotation: RotationMatrix) -> Self:
-        return self._left_product(rotation)
+    def apply_rotation(self, *, rotation: RotationMatrix) -> Self:
+        return self._left_product(matrix=rotation)
 
     def _left_product(
-        self, matrix: HomogeneousTransformationMatrix | RotationMatrix
+        self, *, matrix: HomogeneousTransformationMatrix | RotationMatrix
     ) -> Self:
         """
         :param matrix: The transformation or rotation applied to this value.
         :return: The product of ``matrix`` and this value, of this value's type, in the
             reference frame of ``matrix``.
         """
-        result = type(self).from_casadi_sx(casadi_sx=ca.mtimes(matrix.casadi_sx, self.casadi_sx))
+        result = type(self).from_casadi_sx(
+            casadi_sx=ca.mtimes(matrix.casadi_sx, self.casadi_sx)
+        )
         result.reference_frame = matrix.reference_frame
         return result
+
+
+class Orientation(SpecialEuclideanGroupAction, Mixin):
+    """
+    An orientation, which a transformation turns by its rotation and never shifts, since
+    an orientation has no position.
+    """
+
+    def apply_transformation(
+        self, *, transformation: HomogeneousTransformationMatrix
+    ) -> Self:
+        return self.apply_rotation(rotation=transformation.rotation_matrix)
 
 
 @dataclass(eq=False, init=False, repr=False)
 class HomogeneousTransformationMatrix(
     sm.SymbolicMathType,
-    SpatialChange[CartesianFrame3D],
+    SymbolicSpatialChange[CartesianFrame3D],
     SubclassJSONSerializer,
-    TransformationOperand,
-    RotationOperand,
+    SpecialEuclideanGroupAction,
 ):
     """
     Represents a 4x4 transformation matrix used in kinematics and transformations.
@@ -703,7 +733,7 @@ class HomogeneousTransformationMatrix(
     def z(self, value: sm.ScalarData):
         self[2, 3] = value
 
-    def dot(self, other: TransformationOperandT) -> TransformationOperandT:
+    def dot(self, other: SpecialEuclideanGroupActionT) -> SpecialEuclideanGroupActionT:
         """
         This transformation applied to ``other``, a value given in its child frame or a
         change into it.
@@ -715,13 +745,13 @@ class HomogeneousTransformationMatrix(
         :raises ReferenceFrameMismatchError: If ``other`` is given in a frame other than
             this transformation's child frame.
         """
-        if not isinstance(other, TransformationOperand):
+        if not isinstance(other, SpecialEuclideanGroupAction):
             raise UnsupportedOperationError(operation="dot", left=self, right=other)
         self.ensure_operand_in_child_frame(other)
-        return other.apply_transformation(self)
+        return other.apply_transformation(transformation=self)
 
     def apply_transformation(
-        self, transformation: HomogeneousTransformationMatrix
+        self, *, transformation: HomogeneousTransformationMatrix
     ) -> HomogeneousTransformationMatrix:
         return HomogeneousTransformationMatrix(
             ca.mtimes(transformation.casadi_sx, self.casadi_sx),
@@ -730,7 +760,7 @@ class HomogeneousTransformationMatrix(
         )
 
     def apply_rotation(
-        self, rotation: RotationMatrix
+        self, *, rotation: RotationMatrix
     ) -> HomogeneousTransformationMatrix:
         return HomogeneousTransformationMatrix(
             ca.mtimes(rotation.casadi_sx, self.casadi_sx),
@@ -738,7 +768,9 @@ class HomogeneousTransformationMatrix(
             child_frame=self.child_frame,
         )
 
-    def __matmul__(self, other: TransformationOperandT) -> TransformationOperandT:
+    def __matmul__(
+        self, other: SpecialEuclideanGroupActionT
+    ) -> SpecialEuclideanGroupActionT:
         return self.dot(other)
 
     def inverse(self) -> HomogeneousTransformationMatrix:
@@ -835,9 +867,8 @@ class HomogeneousTransformationMatrix(
 @dataclass(eq=False, init=False, repr=False)
 class RotationMatrix(
     sm.SymbolicMathType,
-    SymbolicSpatialType,
-    MatrixProductAction,
-    ValueInCartesianFrame3D,
+    SymbolicSpatialValue,
+    HomogeneousCoordinates,
     SubclassJSONSerializer,
 ):
     """
@@ -1015,7 +1046,9 @@ class RotationMatrix(
             reference_frame=self.reference_frame,
         )
 
-    def dot(self, other: RotationOperandT) -> RotationOperandT:
+    def dot(
+        self, other: SpecialOrthogonalGroupActionT
+    ) -> SpecialOrthogonalGroupActionT:
         """
         This rotation applied to ``other``, turning it about the origin of its reference
         frame.
@@ -1024,11 +1057,13 @@ class RotationMatrix(
         :return: ``other`` turned, in this rotation's reference frame.
         :raises UnsupportedOperationError: If this rotation does not act on ``other``.
         """
-        if not isinstance(other, RotationOperand):
+        if not isinstance(other, SpecialOrthogonalGroupAction):
             raise UnsupportedOperationError(operation="dot", left=self, right=other)
-        return other.apply_rotation(self)
+        return other.apply_rotation(rotation=self)
 
-    def __matmul__(self, other: RotationOperandT) -> RotationOperandT:
+    def __matmul__(
+        self, other: SpecialOrthogonalGroupActionT
+    ) -> SpecialOrthogonalGroupActionT:
         """
         :meth:`dot`, as the ``@`` operator.
         """
@@ -1319,16 +1354,14 @@ class PlanarFrame(CartesianFrame2D[NameT]):
         return uuid5(self.frame_3d.id, type(self).__name__)
 
 
-class ValueOnFramePlane(CoordinateRepresentation[CartesianFrame2D], Mixin):
+@dataclass(eq=False, repr=False, kw_only=True)
+class SymbolicPlanarValue(
+    SymbolicSpatialType, CoordinateRepresentation[CartesianFrame2D], ABC
+):
     """
-    A value, such as a point or a pose, on the x-y plane of its reference frame, given
-    in the :class:`PlanarFrame` of that frame.
-    """
-
-    reference_frame: CartesianFrame3D | None
-    """
-    The frame on whose x-y plane the value lies, or *None* where the value is given in
-    no frame.
+    A value, as a symbolic matrix, such as a point or a pose, on the x-y plane of its
+    :attr:`~SymbolicSpatialType.reference_frame`, given in the :class:`PlanarFrame` of
+    that frame.
     """
 
     @property
@@ -1341,11 +1374,10 @@ class ValueOnFramePlane(CoordinateRepresentation[CartesianFrame2D], Mixin):
 @dataclass(eq=False, init=False, repr=False)
 class Vector3D(
     sm.SymbolicMathType,
-    SymbolicSpatialType,
-    MatrixProductAction,
-    ValueInCartesianFrame3D,
+    SymbolicSpatialValue,
+    HomogeneousCoordinates,
     SubclassJSONSerializer,
-    CartesianVector[CartesianFrame3D, sm.Scalar],
+    MetricVector[CartesianFrame3D, sm.Scalar],
 ):
     """
     Representation of a 3D vector with reference frame support for homogenous
@@ -1532,14 +1564,18 @@ class Vector3D(
     def z(self, value: sm.ScalarData):
         self[2] = value
 
+    @property
+    def coordinates(self) -> tuple[sm.Scalar, sm.Scalar, sm.Scalar]:
+        return self.x, self.y, self.z
+
     def __add__(self, other: Vector3D) -> Vector3D:
         """
         :raises ReferenceFrameMismatchError: If ``other`` is given in another frame.
         """
         if isinstance(other, Vector3D):
             self.ensure_same_reference_frame(other, "the added Vector3D")
-            result = Vector3D.from_casadi_sx(casadi_sx=
-                ca.SX.binary(ca.OP_ADD, self.casadi_sx, other.casadi_sx)
+            result = Vector3D.from_casadi_sx(
+                casadi_sx=ca.SX.binary(ca.OP_ADD, self.casadi_sx, other.casadi_sx)
             )
         else:
             return NotImplemented
@@ -1552,8 +1588,8 @@ class Vector3D(
         """
         if isinstance(other, Vector3D):
             self.ensure_same_reference_frame(other, "the subtracted Vector3D")
-            result = Vector3D.from_casadi_sx(casadi_sx=
-                ca.SX.binary(ca.OP_SUB, self.casadi_sx, other.casadi_sx)
+            result = Vector3D.from_casadi_sx(
+                casadi_sx=ca.SX.binary(ca.OP_SUB, self.casadi_sx, other.casadi_sx)
             )
         else:
             return NotImplemented
@@ -1562,8 +1598,8 @@ class Vector3D(
 
     def __mul__(self, other: sm.ScalarData) -> Vector3D:
         if isinstance(other, sm.ScalarData):
-            result = Vector3D.from_casadi_sx(casadi_sx=
-                ca.SX.binary(ca.OP_MUL, self.casadi_sx, sm.to_sx(other))
+            result = Vector3D.from_casadi_sx(
+                casadi_sx=ca.SX.binary(ca.OP_MUL, self.casadi_sx, sm.to_sx(other))
             )
         else:
             return NotImplemented
@@ -1572,8 +1608,8 @@ class Vector3D(
 
     def __rmul__(self, other: float) -> Vector3D:
         if isinstance(other, (int, float)):
-            result = Vector3D.from_casadi_sx(casadi_sx=
-                ca.SX.binary(ca.OP_MUL, self.casadi_sx, sm.to_sx(other))
+            result = Vector3D.from_casadi_sx(
+                casadi_sx=ca.SX.binary(ca.OP_MUL, self.casadi_sx, sm.to_sx(other))
             )
         else:
             return NotImplemented
@@ -1582,8 +1618,8 @@ class Vector3D(
 
     def __truediv__(self, other: sm.ScalarData) -> Vector3D:
         if isinstance(other, sm.ScalarData):
-            result = Vector3D.from_casadi_sx(casadi_sx=
-                ca.SX.binary(ca.OP_DIV, self.casadi_sx, sm.to_sx(other))
+            result = Vector3D.from_casadi_sx(
+                casadi_sx=ca.SX.binary(ca.OP_DIV, self.casadi_sx, sm.to_sx(other))
             )
         else:
             return NotImplemented
@@ -1614,16 +1650,11 @@ class Vector3D(
         )
 
     def __neg__(self) -> Vector3D:
-        result = Vector3D.from_casadi_sx(casadi_sx=ca.SX.unary(ca.OP_NEG, self.casadi_sx))
+        result = Vector3D.from_casadi_sx(
+            casadi_sx=ca.SX.unary(ca.OP_NEG, self.casadi_sx)
+        )
         result.reference_frame = self.reference_frame
         return result
-
-    def dot(self, other: Vector3D) -> sm.Scalar:
-        if isinstance(other, Vector3D):
-            return sm.Scalar.from_casadi_sx(casadi_sx=
-                ca.mtimes(self.casadi_sx[:3].T, other.casadi_sx[:3])
-            )
-        raise UnsupportedOperationError(operation="dot", left=self, right=other)
 
     def __matmul__(self, other: Vector3D) -> sm.Scalar:
         return self.dot(other)
@@ -1633,9 +1664,6 @@ class Vector3D(
         result = self.__class__.from_iterable(result)
         result.reference_frame = self.reference_frame
         return result
-
-    def norm(self) -> sm.Scalar:
-        return sm.Scalar.from_casadi_sx(casadi_sx=ca.norm_2(self.casadi_sx[:3]))
 
     def scale(self, a: sm.ScalarData, unsafe: bool = False):
         if unsafe:
@@ -1731,11 +1759,10 @@ class Vector3D(
 @dataclass(eq=False, init=False, repr=False)
 class CartesianPoint3D(
     sm.SymbolicMathType,
-    SymbolicSpatialType,
-    MatrixProductAction,
-    ValueInCartesianFrame3D,
+    SymbolicSpatialValue,
+    HomogeneousCoordinates,
     SubclassJSONSerializer,
-    CartesianPoint[CartesianFrame3D, sm.Scalar, Vector3D],
+    MetricPoint[CartesianFrame3D, sm.Scalar, Vector3D],
 ):
     """
     Represents a 3D point with reference frame handling.
@@ -1875,14 +1902,18 @@ class CartesianPoint3D(
     def z(self, value: sm.ScalarData):
         self[2] = value
 
+    @property
+    def coordinates(self) -> tuple[sm.Scalar, sm.Scalar, sm.Scalar]:
+        return self.x, self.y, self.z
+
     def __add__(self, other: Vector3D) -> CartesianPoint3D:
         """
         :raises ReferenceFrameMismatchError: If ``other`` is given in another frame.
         """
         if isinstance(other, Vector3D):
             self.ensure_same_reference_frame(other, "the added Vector3D")
-            result = CartesianPoint3D.from_casadi_sx(casadi_sx=
-                ca.SX.binary(ca.OP_ADD, self.casadi_sx, other.casadi_sx)
+            result = CartesianPoint3D.from_casadi_sx(
+                casadi_sx=ca.SX.binary(ca.OP_ADD, self.casadi_sx, other.casadi_sx)
             )
         else:
             return NotImplemented
@@ -1901,13 +1932,13 @@ class CartesianPoint3D(
         """
         if isinstance(other, CartesianPoint3D):
             self.ensure_same_reference_frame(other, "the subtracted CartesianPoint3D")
-            result = Vector3D.from_casadi_sx(casadi_sx=
-                ca.SX.binary(ca.OP_SUB, self.casadi_sx, other.casadi_sx)
+            result = Vector3D.from_casadi_sx(
+                casadi_sx=ca.SX.binary(ca.OP_SUB, self.casadi_sx, other.casadi_sx)
             )
         elif isinstance(other, Vector3D):
             self.ensure_same_reference_frame(other, "the subtracted Vector3D")
-            result = CartesianPoint3D.from_casadi_sx(casadi_sx=
-                ca.SX.binary(ca.OP_SUB, self.casadi_sx, other.casadi_sx)
+            result = CartesianPoint3D.from_casadi_sx(
+                casadi_sx=ca.SX.binary(ca.OP_SUB, self.casadi_sx, other.casadi_sx)
             )
         else:
             return NotImplemented
@@ -1915,7 +1946,9 @@ class CartesianPoint3D(
         return result
 
     def __neg__(self) -> CartesianPoint3D:
-        result = CartesianPoint3D.from_casadi_sx(casadi_sx=ca.SX.unary(ca.OP_NEG, self.casadi_sx))
+        result = CartesianPoint3D.from_casadi_sx(
+            casadi_sx=ca.SX.unary(ca.OP_NEG, self.casadi_sx)
+        )
         result.reference_frame = self.reference_frame
         return result
 
@@ -2007,18 +2040,14 @@ class CartesianPoint3D(
         """
         return sm.Vector.from_casadi_sx(casadi_sx=copy(self.casadi_sx[:3]))
 
-    def euclidean_distance(self, other: Self) -> sm.Scalar:
-        return self.generic_vector.euclidean_distance(other=other.generic_vector)
-
 
 @dataclass(eq=False, init=False, repr=False)
 class Vector2D(
     sm.SymbolicMathType,
-    SymbolicSpatialType,
-    ValueOnFramePlane,
+    SymbolicPlanarValue,
     SubclassJSONSerializer,
-    CartesianVector[CartesianFrame2D, sm.Scalar],
-    PlanarTransformationOperand,
+    MetricVector[CartesianFrame2D, sm.Scalar],
+    PlanarSpecialEuclideanGroupAction,
 ):
     """
     A translation within the x-y plane of its reference frame, given in the
@@ -2057,6 +2086,10 @@ class Vector2D(
     @y.setter
     def y(self, value: sm.ScalarData):
         self[1] = value
+
+    @property
+    def coordinates(self) -> tuple[sm.Scalar, sm.Scalar]:
+        return self.x, self.y
 
     def _verify_type(self):
         if self.shape != (2, 1):
@@ -2098,7 +2131,7 @@ class Vector2D(
         return Vector2D(turned.x, turned.y, reference_frame=turned.reference_frame)
 
     def apply_planar_transformation(
-        self, transformation: HomogeneousTransformationMatrix2D
+        self, *, transformation: HomogeneousTransformationMatrix2D
     ) -> Vector2D:
         turned = ca.mtimes(transformation.casadi_sx, ca.vertcat(self.casadi_sx, 0))
         return Vector2D(
@@ -2134,25 +2167,14 @@ class Vector2D(
             self.x * factor, self.y * factor, reference_frame=self.reference_frame
         )
 
-    def norm(self) -> sm.Scalar:
-        return sm.Scalar.from_casadi_sx(casadi_sx=ca.norm_2(self.casadi_sx))
-
-    def dot(self, other: Vector2D) -> sm.Scalar:
-        """
-        :raises ReferenceFrameMismatchError: If ``other`` is given in another frame.
-        """
-        self.ensure_same_reference_frame(other, "the multiplied Vector2D")
-        return sm.Scalar.from_casadi_sx(casadi_sx=ca.mtimes(self.casadi_sx.T, other.casadi_sx))
-
 
 @dataclass(eq=False, init=False, repr=False)
 class CartesianPoint2D(
     sm.SymbolicMathType,
-    SymbolicSpatialType,
-    ValueOnFramePlane,
+    SymbolicPlanarValue,
     SubclassJSONSerializer,
-    CartesianPoint[CartesianFrame2D, sm.Scalar, Vector2D],
-    PlanarTransformationOperand,
+    MetricPoint[CartesianFrame2D, sm.Scalar, Vector2D],
+    PlanarSpecialEuclideanGroupAction,
 ):
     """
     Represents a 2D point with reference frame handling.
@@ -2194,6 +2216,10 @@ class CartesianPoint2D(
     @y.setter
     def y(self, value: sm.ScalarData):
         self[1] = value
+
+    @property
+    def coordinates(self) -> tuple[sm.Scalar, sm.Scalar]:
+        return self.x, self.y
 
     def _verify_type(self):
         if self.shape != (2, 1):
@@ -2279,7 +2305,7 @@ class CartesianPoint2D(
         )
 
     def apply_planar_transformation(
-        self, transformation: HomogeneousTransformationMatrix2D
+        self, *, transformation: HomogeneousTransformationMatrix2D
     ) -> CartesianPoint2D:
         moved = ca.mtimes(transformation.casadi_sx, ca.vertcat(self.casadi_sx, 1))
         return CartesianPoint2D(
@@ -2308,10 +2334,6 @@ class CartesianPoint2D(
             self.x - other.x, self.y - other.y, reference_frame=self.reference_frame
         )
 
-    def euclidean_distance(self, other: Self) -> sm.Scalar:
-        return sm.Vector.from_casadi_sx(casadi_sx=self.casadi_sx).euclidean_distance(other=sm.Vector.from_casadi_sx(casadi_sx=other.casadi_sx)
-        )
-
     def __hash__(self):
         if self.is_constant():
             return hash((*self.to_np().tolist(), self.reference_frame))
@@ -2319,7 +2341,7 @@ class CartesianPoint2D(
 
 
 @dataclass(eq=False)
-class Line3D(AffineLine[CartesianPoint3D, Vector3D]):
+class Line3D(Line[CartesianPoint3D, Vector3D]):
     """
     An infinite straight line in 3D space.
     """
@@ -2396,9 +2418,11 @@ class FramePlaneProjection(
             point = self.plane_frame.express_in_own_frame(point)
         return CartesianPoint2D(point.x, point.y, reference_frame=self.plane_frame)
 
-    def unproject(
-        self, point: CartesianPoint2D, position_along_line: sm.ScalarData = 0
-    ) -> CartesianPoint3D:
+    @property
+    def plane_normal(self) -> Vector3D:
+        return Vector3D.Z(reference_frame=self.plane_frame)
+
+    def foot_point(self, *, point: CartesianPoint2D) -> CartesianPoint3D:
         """
         :raises ReferenceFrameMismatchError: If ``point`` lies on another frame's plane.
         """
@@ -2408,25 +2432,15 @@ class FramePlaneProjection(
                 actual_frame=point.reference_frame,
                 context="the unprojected CartesianPoint2D",
             )
-        return CartesianPoint3D(
-            point.x, point.y, position_along_line, reference_frame=self.plane_frame
-        )
-
-    def projection_line(self, point: CartesianPoint2D) -> Line3D:
-        return Line3D(
-            point=self.unproject(point),
-            direction=Vector3D.Z(reference_frame=self.plane_frame),
-        )
+        return CartesianPoint3D(point.x, point.y, 0, reference_frame=self.plane_frame)
 
 
 @dataclass(eq=False, init=False, repr=False)
 class Quaternion(
     sm.SymbolicMathType,
-    SymbolicSpatialType,
-    ValueInCartesianFrame3D,
+    SymbolicSpatialValue,
     SubclassJSONSerializer,
-    TransformationOperand,
-    RotationOperand,
+    Orientation,
 ):
     """
     Represents a quaternion, which is a mathematical entity used to encode rotations in
@@ -2651,12 +2665,7 @@ class Quaternion(
             reference_frame=self.reference_frame,
         )
 
-    def apply_transformation(
-        self, transformation: HomogeneousTransformationMatrix
-    ) -> Quaternion:
-        return self.apply_rotation(transformation.rotation_matrix)
-
-    def apply_rotation(self, rotation: RotationMatrix) -> Quaternion:
+    def apply_rotation(self, *, rotation: RotationMatrix) -> Quaternion:
         result = rotation.quaternion.multiply(self)
         result.reference_frame = rotation.reference_frame
         return result
@@ -2788,11 +2797,9 @@ class Quaternion(
 @dataclass(eq=False, init=False, repr=False)
 class AxisAngle(
     sm.SymbolicMathType,
-    SymbolicSpatialType,
-    ValueInCartesianFrame3D,
+    SymbolicSpatialValue,
     SubclassJSONSerializer,
-    TransformationOperand,
-    RotationOperand,
+    Orientation,
 ):
     """
     A rotation by an angle around a unit axis.
@@ -2898,7 +2905,9 @@ class AxisAngle(
 
         # (1 - cos(angle)) times the axis times its transpose, which vanishes at no
         # turn; its column with the largest diagonal entry is the axis up to its sign
-        axis_outer_product = (rotation + rotation.T) / 2 - sm.Matrix.eye(size=3) * cosine
+        axis_outer_product = (rotation + rotation.T) / 2 - sm.Matrix.eye(
+            size=3
+        ) * cosine
         columns = [
             Vector3D(*(axis_outer_product[row, column] for row in range(3)))
             for column in range(3)
@@ -2951,12 +2960,7 @@ class AxisAngle(
         """
         return RotationMatrix.from_axis_angle(self)
 
-    def apply_transformation(
-        self, transformation: HomogeneousTransformationMatrix
-    ) -> AxisAngle:
-        return self.apply_rotation(transformation.rotation_matrix)
-
-    def apply_rotation(self, rotation: RotationMatrix) -> AxisAngle:
+    def apply_rotation(self, *, rotation: RotationMatrix) -> AxisAngle:
         result = AxisAngle.from_quaternion(
             rotation.quaternion.multiply(self.quaternion)
         )
@@ -2967,8 +2971,7 @@ class AxisAngle(
 @dataclass(eq=False, init=False, repr=False)
 class Twist(
     sm.SymbolicMathType,
-    SymbolicSpatialType,
-    ValueInCartesianFrame3D,
+    SymbolicSpatialValue,
     SubclassJSONSerializer,
 ):
     """
@@ -3066,9 +3069,8 @@ class Twist(
 @dataclass(eq=False, init=False, repr=False)
 class Pose3D(
     sm.SymbolicMathType,
-    SymbolicSpatialType,
-    MatrixProductAction,
-    ValueInCartesianFrame3D,
+    SymbolicSpatialValue,
+    HomogeneousCoordinates,
     SubclassJSONSerializer,
 ):
     """
@@ -3319,10 +3321,9 @@ class Pose3D(
 @dataclass(eq=False, init=False, repr=False)
 class Pose2D(
     sm.SymbolicMathType,
-    SymbolicSpatialType,
-    ValueOnFramePlane,
+    SymbolicPlanarValue,
     SubclassJSONSerializer,
-    PlanarTransformationOperand,
+    PlanarSpecialEuclideanGroupAction,
 ):
     """
     Represents a 2D pose consisting of an x coordinate, a y coordinate, and a yaw angle.
@@ -3492,12 +3493,12 @@ class Pose2D(
         return Pose2D.from_pose(target_frame_T_reference_frame @ self.pose)
 
     def apply_planar_transformation(
-        self, transformation: HomogeneousTransformationMatrix2D
+        self, *, transformation: HomogeneousTransformationMatrix2D
     ) -> Pose2D:
         flat_pose = HomogeneousTransformationMatrix2D.from_xy_yaw(
             x=self.x, y=self.y, yaw=self.yaw
         )
-        return flat_pose.apply_planar_transformation(transformation).pose
+        return flat_pose.apply_planar_transformation(transformation=transformation).pose
 
     @classmethod
     def from_xy_yaw(
@@ -3548,13 +3549,13 @@ class Pose2D(
 @dataclass(eq=False, init=False, repr=False)
 class HomogeneousTransformationMatrix2D(
     sm.SymbolicMathType,
-    SpatialChange[CartesianFrame2D],
+    SymbolicSpatialChange[CartesianFrame2D],
     SubclassJSONSerializer,
-    PlanarTransformationOperand,
+    PlanarSpecialEuclideanGroupAction,
 ):
     """
     A 3x3 homogeneous matrix of SE(2): the rigid change from the
-    :class:`PlanarFrame` of its :attr:`~SpatialChange.child_frame` into that of its
+    :class:`PlanarFrame` of its :attr:`~SymbolicSpatialChange.child_frame` into that of its
     :attr:`~SymbolicSpatialType.reference_frame`, two frames on one plane.
 
     It is only a change of coordinates, never a value given in a frame: the value it
@@ -3706,8 +3707,8 @@ class HomogeneousTransformationMatrix2D(
     # %% acting on values and changes
 
     def __matmul__(
-        self, other: PlanarTransformationOperandT
-    ) -> PlanarTransformationOperandT:
+        self, other: PlanarSpecialEuclideanGroupActionT
+    ) -> PlanarSpecialEuclideanGroupActionT:
         """
         :param other: A change into this change's child frame, or a point or pose given
             in it.
@@ -3717,13 +3718,13 @@ class HomogeneousTransformationMatrix2D(
         :raises ReferenceFrameMismatchError: If ``other`` is given in a frame other than
             this change's child frame.
         """
-        if not isinstance(other, PlanarTransformationOperand):
+        if not isinstance(other, PlanarSpecialEuclideanGroupAction):
             raise UnsupportedOperationError(operation="@", left=self, right=other)
         self.ensure_operand_in_child_frame(other)
-        return other.apply_planar_transformation(self)
+        return other.apply_planar_transformation(transformation=self)
 
     def apply_planar_transformation(
-        self, transformation: HomogeneousTransformationMatrix2D
+        self, *, transformation: HomogeneousTransformationMatrix2D
     ) -> HomogeneousTransformationMatrix2D:
         return HomogeneousTransformationMatrix2D(
             ca.mtimes(transformation.casadi_sx, self.casadi_sx),
@@ -3855,19 +3856,23 @@ GenericSpatialType = TypeVar(
     bound=SymbolicSpatialType,
 )
 
-TransformationOperandT = TypeVar("TransformationOperandT", bound=TransformationOperand)
+SpecialEuclideanGroupActionT = TypeVar(
+    "SpecialEuclideanGroupActionT", bound=SpecialEuclideanGroupAction
+)
 """
 The kind of value or change a transformation is applied to.
 """
 
-PlanarTransformationOperandT = TypeVar(
-    "PlanarTransformationOperandT", bound=PlanarTransformationOperand
+PlanarSpecialEuclideanGroupActionT = TypeVar(
+    "PlanarSpecialEuclideanGroupActionT", bound=PlanarSpecialEuclideanGroupAction
 )
 """
 The kind of value or change on a plane a planar transformation is applied to.
 """
 
-RotationOperandT = TypeVar("RotationOperandT", bound=RotationOperand)
+SpecialOrthogonalGroupActionT = TypeVar(
+    "SpecialOrthogonalGroupActionT", bound=SpecialOrthogonalGroupAction
+)
 """
 The kind of value or change a rotation is applied to.
 """
