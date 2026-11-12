@@ -35,7 +35,7 @@ from krrood.entity_query_language.rdr.serialization import (
     save_rdr,
 )
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
-from krrood.entity_query_language.rdr.underspecified import RDRMatchParser
+from krrood.entity_query_language.rdr.underspecified import RippleDownRulesMatchParser
 
 from .animal import Animal, Species, make_bird, make_mammal
 from .expert_doubles import labelling_expert, maximally_specific_expert
@@ -114,7 +114,7 @@ class CountingModelSaver(ModelSaver):
 
 
 def test_a_key_names_the_attributes_owner_type_and_name():
-    target = RDRMatchParser(an(Animal)(species=...)).single_target()
+    target = RippleDownRulesMatchParser(match=an(Animal)(species=...)).single_target()
 
     assert ModelKey.from_attribute(target.attribute) == ModelKey(Animal, "species")
 
@@ -124,8 +124,8 @@ def test_every_query_for_one_attribute_is_served_by_one_model(
 ):
     backend = RDRBackend(expert=maximally_specific_expert())
 
-    backend.fit(an(Animal)(species=...).from_(animals), species_of)
-    backend.fit(an(Animal)(milk=True, species=...).from_(animals), species_of)
+    backend.fit(an(Animal)(species=...).from_(domain=animals), species_of)
+    backend.fit(an(Animal)(milk=True, species=...).from_(domain=animals), species_of)
 
     assert list(backend.models) == [ModelKey(Animal, "species")]
 
@@ -133,8 +133,8 @@ def test_every_query_for_one_attribute_is_served_by_one_model(
 def test_a_second_attribute_is_served_by_a_model_of_its_own(animals: List[Animal]):
     backend = RDRBackend(expert=milk_expert())
 
-    backend.fit(an(Animal)(species=...).from_(animals), species_of)
-    backend.fit(an(Animal)(legs=...).from_(animals), lambda animal: animal.legs)
+    backend.fit(an(Animal)(species=...).from_(domain=animals), species_of)
+    backend.fit(an(Animal)(legs=...).from_(domain=animals), lambda animal: animal.legs)
 
     assert set(backend.models) == {
         ModelKey(Animal, "species"),
@@ -148,7 +148,7 @@ def test_a_second_attribute_is_served_by_a_model_of_its_own(animals: List[Animal
 def test_ground_truth_labels_every_case_the_query_keeps(animals: List[Animal]):
     backend = RDRBackend(expert=maximally_specific_expert())
 
-    backend.fit(an(Animal)(species=...).from_(animals), species_of)
+    backend.fit(an(Animal)(species=...).from_(domain=animals), species_of)
 
     model = backend.models[ModelKey(Animal, "species")]
     assert {animal.name: model.classify(animal) for animal in animals} == {
@@ -159,7 +159,10 @@ def test_ground_truth_labels_every_case_the_query_keeps(animals: List[Animal]):
 def test_fitting_returns_the_backend_for_chaining(animals: List[Animal]):
     backend = RDRBackend(expert=maximally_specific_expert())
 
-    assert backend.fit(an(Animal)(species=...).from_(animals), species_of) is backend
+    assert (
+        backend.fit(an(Animal)(species=...).from_(domain=animals), species_of)
+        is backend
+    )
 
 
 def test_without_ground_truth_the_expert_labels_each_case(
@@ -167,7 +170,7 @@ def test_without_ground_truth_the_expert_labels_each_case(
 ):
     backend = RDRBackend(expert=labelling_expert(species_by_name))
 
-    backend.fit(an(Animal)(species=...).from_(animals))
+    backend.fit(an(Animal)(species=...).from_(domain=animals))
 
     model = backend.models[ModelKey(Animal, "species")]
     assert {
@@ -188,7 +191,7 @@ def test_a_fit_persists_the_model_once_rather_than_once_per_case(
         },
     )
 
-    backend.fit(an(Animal)(species=...).from_(animals), species_of)
+    backend.fit(an(Animal)(species=...).from_(domain=animals), species_of)
 
     assert saver.saves == 1
 
@@ -197,7 +200,7 @@ def test_a_fit_with_neither_ground_truth_nor_an_expert_raises(animals: List[Anim
     backend = RDRBackend()
 
     with pytest.raises(ExpertRequired):
-        backend.fit(an(Animal)(species=...).from_(animals))
+        backend.fit(an(Animal)(species=...).from_(domain=animals))
 
 
 # %% inference is lazy, filling is eager
@@ -206,7 +209,7 @@ def test_a_fit_with_neither_ground_truth_nor_an_expert_raises(animals: List[Anim
 def test_inference_does_no_work_until_it_is_iterated(animals: List[Animal]):
     backend = RDRBackend()
 
-    bindings = backend.infer(an(Animal)(species=...).from_(animals))
+    bindings = backend.infer(an(Animal)(species=...).from_(domain=animals))
 
     with pytest.raises(ExpertRequired):
         next(iter(bindings))
@@ -216,7 +219,7 @@ def test_filling_has_done_its_work_by_the_time_it_returns(animals: List[Animal])
     backend = RDRBackend()
 
     with pytest.raises(ExpertRequired):
-        backend.fill(an(Animal)(species=...).from_(animals))
+        backend.fill(an(Animal)(species=...).from_(domain=animals))
 
 
 # %% inference
@@ -226,20 +229,21 @@ def test_inference_binds_each_case_and_its_conclusion_to_the_query(
     animals: List[Animal],
 ):
     backend = RDRBackend(expert=maximally_specific_expert())
-    query = an(Animal)(species=...).from_(animals)
+    query = an(Animal)(species=...).from_(domain=animals)
+    case_variable = RippleDownRulesMatchParser(match=query).variable
     backend.fit(query, species_of)
 
     bindings = list(backend.infer(query))
 
-    assert [bound[query.variable] for bound in bindings] == animals
-    assert [bound[query.variable.species] for bound in bindings] == [
+    assert [bound[case_variable] for bound in bindings] == animals
+    assert [bound[case_variable.species] for bound in bindings] == [
         species_of(animal) for animal in animals
     ]
 
 
 def test_inference_leaves_the_instances_unclassified(animals: List[Animal]):
     backend = RDRBackend(expert=maximally_specific_expert())
-    query = an(Animal)(species=...).from_(animals)
+    query = an(Animal)(species=...).from_(domain=animals)
     backend.fit(query, species_of)
 
     list(backend.infer(query))
@@ -251,12 +255,13 @@ def test_inference_reaches_only_the_cases_the_concrete_constraints_keep(
     animals: List[Animal],
 ):
     backend = RDRBackend(expert=maximally_specific_expert())
-    query = an(Animal)(milk=True, species=...).from_(animals)
+    query = an(Animal)(milk=True, species=...).from_(domain=animals)
+    case_variable = RippleDownRulesMatchParser(match=query).variable
     backend.fit(query, species_of)
 
     bindings = list(backend.infer(query))
 
-    assert [bound[query.variable].name for bound in bindings] == [
+    assert [bound[case_variable].name for bound in bindings] == [
         animal.name for animal in animals if animal.milk
     ]
 
@@ -265,13 +270,14 @@ def test_inference_fits_an_attribute_it_has_no_model_for(
     animals: List[Animal], species_by_name: Dict[str, Species]
 ):
     backend = RDRBackend(expert=labelling_expert(species_by_name))
-    query = an(Animal)(species=...).from_(animals)
+    query = an(Animal)(species=...).from_(domain=animals)
+    case_variable = RippleDownRulesMatchParser(match=query).variable
 
     bindings = list(backend.infer(query))
 
     assert list(backend.models) == [ModelKey(Animal, "species")]
     assert {
-        bound[query.variable].name: bound[query.variable.species] for bound in bindings
+        bound[case_variable].name: bound[case_variable.species] for bound in bindings
     } == species_by_name
 
 
@@ -282,7 +288,7 @@ def test_filling_sets_the_inferred_attribute_on_every_matching_instance(
     animals: List[Animal],
 ):
     backend = RDRBackend(expert=maximally_specific_expert())
-    query = an(Animal)(species=...).from_(animals)
+    query = an(Animal)(species=...).from_(domain=animals)
     backend.fit(query, species_of)
 
     backend.fill(query)
@@ -294,7 +300,7 @@ def test_filling_sets_the_inferred_attribute_on_every_matching_instance(
 
 def test_filling_returns_the_instances_it_filled(animals: List[Animal]):
     backend = RDRBackend(expert=maximally_specific_expert())
-    query = an(Animal)(milk=True, species=...).from_(animals)
+    query = an(Animal)(milk=True, species=...).from_(domain=animals)
     backend.fit(query, species_of)
 
     assert backend.fill(query) == [animal for animal in animals if animal.milk]
@@ -307,7 +313,8 @@ def test_a_reloaded_model_concludes_what_the_original_did(
     animals: List[Animal], tmp_path
 ):
     backend = RDRBackend(expert=maximally_specific_expert())
-    query = an(Animal)(species=...).from_(animals)
+    query = an(Animal)(species=...).from_(domain=animals)
+    case_variable = RippleDownRulesMatchParser(match=query).variable
     backend.fit(query, species_of)
     destination = tmp_path / "animal_species_rdr.py"
     save_rdr(backend.models[ModelKey(Animal, "species")], str(destination))
@@ -316,8 +323,8 @@ def test_a_reloaded_model_concludes_what_the_original_did(
         models={ModelKey(Animal, "species"): load_rdr(str(destination))}
     )
 
-    assert [bound[query.variable.species] for bound in reloaded.infer(query)] == [
-        bound[query.variable.species] for bound in backend.infer(query)
+    assert [bound[case_variable.species] for bound in reloaded.infer(query)] == [
+        bound[case_variable.species] for bound in backend.infer(query)
     ]
 
 
@@ -328,7 +335,7 @@ def test_a_query_evaluated_through_the_backend_yields_its_completed_instances(
     animals: List[Animal],
 ):
     backend = RDRBackend(expert=maximally_specific_expert())
-    query = an(Animal)(milk=True, species=...).from_(animals)
+    query = an(Animal)(milk=True, species=...).from_(domain=animals)
     backend.fit(query, species_of)
 
     completed = list(query.evaluate(backend=backend))
@@ -343,7 +350,7 @@ def test_evaluating_a_query_completes_the_instances_before_it_hands_any_back(
     animals: List[Animal],
 ):
     backend = RDRBackend(expert=maximally_specific_expert())
-    query = an(Animal)(species=...).from_(animals)
+    query = an(Animal)(species=...).from_(domain=animals)
     backend.fit(query, species_of)
 
     query.evaluate(backend=backend)

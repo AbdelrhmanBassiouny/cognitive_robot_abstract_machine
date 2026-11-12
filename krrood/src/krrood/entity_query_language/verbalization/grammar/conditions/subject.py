@@ -1,14 +1,11 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing_extensions import Optional
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.operators.aggregators import Aggregator
-from krrood.entity_query_language.verbalization.grammar.framework.specificity import (
-    SpecificityRule,
-)
+from krrood.patterns.specificity_ranking import SpecificityRule
 from krrood.entity_query_language.query.aggregation_structure import (
     aggregation_source_root,
 )
@@ -28,7 +25,7 @@ class RestrictionSubjectRule(SpecificityRule):
     @classmethod
     @abstractmethod
     def applies(
-        cls, expression: SymbolicExpression, selected_variable: SymbolicExpression
+        cls, *, expression: SymbolicExpression, selected_variable: SymbolicExpression
     ) -> bool:
         """
         :param expression: The query whose restriction subject to resolve.
@@ -43,8 +40,8 @@ class RestrictionSubjectRule(SpecificityRule):
     @classmethod
     @abstractmethod
     def subject(
-        cls, expression: SymbolicExpression, selected_variable: SymbolicExpression
-    ) -> Optional[Variable]:
+        cls, *, expression: SymbolicExpression, selected_variable: SymbolicExpression
+    ) -> Variable | None:
         """
         :param expression: The query whose restriction subject to resolve.
         :param selected_variable: The query's selected variable.
@@ -64,26 +61,28 @@ class SelectedVariableSubjectRule(RestrictionSubjectRule):
 
     @classmethod
     def applies(
-        cls, expression: SymbolicExpression, selected_variable: SymbolicExpression
+        cls, *, expression: SymbolicExpression, selected_variable: SymbolicExpression
     ) -> bool:
         """Fires when the selection is a plain variable.
 
         >>> robot = variable(Robot, [])
         >>> query = an(entity(robot).where(robot.battery > 50))
-        >>> SelectedVariableSubjectRule.applies(query, query.selected_variable)
+        >>> SelectedVariableSubjectRule.applies(
+        ...     expression=query, selected_variable=query.selected_variable
+        ... )
         True
         """
         return isinstance(selected_variable, Variable)
 
     @classmethod
     def subject(
-        cls, expression: SymbolicExpression, selected_variable: SymbolicExpression
-    ) -> Optional[Variable]:
+        cls, *, expression: SymbolicExpression, selected_variable: SymbolicExpression
+    ) -> Variable | None:
         """The plain selection is its own restriction subject.
 
         >>> robot = variable(Robot, [])
         >>> query = an(entity(robot).where(robot.battery > 50))
-        >>> SelectedVariableSubjectRule.subject(query, query.selected_variable) is robot
+        >>> SelectedVariableSubjectRule.subject(expression=query, selected_variable=query.selected_variable) is robot
         True
         """
         return selected_variable
@@ -104,13 +103,15 @@ class AggregationSourceSubjectRule(RestrictionSubjectRule):
 
     @classmethod
     def applies(
-        cls, expression: SymbolicExpression, selected_variable: SymbolicExpression
+        cls, *, expression: SymbolicExpression, selected_variable: SymbolicExpression
     ) -> bool:
         """Fires when the selection aggregates over a single source variable's chain.
 
         >>> employee = variable(Employee, [])
         >>> query = an(entity(max(employee.salary)).where(employee.department == 'Sales'))
-        >>> AggregationSourceSubjectRule.applies(query, query.selected_aggregator)
+        >>> AggregationSourceSubjectRule.applies(
+        ...     expression=query, selected_variable=query.selected_aggregator
+        ... )
         True
         """
         return (
@@ -120,13 +121,13 @@ class AggregationSourceSubjectRule(RestrictionSubjectRule):
 
     @classmethod
     def subject(
-        cls, expression: SymbolicExpression, selected_variable: SymbolicExpression
-    ) -> Optional[Variable]:
+        cls, *, expression: SymbolicExpression, selected_variable: SymbolicExpression
+    ) -> Variable | None:
         """The aggregated source variable is the restriction subject.
 
         >>> employee = variable(Employee, [])
         >>> query = an(entity(max(employee.salary)).where(employee.department == 'Sales'))
-        >>> AggregationSourceSubjectRule.subject(query, query.selected_aggregator) is employee
+        >>> AggregationSourceSubjectRule.subject(expression=query, selected_variable=query.selected_aggregator) is employee
         True
         """
         return aggregation_source_root(expression)
@@ -134,7 +135,7 @@ class AggregationSourceSubjectRule(RestrictionSubjectRule):
 
 def restriction_subject(
     expression: SymbolicExpression, selected_variable: SymbolicExpression
-) -> Optional[Variable]:
+) -> Variable | None:
     """
     :param expression: The query whose restriction subject to resolve.
     :param selected_variable: The query's selected variable.
@@ -146,5 +147,11 @@ def restriction_subject(
     >>> restriction_subject(query, query.selected_variable) is robot
     True
     """
-    chosen = RestrictionSubjectRule.most_applicable(expression, selected_variable)
-    return chosen.subject(expression, selected_variable) if chosen is not None else None
+    chosen = RestrictionSubjectRule.most_applicable(
+        expression=expression, selected_variable=selected_variable
+    )
+    return (
+        chosen.subject(expression=expression, selected_variable=selected_variable)
+        if chosen is not None
+        else None
+    )

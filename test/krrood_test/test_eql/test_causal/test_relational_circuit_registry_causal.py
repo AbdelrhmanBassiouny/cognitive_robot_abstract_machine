@@ -10,7 +10,6 @@ from __future__ import annotations
 import numpy as np
 
 from krrood.entity_query_language.factories import a, cause, variable
-from krrood.ormatic.data_access_objects.helper import to_dao
 from krrood.parametrization.model_registries import RelationalCircuitRegistry
 from krrood.parametrization.parameterizer import UnderspecifiedParameters
 from probabilistic_model.probabilistic_circuit.causal.causal_circuit import (
@@ -18,7 +17,7 @@ from probabilistic_model.probabilistic_circuit.causal.causal_circuit import (
 )
 from probabilistic_model.learning.jpt.jpt import JointProbabilityTree
 from probabilistic_model.learning.learning_method import StratifiedLearning
-from probabilistic_model.probabilistic_circuit.relational.rspn import (
+from probabilistic_model.probabilistic_circuit.relational.relational_probabilistic_circuit import (
     GroundingMode,
     RelationalProbabilisticCircuit,
 )
@@ -30,7 +29,7 @@ from ...dataset.example_classes import (
     SceneRoom,
     SceneRoomAggregations,
 )
-from ...test_feature_extraction.test_rspns import (  # noqa: F401
+from ...test_feature_extraction.test_relational_probabilistic_circuit import (  # noqa: F401
     _room_with_chair_count,
     correlated_room_query,
     relational_probabilistic_circuit,
@@ -44,7 +43,7 @@ def _cause_and_effect_query():
         orientation=a(KRROODOrientation)(x=..., y=..., z=..., w=...),
         objects=[a(SceneObject)(type=...) for _ in range(4)],
     )
-    query.causes_effect(query.variable.objects[0].type == SceneObjectType.CHAIR)
+    query.causes_effect(query.objects[0].type == SceneObjectType.CHAIR)
     return query
 
 
@@ -59,10 +58,10 @@ def test_registry_returns_a_causal_circuit_for_a_cause_query(
     registry = RelationalCircuitRegistry(
         relational_probabilistic_circuit=relational_probabilistic_circuit
     )
-    parameters = UnderspecifiedParameters(_cause_and_effect_query())
+    parameters = UnderspecifiedParameters(statement=_cause_and_effect_query())
 
     np.random.seed(0)
-    result = registry.get_model(parameters)
+    result = registry.get_model(parameters=parameters)
 
     assert isinstance(result, CausalCircuit)
 
@@ -73,10 +72,10 @@ def test_registered_causal_circuit_has_the_queried_cause_and_effect_variables(
     registry = RelationalCircuitRegistry(
         relational_probabilistic_circuit=relational_probabilistic_circuit
     )
-    parameters = UnderspecifiedParameters(_cause_and_effect_query())
+    parameters = UnderspecifiedParameters(statement=_cause_and_effect_query())
 
     np.random.seed(0)
-    result = registry.get_model(parameters)
+    result = registry.get_model(parameters=parameters)
 
     assert [v.name for v in result.causal_variables] == ["SceneRoom.position.x"]
     assert [v.name for v in result.effect_variables] == ["SceneRoom.objects[0].type"]
@@ -88,10 +87,10 @@ def test_registered_causal_circuit_supports_backdoor_adjustment(
     registry = RelationalCircuitRegistry(
         relational_probabilistic_circuit=relational_probabilistic_circuit
     )
-    parameters = UnderspecifiedParameters(_cause_and_effect_query())
+    parameters = UnderspecifiedParameters(statement=_cause_and_effect_query())
 
     np.random.seed(0)
-    result = registry.get_model(parameters)
+    result = registry.get_model(parameters=parameters)
 
     interventional_circuit = result.backdoor_adjustment(
         cause_variable=result.causal_variables[0],
@@ -113,9 +112,9 @@ def test_non_causal_query_is_unaffected(relational_probabilistic_circuit):
         orientation=a(KRROODOrientation)(x=..., y=..., z=..., w=...),
         objects=[a(SceneObject)(type=...) for _ in range(4)],
     )
-    parameters = UnderspecifiedParameters(query)
+    parameters = UnderspecifiedParameters(statement=query)
 
-    result = registry.get_model(parameters)
+    result = registry.get_model(parameters=parameters)
 
     assert not isinstance(result, CausalCircuit)
 
@@ -137,9 +136,13 @@ def test_grounding_mode_field_is_actually_used(relational_probabilistic_circuit)
     )
 
     np.random.seed(0)
-    first = registry.get_model(UnderspecifiedParameters(_cause_and_effect_query()))
+    first = registry.get_model(
+        parameters=UnderspecifiedParameters(statement=_cause_and_effect_query())
+    )
     np.random.seed(123)
-    second = registry.get_model(UnderspecifiedParameters(_cause_and_effect_query()))
+    second = registry.get_model(
+        parameters=UnderspecifiedParameters(statement=_cause_and_effect_query())
+    )
 
     assert isinstance(first, CausalCircuit)
     assert {v.name for v in first.probabilistic_circuit.variables} == {
@@ -170,10 +173,11 @@ def test_cause_on_an_aggregation_statistic_grounds_through_the_registry():
     ]
     chair_count_variable = variable(SceneRoomAggregations).chair_count()
     model = RelationalProbabilisticCircuit(
-        SceneRoom,
-        learning_method=StratifiedLearning(variables=[chair_count_variable._name_], method=JointProbabilityTree()),
+        learning_method=StratifiedLearning(
+            variables=[chair_count_variable._name_], method=JointProbabilityTree()
+        ),
     )
-    model.fit([to_dao(room) for room in rooms])
+    model.fit(rooms)
 
     query = a(SceneRoom)(
         position=a(KRROODPosition)(x=..., y=..., z=...),
@@ -181,12 +185,12 @@ def test_cause_on_an_aggregation_statistic_grounds_through_the_registry():
         objects=[a(SceneObject)(type=...) for _ in range(3)],
         chair_count=cause,
     )
-    query.causes_effect(query.variable.objects[0].type == SceneObjectType.CHAIR)
+    query.causes_effect(query.objects[0].type == SceneObjectType.CHAIR)
 
     registry = RelationalCircuitRegistry(relational_probabilistic_circuit=model)
 
     np.random.seed(0)
-    result = registry.get_model(UnderspecifiedParameters(query))
+    result = registry.get_model(parameters=UnderspecifiedParameters(statement=query))
 
     assert isinstance(result, CausalCircuit)
     assert [v.name for v in result.causal_variables] == [

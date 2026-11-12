@@ -10,10 +10,8 @@ from typing_extensions import Any, Set, Tuple, Type
 
 import pytest
 
-from krrood.entity_query_language.rdr.corner_case import (  # noqa: E402
-    CaseSerializer,
-    CornerCaseStore,
-)
+from krrood.code_generation.dataclass_source import ObjectSourceSerializer
+from krrood.entity_query_language.rdr.corner_case import CornerCaseStore
 from krrood.entity_query_language.factories import entity, variable
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
@@ -51,13 +49,12 @@ def _make_condition_node(case_type=Animal):
 
 
 @dataclass
-class TrivialSerializer(CaseSerializer):
+class TrivialSerializer(ObjectSourceSerializer):
     """
-    Pattern: TrivialSerializer — minimal CaseSerializer that returns str(case).
+    Pattern: TrivialSerializer — minimal ObjectSourceSerializer that returns str(case).
 
     Replaces the old ``_trivial_emit`` raw callable after the Option A migration.
-    ``to_source`` returns the string representation with an empty referenced-type set;
-    ``from_data`` is a no-op stub (not exercised in Phase 1 tests).
+    ``to_source`` returns the string representation with an empty referenced-type set.
     """
 
     def to_source(self, case: Any) -> Tuple[str, Set[Type]]:
@@ -69,15 +66,9 @@ class TrivialSerializer(CaseSerializer):
         """
         return (str(case), set())
 
-    def from_data(self, data: Any, case_type: Type) -> Any:
-        """
-        Stub: not exercised in Phase 1 tests.
-        """
-        return data
-
 
 @dataclass
-class SpySerializer(CaseSerializer):
+class SpySerializer(ObjectSourceSerializer):
     """
     Pattern: SpySerializer — records every case passed to ``to_source``.
 
@@ -101,12 +92,6 @@ class SpySerializer(CaseSerializer):
         self.received.append(case)
         return (str(case), set())
 
-    def from_data(self, data: Any, case_type: Type) -> Any:
-        """
-        Stub: not exercised in Phase 1 tests.
-        """
-        return data
-
 
 # %% recording a case and reading it back
 
@@ -119,9 +104,9 @@ def test_record_and_get_by_node_id():
     node = _make_condition_node()
     case = MinimalCase(name="test_case", milk=True)
 
-    store.record(node, case)
+    store.record_corner_case(node, case)
 
-    assert store.get(node._id_) is case
+    assert store.get_corner_case_for_node(node._id_) is case
 
 
 # %% reading a case the store does not hold
@@ -133,7 +118,7 @@ def test_get_none_for_missing_node_id():
     """
     store = CornerCaseStore()
 
-    result = store.get(uuid.uuid4())
+    result = store.get_corner_case_for_node(uuid.uuid4())
 
     assert result is None
 
@@ -144,7 +129,7 @@ def test_get_none_for_none_input():
     """
     store = CornerCaseStore()
 
-    result = store.get(None)
+    result = store.get_corner_case_for_node(None)
 
     assert result is None
 
@@ -167,8 +152,8 @@ def test_to_ordered_sources_only_includes_recorded_nodes():
     case_a = MinimalCase(name="a", milk=True)
     case_c = MinimalCase(name="c", milk=False)
 
-    store.record(n0, case_a)
-    store.record(n2, case_c)
+    store.record_corner_case(n0, case_a)
+    store.record_corner_case(n2, case_c)
 
     result = store.to_ordered_sources([n0, n1, n2])
 
@@ -190,7 +175,7 @@ def test_to_ordered_sources_calls_emit_with_the_case():
     store = CornerCaseStore(serializer=spy)
     node = _make_condition_node()
     sentinel_case = MinimalCase(name="sentinel", milk=True)
-    store.record(node, sentinel_case)
+    store.record_corner_case(node, sentinel_case)
 
     store.to_ordered_sources([node])
 
@@ -213,8 +198,8 @@ def test_from_ordered_cases_roundtrip():
 
     store = CornerCaseStore.from_ordered_cases([n0, n1], {0: case_a, 1: case_b})
 
-    assert store.get(n0._id_) is case_a
-    assert store.get(n1._id_) is case_b
+    assert store.get_corner_case_for_node(n0._id_) is case_a
+    assert store.get_corner_case_for_node(n1._id_) is case_b
 
 
 # %% from_ordered_cases: a gap in the emitted order
@@ -232,9 +217,9 @@ def test_from_ordered_cases_skips_missing_indices():
 
     store = CornerCaseStore.from_ordered_cases([n0, n1, n2], {1: case_b})
 
-    assert store.get(n1._id_) is case_b
-    assert store.get(n0._id_) is None
-    assert store.get(n2._id_) is None
+    assert store.get_corner_case_for_node(n1._id_) is case_b
+    assert store.get_corner_case_for_node(n0._id_) is None
+    assert store.get_corner_case_for_node(n2._id_) is None
 
 
 # %% recording twice for one node
@@ -249,8 +234,8 @@ def test_record_overwrites_previous_entry():
     first_case = MinimalCase(name="first", milk=True)
     second_case = MinimalCase(name="second", milk=False)
 
-    store.record(node, first_case)
-    store.record(node, second_case)
+    store.record_corner_case(node, first_case)
+    store.record_corner_case(node, second_case)
 
-    assert store.get(node._id_) is second_case
-    assert store.get(node._id_) is not first_case
+    assert store.get_corner_case_for_node(node._id_) is second_case
+    assert store.get_corner_case_for_node(node._id_) is not first_case

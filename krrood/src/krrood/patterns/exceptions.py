@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import inspect
 from dataclasses import dataclass
 
-from typing_extensions import Any, Type
+from typing_extensions import Any, Callable
 
 from krrood.exceptions import DataclassException
 
 
-@dataclass
+@dataclass(kw_only=True)
 class DelegatedFactoryMethodError(DataclassException):
     """
     Raised when a role-taker factory method is invoked through a role.
@@ -17,12 +18,12 @@ class DelegatedFactoryMethodError(DataclassException):
     is refused to keep that mistake loud instead of quiet.
     """
 
-    role_type: Type
+    role_type: type
     """
     The role type the factory method was accessed through.
     """
 
-    taker_type: Type
+    taker_type: type
     """
     The role-taker type that declares the factory method.
     """
@@ -47,7 +48,7 @@ class DelegatedFactoryMethodError(DataclassException):
         )
 
 
-@dataclass
+@dataclass(kw_only=True)
 class RoleAttributeNotDeclaredError(DataclassException):
     """
     Raised when assigning a name that the role does not declare as one of its own
@@ -57,7 +58,7 @@ class RoleAttributeNotDeclaredError(DataclassException):
     write cannot silently shadow a role-taker attribute.
     """
 
-    role_type: Type
+    role_type: type
     """
     The role class the assignment was attempted on.
     """
@@ -80,7 +81,7 @@ class RoleAttributeNotDeclaredError(DataclassException):
         )
 
 
-@dataclass
+@dataclass(kw_only=True)
 class UnmemoizableOwnerError(DataclassException):
     """
     Raised when a memoized call's owner cannot hold a cache.
@@ -110,3 +111,82 @@ class UnmemoizableOwnerError(DataclassException):
             f"Memoize on an object whose lifetime can be tracked, or cache "
             f"{self.function_name}() with functools.lru_cache instead."
         )
+
+
+@dataclass(kw_only=True)
+class KeywordNamesNoFactoryParameter(DataclassException, TypeError):
+    """
+    Raised when a keyword argument given for construction names no parameter of the
+    factory it is given to, which would otherwise be lost without a trace.
+    """
+
+    factory: Callable[..., Any]
+    """
+    The factory the keyword argument was given to.
+    """
+
+    keyword: str
+    """
+    The keyword argument that names no parameter of the factory.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.factory.__qualname__} has no parameter named {self.keyword!r}, so it "
+            f"cannot be constructed with it."
+        )
+
+    def suggest_correction(self) -> str:
+        parameter_names = ", ".join(inspect.signature(self.factory).parameters)
+        return (
+            f"Check the spelling of {self.keyword!r}; the parameters of "
+            f"{self.factory.__qualname__} are: {parameter_names}."
+        )
+
+
+@dataclass(kw_only=True)
+class AmbiguousRuleError(DataclassException):
+    """
+    Two or more rules of a family are equally specific for the same subject, a collision
+    that would otherwise resolve silently by registration order.
+
+    Surfaced as an error so an accidental overlap is caught rather than masked.
+    """
+
+    subject: Any
+    """
+    What the rules were asked about when the collision occurred.
+    """
+
+    candidates: list[type]
+    """
+    The equally specific rule classes that collided.
+    """
+
+    def error_message(self) -> str:
+        names = ", ".join(sorted(candidate.__name__ for candidate in self.candidates))
+        return f"{names} are equally specific for {self.subject!r}."
+
+    def suggest_correction(self) -> str:
+        return (
+            "Make the colliding guards mutually exclusive, or have one rule subclass the other "
+            "to declare it the more-specific special case."
+        )
+
+
+@dataclass(kw_only=True)
+class InterfaceInstantiationError(DataclassException, TypeError):
+    """
+    Raised when an interface itself is instantiated instead of a class implementing it.
+    """
+
+    interface: type
+    """
+    The interface that was instantiated.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.interface.__name__} is an interface and cannot be instantiated."
+
+    def suggest_correction(self) -> str:
+        return f"Instantiate a subclass that implements {self.interface.__name__}."

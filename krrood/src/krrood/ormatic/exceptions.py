@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import zoneinfo
 from dataclasses import dataclass
-from typing_extensions import Type, Any, List, TYPE_CHECKING
+from typing_extensions import Any, TYPE_CHECKING
 
 from sqlalchemy.orm import RelationshipProperty
 
@@ -14,7 +15,7 @@ if TYPE_CHECKING:
     )
 
 
-@dataclass
+@dataclass(kw_only=True)
 class NoGenericError(DataclassException, TypeError):
     """
     Exception raised when the original class for a DataAccessObject subclass cannot be
@@ -25,7 +26,7 @@ class NoGenericError(DataclassException, TypeError):
     with it.
     """
 
-    clazz: Type
+    clazz: type
 
     def error_message(self) -> str:
         return f"Cannot determine original class for {self.clazz}."
@@ -34,7 +35,7 @@ class NoGenericError(DataclassException, TypeError):
         return "did you forget to parameterise the DataAccessObject subclass?"
 
 
-@dataclass
+@dataclass(kw_only=True)
 class NoDAOFoundError(DataclassException, TypeError):
     """
     Represents an error raised when no DAO (Data Access Object) class is found for a
@@ -47,7 +48,7 @@ class NoDAOFoundError(DataclassException, TypeError):
 
     obj: Any
     """
-    The class that no dao was found for
+    The class that no dao was found for.
     """
 
     def error_message(self) -> str:
@@ -61,7 +62,29 @@ class NoDAOFoundError(DataclassException, TypeError):
         )
 
 
-@dataclass
+@dataclass(kw_only=True)
+class QueryCannotBePersisted(DataclassException, TypeError):
+    """
+    Raised when an object that is to be stored holds an entity query language query in
+    place of a value.
+
+    A query describes the objects that would satisfy it rather than one of them, so
+    there is nothing to store until it is answered.
+    """
+
+    query: Any
+    """
+    The query that was to be stored.
+    """
+
+    def error_message(self) -> str:
+        return f"The query {self.query} cannot be stored."
+
+    def suggest_correction(self) -> str:
+        return "Store the objects the query was answered with instead of the query."
+
+
+@dataclass(kw_only=True)
 class NoDAOFoundForTypeError(NoDAOFoundError):
     """
     Raised when no DAO class is found for a domain *type* rather than for a concrete
@@ -76,7 +99,7 @@ class NoDAOFoundForTypeError(NoDAOFoundError):
         return f"No DAO found for type {self.obj}."
 
 
-@dataclass
+@dataclass(kw_only=True)
 class NoDAOFoundForSelectionError(NoDAOFoundError):
     """
     Raised when none of the selected expressions of a query resolve to a DAO-bearing
@@ -87,10 +110,9 @@ class NoDAOFoundForSelectionError(NoDAOFoundError):
         return f"No DAO could be derived from the selected expressions: {self.obj}."
 
 
-@dataclass
+@dataclass(kw_only=True)
 class NoDAOFoundDuringParsingError(NoDAOFoundError):
-
-    dao: Type
+    dao: type
     """
     The DAO class that tried to convert the cls to a DAO if any.
     """
@@ -109,7 +131,7 @@ class NoDAOFoundDuringParsingError(NoDAOFoundError):
         )
 
 
-@dataclass
+@dataclass(kw_only=True)
 class UnsupportedRelationshipError(DataclassException, ValueError):
     """
     Raised when a relationship direction is not supported by the ORM mapping.
@@ -127,7 +149,7 @@ class UnsupportedRelationshipError(DataclassException, ValueError):
         return ""
 
 
-@dataclass
+@dataclass(kw_only=True)
 class UncallableFunction(NotImplementedError):
     """
     Exception raised when anonymous functions are reconstructed and then called.
@@ -145,14 +167,14 @@ class UncallableFunction(NotImplementedError):
         )
 
 
-@dataclass
+@dataclass(kw_only=True)
 class UnsupportedColumnType(DataclassException, TypeError):
     """
     Exception raised when a column type is neither a type_mapping nor a builtin
     sqlalchemy type.
     """
 
-    column_type: Type
+    column_type: type
 
     def error_message(self) -> str:
         return f"Column type: {self.column_type} is neither a builtin sqlalchemy type nor does it exist in the dict of type_mappings."
@@ -161,14 +183,35 @@ class UnsupportedColumnType(DataclassException, TypeError):
         return ""
 
 
-@dataclass
+@dataclass(kw_only=True)
+class ZoneInfoWithoutKey(DataclassException, ValueError):
+    """
+    Raised when a timezone that has no IANA key, such as one read from a file, is
+    written to the database, where timezones are stored by their key.
+    """
+
+    zone: zoneinfo.ZoneInfo
+    """
+    The timezone that has no key.
+    """
+
+    def error_message(self) -> str:
+        return f"The timezone {self.zone!r} has no IANA key to store it by."
+
+    def suggest_correction(self) -> str:
+        return (
+            "create the timezone from its key, e.g. zoneinfo.ZoneInfo('Europe/Berlin')."
+        )
+
+
+@dataclass(kw_only=True)
 class ConversionOrderCycle(DataclassException, ValueError):
     """
     Raised when the alternative mappings of a conversion cannot be put in any order,
     because the orders they ask for form a cycle.
     """
 
-    cycle: List[ConversionOrderConstraint]
+    cycle: list[ConversionOrderConstraint]
     """
     The constraints that close the cycle, each one putting its earlier mapping type
     before its later one.
