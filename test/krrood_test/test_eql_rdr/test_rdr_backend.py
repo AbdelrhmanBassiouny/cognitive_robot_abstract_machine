@@ -31,8 +31,7 @@ from krrood.entity_query_language.rdr.interface import (
 )
 from krrood.entity_query_language.rdr.serialization import (
     ModelSaver,
-    load_rdr,
-    save_rdr,
+    RDRSerializer,
 )
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 from krrood.entity_query_language.rdr.underspecified import RippleDownRulesMatchParser
@@ -312,15 +311,20 @@ def test_filling_returns_the_instances_it_filled(animals: List[Animal]):
 def test_a_reloaded_model_concludes_what_the_original_did(
     animals: List[Animal], tmp_path
 ):
+    """
+    A model saved to a file and loaded back infers what the fitted model inferred.
+    """
     backend = RDRBackend(expert=maximally_specific_expert())
     query = an(Animal)(species=...).from_(domain=animals)
     case_variable = RippleDownRulesMatchParser(match=query).variable
     backend.fit(query, species_of)
     destination = tmp_path / "animal_species_rdr.py"
-    save_rdr(backend.models[ModelKey(Animal, "species")], str(destination))
+    RDRSerializer(rdr=backend.models[ModelKey(Animal, "species")]).save(
+        path=str(destination)
+    )
 
     reloaded = RDRBackend(
-        models={ModelKey(Animal, "species"): load_rdr(str(destination))}
+        models={ModelKey(Animal, "species"): RDRSerializer.load(path=str(destination))}
     )
 
     assert [bound[case_variable.species] for bound in reloaded.infer(query)] == [

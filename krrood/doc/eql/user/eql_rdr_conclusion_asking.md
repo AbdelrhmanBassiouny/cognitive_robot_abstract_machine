@@ -254,17 +254,17 @@ A tree grown by conclusion-asking serializes and loads the same way as any other
 ```{code-cell} ipython3
 import os
 import tempfile
-from krrood.entity_query_language.rdr.serialization import save_rdr, load_rdr
+from krrood.entity_query_language.rdr.serialization import RDRSerializer
 
 with tempfile.TemporaryDirectory() as tmp:
     path = os.path.join(tmp, "exhibit_rdr.py")
-    save_rdr(rdr, path)
+    RDRSerializer(rdr=rdr).save(path=path)
 
     # Show the first few lines of the saved Python module.
     with open(path) as f:
         print(f.read()[:500], "...")
 
-    loaded = load_rdr(path)
+    loaded = RDRSerializer.load(path=path)
 
 # The loaded tree classifies identically.
 all_match = all(rdr.classify(e) == loaded.classify(e) for e in EXHIBITS)
@@ -280,8 +280,8 @@ print("Round-trip identical:", all_match)
 | Inspect allowed values | `rdr.conclusion_domain` |
 | Re-confirm current label | Return the current conclusion; no rule is inserted |
 | Pre-seed with a heuristic | `Expert(helpers=[MyHelper()])` |
-| Save to disk | `save_rdr(rdr, path)` |
-| Reload from disk | `load_rdr(path)` |
+| Save to disk | `RDRSerializer(rdr=rdr).save(path=path)` |
+| Reload from disk | `RDRSerializer.load(path=path)` |
 | Interactive shell | `Expert(interface=IPythonInterface())` — see prose below |
 
 ## The Interactive Shell Experience
@@ -329,7 +329,7 @@ The magics `%help`, `%show_tree`, and `%helper` are available throughout.
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 from krrood.entity_query_language.rdr.interface import FunctionInterface
 from krrood.entity_query_language.rdr.expert import Expert
-from krrood.entity_query_language.rdr.serialization import save_rdr, load_rdr
+from krrood.entity_query_language.rdr.serialization import RDRSerializer
 from krrood.entity_query_language.rdr.answer_vocabulary import AnswerName
 from rdr_conclusion_domain import Exhibit, ExhibitKind, EXHIBITS, LABELS
 import os, tempfile
@@ -351,8 +351,8 @@ rdr_e2e.fit(EXHIBITS, expert=Expert(interface=FunctionInterface(answer_function=
 
 with tempfile.TemporaryDirectory() as tmp:
     path = os.path.join(tmp, "exhibit_e2e.py")
-    save_rdr(rdr_e2e, path)
-    loaded_e2e = load_rdr(path)
+    RDRSerializer(rdr=rdr_e2e).save(path=path)
+    loaded_e2e = RDRSerializer.load(path=path)
 
 print("All correct:", all(loaded_e2e.classify(e) == l for e, l in zip(EXHIBITS, LABELS)))
 ```
@@ -372,8 +372,8 @@ print("All correct:", all(loaded_e2e.classify(e) == l for e, l in zip(EXHIBITS, 
   how allowable values are derived from the type annotation.
 - {py:class}`~krrood.entity_query_language.rdr.conclusion_helper.ConclusionHelper` — base class for pluggable
   presentation and suggestion aids.
-- {py:func}`~krrood.entity_query_language.rdr.serialization.save_rdr` /
-  {py:func}`~krrood.entity_query_language.rdr.serialization.load_rdr` — persistence.
+- {py:meth}`~krrood.entity_query_language.rdr.serialization.RDRSerializer.save` /
+  {py:meth}`~krrood.entity_query_language.rdr.serialization.RDRSerializer.load` — persistence.
 - {doc}`writing_rule_trees` — background on how EQL rule trees are structured.
 - Developer guide: {doc}`../developer/eql_rdr_conclusion_asking` — design rationale and
   extension points.

@@ -32,7 +32,7 @@ from krrood.entity_query_language.rdr.interactive import IPythonInterface
 from krrood.entity_query_language.rdr.interface import (
     FunctionInterface,
 )
-from krrood.entity_query_language.rdr.serialization import load_rdr, save_rdr
+from krrood.entity_query_language.rdr.serialization import RDRSerializer
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
 
@@ -187,8 +187,8 @@ class TestCorrectDrawerNoTargetFit(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "test_correct_drawer_model.py")
-            save_rdr(rdr, path)
-            loaded = load_rdr(path)
+            RDRSerializer(rdr=rdr).save(path=path)
+            loaded = RDRSerializer.load(path=path)
 
         for case, target in zip(drawers, targets):
             self.assertEqual(rdr.classify(case), loaded.classify(case))
@@ -262,7 +262,7 @@ class TestCorrectFitDrawerAsHumanExpert(unittest.TestCase):
         rdr.fit(drawers, expert=Expert(interface=IPythonInterface()))
 
         os.makedirs(FITTED_MODELS_DIR, exist_ok=True)
-        save_rdr(rdr, SAVED_MODEL_PATH)
+        RDRSerializer(rdr=rdr).save(path=SAVED_MODEL_PATH)
 
         correct = sum(
             rdr.classify(drawer) == target for drawer, target in zip(drawers, targets)
@@ -289,7 +289,7 @@ class TestCorrectLoadHumanFittedDrawerModel(unittest.TestCase):
         """
         The saved drawer tree reloads and reproduces its fitted accuracy.
         """
-        rdr = load_rdr(SAVED_MODEL_PATH)
+        rdr = RDRSerializer.load(path=SAVED_MODEL_PATH)
         self.assertIs(rdr.case_type, RDRTestCorrectDrawer)
         self.assertEqual(rdr.conclusion_attribute_name, "correct")
 
