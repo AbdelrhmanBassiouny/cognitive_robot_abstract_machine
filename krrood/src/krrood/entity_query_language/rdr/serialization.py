@@ -26,6 +26,7 @@ from krrood.code_generation.ast_helpers import (
     ast_unparse_statements,
     ast_with_block,
 )
+from krrood.code_generation.function_case import FunctionCaseGenerator
 from krrood.code_generation.formatting import remove_unused_imports
 from krrood.code_generation.generator import CodeGenerator
 from krrood.code_generation.imports import get_imports_from_types
@@ -38,6 +39,7 @@ from krrood.entity_query_language.rdr.exceptions import (
     EmptyRuleTreeError,
     MissingAddConclusionError,
 )
+from krrood.entity_query_language.rdr.function_case import FunctionCase
 from krrood.entity_query_language.rules.conclusion import Add
 from krrood.entity_query_language.rules.decomposition import DecomposedRuleTree
 from krrood.entity_query_language.source_emission import (
@@ -166,6 +168,13 @@ class RDRSerializer:
         from."""
         return "rdr_module.py.jinja"
 
+    @classproperty
+    def case_class_and_rules_separator(cls) -> str:
+        """
+        The blank lines between a generated case class and the rule tree after it.
+        """
+        return "\n\n\n"
+
     def to_source(self, *, case_type_is_local: bool = False) -> str:
         """Python module source that rebuilds the same rule tree on import.
 
@@ -273,5 +282,27 @@ class RDRSerializer:
         :return: The source written.
         """
         source = self.to_source()
+        Path(path).write_text(source)
+        return source
+
+    def save_with_case(self, *, path: str) -> str:
+        """
+        Write the RDR's module to ``path``, preceded by the definition of its case type
+        when that is a :class:`FunctionCase`; otherwise the same as :meth:`save`.
+
+        :param path: The destination ``.py`` file.
+        :return: The source written.
+        """
+        case_type = self.rdr.case_type
+        if not (isinstance(case_type, type) and issubclass(case_type, FunctionCase)):
+            return self.save(path=path)
+        class_source = FunctionCaseGenerator().generate(
+            function=case_type.function, class_name=case_type.__name__
+        )
+        source = (
+            class_source
+            + self.case_class_and_rules_separator
+            + self.to_source(case_type_is_local=True)
+        )
         Path(path).write_text(source)
         return source
