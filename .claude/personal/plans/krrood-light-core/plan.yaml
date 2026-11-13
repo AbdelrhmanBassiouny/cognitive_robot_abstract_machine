@@ -72,9 +72,11 @@ items:
     entries from the guard ratchet.'
 - id: eql-probabilistic-split
   title: Core EQL imports no random_events or probabilistic_model
-  branch: null
-  status: not_started
+  branch: claude/friendly-volta-bny36w
+  status: in progress
   track: core-boundaries
+  pull_request_number: 609
+  session: https://claude.ai/code/session_01JxHGiNCuZYy4zJDsmbyfwZ
   depends_on:
   - type-hint-resolver-skips-missing-modules
   notes: 'Split operators/causal.py: Cause/Confounder/CausesEffect stay core, the random_events
