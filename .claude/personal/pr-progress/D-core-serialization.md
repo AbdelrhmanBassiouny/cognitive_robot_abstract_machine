@@ -1,12 +1,12 @@
 Plan
-- Finish the 2026-11-13 review of serialization.py (the HasFactory part is still open).
+- Keep #66 ready; react to the owner's next review.
 
 Done
-- 5555b4359c: serialization.py now uses RuleTreeSourceEmitter and RDRSerializer; the constants are class properties or RDRModuleAttribute; the decomposition moved to rules/decomposition.py; literal and comparison-operator helpers moved to ast_helpers; generated source unchanged.
-- Carried into all nine descendants (support, engine, expert, single-class, backend, ui-rendering, ui, store, deco); each was pushed with no new failures.
-- Four review threads answered and resolved.
+- e4edd472c9: emitter families (code_generation and EQL source_emission), factory-naming emitters replace the map, ConclusionSelector.grows_rule_tree_inward, ast_ prefix, save_with_case/load moved up the stack (support e02a70c8e1, single-class 2562611189 as EQLSingleClassRDR.load). Output byte-identical.
+- 7ab6cc2675: latest main merged; carried down all nine descendants.
+- All 2026-11-13 threads answered and resolved; PR description current.
 
 Next
-- Owner: decide on HasFactory (thread r4561012001). It needs the type→factory registry or a factories restructure because of the import cycle.
-- Read CI at 121ddadd9a; the owner removes the integration-conflict label.
-- Descendants still have failures from main's keyword-only migration (ExpertAbort, insert_at, Match.from_, _iter_descendants_; test_rule_tree_growth on support and engine).
+- Read CI at 7ab6cc2675; the owner removes the integration-conflict label.
+- Separate fix: DecomposedRuleTree fails on next_rule branches (Next has no .right).
+- Descendants keep pre-existing keyword-only failures (ExpertAbort, insert_at, Match.from_, _iter_descendants_).
