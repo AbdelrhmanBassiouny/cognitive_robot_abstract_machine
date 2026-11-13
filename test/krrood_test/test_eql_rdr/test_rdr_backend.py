@@ -47,7 +47,7 @@ def species_of(animal: Animal) -> Species:
     The ground truth every fit below is given.
 
     :param animal: The animal to label.
-    :return: ``Species.mammal`` for a milk-bearing animal, ``Species.bird`` otherwise.
+    :return:``Species.mammal`` for a milk-bearing animal, ``Species.bird`` otherwise.
     """
     return Species.mammal if animal.milk else Species.bird
 
@@ -324,7 +324,9 @@ def test_a_reloaded_model_concludes_what_the_original_did(
     )
 
     reloaded = RDRBackend(
-        models={ModelKey(Animal, "species"): RDRSerializer.load(path=str(destination))}
+        models={
+            ModelKey(Animal, "species"): EQLSingleClassRDR.load(path=str(destination))
+        }
     )
 
     assert [bound[case_variable.species] for bound in reloaded.infer(query)] == [
