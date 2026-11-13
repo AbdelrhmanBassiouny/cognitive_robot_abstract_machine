@@ -116,9 +116,11 @@ items:
     command is then mounted on basstler-rules'' cyclopts commands. Delete once that item starts.'
 - id: classproperty-in-patterns
   title: krrood-core imports nothing outside patterns, class_diagrams, symbol_graph and exceptions
-  branch: null
-  status: not_started
+  branch: claude/dreamy-ptolemy-v7pxjm
+  status: in progress
   track: core-boundaries
+  pull_request_number: 608
+  session: https://claude.ai/code/session_01JxHGiKzJUPxGJDd4Czwnrm
   depends_on: []
   notes: 'Moves only. classproperty from ormatic/utils.py into krrood.patterns; DataclassException
     into core. symbol_graph stops importing ontomatic''s attribute_introspector at module
