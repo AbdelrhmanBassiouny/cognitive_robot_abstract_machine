@@ -67,6 +67,10 @@ def test_number_like_field_rejects_a_query_selecting_multiple_variables():
 def test_number_like_field_accepts_an_integer_or_floating_point_field(
     accessed_field: Callable[[Any], Attribute],
 ):
+    """
+    A field typed as an integer, a floating-point number or a subclass of either is
+    number-like.
+    """
     attribute = accessed_field(variable(Measurement, domain=[]))
     assert attribute.number_like_field() is attribute
 
@@ -83,5 +87,9 @@ def test_number_like_field_accepts_an_integer_or_floating_point_field(
 def test_number_like_field_rejects_a_boolean_or_enumeration_field(
     accessed_field: Callable[[Any], Attribute],
 ):
+    """
+    A boolean or enumeration field is not number-like, even where its type subclasses an
+    integer.
+    """
     with pytest.raises(NotNumberLikeFieldError):
         accessed_field(variable(Measurement, domain=[])).number_like_field()

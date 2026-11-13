@@ -1,3 +1,7 @@
+"""
+Building the answers of a probabilistic backend from model samples.
+"""
+
 import enum
 from dataclasses import dataclass
 

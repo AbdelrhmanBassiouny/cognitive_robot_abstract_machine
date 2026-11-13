@@ -1,3 +1,7 @@
+"""
+Environments that generate the data an action's parametrization is learned from.
+"""
+
 import json
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field

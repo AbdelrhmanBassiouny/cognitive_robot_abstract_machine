@@ -1,3 +1,7 @@
+"""
+Regressions of probabilistic queries.
+"""
+
 from dataclasses import dataclass
 
 import pytest

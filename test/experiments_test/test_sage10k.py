@@ -1,3 +1,7 @@
+"""
+The SAGE-10k door-opening demo.
+"""
+
 from copy import deepcopy
 
 import numpy as np

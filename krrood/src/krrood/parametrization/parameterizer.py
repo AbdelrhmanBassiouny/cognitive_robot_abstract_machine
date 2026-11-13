@@ -1,3 +1,8 @@
+"""
+The parameters an entity query is translated to for a probabilistic model: its random
+variables and the events its conditions describe.
+"""
+
 from __future__ import annotations
 
 import itertools
@@ -1230,12 +1235,10 @@ class SelectedAttributesParameters(ModelQueryParameters):
 @dataclass(kw_only=True)
 class ConditionParameters(ModelQueryParameters):
     """
-    A class that extracts all necessary information from a condition expression given to
-    {py:class}`~krrood.parametrization.probabilistic_queries.Probability `
-    (``probability_of(...)``) and binds it together, reusing the same :class:`~krrood.
-
-    parametrization.random_events_translator.WhereExpressionToRandomEventTranslator` a
-    ``Match``'s ``where`` conditions are already translated with.
+    The variables and event of a condition given to
+    :class:`~krrood.parametrization.probabilistic_queries.Probability`, translated as
+    a match's ``where`` conditions are, by
+    :class:`~krrood.parametrization.random_events_translator.WhereExpressionToRandomEventTranslator`.
     """
 
     condition: ConditionType

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import importlib
 import pkgutil
+import sys
 from dataclasses import dataclass
 
 from krrood.entity_query_language.verbalization import grammar as grammar_package
@@ -19,12 +20,9 @@ from krrood.patterns.specificity_ranking import concrete_subclasses
 
 def _load_rule_modules() -> None:
     """
-    Import every construct's ``rules`` module so its :class:`PhraseRule` subclasses are
-    loaded (and therefore discoverable) before the grammar is read.
-
-    Discovered by walking the ``grammar`` package rather than a hand-maintained import
-    list, so a new construct is registered simply by adding its
-    ``grammar/<construct>/rules.py`` — no edit here.
+    Import every ``rules`` module of the grammar package, so a construct's
+    :class:`PhraseRule` subclasses are loaded once its ``grammar/<construct>/rules.py``
+    exists.
     """
     for module_info in pkgutil.walk_packages(
         grammar_package.__path__, grammar_package.__name__ + "."
@@ -47,13 +45,14 @@ class PhraseRuleRegistry:
     @classmethod
     def loaded_rules(cls) -> list[PhraseRule]:
         """
-        :return: One instance of every concrete :class:`PhraseRule` subclass that is
-            defined at module level and loaded when this is called: those of the
-            grammar package, and those of any other loaded module, such as a krrood
-            part's own constructs.
+        :return: One instance of every concrete :class:`PhraseRule` subclass bound under
+            its name in its loaded module when this is called: those of the grammar
+            package, and those of any other module, such as a krrood part's own
+            constructs.
         """
         return [
             rule_class()
             for rule_class in concrete_subclasses(PhraseRule)
-            if "<locals>" not in rule_class.__qualname__
+            if vars(sys.modules[rule_class.__module__]).get(rule_class.__name__)
+            is rule_class
         ]

@@ -1,3 +1,7 @@
+"""
+Extracting features of entities for learning a probabilistic model.
+"""
+
 import numpy as np
 import pytest
 

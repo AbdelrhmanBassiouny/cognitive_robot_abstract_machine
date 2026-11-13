@@ -1,3 +1,7 @@
+"""
+Grounding underspecified actions into executable ones.
+"""
+
 import threading
 from dataclasses import dataclass
 from enum import Enum

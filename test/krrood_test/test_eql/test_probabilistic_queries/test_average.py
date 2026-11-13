@@ -1,3 +1,7 @@
+"""
+Averages answered as expectations by the probabilistic backend.
+"""
+
 import pytest
 
 from krrood.parametrization.probabilistic_backend import ProbabilisticBackend

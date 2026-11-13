@@ -519,17 +519,14 @@ class Match(
 
     def _evaluate_natively_(self) -> Iterator:
         """
-        Evaluate the match selectively in the current python process: select elements
-        from the match's domain (its variable's domain, or the ``SymbolGraph`` for
-        ``Symbol`` types when no domain was given) that satisfy the structural pattern
-        and ``where`` conditions.
+        Select the elements of the match's domain (its variable's domain, or the
+        ``SymbolGraph`` for ``Symbol`` types without one) that satisfy the structural
+        pattern and ``where`` conditions, in this process.
 
         .. note::
             Constructing *new* instances from an underspecified match is the job of a
-            :class:`~krrood.entity_query_language.backends.GenerativeBackend` (for example
-            :class:`~krrood.entity_query_language.backends.EntityQueryLanguageGenerativeBackend`
-            or :class:`~krrood.parametrization.probabilistic_backend.ProbabilisticBackend`), not of the
-            default selective evaluation.
+            :class:`~krrood.entity_query_language.backends.GenerativeBackend`, not of
+            the default selective evaluation.
 
         :return: An iterator over the matching elements.
         """

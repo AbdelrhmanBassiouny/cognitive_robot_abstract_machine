@@ -11,13 +11,16 @@ import importlib
 import pkgutil
 import sys
 from dataclasses import dataclass
+from importlib.abc import MetaPathFinder
 from importlib.machinery import ModuleSpec
+
+from krrood.patterns.called_positionally import called_positionally
 
 # %% blocking libraries
 
 
 @dataclass(kw_only=True)
-class LibraryBlocker:
+class LibraryBlocker(MetaPathFinder):
     """
     A meta path finder that makes the given top-level libraries fail to import, as if
     they were not installed.
@@ -28,9 +31,14 @@ class LibraryBlocker:
     The top-level names of the libraries that fail to import.
     """
 
+    @called_positionally
     def find_spec(
         self, fullname: str, path: object = None, target: object = None
     ) -> ModuleSpec | None:
+        """
+        :raises ModuleNotFoundError: If the module belongs to a blocked library.
+        :return: ``None``, so the next finder looks for any other module.
+        """
         if fullname.partition(".")[0] in self.blocked_libraries:
             raise ModuleNotFoundError(f"{fullname} is blocked", name=fullname)
         return None

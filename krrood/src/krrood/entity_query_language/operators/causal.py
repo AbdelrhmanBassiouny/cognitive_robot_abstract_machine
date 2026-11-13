@@ -108,12 +108,9 @@ class CausesEffect(LogicalOperator, UnaryExpression):
     """
     Tags a condition as the effect side of a causal query.
 
-    Evaluates transparently -- the same truth value as its wrapped condition -- under
-    every backend, so filtering behaves identically whether or not a condition is
-    wrapped in :meth:`~krrood.entity_query_language.query.match.Match.causes_effect`.
-    Only :class:`~krrood.parametrization.probabilistic_backend.ProbabilisticBackend`
-    additionally reads it, to find which variable(s) a :class:`Cause` search should
-    optimize for.
+    Evaluates to the same truth value as its wrapped condition under every backend; a
+    causal backend additionally reads it to find which variables a :class:`Cause` search
+    optimizes for.
     """
 
     cause_attributes: list[Attribute] = field(default_factory=list, kw_only=True)

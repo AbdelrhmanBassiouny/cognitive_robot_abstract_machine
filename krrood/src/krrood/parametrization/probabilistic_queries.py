@@ -1,20 +1,6 @@
 """
-Constructs for querying a probabilistic model directly from the Entity Query Language:
-``distribution_of`` and ``probability_of``.
-
-A third case -- the expectation of an attribute -- reuses the existing
-:class:`~krrood.entity_query_language.operators.aggregators.Average` aggregator
-(``average(...)``) instead of a bespoke construct here:
-:class:`~krrood.parametrization.probabilistic_backend.ProbabilisticBackend` recognizes a bare
-``average(...)`` selection and answers it in closed form via
-``ProbabilisticModel.moment`` instead of sampling and averaging rows, so the same
-declarative call reads correctly under either backend. See
-:meth:`~krrood.parametrization.probabilistic_backend.ProbabilisticBackend._resolve_average`.
-
-Bundled in one module rather than one file each (unlike ``operators/causal.py``, which
-is one coupled do()-intervention feature) because these are parallel operations on the
-same base, the same shape ``operators/aggregators.py`` bundles ``Sum``/``Max``/``Min``/
-... in.
+Entity queries that ask a probabilistic model directly: ``distribution_of`` and
+``probability_of``.
 """
 
 from __future__ import annotations
@@ -55,16 +41,12 @@ if TYPE_CHECKING:
 @dataclass(kw_only=True, eq=False, repr=False)
 class ProbabilisticQuery(Evaluable, HasExpression, ABC):
     """
-    Shared base for EQL constructs that query a probabilistic model directly --
-    ``distribution_of``, ``probability_of`` -- rather than selecting or generating
-    rows/instances.
+    A query that asks a probabilistic model directly rather than selecting or generating
+    instances.
 
-    This is a probabilistic operation, not a data selection, so by default none of
-    these resolve natively or under any backend other than
-    :class:`~krrood.parametrization.probabilistic_backend.ProbabilisticBackend`, which
-    dispatches to :meth:`_resolve_` for whichever subclass it is given.
-    :class:`Probability` is the one exception -- see its own
-    :meth:`~Probability._evaluate_natively_`.
+    Only
+    :class:`~krrood.parametrization.probabilistic_backend.ProbabilisticBackend` resolves
+    one, through :meth:`_resolve_`, except :class:`Probability`, which also counts rows.
     """
 
     def _evaluate_natively_(self) -> Iterator:
@@ -84,15 +66,12 @@ class ProbabilisticQuery(Evaluable, HasExpression, ABC):
 @dataclass(kw_only=True, eq=False, repr=False)
 class Probability(ProbabilisticQuery):
     """
-    The probability of a condition, optionally given evidence, e.g.
-    ``probability_of(x.A > 5)`` or ``probability_of(x.A > 5, evidence=x.B < 2)`` for
-    ``x = variable(MyClass)``. Condition and evidence accept anything a
-    ``.where(...)`` clause does.
+    The probability of a condition, optionally given evidence, each anything a
+    ``.where(...)`` clause accepts.
 
-    Resolves two ways: exactly via :meth:`_resolve_` under a
-    :class:`~krrood.parametrization.probabilistic_backend.ProbabilisticBackend`, or by
-    counting matching rows via :meth:`_evaluate_natively_` under any other backend.
-    See :doc:`/krrood/doc/eql/user/probabilistic_queries` for the full walkthrough.
+    Resolved exactly from a model by
+    :meth:`_resolve_`, or by counting matching rows under any other backend; see
+    :doc:`/krrood/doc/eql/user/probabilistic_queries`.
     """
 
     condition: SymbolicExpression
@@ -107,6 +86,9 @@ class Probability(ProbabilisticQuery):
     """
 
     def __post_init__(self):
+        """
+        Wrap a plain value given as condition or evidence in a literal.
+        """
         if not isinstance(self.condition, SymbolicExpression):
             self.condition = Literal(_value_=self.condition)
         if self.evidence is not None and not isinstance(
@@ -178,6 +160,9 @@ class Probability(ProbabilisticQuery):
         return self.condition_and_evidence
 
     def __repr__(self) -> str:
+        """
+        :return: The :func:`probability_of` call that builds this query.
+        """
         evidence = "" if self.evidence is None else f", evidence={self.evidence!r}"
         return f"probability_of({self.condition!r}{evidence})"
 
@@ -185,23 +170,10 @@ class Probability(ProbabilisticQuery):
 @dataclass(kw_only=True, eq=False, repr=False)
 class Distribution(ProbabilisticQuery):
     """
-    Requests the distribution a :class:`~krrood.entity_query_language.query.match.Match`'s
-    conditions describe -- the probabilistic interpretation of
-    :py:func:`~krrood.entity_query_language.factories.a`/:py:func:`~krrood.entity_query_language.factories.an`/
-    :py:func:`~krrood.entity_query_language.factories.the`. Exactly the same sequence
-    :class:`~krrood.parametrization.probabilistic_backend.ProbabilisticBackend` already
-    applies before *sampling* from a match -- literal-valued kwargs condition the
-    circuit (``arm=0.3``), ``.where(...)`` conditions truncate it, and underspecified
-    (``...``) fields are the joint's free variables -- just returned directly instead
-    of sampled from:
-
-    ``distribution_of(a(Pick)(arm=0.3, outcome=...))`` -- the distribution over
-    ``outcome`` given ``arm == 0.3``.
-
-    Optional keyword-only ``marginalize_for`` narrows the result to a subset of the
-    match's free variables (further marginalization), e.g.
-    ``distribution_of(match, marginalize_for=(match.outcome,))``. Without it,
-    every one of the match's free variables is kept.
+    The distribution a :class:`~krrood.entity_query_language.query.match.Match`'s
+    conditions describe: literal-valued keyword arguments condition the model,
+    ``.where(...)`` conditions truncate it, and underspecified (``...``) fields are its
+    free variables, e.g. ``distribution_of(a(Pick)(arm=0.3, outcome=...))``.
     """
 
     match: Match
@@ -211,12 +183,14 @@ class Distribution(ProbabilisticQuery):
 
     marginalize_for: tuple[Attribute, ...] = field(default_factory=tuple)
     """
-    The match's variables to narrow the result to.
-
-    Empty keeps every one of the match's free variables.
+    The match's variables to narrow the result to; empty keeps every free variable.
     """
 
     def __post_init__(self):
+        """
+        Reroot each of :attr:`marginalize_for` that is an attribute of the match's query
+        on the query's selection.
+        """
         query = self.match._get_expression_()
         self.marginalize_for = tuple(
             (
@@ -246,6 +220,9 @@ class Distribution(ProbabilisticQuery):
         return self.match._get_expression_()
 
     def __repr__(self) -> str:
+        """
+        :return: The :func:`distribution_of` call that builds this query.
+        """
         args = (
             f", marginalize_for={self.marginalize_for!r}"
             if self.marginalize_for
@@ -261,25 +238,16 @@ def distribution_of(
     match: Match, *, marginalize_for: tuple[Attribute, ...] = ()
 ) -> Distribution:
     """
-    Request the distribution a match's conditions describe -- the probabilistic
-    interpretation of :func:`~krrood.entity_query_language.factories.a`/:func:`~krrood.e
-    ntity_query_language.factories.an`/:func:`~krrood.entity_query_language.factories.th
-    e`. Literal-valued kwargs condition the circuit (``arm=0.3``), ``.where(...)``
-    conditions truncate it, and underspecified (``...``) fields are the joint's free
-    variables, e.g. ``distribution_of(a(Pick)(arm=0.3, outcome=...))``.
-
-    Unlike :func:`~krrood.entity_query_language.factories.set_of`/:func:`~krrood.entity_query_language.factories.entity`, this never resolves to rows: it must be
-    evaluated with a
-    :class:`~krrood.parametrization.probabilistic_backend.ProbabilisticBackend`, which returns
-    the resolved
-    :class:`~probabilistic_model.probabilistic_model.ProbabilisticModel` instead of
-    sampling instances from it.
+    Request the distribution a match's conditions describe (see :class:`Distribution`),
+    e.g. ``distribution_of(a(Pick)(arm=0.3, outcome=...))``. It never resolves to rows:
+    :class:`~krrood.parametrization.probabilistic_backend.ProbabilisticBackend` answers
+    it with the resolved probabilistic model.
 
     :param match: The match whose conditions describe the distribution.
-    :param marginalize_for: Optionally, a subset of the match's free variables to
-        narrow the result to (further marginalization), e.g. ``distribution_of(match,
-        marginalize_for=(match.outcome,))``. Without it, every one of the
-        match's free variables is kept.
+    :param marginalize_for: Optionally, a subset of the match's free variables to narrow
+        the result to (further marginalization), e.g. ``distribution_of(match,
+        marginalize_for=(match.outcome,))``. Without it, every one of the match's free
+        variables is kept.
     :return: Distribution descriptor.
     """
     return Distribution(match=match, marginalize_for=marginalize_for)
@@ -289,24 +257,14 @@ def probability_of(
     condition: ConditionType, evidence: ConditionType | None = None
 ) -> Probability:
     """
-    Request the probability of a condition, optionally given evidence, e.g.
-    ``probability_of(x.A > 5)`` or ``probability_of(x.A > 5, x.B < 2)`` for
-    ``x = variable(MyClass)``. Condition and evidence may be any expression a
-    ``.where(...)`` condition already accepts; several conditions are joined
-    explicitly with :func:`~krrood.entity_query_language.factories.and_`.
-
-    Like :func:`distribution_of`, this never resolves to rows: it must be evaluated
-    with a
-    :class:`~krrood.parametrization.probabilistic_backend.ProbabilisticBackend`, which returns
-    the resolved probability as a plain ``float``.
-
-    For the expectation of an attribute, use the existing :func:`~krrood.entity_query_language.factories.average` aggregator
-    instead -- {py:class}`~krrood.parametrization.probabilistic_backend.ProbabilisticBackend`
-    already recognizes a bare ``average(...)`` selection and answers it in closed form.
+    Request the probability of a condition, optionally given evidence (see
+    :class:`Probability`), e.g. ``probability_of(x.A > 5, x.B < 2)``. For the
+    expectation of an attribute, use
+    :func:`~krrood.entity_query_language.factories.average` instead.
 
     :param condition: The condition to compute the probability of.
-    :param evidence: The condition to condition the probability on, or ``None`` for
-        the unconditional probability.
+    :param evidence: The condition to condition the probability on, or ``None`` for the
+        unconditional probability.
     :return: Probability descriptor.
     """
     return Probability(condition=condition, evidence=evidence)

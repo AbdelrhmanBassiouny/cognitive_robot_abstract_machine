@@ -1,3 +1,7 @@
+"""
+Fitting and grounding models of nested exchangeable parts.
+"""
+
 from __future__ import annotations
 
 import numpy as np

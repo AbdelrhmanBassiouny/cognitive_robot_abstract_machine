@@ -1,3 +1,7 @@
+"""
+Answering entity queries with each backend.
+"""
+
 from datetime import datetime
 from types import EllipsisType
 

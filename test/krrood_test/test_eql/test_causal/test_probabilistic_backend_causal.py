@@ -1,3 +1,7 @@
+"""
+Causal queries answered by the probabilistic backend.
+"""
+
 import math
 from dataclasses import dataclass
 from enum import Enum, auto

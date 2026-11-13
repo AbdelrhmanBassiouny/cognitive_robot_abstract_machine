@@ -43,33 +43,17 @@ from krrood.entity_query_language.verbalization.vocabulary.english import (
 class DistributionRule(PhraseRule):
     """
     Realise ``distribution_of(match)`` as *"The distribution over <match subject>,
-    given that …, where …"*, and ``distribution_of(match, marginalize_for=...)``
-    (marginalized to a subset of the match's free variables) as *"The distribution
-    over the <variables> of <match subject>, given that …, where …"*.
+    given that …, where …"*, naming the ``marginalize_for`` variables in the subject.
 
-    Reuses the match's own *"given that"*/*"where"* grammar (see
-    :class:`~krrood.entity_query_language.verbalization.grammar.match.assembler.MatchAssembler`),
-    but builds its own header rather than delegating to :meth:`MatchAssembler.realize`
-    outright, for two reasons: the header takes a definite description
-    (:attr:`~....vocabulary.english.Directive.DISTRIBUTION_OVER`) rather than either of
-    the match's imperative *"Find"*/*"Generate"* verbs, since a distribution is asked
-    for, not rows; and a distribution's underspecified (``...``) fields are its
-    free/output variables by default, not values to fill in, so the match's generative
-    *"and predict its … value(s)"* clause is dropped entirely rather than reworded --
-    "the distribution over a Coin" already means "over every attribute not given", the
-    same way an unqualified marginal does, so nothing is lost by omitting them. When
-    ``marginalize_for`` narrows that default, they're named directly in the subject
-    (*"the battery of a Robot"*) -- not a trailing qualifier like *"restricted to"*,
-    which reads like a truncation (a ``where``), not a choice of which variables the
-    joint is even over.
+    Example::
 
-    >>> from krrood.entity_query_language.factories import a
-    >>> from krrood.parametrization.probabilistic_queries import distribution_of
-    >>> match = a(Robot)(name="R2", battery=...)
-    >>> verbalize_expression(distribution_of(match))
-    "The distribution over a Robot given that its name is 'R2'"
-    >>> verbalize_expression(distribution_of(match, marginalize_for=(match.battery,)))
-    "The distribution over the battery of a Robot given that its name is 'R2'"
+        >>> from krrood.entity_query_language.factories import a
+        >>> from krrood.parametrization.probabilistic_queries import distribution_of
+        >>> match = a(Robot)(name="R2", battery=...)
+        >>> verbalize_expression(distribution_of(match))
+        "The distribution over a Robot given that its name is 'R2'"
+        >>> verbalize_expression(distribution_of(match, marginalize_for=(match.battery,)))
+        "The distribution over the battery of a Robot given that its name is 'R2'"
     """
 
     construct = Distribution
@@ -121,17 +105,17 @@ class DistributionRule(PhraseRule):
 @dataclass(kw_only=True)
 class ProbabilityRule(PhraseRule):
     """
-    Realise ``probability_of(condition)`` as *"the probability that <condition>"*, and
-    ``probability_of(condition, evidence=evidence)`` as *"the probability that
-    <condition> given that <evidence>"* -- both are recursed through the ordinary
-    comparator/logical-operator grammar via ``context.child``, so they read exactly as
-    they would inside a ``where`` clause.
+    Realise ``probability_of(condition, evidence=evidence)`` as *"the probability that
+    <condition> given that <evidence>"*, reading condition and evidence as they would
+    inside a ``where`` clause.
 
-    >>> from krrood.entity_query_language.factories import variable
-    >>> from krrood.parametrization.probabilistic_queries import probability_of
-    >>> robot = variable(Robot, [])
-    >>> verbalize_expression(probability_of(robot.battery > 50))
-    'the probability that the battery of a Robot is greater than 50'
+    Example::
+
+        >>> from krrood.entity_query_language.factories import variable
+        >>> from krrood.parametrization.probabilistic_queries import probability_of
+        >>> robot = variable(Robot, [])
+        >>> verbalize_expression(probability_of(robot.battery > 50))
+        'the probability that the battery of a Robot is greater than 50'
     """
 
     construct = Probability

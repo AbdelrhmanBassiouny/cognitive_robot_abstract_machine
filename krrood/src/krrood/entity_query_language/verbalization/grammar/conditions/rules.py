@@ -1,3 +1,7 @@
+"""
+The grammar rules for conditions: comparisons, logical operators and causal effects.
+"""
+
 from __future__ import annotations
 
 import operator

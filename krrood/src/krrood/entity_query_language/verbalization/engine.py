@@ -1,3 +1,7 @@
+"""
+The fold that builds a verbalization fragment for an expression from the grammar rules.
+"""
+
 from __future__ import annotations
 
 from dataclasses import replace

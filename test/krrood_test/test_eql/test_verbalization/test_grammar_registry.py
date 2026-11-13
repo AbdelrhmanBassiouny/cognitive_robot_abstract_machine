@@ -1,11 +1,6 @@
 """
-The registry auto-discovers every concrete grammar rule by walking the grammar package,
-rather than hand-maintaining a list of imports — so adding a construct's ``rules``
-module needs no edit to the registry. Rules a module outside the grammar package defines
-join once that module is loaded.
-
-``concrete_subclasses`` is the single subclass-discovery primitive shared by the
-registry and the :class:`SpecificityRule` families.
+The registry discovers every concrete grammar rule of the grammar package's ``rules``
+modules, and the rules a module outside it defines once that module is loaded.
 """
 
 from __future__ import annotations
@@ -35,12 +30,7 @@ from krrood.patterns.specificity_ranking import (
 def _discovered_grammar_rule_types():
     """
     Concrete ``PhraseRule`` subclasses defined within the grammar package's own rule
-    modules.
-
-    Excludes any subclass defined elsewhere (e.g. by unrelated tests exercising
-    ``PhraseRule``'s dispatch contract with throwaway subclasses) so completeness checks
-    against the loaded rules stay independent of those subclasses' unrelated object
-    lifetimes.
+    modules, excluding the throwaway subclasses other tests define.
     """
     return {
         subclass
@@ -83,6 +73,9 @@ def test_rules_registry_is_exactly_one_instance_per_concrete_rule():
 
 
 def test_registry_includes_a_module_level_rule_defined_outside_the_grammar_package():
+    """
+    A rule a loaded module outside the grammar package defines joins the grammar.
+    """
     assert ConstructOutsideGrammarRule in {
         type(rule) for rule in PhraseRuleRegistry.loaded_rules()
     }
@@ -90,15 +83,9 @@ def test_registry_includes_a_module_level_rule_defined_outside_the_grammar_packa
 
 def test_registry_completeness_check_ignores_phrase_rule_subclasses_defined_outside_grammar():
     """
-    A ``PhraseRule`` subclass defined outside the grammar package must not affect the
-    registry's completeness check.
-
-    Regression: ``concrete_subclasses(PhraseRule)`` reflects on every live subclass in the whole
-    process via ``__subclasses__()``, including throwaway subclasses other tests define to exercise
-    ``PhraseRule``'s dispatch contract (e.g. ``test_grammar_dispatch.py``'s ``ScopedRule``). Comparing
-    the loaded rules against the raw, unscoped set made the completeness check fail depending on whether
-    such a subclass happened to still be alive when it ran — a flake tied to unrelated
-    garbage-collection timing rather than any real registry defect.
+    A ``PhraseRule`` subclass a function defines, as tests do to exercise the dispatch
+    contract, is neither part of the grammar package's rules nor loaded into the
+    grammar, however long it stays alive.
     """
 
     class TransientNonGrammarRule(PhraseRule):
@@ -110,6 +97,22 @@ def test_registry_completeness_check_ignores_phrase_rule_subclasses_defined_outs
     assert TransientNonGrammarRule in concrete_subclasses(PhraseRule)
     assert TransientNonGrammarRule not in _discovered_grammar_rule_types()
     assert TransientNonGrammarRule not in {
+        type(rule) for rule in PhraseRuleRegistry.loaded_rules()
+    }
+
+
+def test_registry_excludes_a_rule_class_created_dynamically():
+    """
+    A ``PhraseRule`` subclass built with :func:`type`, which no module binds, is not
+    loaded into the grammar.
+    """
+    dynamic_rule = type(
+        "DynamicRule",
+        (PhraseRule,),
+        {"construct": object, "build": lambda self, node, context: None},
+    )
+
+    assert dynamic_rule not in {
         type(rule) for rule in PhraseRuleRegistry.loaded_rules()
     }
 

@@ -1,3 +1,7 @@
+"""
+Probabilities of conditions, from a model or by counting rows.
+"""
+
 import pytest
 from random_events.interval import closed
 from random_events.product_algebra import SimpleEvent

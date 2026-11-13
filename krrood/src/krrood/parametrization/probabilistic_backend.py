@@ -81,12 +81,10 @@ T = TypeVar("T")
 @dataclass(kw_only=True)
 class ProbabilisticBackend(GenerativeBackend):
     """
-    A backend that generates elements from a tractable probabilistic model using a model
-    registry.
+    A backend that samples instances from a tractable probabilistic model.
 
-    A sampled instance contradicting the match, in a value the model does not cover such
-    as a property's, is rejected, so fewer instances than :attr:`number_of_samples` may
-    be generated.
+    A sample contradicting the match where the model does not cover it, such as in a
+    property, is rejected, so fewer than :attr:`number_of_samples` may be generated.
     """
 
     model_registry: ModelRegistry = field(default_factory=FullyFactorizedRegistry)
@@ -106,12 +104,10 @@ class ProbabilisticBackend(GenerativeBackend):
         kw_only=True, default_factory=dict
     )
     """
-    The causal structure learned for each class, which chooses the variables each cause
-    of a causal query about the class adjusts for, or checks those marked
-    ``confounder``.
+    The causal structure learned for each class.
 
-    A query about a class without one adjusts for the variables marked ``confounder``
-    alone, unchecked.
+    It chooses the variables each cause of a query about the class adjusts for, or
+    checks those marked ``confounder``, which a class without one uses unchecked.
     """
 
     declared_adjustment_policy: DeclaredAdjustmentPolicy = field(
@@ -123,6 +119,12 @@ class ProbabilisticBackend(GenerativeBackend):
     """
 
     def evaluate(self, *, expression: Evaluable) -> Iterable[T]:
+        """
+        Unlike
+        :meth:`~krrood.entity_query_language.backends.GenerativeBackend.evaluate`, also
+        answers a probabilistic query and a bare ``average(...)`` selection, each with
+        its single resolved value.
+        """
         if isinstance(expression, ProbabilisticQuery):
             yield expression._resolve_(model_registry=self.model_registry)
             return
@@ -291,11 +293,8 @@ class ProbabilisticBackend(GenerativeBackend):
                 model=primary.narrowed_circuit
             )
         else:
-            # apply literal-assignment conditions, then where-conditions, then
-            # krrood-variable-assignment truncations -- see
-            # UnderspecifiedParameters.resolve_conditioned_and_truncated_model, which
-            # Distribution._resolve_ also reuses to answer a distribution(...) query
-            # with exactly this same sequence, without the sampling step.
+            # The same conditioning and truncation a distribution_of(...) query
+            # resolves to, without sampling.
             truncated = parameters.resolve_conditioned_and_truncated_model(model=model)
 
         if truncated is None:
@@ -347,11 +346,10 @@ class ProbabilisticBackend(GenerativeBackend):
         self, *, parameters: UnderspecifiedParameters, expression: Match[T]
     ) -> None:
         """
-        Let the causal structure learned for the queried class choose, for every cause
-        candidate, the variables its intervention adjusts for, or settle the variables
-        marked ``confounder`` (see :meth:`adjustment_candidates`). Does nothing for a
-        class without a structure in :attr:`causal_structures`, or a query without a
-        ``cause``.
+        Let the causal structure learned for the queried class choose the variables each
+        cause candidate adjusts for, or settle those marked ``confounder``.
+
+        Does nothing for a class without a structure or a query without a cause.
 
         :param parameters: The parameters extracted from *expression*, which record the
             chosen variables.
@@ -493,9 +491,8 @@ class ProbabilisticBackend(GenerativeBackend):
         """
         Answer a causal query whose effect the learned causal structure identifies only
         up to a few candidate adjustment sets: for every cause, the lowest and highest
-        probability of the effect per region of the cause, across the candidates
-        (Maathuis, Kalisch and Bühlmann, 2009). An identified effect has one candidate,
-        so its range is a single value per region.
+        probability of the effect per region of the cause across the candidates
+        (Maathuis, Kalisch and Bühlmann, 2009), a single value for an identified effect.
 
         :param expression: A match with ``cause`` fields and a ``causes_effect(...)``
             condition.
@@ -727,13 +724,8 @@ class ProbabilisticBackend(GenerativeBackend):
         ) = None,
     ) -> list[ScoredIntervention]:
         """
-        Score every candidate cause variable independently for the region whose
-        intervention best explains the effect.
-
-        Shared by :meth:`_resolve_primary_intervention` (which keeps only the top
-        result) and :meth:`rank_causes` (which keeps them all) -- trying one candidate
-        at a time needs no joint, multi-variable intervention, which
-        ``backdoor_adjustment`` does not support.
+        Score every candidate cause variable independently, one at a time, for the
+        region whose intervention best explains the effect.
 
         :param model: The causal circuit to search.
         :param cause_variables: The candidate cause variables, one or more.
@@ -771,21 +763,9 @@ class ProbabilisticBackend(GenerativeBackend):
     def rank_causes(self, *, expression: Match[T]) -> list[ScoredIntervention]:
         """
         Rank every ``cause`` candidate in *expression* by how well its intervention
-        explains the declared effect.
-
-        Runs the same per-candidate search :meth:`_evaluate` uses internally for a
-        multi-``cause`` query, but returns every scoreable candidate instead of only
-        the primary one :meth:`_evaluate` picks -- useful when several plausible causes
-        exist and how they compare matters, not just which one wins (for example, both
-        ``arm`` and ``force`` scoring high for a pick failure). Leaves
-        :meth:`_evaluate` and the primary-cause search it uses entirely unchanged; this
-        is an additional, independent read of the same candidates.
-
-        Each candidate's search adjusts for its own set: the fields marked
-        ``confounder``, or, with a structure in :attr:`causal_structures`, the set the learned
-        structure chooses (see :meth:`choose_adjustment_sets`), so a variable that drives
-        both a candidate and the effect does not inflate that candidate's score with mere
-        correlation.
+        explains the declared effect, with the same per-candidate search
+        :meth:`_evaluate` picks its primary cause with. Each search adjusts for the
+        candidate's own set (see :meth:`choose_adjustment_sets`).
 
         :param expression: A match with one or more ``cause`` fields and a
             ``causes_effect(...)`` condition.
@@ -833,29 +813,10 @@ class ProbabilisticBackend(GenerativeBackend):
         adjustment_variables: Iterable[random_events.variable.Variable] = (),
     ) -> ScoredIntervention | None:
         """
-        Compute ``cause_variable``'s best-region search result and score it by how
-        *reliably* that region produces the effect: ``P(effect | do(cause_variable in
-        best_region))``. Comparable across candidates because it is a conditional
-        probability under each candidate's own interventional distribution, not scaled
-        by how much of that candidate's domain the region happens to cover.
-
-        This must be scored on the interventional joint restricted to *only* the region,
-        before conditioning on the effect: scoring on the already effect-truncated
-        circuit instead would read close to 100% for *any* region, including a
-        candidate's entire, unrestricted domain (an uninformative candidate's only
-        "region"), since conditioning on the effect first makes whatever region is
-        examined trivially compatible with it by construction. The region itself is
-        still chosen by searching the effect-truncated circuit -- that search still
-        needs to know which values are compatible with the effect; only the *score* is
-        measured against the region-only, effect-free distribution.
-
-        # `_best_disjoint_region` is private: `causal_circuit.py` is a stable #
-        dependency this glue code does not modify beyond what #
-        doc/eql/user/causality.md documents. It is the disjoint counterpart of #
-        `_best_region` (which `diagnose_failure` uses for `recommended_region`): #
-        `_best_region`'s regions always collapse to the variable's whole domain, which #
-        cannot discriminate between candidates -- `_best_disjoint_region` keeps #
-        separate SumUnit branches separate, which this ranking needs.
+        Find ``cause_variable``'s best region, searched on the effect-truncated circuit,
+        and score it by ``P(effect | do(cause_variable in best_region))`` on the
+        interventional joint restricted to that region alone, so the score is comparable
+        across candidates whatever share of their domain the region covers.
 
         :param model: The causal circuit to search.
         :param cause_variable: The candidate cause variable.
@@ -871,10 +832,8 @@ class ProbabilisticBackend(GenerativeBackend):
             cause_variable, effect_variable, list(adjustment_variables)
         )
 
-        # `.truncated()` fills in missing variables *in place* on the event it is
-        # given, so reusing the same event object across several `.truncated()` calls
-        # (each on a differently-shaped circuit) would leak one call's variables into
-        # the next -- pass a fresh copy each time.
+        # `.truncated()` fills in missing variables in place on the event it is given,
+        # so each call gets a fresh copy rather than the previous call's variables.
         if effect_truncation_event:
             effect_truncated = interventional.truncated(
                 copy.deepcopy(effect_truncation_event)

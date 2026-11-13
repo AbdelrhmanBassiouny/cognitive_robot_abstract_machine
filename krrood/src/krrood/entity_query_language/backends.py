@@ -1,3 +1,8 @@
+"""
+The backends that answer entity queries: by evaluating them in this process, through
+SQL, or by generating the instances they describe.
+"""
+
 import enum
 import uuid
 from abc import abstractmethod, ABC
@@ -53,15 +58,12 @@ class QueryBackend(ABC):
 
     raise_on_unresolvable_cause: bool = field(default=False, kw_only=True)
     """
-    Whether to raise instead of warning when an expression contains a `Cause` (`cause`)
-    intervention this backend cannot resolve causally.
+    Whether to raise instead of warning when an expression contains a ``cause``
+    intervention this backend cannot resolve causally; otherwise the cause is treated as
+    an ordinary unspecified field.
 
-    Defaults to ``False``: the `Cause` is then treated as an ordinary unspecified field
-    (a warning is logged explaining why) rather than failing the query. Set ``True`` to
-    fail loudly instead -- for example in tests that want to catch accidental `cause`
-    misuse against a non-causal backend. Read only by :class:`SelectiveBackend` and
-    :class:`EntityQueryLanguageGenerativeBackend`; :class:`~krrood.parametrization.probabilistic_backend.ProbabilisticBackend` always
-    raises when it cannot resolve a causal model, regardless of this flag.
+    Read only by :class:`SelectiveBackend` and
+    :class:`EntityQueryLanguageGenerativeBackend`.
     """
 
     @classproperty

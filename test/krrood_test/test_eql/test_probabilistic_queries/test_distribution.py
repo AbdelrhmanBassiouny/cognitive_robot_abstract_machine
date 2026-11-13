@@ -1,3 +1,7 @@
+"""
+Distributions a match describes.
+"""
+
 import pytest
 from random_events.interval import closed
 from random_events.product_algebra import SimpleEvent

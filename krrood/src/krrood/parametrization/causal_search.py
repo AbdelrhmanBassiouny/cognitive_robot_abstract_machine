@@ -45,14 +45,9 @@ class CauseEffectVariables:
         random_events.variable.Variable, list[random_events.variable.Variable]
     ]
     """
-    Per cause candidate, the variables its interventional search adjusts for: Pearl's
-    backdoor-criterion adjustment set, summed back out of the candidate's interventional
-    probability so it is not left baked into the correlation between cause and effect.
-    They are the variables marked ``confounder``, and those a learned causal structure
-    chose for the candidate.
-
-    Empty for a candidate with neither, so its search falls back to an empty adjustment
-    set.
+    Per cause candidate, the variables its interventional search adjusts for (Pearl's
+    backdoor-criterion adjustment set): those marked ``confounder`` and those a learned
+    causal structure chose for the candidate, empty for a candidate with neither.
     """
 
 
@@ -71,11 +66,10 @@ class ScoredIntervention:
     effect_probability_given_region: float
     """
     The interventional probability that the effect holds, given this variable is
-    restricted to its best region -- how *reliably* this candidate's best value produces
-    the effect.
+    restricted to its best region.
 
-    Comparable across candidates regardless of how much of each candidate's own domain
-    that region happens to cover: the higher one is the better explanation.
+    Comparable across candidates whatever share of their
+    domain the region covers: the higher one is the better explanation.
     """
 
     narrowed_circuit: ProbabilisticCircuitRepresentation

@@ -1,3 +1,7 @@
+"""
+The verbalizer that turns an entity query into English text.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

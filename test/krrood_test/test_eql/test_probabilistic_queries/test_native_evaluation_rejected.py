@@ -1,3 +1,7 @@
+"""
+Distributions cannot be evaluated without a probabilistic backend.
+"""
+
 import pytest
 
 from krrood.entity_query_language.backends import EntityQueryLanguageBackend
