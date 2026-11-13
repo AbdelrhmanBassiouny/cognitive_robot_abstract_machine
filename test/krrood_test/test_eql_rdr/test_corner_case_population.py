@@ -9,9 +9,7 @@ record nothing.
 
 from __future__ import annotations
 
-from krrood.entity_query_language.rdr.serialization import (
-    walk_rules_in_emission_order,
-)
+from krrood.entity_query_language.rules.decomposition import DecomposedRuleTree
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
 from .animal import Animal, Species, make_animal
@@ -46,7 +44,9 @@ def _rule_nodes(rdr: EQLSingleClassRDR):
     :param rdr: The fitted RDR.
     :return: Its rule condition nodes, in the order the rules were emitted.
     """
-    return walk_rules_in_emission_order(rdr.conditions_root)
+    return DecomposedRuleTree.from_condition(
+        condition=rdr.conditions_root
+    ).rule_conditions()
 
 
 # %% one entry per inserted rule
