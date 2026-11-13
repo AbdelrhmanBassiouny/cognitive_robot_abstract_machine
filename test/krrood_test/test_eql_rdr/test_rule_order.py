@@ -1,5 +1,5 @@
 """
-Tests for ``walk_rules_in_emission_order`` — the canonical traversal order.
+Tests for :meth:`DecomposedRuleTree.rule_conditions` — the canonical traversal order.
 """
 
 from __future__ import annotations
@@ -15,10 +15,8 @@ from krrood.entity_query_language.rdr.rule_tree import (
     insert_refinement,
 )
 from krrood.entity_query_language.rdr.rule_tree_view import walk_rules
-from krrood.entity_query_language.rdr.serialization import (
-    rdr_to_python,
-    walk_rules_in_emission_order,
-)
+from krrood.entity_query_language.rdr.serialization import RDRSerializer
+from krrood.entity_query_language.rules.decomposition import DecomposedRuleTree
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 from krrood.entity_query_language.rules.conclusion import Add
 
@@ -105,7 +103,7 @@ def _mixed_alternative_then_refinement_query():
     (milk/mammal refinement of A).
 
     The resulting DAG is Refinement(Alternative(A, B), C) — or similar left-nested form.
-    walk_rules (display) order: A, B, C. _emit_rule_body (emission) order: A, C, B.
+    walk_rules (display) order: A, B, C. :meth:`RuleTreeSourceEmitter.emit_rule_body` (emission) order: A, C, B.
     """
     animal = _animal_variable()
     query = entity(animal).where(animal.backbone == True)
@@ -132,10 +130,12 @@ def _mixed_alternative_then_refinement_query():
 
 def test_single_rule_returns_list_of_length_one():
     """
-    ``walk_rules_in_emission_order`` on a one-rule tree returns exactly one node.
+    :meth:`DecomposedRuleTree.rule_conditions` on a one-rule tree returns exactly one node.
     """
     query, _animal = _single_rule_query()
-    result = walk_rules_in_emission_order(query._conditions_root_)
+    result = DecomposedRuleTree.from_condition(
+        condition=query._conditions_root_
+    ).rule_conditions()
     assert len(result) == 1
 
 
@@ -145,7 +145,7 @@ def test_single_rule_contains_the_condition_node():
     """
     query, _animal = _single_rule_query()
     root = query._conditions_root_
-    result = walk_rules_in_emission_order(root)
+    result = DecomposedRuleTree.from_condition(condition=root).rule_conditions()
     assert result[0]._id_ == root._id_
 
 
@@ -157,7 +157,9 @@ def test_all_alternatives_returns_three_nodes():
     Three alternatives produce a list of exactly three condition nodes.
     """
     query, _animal, _b, _d = _all_alternatives_query()
-    result = walk_rules_in_emission_order(query._conditions_root_)
+    result = DecomposedRuleTree.from_condition(
+        condition=query._conditions_root_
+    ).rule_conditions()
     assert len(result) == 3
 
 
@@ -168,7 +170,9 @@ def test_all_alternatives_first_node_is_first_inserted():
     query, animal, _b, _d = _all_alternatives_query()
     # The first rule's condition is milk == True.  Use walk_rules to find it (A is [0]).
     display = walk_rules(query._conditions_root_)
-    result = walk_rules_in_emission_order(query._conditions_root_)
+    result = DecomposedRuleTree.from_condition(
+        condition=query._conditions_root_
+    ).rule_conditions()
     assert result[0]._id_ == display[0].condition._id_
 
 
@@ -176,13 +180,16 @@ def test_all_alternatives_emission_order_matches_insertion_order():
     """
     Emission order for all-alternative tree is the same as walk_rules display order.
 
-    When there are no refinements, Alternative chains are reversed by ``_orient_run``
+    When there are no refinements, Alternative chains are reversed by :meth:`DecomposedRuleTree._order_branches_for_reinsertion`
     back to insertion order, which happens to coincide with display order.
     """
     query, _animal, _b, _d = _all_alternatives_query()
     display_ids = [r.condition._id_ for r in walk_rules(query._conditions_root_)]
     emission_ids = [
-        n._id_ for n in walk_rules_in_emission_order(query._conditions_root_)
+        n._id_
+        for n in DecomposedRuleTree.from_condition(
+            condition=query._conditions_root_
+        ).rule_conditions()
     ]
     assert emission_ids == display_ids
 
@@ -195,7 +202,9 @@ def test_all_refinements_returns_three_nodes():
     A three-rule refinement chain produces a list of exactly three condition nodes.
     """
     query, _animal, _c, _e = _all_refinements_query()
-    result = walk_rules_in_emission_order(query._conditions_root_)
+    result = DecomposedRuleTree.from_condition(
+        condition=query._conditions_root_
+    ).rule_conditions()
     assert len(result) == 3
 
 
@@ -203,12 +212,14 @@ def test_all_refinements_emission_order_matches_insertion_order():
     """
     Emission order for a pure refinement chain is A, C, E — insertion order.
 
-    Refinement chains grow inward; ``_orient_run`` does not reverse them, so
-    ``_decompose`` already yields them in insertion order.
+    Refinement chains grow inward; :meth:`DecomposedRuleTree._order_branches_for_reinsertion` does not reverse them, so
+    :meth:`DecomposedRuleTree.from_condition` already yields them in insertion order.
     """
     query, _animal, node_c, node_e = _all_refinements_query()
     display = walk_rules(query._conditions_root_)
-    result = walk_rules_in_emission_order(query._conditions_root_)
+    result = DecomposedRuleTree.from_condition(
+        condition=query._conditions_root_
+    ).rule_conditions()
     # Display order for refinements is also A, C, E — both orderings agree here.
     display_ids = [r.condition._id_ for r in display]
     emission_ids = [n._id_ for n in result]
@@ -223,7 +234,9 @@ def test_mixed_tree_returns_three_nodes():
     The mixed Alternative+Refinement tree contains exactly three condition nodes.
     """
     query, _animal = _mixed_alternative_then_refinement_query()
-    result = walk_rules_in_emission_order(query._conditions_root_)
+    result = DecomposedRuleTree.from_condition(
+        condition=query._conditions_root_
+    ).rule_conditions()
     assert len(result) == 3
 
 
@@ -233,7 +246,9 @@ def test_mixed_tree_emission_first_node_is_base_rule():
     """
     query, _animal = _mixed_alternative_then_refinement_query()
     display = walk_rules(query._conditions_root_)
-    result = walk_rules_in_emission_order(query._conditions_root_)
+    result = DecomposedRuleTree.from_condition(
+        condition=query._conditions_root_
+    ).rule_conditions()
     # display[0] is A (base rule) — emission must also start with A
     assert result[0]._id_ == display[0].condition._id_
 
@@ -242,8 +257,8 @@ def test_mixed_tree_emission_order_is_A_C_B():
     """
     Emission order for Refinement(Alternative(A, B), C) is A, C, B.
 
-    ``_emit_rule_body`` calls ``_decompose`` on the root: it peels off the Alternative-
-    of-B then the Refinement-of-C branch.  ``_orient_run`` reverses the Alternative run,
+    :meth:`RuleTreeSourceEmitter.emit_rule_body` decomposes the root: it peels off the Alternative-
+    of-B then the Refinement-of-C branch.  :meth:`DecomposedRuleTree._order_branches_for_reinsertion` reverses the Alternative run,
     placing C (refinement) before B (alternative) in the branch list.  The serializer
     emits the base A first, then walks each branch — C then B.
     """
@@ -254,7 +269,9 @@ def test_mixed_tree_emission_order_is_A_C_B():
     B_id = display[1].condition._id_
     C_id = display[2].condition._id_
 
-    result = walk_rules_in_emission_order(query._conditions_root_)
+    result = DecomposedRuleTree.from_condition(
+        condition=query._conditions_root_
+    ).rule_conditions()
     emission_ids = [n._id_ for n in result]
 
     assert emission_ids == [A_id, C_id, B_id]
@@ -271,7 +288,10 @@ def test_mixed_tree_emission_order_differs_from_display_order():
     query, _animal = _mixed_alternative_then_refinement_query()
     display_ids = [r.condition._id_ for r in walk_rules(query._conditions_root_)]
     emission_ids = [
-        n._id_ for n in walk_rules_in_emission_order(query._conditions_root_)
+        n._id_
+        for n in DecomposedRuleTree.from_condition(
+            condition=query._conditions_root_
+        ).rule_conditions()
     ]
     assert emission_ids != display_ids
 
@@ -309,41 +329,36 @@ def _build_mixed_rdr() -> EQLSingleClassRDR:
 
 def test_emission_order_count_matches_add_occurrences_in_source():
     """
-    The number of nodes in ``walk_rules_in_emission_order`` equals the number of
-    ``add(`` calls emitted by ``rdr_to_python``.
-
-    This is the weakest integration guarantee: the walker and the emitter visit the
-    same number of rules.  A mismatch would mean one of them skips or double-counts
-    a node.
+    :meth:`DecomposedRuleTree.rule_conditions` holds as many conditions as
+    :meth:`RDRSerializer.to_source` emits ``add(`` calls, so neither skips or
+    double-counts a rule.
     """
     rdr = _build_mixed_rdr()
-    src = rdr_to_python(rdr)
+    src = RDRSerializer(rdr=rdr).to_source()
     add_count_in_source = len(re.findall(r"\badd\(", src))
-    emission_nodes = walk_rules_in_emission_order(rdr.query._conditions_root_)
+    emission_nodes = DecomposedRuleTree.from_condition(
+        condition=rdr.query._conditions_root_
+    ).rule_conditions()
     assert len(emission_nodes) == add_count_in_source
 
 
 def test_emission_order_i_th_node_matches_i_th_add_in_source():
     """
-    The i-th node in ``walk_rules_in_emission_order`` corresponds to the i-th ``add(``
-    block in the emitted source, verified by checking that the conclusion value of the
-    i-th emission node appears in the i-th add-block of the source.
-
-    This pins the ordering contract: the walker and the emitter traverse rules
-    in identical sequence.
-
-    Note: we match conclusion *values* (enum names) rather than condition repr
-    to avoid fragility from variable-name or attribute-path formatting differences.
+    The i-th condition in :meth:`DecomposedRuleTree.rule_conditions` concludes the value
+    of the i-th ``add(`` call in the emitted source, so the walk and the emitter visit
+    rules in the same order.
     """
     rdr = _build_mixed_rdr()
-    src = rdr_to_python(rdr)
+    src = RDRSerializer(rdr=rdr).to_source()
 
     # Extract the Species.X argument from each add( call, in document order.
     # Each emitted add line looks like: add(animal.species, Species.mammal)
     species_pattern = re.compile(r"\badd\([^,]+,\s*(Species\.\w+)\)")
     emitted_values = species_pattern.findall(src)
 
-    emission_nodes = walk_rules_in_emission_order(rdr.query._conditions_root_)
+    emission_nodes = DecomposedRuleTree.from_condition(
+        condition=rdr.query._conditions_root_
+    ).rule_conditions()
 
     assert len(emitted_values) == len(emission_nodes)
 
