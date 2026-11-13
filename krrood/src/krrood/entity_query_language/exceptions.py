@@ -38,7 +38,7 @@ if TYPE_CHECKING:
         AbstractMatchExpression,
         AttributeMatch,
     )
-    from krrood.entity_query_language.operators.probabilistic_queries import (
+    from krrood.parametrization.probabilistic_queries import (
         Probability,
         ProbabilisticQuery,
     )
@@ -1037,14 +1037,14 @@ class BackendCannotReadState(DataclassException):
 class BackendCannotEvaluateProbabilisticQuery(DataclassException):
     """
     Raised when a
-    :class:`~krrood.entity_query_language.operators.probabilistic_queries.ProbabilisticQuery`
+    :class:`~krrood.parametrization.probabilistic_queries.ProbabilisticQuery`
     is evaluated with any backend other than
-    :class:`~krrood.entity_query_language.backends.ProbabilisticBackend`.
+    :class:`~krrood.parametrization.probabilistic_backend.ProbabilisticBackend`.
 
     Querying a probabilistic model directly is a probabilistic operation, not a data
     selection, so most of these have no native/SQL evaluation strategy at all --
     unlike every other query construct in this package. The one exception is
-    :class:`~krrood.entity_query_language.operators.probabilistic_queries.Probability`
+    :class:`~krrood.parametrization.probabilistic_queries.Probability`
     (``probability_of(...)``), which *does* evaluate natively (counting matching rows
     over an enumerable domain) and never raises this; ``distribution_of(...)`` still
     does, unconditionally.
@@ -1069,7 +1069,7 @@ class BackendCannotEvaluateProbabilisticQuery(DataclassException):
 class EvidenceHasZeroProbability(DataclassException):
     """
     Raised when a
-    :class:`~krrood.entity_query_language.operators.probabilistic_queries.Probability`
+    :class:`~krrood.parametrization.probabilistic_queries.Probability`
     is conditioned on evidence that has zero probability, which leaves the conditional
     probability undefined.
     """
@@ -1331,7 +1331,7 @@ class NoCausesEffectConditionForCause(DataclassException):
 class NoCauseVariablesForRanking(DataclassException):
     """
     Raised when
-    :meth:`~krrood.entity_query_language.backends.ProbabilisticBackend.rank_causes` is
+    :meth:`~krrood.parametrization.probabilistic_backend.ProbabilisticBackend.rank_causes` is
     called on a match with no :class:`~krrood.entity_query_language.operators.causal.Cause`
     (``cause``) fields to rank.
     """
