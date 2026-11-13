@@ -23,7 +23,7 @@ from krrood.entity_query_language.factories import (
 from krrood.entity_query_language.rdr.expert import Expert
 from krrood.entity_query_language.rdr.interactive import IPythonInterface
 from krrood.entity_query_language.rdr.observer import trace_case
-from krrood.entity_query_language.rdr.serialization import RDRSerializer
+from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
 from krrood.entity_query_language.rules.conclusion_selector import Alternative
 from krrood.entity_query_language.rdr.rule_tree_view import (
@@ -363,7 +363,7 @@ class TestStatusResolution(unittest.TestCase):
         if not model_path.exists():
             self.skipTest("human-fitted zoo model not yet committed")
 
-        rdr = RDRSerializer.load(path=str(model_path))
+        rdr = EQLSingleClassRDR.load(path=str(model_path))
         for animal_case, _ in zip(animals, targets):
             trace = rdr._trace(animal_case)
             rules = walk_rules(trace.rule_tree_root)

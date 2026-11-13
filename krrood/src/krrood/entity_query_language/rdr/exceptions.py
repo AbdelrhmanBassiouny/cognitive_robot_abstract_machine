@@ -61,9 +61,11 @@ class ExpertAbort(DataclassException):
     """
 
     missing: list[str]
-    """The names of the still-missing required answers, so the calling
+    """
+    The names of the still-missing required answers, so the calling
     :class:`~krrood.entity_query_language.rdr.expert.Expert` can raise its own specific
-    exception."""
+    exception.
+    """
 
     def error_message(self) -> str:
         return f"Expert cancelled without supplying: {', '.join(self.missing) or '(nothing)'}"
@@ -79,7 +81,9 @@ class ConclusionSelectorAsConditionError(DataclassException):
     used as a rule condition."""
 
     condition: SymbolicExpression
-    """The offending node that was passed as a condition."""
+    """
+    The offending node that was passed as a condition.
+    """
 
     def error_message(self) -> str:
         return f"A ConclusionSelector cannot be used as a rule condition: {self.condition!r}"
@@ -216,24 +220,6 @@ class UndeclaredInferenceTarget(DataclassException):
 
 
 # %% rule-tree serialization
-
-
-@dataclass
-class UnsupportedNodeForSerialization(DataclassException):
-    """
-    Raised when the rule-tree DAG contains a node the serializer cannot emit.
-    """
-
-    node: Any
-    """
-    The node (or leaf value) the serializer does not know how to emit as Python source.
-    """
-
-    def error_message(self) -> str:
-        return f"Cannot serialize node of type {type(self.node).__name__!r} to Python source."
-
-    def suggest_correction(self) -> str:
-        return ""
 
 
 @dataclass

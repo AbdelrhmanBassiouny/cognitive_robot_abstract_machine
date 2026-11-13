@@ -113,7 +113,7 @@ class TestLoadHumanFittedModel(unittest.TestCase):
         """
         A reloaded tree infers through the backend exactly as it classifies directly.
         """
-        rdr = RDRSerializer.load(path=SAVED_MODEL_PATH)
+        rdr = EQLSingleClassRDR.load(path=SAVED_MODEL_PATH)
         self.assertIs(rdr.case_type, Animal)
         self.assertEqual(rdr.conclusion_attribute_name, "species")
 

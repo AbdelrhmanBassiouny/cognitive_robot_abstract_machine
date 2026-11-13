@@ -188,7 +188,7 @@ class TestCorrectDrawerNoTargetFit(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "test_correct_drawer_model.py")
             RDRSerializer(rdr=rdr).save(path=path)
-            loaded = RDRSerializer.load(path=path)
+            loaded = EQLSingleClassRDR.load(path=path)
 
         for case, target in zip(drawers, targets):
             self.assertEqual(rdr.classify(case), loaded.classify(case))
@@ -289,7 +289,7 @@ class TestCorrectLoadHumanFittedDrawerModel(unittest.TestCase):
         """
         The saved drawer tree reloads and reproduces its fitted accuracy.
         """
-        rdr = RDRSerializer.load(path=SAVED_MODEL_PATH)
+        rdr = EQLSingleClassRDR.load(path=SAVED_MODEL_PATH)
         self.assertIs(rdr.case_type, RDRTestCorrectDrawer)
         self.assertEqual(rdr.conclusion_attribute_name, "correct")
 
