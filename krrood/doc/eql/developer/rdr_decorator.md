@@ -71,7 +71,7 @@ sequenceDiagram
         Wrapper->>Tree: EQLSingleClassRDR(case_type, "_output")
     else model on disk
         Store-->>Wrapper: True
-        Wrapper->>Wrapper: RDRSerializer.load(path=store.path)
+        Wrapper->>Wrapper: EQLSingleClassRDR.load(path=store.path)
         Tree-->>Wrapper: the saved rule tree
     end
     Wrapper->>Wrapper: case_type.function = function
@@ -177,10 +177,10 @@ RDR_CASE_VARIABLE = selectStrategy
 RDR_QUERY = None
 ```
 
-The `RDRModuleAttribute` names are the stable handles `RDRSerializer.load` and `RDRFileStore.load_case_type` read;
+The `RDRModuleAttribute` names are the stable handles `EQLSingleClassRDR.load` and `RDRFileStore.load_case_type` read;
 both sections take them from the constants in `rdr/serialization.py` rather than spelling
 them out, so the writer and the reader cannot drift apart. `RDR_QUERY = None` is what an
-empty tree looks like, and `RDRSerializer.load` reads it back as a tree with no rules.
+empty tree looks like, and `EQLSingleClassRDR.load` reads it back as a tree with no rules.
 
 Once a rule exists, `RDRSerializer.save_with_case` rewrites the whole file: it regenerates the class
 section from `case_type.function` and replaces the rule-tree section with the live EQL
@@ -413,5 +413,5 @@ print("kept in the project directory:",
 - {py:class}`~krrood.code_generation.function_case.FunctionCaseGenerator`
 - {py:class}`~krrood.entity_query_language.rdr.serialization.ModelSaver`
 - {py:meth}`~krrood.entity_query_language.rdr.serialization.RDRSerializer.save_with_case`
-- {py:meth}`~krrood.entity_query_language.rdr.serialization.RDRSerializer.load`
+- {py:meth}`~krrood.entity_query_language.rdr.single_class.EQLSingleClassRDR.load`
 - {py:class}`~krrood.entity_query_language.rdr.single_class.EQLSingleClassRDR`

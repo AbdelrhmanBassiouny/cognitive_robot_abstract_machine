@@ -221,7 +221,7 @@ class RDRWrapper:
         :return: The rule tree over this function's generated case type.
         """
         if self.store.exists():
-            return RDRSerializer.load(path=self.store.path)
+            return EQLSingleClassRDR.load(path=self.store.path)
         self._write_empty_model()
         return EQLSingleClassRDR(self.store.load_case_type(), CONCLUSION_ATTRIBUTE_NAME)
 
