@@ -62,8 +62,7 @@ items:
     as expressions that follow the state
   track: cram-robocasa
   status: not_started
-  depends_on:
-  - eql-planning/state-objects-and-domains
+  depends_on: []
   notes: 23 sites, mostly semantic_digital_twin world_rdr/rules.py, plus robot_predicates.py,
     queries.py, robot_parts.py and coraplex training_environment.py. Mechanical once variable(Type,
     expression) evaluates its expression.
@@ -73,8 +72,7 @@ items:
     as EQL bodies
   track: cram-robocasa
   status: not_started
-  depends_on:
-  - eql-planning/state-objects-and-domains
+  depends_on: []
   notes: 'Owner decided (Oct 30): relational predicates the planner reasons through get EQL
     bodies. 12 of the 57 workspace predicates and symbolic functions are relational; inventory
     in https://claude.ai/artifact/3zhr45pHQ9P9mdqxtJs5L5'
@@ -84,8 +82,7 @@ items:
     read
   track: cram-robocasa
   status: not_started
-  depends_on:
-  - eql-planning/state-objects-and-domains
+  depends_on: []
   notes: 'Owner decided (Oct 30): an attachment declares the terms it reads (coarse at first,
     e.g. the joint positions of these bodies). SemDT meets it by putting its world into the
     state inside the attachment, scoped, restored and without notifying observers. 27 geometric
@@ -100,7 +97,6 @@ items:
   - icra-upstream/coraplex-actions-on-cramph
   - concept-theory/contact-and-support
   - concept-theory/holds-estimator
-  - eql-planning/state-objects-and-domains
   - world-collections-as-expressions
   notes: Attaching a body removes a Connection and adds a FixedConnection, so pick and place
     need objects in a state.

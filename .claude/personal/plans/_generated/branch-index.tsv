@@ -30,7 +30,6 @@ claude/split-performatives-prs-xbluus	eql-performatives
 claude/performatives-clean	eql-performatives
 claude/eql-performatives-unify	eql-performatives
 eql-planning/state-aware-predicate-cache	eql-planning
-ccr-b32c8432-18ncpi	eql-planning
 eql-planning/action-schema-progression	eql-planning
 eql-planning/declared-setter-implications	eql-planning
 eql-planning/planning-backend-search	eql-planning
@@ -95,7 +94,6 @@ claude/camera-pose-fitted-p2mk7d	knowledge-directed-requests
 claude/detector-consolidation-analysis-rgg3xg	knowledge-directed-requests
 claude/bold-ramanujan-vb0e9c	krrood-light-core
 claude/relaxed-wozniak-eu4gdv	krrood-light-core
-claude/keen-feynman-4xcf4m	krrood-light-core
 infer-required-match-attributes	match-implicit-prediction
 complete-domain-objects	match-implicit-prediction
 krrood_eql_orm_fixes	montessori-eql-stack
