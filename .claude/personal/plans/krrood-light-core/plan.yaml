@@ -124,12 +124,12 @@ items:
   pull_request_number: 608
   session: https://claude.ai/code/session_01JxHGiKzJUPxGJDd4Czwnrm
   depends_on: []
-  notes: 'Moves only. classproperty from ormatic/utils.py into krrood.patterns; DataclassException
-    into core. symbol_graph stops importing ontomatic''s attribute_introspector at module
-    level. role_predicates (EQL Predicate, verbalization) and code_parsing_utils (EQL exceptions)
-    move to EQL. Role, SubClassSafeGeneric and factory_and_kwargs stay patterns (user decision):
-    Role inherits Symbol and symbol_graph imports patterns, so the three ship together as
-    krrood-core.'
+  notes: 'Draft PR open; all five core crossings removed, krrood tests pass. classproperty
+    moved to krrood.patterns.classproperty; symbol_graph loads ontomatic''s introspector
+    inside _build_class_diagram; symbol_graph.helpers moved to entity_query_language.class_diagram_lookup,
+    causal_relation to entity_query_language, module_generation to code_generation. A test
+    keeps the core boundary checker silent over core. Development tools stay out of core
+    (user decision).'
 - id: namespace-package
   title: 'krrood is a namespace package: krrood/__init__.py removed'
   branch: null
