@@ -411,3 +411,25 @@ class ConclusionWrongType(WrongConclusionProvided):
 
     def suggest_correction(self) -> str:
         return f"Provide a {self.domain.type_display}."
+
+
+# %% serialization
+
+
+@dataclass(kw_only=True)
+class MissingAddConclusionError(DataclassException):
+    """
+    Raised when saving a rule whose condition holds no ``Add`` conclusion, so the saved
+    module has no value for the rule to conclude.
+    """
+
+    condition: Any
+    """
+    The rule's condition.
+    """
+
+    def error_message(self) -> str:
+        return f"The rule condition {self.condition!r} holds no add(...) conclusion."
+
+    def suggest_correction(self) -> str:
+        return "Conclude every rule with an add(...) before saving the rule tree."
