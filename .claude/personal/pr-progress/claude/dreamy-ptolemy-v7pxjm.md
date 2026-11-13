@@ -1,12 +1,9 @@
 Plan:
-- Failing test: core boundary checker reports nothing for any core module
-- classproperty -> krrood.patterns.classproperty, update every importer
-- symbol_graph imports DescriptorAwareIntrospector inside class_diagram builder
-- causal_relation -> krrood.entity_query_language.causal_relation
-- module_generation -> krrood.code_generation.module_generation (+ its test)
-- Run krrood tests by package, pre-commit, update PR and plan notes
+- Run krrood tests per directory, then the other packages that import classproperty
+- Add api-break and maintenance labels; update plan item notes
 Done:
-- Bootstrap, draft PR #608, item recorded in progress
-- Decided: dev tools stay out of core; remove all core crossings
+- All five core crossings removed (classproperty, ontomatic introspector, helpers, causal_relation, module_generation), with a boundary test; commit f9f6b1719
+- Decided: dev tools stay out of core; remove all crossings; helpers becomes entity_query_language.class_diagram_lookup
+- ORM regeneration fails on main too (coraplex DetectAction), so it isn't from this PR
 Next:
-- Write the failing boundary test
+- Read the krrood test results and fix any failure the moves caused
