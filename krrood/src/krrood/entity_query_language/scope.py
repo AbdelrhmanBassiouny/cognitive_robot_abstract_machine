@@ -166,7 +166,7 @@ def get_definition_scope(
     scope: dict[str, Any] = {}
     # Read from ``__dict__``: an EQL variable's ``__getattr__`` synthesises an attribute
     # for any missing name, so ``getattr`` never returns ``None`` for a variable without
-    # an attached scope, such as one rebuilt by ``RDRSerializer.load``.
+    # an attached scope, such as one rebuilt by ``EQLSingleClassRDR.load``.
     attached = (
         getattr(obj, "__dict__", {}).get(_SCOPE_ATTRIBUTE) if obj is not None else None
     )
