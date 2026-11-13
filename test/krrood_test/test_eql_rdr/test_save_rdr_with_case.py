@@ -109,13 +109,14 @@ SyntheticFunctionCase.function = _score_func
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
 class TestSaveRdrWithCaseRoundtrip(unittest.TestCase):
     """
-    Files written by RDRSerializer.save_with_case must load correctly via RDRSerializer.load.
+    Files written by RDRSerializer.save_with_case must load correctly via
+    EQLSingleClassRDR.load.
     """
 
     def test_loaded_rdr_classifies_trained_cases(self):
         """
-        RDRSerializer.load of a RDRSerializer.save_with_case file must reproduce the original
-        classifications.
+        EQLSingleClassRDR.load of a RDRSerializer.save_with_case file must reproduce the
+        original classifications.
         """
         rdr = _build_two_rule_rdr()
         with tempfile.TemporaryDirectory() as d:
@@ -127,8 +128,8 @@ class TestSaveRdrWithCaseRoundtrip(unittest.TestCase):
 
     def test_loaded_rdr_unclassified_case_returns_unset(self):
         """
-        RDRSerializer.load of RDRSerializer.save_with_case leaves a case the rules do not cover
-        undetermined.
+        EQLSingleClassRDR.load of RDRSerializer.save_with_case leaves a case the rules
+        do not cover undetermined.
         """
         rdr = _build_one_rule_rdr()
         with tempfile.TemporaryDirectory() as d:
@@ -230,8 +231,8 @@ class TestSaveRdrWithCaseFunctionCaseHeader(unittest.TestCase):
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
 class TestSaveRdrWithCaseNonFunctionCaseFallback(unittest.TestCase):
     """
-    Non-FunctionCase RDR: RDRSerializer.save_with_case falls back to plain RDRSerializer.save (no class
-    header).
+    Non-FunctionCase RDR: RDRSerializer.save_with_case falls back to plain
+    RDRSerializer.save (no class header).
     """
 
     def test_no_class_header_in_fallback_file(self):
@@ -248,7 +249,8 @@ class TestSaveRdrWithCaseNonFunctionCaseFallback(unittest.TestCase):
 
     def test_fallback_file_matches_save_rdr_output(self):
         """
-        Fallback output must be identical to what plain RDRSerializer.save would produce.
+        Fallback output must be identical to what plain RDRSerializer.save would
+        produce.
         """
         rdr = _build_one_rule_rdr()
         with tempfile.TemporaryDirectory() as d:
@@ -264,7 +266,8 @@ class TestSaveRdrWithCaseNonFunctionCaseFallback(unittest.TestCase):
 
     def test_fallback_file_loads_correctly(self):
         """
-        A fallback file must still be loadable via RDRSerializer.load and classify correctly.
+        A fallback file must still be loadable via EQLSingleClassRDR.load and classify
+        correctly.
         """
         rdr = _build_one_rule_rdr()
         with tempfile.TemporaryDirectory() as d:
@@ -351,18 +354,20 @@ class TestRdrToPythonCaseTypeIsLocal(unittest.TestCase):
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
 class TestSaveRdrWithCasePreservesCornerCases(unittest.TestCase):
     """
-    ``RDRSerializer.save_with_case`` must persist and restore corner cases just like ``RDRSerializer.save``.
+    ``RDRSerializer.save_with_case`` must persist and restore corner cases just like
+    ``RDRSerializer.save``.
 
     The round-trip path goes through ``RDRSerializer.save_with_case`` (which prepends a
-    ``FunctionCase`` class header for function-case RDRs and falls back to ``RDRSerializer.save``
-    for plain RDRs).  In both cases the ``RDR_CORNER_CASES`` block must survive.
+    ``FunctionCase`` class header for function-case RDRs and falls back to
+    ``RDRSerializer.save`` for plain RDRs).  In both cases the ``RDR_CORNER_CASES``
+    block must survive.
     """
 
     def test_save_rdr_with_case_preserves_corner_cases(self):
         """
-        After ``RDRSerializer.save_with_case`` and ``RDRSerializer.load`` of a plain RDR,
-        the loaded store has as many corner cases as the original, restored from the
-        ``RDR_CORNER_CASES`` block the module embeds.
+        After ``RDRSerializer.save_with_case`` and ``EQLSingleClassRDR.load`` of a plain
+        RDR, the loaded store has as many corner cases as the original, restored from
+        the ``RDR_CORNER_CASES`` block the module embeds.
         """
         rdr = _build_two_rule_rdr()
         original_count = len(rdr.corner_cases.cases)

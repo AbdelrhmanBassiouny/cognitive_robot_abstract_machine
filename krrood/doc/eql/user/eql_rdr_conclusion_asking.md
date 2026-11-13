@@ -264,7 +264,7 @@ with tempfile.TemporaryDirectory() as tmp:
     with open(path) as f:
         print(f.read()[:500], "...")
 
-    loaded = RDRSerializer.load(path=path)
+    loaded = EQLSingleClassRDR.load(path=path)
 
 # The loaded tree classifies identically.
 all_match = all(rdr.classify(e) == loaded.classify(e) for e in EXHIBITS)
@@ -281,7 +281,7 @@ print("Round-trip identical:", all_match)
 | Re-confirm current label | Return the current conclusion; no rule is inserted |
 | Pre-seed with a heuristic | `Expert(helpers=[MyHelper()])` |
 | Save to disk | `RDRSerializer(rdr=rdr).save(path=path)` |
-| Reload from disk | `RDRSerializer.load(path=path)` |
+| Reload from disk | `EQLSingleClassRDR.load(path=path)` |
 | Interactive shell | `Expert(interface=IPythonInterface())` — see prose below |
 
 ## The Interactive Shell Experience
@@ -352,7 +352,7 @@ rdr_e2e.fit(EXHIBITS, expert=Expert(interface=FunctionInterface(answer_function=
 with tempfile.TemporaryDirectory() as tmp:
     path = os.path.join(tmp, "exhibit_e2e.py")
     RDRSerializer(rdr=rdr_e2e).save(path=path)
-    loaded_e2e = RDRSerializer.load(path=path)
+    loaded_e2e = EQLSingleClassRDR.load(path=path)
 
 print("All correct:", all(loaded_e2e.classify(e) == l for e, l in zip(EXHIBITS, LABELS)))
 ```
@@ -373,7 +373,7 @@ print("All correct:", all(loaded_e2e.classify(e) == l for e, l in zip(EXHIBITS, 
 - {py:class}`~krrood.entity_query_language.rdr.conclusion_helper.ConclusionHelper` — base class for pluggable
   presentation and suggestion aids.
 - {py:meth}`~krrood.entity_query_language.rdr.serialization.RDRSerializer.save` /
-  {py:meth}`~krrood.entity_query_language.rdr.serialization.RDRSerializer.load` — persistence.
+  {py:meth}`~krrood.entity_query_language.rdr.single_class.EQLSingleClassRDR.load` — persistence.
 - {doc}`writing_rule_trees` — background on how EQL rule trees are structured.
 - Developer guide: {doc}`../developer/eql_rdr_conclusion_asking` — design rationale and
   extension points.

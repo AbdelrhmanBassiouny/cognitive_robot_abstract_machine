@@ -193,7 +193,7 @@ class TestNoTargetSerializationRoundTrip(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "mode2_model.py")
             RDRSerializer(rdr=rdr).save(path=path)
-            loaded = RDRSerializer.load(path=path)
+            loaded = EQLSingleClassRDR.load(path=path)
         for case, _ in subset:
             self.assertEqual(rdr.classify(case), loaded.classify(case), case.name)
 
