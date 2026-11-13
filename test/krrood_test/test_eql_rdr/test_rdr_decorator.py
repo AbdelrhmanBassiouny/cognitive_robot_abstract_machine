@@ -5,6 +5,7 @@ decorated function answers with, and what survives being saved and read back.
 
 from __future__ import annotations
 
+import ast
 from dataclasses import dataclass
 from unittest.mock import patch
 
@@ -14,9 +15,12 @@ from typing_extensions import Any, Callable, Dict, List, Optional
 from krrood.code_generation.exceptions import FunctionMissingAnnotationsError
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.rdr.answer_vocabulary import AnswerName
+from krrood.entity_query_language import factories
+from krrood.entity_query_language.factories import variable
 from krrood.entity_query_language.rdr.decorator import (
     CONCLUSION_ATTRIBUTE_NAME,
     RDRWrapper,
+    empty_rule_tree_source,
     rdr,
 )
 from krrood.entity_query_language.rdr.expert import Expert
@@ -435,6 +439,20 @@ class TestModelFileLifecycle:
         """
         assert distance_wrapper.store.path == str(tmp_path / "distance_rdr.py")
         assert distance_wrapper.store.exists()
+
+    def test_a_never_fitted_model_imports_only_the_factories_it_calls(self):
+        """
+        The rule-tree section of a never-fitted model file calls only
+        :func:`~krrood.entity_query_language.factories.variable`.
+        """
+        imported_factory_names = {
+            imported.name
+            for statement in ast.parse(empty_rule_tree_source("DistanceCase")).body
+            if isinstance(statement, ast.ImportFrom)
+            and statement.module == factories.__name__
+            for imported in statement.names
+        }
+        assert imported_factory_names == {variable.__name__}
 
     def test_a_fit_persists_to_the_model_file(
         self, distance_wrapper, positive_x_expert

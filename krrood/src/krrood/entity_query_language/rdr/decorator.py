@@ -25,6 +25,7 @@ from typing_extensions import (
 )
 
 from krrood.code_generation.enums import PythonBuiltinParameterNames
+from krrood.code_generation.formatting import remove_unused_imports
 from krrood.code_generation.function_case import FunctionCaseGenerator
 from krrood.code_generation.generator import CodeGenerator
 from krrood.code_generation.naming import camel_case_to_lower_camel_case, to_camel_case
@@ -95,16 +96,18 @@ def empty_rule_tree_source(case_type_name: str) -> str:
     :return: Python source defining the case variable and the loader's stable handles.
     """
     generator = CodeGenerator(template_directory=str(RDRSerializer.templates_directory))
-    return generator.render(
-        template_name=EMPTY_RULE_TREE_TEMPLATE_NAME,
-        factory_import=RDRSerializer.rule_authoring_import,
-        variable_name=camel_case_to_lower_camel_case(case_type_name),
-        case_type_name=case_type_name,
-        conclusion_attribute_name=CONCLUSION_ATTRIBUTE_NAME,
-        rdr_case_type_name=RDRModuleAttribute.CASE_TYPE,
-        rdr_conclusion_attribute_name=RDRModuleAttribute.CONCLUSION_ATTRIBUTE,
-        rdr_case_variable_name=RDRModuleAttribute.CASE_VARIABLE,
-        rdr_query_name=RDRModuleAttribute.QUERY,
+    return remove_unused_imports(
+        generator.render(
+            template_name=EMPTY_RULE_TREE_TEMPLATE_NAME,
+            factory_import=RDRSerializer.rule_authoring_import,
+            variable_name=camel_case_to_lower_camel_case(case_type_name),
+            case_type_name=case_type_name,
+            conclusion_attribute_name=CONCLUSION_ATTRIBUTE_NAME,
+            rdr_case_type_name=RDRModuleAttribute.CASE_TYPE,
+            rdr_conclusion_attribute_name=RDRModuleAttribute.CONCLUSION_ATTRIBUTE,
+            rdr_case_variable_name=RDRModuleAttribute.CASE_VARIABLE,
+            rdr_query_name=RDRModuleAttribute.QUERY,
+        )
     )
 
 
