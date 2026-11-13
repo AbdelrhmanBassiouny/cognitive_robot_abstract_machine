@@ -26,7 +26,7 @@ from krrood.entity_query_language.rdr.interface import (
     CaseContext,
     FunctionInterface,
 )
-from krrood.entity_query_language.rdr.serialization import load_rdr
+from krrood.entity_query_language.rdr.serialization import RDRSerializer
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
 # %% the functions the decorator is applied to
@@ -447,7 +447,7 @@ class TestModelFileLifecycle:
             distance_wrapper.case_type(x=1.0, y=0.0, _output=None),
             expert=positive_x_expert,
         )
-        assert load_rdr(distance_wrapper.store.path).query is not None
+        assert RDRSerializer.load(path=distance_wrapper.store.path).query is not None
 
     def test_corner_cases_survive_being_read_back(self, tmp_path):
         """

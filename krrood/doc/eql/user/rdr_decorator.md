@@ -135,13 +135,13 @@ print(open(model_file).read()[:600], "...")
 
 ## Reading a Model Back
 
-`load_rdr` rebuilds the same tree from the file, so a later process - or a later run of
+`RDRSerializer.load` rebuilds the same tree from the file, so a later process - or a later run of
 the same decorated function - picks up where fitting left off:
 
 ```{code-cell} ipython3
-from krrood.entity_query_language.rdr.serialization import load_rdr
+from krrood.entity_query_language.rdr.serialization import RDRSerializer
 
-reloaded = load_rdr(model_file)
+reloaded = RDRSerializer.load(path=model_file)
 print("heavy:", reloaded.classify(case_type(weight=2.5, material="metal", _output=5.0)))
 print("light:", reloaded.classify(case_type(weight=0.1, material="plastic", _output=5.0)))
 ```
@@ -181,7 +181,7 @@ print("rules after the call:", collect_force.rdr.query is not None)
 | Reach the generated case class | `wrapper.case_type` |
 | Reach the rule tree | `wrapper.rdr` |
 | Reach the model file | `wrapper.store.path` |
-| Read a model back | `load_rdr(path)` |
+| Read a model back | `RDRSerializer.load(path=path)` |
 
 ## End to End
 
@@ -238,7 +238,7 @@ for name, weight, material, expected in OBJECTS:
     outcome = "ok" if predicted == expected else "MISMATCH"
     print(f"[{outcome}] {name:8s} {weight:5.2f} kg -> {predicted:5.1f} N")
 
-reloaded_plan = load_rdr(end_to_end_file)
+reloaded_plan = RDRSerializer.load(path=end_to_end_file)
 print("same after reloading:", all(
     reloaded_plan.classify(
         plan_force.case_type(weight=weight, material=material, _output=LIGHT_FORCE)
@@ -259,7 +259,7 @@ print("same after reloading:", all(
   file lives and how it is read and written.
 - {py:class}`~krrood.entity_query_language.rdr.single_class.EQLSingleClassRDR` — the rule
   tree itself; `classify`, `fit_case`, `fit`, `render_tree`.
-- {py:func}`~krrood.entity_query_language.rdr.serialization.load_rdr` — read a model file
+- {py:meth}`~krrood.entity_query_language.rdr.serialization.RDRSerializer.load` — read a model file
   back into a rule tree.
 - {doc}`writing_rule_trees` — how EQL rule trees are authored and structured.
 - {doc}`eql_rdr_conclusion_asking` — growing a tree from unlabelled cases, interactively.

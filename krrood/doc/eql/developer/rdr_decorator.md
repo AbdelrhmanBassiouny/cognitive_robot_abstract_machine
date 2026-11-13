@@ -71,7 +71,7 @@ sequenceDiagram
         Wrapper->>Tree: EQLSingleClassRDR(case_type, "_output")
     else model on disk
         Store-->>Wrapper: True
-        Wrapper->>Wrapper: load_rdr(store.path)
+        Wrapper->>Wrapper: RDRSerializer.load(path=store.path)
         Tree-->>Wrapper: the saved rule tree
     end
     Wrapper->>Wrapper: case_type.function = function
@@ -177,19 +177,19 @@ RDR_CASE_VARIABLE = selectStrategy
 RDR_QUERY = None
 ```
 
-The `RDR_*` names are the stable handles `load_rdr` and `RDRFileStore.load_case_type` read;
+The `RDRModuleAttribute` names are the stable handles `RDRSerializer.load` and `RDRFileStore.load_case_type` read;
 both sections take them from the constants in `rdr/serialization.py` rather than spelling
 them out, so the writer and the reader cannot drift apart. `RDR_QUERY = None` is what an
-empty tree looks like, and `load_rdr` reads it back as a tree with no rules.
+empty tree looks like, and `RDRSerializer.load` reads it back as a tree with no rules.
 
-Once a rule exists, `save_rdr_with_case` rewrites the whole file: it regenerates the class
+Once a rule exists, `RDRSerializer.save_with_case` rewrites the whole file: it regenerates the class
 section from `case_type.function` and replaces the rule-tree section with the live EQL
 expression.
 
-### `save_rdr_with_case` against `save_rdr`
+### `RDRSerializer.save_with_case` against `RDRSerializer.save`
 
-`save_rdr` writes the rule tree alone and imports the case type from wherever it came
-from. `save_rdr_with_case` recognises a `FunctionCase` subclass and inlines the class
+`RDRSerializer.save` writes the rule tree alone and imports the case type from wherever it came
+from. `RDRSerializer.save_with_case` recognises a `FunctionCase` subclass and inlines the class
 definition at the top of the same file, passing `case_type_is_local=True` so the rule-tree
 section does not import a class defined just above it. It generates that class against the
 RDR layer's own `FunctionCase`, which is the base the layer checks against - a case class
@@ -341,7 +341,7 @@ other module changes.
 
 `_emit_value` in `rdr/serialization.py` turns a conclusion into Python source, and handles
 enums, `bool`, `None`, `int`, `float` and `str`. A new type needs a branch there, plus an
-entry in `rdr_to_python`'s `referenced_types` if it has to be imported.
+entry in `RuleTreeSourceEmitter.referenced_types` if it has to be imported.
 
 ### Another base for generated case classes
 
@@ -412,6 +412,6 @@ print("kept in the project directory:",
 - {py:class}`~krrood.entity_query_language.rdr.function_case.FunctionCase`
 - {py:class}`~krrood.code_generation.function_case.FunctionCaseGenerator`
 - {py:class}`~krrood.entity_query_language.rdr.serialization.ModelSaver`
-- {py:func}`~krrood.entity_query_language.rdr.serialization.save_rdr_with_case`
-- {py:func}`~krrood.entity_query_language.rdr.serialization.load_rdr`
+- {py:meth}`~krrood.entity_query_language.rdr.serialization.RDRSerializer.save_with_case`
+- {py:meth}`~krrood.entity_query_language.rdr.serialization.RDRSerializer.load`
 - {py:class}`~krrood.entity_query_language.rdr.single_class.EQLSingleClassRDR`

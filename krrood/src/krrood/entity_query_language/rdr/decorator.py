@@ -31,14 +31,8 @@ from krrood.code_generation.naming import camel_case_to_lower_camel_case, to_cam
 from krrood.entity_query_language.rdr.file_store import RDRFileStore
 from krrood.entity_query_language.rdr.function_case import FunctionCase
 from krrood.entity_query_language.rdr.serialization import (
-    _CLASS_AND_RULES_SEPARATOR,
-    _FACTORY_IMPORT,
-    _TEMPLATES_DIRECTORY,
-    RDR_CASE_TYPE_NAME,
-    RDR_CASE_VARIABLE_NAME,
-    RDR_CONCLUSION_ATTRIBUTE_NAME,
-    RDR_QUERY_NAME,
-    load_rdr,
+    RDRModuleAttribute,
+    RDRSerializer,
 )
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
@@ -100,17 +94,17 @@ def empty_rule_tree_source(case_type_name: str) -> str:
     :param case_type_name: The generated case class the empty tree ranges over.
     :return: Python source defining the case variable and the loader's stable handles.
     """
-    generator = CodeGenerator(template_directory=_TEMPLATES_DIRECTORY)
+    generator = CodeGenerator(template_directory=str(RDRSerializer.templates_directory))
     return generator.render(
-        EMPTY_RULE_TREE_TEMPLATE_NAME,
-        factory_import=_FACTORY_IMPORT,
+        template_name=EMPTY_RULE_TREE_TEMPLATE_NAME,
+        factory_import=RDRSerializer.rule_authoring_import,
         variable_name=camel_case_to_lower_camel_case(case_type_name),
         case_type_name=case_type_name,
         conclusion_attribute_name=CONCLUSION_ATTRIBUTE_NAME,
-        rdr_case_type_name=RDR_CASE_TYPE_NAME,
-        rdr_conclusion_attribute_name=RDR_CONCLUSION_ATTRIBUTE_NAME,
-        rdr_case_variable_name=RDR_CASE_VARIABLE_NAME,
-        rdr_query_name=RDR_QUERY_NAME,
+        rdr_case_type_name=RDRModuleAttribute.CASE_TYPE,
+        rdr_conclusion_attribute_name=RDRModuleAttribute.CONCLUSION_ATTRIBUTE,
+        rdr_case_variable_name=RDRModuleAttribute.CASE_VARIABLE,
+        rdr_query_name=RDRModuleAttribute.QUERY,
     )
 
 
@@ -227,7 +221,7 @@ class RDRWrapper:
         :return: The rule tree over this function's generated case type.
         """
         if self.store.exists():
-            return load_rdr(self.store.path)
+            return RDRSerializer.load(path=self.store.path)
         self._write_empty_model()
         return EQLSingleClassRDR(self.store.load_case_type(), CONCLUSION_ATTRIBUTE_NAME)
 
@@ -238,11 +232,11 @@ class RDRWrapper:
         """
         case_type_name = to_camel_case(self.function.__name__)
         case_source = FunctionCaseGenerator(base_class=FunctionCase).generate(
-            self.function, class_name=case_type_name
+            function=self.function, class_name=case_type_name
         )
         source = (
             case_source
-            + _CLASS_AND_RULES_SEPARATOR
+            + RDRSerializer.case_class_and_rules_separator
             + empty_rule_tree_source(case_type_name)
         )
         Path(self.store.path).parent.mkdir(parents=True, exist_ok=True)
