@@ -14,10 +14,9 @@ from typing_extensions import TYPE_CHECKING, Callable, Type
 from krrood.code_generation.module_loading import load_module_from_path
 from krrood.entity_query_language.rdr.exceptions import ModelFileMissing
 from krrood.entity_query_language.rdr.serialization import (
-    _LOADED_MODULE_NAME_PREFIX,
-    RDR_CASE_TYPE_NAME,
     ModelSaver,
-    save_rdr_with_case,
+    RDRModuleAttribute,
+    RDRSerializer,
 )
 
 if TYPE_CHECKING:
@@ -76,7 +75,7 @@ class RDRFileStore(ModelSaver):
         :param rdr: The RDR to persist, over a :class:`FunctionCase` subclass.
         """
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
-        save_rdr_with_case(rdr, self.path)
+        RDRSerializer(rdr=rdr).save_with_case(path=self.path)
 
     def load_case_type(self) -> Type[FunctionCase]:
         """
@@ -85,5 +84,7 @@ class RDRFileStore(ModelSaver):
         """
         if not self.exists():
             raise ModelFileMissing(self.function, self.path)
-        module = load_module_from_path(self.path, _LOADED_MODULE_NAME_PREFIX)
-        return getattr(module, RDR_CASE_TYPE_NAME)
+        module = load_module_from_path(
+            self.path, RDRSerializer.loaded_module_name_prefix
+        )
+        return getattr(module, RDRModuleAttribute.CASE_TYPE)

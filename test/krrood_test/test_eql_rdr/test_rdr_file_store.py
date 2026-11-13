@@ -21,7 +21,10 @@ from krrood.entity_query_language.rdr.file_store import (
 )
 from krrood.entity_query_language.rdr.function_case import FunctionCase
 from krrood.entity_query_language.rdr.interface import FunctionInterface
-from krrood.entity_query_language.rdr.serialization import ModelSaver, load_rdr
+from krrood.entity_query_language.rdr.serialization import (
+    ModelSaver,
+    RDRSerializer,
+)
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
 CONCLUSION_ATTRIBUTE_NAME = "_output"
@@ -59,7 +62,7 @@ def generated_case_type():
     The generated source is executed rather than written to a file, so a test that has
     no interest in the file does not need one.
     """
-    source = FunctionCaseGenerator(base_class=FunctionCase).generate(distance)
+    source = FunctionCaseGenerator(base_class=FunctionCase).generate(function=distance)
     namespace: dict = {}
     exec(compile(source, "<generated_distance>", "exec"), namespace)
     return namespace["Distance"]
@@ -244,7 +247,7 @@ class TestRoundTrip:
         The single rule fires for positive ``x``, as it did before the save.
         """
         file_store.save(fitted_rdr)
-        loaded_rdr = load_rdr(file_store.path)
+        loaded_rdr = RDRSerializer.load(path=file_store.path)
         case = file_store.load_case_type()(x=1.0, y=2.0, _output=None)
         assert loaded_rdr.classify(case) == pytest.approx(TRAINED_CONCLUSION)
 
@@ -253,7 +256,7 @@ class TestRoundTrip:
         Negative ``x`` falls through the rule tree, as it did before the save.
         """
         file_store.save(fitted_rdr)
-        loaded_rdr = load_rdr(file_store.path)
+        loaded_rdr = RDRSerializer.load(path=file_store.path)
         case = file_store.load_case_type()(x=-1.0, y=2.0, _output=None)
         assert loaded_rdr.classify(case) is ...
 
