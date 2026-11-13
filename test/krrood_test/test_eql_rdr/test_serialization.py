@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 from dataclasses import dataclass, field
+from pathlib import Path
 from enum import Enum
 
 import pytest
@@ -30,8 +31,11 @@ from krrood.entity_query_language.rdr.corner_case import CornerCaseStore
 from krrood.entity_query_language.rdr.exceptions import EmptyRuleTreeError
 from krrood.entity_query_language.rdr.function_case import FunctionCase
 from krrood.entity_query_language.rdr.serialization import (
+    FileModelSaver,
+    NullModelSaver,
     RDRModuleAttribute,
     RDRSerializer,
+    TemporaryModelSaver,
 )
 from krrood.entity_query_language.rules.decomposition import DecomposedRuleTree
 
@@ -274,6 +278,74 @@ def test_recorded_corner_case_with_an_enum_field_round_trips_through_the_generat
     namespace = _exec_generated_module(source)
 
     assert corner_case in namespace[RDRModuleAttribute.CORNER_CASES].values()
+
+
+# %% ModelSaver strategies
+
+
+def test_null_saver_writes_nothing_for_a_fitted_tree(tmp_path):
+    NullModelSaver().save(_flat_tree_rdr())
+
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_file_saver_writes_the_generated_source_to_its_path(tmp_path):
+    """The file saver writes exactly the generated module to its path."""
+    rdr = _flat_tree_rdr()
+    destination = tmp_path / "zoo_rules.py"
+
+    FileModelSaver(str(destination)).save(rdr)
+
+    assert destination.read_text() == RDRSerializer(rdr=rdr).to_source()
+
+
+def test_file_saver_rewrites_the_file_on_every_save(tmp_path):
+    """A save replaces whatever the file held before."""
+    rdr = _flat_tree_rdr()
+    destination = tmp_path / "zoo_rules.py"
+    destination.write_text("stale contents")
+
+    FileModelSaver(str(destination)).save(rdr)
+
+    assert destination.read_text() == RDRSerializer(rdr=rdr).to_source()
+
+
+def test_temporary_saver_writes_the_generated_source_to_a_file_it_names():
+    """The temporary saver writes the generated module to the path it reports."""
+    rdr = _flat_tree_rdr()
+    saver = TemporaryModelSaver()
+
+    saver.save(rdr)
+
+    assert Path(saver.path).read_text() == RDRSerializer(rdr=rdr).to_source()
+    Path(saver.path).unlink()
+
+
+def test_temporary_saver_reuses_the_same_file_on_every_save():
+    """A second save goes to the file the first one chose."""
+    rdr = _flat_tree_rdr()
+    saver = TemporaryModelSaver()
+    saver.save(rdr)
+    first_path = saver.path
+
+    saver.save(rdr)
+
+    assert saver.path == first_path
+    assert Path(saver.path).read_text() == RDRSerializer(rdr=rdr).to_source()
+    Path(saver.path).unlink()
+
+
+def test_temporary_saver_names_the_file_after_the_case_type():
+    saver = TemporaryModelSaver()
+
+    saver.save(_flat_tree_rdr())
+
+    assert Path(saver.path).name.startswith(f"eql_rdr_{Animal.__name__}_")
+    Path(saver.path).unlink()
+
+
+def test_temporary_saver_has_no_path_before_it_saves():
+    assert TemporaryModelSaver().path is None
 
 
 # %% RDRSerializer.save_with_case
