@@ -277,7 +277,7 @@ class TestSaveRdrWithCaseNonFunctionCaseFallback(unittest.TestCase):
         self.assertEqual(loaded.classify(first(Species.mammal)), Species.mammal)
 
 
-# %% rdr_to_python and a case type local to the file
+# %% RDRSerializer.to_source and a case type local to the file
 
 
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
@@ -342,7 +342,7 @@ class TestRdrToPythonCaseTypeIsLocal(unittest.TestCase):
 
     def test_case_type_is_local_default_is_false(self):
         """
-        rdr_to_python without the kwarg must behave the same as
+        RDRSerializer.to_source without the kwarg must behave the same as
         case_type_is_local=False.
         """
         rdr = _build_one_rule_rdr()
