@@ -9,7 +9,7 @@ import pytest
 from krrood.entity_query_language.rdr.expert import Expert
 from krrood.entity_query_language.rdr.interface import FunctionInterface
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
-from krrood.entity_query_language.rdr.serialization import walk_rules_in_emission_order
+from krrood.entity_query_language.rules.decomposition import DecomposedRuleTree
 
 from .animal import Animal, Species
 from .zoo_loader import load_zoo_animals
@@ -69,7 +69,9 @@ def _scripted_expert(rules: dict) -> Expert:
 
 def _first_recorded_node_id(rdr: EQLSingleClassRDR):
     """Return the ``_id_`` of the first (root) condition node in emission order."""
-    nodes = walk_rules_in_emission_order(rdr.conditions_root)
+    nodes = DecomposedRuleTree.from_condition(
+        condition=rdr.conditions_root
+    ).rule_conditions()
     assert nodes, "RDR must have at least one rule"
     return nodes[0]._id_
 
@@ -110,7 +112,9 @@ def test_alternative_rule_corner_case_is_recorded():
 
     assert len(rdr.corner_cases.cases) == 2
     # The node whose corner case is the bird instance is the alternative node.
-    nodes = walk_rules_in_emission_order(rdr.conditions_root)
+    nodes = DecomposedRuleTree.from_condition(
+        condition=rdr.conditions_root
+    ).rule_conditions()
     assert len(nodes) == 2
     alternative_node_id = nodes[1]._id_
     assert rdr.corner_cases.get_corner_case_for_node(alternative_node_id) is bird
@@ -142,7 +146,9 @@ def test_refinement_rule_corner_case_is_recorded():
     rdr.fit_case(mammal, Species.mammal, expert)
 
     assert len(rdr.corner_cases.cases) == 3
-    nodes = walk_rules_in_emission_order(rdr.conditions_root)
+    nodes = DecomposedRuleTree.from_condition(
+        condition=rdr.conditions_root
+    ).rule_conditions()
     # The refinement node is the third in emission order.
     refinement_node_id = nodes[2]._id_
     assert rdr.corner_cases.get_corner_case_for_node(refinement_node_id) is mammal

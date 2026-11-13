@@ -29,7 +29,7 @@ from krrood.entity_query_language.rdr.exceptions import (
 )
 from krrood.entity_query_language.rdr.expert import Expert
 from krrood.entity_query_language.rdr.interface import FunctionInterface
-from krrood.entity_query_language.rdr.serialization import load_rdr, save_rdr
+from krrood.entity_query_language.rdr.serialization import RDRSerializer
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 from krrood.entity_query_language.rdr.underspecified import UnderspecifiedMatch
 
@@ -234,16 +234,23 @@ class TestRDRBackendFitModes(unittest.TestCase):
 
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
 class TestUnderspecifiedEndToEnd(unittest.TestCase):
+    """
+    A model fitted on the zoo dataset through an underspecified query.
+    """
+
     @classmethod
     def setUpClass(cls):
         cls._fitted_model = _ZOO_MODEL_CACHE
 
     def test_fit_save_load_infer(self):
+        """
+        A saved and loaded model infers the same values as the model it was saved from.
+        """
         model = self._fitted_model
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "zoo_rdr.py")
-            save_rdr(model, path)
-            loaded = load_rdr(path)
+            RDRSerializer(rdr=model).save(path=path)
+            loaded = RDRSerializer.load(path=path)
 
         original_backend = RDRBackend()
         original_backend.models[(Animal, "species")] = model

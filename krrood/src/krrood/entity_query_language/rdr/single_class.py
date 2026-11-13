@@ -58,7 +58,7 @@ from krrood.entity_query_language.rdr.rule_tree_view import (
     DEFAULT_TAIL,
     render_rule_tree,
 )
-from krrood.entity_query_language.rdr.serialization import save_rdr_with_case
+from krrood.entity_query_language.rdr.serialization import RDRSerializer
 from krrood.entity_query_language.scope import (
     attach_definition_scope,
     capture_caller_scope,
@@ -398,7 +398,7 @@ class EQLSingleClassRDR:
         self.corner_cases.record_corner_case(new_node, case)
 
         if self.save_path is not None:
-            save_rdr_with_case(self, self.save_path)
+            RDRSerializer(rdr=self).save_with_case(path=self.save_path)
 
     def fit(
         self,
@@ -437,7 +437,9 @@ class EQLSingleClassRDR:
         pending = list(range(len(cases)))
 
         if expert is not None and self.save_path is not None and expert.interface.on_save is None:
-            expert.interface.on_save = lambda: save_rdr_with_case(self, self.save_path)
+            expert.interface.on_save = lambda: RDRSerializer(rdr=self).save_with_case(
+                path=self.save_path
+            )
 
         progress: Optional[ProgressReporter] = None
         if expert is not None:
@@ -509,7 +511,7 @@ class EQLSingleClassRDR:
             signature = frozenset(pending)
             if signature in seen_signatures:
                 if self.save_path is not None:
-                    save_rdr_with_case(self, self.save_path)
+                    RDRSerializer(rdr=self).save_with_case(path=self.save_path)
                 clashing = ", ".join(repr(cases[i]) for i in pending)
                 save_hint = (
                     f" The partially fitted model has been saved to {self.save_path!r}."
