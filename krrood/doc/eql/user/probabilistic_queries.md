@@ -36,13 +36,13 @@ exist, but about the *model itself*. Three constructs answer that kind of questi
 | Question | Construct | Answer |
 |---|---|---|
 | "On average, how fast do robots move?" | {py:func}`~krrood.entity_query_language.factories.average` | a number |
-| "What fraction of robots run dangerously hot?" | {py:func}`~krrood.entity_query_language.factories.probability_of` | a number |
-| "Of the robots running hot, how many are critically hot?" | {py:func}`~krrood.entity_query_language.factories.probability_of` with `evidence` | a number |
-| "Given today's charge level, what does the rest look like?" | {py:func}`~krrood.entity_query_language.factories.distribution_of` | a distribution |
+| "What fraction of robots run dangerously hot?" | {py:func}`~krrood.parametrization.probabilistic_queries.probability_of` | a number |
+| "Of the robots running hot, how many are critically hot?" | {py:func}`~krrood.parametrization.probabilistic_queries.probability_of` with `evidence` | a number |
+| "Given today's charge level, what does the rest look like?" | {py:func}`~krrood.parametrization.probabilistic_queries.distribution_of` | a distribution |
 
 Without live telemetry on hand -- only the fitted model -- all three questions below
 get answered from it, via
-{py:class}`~krrood.entity_query_language.backends.ProbabilisticBackend`, the backend
+{py:class}`~krrood.parametrization.probabilistic_backend.ProbabilisticBackend`, the backend
 that knows how to reach it:
 
 ```python
@@ -66,8 +66,16 @@ root.add_subcircuit(leaf(UniformDistribution(variable=var_temperature, interval=
 root.add_subcircuit(leaf(UniformDistribution(variable=var_speed, interval=closed(0, 2).simple_sets[0]), circuit))
 root.add_subcircuit(leaf(UniformDistribution(variable=var_charge, interval=closed(0, 3).simple_sets[0]), circuit))
 
-from krrood.entity_query_language.backends import ProbabilisticBackend
-from krrood.entity_query_language.factories import a, average, distribution_of, probability_of, variable
+from krrood.parametrization.probabilistic_backend import ProbabilisticBackend
+from krrood.entity_query_language.factories import (
+    a,
+    average,
+    variable,
+)
+from krrood.parametrization.probabilistic_queries import (
+    distribution_of,
+    probability_of,
+)
 from krrood.parametrization.model_registries import DictRegistry
 
 backend = ProbabilisticBackend(model_registry=DictRegistry({Robot: circuit}))
@@ -218,14 +226,14 @@ answered from a model instead of only ever a table.
 
 ## API Reference
 
-- {py:func}`~krrood.entity_query_language.factories.distribution_of`
-- {py:func}`~krrood.entity_query_language.factories.probability_of`
+- {py:func}`~krrood.parametrization.probabilistic_queries.distribution_of`
+- {py:func}`~krrood.parametrization.probabilistic_queries.probability_of`
 - {py:func}`~krrood.entity_query_language.factories.average`
-- {py:class}`~krrood.entity_query_language.operators.probabilistic_queries.ProbabilisticQuery`
-- {py:class}`~krrood.entity_query_language.operators.probabilistic_queries.Distribution`
-- {py:class}`~krrood.entity_query_language.operators.probabilistic_queries.Probability`
+- {py:class}`~krrood.parametrization.probabilistic_queries.ProbabilisticQuery`
+- {py:class}`~krrood.parametrization.probabilistic_queries.Distribution`
+- {py:class}`~krrood.parametrization.probabilistic_queries.Probability`
 - {py:class}`~krrood.entity_query_language.operators.aggregators.Average`
-- {py:meth}`~krrood.entity_query_language.backends.ProbabilisticBackend._resolve_average`
+- {py:meth}`~krrood.parametrization.probabilistic_backend.ProbabilisticBackend._resolve_average`
 - {py:meth}`~krrood.parametrization.parameterizer.UnderspecifiedParameters.resolve_conditioned_and_truncated_model`
 - {py:class}`~krrood.parametrization.parameterizer.ModelQueryParameters`
 - {py:class}`~krrood.entity_query_language.exceptions.BackendCannotEvaluateProbabilisticQuery`

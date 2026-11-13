@@ -2,8 +2,12 @@ import pytest
 from random_events.interval import closed
 from random_events.product_algebra import SimpleEvent
 
-from krrood.entity_query_language.backends import ProbabilisticBackend
-from krrood.entity_query_language.factories import a, distribution_of, variable
+from krrood.parametrization.probabilistic_backend import ProbabilisticBackend
+from krrood.entity_query_language.factories import (
+    a,
+    variable,
+)
+from krrood.parametrization.probabilistic_queries import distribution_of
 from krrood.parametrization.model_registries import DictRegistry
 
 from ._fixtures import Coin, build_three_independent_variables_circuit

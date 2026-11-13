@@ -49,7 +49,7 @@ from krrood.class_diagrams.causal_relation import (
     CausalRelationsOfClass,
 )
 from krrood.class_diagrams.class_diagram import ClassDiagram
-from krrood.entity_query_language.backends import ProbabilisticBackend
+from krrood.parametrization.probabilistic_backend import ProbabilisticBackend
 from krrood.entity_query_language.exceptions import (
     EffectNotIdentified,
     NoCauseVariablesForRanking,

@@ -528,7 +528,7 @@ class Match(
             Constructing *new* instances from an underspecified match is the job of a
             :class:`~krrood.entity_query_language.backends.GenerativeBackend` (for example
             :class:`~krrood.entity_query_language.backends.EntityQueryLanguageGenerativeBackend`
-            or :class:`~krrood.entity_query_language.backends.ProbabilisticBackend`), not of the
+            or :class:`~krrood.parametrization.probabilistic_backend.ProbabilisticBackend`), not of the
             default selective evaluation.
 
         :return: An iterator over the matching elements.
@@ -818,7 +818,7 @@ class Match(
 
         Sugar for ``self.where(CausesEffect(and_(*conditions), cause_attributes=...))``:
         semantically identical to an ordinary ``.where()`` under every backend except
-        :class:`~krrood.entity_query_language.backends.ProbabilisticBackend`, which reads
+        :class:`~krrood.parametrization.probabilistic_backend.ProbabilisticBackend`, which reads
         the wrapped condition to find which variable(s) a
         :data:`~krrood.entity_query_language.factories.cause` search should optimize for.
         The ``cause``-marked attribute(s) are also attached to the built

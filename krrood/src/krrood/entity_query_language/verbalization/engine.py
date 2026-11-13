@@ -14,7 +14,9 @@ from krrood.entity_query_language.verbalization.grammar.framework.phrase_rule im
     PhraseRule,
     select,
 )
-from krrood.entity_query_language.verbalization.grammar.framework.registry import RULES
+from krrood.entity_query_language.verbalization.grammar.framework.registry import (
+    PhraseRuleRegistry,
+)
 from krrood.entity_query_language.verbalization.exceptions import (
     UnverbalizableExpressionError,
 )
@@ -43,7 +45,7 @@ def root_context(
 
     >>> from krrood.entity_query_language.verbalization.context import MicroplanningServices
     >>> robot = variable(Robot, [])
-    >>> context = root_context(MicroplanningServices.from_expression(expression=robot), RULES)
+    >>> context = root_context(MicroplanningServices.from_expression(expression=robot), PhraseRuleRegistry.loaded_rules())
     >>> type(context.child(node=robot)).__name__
     'NounPhrase'
     """
@@ -89,7 +91,7 @@ def fold(
     >>> verbalize_expression(variable(Robot, []).battery)
     'the battery of a Robot'
     """
-    rules = RULES if rules is None else rules
+    rules = PhraseRuleRegistry.loaded_rules() if rules is None else rules
 
     if isinstance(node, SymbolicExpression):
         override = services.binding.binding_overrides.get(node._id_)

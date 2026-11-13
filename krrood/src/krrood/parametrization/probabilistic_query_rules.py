@@ -1,12 +1,10 @@
 """
 Grammar rules for the probabilistic query constructs:
-:class:`~krrood.entity_query_language.operators.probabilistic_queries.Distribution` and
-:class:`~krrood.entity_query_language.operators.probabilistic_queries.Probability`.
+:class:`~krrood.parametrization.probabilistic_queries.Distribution` and
+:class:`~krrood.parametrization.probabilistic_queries.Probability`.
 
-Auto-registered by :mod:`~krrood.entity_query_language.verbalization.grammar.framework.registry`
-(any module named ``rules.py`` under ``grammar/`` is walked and imported, and every concrete
-:class:`~krrood.entity_query_language.verbalization.grammar.framework.phrase_rule.PhraseRule`
-subclass found is added to ``RULES``) -- nothing else needs editing to wire these in.
+:meth:`~krrood.entity_query_language.verbalization.grammar.framework.registry.PhraseRuleRegistry.loaded_rules`
+includes them once this module is loaded, which loading :mod:`krrood.parametrization` does.
 """
 
 from __future__ import annotations
@@ -14,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
-from krrood.entity_query_language.operators.probabilistic_queries import (
+from krrood.parametrization.probabilistic_queries import (
     Distribution,
     Probability,
 )
@@ -65,7 +63,8 @@ class DistributionRule(PhraseRule):
     which reads like a truncation (a ``where``), not a choice of which variables the
     joint is even over.
 
-    >>> from krrood.entity_query_language.factories import a, distribution_of
+    >>> from krrood.entity_query_language.factories import a
+    >>> from krrood.parametrization.probabilistic_queries import distribution_of
     >>> match = a(Robot)(name="R2", battery=...)
     >>> verbalize_expression(distribution_of(match))
     "The distribution over a Robot given that its name is 'R2'"
@@ -128,7 +127,8 @@ class ProbabilityRule(PhraseRule):
     comparator/logical-operator grammar via ``context.child``, so they read exactly as
     they would inside a ``where`` clause.
 
-    >>> from krrood.entity_query_language.factories import probability_of, variable
+    >>> from krrood.entity_query_language.factories import variable
+    >>> from krrood.parametrization.probabilistic_queries import probability_of
     >>> robot = variable(Robot, [])
     >>> verbalize_expression(probability_of(robot.battery > 50))
     'the probability that the battery of a Robot is greater than 50'

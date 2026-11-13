@@ -1,8 +1,12 @@
+"""
+The grammar a verbalization dispatches over.
+"""
+
 from __future__ import annotations
 
 import importlib
 import pkgutil
-
+from dataclasses import dataclass
 
 from krrood.entity_query_language.verbalization import grammar as grammar_package
 from krrood.entity_query_language.verbalization.grammar.framework.phrase_rule import (
@@ -10,11 +14,13 @@ from krrood.entity_query_language.verbalization.grammar.framework.phrase_rule im
 )
 from krrood.patterns.specificity_ranking import concrete_subclasses
 
+# %% loading the grammar package's rules
+
 
 def _load_rule_modules() -> None:
     """
     Import every construct's ``rules`` module so its :class:`PhraseRule` subclasses are
-    loaded (and therefore discoverable) before ``RULES`` is built.
+    loaded (and therefore discoverable) before the grammar is read.
 
     Discovered by walking the ``grammar`` package rather than a hand-maintained import
     list, so a new construct is registered simply by adding its
@@ -29,8 +35,25 @@ def _load_rule_modules() -> None:
 
 _load_rule_modules()
 
-# Auto-discovered: one instance of every concrete ``PhraseRule`` subclass. Order is irrelevant —
-# ``select`` decides specificity — and a new rule is registered simply by defining its class in one
-# of the construct ``rules`` modules. Uses the same ``concrete_subclasses`` primitive the
-# ``SpecificityRule`` families use to discover their alternatives.
-RULES: list[PhraseRule] = [rule_cls() for rule_cls in concrete_subclasses(PhraseRule)]
+# %% reading the grammar
+
+
+@dataclass(kw_only=True)
+class PhraseRuleRegistry:
+    """
+    The grammar rules a verbalization dispatches over.
+    """
+
+    @classmethod
+    def loaded_rules(cls) -> list[PhraseRule]:
+        """
+        :return: One instance of every concrete :class:`PhraseRule` subclass that is
+            defined at module level and loaded when this is called: those of the
+            grammar package, and those of any other loaded module, such as a krrood
+            part's own constructs.
+        """
+        return [
+            rule_class()
+            for rule_class in concrete_subclasses(PhraseRule)
+            if "<locals>" not in rule_class.__qualname__
+        ]

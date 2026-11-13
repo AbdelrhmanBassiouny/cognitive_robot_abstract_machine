@@ -6,10 +6,8 @@ from uuid import UUID, uuid4
 import pytest
 from typing_extensions import Callable, ClassVar, Dict, Iterator, List
 
-from krrood.entity_query_language.backends import (
-    EntityQueryLanguageGenerativeBackend,
-    ProbabilisticBackend,
-)
+from krrood.entity_query_language.backends import EntityQueryLanguageGenerativeBackend
+from krrood.parametrization.probabilistic_backend import ProbabilisticBackend
 from krrood.entity_query_language.factories import a, variable, variable_from
 from cramph.composites import (
     ChildChooserAccess,

@@ -1,6 +1,6 @@
 import pytest
 
-from krrood.entity_query_language.backends import ProbabilisticBackend
+from krrood.parametrization.probabilistic_backend import ProbabilisticBackend
 from krrood.entity_query_language.exceptions import (
     GenerativeBackendQueryIsNotUnderspecifiedVariable,
 )

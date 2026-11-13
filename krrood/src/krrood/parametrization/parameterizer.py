@@ -412,7 +412,7 @@ class UnderspecifiedParameters(ModelQueryParameters):
         Apply this match's literal-value conditions, then its where-conditions, then
         its krrood-variable-assignment truncations, to ``model``, in that order -- the
         same sequence
-        :class:`~krrood.entity_query_language.backends.ProbabilisticBackend` already
+        :class:`~krrood.parametrization.probabilistic_backend.ProbabilisticBackend` already
         applies to a non-causal match before sampling from it.
 
         :param model: The model to condition and truncate.
@@ -495,7 +495,7 @@ class UnderspecifiedParameters(ModelQueryParameters):
         :class:`~krrood.entity_query_language.operators.causal.Cause` (``cause``) marker:
         register the variable to search over, the same way a free ``...`` field would
         be, and record it as a cause variable for
-        :class:`~krrood.entity_query_language.backends.ProbabilisticBackend`'s
+        :class:`~krrood.parametrization.probabilistic_backend.ProbabilisticBackend`'s
         interventional search.
 
         :param attribute_match: The attribute match with a ``Cause`` assigned value.
@@ -520,7 +520,7 @@ class UnderspecifiedParameters(ModelQueryParameters):
         :class:`~krrood.entity_query_language.operators.causal.Confounder`
         (``confounder``) marker: register the variable to search over, the same way a
         free ``...`` field would be, and record it as an adjustment variable for
-        :class:`~krrood.entity_query_language.backends.ProbabilisticBackend`'s
+        :class:`~krrood.parametrization.probabilistic_backend.ProbabilisticBackend`'s
         interventional search.
 
         :param attribute_match: The attribute match with a ``Confounder`` assigned
@@ -1196,7 +1196,7 @@ class SelectedAttributesParameters(ModelQueryParameters):
     rather than a structural match, since there are no where conditions, literal
     assignments or cause/confounder markers to extract. Used to resolve a bare
     ``average(...)`` selection under
-    :class:`~krrood.entity_query_language.backends.ProbabilisticBackend`.
+    :class:`~krrood.parametrization.probabilistic_backend.ProbabilisticBackend`.
     """
 
     attributes: tuple[Attribute, ...]
@@ -1231,8 +1231,8 @@ class SelectedAttributesParameters(ModelQueryParameters):
 class ConditionParameters(ModelQueryParameters):
     """
     A class that extracts all necessary information from a condition expression given to
-    {py:class}`~krrood.entity_query_language.operators.probabilistic_queries.Probability
-    ` (``probability_of(...)``) and binds it together, reusing the same :class:`~krrood.
+    {py:class}`~krrood.parametrization.probabilistic_queries.Probability `
+    (``probability_of(...)``) and binds it together, reusing the same :class:`~krrood.
 
     parametrization.random_events_translator.WhereExpressionToRandomEventTranslator` a
     ``Match``'s ``where`` conditions are already translated with.
