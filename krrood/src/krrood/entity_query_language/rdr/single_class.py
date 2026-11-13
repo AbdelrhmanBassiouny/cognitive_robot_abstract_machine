@@ -22,6 +22,9 @@ from typing_extensions import Any, List, Optional, TYPE_CHECKING, Type, Self
 if TYPE_CHECKING:
     from krrood.entity_query_language.rdr.progress import ProgressReporter
 
+from krrood.code_generation.module_loading import load_module_from_path
+from krrood.entity_query_language.rules.decomposition import DecomposedRuleTree
+from krrood.ormatic.utils import classproperty
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
 from krrood.entity_query_language.core.variable import Variable
@@ -58,7 +61,10 @@ from krrood.entity_query_language.rdr.rule_tree_view import (
     DEFAULT_TAIL,
     render_rule_tree,
 )
-from krrood.entity_query_language.rdr.serialization import RDRSerializer
+from krrood.entity_query_language.rdr.serialization import (
+    RDRModuleAttribute,
+    RDRSerializer,
+)
 from krrood.entity_query_language.scope import (
     attach_definition_scope,
     capture_caller_scope,
@@ -71,48 +77,79 @@ The description of the fitting RDR situation, used in error messages and documen
 
 
 class RDRConvergenceWarning(UserWarning):
-    """Emitted when the RDR fitting loop detects oscillation and terminates early.
+    """
+    Emitted when the RDR fitting loop detects oscillation and terminates early.
 
-    The pending set of misclassified cases repeated a previously seen signature,
-    meaning the tree is oscillating rather than converging. Inspect the warning
-    message for the clashing case reprs; if :attr:`EQLSingleClassRDR.save_path`
-    is set the partially fitted model is saved there for inspection.
+    The pending set of misclassified cases repeated a previously seen signature, meaning
+    the tree is oscillating rather than converging. Inspect the warning message for the
+    clashing case reprs; if :attr:`EQLSingleClassRDR.save_path` is set the partially
+    fitted model is saved there for inspection.
     """
 
 
 @dataclass
 class EQLSingleClassRDR:
-    """A single-class RDR whose rule tree is a live EQL expression DAG."""
+    """
+    A single-class RDR whose rule tree is a live EQL expression DAG.
+    """
 
     case_type: Type
-    """The type of case the RDR classifies (e.g. ``Animal``)."""
+    """
+    The type of case the RDR classifies (e.g. ``Animal``).
+    """
+
     conclusion_attribute_name: str
-    """The underspecified attribute the RDR predicts (e.g. ``"species"``)."""
+    """
+    The underspecified attribute the RDR predicts (e.g. ``"species"``).
+    """
 
     case_variable: Variable = field(init=False)
-    """The shared EQL variable the whole rule tree ranges over."""
+    """
+    The shared EQL variable the whole rule tree ranges over.
+    """
+
     conclusion_variable: CanBehaveLikeAVariable = field(init=False)
-    """The attribute expression the rules conclude on (``case_variable.<attr>``)."""
+    """
+    The attribute expression the rules conclude on (``case_variable.<attr>``).
+    """
+
     query: Optional[Query] = field(init=False, default=None)
-    """The root rule-tree query; ``None`` until the first rule is added."""
+    """
+    The root rule-tree query; ``None`` until the first rule is added.
+    """
+
     save_path: Optional[str] = field(default=None)
-    """When set, the RDR is automatically saved to this path after every rule insertion."""
+    """
+    When set, the RDR is automatically saved to this path after every rule insertion.
+    """
+
     corner_cases: CornerCaseStore = field(default_factory=CornerCaseStore)
-    """Maps each rule's condition-node id to the corner case that triggered its creation."""
+    """
+    Maps each rule's condition-node id to the corner case that triggered its creation.
+    """
+
     _backward_index: BackwardInferenceIndex = field(
         default_factory=BackwardInferenceIndex, repr=False
     )
-    """Lazy cache for backward-inference queries. Invalidated on every rule insertion."""
+    """
+    Lazy cache for backward-inference queries.
+
+    Invalidated on every rule insertion.
+    """
+
     condition_resolver: Optional[ConditionResolver] = field(default=None)
-    """Optional resolver for automatic condition derivation using backward inference.
+    """
+    Optional resolver for automatic condition derivation using backward inference.
 
     When set, :meth:`fit_case` attempts to derive a differentiating condition automatically
     before asking the expert. Only applies to the refinement branch (wrong rule fired).
     Use :class:`~krrood.entity_query_language.rdr.condition_resolver.ChainConditionResolver`
     ``.backward_inference_default()`` for the standard target-knowledge resolution strategy.
     """
+
     resolution_mode: ResolutionMode = field(default=ResolutionMode.AUTOMATIC)
-    """Controls whether an auto-resolved condition is silently inserted or shown as a hint.
+    """
+    Controls whether an auto-resolved condition is silently inserted or shown as a hint.
 
     :attr:`~krrood.entity_query_language.rdr.condition_resolver.ResolutionMode.AUTOMATIC`
     (default) inserts the condition directly without asking the expert.
@@ -134,17 +171,55 @@ class EQLSingleClassRDR:
     @classmethod
     def from_underspecified(cls, template: Any) -> EQLSingleClassRDR:
         """
-        Build an RDR from an underspecified ``Match`` template: the lone ``...`` attribute
-        defines what the RDR predicts.
+        Build an RDR from an underspecified ``Match`` template: the lone ``...``
+        attribute defines what the RDR predicts.
 
         :param template: e.g. ``an(Animal)(species=...)``.
-        :return: An RDR with ``case_type`` and ``conclusion_attribute_name`` taken from the
-            template's single underspecified slot.
+        :return: An RDR with ``case_type`` and ``conclusion_attribute_name`` taken from
+            the template's single underspecified slot.
         """
         from krrood.entity_query_language.rdr.underspecified import UnderspecifiedMatch
 
         statement = UnderspecifiedMatch(template)
         return cls(statement.case_type, statement.target_attribute_name)
+
+    @classproperty
+    def loaded_module_name_prefix(cls) -> str:
+        """
+        The prefix of the unique name a saved RDR module is imported under.
+        """
+        return "_eql_rdr_loaded_"
+
+    @classmethod
+    def load(cls, *, path: str) -> Self:
+        """
+        Load an RDR from a module written by
+        :meth:`~krrood.entity_query_language.rdr.serialization.RDRSerializer.save` or
+        :meth:`~krrood.entity_query_language.rdr.serialization.RDRSerializer.save_with_case`.
+
+        :param path: The ``.py`` file.
+        :return: The rebuilt RDR.
+        """
+        module = load_module_from_path(path, cls.loaded_module_name_prefix)
+        module_attributes = vars(module)
+
+        conclusion_attribute_name = module_attributes[
+            RDRModuleAttribute.CONCLUSION_ATTRIBUTE
+        ]
+        rdr = cls(
+            module_attributes[RDRModuleAttribute.CASE_TYPE], conclusion_attribute_name
+        )
+        rdr.case_variable = module_attributes[RDRModuleAttribute.CASE_VARIABLE]
+        rdr.conclusion_variable = getattr(rdr.case_variable, conclusion_attribute_name)
+        rdr.query = module_attributes[RDRModuleAttribute.QUERY]
+
+        rule_conditions = DecomposedRuleTree.from_condition(
+            condition=rdr.conditions_root
+        ).rule_conditions()
+        rdr.corner_cases = CornerCaseStore.from_ordered_cases(
+            rule_conditions, module_attributes.get(RDRModuleAttribute.CORNER_CASES, {})
+        )
+        return rdr
 
     def classify(self, case: Any) -> Optional[Any]:
         """:return: The inferred conclusion for ``case``, or ``None`` if no rule fires."""
@@ -154,9 +229,10 @@ class EQLSingleClassRDR:
 
     def _observe(self, case: Any) -> ConclusionObserver:
         """
-        Observe a case and return a conclusion observer for it. An observer is a tool for
-        tracking the progress of classification and can be used to debug or explain the
-        classification process.
+        Observe a case and return a conclusion observer for it.
+
+        An observer is a tool for tracking the progress of classification and can be
+        used to debug or explain the classification process.
 
         :param case: The case to observe.
         :return: A conclusion observer for the case.
@@ -190,7 +266,8 @@ class EQLSingleClassRDR:
         use_color: bool = True,
     ) -> str:
         """
-        Render this RDR's rule tree for ``case`` as coloured text (fired/evaluated/skipped).
+        Render this RDR's rule tree for ``case`` as coloured text
+        (fired/evaluated/skipped).
 
         :param case: The case to classify and explain.
         :param head: Rules to show before the elision marker.
@@ -208,20 +285,21 @@ class EQLSingleClassRDR:
         self, case: Any, target: Any = UNSET, expert: Optional[Expert] = None
     ) -> Any:
         """
-        Ensure the RDR classifies ``case`` as ``target``, growing the rule tree when it does
-        not.
+        Ensure the RDR classifies ``case`` as ``target``, growing the rule tree when it
+        does not.
 
         When ``target`` is ``UNSET`` (no ground truth) the expert supplies **both** the
-        conclusion and its conditions via :meth:`Expert.ask_for_rule`; otherwise only the
-        conditions are requested (the conclusion is the known ``target``).
+        conclusion and its conditions via :meth:`Expert.ask_for_rule`; otherwise only
+        the conditions are requested (the conclusion is the known ``target``).
 
         :param case: The case to classify.
-        :param target: The known correct conclusion, or ``UNSET`` when no ground truth is available.
-        :param expert: The expert that supplies rule conditions (and conclusion, when ``target`` is ``UNSET``).
-        :return: The conclusion now associated with ``case`` (``target`` when given, else the
-            expert's conclusion).
+        :param target: The known correct conclusion, or ``UNSET`` when no ground truth
+            is available.
+        :param expert: The expert that supplies rule conditions (and conclusion, when
+            ``target`` is ``UNSET``).
+        :return: The conclusion now associated with ``case`` (``target`` when given,
+            else the expert's conclusion).
         """
-
         trace = None if self.query is None else self._trace(case)
         current = trace.conclusion if trace is not None else UNSET
 
@@ -235,7 +313,9 @@ class EQLSingleClassRDR:
             trace.firing_anchor_id if trace is not None else None
         )
 
-        from krrood.entity_query_language.exceptions import SelfReferentialInsertionError
+        from krrood.entity_query_language.exceptions import (
+            SelfReferentialInsertionError,
+        )
 
         if target is UNSET:
             target, condition = expert.ask_for_rule(
@@ -289,7 +369,8 @@ class EQLSingleClassRDR:
         corner_case: Optional[Any],
         firing_anchor: Optional[SymbolicExpression] = None,
     ) -> Optional[ResolvedCondition]:
-        """Attempt to derive a differentiating condition without asking the expert.
+        """
+        Attempt to derive a differentiating condition without asking the expert.
 
         Only active for the refinement branch: returns ``None`` immediately when
         :attr:`condition_resolver` is unset, ``corner_case`` is ``None``, or ``current``
@@ -330,7 +411,8 @@ class EQLSingleClassRDR:
         corner_case: Optional[Any],
         expert: Expert,
     ) -> SymbolicExpression:
-        """Apply the auto-resolver outcome according to :attr:`resolution_mode`.
+        """
+        Apply the auto-resolver outcome according to :attr:`resolution_mode`.
 
         In :attr:`~krrood.entity_query_language.rdr.condition_resolver.ResolutionMode.AUTOMATIC`
         mode (default), a resolved condition is inserted directly without prompting.  In
@@ -370,7 +452,9 @@ class EQLSingleClassRDR:
         target: Any,
         case: Any,
     ) -> None:
-        """Splice a new rule into the tree, choosing first-rule / alternative / refinement."""
+        """
+        Splice a new rule into the tree, choosing first-rule / alternative / refinement.
+        """
         if self.query is None:
             # First rule: seed the tree.
             self.query = entity(self.case_variable).where(condition)
@@ -408,20 +492,23 @@ class EQLSingleClassRDR:
         max_passes: int = 10,
     ) -> Self:
         """
-        Fit the RDR over ``cases``. When ``targets`` is given it is paired with ``cases``
-        (ground-truth fitting); when ``None`` the expert labels each case (the no-target
-        ``ask_for_rule`` path), so each case is paired with the ``UNSET`` sentinel rather than
-        a literal ``None`` target.
+        Fit the RDR over ``cases``.
+
+        When ``targets`` is given it is paired with ``cases`` (ground-truth fitting);
+        when ``None`` the expert labels each case (the no-target ``ask_for_rule`` path),
+        so each case is paired with the ``UNSET`` sentinel rather than a literal
+        ``None`` target.
 
         When ground-truth ``targets`` are provided, the fit is *convergent*: after each
         pass the model is rechecked and any cases that are now misclassified (because a
-        later rule retroactively intercepted them) are re-fitted.  Convergence stops when
-        every case is correct, ``max_passes`` is exhausted, or oscillation is detected —
-        whichever comes first.  Oscillation is signalled with a :class:`RDRConvergenceWarning`.
+        later rule retroactively intercepted them) are re-fitted.  Convergence stops
+        when every case is correct, ``max_passes`` is exhausted, or oscillation is
+        detected — whichever comes first.  Oscillation is signalled with a
+        :class:`RDRConvergenceWarning`.
 
-        Correctly-classified cases on re-passes are idempotent (the expert is never called
-        for them), so the overhead is one :meth:`classify` call per case per pass —
-        negligible compared to expert interaction.
+        Correctly-classified cases on re-passes are idempotent (the expert is never
+        called for them), so the overhead is one :meth:`classify` call per case per pass
+        — negligible compared to expert interaction.
 
         When ``targets`` is ``None`` the no-target path has no ground truth to converge
         against, so each case is fitted exactly once with no cycle detection.
@@ -436,7 +523,11 @@ class EQLSingleClassRDR:
         paired_targets = targets if targets is not None else [UNSET] * len(cases)
         pending = list(range(len(cases)))
 
-        if expert is not None and self.save_path is not None and expert.interface.on_save is None:
+        if (
+            expert is not None
+            and self.save_path is not None
+            and expert.interface.on_save is None
+        ):
             expert.interface.on_save = lambda: RDRSerializer(rdr=self).save_with_case(
                 path=self.save_path
             )
@@ -472,7 +563,9 @@ class EQLSingleClassRDR:
         progress: Optional[ProgressReporter],
         max_passes: int,
     ) -> None:
-        """Run the convergent fitting loop until all cases are correct or a cycle is detected.
+        """
+        Run the convergent fitting loop until all cases are correct or a cycle is
+        detected.
 
         After each pass, recomputes the misclassified-case set and checks whether its
         index signature (a ``frozenset``) has appeared in any previous pass.  A repeated
@@ -530,16 +623,21 @@ class EQLSingleClassRDR:
 
     @property
     def conditions_root(self) -> Optional[SymbolicExpression]:
-        """The root of the rule tree's condition DAG, or ``None`` if empty."""
+        """
+        The root of the rule tree's condition DAG, or ``None`` if empty.
+        """
         return self.query._conditions_root_ if self.query is not None else None
 
     @cached_property
     def conclusion_domain(self) -> ConclusionDomain:
-        """The allowable-value domain of the predicted attribute, resolved from its type."""
+        """
+        The allowable-value domain of the predicted attribute, resolved from its type.
+        """
         return resolve_conclusion_domain(self.case_type, self.conclusion_attribute_name)
 
     def what_do_we_know_about(self, conclusion_value: Any) -> ConclusionKnowledge:
-        """Return the rule-tree conditions that would produce *conclusion_value*.
+        """
+        Return the rule-tree conditions that would produce *conclusion_value*.
 
         This inspects the rule tree from the perspective of *conclusion_value*,
         walking the conclusion-selector DAG backwards to enumerate every rule path

@@ -1,14 +1,14 @@
 """
 Phase 7 tests: the RDR backend for underspecified (``...``) EQL queries.
 
-An underspecified query marks the attribute to infer with ``...``, optionally filters with
-concrete kwargs, and supplies a domain of existing instances. The backend infers the
-``...`` attribute on each matching instance — lazily, yielding ``UnificationDict``s by
-default (or filling instances in place) — mirroring ordinary EQL evaluation.
+An underspecified query marks the attribute to infer with ``...``, optionally filters
+with concrete kwargs, and supplies a domain of existing instances. The backend infers
+the ``...`` attribute on each matching instance — lazily, yielding ``UnificationDict``s
+by default (or filling instances in place) — mirroring ordinary EQL evaluation.
 
-Exercises this through the full engine (:class:`RDRBackend`, :class:`EQLSingleClassRDR`);
-see ``test_underspecified_match.py`` for the self-contained unit tests of the underlying
-``UnderspecifiedMatch`` adapter.
+Exercises this through the full engine (:class:`RDRBackend`,
+:class:`EQLSingleClassRDR`); see ``test_underspecified_match.py`` for the self-contained
+unit tests of the underlying ``UnderspecifiedMatch`` adapter.
 """
 
 import dataclasses
@@ -56,7 +56,9 @@ def first(sp: Species) -> Animal:
 
 @dataclasses.dataclass
 class Bag:
-    """A type whose inferred attribute would be an unbounded iterable (single-class can't)."""
+    """
+    A type whose inferred attribute would be an unbounded iterable (single-class can't).
+    """
 
     items: List[str]
     label: Optional[str] = None
@@ -77,7 +79,9 @@ def maximally_specific_expert() -> Expert:
 
 
 def labelling_expert() -> Expert:
-    """Also supplies the conclusion (from ground truth) when no target is given."""
+    """
+    Also supplies the conclusion (from ground truth) when no target is given.
+    """
 
     def answer(context, requests):
         result = {"conditions": _full_feature_conditions(context)}
@@ -89,7 +93,9 @@ def labelling_expert() -> Expert:
 
 
 def setUpModule():
-    """Fit the full-zoo species model once for the whole module."""
+    """
+    Fit the full-zoo species model once for the whole module.
+    """
     global _ZOO_MODEL_CACHE
     if not animals:
         return
@@ -110,9 +116,7 @@ class TestUnderspecifiedMatchAdapter(unittest.TestCase):
 
     def test_concrete_kwargs_filter_ellipsis_stripped(self):
         # milk=True filters the domain; species=... must NOT filter (it is the target).
-        stmt = UnderspecifiedMatch(
-            an(Animal)(milk=True, species=...).from_(animals)
-        )
+        stmt = UnderspecifiedMatch(an(Animal)(milk=True, species=...).from_(animals))
         cases = list(stmt.filtered_cases())
         self.assertEqual(len(cases), sum(1 for a in animals if a.milk))
         self.assertTrue(all(c.milk for c in cases))
@@ -127,9 +131,7 @@ class TestUnderspecifiedMatchAdapter(unittest.TestCase):
             stmt.single_target()
 
     def test_multiple_inference_targets_raises(self):
-        stmt = UnderspecifiedMatch(
-            an(Animal)(species=..., legs=...).from_(animals)
-        )
+        stmt = UnderspecifiedMatch(an(Animal)(species=..., legs=...).from_(animals))
         with self.assertRaises(MultipleInferenceTargets):
             stmt.single_target()
 
@@ -215,7 +217,10 @@ class TestRDRBackendFitModes(unittest.TestCase):
         # Every milk-bearing animal is a mammal: a single ground-truth value for the subset.
         out = an(Animal)(milk=True, species=...).from_(_SMALL_MILK_ANIMALS)
         self.assertTrue(
-            all(r[out.variable.species] == Species.mammal for r in self._mammal_backend.infer(out))
+            all(
+                r[out.variable.species] == Species.mammal
+                for r in self._mammal_backend.infer(out)
+            )
         )
 
     def test_auto_fit_mode_without_ground_truth_uses_ask_for_rule(self):
@@ -250,7 +255,7 @@ class TestUnderspecifiedEndToEnd(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "zoo_rdr.py")
             RDRSerializer(rdr=model).save(path=path)
-            loaded = RDRSerializer.load(path=path)
+            loaded = EQLSingleClassRDR.load(path=path)
 
         original_backend = RDRBackend()
         original_backend.models[(Animal, "species")] = model
