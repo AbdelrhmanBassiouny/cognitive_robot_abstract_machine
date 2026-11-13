@@ -18,10 +18,10 @@ from krrood.entity_query_language.rdr.serialization import (
     RDRModuleAttribute,
     RDRSerializer,
 )
+from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.rdr.function_case import FunctionCase
-    from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
 MODELS_DIRECTORY_NAME: str = "_rdr_models"
 """
@@ -85,6 +85,6 @@ class RDRFileStore(ModelSaver):
         if not self.exists():
             raise ModelFileMissing(self.function, self.path)
         module = load_module_from_path(
-            self.path, RDRSerializer.loaded_module_name_prefix
+            self.path, EQLSingleClassRDR.loaded_module_name_prefix
         )
         return getattr(module, RDRModuleAttribute.CASE_TYPE)
