@@ -1,13 +1,7 @@
 """
-Self-contained tests for the rule-tree unparser
-(:mod:`krrood.entity_query_language.rdr.serialization`).
-
-Builds rule trees directly from core EQL primitives and feeds ``rdr_to_python()`` a
-minimal stand-in for the parts of :class:`EQLSingleClassRDR` it actually reads, so this
-test module -- and the DAG-unparsing slice it covers -- stays testable independently of
-the rest of the RDR engine. ``save_rdr``/``save_rdr_with_case``/``load_rdr`` operate on
-a real :class:`EQLSingleClassRDR` and are covered by the later, dedicated serialization
-test suite once the engine slice lands.
+Tests for :meth:`krrood.entity_query_language.rdr.serialization.RDRSerializer.to_source`,
+on rule trees built from core EQL primitives and a stand-in for the parts of
+:class:`EQLSingleClassRDR` it reads.
 """
 
 from __future__ import annotations
@@ -20,32 +14,20 @@ from enum import Enum
 import pytest
 from typing_extensions import Any, Optional
 
-from krrood.entity_query_language.factories import (
-    add,
-    alternative,
-    entity,
-    refinement,
-    variable,
-)
+from krrood.entity_query_language.factories import add, alternative, entity, refinement, variable
 from krrood.entity_query_language.rdr.backward_inference import (
     get_conclusion_sufficient_conditions_from_a_rule_tree,
 )
 from krrood.entity_query_language.rdr.corner_case import CornerCaseStore
 from krrood.entity_query_language.rdr.exceptions import EmptyRuleTreeError
 from krrood.entity_query_language.rdr.serialization import (
-    _RDR_MODULE_TEMPLATE_NAME,
-    _TEMPLATES_DIRECTORY,
-    RDR_CASE_TYPE_NAME,
-    RDR_CASE_VARIABLE_NAME,
-    RDR_CONCLUSION_ATTRIBUTE_NAME,
-    RDR_CORNER_CASES_NAME,
-    RDR_QUERY_NAME,
     FileModelSaver,
     NullModelSaver,
+    RDRModuleAttribute,
+    RDRSerializer,
     TemporaryModelSaver,
-    rdr_to_python,
-    walk_rules_in_emission_order,
 )
+from krrood.entity_query_language.rules.decomposition import DecomposedRuleTree
 
 
 class Species(Enum):
@@ -55,9 +37,7 @@ class Species(Enum):
 
 @dataclass(unsafe_hash=True)
 class Animal:
-    """
-    Minimal RDR classification target used only by this test module.
-    """
+    """Minimal RDR classification target used only by this test module."""
 
     name: str
     has_fur: bool = False
@@ -67,10 +47,7 @@ class Animal:
 
 @dataclass
 class _SerializableRuleTree:
-    """
-    Minimal stand-in for the :class:`EQLSingleClassRDR` attributes ``rdr_to_python``
-    reads.
-    """
+    """Minimal stand-in for the :class:`EQLSingleClassRDR` attributes :class:`RDRSerializer` reads."""
 
     query: Any
     case_type: type
@@ -102,32 +79,32 @@ def _alternative_chain_rdr():
 
 
 def _exec_generated_module(source: str) -> dict:
-    """
-    Execute generated source in a fresh namespace, as the real module loader would.
-    """
+    """Execute generated source in a fresh namespace, as the real module loader would."""
     namespace: dict = {}
     exec(compile(source, "<generated>", "exec"), namespace)
     return namespace
 
 
-# %% rdr_to_python: structure of the generated source
+# %% RDRSerializer.to_source: structure of the generated source
 
 
 def test_generated_source_rebuilds_an_equivalent_rule_tree():
-    source = rdr_to_python(_flat_tree_rdr())
+    """The generated module defines the attributes loading reads, with the RDR's values."""
+    source = RDRSerializer(rdr=_flat_tree_rdr()).to_source()
 
     namespace = _exec_generated_module(source)
 
-    assert namespace[RDR_CASE_TYPE_NAME] is Animal
-    assert namespace[RDR_CONCLUSION_ATTRIBUTE_NAME] == "species"
-    assert namespace[RDR_CORNER_CASES_NAME] == {}
+    assert namespace[RDRModuleAttribute.CASE_TYPE] is Animal
+    assert namespace[RDRModuleAttribute.CONCLUSION_ATTRIBUTE] == "species"
+    assert namespace[RDRModuleAttribute.CORNER_CASES] == {}
 
 
 def test_generated_tree_has_the_same_backward_inference_knowledge_as_the_original():
+    """Backward inference finds as many sufficient conditions in the rebuilt tree as in the original."""
     original = _flat_tree_rdr()
-    source = rdr_to_python(original)
+    source = RDRSerializer(rdr=original).to_source()
     namespace = _exec_generated_module(source)
-    rebuilt_root = namespace[RDR_QUERY_NAME]._conditions_root_
+    rebuilt_root = namespace[RDRModuleAttribute.QUERY]._conditions_root_
 
     original_root = original.query._conditions_root_
     for value in (Species.MAMMAL, Species.BIRD):
@@ -144,11 +121,12 @@ def test_generated_tree_has_the_same_backward_inference_knowledge_as_the_origina
 
 
 def test_generated_tree_evaluates_a_bird_case_the_same_as_the_original():
+    """A case the refinement concludes for satisfies the rebuilt tree's condition for that conclusion."""
     original = _flat_tree_rdr()
-    source = rdr_to_python(original)
+    source = RDRSerializer(rdr=original).to_source()
     namespace = _exec_generated_module(source)
-    rebuilt_variable = namespace[RDR_CASE_VARIABLE_NAME]
-    rebuilt_root = namespace[RDR_QUERY_NAME]._conditions_root_
+    rebuilt_variable = namespace[RDRModuleAttribute.CASE_VARIABLE]
+    rebuilt_root = namespace[RDRModuleAttribute.QUERY]._conditions_root_
 
     bat = Animal("bat", has_fur=True, can_fly=True)
     knowledge = get_conclusion_sufficient_conditions_from_a_rule_tree(
@@ -160,19 +138,19 @@ def test_generated_tree_evaluates_a_bird_case_the_same_as_the_original():
 
 
 def test_raises_when_the_rdr_has_no_rules():
-    empty_rdr = _SerializableRuleTree(
-        None, Animal, variable(Animal, domain=[]), "species"
-    )
+    """An RDR without rules has nothing to write."""
+    empty_rdr = _SerializableRuleTree(None, Animal, variable(Animal, domain=[]), "species")
 
     with pytest.raises(EmptyRuleTreeError):
-        rdr_to_python(empty_rdr)
+        RDRSerializer(rdr=empty_rdr).to_source()
 
 
 def test_generated_source_rebuilds_an_equivalent_alternative_chain():
+    """An alternative chain rebuilds with the same backward-inference knowledge."""
     original = _alternative_chain_rdr()
-    source = rdr_to_python(original)
+    source = RDRSerializer(rdr=original).to_source()
     namespace = _exec_generated_module(source)
-    rebuilt_root = namespace[RDR_QUERY_NAME]._conditions_root_
+    rebuilt_root = namespace[RDRModuleAttribute.QUERY]._conditions_root_
 
     original_root = original.query._conditions_root_
     for value in (Species.MAMMAL, Species.BIRD):
@@ -194,47 +172,53 @@ def _template_docstring() -> str:
     Everything from the first placeholder on is dropped, since a Jinja template is not
     parseable Python."""
     template_source = (
-        Path(_TEMPLATES_DIRECTORY) / _RDR_MODULE_TEMPLATE_NAME
+        RDRSerializer.templates_directory / RDRSerializer.module_template_name
     ).read_text()
     return ast.get_docstring(ast.parse(template_source[: template_source.index("{{")]))
 
 
-# %% rdr_to_python: the generated module states how it may be edited
+# %% RDRSerializer.to_source: the generated module states how it may be edited
 
 
 def test_generated_source_opens_with_the_template_docstring():
     """The header telling a reader how a generated module may be edited reaches the
     output, rather than only living in the template."""
-    source = rdr_to_python(_flat_tree_rdr())
+    source = RDRSerializer(rdr=_flat_tree_rdr()).to_source()
 
     assert ast.get_docstring(ast.parse(source)) == _template_docstring()
 
 
-# %% rdr_to_python: corner cases are embedded in the generated source
+# %% RDRSerializer.to_source: corner cases are embedded in the generated source
 
 
 def test_recorded_corner_case_is_embedded_in_the_generated_source():
+    """A recorded corner case is part of the generated module."""
     rdr = _flat_tree_rdr()
-    rule_node = walk_rules_in_emission_order(rdr.query._conditions_root_)[0]
+    rule_node = DecomposedRuleTree.from_condition(
+        condition=rdr.query._conditions_root_
+    ).rule_conditions()[0]
     corner_case = Animal("cat", has_fur=True, can_fly=False)
     rdr.corner_cases.record_corner_case(rule_node, corner_case)
 
-    source = rdr_to_python(rdr)
+    source = RDRSerializer(rdr=rdr).to_source()
     namespace = _exec_generated_module(source)
 
-    assert corner_case in namespace[RDR_CORNER_CASES_NAME].values()
+    assert corner_case in namespace[RDRModuleAttribute.CORNER_CASES].values()
 
 
 def test_recorded_corner_case_with_an_enum_field_round_trips_through_the_generated_source():
+    """A corner case with an enum field evaluates back to an equal case."""
     rdr = _flat_tree_rdr()
-    rule_node = walk_rules_in_emission_order(rdr.query._conditions_root_)[0]
+    rule_node = DecomposedRuleTree.from_condition(
+        condition=rdr.query._conditions_root_
+    ).rule_conditions()[0]
     corner_case = Animal("cat", has_fur=True, can_fly=False, habitat=Species.MAMMAL)
     rdr.corner_cases.record_corner_case(rule_node, corner_case)
 
-    source = rdr_to_python(rdr)
+    source = RDRSerializer(rdr=rdr).to_source()
     namespace = _exec_generated_module(source)
 
-    assert corner_case in namespace[RDR_CORNER_CASES_NAME].values()
+    assert corner_case in namespace[RDRModuleAttribute.CORNER_CASES].values()
 
 
 # %% ModelSaver strategies
@@ -247,35 +231,39 @@ def test_null_saver_writes_nothing_for_a_fitted_tree(tmp_path):
 
 
 def test_file_saver_writes_the_generated_source_to_its_path(tmp_path):
+    """The file saver writes exactly the generated module to its path."""
     rdr = _flat_tree_rdr()
     destination = tmp_path / "zoo_rules.py"
 
     FileModelSaver(str(destination)).save(rdr)
 
-    assert destination.read_text() == rdr_to_python(rdr)
+    assert destination.read_text() == RDRSerializer(rdr=rdr).to_source()
 
 
 def test_file_saver_rewrites_the_file_on_every_save(tmp_path):
+    """A save replaces whatever the file held before."""
     rdr = _flat_tree_rdr()
     destination = tmp_path / "zoo_rules.py"
     destination.write_text("stale contents")
 
     FileModelSaver(str(destination)).save(rdr)
 
-    assert destination.read_text() == rdr_to_python(rdr)
+    assert destination.read_text() == RDRSerializer(rdr=rdr).to_source()
 
 
 def test_temporary_saver_writes_the_generated_source_to_a_file_it_names():
+    """The temporary saver writes the generated module to the path it reports."""
     rdr = _flat_tree_rdr()
     saver = TemporaryModelSaver()
 
     saver.save(rdr)
 
-    assert Path(saver.path).read_text() == rdr_to_python(rdr)
+    assert Path(saver.path).read_text() == RDRSerializer(rdr=rdr).to_source()
     Path(saver.path).unlink()
 
 
 def test_temporary_saver_reuses_the_same_file_on_every_save():
+    """A second save goes to the file the first one chose."""
     rdr = _flat_tree_rdr()
     saver = TemporaryModelSaver()
     saver.save(rdr)
@@ -284,7 +272,7 @@ def test_temporary_saver_reuses_the_same_file_on_every_save():
     saver.save(rdr)
 
     assert saver.path == first_path
-    assert Path(saver.path).read_text() == rdr_to_python(rdr)
+    assert Path(saver.path).read_text() == RDRSerializer(rdr=rdr).to_source()
     Path(saver.path).unlink()
 
 
