@@ -1,9 +1,9 @@
 Plan:
-- Run krrood tests per directory, then the other packages that import classproperty
-- Add api-break and maintenance labels; update plan item notes
+- Wait for review; mark ready only when told
 Done:
-- All five core crossings removed (classproperty, ontomatic introspector, helpers, causal_relation, module_generation), with a boundary test; commit f9f6b1719
-- Decided: dev tools stay out of core; remove all crossings; helpers becomes entity_query_language.class_diagram_lookup
-- ORM regeneration fails on main too (coraplex DetectAction), so it isn't from this PR
+- All five core crossings removed, with a boundary test (f9f6b1719)
+- krrood tests pass per directory, except 2 RDR diagram tests that need Graphviz `dot` (fail on main too)
+- cramph and sdt tests touched by the import change: same 219 environment failures as main, none new
+- Labels api-break and maintenance; plan item notes updated
 Next:
-- Read the krrood test results and fix any failure the moves caused
+- Address review; open question: the name class_diagram_lookup for the old symbol_graph.helpers
