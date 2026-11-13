@@ -35,16 +35,6 @@ def ast_attribute_access(value: ast.expr, attribute_name: str) -> ast.Attribute:
     return ast.Attribute(value=value, attr=attribute_name, ctx=ast.Load())
 
 
-def ast_constant(value: Any) -> ast.Constant:
-    """
-    Build a literal constant node.
-
-    :param value: The literal value to embed.
-    :return: An :class:`ast.Constant` wrapping *value*.
-    """
-    return ast.Constant(value=value)
-
-
 def ast_enum_member(member: enum.Enum) -> ast.Attribute:
     """
     Build the attribute access that reconstructs an enum member (``EnumType.MEMBER``).
