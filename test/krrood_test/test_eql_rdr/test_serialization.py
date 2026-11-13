@@ -14,12 +14,20 @@ from enum import Enum
 import pytest
 from typing_extensions import Any, Optional
 
-from krrood.entity_query_language.factories import add, alternative, entity, refinement, variable
+from krrood.code_generation.function_case import FunctionCaseGenerator
+from krrood.entity_query_language.factories import (
+    add,
+    alternative,
+    entity,
+    refinement,
+    variable,
+)
 from krrood.entity_query_language.rdr.backward_inference import (
     get_conclusion_sufficient_conditions_from_a_rule_tree,
 )
 from krrood.entity_query_language.rdr.corner_case import CornerCaseStore
 from krrood.entity_query_language.rdr.exceptions import EmptyRuleTreeError
+from krrood.entity_query_language.rdr.function_case import FunctionCase
 from krrood.entity_query_language.rdr.serialization import (
     FileModelSaver,
     NullModelSaver,
@@ -139,7 +147,9 @@ def test_generated_tree_evaluates_a_bird_case_the_same_as_the_original():
 
 def test_raises_when_the_rdr_has_no_rules():
     """An RDR without rules has nothing to write."""
-    empty_rdr = _SerializableRuleTree(None, Animal, variable(Animal, domain=[]), "species")
+    empty_rdr = _SerializableRuleTree(
+        None, Animal, variable(Animal, domain=[]), "species"
+    )
 
     with pytest.raises(EmptyRuleTreeError):
         RDRSerializer(rdr=empty_rdr).to_source()
@@ -287,3 +297,66 @@ def test_temporary_saver_names_the_file_after_the_case_type():
 
 def test_temporary_saver_has_no_path_before_it_saves():
     assert TemporaryModelSaver().path is None
+
+
+# %% RDRSerializer.save_with_case
+
+
+def bird_risk(name: str) -> float:
+    """A function whose calls a function-case RDR classifies."""
+    return 0.0
+
+
+@dataclass(kw_only=True)
+class BirdRiskCase(FunctionCase):
+    """The case type of an RDR over calls of :func:`bird_risk`."""
+
+    name: str
+    """The ``name`` argument of the call."""
+
+    _output: Optional[float] = None
+    """The value the call returns."""
+
+
+BirdRiskCase.function = bird_risk
+
+
+def _function_case_rdr():
+    """An RDR over :class:`BirdRiskCase` with one rule."""
+    case = variable(BirdRiskCase, domain=[])
+    query = entity(case).where(case.name == "sparrow")
+    with query:
+        add(case._output, 1.0)
+    query.build()
+    return _SerializableRuleTree(query, BirdRiskCase, case, "_output")
+
+
+def test_save_with_case_writes_the_case_class_before_the_rules(tmp_path):
+    """A function-case RDR's file defines its case class, then the rule tree
+    that uses the class without importing it."""
+    rdr = _function_case_rdr()
+    path = tmp_path / "bird_risk_rdr.py"
+
+    source = RDRSerializer(rdr=rdr).save_with_case(path=str(path))
+
+    serializer = RDRSerializer(rdr=rdr)
+    assert source == (
+        FunctionCaseGenerator().generate(
+            function=bird_risk, class_name=BirdRiskCase.__name__
+        )
+        + RDRSerializer.case_class_and_rules_separator
+        + serializer.to_source(case_type_is_local=True)
+    )
+    assert path.read_text() == source
+
+
+def test_save_with_case_writes_the_plain_module_for_another_case_type(tmp_path):
+    """An RDR whose case type is no function case is saved as by
+    :meth:`RDRSerializer.save`."""
+    rdr = _flat_tree_rdr()
+    path = tmp_path / "animal_rdr.py"
+
+    source = RDRSerializer(rdr=rdr).save_with_case(path=str(path))
+
+    assert source == RDRSerializer(rdr=rdr).to_source()
+    assert path.read_text() == source
