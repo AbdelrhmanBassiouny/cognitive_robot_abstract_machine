@@ -23,6 +23,7 @@ from krrood.entity_query_language.rdr.expert import Expert
 from krrood.entity_query_language.factories import an
 from krrood.entity_query_language.rdr.interface import FunctionInterface
 from krrood.entity_query_language.rdr.rule_tree_view import walk_rules
+from krrood.entity_query_language.rdr.serialization import RDRSerializer
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 from krrood.entity_query_language.rules.conclusion_selector import (
     Alternative,
@@ -486,3 +487,26 @@ class TestAutomaticConditionResolution:
 
         assert len(expert.interface.calls) > calls_before
         assert rdr.classify(unknown) == Species.bird
+
+
+# %% loading a saved model
+
+
+@pytest.mark.skipif(len(zoo) == 0, reason="Failed to load zoo dataset")
+def test_loaded_rdr_classifies_every_case_as_the_saved_one(tmp_path):
+    """
+    An RDR loaded from the module it was saved to concludes what the saved RDR concludes
+    for every case.
+    """
+    subset, subset_targets = zoo.animals[:12], zoo.targets[:12]
+    rdr = EQLSingleClassRDR(Animal, "species")
+    rdr.fit(subset, subset_targets, maximally_specific_expert())
+    path = tmp_path / "animal_rdr.py"
+    RDRSerializer(rdr=rdr).save(path=str(path))
+
+    loaded = EQLSingleClassRDR.load(path=str(path))
+
+    assert loaded.case_type is Animal
+    assert {animal.name: loaded.classify(animal) for animal in subset} == {
+        animal.name: rdr.classify(animal) for animal in subset
+    }
