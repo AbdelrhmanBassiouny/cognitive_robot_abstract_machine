@@ -1,12 +1,12 @@
 ## Plan
-- Fresh-interpreter test: every EQL module imports with random_events/probabilistic_model blocked
-- Move causal result dataclasses, ProbabilisticBackend, probabilistic_queries (+ distribution_of/probability_of, their verbalization rules) to krrood.parametrization
-- Verbalization rules collected lazily from every loaded PhraseRule subclass (user-chosen)
-- Update imports in tests, docs, other packages; run EQL/parametrization tests
+- EQL imports no random_events/probabilistic_model; probabilistic parts live in krrood.parametrization
 
 ## Done
-- PR #609 opened on #545's branch; item recorded in progress
-- number_like_field is a plain int/float-not-bool/Enum check, with tests
+- number_like_field plain check; fresh-interpreter import-boundary test
+- ProbabilisticBackend, causal search results, probabilistic queries + factories + rules moved; importers rewritten
+- Lazy grammar (PhraseRuleRegistry.loaded_rules), only rule classes their module binds
+- krrood check clean vs base; test_eql 1561 passed; PR #609 description/labels current
 
 ## Next
-- Write the import-boundary test, then the moves
+- Await review; rebase when #545 or #608 (classproperty move touches backends imports) lands
+- semantic_digital_twin/coraplex/experiments suites only verifiable in CI
