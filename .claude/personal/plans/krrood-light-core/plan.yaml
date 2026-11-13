@@ -79,10 +79,12 @@ items:
   session: https://claude.ai/code/session_01JxHGiNCuZYy4zJDsmbyfwZ
   depends_on:
   - type-hint-resolver-skips-missing-modules
-  notes: 'Split operators/causal.py: Cause/Confounder/CausesEffect stay core, the random_events
-    dataclasses move out; probabilistic_queries.py and backends.py move to krrood-probabilistic.
-    number_like_field (user-approved cleanest): plain check, int/float subclass and not bool/Enum,
-    matching random_events today. aggregators interval stays method-local.'
+  notes: 'Draft PR open; every EQL module imports with random_events/probabilistic_model
+    blocked (fresh-interpreter test). ProbabilisticBackend, the causal search results,
+    probabilistic_queries with distribution_of/probability_of and their verbalization rules
+    moved to krrood.parametrization; the EQL backends stay in backends.py. Verbalization
+    rules are collected lazily (PhraseRuleRegistry.loaded_rules, user decision).
+    number_like_field is a plain int/float-not-bool/Enum check.'
 - id: verbalization-realization-split
   title: Verbalization vocabulary stays in krrood-eql, realization moves out of it
   branch: null
