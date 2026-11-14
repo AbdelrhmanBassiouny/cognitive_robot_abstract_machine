@@ -37,6 +37,7 @@ items:
   repository: cram2/crollywood
   track: video-package
   status: not_started
+  recommended_model: sonnet
   depends_on:
   - domain-models/krrimage
   notes: '#472 (cram2#742) will not be merged: crollywood becomes its own repository, cram2/crollywood,
@@ -49,6 +50,7 @@ items:
   pull_request_number: 429
   track: icra-video
   status: not_started
+  recommended_model: sonnet
   depends_on:
   - krrollywood-on-krrimage
   notes: '#429 imports krrollywood and must follow its API changes listed on #471 (latest:
@@ -63,6 +65,7 @@ items:
   branch: claude/general-figure-scenes
   track: figure-scenes
   status: not_started
+  recommended_model: sonnet
   depends_on:
   - icra-video-on-core
   notes: stages.py and figure.py behind a figure abstraction, so other experiments grow close-ups
@@ -72,6 +75,7 @@ items:
   branch: claude/video-manim-scenes
   track: explainer-animation
   status: not_started
+  recommended_model: sonnet
   depends_on:
   - krrollywood-on-krrimage
   notes: 'An AnimatedScene in crollywood.animation (its own optional extra, since Manim needs

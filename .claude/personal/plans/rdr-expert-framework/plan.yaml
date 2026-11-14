@@ -26,6 +26,7 @@ items:
   depends_on:
   - rdr-core-engine/d-core-single-class
   status: not started
+  recommended_model: opus
   notes: 'Abstract Expert declares full question vocabulary; each impl carries an evaluable
     EQL capability guard. Lit: blackboard activation conditions, Contract-Net, Chain-of-Responsibility.'
 - id: expert-ensembles
@@ -36,6 +37,7 @@ items:
   depends_on:
   - expert-capability-guards
   status: blocked
+  recommended_model: opus
   blockers:
   - Blocked on expert-capability-guards.
   notes: 'Multiple experts assisting each other. Lit: mixed-initiative / critiquing systems.'
@@ -48,4 +50,5 @@ items:
   - expert-capability-guards
   - rdr-explanation/rdr-why-answer
   status: not started
+  recommended_model: sonnet
   notes: The guard is EQL, so it is inspectable and verbalizable. Ties to the Why track.

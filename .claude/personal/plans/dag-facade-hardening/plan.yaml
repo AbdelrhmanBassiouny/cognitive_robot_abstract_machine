@@ -41,6 +41,7 @@ items:
   track: bugs-and-audit
   depends_on: []
   status: not_started
+  recommended_model: opus
   notes: 'bug-labeled PR. Phase C: stop caching a per-query value on a shared Exists/ForAll
     node (_ids_of_variables_to_add_to_sources_, a @cached_property over _root_query_ at logical_quantifiers.py:147);
     resolve the owning query from context (reuse #92''s OutermostQueryClaim) and key any cache
@@ -55,6 +56,7 @@ items:
   track: bugs-and-audit
   depends_on: []
   status: not_started
+  recommended_model: sonnet
   notes: 'Surfaced 2026-08-03 by rdr-refactor''s #41 review thread r3702021144, which asked
     whether GuardCondition.negated could be replaced by wrapping the guard expression in Not().
     It cannot, today, and the reason is this plan''s defect class: factories.not_ -> SymbolicExpression._invert_
@@ -69,6 +71,7 @@ items:
   depends_on:
   - quantified-conditional-and-audit
   status: not_started
+  recommended_model: haiku
   notes: 'Sequenced last to rebase cleanly (largest diff; collides with the leak-fix stack).
     Phase A: rename _parent__/_parent_ -> _structural_parent_ and _root_ -> _structural_root_
     (keep _parents_ authoritative); update the construction/layout call sites. Phase B: consolidate
@@ -82,6 +85,7 @@ items:
   track: facade-rename
   depends_on: []
   status: in_progress
+  recommended_model: opus
   session: https://claude.ai/code/session_01PoUhMvymUQjsGL1JFpBsez
   notes: 'Not a bug PR - no bug label. Raised 2026-08-04 by the developer looking at #118:
     _symbolic_expression_stack_ is still a ClassVar mutable list on SymbolicExpression. Verified

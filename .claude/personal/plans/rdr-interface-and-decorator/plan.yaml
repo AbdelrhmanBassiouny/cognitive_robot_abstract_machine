@@ -29,6 +29,7 @@ items:
   depends_on:
   - rdr-core-engine/d-core-backend
   status: in_progress
+  recommended_model: sonnet
   session: https://claude.ai/code/session_01W5rkhDr2xdFuFVExi6bXb4
   notes: 'Rebuilt onto `D-core-backend` (#210) on 2026-08-30, which is what unblocked it:
     its old base `D-ui-splice-fix` (#78, closed unmerged) led nowhere, and the re-target its
@@ -45,6 +46,7 @@ items:
   depends_on:
   - D-ui-rendering
   status: in_progress
+  recommended_model: sonnet
   session: https://claude.ai/code/session_01W5rkhDr2xdFuFVExi6bXb4
   notes: '2026-08-23: outstanding work added from the #159 review - **default the progress
     reporter to IPythonProgressBar here**. The engine keeps NullProgressReporter, which is
@@ -63,6 +65,7 @@ items:
   depends_on:
   - D-ui
   status: in_progress
+  recommended_model: sonnet
   notes: 'Path resolution + model-file lifecycle; standalone, no decorator dependency. 2026-08-30
     (later): a `/plan-item-resolve` session read the branch''s live state and found the restack
     the roadmap''s Open section predicted, never recorded on the item: the head is from 2026-07-19,
@@ -77,6 +80,7 @@ items:
   depends_on:
   - D-store
   status: in_progress
+  recommended_model: sonnet
   session: https://claude.ai/code/session_01Wf62T3vDfRPgxbi4ew7KAm
   notes: 'rdr() factory + RDRWrapper, stacked on D-store. 2026-08-31 (resolve): the restack
     the roadmap''s Open section had predicted since the rebuilds. The head was from 2026-07-19

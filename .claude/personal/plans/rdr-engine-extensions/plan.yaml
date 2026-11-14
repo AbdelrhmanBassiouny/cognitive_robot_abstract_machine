@@ -64,6 +64,7 @@ items:
   depends_on:
   - rdr-core-engine/d-core-backend
   status: not started
+  recommended_model: opus
   notes: Registry + CaseView memoization + EQL name resolution.
 - id: rdr-feature-capture
   title: KA-time feature capture
@@ -73,6 +74,7 @@ items:
   depends_on:
   - rdr-feature-registry
   status: not_started
+  recommended_model: sonnet
   notes: '%feature magic, AST-hash dedup, registry autocomplete.'
 - id: rdr-multi-class
   title: 'MCRDR port: multi-valued attributes'
@@ -82,6 +84,7 @@ items:
   depends_on:
   - rdr-core-engine/d-core-backend
   status: not started
+  recommended_model: sonnet
   notes: Lifts the single-valued guard in underspecified.py.
 - id: rdr-general-fixpoint
   title: GRDR naive fixpoint engine
@@ -91,6 +94,7 @@ items:
   depends_on:
   - rdr-multi-class
   status: not_started
+  recommended_model: opus
   notes: Monotonic-conclusions contract + recorded dependency edges.
 - id: rdr-concept-trees
   title: NRDR concept layer
@@ -101,6 +105,7 @@ items:
   - rdr-feature-registry
   - rdr-general-fixpoint
   status: blocked
+  recommended_model: opus
   blockers:
   - Blocked on Track F (rdr/feature-registry) and Track G (rdr/general-fixpoint).
   notes: Concept declaration, explicit DependencyGraph, stratified order, semi-naive firing,
@@ -114,6 +119,7 @@ items:
   depends_on:
   - rdr-concept-trees
   status: blocked
+  recommended_model: opus
   blockers:
   - Blocked on rdr/concept-trees.
   notes: 'Harvests prototypes #21/#22 (rdr-oo-recognition, rdr-backend-unification), then
@@ -126,6 +132,7 @@ items:
   depends_on:
   - rdr-concept-trees
   status: blocked
+  recommended_model: opus
   notes: Justification value object + JustificationRecorder(EvaluationObserver) + retraction
     propagation over the dependency graph.
 - id: rdr-oo-recognition
@@ -135,6 +142,7 @@ items:
   track: oo-prototypes
   depends_on: []
   status: deferred
+  recommended_model: haiku
   blockers:
   - 'stacked-pr-maintenance: Fork PR #21 (branch `rdr/oo-recognition`) is based on `rdr/oo-plan`,
     whose commits are in neither the upstream base nor any other open fork branch, so the
@@ -150,6 +158,7 @@ items:
   depends_on:
   - rdr-oo-recognition
   status: deferred
+  recommended_model: haiku
   notes: 'Same disposition as #21: harvested by Wave 3, then closed.'
 - id: rdr-architecture-brief
   title: Re-land RDR architecture brief and its bibliography as a docs-only page
@@ -160,6 +169,7 @@ items:
   - rdr-oo-definitions
   - rdr-justifications
   status: deferred
+  recommended_model: haiku
   notes: 'Repositioned 2026-07-24 from S3-docs/wave-0 to the final wave: the doc describes
     the architecture as a finished whole, so it reads better landed once the engine is actually
     stable (Wave 3 done) rather than mid-refactor. PR #75 (which re-landed closed PR #20''s

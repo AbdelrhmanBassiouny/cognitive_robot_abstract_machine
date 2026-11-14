@@ -37,6 +37,7 @@ items:
   title: Re-run every counterexample against cram2 main and update the inconsistency report and cards
   track: theory
   status: not_started
+  recommended_model: sonnet
   depends_on: []
   notes: 'The local analysis read the integration tip; main has since merged #670 and #717 (support
     by contact normal, contact tolerance wired, grasp by finger contact, containment gated on
@@ -47,6 +48,7 @@ items:
   title: Review the core theory and cards with the professor; freeze the numbering of definitions, laws and measures
   track: theory
   status: not_started
+  recommended_model: sonnet
   depends_on:
   - rebaseline-on-main
   notes: 'Dossier pages p/04_core_theory.html and the cards. Also restore the recorded episode
@@ -56,6 +58,7 @@ items:
   title: A concept verdict in krrood that reuses the trinary scalar (0 / 0.5 / 1) instead of a new encoding
   track: estimators
   status: not_started
+  recommended_model: opus
   depends_on: []
   notes: 'HOLDS/UNDECIDED/FAILS map onto krrood symbolic_math trinary values and cramph
     ObservationStateValues one to one, so a decide() compiles into a casadi observation. Name the
@@ -66,6 +69,7 @@ items:
   title: Declared concept resolutions from which every truth-deciding tolerance is derived, with a liveness test
   track: estimators
   status: not_started
+  recommended_model: opus
   depends_on:
   - trinary-verdict
   notes: 'Spatial resolution, slowest detected speed, friction angle, dwell time; derived
@@ -76,6 +80,7 @@ items:
   title: Three-valued InContactWith and SupportedBy sharing one spatial resolution
   track: estimators
   status: not_started
+  recommended_model: opus
   depends_on:
   - concept-resolutions
   - rebaseline-on-main
@@ -88,6 +93,7 @@ items:
   title: One Holds estimator that does not depend on the executor, replacing GripperHolds and the reattach switch
   track: estimators
   status: not_started
+  recommended_model: opus
   depends_on:
   - concept-resolutions
   notes: 'Today Holds is kinematic attachment (GripperHolds), a preceding-PickUp fallback, and never
@@ -99,6 +105,7 @@ items:
   title: Containment by the excursion estimator, evaluated independently of support changes
   track: estimators
   status: not_started
+  recommended_model: opus
   depends_on:
   - concept-resolutions
   notes: 'Replaces the 0.9 vertex ratio of segmind''s ContainmentDetector and the four inside
@@ -109,6 +116,7 @@ items:
   title: segmind detectors read the shared estimators, on the episode clock
   track: consumers
   status: not_started
+  recommended_model: sonnet
   depends_on:
   - contact-and-support
   - containment-and-insert
@@ -122,6 +130,7 @@ items:
   title: A cramph ConceptMonitor node whose observation is a concept verdict, and concept post-conditions for actions
   track: consumers
   status: not_started
+  recommended_model: opus
   depends_on:
   - trinary-verdict
   - holds-estimator
@@ -137,6 +146,7 @@ items:
   title: giskardpy monitor thresholds (0.01 m / rad defaults, dwell and progress timeouts) derived from resolutions
   track: consumers
   status: not_started
+  recommended_model: sonnet
   depends_on:
   - cramph-concept-monitor
   notes: 'PoseReached, JointPositionReached, LocalMinimumReached, StillProgressing (5 s),
@@ -147,6 +157,7 @@ items:
   title: The laws as EQL queries over recorded episodes, with a violation report for current versus new definitions
   track: experiments
   status: not_started
+  recommended_model: opus
   depends_on:
   - segmind-on-concepts
   - theory-freeze
@@ -157,6 +168,7 @@ items:
   title: Estimator agreement, metamorphic invariance and constant sensitivity studies
   track: experiments
   status: not_started
+  recommended_model: opus
   depends_on:
   - contact-and-support
   - containment-and-insert
@@ -170,6 +182,7 @@ items:
   title: RoboCasa as the zero-retuning transfer domain, its success checks registered as estimators
   track: experiments
   status: not_started
+  recommended_model: sonnet
   depends_on:
   - eql-planning-robots/robocasa-goals
   - agreement-invariance-sensitivity
@@ -181,6 +194,7 @@ items:
   title: Paper for ICRA 2028 or RA-L
   track: experiments
   status: not_started
+  recommended_model: opus
   depends_on:
   - law-monitors
   - agreement-invariance-sensitivity

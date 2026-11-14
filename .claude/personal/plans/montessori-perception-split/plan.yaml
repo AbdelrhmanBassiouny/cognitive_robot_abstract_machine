@@ -33,6 +33,7 @@ items:
     threads are the developer''s to update upstream.'
   depends_on: []
   status: in_progress
+  recommended_model: sonnet
   pull_request_number: 488
   session: https://claude.ai/code/session_01JxHGiMeCJRVXzPpv26S5vx
   notes: 'Shape-sorting vocabulary in semantic_digital_twin (ShapeSortingPiece + Cube/Cylinder/...Piece,
@@ -51,6 +52,7 @@ items:
   depends_on:
   - shape-vocabulary-on-main
   status: not_started
+  recommended_model: haiku
   notes: montessori/world.py, test_montessori_world.py, dataset/synthetic_fixed_arm_robot.py
     and .urdf, and dataset/__init__.py - 5 files, ~1,770 lines. Has to land before any detection
     code, because pipeline.py reads BOARD_SCALE from world.py. That one constant brings in
@@ -63,6 +65,7 @@ items:
   depends_on:
   - simulated-world-on-main
   status: not_started
+  recommended_model: haiku
   notes: perception/__init__.py, perception/exceptions.py, camera.py, orthophoto.py, viewer.py,
     the opencv dependency in experiments/pyproject.toml, and test_montessori_camera.py and
     test_montessori_viewer.py - 8 files, ~1,570 lines. Needs only main, so it could branch
@@ -74,6 +77,7 @@ items:
   depends_on:
   - frame-reading-on-main
   status: not_started
+  recommended_model: sonnet
   notes: 'footprint.py, detections.py, edges.py and piece_matcher.py, test_montessori_footprint.py,
     and the direct piece-recognition tests. Those tests are split verbatim out of test_montessori_piece_matching.py
     into a module of their own, since that file imports pipeline.py at the top and uses the
@@ -88,6 +92,7 @@ items:
   depends_on:
   - piece-recognition-on-main
   status: not_started
+  recommended_model: sonnet
   notes: pipeline.py, overlay.py, colors.py and scene_source.py, dataset/montessori_scene_renderer.py
     and montessori_scene_fixtures.py, test_montessori_views.py, test_montessori_perception.py,
     and the rest of test_montessori_piece_matching.py. The second half of the detection layer.
@@ -98,6 +103,7 @@ items:
   depends_on:
   - detection-pipeline-on-main
   status: not_started
+  recommended_model: haiku
   notes: perception/captures.py, the 18 files under montessori/resources/captures (3 MB),
     dataset/montessori_capture_truths.py, test_montessori_captures.py, and the .gitignore
     rosbags rule - 22 files, ~790 lines. Needs only frame-reading-on-main; it is stacked linearly
@@ -110,6 +116,7 @@ items:
   depends_on:
   - captures-on-main
   status: not_started
+  recommended_model: sonnet
   notes: 'perception/node.py, markers.py, recordings.py, watch_camera.py, capture_from_bag.py,
     tracy_experiments/equipment.py and tracy_experiments/__init__.py - 7 files, ~1,770 lines,
     all importing rclpy, so nothing here can run their tests. The item is to merge the top

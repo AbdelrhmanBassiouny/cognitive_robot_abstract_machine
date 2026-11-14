@@ -34,6 +34,7 @@ items:
     goal'
   track: montessori
   status: not_started
+  recommended_model: sonnet
   notes: 'SortPieceAction exists only on the unlanded showcase PR #511.'
   blockers:
   - '#511 (EQL showcase) has not landed.'
@@ -48,11 +49,13 @@ items:
   - montessori-planning-domain
   - eql-performatives/giskardpy-acts
   status: not_started
+  recommended_model: opus
 - id: blocking-restores-world-state
   branch: eql-planning-robots/blocking-restores-world-state
   title: blocking leaves its IK solution in the live world state
   track: cram-robocasa
   status: not_started
+  recommended_model: sonnet
   notes: 'semantic_digital_twin reasoning/robot_predicates.py: blocking writes the IK result
     into world.state inside modify_world() and never restores it. Bug-fix PR off main with
     the bug label; failing test first.'
@@ -62,6 +65,7 @@ items:
     as expressions that follow the state
   track: cram-robocasa
   status: not_started
+  recommended_model: sonnet
   depends_on: []
   notes: 23 sites, mostly semantic_digital_twin world_rdr/rules.py, plus robot_predicates.py,
     queries.py, robot_parts.py and coraplex training_environment.py. Mechanical once variable(Type,
@@ -72,6 +76,7 @@ items:
     as EQL bodies
   track: cram-robocasa
   status: not_started
+  recommended_model: opus
   depends_on: []
   notes: 'Owner decided (Oct 30): relational predicates the planner reasons through get EQL
     bodies. 12 of the 57 workspace predicates and symbolic functions are relational; inventory
@@ -82,6 +87,7 @@ items:
     read
   track: cram-robocasa
   status: not_started
+  recommended_model: opus
   depends_on: []
   notes: 'Owner decided (Oct 30): an attachment declares the terms it reads (coarse at first,
     e.g. the joint positions of these bodies). SemDT meets it by putting its world into the
@@ -92,6 +98,7 @@ items:
   title: Effects for pick, place, open, close and navigate, separate from post_condition monitors
   track: cram-robocasa
   status: not_started
+  recommended_model: sonnet
   depends_on:
   - eql-planning/action-schema-progression
   - icra-upstream/coraplex-actions-on-cramph
@@ -105,6 +112,7 @@ items:
   title: A cramph Achieve(goal) node that plans when expanded and replans when a step fails
   track: cram-robocasa
   status: not_started
+  recommended_model: opus
   blockers:
   - cramph is only on Tigul/plan-cramp-second-iter.
   depends_on:
@@ -115,6 +123,7 @@ items:
   title: RoboCasa task goals as EQL conditions, read from the tasks' success checks
   track: cram-robocasa
   status: not_started
+  recommended_model: sonnet
   notes: Builds on Tom Schierenbeck's RoboCasa condition survey (#523, on main) and the semantic_digital_twin
     RoboCasa loader; its predicates are also the transfer-domain estimators of concept-theory/robocasa-transfer.
 - id: robocasa-slice
@@ -127,6 +136,7 @@ items:
   - robocasa-goals
   - geometric-attachments
   status: not_started
+  recommended_model: sonnet
   notes: Feature freeze 2026-12-18.
 - id: iros-experiments
   branch: eql-planning-robots/iros-experiments
@@ -135,3 +145,4 @@ items:
   depends_on:
   - robocasa-slice
   status: not_started
+  recommended_model: opus

@@ -43,6 +43,7 @@ items:
   track: request-language
   depends_on: []
   status: in_progress
+  recommended_model: opus
   session: https://claude.ai/code/session_01MotUMLrQxbZKQWs4BADwkj
   notes: 'Answers a query by looking, as a `PerceptionBackend` beside `EntityQueryLanguageBackend`
     and `SQLAlchemyBackend` - `SQLAlchemyBackend` already sets the shape (translate the query
@@ -58,6 +59,7 @@ items:
   depends_on:
   - perception-backend
   status: in_progress
+  recommended_model: opus
   session: https://claude.ai/code/session_0137umDhuvEG3jkbh6iZUDzQ
   notes: 'Raised by the developer across five review threads on #222, which are one ask: a
     look should be narrowed by what the world means, not by an attribute spelled as a string.
@@ -74,6 +76,7 @@ items:
   - perception-predicates-guide-the-search
   - knowledge-directed-grounding/pieces-looked-for-where-expected
   status: in_progress
+  recommended_model: sonnet
   session: https://claude.ai/code/session_013HJ4gSb7tjesc6vB1GAtwu
   blockers:
   - One of the six review threads of 2026-09-02 is still open, and it is the developer's to
@@ -94,6 +97,7 @@ items:
   - perception-predicates-guide-the-search
   - search-clipped-to-a-predicates-region
   status: in_progress
+  recommended_model: opus
   session: https://claude.ai/code/session_01WDteX4z7jQUBG4FZqMKG5m
   notes: 'The developer''s third mechanism on r3893499716, deferred out of #227 as a second
     pull request''s worth of work: a predicate no search algorithm covers is still answerable,
@@ -109,6 +113,7 @@ items:
   - choose-detection-method
   - detector-parameters-from-knowledge
   status: in_progress
+  recommended_model: opus
   session: https://claude.ai/code/session_0139rDK7uNEvtjEVZ5krjS4h
   notes: 'Raised by the developer on `search-clipped-to-a-predicates-region`''s review (r3915356623),
     2026-09-02: the pipeline''s own six fields are not one kind of thing - the world already
@@ -123,6 +128,7 @@ items:
   - perception-backend
   - choose-detection-method
   status: in_progress
+  recommended_model: sonnet
   session: https://claude.ai/code/session_01DnVSdcxop561xKAGeg61MG
   notes: Finds a surface in the picture from what the twin already says it is like - a large
     horizontal plane, mirror-finished, colourless, of about the modelled size - stated as
@@ -138,6 +144,7 @@ items:
   depends_on:
   - perception-backend
   status: in_progress
+  recommended_model: sonnet
   session: https://claude.ai/code/session_01JzpfVmddAPa4ZTJYSEEqAF
   notes: 'The detector interface the backend dispatches to, chosen by a rule tree over properties
     of the surface and the target - this is where perception measurably gets better as the
@@ -154,6 +161,7 @@ items:
   depends_on:
   - choose-detection-method
   status: in_progress
+  recommended_model: opus
   session: https://claude.ai/code/session_014LgGAmWL8JZM3qW7pwwnbp
   notes: The detectors' numbers - hue windows, size ranges, edge-agreement thresholds, mesh
     classification thresholds, and (widened 2026-08-31) the numbers that say *how to search*
@@ -170,6 +178,7 @@ items:
   depends_on:
   - detector-parameters-from-knowledge
   status: not_started
+  recommended_model: sonnet
   notes: 'The developer''s own suggestion on #202: an interactive presenter for the ripple-down
     rules'' `ConclusionHelper`, showing the live camera feed beside the parameters it would
     conclude, so an expert sees what a value does before committing it as a rule. Needs `detector-parameters-from-knowledge`''s
@@ -188,6 +197,7 @@ items:
   - surfaces-found-by-looking
   - how-to-look-concluded-from-the-request
   status: in_progress
+  recommended_model: opus
   session: https://claude.ai/code/session_01SK2tbXUzLSPebeVcKif92s
   notes: 'Added 2026-09-05 at the developer''s direction on #259 (r3940339984 and r3940357436):
     "why not replace this with an EQL match statement of semdt semantic annotation or kinematic
@@ -205,6 +215,7 @@ items:
   - surfaces-found-by-looking
   - knowledge-directed-grounding/holes-fitted-like-pieces
   status: in_progress
+  recommended_model: sonnet
   session: https://claude.ai/code/session_01ViZEJchUqcVcsFMbYHeVR6
   notes: 'Added 2026-09-05 at the developer''s direction on #259, folding the two threads
     he asked to keep together (r3940349876 and r3940351882): "since we have a 3d model of
@@ -220,6 +231,7 @@ items:
   - detector-parameters-from-knowledge
   - montessori-perception-split/shape-vocabulary-on-main
   status: not_started
+  recommended_model: sonnet
   notes: 'Added 2026-10-13 at the developer''s direction, from the KnownPiece thread on #488
     (r4250836397). A seen blob becomes a partial EQL description (outline from above, measured
     hue, height) resolved against the PieceSet instances with tolerance predicates (hue, height,
@@ -234,6 +246,7 @@ items:
   - choose-detection-method
   - knowledge-directed-grounding/demo-runs-on-grounded-perception
   status: not_started
+  recommended_model: sonnet
   notes: 'Lands on the tracy_icra demo branch, which knowledge-directed-expectation/demo-detects-and-recovers-a-failed-insert
     tracks. Every perception call in montessori_demo.py goes through the backend rather than
     calling the pipeline by hand, and the detector that answers is the one the rule tree chose
@@ -249,6 +262,7 @@ items:
   - knowledge-directed-grounding/competing-explanations
   - a-look-is-described-by-a-match
   status: blocked
+  recommended_model: sonnet
   notes: '#299''s 9c4840bf94 already is the join commit -- its own message says the two detectors
     "arrived on the same detector from different branches of #231, onto the rewrite #236 had
     already landed" -- sitting on #265 because no other base held both lineages. knowledge-directed-grounding''s
@@ -266,6 +280,7 @@ items:
   depends_on:
   - perception-join
   status: not_started
+  recommended_model: haiku
   notes: '6c968260eb, 9ab3729019, 746f8ea3c6, 280832645d, 3d6504f7d9, 4bf6694f1d and 54b4ec5848
     -- real features pushed straight onto #265, in no pull request''s diff. The other four
     of the eleven (0e4d632b3f, a3acc06fbe, 83c3eae1b7, 5f63f0f503) are reconciliation glue

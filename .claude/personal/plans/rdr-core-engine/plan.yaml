@@ -39,6 +39,7 @@ items:
   track: engine-stack
   depends_on: []
   status: in_progress
+  recommended_model: sonnet
   blockers:
   - The `integration-conflict` label (2026-09-29) still withholds promotion and nothing clears
     it automatically. The pull request's own CI is green at `345b5fbfa` (18/18); removing the label is
@@ -57,6 +58,7 @@ items:
   depends_on:
   - D-core-serialization
   status: in_progress
+  recommended_model: sonnet
   notes: Merged D-core-serialization into it 2026-11-04 (ff9a89984, merge probe clean). The
     one core-EQL fix still needed sets the active conditions root in `_evaluate_within_`,
     for pre-installed contexts; the gate fix is gone. Descendants restacked except `claude/rdr-why-answer-6fnw2o`
@@ -69,6 +71,7 @@ items:
   depends_on:
   - D-core-support
   status: in_progress
+  recommended_model: sonnet
   session: https://claude.ai/code/session_01Gid5Qw9cbedssFEqojo1SK
   notes: 'The Expert policy split, and the parameter-object work handed to it from the single-class
     plan. What it establishes for everything above: `ExpertInterface` carries only the expert
@@ -83,6 +86,7 @@ items:
   depends_on:
   - d-core-expert
   status: in_progress
+  recommended_model: sonnet
   session: https://claude.ai/code/session_012Fy3CmMRRy1m5DtzVUhP2X
   notes: 'The `EQLSingleClassRDR` inference engine, ported from the superseded mega-slice.
     What it settled: a fit saves once on its way out through a `finally`, not once per inserted
@@ -97,6 +101,7 @@ items:
   depends_on:
   - d-core-single-class
   status: in_progress
+  recommended_model: sonnet
   session: https://claude.ai/code/session_01JxHGiL16bUxxHg6B3qRSaL
   blockers:
   - The GroundTruth thread on backend.py:39 waits on the owner's pick of its three options
@@ -117,6 +122,7 @@ items:
   track: superseded-slices
   depends_on: []
   status: deferred
+  recommended_model: haiku
   notes: 'Closed unmerged once the remainder was split into #58..#68 above. Opened on top
     of eql-core-prep (#28), now in the eql-core-and-code-generation plan; that dependency
     has merged.'
@@ -128,6 +134,7 @@ items:
   depends_on:
   - d-core-single-class
   status: blocked
+  recommended_model: opus
   blockers:
   - Blocked until the Wave-0 engine stack lands on main.
   notes: 'Beyond interim classify->UNSET. Conclusion provenance coordinates with Wave-3 JTMS

@@ -32,6 +32,7 @@ items:
   session: https://claude.ai/code/session_01JxHGiMEy4DjtkFbwQu2uRK
   depends_on: []
   status: in progress
+  recommended_model: sonnet
   notes: 'Source 08f9178dd2 on aamas27-unification-revision. Stacked on #535 (merged at c6bd57ebe8);
     CallResults is a TermReader keyed by callee + CallArguments as passed (CallTerm keys fail
     on builtins), predicate truth read as a __call__ call. Needs #554 and #558 (bug PR off
@@ -44,6 +45,7 @@ items:
   track: paper-eql-ormatic
   depends_on: []
   status: not_started
+  recommended_model: sonnet
   notes: Source commits 5f4cfb9aee, eeeb2e48db.
 - id: ormatic-identifier-selection
   branch: ormatic-identifier-selection
@@ -52,6 +54,7 @@ items:
   depends_on:
   - ormatic-collection-translation
   status: not_started
+  recommended_model: sonnet
   notes: Source commits aa8e9299a3, 67a666b1e2, 20f6990f69, f083e650c4.
 - id: ormatic-reference-fixes
   branch: ormatic-reference-fixes
@@ -60,6 +63,7 @@ items:
   depends_on:
   - ormatic-identifier-selection
   status: not_started
+  recommended_model: sonnet
   notes: Source commits 8316e4c8b8, 9936287aac.
 - id: descriptor-characteristics
   branch: descriptor-characteristics
@@ -67,6 +71,7 @@ items:
   track: ontomatic-core
   depends_on: []
   status: not_started
+  recommended_model: sonnet
   notes: Port ontomatic/property_descriptor/mixins.py from aamas27-experiments onto main's
     descriptors.
 - id: descriptor-provenance
@@ -76,6 +81,7 @@ items:
   depends_on:
   - descriptor-characteristics
   status: not_started
+  recommended_model: sonnet
   notes: InferredThrough, premises/explain, equivalence/inverse/symmetry/chain inference.
 - id: terminology-model
   branch: terminology-model
@@ -83,6 +89,7 @@ items:
   track: ontomatic-core
   depends_on: []
   status: not_started
+  recommended_model: opus
   notes: Seed from owl2rl_tbox.py; replaces ClassInfo/PropertyInfo and the rdrs/property_inference
     files.
 - id: model-compiler
@@ -93,6 +100,7 @@ items:
   - terminology-model
   - descriptor-characteristics
   status: not_started
+  recommended_model: opus
   notes: 'Fixes: sufficient conditions as a disjunction, owl:Thing filler, owl:Nothing, hierarchy
     cycles.'
 - id: abox-loader
@@ -103,6 +111,7 @@ items:
   - model-compiler
   - descriptor-provenance
   status: not_started
+  recommended_model: sonnet
   notes: 'Fixes: line_profiler, tqdm and timing inside library code.'
 - id: owl2rl-consistency-check
   branch: owl2rl-consistency-check
@@ -111,6 +120,7 @@ items:
   depends_on:
   - abox-loader
   status: not_started
+  recommended_model: sonnet
 - id: closure-verification
   branch: closure-verification
   title: Differential tests against owlrl's closure and the 78-rule coverage test
@@ -118,6 +128,7 @@ items:
   depends_on:
   - owl2rl-consistency-check
   status: not_started
+  recommended_model: sonnet
 - id: owl2bench-experiments
   branch: owl2bench-experiments
   title: OWL2Bench model generation, queries and closure comparison in experiments/
@@ -125,4 +136,5 @@ items:
   depends_on:
   - closure-verification
   status: not_started
+  recommended_model: sonnet
   notes: From krrood_experiments aamas27-* and the supplement; large runs skipped in CI.

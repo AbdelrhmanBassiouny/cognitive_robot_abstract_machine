@@ -42,6 +42,7 @@ items:
   depends_on:
   - montessori-perception-split/perception-node-on-main
   status: in_progress
+  recommended_model: sonnet
   session: https://claude.ai/code/session_01ScJk8zKUuToafxg38Bcag5
   blockers:
   - 'Unanswered question to the developer, raised on #205 at review time and still open: WorkspaceSurface.of_body
@@ -61,6 +62,7 @@ items:
   depends_on:
   - surfaces-from-world
   status: in_progress
+  recommended_model: sonnet
   session: https://claude.ai/code/session_01T8CPPnj2uqZB7bACWBFJhb
   notes: 'Fixes the second fault: a piece resting on the board''s lid is invisible twice over.
     The pipeline rectifies loose pieces onto exactly one plane (table_height), so a piece
@@ -77,6 +79,7 @@ items:
   depends_on:
   - detect-per-supporting-surface
   status: in_progress
+  recommended_model: sonnet
   session: https://claude.ai/code/session_01RRu7SutvRcNWHYNVUDCUFr
   notes: 'Fixes the third fault: the duplicate boxes on the board''s borders are the lid''s
     own edges, which a rectangular or triangular prism template fits at about 0.7 - above
@@ -93,6 +96,7 @@ items:
   depends_on:
   - pieces-looked-for-where-expected
   status: in_progress
+  recommended_model: sonnet
   session: https://claude.ai/code/session_01TSK8GxG8qC6udSB7sjwzXf
   notes: 'The board''s holes are found by fitting the mesh''s own rigid six-hole layout over
     the lid in one shot - three degrees of freedom for all six holes together, seeded from
@@ -108,6 +112,7 @@ items:
   depends_on:
   - one-detection-per-thing
   status: in_progress
+  recommended_model: opus
   session: https://claude.ai/code/session_0158YvLwWkcdv4Hqz9i4926W
   notes: The structural change the rest of the plan's perception work needs. Today a piece
     is only found where colour segmentation isolated a blob, so one wearing the lid's own
@@ -121,6 +126,7 @@ items:
   - pieces-looked-for-where-expected
   - holes-fitted-like-pieces
   status: in_progress
+  recommended_model: opus
   session: https://claude.ai/code/session_01BxhH7rCvhti967uCAmAaKr
   notes: 'PieceMatcher.minimum_agreement is one number, 0.62, standing for how much of an
     outline must lie along a seen edge before a piece is reported, and its recorded justification
@@ -137,6 +143,7 @@ items:
   depends_on:
   - montessori-perception-split/perception-node-on-main
   status: in_progress
+  recommended_model: sonnet
   session: https://claude.ai/code/session_01PWzamoTtp8TNZyqhWornUs
   notes: experiments/src/experiments/montessori/ has no __init__.py, and never has on any
     branch, so pkgutil does not report it as a subpackage of experiments and the ORM generator's
@@ -149,6 +156,7 @@ items:
   depends_on:
   - one-detection-per-thing
   status: not_started
+  recommended_model: sonnet
   notes: 'Lands on the tracy_icra demo branch, which knowledge-directed-expectation/demo-detects-and-recovers-a-failed-insert
     tracks. Wave one is finished when the three faults are gone on the real robot, not when
     their pull requests are approved: the clipped windows show the table and nothing beyond

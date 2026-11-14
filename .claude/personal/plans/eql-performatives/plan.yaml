@@ -37,6 +37,7 @@ items:
   track: grammar-features
   depends_on: []
   status: in_progress
+  recommended_model: sonnet
   session: https://claude.ai/code/session_014rJsLXhoAAV5Xbc2w5dyHR
   notes: 'Adds AgreementProcessor as its own lowering pass ahead of DeterminerProcessor/MorphologyProcessor,
     plus PhraseFragment.concord_number and the All universal quantifier; removes coreference_processor''s
@@ -50,6 +51,7 @@ items:
   depends_on:
   - agreement
   status: in_progress
+  recommended_model: sonnet
   notes: Adds verbalization/cardinality.py (Cardinality enum + column_cardinality) and routes
     a grouped report's non-key columns through it, so a scalar attribute reads distributively
     singular ("the battery") while a collection keeps the quantified plural ("all the tasks").
@@ -62,6 +64,7 @@ items:
   depends_on:
   - cardinality
   status: blocked
+  recommended_model: opus
   blockers:
   - 'stacked-pr-maintenance: Fork PR #14 (branch `claude/performatives-clean`) conflicts against
     its base `claude/split-performatives-prs-xbluus` as of the 2026-08-31 stacked-pr-maintenance
@@ -79,6 +82,7 @@ items:
   depends_on:
   - performatives-core
   status: in_progress
+  recommended_model: opus
   notes: Approach M - one class both executes and verbalizes, rather than an external visitor.
     Performable becomes a plain field-less ABC mixin; the verbalization shapes (interleave/coordinate/concurrent)
     move to free functions in verbalization/composition.py so krrood's combinators and coraplex's
@@ -92,6 +96,7 @@ items:
   depends_on:
   - performatives-core
   status: not_started
+  recommended_model: sonnet
   notes: 'Deferred out of #14 to keep it scoped to the framework-agnostic layer. Gives a concrete
     action (e.g. NavigateAction) its own fragment instead of relying on the generic "given
     that"/"such that" rendering, including operand field-name aliasing.'
@@ -104,6 +109,7 @@ items:
   - performatives-core
   - rdr-core-engine/d-core-expert
   status: not_started
+  recommended_model: sonnet
   notes: 'Surfaced during the rdr-refactor plan''s d-core-expert item (PR #98) review: the
     Expert policy''s conclusion/conditions validators (ConclusionDomain.hint(), AnswerName.CONDITIONS.example_assignment,
     and the DataclassException hierarchy in rdr/exceptions.py) currently build their hints/error
@@ -116,6 +122,7 @@ items:
   depends_on:
   - performatives-core
   status: not_started
+  recommended_model: sonnet
   notes: 'Deferred out of #14. Follows the same distributed placement as coraplex''s Perform
     - each act lives in the layer that owns the behaviour it names, not in a central registry.'
 - id: language-nodes-and-bridge
@@ -127,6 +134,7 @@ items:
   - plannode-performable
   - eql-existential-semantics/threshold-connective
   status: not_started
+  recommended_model: opus
   notes: 'Phases C and D of the unification. Requires the shared shape functions and the Performable
     mixin from #15 to exist first. Cross-plan note (2026-08-29, from eql-existential-semantics
     #137): when this item re-expresses coraplex''s ParallelNode/TryAllNode and giskardpy''s
@@ -141,5 +149,6 @@ items:
   depends_on:
   - language-nodes-and-bridge
   status: not_started
+  recommended_model: sonnet
   notes: Phase E - the end-to-end proof that one tree executes and verbalizes, once the bridge
     exists.

@@ -36,6 +36,7 @@ items:
   depends_on:
   - ontomatic-port/eql-predicate-call-memo
   status: deferred
+  recommended_model: opus
   notes: 'Changes the per-argument cache (ontomatic-port eql-predicate-call-memo, commit 08f9178dd
     on aamas27-unification-revision): fold into whichever PR lands that cache. Keys on the
     State that fluent-state-overlay introduces. Deferred at kickoff on 2026-10-20.'
@@ -45,6 +46,7 @@ items:
   track: planning-core
   depends_on: []
   status: not_started
+  recommended_model: opus
   notes: 'Effects can create and remove objects (state-objects-and-domains). Field types of
     the class diagram type-check effects. Effects are facts (State.with_facts) whose value
     may depend on the binding (x.support := y); #535 accepts only constant values. Appending
@@ -58,6 +60,7 @@ items:
   depends_on:
   - action-schema-progression
   status: not_started
+  recommended_model: sonnet
   notes: ontomatic PropertyDescriptor.__set__ applies inverse, super-property and transitive
     implications; a state assigning one side must assign the implied ones too, from the declared
     structure. Lets a domain declare how its setter's effects are modelled, lifting AssignmentBypassesSetter
@@ -69,6 +72,7 @@ items:
   depends_on:
   - action-schema-progression
   status: not_started
+  recommended_model: opus
   notes: Test domains write each derived fact that passes the three-part rule (changes during
     a plan, used by a goal or precondition, relational) as an EQL body, not Python.
 - id: regression-and-explanation
@@ -78,6 +82,7 @@ items:
   depends_on:
   - action-schema-progression
   status: not_started
+  recommended_model: opus
 - id: compiled-search-ff
   branch: eql-planning/compiled-search-ff
   title: Grounding through EQL, compiled integer state, greedy best-first and A* with the
@@ -87,6 +92,7 @@ items:
   - planning-backend-search
   - state-aware-predicate-cache
   status: not_started
+  recommended_model: opus
   notes: 'Grounding, finite-domain variables and h_add/h_FF need each condition''s read set
     before search: they see through EQL bodies only; Python bodies are attachments. Field
     types give grounding and finite domains.'
@@ -97,6 +103,7 @@ items:
   depends_on:
   - planning-backend-search
   status: not_started
+  recommended_model: opus
 - id: unified-planning-backend
   branch: eql-planning/unified-planning-backend
   title: Compile EQL domains to unified-planning; cross-check against Fast Downward on IPC
@@ -105,3 +112,4 @@ items:
   depends_on:
   - planning-backend-search
   status: not_started
+  recommended_model: sonnet

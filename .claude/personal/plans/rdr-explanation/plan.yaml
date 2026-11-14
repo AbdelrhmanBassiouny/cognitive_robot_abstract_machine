@@ -38,6 +38,7 @@ items:
   depends_on:
   - rdr-core-engine/d-core-backend
   status: in_progress
+  recommended_model: sonnet
   session: https://claude.ai/code/session_01V2DJMF1C2bQjhLcPo5sFkx
   notes: 'W1. KNOWN-STALE per-branch progress note: pr-progress/rdr/why-answer.md still says
     "Not started" even though this PR is real, open, and W2/W3 already build on it — the exact
@@ -51,6 +52,7 @@ items:
   depends_on:
   - rdr-why-answer
   status: in_progress
+  recommended_model: sonnet
   notes: 'W2. Deep in review: 20/22 threads resolved, 2 blocked on PR #83''s boolean-predicate
     goldens.'
 - id: rdr-why-query-surface
@@ -61,6 +63,7 @@ items:
   depends_on:
   - eql-causal-verbalization
   status: in_progress
+  recommended_model: sonnet
   session: https://claude.ai/code/session_0148J38dvujaob3AYJqfNzwa
   notes: W3. %why magic deferred until D-ui (#76) lands.
 - id: rdr-decision-queries
@@ -71,6 +74,7 @@ items:
   depends_on:
   - eql-causal-verbalization
   status: in_progress
+  recommended_model: opus
   session: https://claude.ai/code/session_013NepUGgubeWHnLT5TUPLdu
   notes: C1. Reframed 2026-07-17 (ExplainableChoice protocol dropped as YAGNI). Coordinates
     with W3 via a shared ExplanationCarrier seam.
@@ -82,6 +86,7 @@ items:
   depends_on:
   - eql-causal-verbalization
   status: blocked
+  recommended_model: opus
   blockers:
   - Blocked on W2 (eql-causal-verbalization).
   notes: 'Separate explanation content from rendering, chosen from the recipient model. Lit:
@@ -94,6 +99,7 @@ items:
   depends_on:
   - rdr-decision-queries
   status: deferred
+  recommended_model: sonnet
   blockers:
   - Deferred until Tom's montessori_ijcai branch is ready.
   notes: M1. The generic half (decision-query semantics) already proceeds as C1; only the
@@ -107,4 +113,5 @@ items:
   - montessori-choice-policies
   - eql-causal-verbalization
   status: deferred
+  recommended_model: haiku
   notes: M2.

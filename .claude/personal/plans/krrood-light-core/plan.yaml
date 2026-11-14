@@ -39,6 +39,7 @@ items:
   title: matplotlib is imported only when drawing
   branch: claude/bold-ramanujan-vb0e9c
   status: in progress
+  recommended_model: haiku
   track: optional-imports
   pull_request_number: 547
   session: https://claude.ai/code/session_01JxHGiMUhYaVsG6NkZNgzAC
@@ -50,6 +51,7 @@ items:
   title: Type-hint resolution skips modules that are not installed
   branch: claude/relaxed-wozniak-eu4gdv
   status: in progress
+  recommended_model: sonnet
   track: optional-imports
   pull_request_number: 545
   session: https://claude.ai/code/session_01JxHGiMzkomLaQ42NXK331R
@@ -62,6 +64,7 @@ items:
   title: JSON serializer and symbol graph import no sqlalchemy, scipy or casadi
   branch: null
   status: not_started
+  recommended_model: sonnet
   track: core-boundaries
   depends_on:
   - type-hint-resolver-skips-missing-modules
@@ -74,6 +77,7 @@ items:
   title: Core EQL imports no random_events or probabilistic_model
   branch: claude/friendly-volta-bny36w
   status: in progress
+  recommended_model: sonnet
   track: core-boundaries
   pull_request_number: 609
   session: https://claude.ai/code/session_01JxHGiNCuZYy4zJDsmbyfwZ
@@ -89,6 +93,7 @@ items:
   title: Verbalization vocabulary stays in krrood-eql, realization moves out of it
   branch: null
   status: not_started
+  recommended_model: opus
   track: core-boundaries
   depends_on:
   - type-hint-resolver-skips-missing-modules
@@ -102,6 +107,7 @@ items:
   title: CI compares core install size and import time against the base branch
   branch: null
   status: not_started
+  recommended_model: sonnet
   track: packaging
   depends_on:
   - krrood-distributions
@@ -114,6 +120,7 @@ items:
   title: krrood's command line is built on cyclopts
   branch: null
   status: deferred
+  recommended_model: haiku
   track: command-line
   depends_on: []
   notes: 'Asked in review of #547. Absorbed by development-tools-on-basstler-rules: krrood''s
@@ -122,6 +129,7 @@ items:
   title: krrood-core imports nothing outside patterns, class_diagrams, symbol_graph and exceptions
   branch: claude/dreamy-ptolemy-v7pxjm
   status: in progress
+  recommended_model: sonnet
   track: core-boundaries
   pull_request_number: 608
   session: https://claude.ai/code/session_01JxHGiKzJUPxGJDd4Czwnrm
@@ -136,6 +144,7 @@ items:
   title: 'krrood is a namespace package: krrood/__init__.py removed'
   branch: null
   status: not_started
+  recommended_model: sonnet
   track: packaging
   depends_on: []
   notes: Several distributions share the krrood. prefix only if none ships krrood/__init__.py.
@@ -147,6 +156,7 @@ items:
     CI
   branch: null
   status: not_started
+  recommended_model: opus
   track: packaging
   depends_on:
   - matplotlib-optional
@@ -165,6 +175,7 @@ items:
   title: krrood-development-tools builds on basstler-rules' rule engine
   branch: null
   status: blocked
+  recommended_model: opus
   track: command-line
   depends_on:
   - krrood-distributions

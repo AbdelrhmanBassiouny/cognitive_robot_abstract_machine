@@ -28,6 +28,7 @@ items:
   track: flaky-handling
   depends_on: []
   status: deferred
+  recommended_model: haiku
   session: https://claude.ai/code/session_01LeZ4Mkr4tfdKjvEcJrz32C
   notes: 'Closed unmerged 2026-08-22, branch kept. It proposed extending a skip that should
     never have existed. A 900-run sweep over `PYTHONHASHSEED` — both siblings and the whole
@@ -43,6 +44,7 @@ items:
   track: pytest-conversion
   depends_on: []
   status: not_started
+  recommended_model: haiku
   notes: 'Every unittest-based module outside test_eql_rdr: test_ripple_down_rules and parts
     of test_eql. Raised by the #159 review''s "all tests everywhere should be pytest"; the
     test_eql_rdr half landed on #67 and #98 while they were still unlanded, and this is the

@@ -40,6 +40,7 @@ items:
   pull_request_number: 524
   track: image
   status: in_progress
+  recommended_model: sonnet
   blockers:
   - '#527 not yet merged into cram2.'
   depends_on:
@@ -56,6 +57,7 @@ items:
     collapsed into Resolution
   track: image-consumers
   status: not_started
+  recommended_model: sonnet
   depends_on:
   - krrimage
   - planar-point-interface
@@ -73,6 +75,7 @@ items:
   branch: claude/krrood-image-video-on-a-plane
   track: image-consumers
   status: not_started
+  recommended_model: opus
   depends_on:
   - image-extensions
   notes: 'Per frame: placement, unproject and camera project collapse into one video-to-camera
@@ -89,6 +92,7 @@ items:
   pull_request_number: 527
   track: spatial
   status: in_progress
+  recommended_model: opus
   blockers:
   - 'CI on 203c33f2 not read. Upstream review state not checked (upstream-reviews Action
     crashed). Owner to decide: krrood check flags dot, euclidean_distance, projection_line,
@@ -107,6 +111,7 @@ items:
   branch: claude/krrood-image-coordinate-change
   track: image
   status: not_started
+  recommended_model: sonnet
   depends_on:
   - krrimage
   notes: 'Implements AffineCoordinateChange[ImageCoordinateSystem], the pixel AffineFrame:
@@ -120,6 +125,7 @@ items:
   branch: claude/world-as-euclidean-space
   track: spatial
   status: not_started
+  recommended_model: opus
   depends_on:
   - planar-point-interface
   notes: 'World implements EuclideanSpace3D (one world, one space). test/living_worlds.py
@@ -135,6 +141,7 @@ items:
   branch: claude/perception-typed-images
   track: perception
   status: not_started
+  recommended_model: sonnet
   depends_on:
   - image-extensions
   - image-coordinate-change
@@ -150,6 +157,7 @@ items:
   branch: claude/robokudo-captures
   track: perception
   status: not_started
+  recommended_model: sonnet
   depends_on:
   - perception-typed-images
   - world-as-euclidean-space

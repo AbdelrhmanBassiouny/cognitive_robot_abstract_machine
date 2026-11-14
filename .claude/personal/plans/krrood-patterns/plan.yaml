@@ -20,6 +20,7 @@ items:
   title: Survey where classes act as factories for other classes across cram
   track: factory-classes
   status: not started
+  recommended_model: sonnet
   depends_on: []
   notes: 'From #542 review (predicate.py:213). List every site that picks the type it builds
     from its arguments - known: SymbolicCallable.__new__ (InstantiatedVariable vs cls), the
@@ -30,6 +31,7 @@ items:
   title: A krrood pattern where a factory class declares the types it builds and when
   track: factory-classes
   status: not started
+  recommended_model: opus
   depends_on:
   - factory-class-survey
   notes: 'From #542 review (predicate.py:213, :348). A krrood.patterns base where a factory

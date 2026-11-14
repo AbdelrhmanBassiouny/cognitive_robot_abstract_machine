@@ -21,6 +21,7 @@ items:
     track: match
     depends_on: []
     status: not started
+    recommended_model: sonnet
     notes: >
       new-feature, based on main. GenerativeBackend.evaluate calls
       Match._infer_required_attributes_() first. Each unstated required factory
@@ -39,6 +40,7 @@ items:
     depends_on:
       - eql-existential-semantics/match-generation
     status: not started
+    recommended_model: sonnet
     notes: >
       new-feature, based on main after #557. `...` (and cause) in a pattern with a domain,
       top-level or nested, fills only attributes that are None on each domain object,

@@ -55,6 +55,7 @@ items:
   track: landing
   depends_on: []
   status: not_started
+  recommended_model: sonnet
   notes: 'Measured 2026-09-19: of 148 open pull requests, 119 already bottom out on main and
     36 are based on it directly -- #408 at +1 commit, #409 and #405 at +2, #365 at +6, #367/#371/#372/#362
     at +10, #357 at +11. This item is not one pull request: it is the decision to spend review
@@ -67,6 +68,7 @@ items:
   track: orphan-recovery
   depends_on: []
   status: not_started
+  recommended_model: sonnet
   notes: 'Thirty-six pull requests were merged into #265 and closed; only five are tracked
     plan items (#298, #301, #303, #304, #311). A merged pull request cannot be reopened, so
     the assets are the branches, which still exist, and the descriptions, which are good --
@@ -80,6 +82,7 @@ items:
   depends_on:
   - knowledge-directed-requests/perception-join
   status: not_started
+  recommended_model: haiku
   notes: 'Twenty-seven open pull requests bottom out on a #265-family branch and cannot be
     reviewed as they stand. Closing each with the replacement named and the branch SHA recorded
     is the cheapest item here and the one that makes the queue readable, which is the precondition
@@ -91,6 +94,7 @@ items:
   track: prevention
   depends_on: []
   status: not_started
+  recommended_model: haiku
   notes: 'The rule whose absence produced #265: a pull request may only be based on main or
     on a pull request that has been approved; to build on unapproved work you merge the dependency
     into your branch and say so in the description. That forces every convergence decision

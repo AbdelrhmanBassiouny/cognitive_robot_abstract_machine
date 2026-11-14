@@ -33,6 +33,7 @@ items:
   depends_on:
   - ontomatic-port/closure-verification
   status: not_started
+  recommended_model: sonnet
 - id: rl-data-properties
   branch: rl-data-properties
   title: Multi-valued data properties, datatype check, data-property cardinality and disjointness
@@ -40,6 +41,7 @@ items:
   depends_on:
   - ontomatic-port/closure-verification
   status: not_started
+  recommended_model: sonnet
 - id: rl-nested-expressions
   branch: rl-nested-expressions
   title: Unions and complements inside class expressions, intersections as equivalent classes
@@ -47,6 +49,7 @@ items:
   depends_on:
   - ontomatic-port/closure-verification
   status: not_started
+  recommended_model: opus
 - id: rl-runtime-classification
   branch: rl-runtime-classification
   title: Evaluate every compiled class axiom at runtime, not only hasValue
@@ -54,6 +57,7 @@ items:
   depends_on:
   - ontomatic-port/closure-verification
   status: not_started
+  recommended_model: sonnet
 - id: roles-without-markers
   branch: roles-without-markers
   title: Designate roles without roleFor markers, keep multiply classified individuals whole
@@ -61,6 +65,7 @@ items:
   depends_on:
   - ontomatic-port/closure-verification
   status: not_started
+  recommended_model: opus
 - id: inference-retraction
   branch: inference-retraction
   title: Retract inferred facts incrementally over recorded provenance
@@ -69,6 +74,7 @@ items:
   - ontomatic-port/closure-verification
   - ontomatic-port/descriptor-provenance
   status: not_started
+  recommended_model: opus
 - id: owl-profile-detection
   branch: owl-profile-detection
   title: Classify the ontology and each axiom into OWL 2 EL/QL/RL/DL with reasons
@@ -76,6 +82,7 @@ items:
   depends_on:
   - ontomatic-port/terminology-model
   status: not_started
+  recommended_model: sonnet
 - id: el-classification
   branch: el-classification
   title: Consequence-based OWL 2 EL TBox classification compiled as inheritance
@@ -84,6 +91,7 @@ items:
   - owl-profile-detection
   - ontomatic-port/model-compiler
   status: not_started
+  recommended_model: opus
   notes: Brings LUBM into scope.
 - id: existential-witnesses
   branch: existential-witnesses
@@ -93,6 +101,7 @@ items:
   - el-classification
   - ontomatic-port/abox-loader
   status: not_started
+  recommended_model: opus
 - id: open-world-query-answers
   branch: open-world-query-answers
   title: Unions, complements and allValuesFrom as three-valued query-time conditions
@@ -100,6 +109,7 @@ items:
   depends_on:
   - existential-witnesses
   status: not_started
+  recommended_model: opus
 - id: sroiq-classification
   branch: sroiq-classification
   title: 'Research: Python hypertableau for full SROIQ TBox classification'
@@ -107,4 +117,5 @@ items:
   depends_on:
   - open-world-query-answers
   status: deferred
+  recommended_model: opus
   notes: Optional; decide after open-world-query-answers on evidence from real ontologies.

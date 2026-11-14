@@ -34,6 +34,7 @@ items:
   track: events
   depends_on: []
   status: in_progress
+  recommended_model: opus
   session: https://claude.ai/code/session_01UdpwcAQGVFCKEy8VA2iFwv
   blockers:
   - One of the four review threads of 2026-09-03 is left open deliberately, and it is the
@@ -53,6 +54,7 @@ items:
   depends_on:
   - episode-replayed-into-the-world
   status: in_progress
+  recommended_model: opus
   session: https://claude.ai/code/session_0124wGjWgkgfuDHX1xTJh6St
   blockers:
   - 'One thread is open on #257 and it is the developer''s to settle. r3940953108 asked whether
@@ -75,6 +77,7 @@ items:
   depends_on:
   - expectations-from-events
   status: not_started
+  recommended_model: opus
   notes: 'Added 2026-09-04 at the developer''s ask on #257 (r3934932647 and r3937639689).
     expectations-from-events keeps what holds of one piece the robot acted on, from the action''s
     declared effect and each event''s declared Effect, both stated as the twin''s own relations.'
@@ -86,6 +89,7 @@ items:
   depends_on:
   - knowledge-directed-requests/choose-detection-method
   status: deferred
+  recommended_model: sonnet
   blockers:
   - 'Deferred past the 2026-09-15 deadline: nothing depends on it and no demo item needs it.'
   notes: 'One adapter implementing the detector interface over a RoboKudo analysis engine,
@@ -103,6 +107,7 @@ items:
   - expectations-from-events
   - knowledge-directed-requests/demo-asks-by-query
   status: not_started
+  recommended_model: sonnet
   notes: 'The end-to-end story the paper is written around: the robot picks a piece, Segmind''s
     LossOfSupportEvent takes the table out of the search, the insertion''s declared effect
     points perception at the board''s lid, and when the insertion fails perception finds the
@@ -117,6 +122,7 @@ items:
   track: events
   depends_on: []
   status: not_started
+  recommended_model: sonnet
   notes: 'Split out of icra-mechanism''s `snapshot-working-memory` (#301) on 2026-09-11, per
     the developer''s own direction on that PR''s review thread: `SnapshotWorkingMemory` now
     writes every perceived pose onto the twin unconditionally, and deciding whether a piece

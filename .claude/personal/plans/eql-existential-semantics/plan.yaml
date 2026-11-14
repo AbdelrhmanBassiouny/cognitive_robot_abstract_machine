@@ -75,6 +75,7 @@ items:
   track: benchmarking
   depends_on: []
   status: not_started
+  recommended_model: sonnet
   notes: 'GOAL: a repeatable timing harness for EQL query evaluation, plus a recorded baseline
     on main, so every later item in this plan reports a measured delta instead of an assertion
     that it is "probably fine". EXPLORE FIRST: (a) what PR #99 already built — it measured
@@ -90,6 +91,7 @@ items:
   depends_on:
   - evaluation-benchmark
   status: not started
+  recommended_model: opus
   notes: 'GOAL: the outer relation exists before any filter condition runs. Concretely, an(entity(box).where(<filter>))
     binds box first, then evaluates <filter> per binding — rather than letting the condition''s
     own enumeration be the only thing that ever binds box. WHY IT IS THE PREREQUISITE, NOT
@@ -104,6 +106,7 @@ items:
   track: binding-order
   depends_on: []
   status: not_started
+  recommended_model: opus
   notes: 'NEXT: SQL rule (chosen on #541, thread match.md:92): a nested query is evaluated
     under the enclosing bindings of every variable it shares; generalize #541''s MatchedEntity
     to every nested Query. Fails now: entity(body).where(HasType(entity(body), Handle)) gives
@@ -117,6 +120,7 @@ items:
   track: disjunction-safety
   depends_on: []
   status: not_started
+  recommended_model: opus
   notes: 'GOAL: OR''s behaviour is stated, tested, and safe. Today core_logical_operators.py
     documents OR as an "ElseIf" that evaluates the right operand only when the left is False,
     but measured behaviour is classical disjunction — the union of both branches'' solution
@@ -131,6 +135,7 @@ items:
   depends_on:
   - binding-order-planner
   status: not_started
+  recommended_model: opus
   notes: 'GOAL: exists() is a filter on the outer bindings that emits no new bindings at all.
     For each distinct assignment to the outer-visible variables, yield it once if at least
     one assignment to the remaining variables satisfies the condition; the remaining variables
@@ -145,6 +150,7 @@ items:
   depends_on:
   - exists-semijoin
   status: not_started
+  recommended_model: opus
   notes: 'GOAL: set semantics over unselected variables: a variable a query does not select
     is existential, so the query yields one row per binding of its selection, not one per
     witness (relational calculus, Datalog). Raised on #480; chosen as the target on #495 (2026-11-09),
@@ -159,6 +165,7 @@ items:
   depends_on:
   - exists-semijoin
   status: not_started
+  recommended_model: opus
   notes: 'GOAL: not_(exists(...)) is an antijoin (R ▷ S) — one row per outer binding with
     no witness — and for_all stops failing for the same reason exists did. EXPLORE FIRST:
     (a) whether Not wrapping a semi-join Exists gives the antijoin for free once the semi-join
@@ -173,6 +180,7 @@ items:
   depends_on:
   - exists-semijoin
   status: not_started
+  recommended_model: haiku
   notes: 'GOAL: exists(*conditions), joined like where(). Hard break — all five in-repo call
     sites migrate in the same PR, no deprecation shim (user decision, 2026-08-03: a shim that
     silently accepts a now-meaningless variable is exactly the misuse-prone interface being
@@ -188,6 +196,7 @@ items:
   depends_on:
   - exists-single-argument
   status: not_started
+  recommended_model: sonnet
   notes: 'GOAL: the two consumers that read Exists.variable keep working without it. THE CONSUMERS:
     (a) ExistsRule.build and QuantifierScope.focus in verbalization — "there exists a Robot
     such that its battery is greater than 0" needs both a noun to introduce and a discourse
@@ -205,6 +214,7 @@ items:
   - negation-antijoin
   - disjunction-range-restriction
   status: not_started
+  recommended_model: sonnet
   notes: 'GOAL: close the loop the user asked for — a published before/after on what the binding-order
     and quantifier changes did to EQL''s evaluation cost, using the wave-0 harness unchanged.
     REPORT: per query shape, the baseline and final numbers for wall time, variable enumerations,
@@ -220,6 +230,7 @@ items:
   depends_on:
   - disjunction-range-restriction
   status: not_started
+  recommended_model: sonnet
   notes: 'GOAL: an n-ary threshold connective in core_logical_operators.py - "at least k of
     these n operands hold" - with Or (k=1) and And (k=n) as its two ends, its first-order
     reading written down, and its range-restriction rule stated as a function of k. IT GENERALIZES
@@ -233,6 +244,7 @@ items:
   pull_request_number: 556
   track: match-collections
   status: in_progress
+  recommended_model: sonnet
   session: https://claude.ai/code/session_01JxHGiLw14x2s6qUmLMbTjy
   notes: 'Draft, stacked on #495; bug-fix, api-break (list/tuple == by order, list of patterns
     needs the same length, ValueFitsNeitherElementNorCollection). Option A, chosen by the
@@ -244,6 +256,7 @@ items:
   pull_request_number: 557
   track: match-collections
   status: in_progress
+  recommended_model: sonnet
   session: https://claude.ai/code/session_01JxHGiLw14x2s6qUmLMbTjy
   notes: 'Draft, stacked on #556; bug-fix, api-break (nested domain reused, `...`/cause inside
     it raises GenerativeBackendCannotFillInADomainObject until match-implicit-prediction/complete-domain-objects).'

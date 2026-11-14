@@ -21,6 +21,7 @@ items:
   track: counterfactual-core
   depends_on: []
   status: not started
+  recommended_model: opus
   notes: '#535 compares a ground term''s owner (instance, container, receiver) by Python identity.
     An object loaded from the database again, or deep-copied, is then a different owner. Key
     the owner by its persistent identity where it has one (ORM primary key or SymbolGraph
@@ -33,6 +34,7 @@ items:
   depends_on:
   - owner-identity-across-reloads
   status: not started
+  recommended_model: opus
   notes: 'Load the objects of one moment of an episode through the ORM, state facts about
     them, and evaluate with the EQL backend and state=. Tests compare the answer with the
     live answer on the same loaded objects; nothing is written back.
@@ -44,6 +46,7 @@ items:
   depends_on:
   - episode-counterfactuals
   status: not started
+  recommended_model: opus
   notes: 'Translate assigned attributes into per-row overrides of the generated SQL, and set
     reads_state. Refuse a state that assigns a call or a Python-bodied derived term, which
     SQL cannot evaluate. Answers must equal episode-counterfactuals'' on the same data.
@@ -55,6 +58,7 @@ items:
   depends_on:
   - episode-counterfactuals
   status: not started
+  recommended_model: opus
   notes: 'Design first: whether an assigned ground term is a do-intervention or conditioning
     evidence, and what a state means for a model with no causal structure. Propose it on the
     tracking issue before implementing.
