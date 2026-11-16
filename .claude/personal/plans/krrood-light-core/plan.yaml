@@ -117,12 +117,14 @@ items:
   pull_request_number: 608
   session: https://claude.ai/code/session_01JxHGiKzJUPxGJDd4Czwnrm
   depends_on: []
-  notes: 'Ready for review and promoted upstream as cram2 pull request 978. All five core
-    crossings are removed and a test keeps the core boundary checker silent over core. Next:
-    read CI on the latest head and any upstream review. Development tools stay out of core
+  notes: >
+    Ready for review and promoted upstream as cram2 pull request 978, approved by two reviewers with
+    all checks passing and no unresolved threads when read. All five core crossings are removed and
+    a test keeps the core boundary checker silent over core. Development tools stay out of core
     (user decision).
 
-    '
+    The branch carries a merge of upstream main 8ed27b107b (head 1107f1c700); CI on that head has
+    not been read yet.
 - id: namespace-package
   title: 'krrood is a namespace package: krrood/__init__.py removed'
   branch: null
