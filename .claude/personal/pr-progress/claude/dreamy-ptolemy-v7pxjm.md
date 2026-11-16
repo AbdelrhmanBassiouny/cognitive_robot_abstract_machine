@@ -1,9 +1,10 @@
-Plan:
-- Wait for review; mark ready only when told
-Done:
-- All five core crossings removed, with a boundary test (f9f6b1719)
-- krrood tests pass per directory, except 2 RDR diagram tests that need Graphviz `dot` (fail on main too)
-- cramph and sdt tests touched by the import change: same 219 environment failures as main, none new
-- Labels api-break and maintenance; plan item notes updated
-Next:
-- Address review; open question: the name class_diagram_lookup for the old symbol_graph.helpers
+## Plan
+- Keep the item's pull request in step with upstream main and answer review.
+
+## Done
+- All five core crossings removed; core boundary test added.
+- Merged upstream main (8c733e90bd) to clear a conflict in tensorized normal_distribution_functions.py; moved the new gaussian_layer.py to krrood.patterns.classproperty (pushed ff84851d64).
+- Upstream pull request 978: checks passed, no reviews when read.
+
+## Next
+- Read CI on the new head. Not run locally (no development environment): krrood check and tests.
