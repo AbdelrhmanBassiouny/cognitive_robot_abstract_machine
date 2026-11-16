@@ -1,12 +1,12 @@
 ## Plan
-- EQL imports no random_events/probabilistic_model; probabilistic parts live in krrood.parametrization
+- Keep the EQL core free of random_events and probabilistic_model; probabilistic parts live in krrood.parametrization.
 
 ## Done
-- number_like_field plain check; fresh-interpreter import-boundary test
-- ProbabilisticBackend, causal search results, probabilistic queries + factories + rules moved; importers rewritten
-- Lazy grammar (PhraseRuleRegistry.loaded_rules), only rule classes their module binds
-- krrood check clean vs base; test_eql 1561 passed; PR #609 description/labels current
+- Moves, lazy factories and import-boundary test landed; CI green (14/14) at 8285d6814a.
+- Merged the updated main (docstring conflicts in backends.py, parameterizer.py) at 787d2ec478; pushed. CI on it not read yet.
+- Upstream PR #985: 1/1 checks, no reviews or threads (read this run).
+- Fork thread on probabilistic_queries.py resolved.
 
 ## Next
-- Await review; rebase when #545 or #608 (classproperty move touches backends imports) lands
-- semantic_digital_twin/coraplex/experiments suites only verifiable in CI
+- Read CI at 787d2ec478 when it finishes.
+- Open thread on test_grammar_registry.py: user asked whether a class-level flag should replace the module-binding filter in PhraseRuleRegistry.loaded_rules; awaiting the user's yes/no.
