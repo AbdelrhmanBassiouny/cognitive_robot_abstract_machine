@@ -1,11 +1,13 @@
 Plan
-- Keep #66 ready; react to the owner's next review.
+- Keep #66 mergeable against `main` and carried into the stack above it.
 
 Done
-- 22f35dfa26 (round 4): SpecificityRankedAlternative (guard + specificity class properties); SpecificityRule = guard applies; SourceEmitter selects via most_applicable (guard can_emit_source_for_object, rank by emitted type); classproperty moved to patterns/classproperty.py, re-exported by ormatic.utils.
-- Carried down all nine descendants; both round-4 threads answered and resolved; PR description current.
+- 2026-11-16: merged `main` (`97fcca43a9`) into the branch (`d7b3499c2f`) and pushed. It conflicted in `dataclass_source.py`, `ormatic/utils.py` and `patterns/classproperty.py`, because `main` had made the same `classproperty` move. Merge probe afterwards: clean.
+- Tests at `d7b3499c2f`: `test_eql_rdr`, `test_code_generation`, `test_patterns` (347), `test_eql/test_core` (424), `test_ormatic` (262) pass; `krrood check` passes on the touched files.
+- All 77 review threads are resolved. Description updated.
 
 Next
-- Read CI at 22f35dfa26; the owner removes the integration-conflict label.
-- Separate fix: DecomposedRuleTree fails on next_rule branches (Next has no .right).
-- Descendants keep pre-existing keyword-only failures (ExpertAbort, insert_at, Match.from_, _iter_descendants_).
+- Read CI on `d7b3499c2f` (not read yet).
+- Read upstream review state: the upstream-reviews Action's reader crashed (a KeyError on `error`).
+- Restack the descendants onto `d7b3499c2f`: `maintenance restack --stacked-on D-core-serialization` fails at the `D-ui-rendering` checkout.
+- Owner: remove the `integration-conflict` label; ask whether the item is finished (PR is out of draft, promotion unknown).
