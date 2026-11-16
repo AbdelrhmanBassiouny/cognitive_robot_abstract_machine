@@ -68,10 +68,11 @@ items:
   pull_request_number: 609
   session: https://claude.ai/code/session_01JxHGiNCuZYy4zJDsmbyfwZ
   depends_on: []
-  notes: Draft PR open; every EQL module imports with random_events/probabilistic_model blocked
-    (fresh-interpreter test). ProbabilisticBackend, the causal search results, probabilistic_queries
-    with distribution_of/probability_of and their verbalization rules moved to krrood.parametrization;
-    the EQL backends stay in backends.py. Verbalization rules are collected lazily (PhraseRuleRegistry.loaded_rules,
+  notes: PR 609 ready, promoted as upstream PR 985; main merged in, CI on it pending; every
+    EQL module imports with random_events/probabilistic_model blocked (fresh-interpreter test).
+    ProbabilisticBackend, the causal search results, probabilistic_queries with distribution_of/probability_of
+    and their verbalization rules moved to krrood.parametrization; the EQL backends stay in
+    backends.py. Verbalization rules are collected lazily (PhraseRuleRegistry.loaded_rules,
     user decision). number_like_field is a plain int/float-not-bool/Enum check.
 - id: verbalization-realization-split
   title: Verbalization vocabulary stays in krrood-eql, realization moves out of it
@@ -108,23 +109,6 @@ items:
   depends_on: []
   notes: 'Asked in review of #547. Absorbed by development-tools-on-basstler-rules: krrood''s
     command is then mounted on basstler-rules'' cyclopts commands. Delete once that item starts.'
-- id: classproperty-in-patterns
-  title: krrood-core imports nothing outside patterns, class_diagrams, symbol_graph and exceptions
-  branch: claude/dreamy-ptolemy-v7pxjm
-  status: in progress
-  recommended_model: sonnet
-  track: core-boundaries
-  pull_request_number: 608
-  session: https://claude.ai/code/session_01JxHGiKzJUPxGJDd4Czwnrm
-  depends_on: []
-  notes: >
-    Ready for review and promoted upstream as cram2 pull request 978, approved by two reviewers with
-    all checks passing and no unresolved threads when read. All five core crossings are removed and
-    a test keeps the core boundary checker silent over core. Development tools stay out of core
-    (user decision).
-
-    The branch carries a merge of upstream main 8ed27b107b (head 1107f1c700); CI on that head has
-    not been read yet.
 - id: namespace-package
   title: 'krrood is a namespace package: krrood/__init__.py removed'
   branch: null
@@ -148,7 +132,6 @@ items:
   - serializer-without-heavy-dependencies
   - eql-probabilistic-split
   - verbalization-realization-split
-  - classproperty-in-patterns
   - namespace-package
   notes: 'One workspace member per distribution (krrood-core, -eql, -serialization, -ormatic,
     -rdr, -ontomatic, -probabilistic, -development-tools...), cut by the decoupling items;
@@ -172,4 +155,4 @@ items:
     engine: rule, section, checker, instructions, formatting. It keeps krrood''s shipped rules
     (EQL a/an, serializer, core-boundary) as a basstler-rules ruleset and the krrood command
     mounted on basstler-rules'' commands. Absorbs command-line-on-cyclopts.'
-landed_item_count: 1
+landed_item_count: 2
