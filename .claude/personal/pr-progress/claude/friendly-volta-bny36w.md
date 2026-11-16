@@ -3,10 +3,9 @@
 
 ## Done
 - Moves, lazy factories and import-boundary test landed; CI green (14/14) at 8285d6814a.
-- Merged the updated main (docstring conflicts in backends.py, parameterizer.py) at 787d2ec478; pushed. CI on it not read yet.
+- Merged updated main at 787d2ec478; replaced the module-binding filter with PhraseRule.joins_grammar (default True) at d27b63faeb (user chose opt-out); pushed. Not run under pytest here (random_events build mismatch).
 - Upstream PR #985: 1/1 checks, no reviews or threads (read this run).
 - Fork thread on probabilistic_queries.py resolved.
 
 ## Next
-- Read CI at 787d2ec478 when it finishes.
-- Open thread on test_grammar_registry.py: user asked whether a class-level flag should replace the module-binding filter in PhraseRuleRegistry.loaded_rules; awaiting the user's yes/no.
+- Read CI at d27b63faeb; if green, resolve the test_grammar_registry.py thread.
