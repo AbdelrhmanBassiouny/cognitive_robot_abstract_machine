@@ -47,27 +47,13 @@ items:
   notes: 'Stacked on #546. matplotlib imported inside the functions that draw; no enums or
     decorator. #546''s CoreBoundaryChecker enforces it; graph_visualizer and rxnode no longer
     cross the boundary.'
-- id: type-hint-resolver-skips-missing-modules
-  title: Type-hint resolution skips modules that are not installed
-  branch: claude/relaxed-wozniak-eu4gdv
-  status: in progress
-  recommended_model: sonnet
-  track: optional-imports
-  pull_request_number: 545
-  session: https://claude.ai/code/session_01JxHGiMzkomLaQ42NXK331R
-  depends_on: []
-  notes: 'In review in #545: get_scope_from_imports attempts a plain import under TYPE_CHECKING
-    and an ImportError makes it bind no name (developer-approved exception to no-try/except;
-    find_spec missed modules with missing dependencies). Runtime imports keep raising. After
-    #546 lands, move these helpers into krrood.source_analysis and share ModuleLevelImportFinder.type_checking_flag.'
 - id: serializer-without-heavy-dependencies
   title: JSON serializer and symbol graph import no sqlalchemy, scipy or casadi
   branch: null
   status: not_started
   recommended_model: sonnet
   track: core-boundaries
-  depends_on:
-  - type-hint-resolver-skips-missing-modules
+  depends_on: []
   notes: 'HasGeneric moves from ormatic.data_access_objects.base into patterns; the scipy
     sparse-array support moves to its own serializer module; numpy array support stays core
     (rustworkx already requires numpy, import ~0.07 s); symbol_graph.helpers stops importing
@@ -81,22 +67,19 @@ items:
   track: core-boundaries
   pull_request_number: 609
   session: https://claude.ai/code/session_01JxHGiNCuZYy4zJDsmbyfwZ
-  depends_on:
-  - type-hint-resolver-skips-missing-modules
-  notes: 'Draft PR open; every EQL module imports with random_events/probabilistic_model
-    blocked (fresh-interpreter test). ProbabilisticBackend, the causal search results,
-    probabilistic_queries with distribution_of/probability_of and their verbalization rules
-    moved to krrood.parametrization; the EQL backends stay in backends.py. Verbalization
-    rules are collected lazily (PhraseRuleRegistry.loaded_rules, user decision).
-    number_like_field is a plain int/float-not-bool/Enum check.'
+  depends_on: []
+  notes: Draft PR open; every EQL module imports with random_events/probabilistic_model blocked
+    (fresh-interpreter test). ProbabilisticBackend, the causal search results, probabilistic_queries
+    with distribution_of/probability_of and their verbalization rules moved to krrood.parametrization;
+    the EQL backends stay in backends.py. Verbalization rules are collected lazily (PhraseRuleRegistry.loaded_rules,
+    user decision). number_like_field is a plain int/float-not-bool/Enum check.
 - id: verbalization-realization-split
   title: Verbalization vocabulary stays in krrood-eql, realization moves out of it
   branch: null
   status: not_started
   recommended_model: opus
   track: core-boundaries
-  depends_on:
-  - type-hint-resolver-skips-missing-modules
+  depends_on: []
   notes: 'User-approved: _verbalization_fragment_ stays abstract and unchanged. The vocabulary
     (clause, Noun, Verb, fragments) is declarative; only morphology (inflect ~1.7 s, lemminflect,
     typeguard) and the pipeline (jinja2, IPython) move out of krrood-eql (which distribution
@@ -134,12 +117,12 @@ items:
   pull_request_number: 608
   session: https://claude.ai/code/session_01JxHGiKzJUPxGJDd4Czwnrm
   depends_on: []
-  notes: 'Draft PR open; all five core crossings removed, krrood tests pass. classproperty
-    moved to krrood.patterns.classproperty; symbol_graph loads ontomatic''s introspector
-    inside _build_class_diagram; symbol_graph.helpers moved to entity_query_language.class_diagram_lookup,
-    causal_relation to entity_query_language, module_generation to code_generation. A test
-    keeps the core boundary checker silent over core. Development tools stay out of core
-    (user decision).'
+  notes: 'Ready for review and promoted upstream as cram2 pull request 978. All five core
+    crossings are removed and a test keeps the core boundary checker silent over core. Next:
+    read CI on the latest head and any upstream review. Development tools stay out of core
+    (user decision).
+
+    '
 - id: namespace-package
   title: 'krrood is a namespace package: krrood/__init__.py removed'
   branch: null
@@ -187,3 +170,4 @@ items:
     engine: rule, section, checker, instructions, formatting. It keeps krrood''s shipped rules
     (EQL a/an, serializer, core-boundary) as a basstler-rules ruleset and the krrood command
     mounted on basstler-rules'' commands. Absorbs command-line-on-cyclopts.'
+landed_item_count: 1
