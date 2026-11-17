@@ -32,7 +32,7 @@ from krrood.entity_query_language.rdr.interactive import IPythonInterface
 from krrood.entity_query_language.rdr.interface import (
     FunctionInterface,
 )
-from krrood.entity_query_language.rdr.serialization import RDRSerializer
+from krrood.entity_query_language.rdr.serialization import RippleDownRulesSerializer
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
 
@@ -187,7 +187,7 @@ class TestCorrectDrawerNoTargetFit(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "test_correct_drawer_model.py")
-            RDRSerializer(rdr=rdr).save(path=path)
+            RippleDownRulesSerializer(rdr=rdr).save(path=path)
             loaded = EQLSingleClassRDR.load(path=path)
 
         for case, target in zip(drawers, targets):
@@ -262,7 +262,7 @@ class TestCorrectFitDrawerAsHumanExpert(unittest.TestCase):
         rdr.fit(drawers, expert=Expert(interface=IPythonInterface()))
 
         os.makedirs(FITTED_MODELS_DIR, exist_ok=True)
-        RDRSerializer(rdr=rdr).save(path=SAVED_MODEL_PATH)
+        RippleDownRulesSerializer(rdr=rdr).save(path=SAVED_MODEL_PATH)
 
         correct = sum(
             rdr.classify(drawer) == target for drawer, target in zip(drawers, targets)
