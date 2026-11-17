@@ -38,7 +38,7 @@ from krrood.entity_query_language.rdr.condition_resolver import (
 from krrood.entity_query_language.rdr.backend import ModelKey, RDRBackend
 from krrood.entity_query_language.rdr.expert import Expert
 from krrood.entity_query_language.rdr.interactive import IPythonInterface
-from krrood.entity_query_language.rdr.serialization import RDRSerializer
+from krrood.entity_query_language.rdr.serialization import RippleDownRulesSerializer
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
 from .animal import Animal
@@ -88,13 +88,13 @@ class TestFitZooAsHumanExpert(unittest.TestCase):
         rdr.fit(animals, targets, Expert(interface=IPythonInterface(rdr=rdr)))
 
         os.makedirs(FITTED_MODELS_DIR, exist_ok=True)
-        RDRSerializer(rdr=rdr).save(path=SAVED_MODEL_PATH)
+        RippleDownRulesSerializer(rdr=rdr).save(path=SAVED_MODEL_PATH)
 
         correct = sum(rdr.classify(a) == t for a, t in zip(animals, targets))
         print(f"\n[interactive] accuracy on fitted set: {correct}/{len(animals)}")
         print(f"[interactive] saved learned rule tree to: {SAVED_MODEL_PATH}")
         print("[interactive] commit it to enable TestLoadHumanFittedModel.\n")
-        print(RDRSerializer(rdr=rdr).to_source())
+        print(RippleDownRulesSerializer(rdr=rdr).to_source())
 
         self.assertTrue(os.path.exists(SAVED_MODEL_PATH))
 

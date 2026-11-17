@@ -254,11 +254,11 @@ A tree grown by conclusion-asking serializes and loads the same way as any other
 ```{code-cell} ipython3
 import os
 import tempfile
-from krrood.entity_query_language.rdr.serialization import RDRSerializer
+from krrood.entity_query_language.rdr.serialization import RippleDownRulesSerializer
 
 with tempfile.TemporaryDirectory() as tmp:
     path = os.path.join(tmp, "exhibit_rdr.py")
-    RDRSerializer(rdr=rdr).save(path=path)
+    RippleDownRulesSerializer(rdr=rdr).save(path=path)
 
     # Show the first few lines of the saved Python module.
     with open(path) as f:
@@ -280,7 +280,7 @@ print("Round-trip identical:", all_match)
 | Inspect allowed values | `rdr.conclusion_domain` |
 | Re-confirm current label | Return the current conclusion; no rule is inserted |
 | Pre-seed with a heuristic | `Expert(helpers=[MyHelper()])` |
-| Save to disk | `RDRSerializer(rdr=rdr).save(path=path)` |
+| Save to disk | `RippleDownRulesSerializer(rdr=rdr).save(path=path)` |
 | Reload from disk | `EQLSingleClassRDR.load(path=path)` |
 | Interactive shell | `Expert(interface=IPythonInterface())` — see prose below |
 
@@ -329,7 +329,7 @@ The magics `%help`, `%show_tree`, and `%helper` are available throughout.
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 from krrood.entity_query_language.rdr.interface import FunctionInterface
 from krrood.entity_query_language.rdr.expert import Expert
-from krrood.entity_query_language.rdr.serialization import RDRSerializer
+from krrood.entity_query_language.rdr.serialization import RippleDownRulesSerializer
 from krrood.entity_query_language.rdr.answer_vocabulary import AnswerName
 from rdr_conclusion_domain import Exhibit, ExhibitKind, EXHIBITS, LABELS
 import os, tempfile
@@ -351,7 +351,7 @@ rdr_e2e.fit(EXHIBITS, expert=Expert(interface=FunctionInterface(answer_function=
 
 with tempfile.TemporaryDirectory() as tmp:
     path = os.path.join(tmp, "exhibit_e2e.py")
-    RDRSerializer(rdr=rdr_e2e).save(path=path)
+    RippleDownRulesSerializer(rdr=rdr_e2e).save(path=path)
     loaded_e2e = EQLSingleClassRDR.load(path=path)
 
 print("All correct:", all(loaded_e2e.classify(e) == l for e, l in zip(EXHIBITS, LABELS)))
@@ -372,7 +372,7 @@ print("All correct:", all(loaded_e2e.classify(e) == l for e, l in zip(EXHIBITS, 
   how allowable values are derived from the type annotation.
 - {py:class}`~krrood.entity_query_language.rdr.conclusion_helper.ConclusionHelper` — base class for pluggable
   presentation and suggestion aids.
-- {py:meth}`~krrood.entity_query_language.rdr.serialization.RDRSerializer.save` /
+- {py:meth}`~krrood.entity_query_language.rdr.serialization.RippleDownRulesSerializer.save` /
   {py:meth}`~krrood.entity_query_language.rdr.single_class.EQLSingleClassRDR.load` — persistence.
 - {doc}`writing_rule_trees` — background on how EQL rule trees are structured.
 - Developer guide: {doc}`../developer/eql_rdr_conclusion_asking` — design rationale and

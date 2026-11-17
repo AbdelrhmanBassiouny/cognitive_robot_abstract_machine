@@ -29,7 +29,7 @@ from krrood.entity_query_language.rdr.interactive import IPythonInterface
 from krrood.entity_query_language.rdr.interface import (
     FunctionInterface,
 )
-from krrood.entity_query_language.rdr.serialization import RDRSerializer
+from krrood.entity_query_language.rdr.serialization import RippleDownRulesSerializer
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
 from .animal import Animal, Species
@@ -192,7 +192,7 @@ class TestNoTargetSerializationRoundTrip(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "mode2_model.py")
-            RDRSerializer(rdr=rdr).save(path=path)
+            RippleDownRulesSerializer(rdr=rdr).save(path=path)
             loaded = EQLSingleClassRDR.load(path=path)
         for case, _ in subset:
             self.assertEqual(rdr.classify(case), loaded.classify(case), case.name)

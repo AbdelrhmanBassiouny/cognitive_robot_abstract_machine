@@ -31,7 +31,7 @@ from krrood.entity_query_language.rdr.interface import (
 )
 from krrood.entity_query_language.rdr.serialization import (
     ModelSaver,
-    RDRSerializer,
+    RippleDownRulesSerializer,
 )
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 from krrood.entity_query_language.rdr.underspecified import RippleDownRulesMatchParser
@@ -319,7 +319,7 @@ def test_a_reloaded_model_concludes_what_the_original_did(
     case_variable = RippleDownRulesMatchParser(match=query).variable
     backend.fit(query, species_of)
     destination = tmp_path / "animal_species_rdr.py"
-    RDRSerializer(rdr=backend.models[ModelKey(Animal, "species")]).save(
+    RippleDownRulesSerializer(rdr=backend.models[ModelKey(Animal, "species")]).save(
         path=str(destination)
     )
 
