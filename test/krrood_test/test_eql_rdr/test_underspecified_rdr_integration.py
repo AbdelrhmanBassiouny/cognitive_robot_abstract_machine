@@ -29,7 +29,7 @@ from krrood.entity_query_language.rdr.exceptions import (
 )
 from krrood.entity_query_language.rdr.expert import Expert
 from krrood.entity_query_language.rdr.interface import FunctionInterface
-from krrood.entity_query_language.rdr.serialization import RDRSerializer
+from krrood.entity_query_language.rdr.serialization import RippleDownRulesSerializer
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 from krrood.entity_query_language.rdr.underspecified import UnderspecifiedMatch
 
@@ -254,7 +254,7 @@ class TestUnderspecifiedEndToEnd(unittest.TestCase):
         model = self._fitted_model
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "zoo_rdr.py")
-            RDRSerializer(rdr=model).save(path=path)
+            RippleDownRulesSerializer(rdr=model).save(path=path)
             loaded = EQLSingleClassRDR.load(path=path)
 
         original_backend = RDRBackend()

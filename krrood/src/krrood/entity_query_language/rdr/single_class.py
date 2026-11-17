@@ -62,8 +62,8 @@ from krrood.entity_query_language.rdr.rule_tree_view import (
     render_rule_tree,
 )
 from krrood.entity_query_language.rdr.serialization import (
-    RDRModuleAttribute,
-    RDRSerializer,
+    RippleDownRulesModuleAttribute,
+    RippleDownRulesSerializer,
 )
 from krrood.entity_query_language.scope import (
     attach_definition_scope,
@@ -194,8 +194,8 @@ class EQLSingleClassRDR:
     def load(cls, *, path: str) -> Self:
         """
         Load an RDR from a module written by
-        :meth:`~krrood.entity_query_language.rdr.serialization.RDRSerializer.save` or
-        :meth:`~krrood.entity_query_language.rdr.serialization.RDRSerializer.save_with_case`.
+        :meth:`~krrood.entity_query_language.rdr.serialization.RippleDownRulesSerializer.save` or
+        :meth:`~krrood.entity_query_language.rdr.serialization.RippleDownRulesSerializer.save_with_case`.
 
         :param path: The ``.py`` file.
         :return: The rebuilt RDR.
@@ -204,20 +204,24 @@ class EQLSingleClassRDR:
         module_attributes = vars(module)
 
         conclusion_attribute_name = module_attributes[
-            RDRModuleAttribute.CONCLUSION_ATTRIBUTE
+            RippleDownRulesModuleAttribute.CONCLUSION_ATTRIBUTE
         ]
         rdr = cls(
-            module_attributes[RDRModuleAttribute.CASE_TYPE], conclusion_attribute_name
+            module_attributes[RippleDownRulesModuleAttribute.CASE_TYPE],
+            conclusion_attribute_name,
         )
-        rdr.case_variable = module_attributes[RDRModuleAttribute.CASE_VARIABLE]
+        rdr.case_variable = module_attributes[
+            RippleDownRulesModuleAttribute.CASE_VARIABLE
+        ]
         rdr.conclusion_variable = getattr(rdr.case_variable, conclusion_attribute_name)
-        rdr.query = module_attributes[RDRModuleAttribute.QUERY]
+        rdr.query = module_attributes[RippleDownRulesModuleAttribute.QUERY]
 
         rule_conditions = DecomposedRuleTree.from_condition(
             condition=rdr.conditions_root
         ).rule_conditions()
         rdr.corner_cases = CornerCaseStore.from_ordered_cases(
-            rule_conditions, module_attributes.get(RDRModuleAttribute.CORNER_CASES, {})
+            rule_conditions,
+            module_attributes.get(RippleDownRulesModuleAttribute.CORNER_CASES, {}),
         )
         return rdr
 
@@ -482,7 +486,7 @@ class EQLSingleClassRDR:
         self.corner_cases.record_corner_case(new_node, case)
 
         if self.save_path is not None:
-            RDRSerializer(rdr=self).save_with_case(path=self.save_path)
+            RippleDownRulesSerializer(rdr=self).save_with_case(path=self.save_path)
 
     def fit(
         self,
@@ -528,9 +532,9 @@ class EQLSingleClassRDR:
             and self.save_path is not None
             and expert.interface.on_save is None
         ):
-            expert.interface.on_save = lambda: RDRSerializer(rdr=self).save_with_case(
-                path=self.save_path
-            )
+            expert.interface.on_save = lambda: RippleDownRulesSerializer(
+                rdr=self
+            ).save_with_case(path=self.save_path)
 
         progress: Optional[ProgressReporter] = None
         if expert is not None:
@@ -604,7 +608,9 @@ class EQLSingleClassRDR:
             signature = frozenset(pending)
             if signature in seen_signatures:
                 if self.save_path is not None:
-                    RDRSerializer(rdr=self).save_with_case(path=self.save_path)
+                    RippleDownRulesSerializer(rdr=self).save_with_case(
+                        path=self.save_path
+                    )
                 clashing = ", ".join(repr(cases[i]) for i in pending)
                 save_hint = (
                     f" The partially fitted model has been saved to {self.save_path!r}."
