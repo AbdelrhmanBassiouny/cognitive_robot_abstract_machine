@@ -494,7 +494,7 @@ def test_save_with_case_writes_the_case_class_before_the_rules(tmp_path):
 
     serializer = RippleDownRulesSerializer(rdr=rdr)
     assert source == (
-        FunctionCaseGenerator().generate(
+        FunctionCaseGenerator(base_class=FunctionCase).generate(
             function=bird_risk, class_name=BirdRiskCase.__name__
         )
         + RippleDownRulesSerializer.case_class_and_rules_separator

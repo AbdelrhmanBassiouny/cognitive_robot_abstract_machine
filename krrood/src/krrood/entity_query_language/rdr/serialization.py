@@ -328,7 +328,7 @@ class RippleDownRulesSerializer:
         case_type = self.rdr.case_type
         if not (isinstance(case_type, type) and issubclass(case_type, FunctionCase)):
             return self.save(path=path)
-        class_source = FunctionCaseGenerator().generate(
+        class_source = FunctionCaseGenerator(base_class=FunctionCase).generate(
             function=case_type.function, class_name=case_type.__name__
         )
         source = (
