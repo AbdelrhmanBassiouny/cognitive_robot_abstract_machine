@@ -177,19 +177,19 @@ RDR_CASE_VARIABLE = selectStrategy
 RDR_QUERY = None
 ```
 
-The `RDRModuleAttribute` names are the stable handles `EQLSingleClassRDR.load` and `RDRFileStore.load_case_type` read;
+The `RippleDownRulesModuleAttribute` names are the stable handles `EQLSingleClassRDR.load` and `RDRFileStore.load_case_type` read;
 both sections take them from the constants in `rdr/serialization.py` rather than spelling
 them out, so the writer and the reader cannot drift apart. `RDR_QUERY = None` is what an
 empty tree looks like, and `EQLSingleClassRDR.load` reads it back as a tree with no rules.
 
-Once a rule exists, `RDRSerializer.save_with_case` rewrites the whole file: it regenerates the class
+Once a rule exists, `RippleDownRulesSerializer.save_with_case` rewrites the whole file: it regenerates the class
 section from `case_type.function` and replaces the rule-tree section with the live EQL
 expression.
 
-### `RDRSerializer.save_with_case` against `RDRSerializer.save`
+### `RippleDownRulesSerializer.save_with_case` against `RippleDownRulesSerializer.save`
 
-`RDRSerializer.save` writes the rule tree alone and imports the case type from wherever it came
-from. `RDRSerializer.save_with_case` recognises a `FunctionCase` subclass and inlines the class
+`RippleDownRulesSerializer.save` writes the rule tree alone and imports the case type from wherever it came
+from. `RippleDownRulesSerializer.save_with_case` recognises a `FunctionCase` subclass and inlines the class
 definition at the top of the same file, passing `case_type_is_local=True` so the rule-tree
 section does not import a class defined just above it. It generates that class against the
 RDR layer's own `FunctionCase`, which is the base the layer checks against - a case class
@@ -412,6 +412,6 @@ print("kept in the project directory:",
 - {py:class}`~krrood.entity_query_language.rdr.function_case.FunctionCase`
 - {py:class}`~krrood.code_generation.function_case.FunctionCaseGenerator`
 - {py:class}`~krrood.entity_query_language.rdr.serialization.ModelSaver`
-- {py:meth}`~krrood.entity_query_language.rdr.serialization.RDRSerializer.save_with_case`
+- {py:meth}`~krrood.entity_query_language.rdr.serialization.RippleDownRulesSerializer.save_with_case`
 - {py:meth}`~krrood.entity_query_language.rdr.single_class.EQLSingleClassRDR.load`
 - {py:class}`~krrood.entity_query_language.rdr.single_class.EQLSingleClassRDR`
