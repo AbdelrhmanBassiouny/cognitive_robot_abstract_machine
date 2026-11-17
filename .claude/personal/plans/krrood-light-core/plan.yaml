@@ -68,12 +68,10 @@ items:
   pull_request_number: 609
   session: https://claude.ai/code/session_01JxHGiNCuZYy4zJDsmbyfwZ
   depends_on: []
-  notes: PR 609 ready, promoted as upstream PR 985; main merged in, CI on it pending; every
-    EQL module imports with random_events/probabilistic_model blocked (fresh-interpreter test).
-    ProbabilisticBackend, the causal search results, probabilistic_queries with distribution_of/probability_of
-    and their verbalization rules moved to krrood.parametrization; the EQL backends stay in
-    backends.py. Verbalization rules are collected lazily (PhraseRuleRegistry.loaded_rules,
-    user decision). number_like_field is a plain int/float-not-bool/Enum check.
+  blockers:
+  - 'Upstream PR 985: changes requested by LucaKro, 3 unresolved threads: the rule-registering import in parametrization/__init__.py, a wall of text in probabilistic_backend.py, names deferred to another PR.'
+  - CI on 25049d9a99 not run yet.
+  notes: PR 609 ready, promoted as upstream PR 985. Probabilistic parts, causal_relation included, live in krrood.parametrization; every EQL module imports with random_events/probabilistic_model blocked (fresh-interpreter test). Verbalization rules are collected lazily (PhraseRuleRegistry.loaded_rules, user decision). number_like_field is a plain int/float-not-bool/Enum check.
 - id: verbalization-realization-split
   title: Verbalization vocabulary stays in krrood-eql, realization moves out of it
   branch: null
