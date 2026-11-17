@@ -49,10 +49,12 @@ items:
     cross the boundary.'
 - id: serializer-without-heavy-dependencies
   title: JSON serializer and symbol graph import no sqlalchemy, scipy or casadi
-  branch: null
-  status: not_started
+  branch: claude/ecstatic-cerf-wbpeis
+  status: in progress
   recommended_model: sonnet
   track: core-boundaries
+  pull_request_number: 610
+  session: https://claude.ai/code/session_018wfiv6feQ5Nq35wc9UCyHZ
   depends_on: []
   notes: 'HasGeneric moves from ormatic.data_access_objects.base into patterns; the scipy
     sparse-array support moves to its own serializer module; numpy array support stays core
