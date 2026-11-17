@@ -642,9 +642,6 @@ class SymbolicExpression(
             None.
         :return: An iterator of OperationResult instances.
         """
-        evaluation_context.active_conditions_root.set_active_root_if_not_set(
-            root=self._conditions_root_, has_condition=self._has_condition_
-        )
         yield from evaluation_context.iterate_as_current(
             results=self._evaluate_within_(
                 evaluation_context=evaluation_context, sources=sources
@@ -667,6 +664,9 @@ class SymbolicExpression(
             None.
         :return: An iterator of OperationResult instances.
         """
+        evaluation_context.active_conditions_root.set_active_root_if_not_set(
+            root=self._conditions_root_, has_condition=self._has_condition_
+        )
         try:
             evaluation_context.on_evaluate_enter(expression=self, sources=sources)
             # Normalize sources: always work with an OperationResult
