@@ -31,7 +31,7 @@ from typing_extensions import (
 
 from krrood.code_generation.module_loading import load_module_from_path
 from krrood.entity_query_language.rules.decomposition import DecomposedRuleTree
-from krrood.ormatic.utils import classproperty
+from krrood.patterns.classproperty import classproperty
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
 from krrood.entity_query_language.core.variable import Variable
