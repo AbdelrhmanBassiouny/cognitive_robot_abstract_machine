@@ -32,8 +32,8 @@ from krrood.code_generation.naming import camel_case_to_lower_camel_case, to_cam
 from krrood.entity_query_language.rdr.file_store import RDRFileStore
 from krrood.entity_query_language.rdr.function_case import FunctionCase
 from krrood.entity_query_language.rdr.serialization import (
-    RDRModuleAttribute,
-    RDRSerializer,
+    RippleDownRulesModuleAttribute,
+    RippleDownRulesSerializer,
 )
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
@@ -95,18 +95,20 @@ def empty_rule_tree_source(case_type_name: str) -> str:
     :param case_type_name: The generated case class the empty tree ranges over.
     :return: Python source defining the case variable and the loader's stable handles.
     """
-    generator = CodeGenerator(template_directory=str(RDRSerializer.templates_directory))
+    generator = CodeGenerator(
+        template_directory=str(RippleDownRulesSerializer.templates_directory)
+    )
     return remove_unused_imports(
         generator.render(
             template_name=EMPTY_RULE_TREE_TEMPLATE_NAME,
-            factory_import=RDRSerializer.rule_authoring_import,
+            factory_import=RippleDownRulesSerializer.rule_authoring_import,
             variable_name=camel_case_to_lower_camel_case(case_type_name),
             case_type_name=case_type_name,
             conclusion_attribute_name=CONCLUSION_ATTRIBUTE_NAME,
-            rdr_case_type_name=RDRModuleAttribute.CASE_TYPE,
-            rdr_conclusion_attribute_name=RDRModuleAttribute.CONCLUSION_ATTRIBUTE,
-            rdr_case_variable_name=RDRModuleAttribute.CASE_VARIABLE,
-            rdr_query_name=RDRModuleAttribute.QUERY,
+            rdr_case_type_name=RippleDownRulesModuleAttribute.CASE_TYPE,
+            rdr_conclusion_attribute_name=RippleDownRulesModuleAttribute.CONCLUSION_ATTRIBUTE,
+            rdr_case_variable_name=RippleDownRulesModuleAttribute.CASE_VARIABLE,
+            rdr_query_name=RippleDownRulesModuleAttribute.QUERY,
         )
     )
 
@@ -239,7 +241,7 @@ class RDRWrapper:
         )
         source = (
             case_source
-            + RDRSerializer.case_class_and_rules_separator
+            + RippleDownRulesSerializer.case_class_and_rules_separator
             + empty_rule_tree_source(case_type_name)
         )
         Path(self.store.path).parent.mkdir(parents=True, exist_ok=True)
