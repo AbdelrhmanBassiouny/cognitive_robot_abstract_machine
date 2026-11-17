@@ -94,12 +94,12 @@ items:
   status: in_progress
   recommended_model: opus
   blockers:
-  - 'CI on 203c33f2 not read. Upstream review state not checked (upstream-reviews Action
-    crashed). Owner to decide: krrood check flags dot, euclidean_distance, projection_line,
-    unproject as positional.'
+  - 'CI on ca5d6c6d (main 34c9f204 merged) not read. No cram2 pull request yet. Owner
+    to decide: krrood check flags dot, euclidean_distance, projection_line, unproject as
+    positional; the ambient_space and Point Generic review threads.'
   - '#524 must move to Point/Vector and the Dimensional names.'
   depends_on: []
-  session: https://claude.ai/code/session_01JxHGiNS35j6Nc3GQ87MdyP
+  session: https://claude.ai/code/session_018wfiv5c5ocSWwDLYMCNudx
   notes: '#527: the casadi-free base and SemDT adopting it, with the planar, imports, projection,
     action and frame-check items folded in. The 2026-11-12 review decisions are in the roadmap
     rules and the PR. api-break; migration in the PR description. Next: CI, review, promote.
