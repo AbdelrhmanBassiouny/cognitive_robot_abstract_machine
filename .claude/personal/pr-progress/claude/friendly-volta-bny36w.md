@@ -1,11 +1,10 @@
-## Plan
-- Keep the EQL core free of random_events and probabilistic_model; probabilistic parts live in krrood.parametrization.
+**Plan**
+- Make every EQL module import without random_events/probabilistic_model; probabilistic parts live in krrood.parametrization.
 
-## Done
-- Moves, lazy factories and import-boundary test landed; CI green (14/14) at 8285d6814a.
-- Merged updated main at 787d2ec478; replaced the module-binding filter with PhraseRule.joins_grammar (default True) at d27b63faeb (user chose opt-out); pushed. Not run under pytest here (random_events build mismatch).
-- Upstream PR #985: 1/1 checks, no reviews or threads (read this run).
-- Fork thread on probabilistic_queries.py resolved.
+**Done**
+- Resolve of 25049d9a99: causal_relation (new from main) moved to krrood.parametrization; it failed test_each_lib (krrood) at d27b63faeb. Import script with both libraries blocked exits 0 locally; CI not run on it yet.
+- PR description updated to the current state.
 
-## Next
-- Read CI at d27b63faeb; if green, resolve the test_grammar_registry.py thread.
+**Next**
+- CI on 25049d9a99 (pytest, ruff, docformatter, krrood check not runnable here).
+- Upstream #985, changes requested by LucaKro: parametrization/__init__.py rule-registering import (author said they would look for another way; open design call), "wall of text" in probabilistic_backend.py (unclear which text; unanswered), weird names (author deferred to another PR).
