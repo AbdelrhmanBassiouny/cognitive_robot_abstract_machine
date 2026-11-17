@@ -1,11 +1,11 @@
 ## Plan
-- Indefinite article: the determiner pass picks the lexeme "a"; the morphology pass realizes a/an (SimpleNLG), pending user approval
-- Then run the verbalization and EQL suites, format, and update the PR description
+- Clause building decides features; the morphology pass realizes every word, including a/an (SimpleNLG)
 
 ## Done
-- Guard test: building clauses loads no inflect, lemminflect, typeguard, jinja2 or IPython (passes)
-- Cardinal, index ordinal, verb form and collection-element noun leaves realized by the morphology pass
-- WIP commit e6b59b94f pushed
+- Guard test: building clauses loads no inflect, lemminflect, typeguard, jinja2 or IPython
+- Cardinal, index-ordinal, verb-form, collection-element-noun and indefinite-article leaves
+- Verbalization + core-boundary tests 786 passed; formatted; PR #611 description and labels updated
 
 ## Next
-- Wait for the user's answer on the a/an design; test_existential_noun_pluralised_by_the_pass fails until then
+- User: rename `as_fragment` (flagged by krrood check, an API change)?
+- semantic_digital_twin's predicate_clause users were not run here
