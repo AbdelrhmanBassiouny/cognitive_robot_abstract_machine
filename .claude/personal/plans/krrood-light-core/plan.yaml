@@ -35,18 +35,6 @@ tracks:
   name: krrood command line
   wave: extras
 items:
-- id: matplotlib-optional
-  title: matplotlib is imported only when drawing
-  branch: claude/bold-ramanujan-vb0e9c
-  status: in progress
-  recommended_model: haiku
-  track: optional-imports
-  pull_request_number: 547
-  session: https://claude.ai/code/session_01JxHGiMUhYaVsG6NkZNgzAC
-  depends_on: []
-  notes: 'Stacked on #546. matplotlib imported inside the functions that draw; no enums or
-    decorator. #546''s CoreBoundaryChecker enforces it; graph_visualizer and rxnode no longer
-    cross the boundary.'
 - id: serializer-without-heavy-dependencies
   title: JSON serializer and symbol graph import no sqlalchemy, scipy or casadi
   branch: claude/ecstatic-cerf-wbpeis
@@ -71,9 +59,14 @@ items:
   session: https://claude.ai/code/session_01JxHGiNCuZYy4zJDsmbyfwZ
   depends_on: []
   blockers:
-  - 'Upstream PR 985: changes requested by LucaKro, 3 unresolved threads: the rule-registering import in parametrization/__init__.py, a wall of text in probabilistic_backend.py, names deferred to another PR.'
+  - 'Upstream PR 985: changes requested by LucaKro, 3 unresolved threads: the rule-registering
+    import in parametrization/__init__.py, a wall of text in probabilistic_backend.py, names
+    deferred to another PR.'
   - CI on 25049d9a99 not run yet.
-  notes: PR 609 ready, promoted as upstream PR 985. Probabilistic parts, causal_relation included, live in krrood.parametrization; every EQL module imports with random_events/probabilistic_model blocked (fresh-interpreter test). Verbalization rules are collected lazily (PhraseRuleRegistry.loaded_rules, user decision). number_like_field is a plain int/float-not-bool/Enum check.
+  notes: PR 609 ready, promoted as upstream PR 985. Probabilistic parts, causal_relation included,
+    live in krrood.parametrization; every EQL module imports with random_events/probabilistic_model
+    blocked (fresh-interpreter test). Verbalization rules are collected lazily (PhraseRuleRegistry.loaded_rules,
+    user decision). number_like_field is a plain int/float-not-bool/Enum check.
 - id: verbalization-realization-split
   title: Verbalization vocabulary stays in krrood-eql, realization moves out of it
   branch: null
@@ -128,7 +121,6 @@ items:
   recommended_model: opus
   track: packaging
   depends_on:
-  - matplotlib-optional
   - serializer-without-heavy-dependencies
   - eql-probabilistic-split
   - verbalization-realization-split
@@ -155,4 +147,4 @@ items:
     engine: rule, section, checker, instructions, formatting. It keeps krrood''s shipped rules
     (EQL a/an, serializer, core-boundary) as a basstler-rules ruleset and the krrood command
     mounted on basstler-rules'' commands. Absorbs command-line-on-cyclopts.'
-landed_item_count: 2
+landed_item_count: 3
