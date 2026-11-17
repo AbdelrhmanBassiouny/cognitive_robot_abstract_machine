@@ -41,15 +41,14 @@ items:
   status: in_progress
   recommended_model: sonnet
   blockers:
-  - The `integration-conflict` label (2026-09-29) still withholds promotion; nothing clears
-    it automatically, so removing it is left to the owner.
-  - CI on `d7b3499c2f` and upstream review state are unread, and the descendants are not
-    restacked onto it (`maintenance restack` fails at the `D-ui-rendering` checkout).
-  notes: The rule-tree unparser, plus the `type_hints.py` to `object_to_source.py` rename
-    its own review asked for. `main` at `97fcca43a9` is merged (`d7b3499c2f`); `main` made the
-    same `classproperty` move and dropped the `ormatic.utils` re-export, so the emitters
-    import it from `krrood.patterns.classproperty`. All 77 review threads are resolved.
-    `save_rdr_with_case`'s `generate(function=...)` call is not covered on this slice.
+  - The `integration-conflict` label (2026-09-29) withholds promotion; removing it is
+    left to the owner.
+  - CI on the pushed heads is unread, and nothing was posted on the cram2 pull request 974 threads,
+    whose reply needs the owner's say-so.
+  notes: The rule-tree unparser. `main` is merged. The three serializer classes are now
+    named `RippleDownRules...` and `module_loading.py` moved to D-core-single-class, both
+    carried through the stack with basstler's `SymbolRename` and `ImportRelocation`
+    actions (basstler#245). Porting basstler's abstract `classproperty` is a separate change.
 - id: D-core-support
   title: 'RDR engine: observer, rule-tree view, and remaining support modules'
   branch: D-core-support
