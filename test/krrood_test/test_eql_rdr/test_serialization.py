@@ -1,6 +1,6 @@
 """
 Tests for
-:meth:`krrood.entity_query_language.rdr.serialization.RDRSerializer.to_source`, on rule
+:meth:`krrood.entity_query_language.rdr.serialization.RippleDownRulesSerializer.to_source`, on rule
 trees built from core EQL primitives and a stand-in for the parts of
 :class:`EQLSingleClassRDR` it reads.
 """
@@ -30,8 +30,8 @@ from krrood.entity_query_language.rdr.corner_case import CornerCaseStore
 from krrood.entity_query_language.rdr.exceptions import EmptyRuleTreeError
 from krrood.entity_query_language.rdr.function_case import FunctionCase
 from krrood.entity_query_language.rdr.serialization import (
-    RDRModuleAttribute,
-    RDRSerializer,
+    RippleDownRulesModuleAttribute,
+    RippleDownRulesSerializer,
 )
 from krrood.entity_query_language.rules.decomposition import DecomposedRuleTree
 
@@ -53,11 +53,22 @@ class Animal:
     habitat: Optional[Species] = None
 
 
+@dataclass(unsafe_hash=True)
+class Entity:
+    """
+    A case type whose lower-camel-case name is also the name of a factory the generated
+    module calls.
+    """
+
+    has_fur: bool = False
+    species: Optional[Species] = None
+
+
 @dataclass
 class _SerializableRuleTree:
     """
     Minimal stand-in for the :class:`EQLSingleClassRDR` attributes
-    :class:`RDRSerializer` reads.
+    :class:`RippleDownRulesSerializer` reads.
     """
 
     query: Any
@@ -89,6 +100,15 @@ def _alternative_chain_rdr():
     return _SerializableRuleTree(query, Animal, animal, "species")
 
 
+def _entity_named_case_type_rdr():
+    entity_case = variable(Entity, domain=[])
+    query = entity(entity_case).where(entity_case.has_fur == True)
+    with query:
+        add(entity_case.species, Species.MAMMAL)
+    query.build()
+    return _SerializableRuleTree(query, Entity, entity_case, "species")
+
+
 def _exec_generated_module(source: str) -> dict:
     """
     Execute generated source in a fresh namespace, as the real module loader would.
@@ -98,20 +118,20 @@ def _exec_generated_module(source: str) -> dict:
     return namespace
 
 
-# %% RDRSerializer.to_source: structure of the generated source
+# %% RippleDownRulesSerializer.to_source: structure of the generated source
 
 
 def test_generated_source_rebuilds_an_equivalent_rule_tree():
     """
     The generated module defines the attributes loading reads, with the RDR's values.
     """
-    source = RDRSerializer(rdr=_flat_tree_rdr()).to_source()
+    source = RippleDownRulesSerializer(rdr=_flat_tree_rdr()).to_source()
 
     namespace = _exec_generated_module(source)
 
-    assert namespace[RDRModuleAttribute.CASE_TYPE] is Animal
-    assert namespace[RDRModuleAttribute.CONCLUSION_ATTRIBUTE] == "species"
-    assert namespace[RDRModuleAttribute.CORNER_CASES] == {}
+    assert namespace[RippleDownRulesModuleAttribute.CASE_TYPE] is Animal
+    assert namespace[RippleDownRulesModuleAttribute.CONCLUSION_ATTRIBUTE] == "species"
+    assert namespace[RippleDownRulesModuleAttribute.CORNER_CASES] == {}
 
 
 def test_generated_tree_has_the_same_backward_inference_knowledge_as_the_original():
@@ -120,9 +140,9 @@ def test_generated_tree_has_the_same_backward_inference_knowledge_as_the_origina
     original.
     """
     original = _flat_tree_rdr()
-    source = RDRSerializer(rdr=original).to_source()
+    source = RippleDownRulesSerializer(rdr=original).to_source()
     namespace = _exec_generated_module(source)
-    rebuilt_root = namespace[RDRModuleAttribute.QUERY]._conditions_root_
+    rebuilt_root = namespace[RippleDownRulesModuleAttribute.QUERY]._conditions_root_
 
     original_root = original.query._conditions_root_
     for value in (Species.MAMMAL, Species.BIRD):
@@ -144,10 +164,10 @@ def test_generated_tree_evaluates_a_bird_case_the_same_as_the_original():
     conclusion.
     """
     original = _flat_tree_rdr()
-    source = RDRSerializer(rdr=original).to_source()
+    source = RippleDownRulesSerializer(rdr=original).to_source()
     namespace = _exec_generated_module(source)
-    rebuilt_variable = namespace[RDRModuleAttribute.CASE_VARIABLE]
-    rebuilt_root = namespace[RDRModuleAttribute.QUERY]._conditions_root_
+    rebuilt_variable = namespace[RippleDownRulesModuleAttribute.CASE_VARIABLE]
+    rebuilt_root = namespace[RippleDownRulesModuleAttribute.QUERY]._conditions_root_
 
     bat = Animal("bat", has_fur=True, can_fly=True)
     knowledge = get_conclusion_sufficient_conditions_from_a_rule_tree(
@@ -156,6 +176,66 @@ def test_generated_tree_evaluates_a_bird_case_the_same_as_the_original():
     assert knowledge.sufficient_condition_sets[0].evaluate_against(
         shared_variable=rebuilt_variable, case=bat
     )
+
+
+def _species_concluded_for(root, case_variable, case) -> set[Species]:
+    """
+    The conclusions whose sufficient conditions the case satisfies in the rule tree.
+    """
+    concluded = set()
+    for value in Species:
+        knowledge = get_conclusion_sufficient_conditions_from_a_rule_tree(root, value)
+        if any(
+            condition_set.evaluate_against(shared_variable=case_variable, case=case)
+            for condition_set in knowledge.sufficient_condition_sets
+        ):
+            concluded.add(value)
+    return concluded
+
+
+@pytest.mark.parametrize("rdr_factory", [_flat_tree_rdr, _alternative_chain_rdr])
+@pytest.mark.parametrize("has_fur", [False, True])
+@pytest.mark.parametrize("can_fly", [False, True])
+def test_generated_tree_concludes_the_same_as_the_original_for_every_case(
+    rdr_factory, has_fur, can_fly
+):
+    """
+    Whatever case is given, the rebuilt tree concludes exactly what the original does.
+    """
+    original = rdr_factory()
+    namespace = _exec_generated_module(
+        RippleDownRulesSerializer(rdr=original).to_source()
+    )
+    case = Animal("subject", has_fur=has_fur, can_fly=can_fly)
+
+    original_conclusions = _species_concluded_for(
+        original.query._conditions_root_, original.case_variable, case
+    )
+    rebuilt_conclusions = _species_concluded_for(
+        namespace[RippleDownRulesModuleAttribute.QUERY]._conditions_root_,
+        namespace[RippleDownRulesModuleAttribute.CASE_VARIABLE],
+        case,
+    )
+
+    assert rebuilt_conclusions == original_conclusions
+
+
+def test_a_case_type_named_like_a_factory_does_not_shadow_the_factory():
+    """
+    The case variable never takes the name of a factory the module calls.
+    """
+    original = _entity_named_case_type_rdr()
+
+    namespace = _exec_generated_module(
+        RippleDownRulesSerializer(rdr=original).to_source()
+    )
+
+    assert namespace[RippleDownRulesModuleAttribute.CASE_TYPE] is Entity
+    assert _species_concluded_for(
+        namespace[RippleDownRulesModuleAttribute.QUERY]._conditions_root_,
+        namespace[RippleDownRulesModuleAttribute.CASE_VARIABLE],
+        Entity(has_fur=True),
+    ) == {Species.MAMMAL}
 
 
 def test_raises_when_the_rdr_has_no_rules():
@@ -167,7 +247,7 @@ def test_raises_when_the_rdr_has_no_rules():
     )
 
     with pytest.raises(EmptyRuleTreeError):
-        RDRSerializer(rdr=empty_rdr).to_source()
+        RippleDownRulesSerializer(rdr=empty_rdr).to_source()
 
 
 def test_generated_source_rebuilds_an_equivalent_alternative_chain():
@@ -175,9 +255,9 @@ def test_generated_source_rebuilds_an_equivalent_alternative_chain():
     An alternative chain rebuilds with the same backward-inference knowledge.
     """
     original = _alternative_chain_rdr()
-    source = RDRSerializer(rdr=original).to_source()
+    source = RippleDownRulesSerializer(rdr=original).to_source()
     namespace = _exec_generated_module(source)
-    rebuilt_root = namespace[RDRModuleAttribute.QUERY]._conditions_root_
+    rebuilt_root = namespace[RippleDownRulesModuleAttribute.QUERY]._conditions_root_
 
     original_root = original.query._conditions_root_
     for value in (Species.MAMMAL, Species.BIRD):
@@ -202,12 +282,13 @@ def _template_docstring() -> str:
     parseable Python.
     """
     template_source = (
-        RDRSerializer.templates_directory / RDRSerializer.module_template_name
+        RippleDownRulesSerializer.templates_directory
+        / RippleDownRulesSerializer.module_template_name
     ).read_text()
     return ast.get_docstring(ast.parse(template_source[: template_source.index("{{")]))
 
 
-# %% RDRSerializer.to_source: the generated module states how it may be edited
+# %% RippleDownRulesSerializer.to_source: the generated module states how it may be edited
 
 
 def test_generated_source_opens_with_the_template_docstring():
@@ -215,7 +296,7 @@ def test_generated_source_opens_with_the_template_docstring():
     The header telling a reader how a generated module may be edited reaches the output,
     rather than only living in the template.
     """
-    source = RDRSerializer(rdr=_flat_tree_rdr()).to_source()
+    source = RippleDownRulesSerializer(rdr=_flat_tree_rdr()).to_source()
 
     assert ast.get_docstring(ast.parse(source)) == _template_docstring()
 
@@ -225,7 +306,7 @@ def test_generated_source_imports_only_the_factories_it_calls():
     A flat tree of refinements imports no factory it does not call, such as
     :func:`~krrood.entity_query_language.factories.alternative`.
     """
-    source = RDRSerializer(rdr=_flat_tree_rdr()).to_source()
+    source = RippleDownRulesSerializer(rdr=_flat_tree_rdr()).to_source()
 
     imported_factory_names = {
         imported.name
@@ -239,7 +320,7 @@ def test_generated_source_imports_only_the_factories_it_calls():
     }
 
 
-# %% RDRSerializer.to_source: corner cases are embedded in the generated source
+# %% RippleDownRulesSerializer.to_source: corner cases are embedded in the generated source
 
 
 def test_recorded_corner_case_is_embedded_in_the_generated_source():
@@ -253,10 +334,12 @@ def test_recorded_corner_case_is_embedded_in_the_generated_source():
     corner_case = Animal("cat", has_fur=True, can_fly=False)
     rdr.corner_cases.record_corner_case(rule_node, corner_case)
 
-    source = RDRSerializer(rdr=rdr).to_source()
+    source = RippleDownRulesSerializer(rdr=rdr).to_source()
     namespace = _exec_generated_module(source)
 
-    assert corner_case in namespace[RDRModuleAttribute.CORNER_CASES].values()
+    assert (
+        corner_case in namespace[RippleDownRulesModuleAttribute.CORNER_CASES].values()
+    )
 
 
 def test_recorded_corner_case_with_an_enum_field_round_trips_through_the_generated_source():
@@ -270,13 +353,15 @@ def test_recorded_corner_case_with_an_enum_field_round_trips_through_the_generat
     corner_case = Animal("cat", has_fur=True, can_fly=False, habitat=Species.MAMMAL)
     rdr.corner_cases.record_corner_case(rule_node, corner_case)
 
-    source = RDRSerializer(rdr=rdr).to_source()
+    source = RippleDownRulesSerializer(rdr=rdr).to_source()
     namespace = _exec_generated_module(source)
 
-    assert corner_case in namespace[RDRModuleAttribute.CORNER_CASES].values()
+    assert (
+        corner_case in namespace[RippleDownRulesModuleAttribute.CORNER_CASES].values()
+    )
 
 
-# %% RDRSerializer.save_with_case
+# %% RippleDownRulesSerializer.save_with_case
 
 
 def bird_risk(name: str) -> float:
@@ -314,14 +399,14 @@ def test_save_with_case_writes_the_case_class_before_the_rules(tmp_path):
     rdr = _function_case_rdr()
     path = tmp_path / "bird_risk_rdr.py"
 
-    source = RDRSerializer(rdr=rdr).save_with_case(path=str(path))
+    source = RippleDownRulesSerializer(rdr=rdr).save_with_case(path=str(path))
 
-    serializer = RDRSerializer(rdr=rdr)
+    serializer = RippleDownRulesSerializer(rdr=rdr)
     assert source == (
         FunctionCaseGenerator().generate(
             function=bird_risk, class_name=BirdRiskCase.__name__
         )
-        + RDRSerializer.case_class_and_rules_separator
+        + RippleDownRulesSerializer.case_class_and_rules_separator
         + serializer.to_source(case_type_is_local=True)
     )
     assert path.read_text() == source
@@ -329,11 +414,11 @@ def test_save_with_case_writes_the_case_class_before_the_rules(tmp_path):
 
 def test_save_with_case_writes_the_plain_module_for_another_case_type(tmp_path):
     """An RDR whose case type is no function case is saved as by
-    :meth:`RDRSerializer.save`."""
+    :meth:`RippleDownRulesSerializer.save`."""
     rdr = _flat_tree_rdr()
     path = tmp_path / "animal_rdr.py"
 
-    source = RDRSerializer(rdr=rdr).save_with_case(path=str(path))
+    source = RippleDownRulesSerializer(rdr=rdr).save_with_case(path=str(path))
 
-    assert source == RDRSerializer(rdr=rdr).to_source()
+    assert source == RippleDownRulesSerializer(rdr=rdr).to_source()
     assert path.read_text() == source
