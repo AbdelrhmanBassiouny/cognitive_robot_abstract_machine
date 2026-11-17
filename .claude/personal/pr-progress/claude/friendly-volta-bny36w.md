@@ -2,10 +2,10 @@
 - Make every EQL module import without random_events/probabilistic_model; probabilistic parts live in krrood.parametrization.
 
 **Done**
-- 25049d9a99: causal_relation (new from main) moved to krrood.parametrization; it failed test_each_lib (krrood) at d27b63faeb.
-- 9964645ff7: backend prose and comments trimmed (upstream wall-of-text thread). a8aaefe125: rules-in-queries attempt reverted, the __init__ import stays (user's choice).
+- Moves, lazy grammar and causal_relation landed; main merged into the branch (f65ac70135), merge probe clean.
+- Upstream #985 approved by LucaKro and tomsch420; no unresolved upstream threads.
 - PR description updated to the current state.
 
 **Next**
-- CI on a8aaefe125 (pytest, ruff, docformatter, krrood check not runnable here).
-- Upstream #985: the __init__ thread stays open by the user's choice, the wall-of-text thread is addressed, names are deferred to another PR; the owner replies and resolves them.
+- CI on f65ac70135 (fork and upstream) is queued; pytest, ruff, docformatter and krrood check not runnable here.
+- After CI is green the owner resolves the open rule-registry thread (test_grammar_registry.py).
