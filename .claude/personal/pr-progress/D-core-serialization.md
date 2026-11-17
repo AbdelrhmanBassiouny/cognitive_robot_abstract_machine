@@ -1,13 +1,12 @@
 Plan
-- Keep #66 mergeable against `main` and carried into the stack above it.
+- Keep #66 and the stack above it mergeable and answered for the cram2 #974 review.
 
 Done
-- 2026-11-16: merged `main` (`97fcca43a9`) into the branch (`d7b3499c2f`) and pushed. It conflicted in `dataclass_source.py`, `ormatic/utils.py` and `patterns/classproperty.py`, because `main` had made the same `classproperty` move. Merge probe afterwards: clean.
-- Tests at `d7b3499c2f`: `test_eql_rdr`, `test_code_generation`, `test_patterns` (347), `test_eql/test_core` (424), `test_ormatic` (262) pass; `krrood check` passes on the touched files.
-- All 77 review threads are resolved. Description updated.
+- 2026-11-17: fixed the name clash, the weak tests and the scope comment; merged `main`.
+- Renamed RDRSerializer, RDRModuleAttribute and RDRModuleLocalName to RippleDownRules... through all ten branches with basstler's `SymbolRename` (mentions included). Moved `module_loading.py` to #159. Imported `classproperty` from `patterns` with `ImportRelocation`. Markdown by text replacement. Both actions are new, in basstler#245 (draft, on #222).
+- Each branch's `test_eql_rdr` and `test_code_generation` compared with its state before the merge: no new failures.
 
 Next
-- Read CI on `d7b3499c2f` (not read yet).
-- Read upstream review state: the upstream-reviews Action's reader crashed (a KeyError on `error`).
-- Restack the descendants onto `d7b3499c2f`: `maintenance restack --stacked-on D-core-serialization` fails at the `D-ui-rendering` checkout.
-- Owner: remove the `integration-conflict` label; ask whether the item is finished (PR is out of draft, promotion unknown).
+- Read CI on the pushed heads (not read).
+- Owner: reply on the cram2 #974 threads (nothing was posted), and decide the `classproperty` abstract-method port and the `integration-conflict` label.
+- basstler#243 and #245 are drafts waiting on review; #245 waits on #222.
