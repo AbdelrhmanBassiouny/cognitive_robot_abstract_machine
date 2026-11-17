@@ -200,7 +200,7 @@ def walk_rules(conditions_root: SymbolicExpression) -> List[RuleView]:
                 rules.append(
                     RuleView(
                         condition=node,
-                        conclusions=node.conclusions_of_type(Add),
+                        conclusions=node.conclusions_of_type(conclusion_type=Add),
                         depth=depth,
                         kind=kind,
                     )

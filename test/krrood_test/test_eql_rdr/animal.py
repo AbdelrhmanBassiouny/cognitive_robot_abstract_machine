@@ -182,3 +182,27 @@ def make_animal(name: str, **kwargs) -> Animal:
         catsize=False,
     )
     return Animal(name=name, **{**defaults, **kwargs})
+
+
+def make_mammal(name: str = "test_mammal", **overrides) -> Animal:
+    """
+    Build a milk-bearing, featherless :class:`Animal`.
+
+    :param name: The animal's name.
+    :param overrides: Attribute overrides applied on top of the mammal traits.
+    :return: An :class:`Animal` a ``milk == True`` rule fires for.
+    """
+    traits = dict(hair=True, milk=True, toothed=True, legs=4, tail=True, catsize=True)
+    return make_animal(name, **{**traits, **overrides})
+
+
+def make_bird(name: str = "test_bird", **overrides) -> Animal:
+    """
+    Build a feathered, milkless :class:`Animal`.
+
+    :param name: The animal's name.
+    :param overrides: Attribute overrides applied on top of the bird traits.
+    :return: An :class:`Animal` a ``feathers == True`` rule fires for.
+    """
+    traits = dict(feathers=True, eggs=True, airborne=True, legs=2, tail=True)
+    return make_animal(name, **{**traits, **overrides})

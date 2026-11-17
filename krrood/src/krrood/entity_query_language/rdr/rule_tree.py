@@ -50,7 +50,7 @@ def _insert_rule(
     """
     if isinstance(condition, ConclusionSelector):
         raise ConclusionSelectorAsConditionError(condition=condition)
-    new_condition = selector.insert_at(anchor, condition)
+    new_condition = selector.insert_at(condition, anchor=anchor)
     with new_condition:
         add(conclusion_variable, conclusion_value)
     return new_condition
