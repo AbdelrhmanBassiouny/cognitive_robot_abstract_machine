@@ -15,8 +15,8 @@ from krrood.code_generation.module_loading import load_module_from_path
 from krrood.entity_query_language.rdr.exceptions import ModelFileMissing
 from krrood.entity_query_language.rdr.serialization import (
     ModelSaver,
-    RDRModuleAttribute,
-    RDRSerializer,
+    RippleDownRulesModuleAttribute,
+    RippleDownRulesSerializer,
 )
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
@@ -75,7 +75,7 @@ class RDRFileStore(ModelSaver):
         :param rdr: The RDR to persist, over a :class:`FunctionCase` subclass.
         """
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
-        RDRSerializer(rdr=rdr).save_with_case(path=self.path)
+        RippleDownRulesSerializer(rdr=rdr).save_with_case(path=self.path)
 
     def load_case_type(self) -> Type[FunctionCase]:
         """
@@ -87,4 +87,4 @@ class RDRFileStore(ModelSaver):
         module = load_module_from_path(
             self.path, EQLSingleClassRDR.loaded_module_name_prefix
         )
-        return getattr(module, RDRModuleAttribute.CASE_TYPE)
+        return getattr(module, RippleDownRulesModuleAttribute.CASE_TYPE)
