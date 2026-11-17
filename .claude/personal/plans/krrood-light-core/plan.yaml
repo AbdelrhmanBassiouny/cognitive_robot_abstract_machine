@@ -69,10 +69,12 @@ items:
     user decision). number_like_field is a plain int/float-not-bool/Enum check.
 - id: verbalization-realization-split
   title: Verbalization vocabulary stays in krrood-eql, realization moves out of it
-  branch: null
-  status: not_started
+  branch: claude/blissful-mendel-6dsd0l
+  status: in progress
   recommended_model: opus
   track: core-boundaries
+  pull_request_number: 611
+  session: https://claude.ai/code/session_018wfiv9XBF7AeVSKhCMyXBH
   depends_on: []
   notes: 'User-approved: _verbalization_fragment_ stays abstract and unchanged. The vocabulary
     (clause, Noun, Verb, fragments) is declarative; only morphology (inflect ~1.7 s, lemminflect,
