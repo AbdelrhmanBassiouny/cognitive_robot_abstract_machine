@@ -15,7 +15,7 @@ from krrood.entity_query_language.rdr.rule_tree import (
     insert_refinement,
 )
 from krrood.entity_query_language.rdr.rule_tree_view import walk_rules
-from krrood.entity_query_language.rdr.serialization import RDRSerializer
+from krrood.entity_query_language.rdr.serialization import RippleDownRulesSerializer
 from krrood.entity_query_language.rules.decomposition import DecomposedRuleTree
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 from krrood.entity_query_language.rules.conclusion import Add
@@ -103,7 +103,8 @@ def _mixed_alternative_then_refinement_query():
     (milk/mammal refinement of A).
 
     The resulting DAG is Refinement(Alternative(A, B), C) — or similar left-nested form.
-    walk_rules (display) order: A, B, C. :meth:`RuleTreeSourceEmitter.emit_rule_body` (emission) order: A, C, B.
+    walk_rules (display) order: A, B, C. :meth:`RuleTreeSourceEmitter.emit_rule_body`
+    (emission) order: A, C, B.
     """
     animal = _animal_variable()
     query = entity(animal).where(animal.backbone == True)
@@ -130,7 +131,8 @@ def _mixed_alternative_then_refinement_query():
 
 def test_single_rule_returns_list_of_length_one():
     """
-    :meth:`DecomposedRuleTree.rule_conditions` on a one-rule tree returns exactly one node.
+    :meth:`DecomposedRuleTree.rule_conditions` on a one-rule tree returns exactly one
+    node.
     """
     query, _animal = _single_rule_query()
     result = DecomposedRuleTree.from_condition(
@@ -330,11 +332,11 @@ def _build_mixed_rdr() -> EQLSingleClassRDR:
 def test_emission_order_count_matches_add_occurrences_in_source():
     """
     :meth:`DecomposedRuleTree.rule_conditions` holds as many conditions as
-    :meth:`RDRSerializer.to_source` emits ``add(`` calls, so neither skips or
-    double-counts a rule.
+    :meth:`RippleDownRulesSerializer.to_source` emits ``add(`` calls, so neither skips
+    or double-counts a rule.
     """
     rdr = _build_mixed_rdr()
-    src = RDRSerializer(rdr=rdr).to_source()
+    src = RippleDownRulesSerializer(rdr=rdr).to_source()
     add_count_in_source = len(re.findall(r"\badd\(", src))
     emission_nodes = DecomposedRuleTree.from_condition(
         condition=rdr.query._conditions_root_
@@ -349,7 +351,7 @@ def test_emission_order_i_th_node_matches_i_th_add_in_source():
     rules in the same order.
     """
     rdr = _build_mixed_rdr()
-    src = RDRSerializer(rdr=rdr).to_source()
+    src = RippleDownRulesSerializer(rdr=rdr).to_source()
 
     # Extract the Species.X argument from each add( call, in document order.
     # Each emitted add line looks like: add(animal.species, Species.mammal)

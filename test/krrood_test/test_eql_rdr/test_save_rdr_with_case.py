@@ -1,5 +1,5 @@
 """
-Tests for :meth:`RDRSerializer.save_with_case` and the Python it writes.
+Tests for :meth:`RippleDownRulesSerializer.save_with_case` and the Python it writes.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from krrood.entity_query_language.rdr.expert import Expert
 from krrood.entity_query_language.rdr.function_case import FunctionCase
 from krrood.entity_query_language.rdr.interface import FunctionInterface
-from krrood.entity_query_language.rdr.serialization import RDRSerializer
+from krrood.entity_query_language.rdr.serialization import RippleDownRulesSerializer
 from krrood.entity_query_language.rules.decomposition import DecomposedRuleTree
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
@@ -120,7 +120,7 @@ class TestSaveRdrWithCaseRoundtrip(unittest.TestCase):
         rdr = _build_two_rule_rdr()
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "model.py")
-            RDRSerializer(rdr=rdr).save_with_case(path=path)
+            RippleDownRulesSerializer(rdr=rdr).save_with_case(path=path)
             loaded = EQLSingleClassRDR.load(path=path)
         self.assertEqual(loaded.classify(first(Species.mammal)), Species.mammal)
         self.assertEqual(loaded.classify(first(Species.bird)), Species.bird)
@@ -133,7 +133,7 @@ class TestSaveRdrWithCaseRoundtrip(unittest.TestCase):
         rdr = _build_one_rule_rdr()
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "model.py")
-            RDRSerializer(rdr=rdr).save_with_case(path=path)
+            RippleDownRulesSerializer(rdr=rdr).save_with_case(path=path)
             loaded = EQLSingleClassRDR.load(path=path)
         self.assertIs(loaded.classify(first(Species.bird)), ...)
 
@@ -162,7 +162,7 @@ class TestSaveRdrWithCaseFunctionCaseHeader(unittest.TestCase):
         rdr = self._build_function_case_rdr()
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "model.py")
-            RDRSerializer(rdr=rdr).save_with_case(path=path)
+            RippleDownRulesSerializer(rdr=rdr).save_with_case(path=path)
             with open(path) as f:
                 content = f.read()
         self.assertIn("@dataclass", content)
@@ -174,7 +174,7 @@ class TestSaveRdrWithCaseFunctionCaseHeader(unittest.TestCase):
         rdr = self._build_function_case_rdr()
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "model.py")
-            RDRSerializer(rdr=rdr).save_with_case(path=path)
+            RippleDownRulesSerializer(rdr=rdr).save_with_case(path=path)
             with open(path) as f:
                 content = f.read()
         self.assertIn("FunctionCase", content)
@@ -187,7 +187,7 @@ class TestSaveRdrWithCaseFunctionCaseHeader(unittest.TestCase):
         rdr = self._build_function_case_rdr()
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "model.py")
-            RDRSerializer(rdr=rdr).save_with_case(path=path)
+            RippleDownRulesSerializer(rdr=rdr).save_with_case(path=path)
             with open(path) as f:
                 content = f.read()
         # e.g. ``SyntheticFunctionCase.function = _score_func``
@@ -200,7 +200,7 @@ class TestSaveRdrWithCaseFunctionCaseHeader(unittest.TestCase):
         rdr = self._build_function_case_rdr()
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "model.py")
-            RDRSerializer(rdr=rdr).save_with_case(path=path)
+            RippleDownRulesSerializer(rdr=rdr).save_with_case(path=path)
             with open(path) as f:
                 content = f.read()
         self.assertIn("x:", content)
@@ -215,7 +215,7 @@ class TestSaveRdrWithCaseFunctionCaseHeader(unittest.TestCase):
         rdr = self._build_function_case_rdr()
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "model.py")
-            RDRSerializer(rdr=rdr).save_with_case(path=path)
+            RippleDownRulesSerializer(rdr=rdr).save_with_case(path=path)
             with open(path) as f:
                 content = f.read()
         header_pos = content.find("@dataclass")
@@ -241,7 +241,7 @@ class TestSaveRdrWithCaseNonFunctionCaseFallback(unittest.TestCase):
         rdr = _build_one_rule_rdr()
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "model.py")
-            RDRSerializer(rdr=rdr).save_with_case(path=path)
+            RippleDownRulesSerializer(rdr=rdr).save_with_case(path=path)
             with open(path) as f:
                 content = f.read()
         self.assertNotIn("@dataclass\nclass", content)
@@ -254,8 +254,8 @@ class TestSaveRdrWithCaseNonFunctionCaseFallback(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             path_with_case = os.path.join(d, "with_case.py")
             path_plain = os.path.join(d, "plain.py")
-            RDRSerializer(rdr=rdr).save_with_case(path=path_with_case)
-            RDRSerializer(rdr=rdr).save(path=path_plain)
+            RippleDownRulesSerializer(rdr=rdr).save_with_case(path=path_with_case)
+            RippleDownRulesSerializer(rdr=rdr).save(path=path_plain)
             with open(path_with_case) as f:
                 content_with_case = f.read()
             with open(path_plain) as f:
@@ -269,7 +269,7 @@ class TestSaveRdrWithCaseNonFunctionCaseFallback(unittest.TestCase):
         rdr = _build_one_rule_rdr()
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "model.py")
-            RDRSerializer(rdr=rdr).save_with_case(path=path)
+            RippleDownRulesSerializer(rdr=rdr).save_with_case(path=path)
             loaded = EQLSingleClassRDR.load(path=path)
         self.assertEqual(loaded.classify(first(Species.mammal)), Species.mammal)
 
@@ -280,8 +280,8 @@ class TestSaveRdrWithCaseNonFunctionCaseFallback(unittest.TestCase):
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
 class TestRdrToPythonCaseTypeIsLocal(unittest.TestCase):
     """
-    ``RDRSerializer.to_source(case_type_is_local=True)``: case type must not appear in
-    an import line.
+    ``RippleDownRulesSerializer.to_source(case_type_is_local=True)``: case type must not
+    appear in an import line.
     """
 
     def test_case_type_not_imported_when_local(self):
@@ -289,7 +289,7 @@ class TestRdrToPythonCaseTypeIsLocal(unittest.TestCase):
         When case_type_is_local=True, no import statement should import the case type.
         """
         rdr = _build_one_rule_rdr()
-        src = RDRSerializer(rdr=rdr).to_source(case_type_is_local=True)
+        src = RippleDownRulesSerializer(rdr=rdr).to_source(case_type_is_local=True)
         import_lines = [
             line
             for line in src.splitlines()
@@ -308,7 +308,7 @@ class TestRdrToPythonCaseTypeIsLocal(unittest.TestCase):
         When case_type_is_local=True, conclusion types (enums) must still be imported.
         """
         rdr = _build_one_rule_rdr()
-        src = RDRSerializer(rdr=rdr).to_source(case_type_is_local=True)
+        src = RippleDownRulesSerializer(rdr=rdr).to_source(case_type_is_local=True)
         # Species.mammal is referenced, so 'Species' must appear in an import line.
         import_lines = [
             line
@@ -325,7 +325,7 @@ class TestRdrToPythonCaseTypeIsLocal(unittest.TestCase):
         The default (case_type_is_local=False) must import the case type as usual.
         """
         rdr = _build_one_rule_rdr()
-        src = RDRSerializer(rdr=rdr).to_source(case_type_is_local=False)
+        src = RippleDownRulesSerializer(rdr=rdr).to_source(case_type_is_local=False)
         import_lines = [
             line
             for line in src.splitlines()
@@ -343,8 +343,10 @@ class TestRdrToPythonCaseTypeIsLocal(unittest.TestCase):
         case_type_is_local=False.
         """
         rdr = _build_one_rule_rdr()
-        src_default = RDRSerializer(rdr=rdr).to_source()
-        src_explicit = RDRSerializer(rdr=rdr).to_source(case_type_is_local=False)
+        src_default = RippleDownRulesSerializer(rdr=rdr).to_source()
+        src_explicit = RippleDownRulesSerializer(rdr=rdr).to_source(
+            case_type_is_local=False
+        )
         self.assertEqual(src_default, src_explicit)
 
 
@@ -374,7 +376,7 @@ class TestSaveRdrWithCasePreservesCornerCases(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "model.py")
-            RDRSerializer(rdr=rdr).save_with_case(path=path)
+            RippleDownRulesSerializer(rdr=rdr).save_with_case(path=path)
             loaded = EQLSingleClassRDR.load(path=path)
 
         self.assertEqual(len(loaded.corner_cases.cases), original_count)
@@ -393,7 +395,7 @@ class TestSaveRdrWithCasePreservesCornerCases(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "model.py")
-            RDRSerializer(rdr=rdr).save_with_case(path=path)
+            RippleDownRulesSerializer(rdr=rdr).save_with_case(path=path)
             loaded = EQLSingleClassRDR.load(path=path)
 
         ordered_after = DecomposedRuleTree.from_condition(
