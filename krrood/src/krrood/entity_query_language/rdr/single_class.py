@@ -31,7 +31,7 @@ from typing_extensions import (
 
 from krrood.code_generation.module_loading import load_module_from_path
 from krrood.entity_query_language.rules.decomposition import DecomposedRuleTree
-from krrood.ormatic.utils import classproperty
+from krrood.patterns.classproperty import classproperty
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
 from krrood.entity_query_language.core.variable import Variable
@@ -81,7 +81,7 @@ from krrood.entity_query_language.rdr.rule_tree_view import (
 )
 from krrood.entity_query_language.rdr.serialization import (
     ModelSaver,
-    RDRModuleAttribute,
+    RippleDownRulesModuleAttribute,
     TemporaryModelSaver,
 )
 from krrood.entity_query_language.rdr.underspecified import RippleDownRulesMatchParser
@@ -204,8 +204,8 @@ class EQLSingleClassRDR:
     def load(cls, *, path: str) -> Self:
         """
         Load an RDR from a module written by
-        :meth:`~krrood.entity_query_language.rdr.serialization.RDRSerializer.save` or
-        :meth:`~krrood.entity_query_language.rdr.serialization.RDRSerializer.save_with_case`.
+        :meth:`~krrood.entity_query_language.rdr.serialization.RippleDownRulesSerializer.save` or
+        :meth:`~krrood.entity_query_language.rdr.serialization.RippleDownRulesSerializer.save_with_case`.
 
         :param path: The ``.py`` file.
         :return: The rebuilt RDR.
@@ -214,20 +214,24 @@ class EQLSingleClassRDR:
         module_attributes = vars(module)
 
         conclusion_attribute_name = module_attributes[
-            RDRModuleAttribute.CONCLUSION_ATTRIBUTE
+            RippleDownRulesModuleAttribute.CONCLUSION_ATTRIBUTE
         ]
         rdr = cls(
-            module_attributes[RDRModuleAttribute.CASE_TYPE], conclusion_attribute_name
+            module_attributes[RippleDownRulesModuleAttribute.CASE_TYPE],
+            conclusion_attribute_name,
         )
-        rdr.case_variable = module_attributes[RDRModuleAttribute.CASE_VARIABLE]
+        rdr.case_variable = module_attributes[
+            RippleDownRulesModuleAttribute.CASE_VARIABLE
+        ]
         rdr.conclusion_variable = getattr(rdr.case_variable, conclusion_attribute_name)
-        rdr.query = module_attributes[RDRModuleAttribute.QUERY]
+        rdr.query = module_attributes[RippleDownRulesModuleAttribute.QUERY]
 
         rule_conditions = DecomposedRuleTree.from_condition(
             condition=rdr.conditions_root
         ).rule_conditions()
         rdr.corner_cases = CornerCaseStore.from_ordered_cases(
-            rule_conditions, module_attributes.get(RDRModuleAttribute.CORNER_CASES, {})
+            rule_conditions,
+            module_attributes.get(RippleDownRulesModuleAttribute.CORNER_CASES, {}),
         )
         return rdr
 
