@@ -23,7 +23,7 @@ from krrood.entity_query_language.rdr.expert import Expert
 from krrood.entity_query_language.factories import an
 from krrood.entity_query_language.rdr.interface import FunctionInterface
 from krrood.entity_query_language.rdr.rule_tree_view import walk_rules
-from krrood.entity_query_language.rdr.serialization import RDRSerializer
+from krrood.entity_query_language.rdr.serialization import RippleDownRulesSerializer
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 from krrood.entity_query_language.rules.conclusion_selector import (
     Alternative,
@@ -502,7 +502,7 @@ def test_loaded_rdr_classifies_every_case_as_the_saved_one(tmp_path):
     rdr = EQLSingleClassRDR(Animal, "species")
     rdr.fit(subset, subset_targets, maximally_specific_expert())
     path = tmp_path / "animal_rdr.py"
-    RDRSerializer(rdr=rdr).save(path=str(path))
+    RippleDownRulesSerializer(rdr=rdr).save(path=str(path))
 
     loaded = EQLSingleClassRDR.load(path=str(path))
 
