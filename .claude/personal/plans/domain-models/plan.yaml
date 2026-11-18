@@ -42,7 +42,12 @@ items:
   status: in_progress
   recommended_model: sonnet
   blockers:
-  - '#527 not yet merged into cram2.'
+    - >-
+      Waits on the student's port in their own fork of cram2. #524 is the code source only and is
+      not restacked: at a4e9bbdb it conflicts with #527 (6f2bd2c4) in 7 files (checked 2026-11-18).
+    - >-
+      The port opens to cram2 only after #527 merges there, and must implement
+      transform_into_own_frame and use #527's 3Dimensional/2Dimensional names (#525, 2026-11-18).
   depends_on:
   - planar-point-interface
   session: https://claude.ai/code/session_01JxHGiM2mprwspsz9viDuqf
