@@ -74,10 +74,12 @@ items:
     command is then mounted on basstler-rules'' cyclopts commands. Delete once that item starts.'
 - id: namespace-package
   title: 'krrood is a namespace package: krrood/__init__.py removed'
-  branch: null
-  status: not_started
+  branch: claude/sweet-bardeen-gphaq8
+  status: in progress
   recommended_model: sonnet
   track: packaging
+  pull_request_number: 613
+  session: https://claude.ai/code/session_01JxHGiLTU7BtWTE8D32kxWW
   depends_on: []
   notes: Several distributions share the krrood. prefix only if none ships krrood/__init__.py.
     Each distribution reads its version with importlib.metadata; the krrood logger moves to
