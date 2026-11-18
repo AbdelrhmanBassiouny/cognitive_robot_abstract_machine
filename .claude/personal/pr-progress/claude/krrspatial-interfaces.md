@@ -2,9 +2,10 @@ Plan
 - Keep #527 conflict-free with main and read CI on each push.
 
 Done
-- Merged fork main aa614f4c and cram2 main 05bc9b20 at 50da1bed; kept main's moved spatial tests under the Dimensional names. 705 spatial tests pass locally; merge probe against cram2 8a60353c clean.
-- All 30 review threads resolved; PR description and plan record updated.
+- Merged fork main 8a60353c (c7f354bb); 2D frame concrete on EmbeddedPlane, plane equality removed (1392bb20). 602 spatial tests pass; PR description updated.
+- Replied inline to the 2026-11-18 review threads.
 
 Next
-- Read CI on 50da1bed (not read yet; the earlier run timed out on PyPI).
-- Owner: leave #527 ready or return it to draft; the three open questions in the description.
+- Read CI on 1392bb20; the probabilistic_model failure on 50da1bed is unread.
+- Owner: MetricPoint/Vector thread, frameless values, flatten-test rename; ready vs draft.
+- Restack #524 (krrood_image) onto the renames.
