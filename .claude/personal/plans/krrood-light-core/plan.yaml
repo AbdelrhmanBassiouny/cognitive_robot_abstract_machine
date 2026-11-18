@@ -44,10 +44,7 @@ items:
   pull_request_number: 611
   session: https://claude.ai/code/session_018wfiv9XBF7AeVSKhCMyXBH
   blockers:
-    - >-
-      test_realization_split fails at 145201d78f: the symbol graph imports krrood.parametrization,
-      whose __init__ (main's a8aaefe125) loads the grammar and so inflect. Waits on the developer's
-      choice of fix.
+    - ""
   depends_on: []
   notes: 'User-approved: _verbalization_fragment_ stays abstract and unchanged. The vocabulary
     (clause, Noun, Verb, fragments) is declarative; only morphology (inflect ~1.7 s, lemminflect,
