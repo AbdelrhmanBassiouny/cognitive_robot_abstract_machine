@@ -1,10 +1,7 @@
-"""Synchronize the root VERSION file into every package of the workspace.
-
-For each package that reads its version from a module of its own, the
-script writes that module and raises every dependency on another such
-package to ``>=`` the repository's version, so no package is installable
-next to an older release of another. The packages are the root's and the
-members of its ``[tool.uv.workspace]``.
+"""
+Synchronize the root VERSION file into the root package and its workspace members: a
+package reading its version from a module of its own gets that module written, and its
+dependencies on other such packages raised to ``>=`` the repository's version.
 
 ``--check`` writes nothing and exits non-zero when a file would change.
 """
@@ -24,17 +21,25 @@ from packaging.utils import canonicalize_name
 
 # %% names the script reads
 class RepositoryFile(StrEnum):
-    """The files this script reads, by name."""
+    """
+    The files this script reads, by name.
+    """
 
     VERSION = "VERSION"
-    """The repository's one version, at its root."""
+    """
+    The repository's one version, at its root.
+    """
 
     PYPROJECT = "pyproject.toml"
-    """A package's metadata, at the root of the package's directory."""
+    """
+    A package's metadata, at the root of the package's directory.
+    """
 
 
 class PyprojectKey(StrEnum):
-    """The keys of a ``pyproject.toml`` the script reads."""
+    """
+    The keys of a ``pyproject.toml`` the script reads.
+    """
 
     PROJECT = "project"
     NAME = "name"
@@ -52,12 +57,15 @@ class PyprojectKey(StrEnum):
     FIND = "find"
     WHERE = "where"
     ROOT_PACKAGE = ""
-    """The ``package-dir`` entry every package not mapped by name falls
-    under."""
+    """
+    The ``package-dir`` entry every package not mapped by name falls under.
+    """
 
 
 class CommandFlag(StrEnum):
-    """The command-line flags of this script."""
+    """
+    The command-line flags of this script.
+    """
 
     CHECK = "--check"
 
@@ -65,35 +73,47 @@ class CommandFlag(StrEnum):
 # %% the pyproject.toml model
 @dataclass(frozen=True)
 class Pyproject:
-    """The parts of a ``pyproject.toml`` this script reads.
+    """
+    The parts of a ``pyproject.toml`` this script reads.
 
     Only :meth:`from_text` knows where in the file they are.
     """
 
     distribution_name: str
-    """The ``[project]`` name as an installer compares names."""
+    """
+    The ``[project]`` name as an installer compares names.
+    """
 
     dependencies: list[str]
-    """The ``[project]`` dependencies as written."""
+    """
+    The ``[project]`` dependencies as written.
+    """
 
     version_attribute: str
-    """The dotted path of the attribute setuptools reads the version from;
-    empty when it reads it from elsewhere."""
+    """
+    The dotted path of the attribute setuptools reads the version from; empty when it
+    reads it from elsewhere.
+    """
 
     named_package_directories: dict[str, str]
-    """The directory setuptools finds each package in, where ``package-dir``
-    names the package."""
+    """
+    The directory setuptools finds each package in, where ``package-dir`` names the
+    package.
+    """
 
     default_package_directory: str | None
     """The directory setuptools finds every package not named in
     :attr:`named_package_directories` in; ``None`` without one."""
 
     find_search_directories: list[str] | None
-    """The directories setuptools searches for packages; ``None`` when it does
-    not search."""
+    """
+    The directories setuptools searches for packages; ``None`` when it does not search.
+    """
 
     workspace_members: list[str]
-    """The ``[tool.uv.workspace]`` members; empty without a workspace."""
+    """
+    The ``[tool.uv.workspace]`` members; empty without a workspace.
+    """
 
     @classmethod
     def from_text(cls, text: str) -> Pyproject:
@@ -141,14 +161,19 @@ class Pyproject:
 # %% a package
 @dataclass(frozen=True)
 class VersionedPackage:
-    """A package whose version setuptools reads from a module of the package's
-    own."""
+    """
+    A package whose version setuptools reads from a module of the package's own.
+    """
 
     directory: Path
-    """The directory the package's ``pyproject.toml`` is in."""
+    """
+    The directory the package's ``pyproject.toml`` is in.
+    """
 
     pyproject: Pyproject
-    """What this script reads of that file."""
+    """
+    What this script reads of that file.
+    """
 
     @classmethod
     def from_directory(cls, directory: Path) -> VersionedPackage | None:
@@ -215,7 +240,13 @@ class VersionedPackage:
         :param version: The version the package is to carry.
         :return: The content its version module is to have.
         """
-        return f'__version__ = "{version}"\n'
+        package_name = self.version_module_path[0]
+        return (
+            f'"""\nThe version of :mod:`{package_name}`.\n\n'
+            "Do not edit: ``scripts/sync_version.py`` writes it from the repository's "
+            '``VERSION``.\n"""\n\n'
+            f'__version__ = "{version}"\n'
+        )
 
     def pyproject_text(self, siblings: set[str], version: str) -> str:
         """
@@ -274,13 +305,19 @@ class VersionedPackage:
 # %% the repository
 @dataclass(frozen=True)
 class ManagedFile:
-    """A file this script keeps in sync, with the content it is to have."""
+    """
+    A file this script keeps in sync, with the content it is to have.
+    """
 
     path: Path
-    """Where the file is."""
+    """
+    Where the file is.
+    """
 
     text: str
-    """The content the file is to have."""
+    """
+    The content the file is to have.
+    """
 
     @property
     def is_outdated(self) -> bool:
@@ -292,10 +329,14 @@ class ManagedFile:
 
 @dataclass(frozen=True)
 class Repository:
-    """This repository, whose root holds the version every package carries."""
+    """
+    This repository, whose root holds the version every package carries.
+    """
 
     root: Path
-    """The repository's root directory."""
+    """
+    The repository's root directory.
+    """
 
     @classmethod
     def of_this_script(cls) -> Repository:
@@ -358,7 +399,8 @@ class Repository:
         return [file for file in self.expected_files() if file.is_outdated]
 
     def synchronize(self) -> list[ManagedFile]:
-        """Write every managed file whose content is outdated.
+        """
+        Write every managed file whose content is outdated.
 
         :return: The files written.
         """
