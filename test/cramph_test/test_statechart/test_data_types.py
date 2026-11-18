@@ -12,7 +12,7 @@ from cramph.data_types import (
     TransitionKind,
 )
 from cramph.exceptions import TransitionHasNoOutcomeError
-from semantic_digital_twin.world_description.geometry import Color
+from krrood_image.color import Color
 
 # %% every state has to be drawable
 

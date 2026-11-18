@@ -17,7 +17,7 @@ from robokudo.annotators.core import BaseAnnotator
 from robokudo.cas import CASViews
 from robokudo.exceptions import ImageContourMissing
 from robokudo.io.camera_model_adapters import Open3DCameraModelAdapter
-from semantic_digital_twin.world_description.geometry import Color
+from krrood_image.color import Color
 from robokudo.types.scene import ObjectHypothesis
 from robokudo.utils.cv_helper import get_scaled_color_image_for_depth_image
 from robokudo.utils.error_handling import catch_and_raise_to_blackboard

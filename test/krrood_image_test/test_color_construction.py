@@ -1,9 +1,14 @@
+"""
+Tests for creating colours from their hue, saturation and value or from their red, green
+and blue channels.
+"""
+
 from __future__ import annotations
 
 # %% Imports
 import pytest
 
-from semantic_digital_twin.world_description.geometry import Color
+from krrood_image.color import Color
 
 
 # %% Native color construction

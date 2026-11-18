@@ -13,7 +13,7 @@ import numpy as np
 import trimesh
 from PIL import Image
 
-from semantic_digital_twin.world_description.geometry import Color
+from krrood_image.color import Color
 from semantic_digital_twin.spatial_computations.exceptions import (
     UnsupportedCameraProjection,
 )

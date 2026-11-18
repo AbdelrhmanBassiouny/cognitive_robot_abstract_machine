@@ -1,3 +1,8 @@
+"""
+Converters from the semantic digital twin's transforms, poses, points, vectors,
+rotations, colours and shapes to ROS 2 messages.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -23,9 +28,9 @@ from semantic_digital_twin.world_description.geometry import (
     Box,
     Cylinder,
     Sphere,
-    Color,
     Mesh,
 )
+from krrood_image.color import Color
 
 
 @dataclass

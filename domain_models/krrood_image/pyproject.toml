@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "krrimage"
+name = "krrood_image"
 authors = [
     { name = "Abdelrhman Bassiouny", email = "abassiou@uni-bremen.de" },
 ]
@@ -18,8 +18,8 @@ keywords = ["robotics", "image"]
 license = "LGPL-3.0-only"
 dynamic = ["version"]
 dependencies = [
-    "krrood",
-    "krrspatial",
+    "krrood>=26.10.0",
+    "krrood_spatial_math>=26.10.0",
     "numpy",
     "opencv-python>=4.11.0.86",
     "typing_extensions",
@@ -32,10 +32,12 @@ dev = [
 
 [project.urls]
 "Source" = 'https://github.com/cram2/cognitive_robot_abstract_machine'
+"Bug Tracker" = "https://github.com/cram2/cognitive_robot_abstract_machine/issues"
+"Changelog" = "https://github.com/cram2/cognitive_robot_abstract_machine/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["krrimage*"]
+include = ["krrood_image*"]
 
 [tool.setuptools.dynamic]
-version = { attr = "krrimage._version.__version__" }
+version = { attr = "krrood_image._version.__version__" }

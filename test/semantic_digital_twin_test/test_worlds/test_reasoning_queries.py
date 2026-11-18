@@ -1,3 +1,7 @@
+"""
+Tests for loading an environment and reasoning about the semantic annotations in it.
+"""
+
 import os
 
 from semantic_digital_twin.adapters.urdf import URDFParser
@@ -20,7 +24,7 @@ from semantic_digital_twin.world_description.connections import (
     PrismaticConnection,
     RevoluteConnection,
 )
-from semantic_digital_twin.world_description.geometry import Color
+from krrood_image.color import Color
 
 
 def test_load_environment_returns_world():

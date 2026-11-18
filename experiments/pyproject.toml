@@ -19,6 +19,7 @@ dependencies = [
     "random_events>=26.10.0",
     "semantic_digital_twin>=26.10.0",
     "krrood_spatial_math[casadi]>=26.10.0",
+    "krrood_image>=26.10.0",
 ]
 
 [tool.setuptools]
@@ -34,6 +35,7 @@ workspace = [
     "cramph",
     "giskardpy",
     "krrood",
+    "krrood_image",
     "krrood_spatial_math",
     "random_events",
     "semantic_digital_twin",

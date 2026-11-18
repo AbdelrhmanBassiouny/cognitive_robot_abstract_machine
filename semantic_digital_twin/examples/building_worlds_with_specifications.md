@@ -94,7 +94,8 @@ by default.
 from semantic_digital_twin.specifications.kinematic_structure_entities import (
     BodySpecification,
 )
-from semantic_digital_twin.world_description.geometry import Scale, Color
+from semantic_digital_twin.world_description.geometry import Scale
+from krrood_image.color import Color
 
 world = World.create_with_root_body()
 

@@ -1,3 +1,8 @@
+"""
+World-independent descriptions of a building floor and the rooms on it, which build
+their bodies into a world.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -18,7 +23,8 @@ from krrood_spatial_math.spatial_types import (
     Vector3Dimensional,
 )
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.geometry import Color, Scale
+from semantic_digital_twin.world_description.geometry import Scale
+from krrood_image.color import Color
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )

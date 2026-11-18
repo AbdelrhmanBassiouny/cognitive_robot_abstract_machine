@@ -51,13 +51,13 @@ from semantic_digital_twin.world_description.degree_of_freedom import (
 )
 from semantic_digital_twin.world_description.geometry import (
     Box,
-    Color,
     Cylinder,
     Mesh,
     Scale,
     Shape,
     Sphere,
 )
+from krrood_image.color import Color
 from semantic_digital_twin.world_description.inertial_properties import (
     Inertial,
     InertiaTensor,
@@ -715,7 +715,7 @@ class GazeboParser(WorldModelParser):
         if diffuse is None:
             return Color()
 
-        return Color.from_rgba(*(float(value) for value in diffuse.split()))
+        return Color.from_list(color=[float(value) for value in diffuse.split()])
 
     # %% joints
 

@@ -88,7 +88,10 @@ def workspace(checkout: Path) -> WorkspaceOrmInterfaces:
     The ORM interfaces of the checkout under test.
     """
     return WorkspaceOrmInterfaces(
-        tuple(OrmInterface(package_name, checkout) for package_name in PACKAGE_NAMES)
+        tuple(
+            OrmInterface(package_name=package_name, repository_root=checkout)
+            for package_name in PACKAGE_NAMES
+        )
     )
 
 
@@ -285,7 +288,8 @@ def branching_interfaces(*package_names: BranchingPackage) -> WorkspaceOrmInterf
     workspace_root = Path(dataset.__file__).parent / "branching_workspace"
     return WorkspaceOrmInterfaces(
         tuple(
-            OrmInterface(package_name, workspace_root) for package_name in package_names
+            OrmInterface(package_name=package_name, repository_root=workspace_root)
+            for package_name in package_names
         )
     )
 
@@ -417,7 +421,10 @@ def failing_workspace(checkout: Path) -> WorkspaceOrmInterfaces:
         checkout / PACKAGE_NAMES[0] / "scripts" / "generate_orm.py",
     )
     return WorkspaceOrmInterfaces(
-        tuple(OrmInterface(package_name, checkout) for package_name in PACKAGE_NAMES)
+        tuple(
+            OrmInterface(package_name=package_name, repository_root=checkout)
+            for package_name in PACKAGE_NAMES
+        )
     )
 
 
@@ -459,7 +466,10 @@ def test_a_failing_generator_is_named_when_it_had_the_terminal(checkout: Path):
         checkout / PACKAGE_NAMES[-1] / "scripts" / "generate_orm.py",
     )
     workspace = WorkspaceOrmInterfaces(
-        tuple(OrmInterface(package_name, checkout) for package_name in PACKAGE_NAMES)
+        tuple(
+            OrmInterface(package_name=package_name, repository_root=checkout)
+            for package_name in PACKAGE_NAMES
+        )
     )
 
     with pytest.raises(OrmGenerationFailedError) as failure:
@@ -566,12 +576,18 @@ def test_a_changed_module_leaves_the_interface_of_another_package_alone(
 def test_a_changed_module_of_a_further_source_folder_outdates_the_interface(
     checkout: Path,
 ):
+    """
+    An interface that also maps another package's modules is rebuilt when one of them
+    changes, not only when its own package does.
+    """
     further_source_folder = Path("domain_model") / "src" / "domain_model"
     (checkout / further_source_folder).mkdir(parents=True)
     module = checkout / further_source_folder / SOURCE_MODULE_NAME
     shutil.copy(Path(mapped_module.__file__), module)
     interface = OrmInterface(
-        PACKAGE_NAMES[0], checkout, further_source_folders=(further_source_folder,)
+        package_name=PACKAGE_NAMES[0],
+        repository_root=checkout,
+        further_source_folders=(further_source_folder,),
     )
     WorkspaceOrmInterfaces((interface,)).regenerate()
 

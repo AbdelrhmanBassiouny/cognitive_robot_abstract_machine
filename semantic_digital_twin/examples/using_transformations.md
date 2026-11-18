@@ -37,7 +37,11 @@ from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix3Di
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
-from semantic_digital_twin.world_description.geometry import Box, Scale, Color
+from semantic_digital_twin.world_description.geometry import (
+    Box,
+    Scale,
+)
+from krrood_image.color import Color
 from semantic_digital_twin.world_description.connections import Connection6DoF
 from semantic_digital_twin.spatial_computations.raytracer import RayTracer
 import math

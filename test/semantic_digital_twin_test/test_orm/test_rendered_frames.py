@@ -21,7 +21,7 @@ from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.world_description.geometry import Color
+from krrood_image.color import Color
 from semantic_digital_twin.world_description.world_entity import Body
 
 # %% Frame persistence

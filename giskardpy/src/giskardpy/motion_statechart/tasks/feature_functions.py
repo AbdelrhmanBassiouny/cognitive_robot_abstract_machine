@@ -1,3 +1,8 @@
+"""
+Tasks that constrain geometric features of the robot, such as aligning two
+directions, keeping a height or distance, reaching a point and keeping an angle.
+"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -8,7 +13,7 @@ from krrood_spatial_math.spatial_types import (
     CartesianPoint3Dimensional,
     Vector3Dimensional,
 )
-from semantic_digital_twin.world_description.geometry import Color
+from krrood_image.color import Color
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )

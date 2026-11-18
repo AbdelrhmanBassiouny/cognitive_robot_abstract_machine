@@ -38,7 +38,11 @@ from semantic_digital_twin.specifications.connections import (
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Drawer, Handle, Dresser
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix3Dimensional, Vector3Dimensional
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.geometry import Scale, Box, Color
+from semantic_digital_twin.world_description.geometry import (
+    Scale,
+    Box,
+)
+from krrood_image.color import Color
 from semantic_digital_twin.world_description.world_entity import Body
 from semantic_digital_twin.spatial_computations.raytracer import RayTracer
 

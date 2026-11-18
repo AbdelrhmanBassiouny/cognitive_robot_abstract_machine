@@ -1,10 +1,15 @@
+"""
+Fixtures for the colour image tests: the size of the images drawn on, a black image of
+that size and the colour pasted onto it.
+"""
+
 from __future__ import annotations
 
 import pytest
 
-from krrimage.color import Color
-from krrimage.coordinates import Resolution
-from krrimage.image import ColorImage
+from krrood_image.color import Color
+from krrood_image.coordinates import Resolution
+from krrood_image.image import ColorImage
 
 # %% images to draw on
 
@@ -22,7 +27,7 @@ def black_image(resolution: Resolution) -> ColorImage:
     """
     An image of that size, every pixel black.
     """
-    return ColorImage.of_color(resolution, Color.BLACK())
+    return ColorImage.uniform(resolution=resolution, color=Color.BLACK())
 
 
 @pytest.fixture
@@ -30,4 +35,4 @@ def picture_color() -> Color:
     """
     The one colour of the pictures pasted onto the black image.
     """
-    return Color.from_hex("#C8C8C8")
+    return Color.from_hex(hex_color="#C8C8C8")

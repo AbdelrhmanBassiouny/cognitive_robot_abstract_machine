@@ -1,3 +1,8 @@
+"""
+Tests for reading URDF files into a world: links, joints, limits and the colours and
+geometry of their shapes.
+"""
+
 import os.path
 from dataclasses import dataclass
 from math import pi
@@ -20,7 +25,7 @@ from semantic_digital_twin.world_description.connections import (
     Connection6DoF,
     FixedConnection,
 )
-from semantic_digital_twin.world_description.geometry import Color
+from krrood_image.color import Color
 from semantic_digital_twin.world_description.world_entity import Body
 
 

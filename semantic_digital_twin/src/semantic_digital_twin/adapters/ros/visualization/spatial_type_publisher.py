@@ -29,7 +29,7 @@ from semantic_digital_twin.adapters.ros.visualization.spatial_type_marker_render
     SpatialTypeVisualization,
 )
 from semantic_digital_twin.callbacks.callback import StateChangeCallback
-from semantic_digital_twin.world_description.geometry import Color
+from krrood_image.color import Color
 
 if TYPE_CHECKING:
     from rclpy.publisher import Publisher

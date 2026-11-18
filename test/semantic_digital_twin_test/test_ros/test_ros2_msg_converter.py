@@ -1,3 +1,8 @@
+"""
+Tests for converting between ROS 2 messages and the semantic digital twin's spatial
+types, shapes and colours, in both directions.
+"""
+
 import os
 import shutil
 import subprocess
@@ -33,12 +38,12 @@ from krrood_spatial_math.spatial_types import (
 from krrood_spatial_math.spatial_types import Pose3Dimensional
 from semantic_digital_twin.world_description.geometry import (
     Box,
-    Color,
     Scale,
     Cylinder,
     Sphere,
     Mesh,
 )
+from krrood_image.color import Color
 
 
 # %% transforms naming both frames

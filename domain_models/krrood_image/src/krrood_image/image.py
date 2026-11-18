@@ -1,3 +1,7 @@
+"""
+Images of colour pixels, and drawing on them.
+"""
+
 from __future__ import annotations
 
 from dataclasses import astuple, dataclass
@@ -6,13 +10,19 @@ import cv2
 import numpy as np
 from numpy.typing import NDArray
 
-from krrimage.color import Color
-from krrimage.coordinates import ImageBox, ImagePoint, Pixel, PixelBox, Resolution
+from krrood_image.color import Color
+from krrood_image.coordinates import (
+    ImageBox,
+    ImagePoint,
+    Pixel,
+    PixelBox,
+    Resolution,
+)
 
 # %% a colour image
 
 
-@dataclass(frozen=True, eq=False)
+@dataclass(frozen=True, eq=False, kw_only=True)
 class ColorImage:
     """
     An image of red, green and blue bytes, rows by columns by channel.
@@ -26,16 +36,17 @@ class ColorImage:
     """
 
     @classmethod
-    def of_color(cls, resolution: Resolution, color: Color) -> ColorImage:
+    def uniform(cls, *, resolution: Resolution, color: Color) -> ColorImage:
         """
         :param resolution: The size.
         :param color: What every pixel is set to.
         :return: An image that size of one colour.
         """
+        channels = tuple(color.to_rgb_bytes())
         return cls(
-            np.full(
-                (resolution.height, resolution.width, len(color.to_rgb())),
-                tuple(color.to_rgb_bytes()),
+            pixels=np.full(
+                (resolution.height, resolution.width, len(channels)),
+                channels,
                 dtype=np.uint8,
             )
         )
@@ -48,17 +59,17 @@ class ColorImage:
         height, width = self.pixels.shape[:2]
         return Resolution(width=width, height=height)
 
-    def pasted(self, picture: ColorImage, into: ImageBox) -> ColorImage:
+    def pasted(self, *, picture: ColorImage, into: ImageBox) -> ColorImage:
         """
         :param picture: What to paste.
         :param into: Where, and how big; what leaves the image is cropped.
         :return: A copy with the picture resized into the box.
         """
         result = self.pixels.copy()
-        box = PixelBox.nearest(into)
-        shown = box.clipped_to(self.resolution)
+        box = PixelBox.nearest(box=into)
+        shown = box.visible_part(resolution=self.resolution)
         if box.is_empty or shown.is_empty:
-            return ColorImage(result)
+            return ColorImage(pixels=result)
         resized = cv2.resize(
             picture.pixels, (box.width, box.height), interpolation=cv2.INTER_AREA
         )
@@ -66,9 +77,9 @@ class ColorImage:
             shown.top - box.top : shown.bottom - box.top,
             shown.left - box.left : shown.right - box.left,
         ]
-        return ColorImage(result)
+        return ColorImage(pixels=result)
 
-    def fitted(self, picture: ColorImage, into: ImageBox) -> ColorImage:
+    def fitted(self, *, picture: ColorImage, into: ImageBox) -> ColorImage:
         """
         :param picture: What to paste.
         :param into: The room it may take.
@@ -77,18 +88,22 @@ class ColorImage:
         """
         resolution = picture.resolution
         return self.pasted(
-            picture, into.largest_centred(resolution.width / resolution.height)
+            picture=picture,
+            into=into.largest_centred(
+                aspect_ratio=resolution.width / resolution.height
+            ),
         )
 
-    def dimmed(self, by: float) -> ColorImage:
+    def dimmed(self, *, by: float) -> ColorImage:
         """
         :param by: How far towards white, from zero to one.
         :return: A copy faded towards white.
         """
-        faded = self.pixels.astype(np.float32) * (1.0 - by) + 255.0 * by
-        return ColorImage(np.clip(faded + 0.5, 0, 255).astype(np.uint8))
+        white = np.iinfo(np.uint8).max
+        faded = self.pixels.astype(np.float32) * (1.0 - by) + white * by
+        return ColorImage(pixels=np.clip(faded + 0.5, 0, white).astype(np.uint8))
 
-    def blended(self, other: ColorImage, weight: float) -> ColorImage:
+    def blended(self, *, other: ColorImage, weight: float) -> ColorImage:
         """
         :param other: The image shown when the weight is one.
         :param weight: How much of the other image shows, from zero to one.
@@ -98,17 +113,39 @@ class ColorImage:
             self.pixels.astype(np.float32) * (1.0 - weight)
             + other.pixels.astype(np.float32) * weight
         )
-        return ColorImage(np.clip(mixed + 0.5, 0, 255).astype(np.uint8))
+        white = np.iinfo(np.uint8).max
+        return ColorImage(pixels=np.clip(mixed + 0.5, 0, white).astype(np.uint8))
 
-    def framed(self, around: ImageBox, color: Color, thickness: int = 3) -> ColorImage:
+    def framed(
+        self, *, around: ImageBox, color: Color, thickness: int = 3
+    ) -> ColorImage:
         """
         :param around: The box.
         :param color: What the outline is drawn in.
         :param thickness: Pixels the outline is thick.
         :return: A copy with the box outlined.
         """
+        return self._rectangle_drawn(around=around, color=color, thickness=thickness)
+
+    def filled(self, *, around: ImageBox, color: Color) -> ColorImage:
+        """
+        :param around: The box.
+        :param color: What it is painted in.
+        :return: A copy with the box painted over.
+        """
+        return self._rectangle_drawn(around=around, color=color, thickness=cv2.FILLED)
+
+    def _rectangle_drawn(
+        self, *, around: ImageBox, color: Color, thickness: int
+    ) -> ColorImage:
+        """
+        :param around: The box.
+        :param color: What it is drawn in.
+        :param thickness: Pixels the outline is thick, or :data:`cv2.FILLED`.
+        :return: A copy with the box drawn on it.
+        """
         result = self.pixels.copy()
-        box = PixelBox.nearest(around)
+        box = PixelBox.nearest(box=around)
         cv2.rectangle(
             result,
             (box.left, box.top),
@@ -116,27 +153,10 @@ class ColorImage:
             tuple(color.to_rgb_bytes()),
             thickness,
         )
-        return ColorImage(result)
-
-    def filled(self, around: ImageBox, color: Color) -> ColorImage:
-        """
-        :param around: The box.
-        :param color: What it is painted in.
-        :return: A copy with the box painted over.
-        """
-        result = self.pixels.copy()
-        box = PixelBox.nearest(around)
-        cv2.rectangle(
-            result,
-            (box.left, box.top),
-            (box.right, box.bottom),
-            tuple(color.to_rgb_bytes()),
-            cv2.FILLED,
-        )
-        return ColorImage(result)
+        return ColorImage(pixels=result)
 
     def lined(
-        self, start: ImagePoint, end: ImagePoint, color: Color, thickness: int = 2
+        self, *, start: ImagePoint, end: ImagePoint, color: Color, thickness: int = 2
     ) -> ColorImage:
         """
         :param start: Where the line starts.
@@ -148,16 +168,17 @@ class ColorImage:
         result = self.pixels.copy()
         cv2.line(
             result,
-            astuple(Pixel.nearest(start)),
-            astuple(Pixel.nearest(end)),
+            astuple(Pixel.nearest(point=start)),
+            astuple(Pixel.nearest(point=end)),
             tuple(color.to_rgb_bytes()),
             thickness,
             cv2.LINE_AA,
         )
-        return ColorImage(result)
+        return ColorImage(pixels=result)
 
     def arrowed(
         self,
+        *,
         start: ImagePoint,
         end: ImagePoint,
         color: Color,
@@ -176,11 +197,11 @@ class ColorImage:
         length = max(np.hypot(end.x - start.x, end.y - start.y), 1.0)
         cv2.arrowedLine(
             result,
-            astuple(Pixel.nearest(start)),
-            astuple(Pixel.nearest(end)),
+            astuple(Pixel.nearest(point=start)),
+            astuple(Pixel.nearest(point=end)),
             tuple(color.to_rgb_bytes()),
             thickness,
             cv2.LINE_AA,
             tipLength=min(head_length / length, 0.5),
         )
-        return ColorImage(result)
+        return ColorImage(pixels=result)

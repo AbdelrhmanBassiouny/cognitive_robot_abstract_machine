@@ -1,9 +1,14 @@
+"""
+Tests for the hue, saturation and value thresholds the image cluster extractor selects
+pixels with.
+"""
+
 from __future__ import annotations
 
 # %% Imports
 
 import numpy as np
-from semantic_digital_twin.world_description.geometry import Color
+from krrood_image.color import Color
 
 from robokudo.annotators.image_cluster_extractor import (
     ColorName,

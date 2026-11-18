@@ -21,7 +21,7 @@ from cramph.plotters.styles import (
     NodeDrawingStyle,
     ObservationDrawingStyle,
 )
-from semantic_digital_twin.world_description.geometry import Color
+from krrood_image.color import Color
 
 if TYPE_CHECKING:
     from cramph.statechart import Statechart
@@ -124,7 +124,7 @@ class StatechartGraphviz:
     """
 
     disabled_condition_color: Color = field(
-        default_factory=lambda: Color.from_hex("#9CA3AF")
+        default_factory=lambda: Color.from_hex(hex_color="#9CA3AF")
     )
     """
     The color a condition that cannot become true any more is written in.

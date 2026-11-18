@@ -1,3 +1,8 @@
+"""
+Tests that every package of the workspace carries the version in the root
+``VERSION`` file.
+"""
+
 from pathlib import Path
 
 PACKAGES = [
@@ -6,8 +11,8 @@ PACKAGES = [
     "cramph",
     "experiments",
     "giskardpy",
-    "krrimage",
     "krrood",
+    "krrood_image",
     "krrood_spatial_math",
     "physics_simulators",
     "probabilistic_model",

@@ -1,3 +1,8 @@
+"""
+Soft continuum arms made of bending sections, modelled with piecewise constant curvature
+or as Cosserat rods, and the end effectors they carry.
+"""
+
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing_extensions import TYPE_CHECKING
@@ -22,7 +27,8 @@ from semantic_digital_twin.world_description.soft_connections import (
     CosseratRodConnection,
 )
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
-from semantic_digital_twin.world_description.geometry import Cylinder, Color
+from semantic_digital_twin.world_description.geometry import Cylinder
+from krrood_image.color import Color
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix3Dimensional,
     Vector3Dimensional,

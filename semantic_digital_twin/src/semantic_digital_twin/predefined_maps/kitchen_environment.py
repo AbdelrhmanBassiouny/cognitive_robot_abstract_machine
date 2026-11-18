@@ -1,3 +1,8 @@
+"""
+The predefined kitchen: its walls and window bays, its furniture and the speed limits
+of its movable parts.
+"""
+
 from __future__ import annotations
 
 # %% Imports
@@ -62,7 +67,12 @@ from semantic_digital_twin.world_description.connections import (
 from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedomLimits,
 )
-from semantic_digital_twin.world_description.geometry import Box, Scale, Color, Mesh
+from semantic_digital_twin.world_description.geometry import (
+    Box,
+    Scale,
+    Mesh,
+)
+from krrood_image.color import Color
 from semantic_digital_twin.world_description.geometry import Cylinder
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body, Region
@@ -276,7 +286,7 @@ class WindowRecess:
             scale=Scale(model.panel_thickness, width, opening_height),
         )
         for shape in window_panel.root.visual.shapes:
-            shape.color = Color(0.55, 0.75, 0.9, 0.3)
+            shape.color = Color(hue=0.55, saturation=0.75, value=0.9, opacity=0.3)
         sill_depth = model.panel_front_x + model.panel_thickness - model.sill_front_x
         WallPanel.create_with_new_body_in_world(
             name=f"{self.name}_sill",

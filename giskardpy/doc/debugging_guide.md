@@ -29,7 +29,7 @@ A node registers a debug expression by appending it to `artifacts.debug_expressi
 `build_artifacts()` method:
 
 ```python
-from semantic_digital_twin.world_description.geometry import Color
+from krrood_image.color import Color
 from giskardpy.motion_statechart.graph_node import DebugExpression
 
 artifacts.debug_expressions.append(

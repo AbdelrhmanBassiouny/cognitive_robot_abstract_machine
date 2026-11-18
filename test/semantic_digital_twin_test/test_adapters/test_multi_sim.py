@@ -1,3 +1,9 @@
+"""
+Tests for simulating worlds in MuJoCo through :class:`MujocoSim`: building the MuJoCo
+model of a world, starting and stopping the simulation, and keeping the world and the
+simulator in step.
+"""
+
 import logging
 import os
 from datetime import timedelta
@@ -37,12 +43,12 @@ from semantic_digital_twin.world_description.contact import ContactParameters
 from semantic_digital_twin.world_description.geometry import (
     Box,
     Scale,
-    Color,
     Cylinder,
     Mesh,
     MeshFileFormat,
     Texture,
 )
+from krrood_image.color import Color
 from semantic_digital_twin.world_description.inertial_properties import Inertial
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import (

@@ -1,3 +1,8 @@
+"""
+Converters from ROS 2 messages to the semantic digital twin's transforms, poses, points,
+vectors, colours and shapes, resolving frame names to bodies of a world.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -27,13 +32,13 @@ from krrood_spatial_math.spatial_types import (
 from krrood_spatial_math.spatial_types import Pose3Dimensional
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import (
-    Color,
     Box,
     Scale,
     Cylinder,
     Sphere,
     Mesh,
 )
+from krrood_image.color import Color
 
 
 @dataclass

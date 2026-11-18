@@ -20,7 +20,8 @@ from krrood_spatial_math.spatial_types import (
     Pose3Dimensional,
 )
 from py_trees.common import Status
-from semantic_digital_twin.world_description.geometry import Color, Mesh
+from semantic_digital_twin.world_description.geometry import Mesh
+from krrood_image.color import Color
 from typing_extensions import TYPE_CHECKING, Self
 
 from robokudo.annotators.core import BaseAnnotator, ThreadedAnnotator

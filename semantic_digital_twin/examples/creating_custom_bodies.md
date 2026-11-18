@@ -49,7 +49,14 @@ Finally, in our kinematic structure, each entity has a name. For this we can use
 import os
 from krrood_spatial_math.spatial_types import AxisAngle, CartesianPoint3Dimensional, Vector3Dimensional
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
-from semantic_digital_twin.world_description.geometry import Box, Scale, Sphere, Cylinder, Mesh, Color
+from semantic_digital_twin.world_description.geometry import (
+    Box,
+    Scale,
+    Sphere,
+    Cylinder,
+    Mesh,
+)
+from krrood_image.color import Color
 
 box_origin = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(x=0, y=0, z=0, roll=0, pitch=0, yaw=0)
 box = Box(origin=box_origin, scale=Scale(1., 1., 0.5), color=Color.from_rgba(red=1., green=0., blue=0., opacity=1., ))

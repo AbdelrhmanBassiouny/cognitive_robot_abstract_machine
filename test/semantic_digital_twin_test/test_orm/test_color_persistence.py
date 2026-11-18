@@ -1,3 +1,7 @@
+"""
+Tests for storing a shape's colour in a database and reading it back unchanged.
+"""
+
 from __future__ import annotations
 
 # %% Imports
@@ -7,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from krrood.ormatic.data_access_objects.helper import to_dao
-from semantic_digital_twin.world_description.geometry import Color
+from krrood_image.color import Color
 
 # %% Color persistence
 

@@ -1,3 +1,7 @@
+"""
+Errors raised while reading colours.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,7 +11,7 @@ from krrood.exceptions import DataclassException
 # %% colours
 
 
-@dataclass
+@dataclass(kw_only=True)
 class MalformedHexColor(DataclassException):
     """
     Raised when a string meant to name a color is not written as hex digits.
@@ -29,19 +33,19 @@ class MalformedHexColor(DataclassException):
         )
 
 
-@dataclass
-class WrongNumberOfColorChannels(DataclassException):
+@dataclass(kw_only=True)
+class InvalidColorChannelCount(DataclassException, ValueError):
     """
-    Raised when a list meant to give a color has neither three nor four channels.
+    A channel sequence cannot describe an RGB or RGBA color.
     """
 
-    channels: list[float]
+    channel_count: int
     """
-    The values that were read as a color.
+    Number of supplied color channels.
     """
 
     def error_message(self) -> str:
-        return f"{self.channels} has {len(self.channels)} channels, not 3 or 4."
+        return f"A color cannot be constructed from {self.channel_count} channels."
 
     def suggest_correction(self) -> str:
-        return "give red, green and blue, optionally followed by the opacity."
+        return "Supply three RGB channels or four RGBA channels."

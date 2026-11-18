@@ -1,3 +1,8 @@
+"""
+Tests for estimating and tracking object poses with FoundationPose, against a scripted
+pose estimator and a flat surface scene.
+"""
+
 from __future__ import annotations
 
 # %% Imports
@@ -50,7 +55,11 @@ from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import Camera
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.geometry import Color, Mesh, Scale
+from semantic_digital_twin.world_description.geometry import (
+    Mesh,
+    Scale,
+)
+from krrood_image.color import Color
 from semantic_digital_twin.world_description.world_entity import Body
 
 # %% Scripted pose estimation
