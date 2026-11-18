@@ -32,30 +32,12 @@ tracks:
   description: Warn, ask an expert or use a default conclusion, and record which of the three
     a conclusion came from.
 items:
-- id: D-core-serialization
-  title: 'RDR engine: rule-tree unparser (rdr_to_python)'
-  branch: D-core-serialization
-  pull_request_number: 66
-  track: engine-stack
-  depends_on: []
-  status: in_progress
-  recommended_model: sonnet
-  blockers:
-  - The `integration-conflict` label (2026-09-29) withholds promotion; removing it is
-    left to the owner.
-  - CI on the pushed heads is unread, and nothing was posted on the cram2 pull request 974 threads,
-    whose reply needs the owner's say-so.
-  notes: The rule-tree unparser. `main` is merged. The three serializer classes are now
-    named `RippleDownRules...` and `module_loading.py` moved to D-core-single-class, both
-    carried through the stack with basstler's `SymbolRename` and `ImportRelocation`
-    actions (basstler#245). Porting basstler's abstract `classproperty` is a separate change.
 - id: D-core-support
   title: 'RDR engine: observer, rule-tree view, and remaining support modules'
   branch: D-core-support
   pull_request_number: 67
   track: engine-stack
-  depends_on:
-  - D-core-serialization
+  depends_on: []
   status: in_progress
   recommended_model: sonnet
   notes: Merged D-core-serialization into it 2026-11-04 (ff9a89984, merge probe clean). The
@@ -141,3 +123,4 @@ items:
     -- see rdr-backward-inference and roadmap Sec.17 -- so this item now inherits "no conclusion"
     being spelled the same way as "generate one". Two consequences it owns. (1) Expert delegation:
     once ...'
+landed_item_count: 1

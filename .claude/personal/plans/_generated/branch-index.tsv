@@ -133,7 +133,6 @@ el-classification	ontomatic-reasoning
 existential-witnesses	ontomatic-reasoning
 open-world-query-answers	ontomatic-reasoning
 sroiq-classification	ontomatic-reasoning
-D-core-serialization	rdr-core-engine
 D-core-support	rdr-core-engine
 D-core-expert	rdr-core-engine
 D-core-single-class	rdr-core-engine
