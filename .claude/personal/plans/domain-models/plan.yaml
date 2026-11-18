@@ -93,9 +93,7 @@ items:
   status: in_progress
   recommended_model: opus
   blockers:
-  - 'CI on 6f2bd2c4 not read (running when pushed). No cram2 pull request yet. Owner to decide
-    on #527: whether transformations keep accepting frameless values, the flatten-test rename,
-    and krrood check flagging dot, euclidean_distance, projection_line, unproject as positional.'
+  - 'CI on 50da1bed not read; at 6f2bd2c4 the install timed out on PyPI. No cram2 PR yet. Owner decides: frameless values in transformations, the flatten-test rename, krrood check on dot, euclidean_distance, projection_line, unproject.'
   - '#524 must move to Point/Vector, the Dimensional names and transform_into_own_frame.'
   depends_on: []
   session: https://claude.ai/code/session_018wfiv5c5ocSWwDLYMCNudx
