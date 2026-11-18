@@ -1,3 +1,8 @@
+"""
+Tests of spawning bodies, regions and connections into a world from their
+specifications.
+"""
+
 import copy
 from dataclasses import dataclass
 import inspect
@@ -9,6 +14,7 @@ import numpy as np
 import pytest
 from typing_extensions import Self
 
+from krrood.patterns.classproperty import classproperty
 from krrood.utils import recursive_subclasses
 from semantic_digital_twin.specifications.base import SpawnSpecification
 from semantic_digital_twin.specifications.connections import (
@@ -27,13 +33,25 @@ from semantic_digital_twin.specifications.kinematic_structure_entities import (
 from semantic_digital_twin.specifications.semantic_annotations import (
     SemanticAnnotationWithRootSpecification,
 )
+from semantic_digital_twin.specifications.exceptions import (
+    VisualCollisionBackupDisabledError,
+)
 from semantic_digital_twin.specifications.robots import RobotSpecification
 from semantic_digital_twin.specifications.worlds import WorldSpecification
+from semantic_digital_twin.predefined_maps.apartment_environment import (
+    ApartmentEnvironment,
+)
+from semantic_digital_twin.predefined_maps.kitchen_environment import (
+    KitchenEnvironment,
+)
+from semantic_digital_twin.world_source import WorldSource
 from krrood.ormatic.data_access_objects.helper import to_dao
 import semantic_digital_twin.orm.ormatic_interface  # registers the DAOs to_dao looks up
 
 from .test_adapters.test_mjcf import VISUAL_ONLY_GEOM_SCENE
+from .test_adapters.test_urdf import VISUAL_ONLY_LINK_URDF
 
+from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.exceptions import (
     HandleWiderThanLong,
@@ -45,11 +63,17 @@ from semantic_digital_twin.exceptions import (
     PartWholeFieldInAnnotationKwargs,
     UnknownPartWholeRelationshipField,
     UselessConceptError,
-    DriveVelocityLimitsOnUndrivenRobot,
 )
-from semantic_digital_twin.robots.pr2 import PR2
+from semantic_digital_twin.robots.exceptions import (
+    RobotDescriptionMissingError,
+    StartPoseWithoutMobileBaseError,
+)
+from semantic_digital_twin.robots.pr2 import PR2, PR2MobileBase
 from semantic_digital_twin.robots.minimal_robot import MinimalRobot
-from semantic_digital_twin.robots.robot_parts import AbstractRobotPart
+from semantic_digital_twin.robots.robot_parts import (
+    AbstractRobotPart,
+    MobileBase,
+)
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Cabinet,
     Milk,
@@ -63,10 +87,10 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     DoorWithType,
     EntryWay,
 )
-from semantic_digital_twin.spatial_types import (
-    HomogeneousTransformationMatrix,
-    Point3,
-    Vector3,
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
+    CartesianPoint3Dimensional,
+    Vector3Dimensional,
 )
 from semantic_digital_twin.semantic_annotations.mixins import (
     HasApertures,
@@ -85,13 +109,18 @@ from semantic_digital_twin.world_description.connections import (
     Connection6DoF,
     OmniDrive,
 )
+from semantic_digital_twin.world_description.connection_properties import JointDynamics
 from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedomLimits,
 )
 from semantic_digital_twin.world_description.geometry import Color, Scale, Box
 from semantic_digital_twin.world_description.inertial_properties import Inertial
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
-from semantic_digital_twin.world_description.world_entity import Body, Region
+from semantic_digital_twin.world_description.world_entity import (
+    Body,
+    Connection,
+    Region,
+)
 
 RESOURCES = Path(__file__).resolve().parents[2] / "semantic_digital_twin" / "resources"
 
@@ -135,7 +164,9 @@ def test_region_specification_uses_connection_specification(empty_world):
     spec = RegionSpecification.box(
         "sliding_region",
         Scale(1, 1, 1),
-        connection_specification=PrismaticConnectionSpecification(axis=Vector3.Z()),
+        connection_specification=PrismaticConnectionSpecification(
+            axis=Vector3Dimensional.Z()
+        ),
     )
     region = spec.spawn(empty_world)
     assert isinstance(region.parent_connection, PrismaticConnection)
@@ -143,7 +174,9 @@ def test_region_specification_uses_connection_specification(empty_world):
 
 def test_body_and_connection_pose_and_name_override(empty_world):
     spec = BodySpecification.box("box", Scale(1, 1, 1))
-    spec.parent_T_self = HomogeneousTransformationMatrix.from_xyz_rpy(x=1, y=2, z=3)
+    spec.parent_T_self = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+        x=1, y=2, z=3
+    )
     body = spec.spawn(empty_world, name="renamed")
     assert body.name == PrefixedName("renamed")
     root_T_body = empty_world.compute_forward_kinematics(empty_world.root, body)
@@ -152,10 +185,10 @@ def test_body_and_connection_pose_and_name_override(empty_world):
 
 def test_body_and_connection_spawn_arg_overrides_stored_pose(empty_world):
     spec = BodySpecification.box("box", Scale(1, 1, 1))
-    spec.parent_T_self = HomogeneousTransformationMatrix.from_xyz_rpy(x=1)
+    spec.parent_T_self = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(x=1)
     body = spec.spawn(
         empty_world,
-        parent_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(x=5),
+        parent_T_self=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(x=5),
     )
     root_T_body = empty_world.compute_forward_kinematics(empty_world.root, body)
     np.testing.assert_allclose(root_T_body.position.to_np()[0], 5)
@@ -165,7 +198,9 @@ def test_body_and_connection_active(empty_world):
     spec = BodySpecification.box(
         "drawer",
         Scale(1, 1, 1),
-        connection_specification=PrismaticConnectionSpecification(axis=Vector3.Z()),
+        connection_specification=PrismaticConnectionSpecification(
+            axis=Vector3Dimensional.Z()
+        ),
     )
     body = spec.spawn(empty_world)
     assert isinstance(body.parent_connection, PrismaticConnection)
@@ -197,7 +232,7 @@ def test_active_annotation_spawns(empty_world):
         "drawer",
         BodySpecification.box("drawer", Scale(0.4, 0.5, 0.6)),
         parent_connection_specification=PrismaticConnectionSpecification(
-            axis=Vector3.X()
+            axis=Vector3Dimensional.X()
         ),
     )
     annotation = spec.spawn(empty_world)
@@ -250,20 +285,20 @@ def test_nested_annotation_on_non_part_whole_field_raises():
 
 def test_world_specification_robotless():
     world = WorldSpecification(
-        world_parser=None,
+        world_source=None,
         objects=[BodySpecification.box("obj", Scale(1, 1, 1))],
-    ).to_domain_object()
+    ).create_world()
     assert not world.is_empty()
     assert world.get_body_by_name("obj") is not None
 
 
-def test_to_domain_object_is_repeatable():
+def test_create_world_is_repeatable():
     spec = WorldSpecification(
-        world_parser=None,
+        world_source=None,
         objects=[BodySpecification.box("obj", Scale(1, 1, 1))],
     )
-    first = spec.to_domain_object()
-    second = spec.to_domain_object()
+    first = spec.create_world()
+    second = spec.create_world()
 
     assert first is not second
     assert len(first.bodies) == 2
@@ -273,7 +308,7 @@ def test_to_domain_object_is_repeatable():
 def test_world_specification_from_urdf_environment():
     world = WorldSpecification.from_urdf(
         os.path.join(RESOURCES, "urdf", "table.urdf")
-    ).to_domain_object()
+    ).create_world()
     assert not world.is_empty()
     assert world.root is not None
 
@@ -282,8 +317,8 @@ def test_materialized_environments_share_no_entity_ids():
     specification = WorldSpecification.from_urdf(
         os.path.join(RESOURCES, "urdf", "table.urdf")
     )
-    first = specification.to_domain_object()
-    second = specification.to_domain_object()
+    first = specification.create_world()
+    second = specification.create_world()
 
     first_ids = {body.id for body in first.bodies}
     second_ids = {body.id for body in second.bodies}
@@ -291,18 +326,59 @@ def test_materialized_environments_share_no_entity_ids():
     assert first_ids.isdisjoint(second_ids)
 
 
+def test_world_specification_builds_on_a_map_written_in_code():
+    specification = WorldSpecification(
+        world_source=KitchenEnvironment(),
+        objects=[BodySpecification.box("obj", Scale(1, 1, 1))],
+    )
+    world = specification.create_world()
+
+    assert len(world.bodies) == len(KitchenEnvironment().create_world().bodies) + 1
+    assert world.get_body_by_name("obj").parent_kinematic_structure_entity == world.root
+
+
+def test_world_specification_builds_on_another_world_specification():
+    inner = WorldSpecification(
+        objects=[BodySpecification.box("inner_obj", Scale(1, 1, 1))]
+    )
+    world = WorldSpecification(
+        world_source=inner,
+        objects=[BodySpecification.box("outer_obj", Scale(1, 1, 1))],
+    ).create_world()
+
+    assert {body.name.name for body in world.bodies} == {
+        world.root.name.name,
+        "inner_obj",
+        "outer_obj",
+    }
+
+
+@pytest.mark.parametrize(
+    "world_source",
+    [KitchenEnvironment(), ApartmentEnvironment()],
+    ids=["kitchen", "apartment"],
+)
+def test_predefined_maps_share_no_entity_ids(world_source: WorldSource):
+    first = world_source.create_world()
+    second = world_source.create_world()
+
+    first_ids = {body.id for body in first.bodies}
+    assert len(first_ids) == len(first.bodies)
+    assert first_ids.isdisjoint(body.id for body in second.bodies)
+
+
 def test_world_specification_from_mjcf_environment():
     pytest.importorskip("mujoco")
     world = WorldSpecification.from_mjcf(
         os.path.join(RESOURCES, "mjcf", "table.xml")
-    ).to_domain_object()
+    ).create_world()
     assert not world.is_empty()
     assert world.root is not None
 
 
 def test_world_specification_from_mjcf_keeps_visual_only_geoms_out_of_collision():
     pytest.importorskip("mujoco")
-    world = WorldSpecification.from_mjcf(VISUAL_ONLY_GEOM_SCENE).to_domain_object()
+    world = WorldSpecification.from_mjcf(VISUAL_ONLY_GEOM_SCENE).create_world()
 
     shelf = world.get_body_by_name("shelf")
     assert len(shelf.visual.shapes) == 1
@@ -313,7 +389,7 @@ def test_world_specification_from_mjcf_collides_every_geom_when_asked():
     pytest.importorskip("mujoco")
     world = WorldSpecification.from_mjcf(
         VISUAL_ONLY_GEOM_SCENE, use_visual_as_collision_backup=True
-    ).to_domain_object()
+    ).create_world()
 
     shelf = world.get_body_by_name("shelf")
     assert len(shelf.collision.shapes) == 1
@@ -323,7 +399,7 @@ def test_world_specification_from_gazebo_environment():
     world = WorldSpecification.from_gazebo(
         os.path.join(RESOURCES, "gazebo", "mini_warehouse", "worlds", "mini.world"),
         objects=[BodySpecification.box("obj", Scale(1, 1, 1))],
-    ).to_domain_object()
+    ).create_world()
 
     assert not world.is_empty()
     assert world.get_body_by_name("obj") is not None
@@ -371,7 +447,12 @@ def test_from_event_constructor_spawns(empty_world):
         ),
         lambda pose: BodySpecification.from_3d_points(
             "shape",
-            [Point3(0, 0, 0), Point3(1, 0, 0), Point3(0, 1, 0), Point3(1, 1, 1)],
+            [
+                CartesianPoint3Dimensional(0, 0, 0),
+                CartesianPoint3Dimensional(1, 0, 0),
+                CartesianPoint3Dimensional(0, 1, 0),
+                CartesianPoint3Dimensional(1, 1, 1),
+            ],
             parent_T_self=pose,
         ),
         lambda pose: RegionSpecification.box(
@@ -380,7 +461,7 @@ def test_from_event_constructor_spawns(empty_world):
     ],
 )
 def test_shape_constructors_apply_parent_T_self(empty_world, make_spec):
-    pose = HomogeneousTransformationMatrix.from_xyz_rpy(x=1, y=2, z=3)
+    pose = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(x=1, y=2, z=3)
     entity = make_spec(pose).spawn(empty_world)
     root_T_entity = empty_world.compute_forward_kinematics(empty_world.root, entity)
     np.testing.assert_allclose(root_T_entity.position.to_np()[:3], [1, 2, 3])
@@ -390,7 +471,12 @@ def test_body_specification_from_3d_points_matches_direct_construction():
     """
     ``from_3d_points`` mirrors :meth:`Body.from_3d_points`.
     """
-    points = [Point3(0, 0, 0), Point3(1, 0, 0), Point3(0, 1, 0), Point3(1, 1, 1)]
+    points = [
+        CartesianPoint3Dimensional(0, 0, 0),
+        CartesianPoint3Dimensional(1, 0, 0),
+        CartesianPoint3Dimensional(0, 1, 0),
+        CartesianPoint3Dimensional(1, 1, 1),
+    ]
     name = "polytope"
 
     materialized = BodySpecification.from_3d_points(name, points).to_domain_object(name)
@@ -543,95 +629,72 @@ def test_spawn_positional_name(empty_world):
 # %% robot specifications
 
 
-def _odom_bodies(world: World) -> list[Body]:
+def _localization_of(robot: MinimalRobot) -> Connection:
     """
-    Every odom body of a world, regardless of the prefix disambiguating it.
+    :return: The connection attaching a spawned robot without a mobile base to the
+        world root.
     """
-    return [body for body in world.bodies if body.name.name == "odom"]
+    return robot.root.parent_connection
+
+
+def _odometry_bodies(world: World, mobile_base_class: type[MobileBase]) -> list[Body]:
+    """
+    Every odometry body of the robots with a mobile base of a class in a world,
+    regardless of the prefix disambiguating it.
+    """
+    return [
+        body
+        for body in world.bodies
+        if body.name.name == mobile_base_class.odometry_body_name
+    ]
 
 
 def test_world_specification_with_robot():
     try:
         world = WorldSpecification(
-            world_parser=None,
+            world_source=None,
             robots=[
                 RobotSpecification(
                     semantic_annotation_type=PR2,
-                    world_T_odom=HomogeneousTransformationMatrix.from_xyz_rpy(x=1.0),
-                    odom_T_robot_start=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    localization_pose=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+                        x=1.0
+                    ),
+                    odometry_T_robot_start=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                         y=2.0
                     ),
                 )
             ],
-        ).to_domain_object()
+        ).create_world()
     except ParsingError as error:
         pytest.skip(f"PR2 URDF not available: {error}")
 
-    odom_body = world.get_body_by_name("odom")
-    assert odom_body is not None
-    assert isinstance(odom_body.parent_connection, FixedConnection)
-    assert odom_body.parent_connection.parent is world.root
+    odometry_body = world.get_body_by_name(PR2MobileBase.odometry_body_name)
+    assert odometry_body is not None
+    assert isinstance(odometry_body.parent_connection, FixedConnection)
+    assert odometry_body.parent_connection.parent is world.root
 
     drive = world.get_body_by_name("base_footprint").parent_connection
     assert isinstance(drive, OmniDrive)
 
-    root_T_odom = world.compute_forward_kinematics(world.root, odom_body)
-    np.testing.assert_allclose(root_T_odom.position.to_np()[0], 1.0)
+    root_T_odometry = world.compute_forward_kinematics(world.root, odometry_body)
+    np.testing.assert_allclose(root_T_odometry.position.to_np()[0], 1.0)
 
 
-def test_robot_specification_applies_the_drive_velocity_limits_it_is_given():
-    translation_velocity_limits = 0.1
-    rotation_velocity_limits = 0.2
+def test_a_spawned_robot_drives_at_the_velocity_limits_its_mobile_base_declares():
     try:
         world = WorldSpecification(
-            world_parser=None,
-            robots=[
-                RobotSpecification(
-                    semantic_annotation_type=PR2,
-                    drive_translation_velocity_limits=translation_velocity_limits,
-                    drive_rotation_velocity_limits=rotation_velocity_limits,
-                )
-            ],
-        ).to_domain_object()
-    except ParsingError as error:
-        pytest.skip(f"PR2 URDF not available: {error}")
-
-    drive = world.get_body_by_name("base_footprint").parent_connection
-    assert drive.x_velocity.limits.upper.velocity == translation_velocity_limits
-    assert drive.x_velocity.limits.lower.velocity == -translation_velocity_limits
-    assert drive.yaw.limits.upper.velocity == rotation_velocity_limits
-    assert drive.yaw.limits.lower.velocity == -rotation_velocity_limits
-
-
-def test_robot_specification_keeps_the_drives_own_velocity_limits_by_default():
-    drive_defaults = inspect.signature(OmniDrive.create_with_dofs).parameters
-    try:
-        world = WorldSpecification(
-            world_parser=None,
             robots=[RobotSpecification(semantic_annotation_type=PR2)],
-        ).to_domain_object()
+        ).create_world()
     except ParsingError as error:
         pytest.skip(f"PR2 URDF not available: {error}")
 
     drive = world.get_body_by_name("base_footprint").parent_connection
-    assert (
-        drive.x_velocity.limits.upper.velocity
-        == drive_defaults["translation_velocity_limits"].default
-    )
-    assert (
-        drive.yaw.limits.upper.velocity
-        == drive_defaults["rotation_velocity_limits"].default
-    )
-
-
-def test_robot_specification_rejects_drive_velocity_limits_for_an_undriven_robot(
-    empty_world,
-):
-    with pytest.raises(DriveVelocityLimitsOnUndrivenRobot):
-        RobotSpecification(
-            semantic_annotation_type=MinimalRobot,
-            drive_translation_velocity_limits=0.1,
-        ).spawn(empty_world)
+    limits = PR2MobileBase.drive_velocity_limits
+    assert drive.x_velocity.limits.upper.velocity == limits.translation
+    assert drive.x_velocity.limits.lower.velocity == -limits.translation
+    assert drive.y_velocity.limits.upper.velocity == limits.translation
+    assert drive.yaw.limits.upper.velocity == limits.rotation
+    assert drive.yaw.limits.lower.velocity == -limits.rotation
 
 
 @dataclass(eq=False)
@@ -668,13 +731,13 @@ def test_world_specification_from_urdf_with_robot():
         world = WorldSpecification.from_urdf(
             os.path.join(RESOURCES, "urdf", "table.urdf"),
             robots=[RobotSpecification(semantic_annotation_type=PR2)],
-        ).to_domain_object()
+        ).create_world()
     except ParsingError as error:
         pytest.skip(f"PR2 URDF not available: {error}")
 
-    odom_body = world.get_body_by_name("odom")
-    assert odom_body is not None
-    assert odom_body.parent_connection.parent is world.root
+    odometry_body = world.get_body_by_name(PR2MobileBase.odometry_body_name)
+    assert odometry_body is not None
+    assert odometry_body.parent_connection.parent is world.root
     drive = world.get_body_by_name("base_footprint").parent_connection
     assert isinstance(drive, OmniDrive)
 
@@ -692,35 +755,349 @@ def test_robot_specification_returns_spawned_annotation(empty_world):
 def test_world_specification_with_several_robots():
     try:
         world = WorldSpecification(
-            world_parser=None,
+            world_source=None,
             robots=[
                 RobotSpecification(
                     semantic_annotation_type=PR2,
-                    world_T_odom=HomogeneousTransformationMatrix.from_xyz_rpy(x=1.0),
+                    localization_pose=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+                        x=1.0
+                    ),
                 ),
                 RobotSpecification(
                     semantic_annotation_type=PR2,
-                    world_T_odom=HomogeneousTransformationMatrix.from_xyz_rpy(x=-1.0),
+                    localization_pose=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+                        x=-1.0
+                    ),
                 ),
             ],
-        ).to_domain_object()
+        ).create_world()
     except ParsingError as error:
         pytest.skip(f"PR2 URDF not available: {error}")
 
     assert len(world.get_semantic_annotations_by_type(PR2)) == 2
 
-    odom_bodies = _odom_bodies(world)
-    assert len(odom_bodies) == 2
-    assert odom_bodies[0].name != odom_bodies[1].name
-    for odom_body in odom_bodies:
-        assert isinstance(odom_body.parent_connection, FixedConnection)
-        assert odom_body.parent_connection.parent is world.root
+    odometry_bodies = _odometry_bodies(world, PR2MobileBase)
+    assert len(odometry_bodies) == 2
+    for odometry_body in odometry_bodies:
+        assert isinstance(odometry_body.parent_connection, FixedConnection)
+        assert odometry_body.parent_connection.parent is world.root
 
-    odom_positions = sorted(
-        world.compute_forward_kinematics(world.root, odom_body).position.to_np()[0]
-        for odom_body in odom_bodies
+    odometry_positions = sorted(
+        world.compute_forward_kinematics(world.root, odometry_body).position.to_np()[0]
+        for odometry_body in odometry_bodies
     )
-    np.testing.assert_allclose(odom_positions, [-1.0, 1.0])
+    np.testing.assert_allclose(odometry_positions, [-1.0, 1.0])
+
+
+# %% robot specifications: a movable localization
+
+
+def _adapter_dataset_file(file_name: str) -> Path:
+    """
+    :return: The path of a description file of the adapter test dataset.
+    """
+    return Path(__file__).resolve().parent / "test_adapters" / "dataset" / file_name
+
+
+def _parser_of_robot_rooted_at_map(prefix: str | None = None) -> URDFParser:
+    """
+    :param prefix: The prefix of every name the parser reads.
+    :return: A parser of a robot whose root link is called ``map``.
+    """
+    return URDFParser.from_file(
+        str(_adapter_dataset_file("robot_rooted_at_map.urdf")), prefix=prefix
+    )
+
+
+def test_a_localization_is_fixed_by_default(empty_world):
+    robot = RobotSpecification(
+        semantic_annotation_type=MinimalRobot,
+        description_parser=_parser_of_robot_rooted_at_map(),
+    ).spawn(empty_world)
+
+    assert type(_localization_of(robot)) is FixedConnection
+
+
+def test_a_movable_localization_starts_at_the_localization_pose(empty_world):
+    localization_pose = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+        x=1.0, y=2.0
+    )
+
+    robot = RobotSpecification(
+        semantic_annotation_type=MinimalRobot,
+        description_parser=_parser_of_robot_rooted_at_map(),
+        localization_pose=localization_pose,
+        localization_connection_type=Connection6DoF,
+    ).spawn(empty_world)
+
+    localization = _localization_of(robot)
+    assert isinstance(localization, Connection6DoF)
+    assert localization.parent is empty_world.root
+    np.testing.assert_allclose(localization.origin.to_np(), localization_pose.to_np())
+
+
+def test_a_movable_localization_moves(empty_world):
+    robot = RobotSpecification(
+        semantic_annotation_type=MinimalRobot,
+        description_parser=_parser_of_robot_rooted_at_map(),
+        localization_connection_type=Connection6DoF,
+    ).spawn(empty_world)
+    localization = _localization_of(robot)
+    moved_pose = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+        x=3.0, reference_frame=empty_world.root
+    )
+
+    localization.origin = moved_pose
+
+    np.testing.assert_allclose(
+        empty_world.compute_forward_kinematics(empty_world.root, robot.root).to_np(),
+        moved_pose.to_np(),
+    )
+
+
+# %% robot specifications: a robot read by the parser it is given
+
+
+def test_a_robot_is_spawned_from_the_description_its_parser_reads(empty_world):
+    robot = RobotSpecification(
+        semantic_annotation_type=MinimalRobot,
+        description_parser=_parser_of_robot_rooted_at_map(),
+    ).spawn(empty_world)
+
+    assert {body.name.name for body in robot.bodies_of_branch} == {"map", "base_link"}
+
+
+def test_a_spawned_robot_keeps_the_names_its_parser_gives_it(empty_world):
+    robot = RobotSpecification(
+        semantic_annotation_type=MinimalRobot,
+        description_parser=_parser_of_robot_rooted_at_map(prefix=""),
+    ).spawn(empty_world)
+
+    assert str(robot.root.name) == "map"
+
+
+def test_a_robot_without_a_description_and_without_a_parser_cannot_be_spawned(
+    empty_world,
+):
+    with pytest.raises(RobotDescriptionMissingError) as raised:
+        RobotSpecification(semantic_annotation_type=MinimalRobot).spawn(empty_world)
+
+    assert raised.value.robot_class is MinimalRobot
+
+
+# %% robot specifications: a robot without a mobile base
+
+
+@dataclass(eq=False)
+class RobotBelowTheRootOfItsDescription(MinimalRobot):
+    """
+    A robot whose description places it below a frame that is not part of the robot.
+    """
+
+    @classmethod
+    def from_world(cls, world: World) -> Self:
+        return cls.from_branch_in_world(world.get_body_by_name("base_link"))
+
+
+def test_a_robot_without_a_mobile_base_hangs_from_the_world_root_by_its_localization(
+    empty_world,
+):
+    robot = RobotSpecification(
+        semantic_annotation_type=MinimalRobot,
+        description_parser=_parser_of_robot_rooted_at_map(),
+    ).spawn(empty_world)
+
+    assert _localization_of(robot).parent is empty_world.root
+
+
+def test_a_robot_without_a_mobile_base_starts_at_the_localization_pose(empty_world):
+    localization_pose = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+        x=1.0, y=2.0
+    )
+
+    robot = RobotSpecification(
+        semantic_annotation_type=MinimalRobot,
+        description_parser=_parser_of_robot_rooted_at_map(),
+        localization_pose=localization_pose,
+    ).spawn(empty_world)
+
+    np.testing.assert_allclose(
+        empty_world.compute_forward_kinematics(empty_world.root, robot.root).to_np(),
+        localization_pose.to_np(),
+    )
+
+
+def test_a_localization_attaches_the_root_of_the_robots_description(empty_world):
+    robot = RobotSpecification(
+        semantic_annotation_type=RobotBelowTheRootOfItsDescription,
+        description_parser=_parser_of_robot_rooted_at_map(),
+    ).spawn(empty_world)
+
+    description_root = robot.root.parent_connection.parent
+    assert description_root.name.name == "map"
+    assert description_root.parent_connection.parent is empty_world.root
+
+
+def test_a_start_pose_is_rejected_for_a_robot_without_a_mobile_base():
+    with pytest.raises(StartPoseWithoutMobileBaseError) as raised:
+        RobotSpecification(
+            semantic_annotation_type=MinimalRobot,
+            odometry_T_robot_start=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+                x=1.0
+            ),
+        )
+
+    assert raised.value.robot_class is MinimalRobot
+
+
+# %% robot specifications: a robot whose description leaves parts without collision
+
+
+@dataclass(eq=False)
+class RobotWithVisualOnlyCovers(MinimalRobot):
+    """
+    A robot whose description draws a cover without describing it for contact.
+    """
+
+    @classmethod
+    def get_ros_file_path(cls) -> str:
+        """
+        A description whose cover link has only visual geometry.
+        """
+        return VISUAL_ONLY_LINK_URDF
+
+    @classproperty
+    def uses_visual_as_collision_backup(cls) -> bool:
+        """
+        True, unlike :meth:`AbstractRobot.uses_visual_as_collision_backup`, so the cover
+        collides.
+        """
+        return True
+
+
+def test_a_parser_without_the_collision_backup_its_robot_needs_is_rejected():
+    """
+    The robot class asks for the backup, so a parser leaving it out is refused before
+    anything is read.
+    """
+    with pytest.raises(VisualCollisionBackupDisabledError) as raised:
+        RobotSpecification(
+            semantic_annotation_type=RobotWithVisualOnlyCovers,
+            description_parser=URDFParser.from_file(VISUAL_ONLY_LINK_URDF),
+        )
+
+    assert raised.value.robot_class is RobotWithVisualOnlyCovers
+
+
+# %% robot specifications: a robot as it runs on the real robot
+
+
+def test_a_real_robot_keeps_the_names_of_its_description(empty_world):
+    """
+    The names carry no prefix, so they match the frames the robot publishes.
+    """
+    urdf = _adapter_dataset_file("robot_rooted_at_map.urdf").read_text()
+
+    robot = RobotSpecification.specify_real_robot(MinimalRobot, urdf=urdf).spawn(
+        empty_world
+    )
+
+    assert str(robot.root.name) == "map"
+
+
+def test_a_real_robot_is_read_from_its_own_description_by_default(empty_world):
+    """
+    Without a published description, the file the robot class declares is read.
+    """
+    robot = RobotSpecification.specify_real_robot(RobotWithVisualOnlyCovers).spawn(
+        empty_world
+    )
+
+    assert {str(body.name) for body in robot.bodies_of_branch} == {
+        "base_link",
+        "cover_link",
+    }
+
+
+def test_a_real_robot_collides_with_the_visuals_its_class_asks_for(empty_world):
+    """
+    A part the description draws without collision geometry collides with its visual.
+    """
+    RobotSpecification.specify_real_robot(RobotWithVisualOnlyCovers).spawn(empty_world)
+
+    assert empty_world.get_body_by_name("cover_link").has_collision()
+
+
+def test_a_real_robot_without_a_mobile_base_is_localized_by_a_fixed_connection():
+    """
+    A robot that cannot drive stays where it is placed.
+    """
+    specification = RobotSpecification.specify_real_robot(RobotWithVisualOnlyCovers)
+
+    assert specification.localization_connection_type is FixedConnection
+
+
+def test_a_real_robot_with_a_mobile_base_is_localized_by_a_movable_connection():
+    """
+    The localization of a driving robot is updated while it runs.
+    """
+    try:
+        specification = RobotSpecification.specify_real_robot(PR2)
+    except ParsingError as error:
+        pytest.skip(f"PR2 URDF not available: {error}")
+
+    assert specification.localization_connection_type is Connection6DoF
+
+
+# %% robot specifications: the odometry body
+
+
+def test_an_odometry_body_is_named_as_its_mobile_base_declares_in_the_namespace_of_the_robot(
+    empty_world,
+):
+    try:
+        robot = RobotSpecification(
+            semantic_annotation_type=PR2,
+            description_parser=URDFParser.from_file(
+                PR2.get_ros_file_path(), prefix="described"
+            ),
+        ).spawn(empty_world)
+    except ParsingError as error:
+        pytest.skip(f"PR2 URDF not available: {error}")
+
+    assert robot.mobile_base.drive.parent.name == PrefixedName(
+        PR2MobileBase.odometry_body_name, robot.root.name.prefix
+    )
+
+
+def test_a_pr2_reports_its_odometry_relative_to_the_body_its_mobile_base_declares(
+    empty_world,
+):
+    try:
+        robot = RobotSpecification(
+            semantic_annotation_type=PR2,
+            description_parser=URDFParser.from_file(PR2.get_ros_file_path(), prefix=""),
+        ).spawn(empty_world)
+    except ParsingError as error:
+        pytest.skip(f"PR2 URDF not available: {error}")
+
+    assert str(robot.mobile_base.drive.parent.name) == PR2MobileBase.odometry_body_name
+
+
+def test_a_robot_specification_survives_orm_round_trip():
+    specification = RobotSpecification(
+        semantic_annotation_type=MinimalRobot,
+        description_parser=_parser_of_robot_rooted_at_map(prefix=""),
+        localization_connection_type=Connection6DoF,
+    )
+
+    reconstructed = to_dao(specification).from_dao()
+
+    assert (
+        reconstructed.localization_connection_type
+        is specification.localization_connection_type
+    )
+    assert reconstructed.description_parser == specification.description_parser
 
 
 # %% world specifications with starting objects
@@ -728,14 +1105,14 @@ def test_world_specification_with_several_robots():
 
 def test_world_specification_annotation_starting_object():
     world = WorldSpecification(
-        world_parser=None,
+        world_source=None,
         objects=[
             Milk.get_annotation_specification(
                 "milk",
                 BodySpecification.box("milk", Scale(0.1, 0.1, 0.2)),
             )
         ],
-    ).to_domain_object()
+    ).create_world()
     milks = world.get_semantic_annotations_by_type(Milk)
     assert len(milks) == 1
 
@@ -759,7 +1136,7 @@ def test_connection_6dof_spec_binds_type_without_params():
 
 def test_active_1dof_spec_captures_parameters():
     limits = DegreeOfFreedomLimits.from_position_range_and_speed(maximum_speed=1.0)
-    axis = Vector3.Z()
+    axis = Vector3Dimensional.Z()
     spec = PrismaticConnectionSpecification(
         axis=axis, multiplier=2.0, offset=0.5, dof_limits=limits
     )
@@ -771,7 +1148,7 @@ def test_active_1dof_spec_captures_parameters():
 
 
 def test_active_1dof_spec_defaults():
-    axis = Vector3.Z()
+    axis = Vector3Dimensional.Z()
     spec = RevoluteConnectionSpecification(axis=axis)
     assert spec.connection_type is RevoluteConnection
     assert spec._create_with_dofs_kwargs() == {
@@ -779,6 +1156,7 @@ def test_active_1dof_spec_defaults():
         "multiplier": 1.0,
         "offset": 0.0,
         "dof_limits": None,
+        "dynamics": JointDynamics(),
     }
 
 
@@ -786,7 +1164,7 @@ def test_fixed_spec_rejects_active_parameters():
     # Each connection family carries exactly its own parameters, so an inapplicable one
     # is a construction error instead of being silently dropped.
     with pytest.raises(TypeError):
-        FixedConnectionSpecification(axis=Vector3.Z())
+        FixedConnectionSpecification(axis=Vector3Dimensional.Z())
 
 
 def _connection_specification_types() -> list[type[ConnectionSpecification]]:
@@ -806,9 +1184,9 @@ def _build_connection_specification(
     Build a specification, supplying the parameters its own family requires.
     """
     if issubclass(specification_type, ScrewConnectionSpecification):
-        return specification_type(axis=Vector3.Z(), screw_pitch=0.005)
+        return specification_type(axis=Vector3Dimensional.Z(), screw_pitch=0.005)
     if issubclass(specification_type, ActiveConnection1DOFSpecification):
-        return specification_type(axis=Vector3.Z())
+        return specification_type(axis=Vector3Dimensional.Z())
     return specification_type()
 
 
@@ -851,17 +1229,40 @@ def test_connection_spec_connect_active_forwards_kwargs(empty_world):
     limits = DegreeOfFreedomLimits.from_position_range_and_speed(maximum_speed=1.5)
     child = BodySpecification.box("slider", Scale(1, 1, 1)).to_domain_object()
     connection = PrismaticConnectionSpecification(
-        axis=Vector3.Z(), dof_limits=limits
+        axis=Vector3Dimensional.Z(), dof_limits=limits
     ).connect(empty_world, child=child)
     assert isinstance(connection, PrismaticConnection)
     assert connection.dof.limits.upper.velocity == 1.5
     assert connection.dof.limits.lower.velocity == -1.5
 
 
+@pytest.mark.parametrize(
+    "specification",
+    [
+        RevoluteConnectionSpecification(
+            axis=Vector3Dimensional.Z(),
+            dynamics=JointDynamics(damping=0.7, dry_friction=0.3),
+        ),
+        ScrewConnectionSpecification(
+            axis=Vector3Dimensional.Z(),
+            screw_pitch=0.005,
+            dynamics=JointDynamics(damping=0.7, dry_friction=0.3),
+        ),
+    ],
+    ids=["revolute", "screw"],
+)
+def test_connection_spec_connect_applies_dynamics(
+    empty_world, specification: ActiveConnection1DOFSpecification
+):
+    child = BodySpecification.box("child", Scale(1, 1, 1)).to_domain_object()
+    connection = specification.connect(empty_world, child=child)
+    assert connection.dynamics == specification.dynamics
+
+
 def test_screw_connection_spec_connect_forwards_pitch(empty_world):
     child = BodySpecification.box("cap", Scale(1, 1, 1)).to_domain_object()
     connection = ScrewConnectionSpecification(
-        axis=Vector3.Z(), screw_pitch=0.005
+        axis=Vector3Dimensional.Z(), screw_pitch=0.005
     ).connect(empty_world, child=child)
     assert isinstance(connection, ScrewConnection)
     assert connection.screw_pitch == 0.005
@@ -871,7 +1272,9 @@ def test_connection_spec_connect_applies_pose(empty_world):
     child = BodySpecification.box("child", Scale(1, 1, 1)).to_domain_object()
     FixedConnectionSpecification().connect(
         empty_world,
-        parent_T_connection=HomogeneousTransformationMatrix.from_xyz_rpy(x=1, y=2, z=3),
+        parent_T_connection=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+            x=1, y=2, z=3
+        ),
         child=child,
     )
     root_T_child = empty_world.compute_forward_kinematics(empty_world.root, child)
@@ -923,11 +1326,11 @@ def test_connection_spec_connect_without_name_matches_direct_creation(empty_worl
 # like a door whose origin is its centre hanging on a hinge at its edge.
 
 
-def _hinge_T_door() -> HomogeneousTransformationMatrix:
+def _hinge_T_door() -> HomogeneousTransformationMatrix3Dimensional:
     """
     The pose of a door's centre relative to the hinge it swings on.
     """
-    return HomogeneousTransformationMatrix.from_xyz_rpy(y=0.5)
+    return HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(y=0.5)
 
 
 def _door_on_hinge_specification() -> BodySpecification:
@@ -935,14 +1338,14 @@ def _door_on_hinge_specification() -> BodySpecification:
         "door",
         Scale(0.03, 1, 2),
         connection_specification=RevoluteConnectionSpecification(
-            axis=Vector3.Z(), connection_T_child=_hinge_T_door()
+            axis=Vector3Dimensional.Z(), connection_T_child=_hinge_T_door()
         ),
     )
 
 
 def test_connect_places_the_child_at_its_offset_from_the_connection(empty_world):
     child = BodySpecification.box("child", Scale(1, 1, 1)).to_domain_object()
-    parent_T_connection = HomogeneousTransformationMatrix.from_xyz_rpy(x=1)
+    parent_T_connection = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(x=1)
     connection = FixedConnectionSpecification(
         connection_T_child=_hinge_T_door()
     ).connect(empty_world, child=child, parent_T_connection=parent_T_connection)
@@ -959,7 +1362,9 @@ def test_connect_places_the_child_at_its_offset_from_the_connection(empty_world)
 def test_spawn_places_the_child_at_parent_T_self_when_its_joint_is_at_zero(
     empty_world,
 ):
-    parent_T_door = HomogeneousTransformationMatrix.from_xyz_rpy(x=2, yaw=0.3)
+    parent_T_door = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+        x=2, yaw=0.3
+    )
     door = _door_on_hinge_specification().spawn(
         empty_world, parent_T_self=parent_T_door
     )
@@ -979,7 +1384,7 @@ def test_child_swings_about_its_connection_frame_not_its_own_origin(empty_world)
 
     expected_root_T_door = (
         _hinge_T_door().inverse()
-        @ HomogeneousTransformationMatrix.from_xyz_rpy(yaw=angle)
+        @ HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(yaw=angle)
         @ _hinge_T_door()
     )
     np.testing.assert_allclose(
@@ -1009,13 +1414,15 @@ def test_reconnect_keeps_the_child_and_its_branch_where_they_are(empty_world):
     )
     door = door_specification.spawn(
         empty_world,
-        parent_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(x=1, yaw=0.3),
+        parent_T_self=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+            x=1, yaw=0.3
+        ),
     )
     handle = empty_world.get_body_by_name("handle")
     root_T_door = empty_world.compute_forward_kinematics(empty_world.root, door)
 
     connection = RevoluteConnectionSpecification(
-        axis=Vector3.Z(), connection_T_child=_hinge_T_door()
+        axis=Vector3Dimensional.Z(), connection_T_child=_hinge_T_door()
     ).reconnect(empty_world, door)
 
     assert isinstance(door.parent_connection, RevoluteConnection)
@@ -1032,7 +1439,7 @@ def test_reconnect_keeps_the_child_and_its_branch_where_they_are(empty_world):
 def test_reconnect_swings_the_child_about_the_new_connection_frame(empty_world):
     door = BodySpecification.box("door", Scale(0.03, 1, 2)).spawn(empty_world)
     connection = RevoluteConnectionSpecification(
-        axis=Vector3.Z(), connection_T_child=_hinge_T_door()
+        axis=Vector3Dimensional.Z(), connection_T_child=_hinge_T_door()
     ).reconnect(empty_world, door)
     angle = np.pi / 2
 
@@ -1041,7 +1448,7 @@ def test_reconnect_swings_the_child_about_the_new_connection_frame(empty_world):
 
     expected_root_T_door = (
         _hinge_T_door().inverse()
-        @ HomogeneousTransformationMatrix.from_xyz_rpy(yaw=angle)
+        @ HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(yaw=angle)
         @ _hinge_T_door()
     )
     np.testing.assert_allclose(
@@ -1055,10 +1462,10 @@ def test_reconnect_swings_the_child_about_the_new_connection_frame(empty_world):
     "joint_specification",
     [
         RevoluteConnectionSpecification(
-            axis=Vector3.Z(), offset=0.3, connection_T_child=_hinge_T_door()
+            axis=Vector3Dimensional.Z(), offset=0.3, connection_T_child=_hinge_T_door()
         ),
         RevoluteConnectionSpecification(
-            axis=Vector3.Z(),
+            axis=Vector3Dimensional.Z(),
             dof_limits=DegreeOfFreedomLimits.from_position_range_and_speed(
                 lower_position=0.2, upper_position=1.0
             ),
@@ -1072,7 +1479,9 @@ def test_reconnect_keeps_the_child_where_it_is_when_the_joint_starts_away_from_z
 ):
     door = BodySpecification.box("door", Scale(0.03, 1, 2)).spawn(
         empty_world,
-        parent_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(x=1, yaw=0.3),
+        parent_T_self=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+            x=1, yaw=0.3
+        ),
     )
     root_T_door = empty_world.compute_forward_kinematics(empty_world.root, door)
 
@@ -1089,7 +1498,9 @@ def test_reconnect_keeps_the_child_where_it_is_when_the_joint_starts_away_from_z
 def test_reconnect_keeps_the_name_of_the_specification(empty_world):
     door = BodySpecification.box("door", Scale(0.03, 1, 2)).spawn(empty_world)
     specification = RevoluteConnectionSpecification(
-        name="front_door_hinge", axis=Vector3.Z(), connection_T_child=_hinge_T_door()
+        name="front_door_hinge",
+        axis=Vector3Dimensional.Z(),
+        connection_T_child=_hinge_T_door(),
     )
 
     connection = specification.reconnect(empty_world, door)
@@ -1103,11 +1514,13 @@ def test_reconnect_releases_the_degrees_of_freedom_of_the_replaced_connection(
     drawer = BodySpecification.box(
         "drawer",
         Scale(0.5, 0.5, 0.2),
-        connection_specification=PrismaticConnectionSpecification(axis=Vector3.X()),
+        connection_specification=PrismaticConnectionSpecification(
+            axis=Vector3Dimensional.X()
+        ),
     ).spawn(empty_world)
     [replaced_degree_of_freedom] = drawer.parent_connection.dofs
 
-    connection = RevoluteConnectionSpecification(axis=Vector3.Z()).reconnect(
+    connection = RevoluteConnectionSpecification(axis=Vector3Dimensional.Z()).reconnect(
         empty_world, drawer
     )
 
@@ -1122,7 +1535,7 @@ def test_connection_T_child_survives_orm_round_trip(empty_world):
             scale=Scale(0.03, 1, 2)
         ),
         parent_connection_specification=RevoluteConnectionSpecification(
-            axis=Vector3.Z(), connection_T_child=_hinge_T_door()
+            axis=Vector3Dimensional.Z(), connection_T_child=_hinge_T_door()
         ),
     )
 
@@ -1325,7 +1738,7 @@ def test_annotation_spec_active_door(empty_world):
             scale=Scale(0.03, 1, 2)
         ),
         parent_connection_specification=RevoluteConnectionSpecification(
-            axis=Vector3.Z()
+            axis=Vector3Dimensional.Z()
         ),
     )
     annotation = spec.spawn(empty_world)
@@ -1407,7 +1820,7 @@ def test_door_joint_survives_mounting_the_door_as_a_part(empty_world):
             scale=Scale(0.03, 1, 2)
         ),
         parent_connection_specification=RevoluteConnectionSpecification(
-            axis=Vector3.Z(), connection_T_child=_hinge_T_door()
+            axis=Vector3Dimensional.Z(), connection_T_child=_hinge_T_door()
         ),
     )
 
@@ -1435,7 +1848,7 @@ def test_drawer_joint_survives_mounting_the_drawer_as_a_part(empty_world):
             scale=Scale(0.4, 0.5, 0.6)
         ),
         parent_connection_specification=PrismaticConnectionSpecification(
-            axis=Vector3.X()
+            axis=Vector3Dimensional.X()
         ),
     )
 
@@ -1480,7 +1893,7 @@ def test_nested_list_valued_parts_on_to_many_field(empty_world):
         ),
     )
     aperture_a.root_specification.parent_T_self = (
-        HomogeneousTransformationMatrix.from_xyz_rpy(y=-0.8)
+        HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(y=-0.8)
     )
     aperture_b = Aperture.get_annotation_specification(
         "hole_b",
@@ -1489,7 +1902,7 @@ def test_nested_list_valued_parts_on_to_many_field(empty_world):
         ),
     )
     aperture_b.root_specification.parent_T_self = (
-        HomogeneousTransformationMatrix.from_xyz_rpy(y=0.8)
+        HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(y=0.8)
     )
     wall = Wall.get_annotation_specification(
         "wall",
@@ -1537,7 +1950,7 @@ def test_nested_part_placement_is_relative_to_whole(empty_world):
         ),
     )
     handle_part.root_specification.parent_T_self = (
-        HomogeneousTransformationMatrix.from_xyz_rpy(y=0.5)
+        HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(y=0.5)
     )
     drawer = _spawn_with_parts(
         empty_world, Drawer, Scale(0.4, 0.5, 0.6), {"handle": handle_part}
@@ -1558,7 +1971,7 @@ def test_annotation_connection_limits_threaded(empty_world):
             scale=Scale(0.4, 0.5, 0.6)
         ),
         parent_connection_specification=PrismaticConnectionSpecification(
-            axis=Vector3.Z(), dof_limits=limits
+            axis=Vector3Dimensional.Z(), dof_limits=limits
         ),
     )
     drawer = spec.spawn(empty_world)
@@ -1646,7 +2059,7 @@ def test_complex_spawned_world_is_deepcopyable(empty_world):
             scale=Scale(0.4, 0.5, 0.6)
         ),
         parent_connection_specification=RevoluteConnectionSpecification(
-            axis=Vector3.Z(), connection_T_child=_hinge_T_door()
+            axis=Vector3Dimensional.Z(), connection_T_child=_hinge_T_door()
         ),
         part_specifications={
             "handle": Handle.get_annotation_specification(
@@ -1698,7 +2111,7 @@ def test_nested_composite_matches_manual_construction(empty_world):
         "drawer",
         Drawer.get_default_root_kinematic_structure_entity_specification(scale=scale),
         parent_connection_specification=PrismaticConnectionSpecification(
-            axis=Vector3.X()
+            axis=Vector3Dimensional.X()
         ),
         part_specifications={
             "handle": Handle.get_annotation_specification(
@@ -1721,7 +2134,7 @@ def test_nested_composite_matches_manual_construction(empty_world):
             world=manual_world,
             scale=scale,
             parent_connection_specification=PrismaticConnectionSpecification(
-                axis=Vector3.X()
+                axis=Vector3Dimensional.X()
             ),
         )
         manual_handle = Handle.create_with_new_body_in_world(
@@ -1737,7 +2150,7 @@ def test_nested_composite_matches_manual_construction(empty_world):
 
 # %% factory defaults are not shared mutable state
 # Factory overrides must not carry shared mutable spatial defaults:
-# a Vector3 default is constructed once at definition time and would
+# a Vector3Dimensional default is constructed once at definition time and would
 # be aliased by every caller that mutates it.
 
 
@@ -1754,8 +2167,12 @@ def _factory_overrides():
         for method_name, method in vars(annotation_type).items():
             if not method_name.startswith("create_with_new_"):
                 continue
-            yield annotation_type, method_name, inspect.signature(
-                method.__func__ if isinstance(method, classmethod) else method
+            yield (
+                annotation_type,
+                method_name,
+                inspect.signature(
+                    method.__func__ if isinstance(method, classmethod) else method
+                ),
             )
 
 
@@ -1764,7 +2181,9 @@ def test_factories_have_no_shared_mutable_spatial_defaults():
         f"{owner.__name__}.{method_name}({parameter.name})"
         for owner, method_name, signature in _factory_overrides()
         for parameter in signature.parameters.values()
-        if isinstance(parameter.default, (Vector3, Point3, Scale))
+        if isinstance(
+            parameter.default, (Vector3Dimensional, CartesianPoint3Dimensional, Scale)
+        )
     ]
     assert not offenders, f"shared mutable defaults: {offenders}"
 
@@ -1885,7 +2304,9 @@ def test_entry_way_is_coextensive_with_the_door_leaf(empty_world):
 def test_entry_way_geometry_is_translucent_white(empty_world):
     with empty_world.modify_world():
         door = Door.create_with_new_body_in_world(name="door", world=empty_world)
-    assert door.entry_way.root.area[0].color == Color(R=1.0, G=1.0, B=1.0, A=0.2)
+    assert door.entry_way.root.area[0].color == Color.from_rgba(
+        red=1.0, green=1.0, blue=1.0, opacity=0.2
+    )
 
 
 def test_entry_way_is_named_after_the_door(empty_world):
@@ -1959,8 +2380,10 @@ def test_door_with_type_spawns_an_entry_way(empty_world):
 def test_only_aperture_fields_remove_geometry_from_the_whole():
     # The cut is declared by the relationship, not by the part's type: the same EntryWay
     # cuts a wall it is mounted into but not the door it belongs to.
-    apertures = IsPartWholeRelationship.of_field(HasApertures, "apertures")
-    entry_way = IsPartWholeRelationship.of_field(Door, "entry_way")
+    apertures = IsPartWholeRelationship.of_field(
+        clazz=HasApertures, field_name="apertures"
+    )
+    entry_way = IsPartWholeRelationship.of_field(clazz=Door, field_name="entry_way")
     assert apertures.removes_part_geometry_from_whole
     assert not entry_way.removes_part_geometry_from_whole
 

@@ -1,3 +1,7 @@
+"""
+The verbalizer that turns an entity query into English text.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -17,7 +21,9 @@ from krrood.entity_query_language.verbalization.fragments.base import (
 from krrood.entity_query_language.verbalization.grammar.framework.phrase_rule import (
     RuleContext,
 )
-from krrood.entity_query_language.verbalization.grammar.framework.registry import RULES
+from krrood.entity_query_language.verbalization.grammar.framework.registry import (
+    PhraseRuleRegistry,
+)
 from krrood.entity_query_language.verbalization.grammar.match.assembler import (
     MatchAssembler,
 )
@@ -29,7 +35,7 @@ from krrood.entity_query_language.verbalization.rendering.realization import (
 )
 
 
-@dataclass
+@dataclass(kw_only=True)
 class EQLVerbalizer:
     """
     Builds the natural-language fragment tree that represents an EQL expression.
@@ -37,6 +43,7 @@ class EQLVerbalizer:
 
     def build(
         self,
+        *,
         expression: SymbolicExpression,
         services: MicroplanningServices | None = None,
         performative: Directive | None = None,
@@ -54,7 +61,7 @@ class EQLVerbalizer:
         :return: Root of the fragment tree representing *expression* in natural language.
 
         >>> from krrood.entity_query_language.verbalization.fragments.base import flatten_fragment_to_plain_text
-        >>> flatten_fragment_to_plain_text(EQLVerbalizer().build(a(entity(variable(Robot, [])))))
+        >>> flatten_fragment_to_plain_text(EQLVerbalizer().build(expression=a(entity(variable(Robot, [])))))
         'Find a Robot'
         """
         # A match is not a foldable EQL node but a builder; it routes to its own assembler and
@@ -64,7 +71,7 @@ class EQLVerbalizer:
         # SymbolicExpression they actually wrap without an isinstance chain here.
         scan_target = expression._get_expression_()
         if services is None:
-            services = MicroplanningServices.from_expression(scan_target)
+            services = MicroplanningServices.from_expression(expression=scan_target)
         if performative is not None:
             services.performative_override = performative
         # Referents already introduced by prior builds on these (shared) services, so the same
@@ -72,14 +79,16 @@ class EQLVerbalizer:
         # fold, which records this build's own mentions in the same set.
         previously_introduced_referents = set(services.referring.seen)
         if isinstance(expression, Match):
-            fragment = MatchAssembler(self._match_context(services)).assemble(
-                expression
-            )
+            fragment = MatchAssembler(
+                context=self._match_context(services=services)
+            ).assemble(node=expression)
         else:
-            fragment = fold(expression, services, RULES)
+            fragment = fold(expression, services, PhraseRuleRegistry.loaded_rules())
         # The discourse focus per query scope, projected once from the shared plan read model; the
         # coreference pass consults it instead of rule-emitted subject markers.
-        discourse = DiscourseModel.from_expression(scan_target, services.microplan)
+        discourse = DiscourseModel.from_expression(
+            expression=scan_target, microplan=services.microplan
+        )
         return realize_tree(
             fragment,
             previously_introduced_referents=previously_introduced_referents,
@@ -88,10 +97,10 @@ class EQLVerbalizer:
         )
 
     @staticmethod
-    def _match_context(services: MicroplanningServices) -> RuleContext:
+    def _match_context(*, services: MicroplanningServices) -> RuleContext:
         """
         :param services: The pass-wide microplanning services.
         :return: A root context whose ``child`` is the fold continuation, so the match assembler
             recurses its selection / values / conditions through the standard grammar.
         """
-        return root_context(services, RULES)
+        return root_context(services, PhraseRuleRegistry.loaded_rules())

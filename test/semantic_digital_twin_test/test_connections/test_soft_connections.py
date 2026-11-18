@@ -13,7 +13,9 @@ from semantic_digital_twin.datastructures.soft_trunk import (
     SoftTrunkSection,
 )
 from semantic_digital_twin.spatial_computations.ik_solver import InverseKinematicsSolver
-from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
+)
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedom,
@@ -27,7 +29,6 @@ from semantic_digital_twin.world_description.world_entity import Body, Connectio
 
 
 class TestSoftTrunk:
-
     def test_piecewise_constant_curvature_construction(self):
         """
         Tests if the PCC robot is built and its DOFs are accessible via properties.
@@ -106,7 +107,7 @@ class TestSoftTrunk:
         trunk = SoftTrunk.build_piecewise_constant_curvature(world, sections)
 
         # Reachable target
-        target = HomogeneousTransformationMatrix.from_xyz_rpy(
+        target = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
             x=0.2, z=0.8, reference_frame=world.root
         )
 
@@ -173,7 +174,7 @@ class TestSoftConnectionFactories:
                 world=world,
                 parent=world.root,
                 child=tip,
-                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                     x=0.4
                 ),
                 kappa_dof_id=kappa.id,
@@ -206,7 +207,7 @@ class TestSoftConnectionFactories:
                 world=world,
                 parent=world.root,
                 child=tip,
-                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                     x=0.4
                 ),
                 bending_x_dof_id=strain_dofs["bending_x"].id,
@@ -258,6 +259,28 @@ class TestSoftConnectionRebuilding:
         world.notify_state_change()
         return world
 
+    def test_a_re_parented_piecewise_constant_curvature_segment_keeps_its_name(self):
+        world = self.build_piecewise_constant_curvature_world()
+        segment = world.get_connections_by_type(PiecewiseConstantCurvatureConnection)[0]
+
+        copied_segment = segment.copy_with_new_parent(
+            Body(name=PrefixedName("new_parent")),
+            HomogeneousTransformationMatrix3Dimensional(),
+        )
+
+        assert copied_segment.name == segment.name
+
+    def test_a_re_parented_cosserat_rod_segment_keeps_its_name(self):
+        world = self.build_cosserat_world()
+        segment = world.get_connections_by_type(CosseratRodConnection)[0]
+
+        copied_segment = segment.copy_with_new_parent(
+            Body(name=PrefixedName("new_parent")),
+            HomogeneousTransformationMatrix3Dimensional(),
+        )
+
+        assert copied_segment.name == segment.name
+
     def test_a_copied_piecewise_constant_curvature_world_bends_the_same_way(self):
         world = self.build_piecewise_constant_curvature_world()
         trunk = world.get_semantic_annotations_by_type(SoftTrunk)[0]
@@ -301,7 +324,9 @@ class TestSoftConnectionRebuilding:
         segment = world.get_connections_by_type(PiecewiseConstantCurvatureConnection)[0]
         tracker = WorldEntityWithIDKwargsTracker.from_world(world)
 
-        restored = Connection.from_json(segment.to_json(), **tracker.create_kwargs())
+        restored = Connection.from_json(
+            data=segment.to_json(), **tracker.create_kwargs()
+        )
 
         assert type(restored) is type(segment)
         assert restored.kappa_dof_id == segment.kappa_dof_id
@@ -313,7 +338,9 @@ class TestSoftConnectionRebuilding:
         segment = world.get_connections_by_type(CosseratRodConnection)[0]
         tracker = WorldEntityWithIDKwargsTracker.from_world(world)
 
-        restored = Connection.from_json(segment.to_json(), **tracker.create_kwargs())
+        restored = Connection.from_json(
+            data=segment.to_json(), **tracker.create_kwargs()
+        )
 
         assert type(restored) is type(segment)
         assert restored.bending_x_dof_id == segment.bending_x_dof_id

@@ -16,11 +16,11 @@ from krrood.symbolic_math.symbolic_math import (
     Scalar,
     VariableParameters,
 )
-from semantic_digital_twin.spatial_types import (
+from krrood_spatial_math.spatial_types import (
     AxisAngle,
-    HomogeneousTransformationMatrix,
+    HomogeneousTransformationMatrix3Dimensional,
     RotationMatrix,
-    Vector3,
+    Vector3Dimensional,
 )
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 
@@ -162,7 +162,7 @@ class InverseKinematicsSolver:
         self,
         root: KinematicStructureEntity,
         tip: KinematicStructureEntity,
-        target: HomogeneousTransformationMatrix,
+        target: HomogeneousTransformationMatrix3Dimensional,
         dt: float = 0.05,
         max_iterations: int = 200,
         translation_velocity: float = 0.2,
@@ -312,7 +312,7 @@ class QPProblem:
     Tip body of the kinematic chain.
     """
 
-    target: HomogeneousTransformationMatrix
+    target: HomogeneousTransformationMatrix3Dimensional
     """
     Desired tip pose relative to the root body.
     """
@@ -389,7 +389,7 @@ class QPProblem:
         self.lower_box_constraints, self.upper_box_constraints = (
             self.constraint_builder.build_box_constraints(self.active_dofs)
         )
-        self.box_constraint_matrix = Matrix.eye(len(self.lower_box_constraints))
+        self.box_constraint_matrix = Matrix.eye(size=len(self.lower_box_constraints))
 
         # Goal constraints
         self.eq_bound_expr, self.neq_matrix = (
@@ -397,9 +397,15 @@ class QPProblem:
         )
 
         # Combine constraints
-        self.l = Matrix.vstack([self.lower_box_constraints, self.eq_bound_expr])
-        self.u = Matrix.vstack([self.upper_box_constraints, self.eq_bound_expr])
-        self.A = Matrix.vstack([self.box_constraint_matrix, self.neq_matrix])
+        self.l = Matrix.vstack(
+            list_of_matrices=[self.lower_box_constraints, self.eq_bound_expr]
+        )
+        self.u = Matrix.vstack(
+            list_of_matrices=[self.upper_box_constraints, self.eq_bound_expr]
+        )
+        self.A = Matrix.vstack(
+            list_of_matrices=[self.box_constraint_matrix, self.neq_matrix]
+        )
 
     def _setup_weights(self):
         """
@@ -412,7 +418,10 @@ class QPProblem:
         slack_weights = [2500 * (1.0 / 0.2) ** 2] * 6
 
         self.quadratic_weights = Matrix(dof_weights + slack_weights)
-        self.linear_weights = Matrix.zeros(*self.quadratic_weights.shape)
+        self.linear_weights = Matrix.zeros(
+            rows=self.quadratic_weights.shape[0],
+            columns=self.quadratic_weights.shape[1],
+        )
 
     def _compile_functions(self):
         """
@@ -420,14 +429,20 @@ class QPProblem:
         """
         variable_args = [self.active_variables, self.passive_variables]
 
-        self.l_f = self.l.compile(VariableParameters.from_lists(*variable_args))
-        self.u_f = self.u.compile(VariableParameters.from_lists(*variable_args))
-        self.A_f = self.A.compile(VariableParameters.from_lists(*variable_args))
+        self.l_f = self.l.compile(
+            parameters=VariableParameters.from_lists(*variable_args)
+        )
+        self.u_f = self.u.compile(
+            parameters=VariableParameters.from_lists(*variable_args)
+        )
+        self.A_f = self.A.compile(
+            parameters=VariableParameters.from_lists(*variable_args)
+        )
         self.quadratic_weights_f = self.quadratic_weights.compile(
-            VariableParameters.from_lists(*variable_args)
+            parameters=VariableParameters.from_lists(*variable_args)
         )
         self.linear_weights_f = self.linear_weights.compile(
-            VariableParameters.from_lists(*variable_args)
+            parameters=VariableParameters.from_lists(*variable_args)
         )
 
     def evaluate_at_state(self, solver_state) -> QPMatrices:
@@ -470,7 +485,7 @@ class ConstraintBuilder:
     Tip body of the kinematic chain.
     """
 
-    target: HomogeneousTransformationMatrix
+    target: HomogeneousTransformationMatrix3Dimensional
     """
     Desired tip pose relative to the root body.
     """
@@ -535,16 +550,18 @@ class ConstraintBuilder:
         rotation_state, rotation_error = self._compute_rotation_error(root_T_tip)
 
         # Current state and jacobian
-        current_expr = Matrix.vstack([position_state, rotation_state])
-        eq_bound_expr = Matrix.vstack([position_error, rotation_error])
+        current_expr = Matrix.vstack(list_of_matrices=[position_state, rotation_state])
+        eq_bound_expr = Matrix.vstack(list_of_matrices=[position_error, rotation_error])
 
-        J = current_expr.jacobian(active_variables)
-        neq_matrix = Matrix.hstack([J * self.dt, Matrix.eye(6) * self.dt])
+        J = current_expr.jacobian(variables=active_variables)
+        neq_matrix = Matrix.hstack(
+            list_of_matrices=[J * self.dt, Matrix.eye(size=6) * self.dt]
+        )
 
         return eq_bound_expr, neq_matrix
 
     def _compute_position_error(
-        self, root_T_tip: HomogeneousTransformationMatrix
+        self, root_T_tip: HomogeneousTransformationMatrix3Dimensional
     ) -> tuple[Vector, Vector]:
         """
         Compute position error with velocity limits.
@@ -553,7 +570,7 @@ class ConstraintBuilder:
         :return: Expression describing the position, and the error vector.
         """
         root_P_tip = root_T_tip.position
-        root_T_tip_goal = HomogeneousTransformationMatrix(self.target)
+        root_T_tip_goal = HomogeneousTransformationMatrix3Dimensional(self.target)
         root_P_tip_goal = root_T_tip_goal.position
 
         translation_cap = self.max_translation_velocity * self.dt
@@ -567,7 +584,7 @@ class ConstraintBuilder:
         return root_P_tip[:3], position_error
 
     def _compute_rotation_error(
-        self, root_T_tip: HomogeneousTransformationMatrix
+        self, root_T_tip: HomogeneousTransformationMatrix3Dimensional
     ) -> tuple[Vector, Vector]:
         """
         Compute rotation error with velocity limits.
@@ -577,9 +594,11 @@ class ConstraintBuilder:
         """
         rotation_cap = self.max_rotation_velocity * self.dt
 
-        hack = RotationMatrix.from_axis_angle(AxisAngle(Vector3.Z(), -0.0001))
+        hack = RotationMatrix.from_axis_angle(
+            AxisAngle(Vector3Dimensional.Z(), -0.0001)
+        )
         root_R_tip = root_T_tip.rotation_matrix.dot(hack)
-        q_actual = HomogeneousTransformationMatrix(self.target).quaternion
+        q_actual = HomogeneousTransformationMatrix3Dimensional(self.target).quaternion
         q_goal = root_R_tip.quaternion
         q_goal = sm.if_less(q_goal.dot(q_actual), 0, -q_goal, q_goal)
         q_error = q_actual.diff(q_goal)

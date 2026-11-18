@@ -6,8 +6,13 @@ import pytest
 from random_events.interval import closed
 from random_events.product_algebra import SimpleEvent
 
-from krrood.entity_query_language.backends import ProbabilisticBackend
-from krrood.entity_query_language.factories import a, and_, distribution_of, or_
+from krrood.parametrization.probabilistic_backend import ProbabilisticBackend
+from krrood.entity_query_language.factories import (
+    a,
+    and_,
+    or_,
+)
+from krrood.entity_query_language.factories import distribution_of
 from krrood.parametrization.exceptions import UnboundedParameterError
 from krrood.parametrization.model_registries import UniformPriorRegistry
 from probabilistic_model.probabilistic_circuit.tensorized.layered_probabilistic_circuit import (
@@ -49,7 +54,7 @@ def draw(statement, number_of_draws: int = NUMBER_OF_DRAWS) -> list:
     return list(
         statement.evaluate(
             backend=ProbabilisticBackend(
-                UniformPriorRegistry(), number_of_samples=number_of_draws
+                model_registry=UniformPriorRegistry(), number_of_samples=number_of_draws
             )
         )
     )
@@ -77,7 +82,7 @@ def test_draws_come_from_every_allowed_region():
 
 def test_equally_large_regions_are_equally_likely():
     distribution = distribution_of(two_separate_regions()).first(
-        backend=ProbabilisticBackend(UniformPriorRegistry())
+        backend=ProbabilisticBackend(model_registry=UniformPriorRegistry())
     )
     [variable_a] = [
         variable for variable in distribution.variables if variable.name == "Coin.a"
@@ -92,7 +97,7 @@ def test_equally_large_regions_are_equally_likely():
 
 def test_the_prior_is_a_tensorized_circuit():
     distribution = distribution_of(two_separate_regions()).first(
-        backend=ProbabilisticBackend(UniformPriorRegistry())
+        backend=ProbabilisticBackend(model_registry=UniformPriorRegistry())
     )
 
     assert isinstance(distribution, LayeredProbabilisticCircuit)

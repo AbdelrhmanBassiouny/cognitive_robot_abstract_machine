@@ -17,6 +17,7 @@ from semantic_digital_twin.adapters.multi_sim import (
     MujocoActuator,
     GeomVisibilityAndCollisionType,
     MujocoCamera,
+    MujocoContactDimensionality,
     MujocoEquality,
     MujocoGeom,
     MujocoBody,
@@ -25,14 +26,14 @@ from semantic_digital_twin.adapters.multi_sim import (
     MujocoTendon,
 )
 from semantic_digital_twin.adapters.package_resolver import PackageUriResolver
-from semantic_digital_twin.adapters.world_model_parser import WorldModelParser
+from semantic_digital_twin.world_source import WorldModelParser
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.exceptions import WorldEntityNotFoundError
-from semantic_digital_twin.spatial_types import (
-    HomogeneousTransformationMatrix,
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
     RotationMatrix,
-    Point3,
-    Vector3,
+    CartesianPoint3Dimensional,
+    Vector3Dimensional,
 )
 from semantic_digital_twin.world import World, Body
 from semantic_digital_twin.world_description.connection_properties import JointDynamics
@@ -174,17 +175,10 @@ class MJCFParser(WorldModelParser):
             file_path, use_visual_as_collision_backup=use_visual_as_collision_backup
         )
 
-    def parse(self) -> World:
-        """
-        Parse the MJCF file and convert it into a World object.
-
-        The world is built per call, so parsing repeatedly yields independent worlds
-        that share no entity identifiers.
-
-        :return: The World object representing the MJCF scene.
-        """
+    def create_world(self) -> World:
         self.world = World()
         worldbody: mujoco.MjsBody = self.spec.worldbody
+        self._name_unnamed_bodies()
         with self.world.modify_world():
             self.parse_equalities()
             self.parse_tendons()
@@ -210,10 +204,25 @@ class MJCFParser(WorldModelParser):
 
         return self.world
 
+    def _name_unnamed_bodies(self) -> None:
+        """
+        Name every unnamed body of the scene after its parent, uniquely, since the world
+        tells its bodies apart by name.
+        """
+        taken = {mujoco_body.name for mujoco_body in self.spec.bodies}
+        for mujoco_body in self.spec.bodies[1:]:
+            if mujoco_body.name:
+                continue
+            index = 0
+            while f"{mujoco_body.parent.name}_body_{index}" in taken:
+                index += 1
+            mujoco_body.name = f"{mujoco_body.parent.name}_body_{index}"
+            taken.add(mujoco_body.name)
+
     @staticmethod
     def _compose_frame_chain(
         entity: mujoco.MjsBody | mujoco.MjsGeom,
-    ) -> HomogeneousTransformationMatrix:
+    ) -> HomogeneousTransformationMatrix3Dimensional:
         """
         Compose the transform from the entity's enclosing body down through any nested
         MJCF ``<frame>`` wrappers to the entity's own local frame.
@@ -234,18 +243,20 @@ class MJCFParser(WorldModelParser):
         while frame is not None:
             chain.append(frame)
             frame = frame.frame
-        result = HomogeneousTransformationMatrix()
+        result = HomogeneousTransformationMatrix3Dimensional()
         for frame in reversed(chain):
             frame_quat = numpy.asarray(frame.quat, dtype=float)
             frame_quat = frame_quat / numpy.linalg.norm(frame_quat)
-            frame_transform = HomogeneousTransformationMatrix.from_xyz_quaternion(
-                pos_x=frame.pos[0],
-                pos_y=frame.pos[1],
-                pos_z=frame.pos[2],
-                quat_w=frame_quat[0],
-                quat_x=frame_quat[1],
-                quat_y=frame_quat[2],
-                quat_z=frame_quat[3],
+            frame_transform = (
+                HomogeneousTransformationMatrix3Dimensional.from_xyz_quaternion(
+                    pos_x=frame.pos[0],
+                    pos_y=frame.pos[1],
+                    pos_z=frame.pos[2],
+                    quat_w=frame_quat[0],
+                    quat_x=frame_quat[1],
+                    quat_y=frame_quat[2],
+                    quat_z=frame_quat[3],
+                )
             )
             result = result @ frame_transform
         return result
@@ -270,7 +281,11 @@ class MJCFParser(WorldModelParser):
             shape.origin.reference_frame = body
             shape.add_simulator_property(
                 ContactParameters(
-                    friction=ContactFriction(*mujoco_geom.friction.tolist()),
+                    friction=MujocoContactDimensionality(
+                        mujoco_geom.condim
+                    ).acting_friction(
+                        friction=ContactFriction(*mujoco_geom.friction.tolist())
+                    ),
                     stiffness=ContactStiffness(
                         time_constant=timedelta(seconds=mujoco_geom.solref[0]),
                         damping_ratio=mujoco_geom.solref[1],
@@ -361,7 +376,7 @@ class MJCFParser(WorldModelParser):
 
         return Inertial(
             mass=mujoco_body.mass,
-            center_of_mass=Point3.from_iterable(mujoco_body.ipos),
+            center_of_mass=CartesianPoint3Dimensional.from_iterable(mujoco_body.ipos),
             inertia=inertia_tensor,
         )
 
@@ -382,7 +397,7 @@ class MJCFParser(WorldModelParser):
             body_quat = mujoco_body.quat
             body_quat /= numpy.linalg.norm(body_quat)
             frame_to_body_transform = (
-                HomogeneousTransformationMatrix.from_xyz_quaternion(
+                HomogeneousTransformationMatrix3Dimensional.from_xyz_quaternion(
                     pos_x=body_pos[0],
                     pos_y=body_pos[1],
                     pos_z=body_pos[2],
@@ -452,14 +467,16 @@ class MJCFParser(WorldModelParser):
         geom_pos = mujoco_geom.pos
         geom_quat = mujoco_geom.quat
         geom_quat /= numpy.linalg.norm(geom_quat)
-        frame_to_geom_transform = HomogeneousTransformationMatrix.from_xyz_quaternion(
-            pos_x=geom_pos[0],
-            pos_y=geom_pos[1],
-            pos_z=geom_pos[2],
-            quat_w=geom_quat[0],
-            quat_x=geom_quat[1],
-            quat_y=geom_quat[2],
-            quat_z=geom_quat[3],
+        frame_to_geom_transform = (
+            HomogeneousTransformationMatrix3Dimensional.from_xyz_quaternion(
+                pos_x=geom_pos[0],
+                pos_y=geom_pos[1],
+                pos_z=geom_pos[2],
+                quat_w=geom_quat[0],
+                quat_x=geom_quat[1],
+                quat_y=geom_quat[2],
+                quat_z=geom_quat[3],
+            )
         )
         origin_transform = (
             self._compose_frame_chain(mujoco_geom) @ frame_to_geom_transform
@@ -468,7 +485,7 @@ class MJCFParser(WorldModelParser):
         for i in range(len(size)):
             if numpy.isclose(size[i], 0.0):
                 size[i] = 100.0  # Handle infinite size
-        color = Color(*mujoco_geom.rgba)
+        color = Color.from_rgba(*mujoco_geom.rgba)
         match mujoco_geom.type:
             case mujoco.mjtGeom.mjGEOM_PLANE:
                 return Box(
@@ -529,7 +546,7 @@ class MJCFParser(WorldModelParser):
                     texture_name = mujoco_material.textures[1]
                     mujoco_texture: mujoco.MjsTexture = self.spec.texture(texture_name)
                     if mujoco_texture is None:
-                        color = Color(*mujoco_material.rgba)
+                        color = Color.from_rgba(*mujoco_material.rgba)
                         return Mesh(
                             filename=filename,
                             origin=origin_transform,
@@ -582,7 +599,7 @@ class MJCFParser(WorldModelParser):
             child_body_quat = mujoco_child_body.quat
             child_body_quat /= numpy.linalg.norm(child_body_quat)
             frame_to_child_body_transform = (
-                HomogeneousTransformationMatrix.from_xyz_quaternion(
+                HomogeneousTransformationMatrix3Dimensional.from_xyz_quaternion(
                     pos_x=child_body_pos[0],
                     pos_y=child_body_pos[1],
                     pos_z=child_body_pos[2],
@@ -597,7 +614,7 @@ class MJCFParser(WorldModelParser):
                 @ frame_to_child_body_transform
             )
             child_body_to_joint_transform = (
-                HomogeneousTransformationMatrix.from_xyz_quaternion(
+                HomogeneousTransformationMatrix3Dimensional.from_xyz_quaternion(
                     pos_x=mujoco_joint.pos[0],
                     pos_y=mujoco_joint.pos[1],
                     pos_z=mujoco_joint.pos[2],
@@ -615,7 +632,7 @@ class MJCFParser(WorldModelParser):
                 )
             else:
                 joint_to_child_body_transform = child_body_to_joint_transform.inverse()
-                joint_axis = Vector3(
+                joint_axis = Vector3Dimensional(
                     mujoco_joint.axis[0],
                     mujoco_joint.axis[1],
                     mujoco_joint.axis[2],
@@ -723,9 +740,9 @@ class MJCFParser(WorldModelParser):
             joint_name = mujoco_actuator.target
             connection = self.world.get_connection_by_name(joint_name)
             dofs = list(connection.dofs)
-            assert (
-                len(dofs) == 1
-            ), f"Actuator {actuator_name} is associated with joint {joint_name} which has {len(connection.dofs)} DOFs, but only single-DOF joints are supported for actuators."
+            assert len(dofs) == 1, (
+                f"Actuator {actuator_name} is associated with joint {joint_name} which has {len(connection.dofs)} DOFs, but only single-DOF joints are supported for actuators."
+            )
             actuator.add_dof(dofs[0])
         else:
             actuator.add_dof(
@@ -912,7 +929,7 @@ class MJCFParser(WorldModelParser):
                     margin=tendon.margin,
                     material=tendon.material,
                     range=tendon.range.tolist(),
-                    rgba=Color(*tendon.rgba),
+                    rgba=Color.from_rgba(*tendon.rgba),
                     solver_impedance_friction=tendon.solimp_friction.tolist(),
                     solver_impedance_limit=tendon.solimp_limit.tolist(),
                     solver_reference_friction=tendon.solref_friction.tolist(),

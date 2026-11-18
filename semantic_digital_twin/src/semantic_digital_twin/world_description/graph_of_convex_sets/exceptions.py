@@ -1,10 +1,14 @@
+"""
+Errors raised when building or querying a graph of convex sets.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
 from semantic_digital_twin.exceptions import UsageError
-from semantic_digital_twin.spatial_types import Point
+from krrood_spatial_math.point import MetricPoint
 from semantic_digital_twin.world_description.geometry import AxisAlignedBox
 
 
@@ -40,12 +44,12 @@ class UnreachableGoalError(UsageError):
     goal.
     """
 
-    start: Point
+    start: MetricPoint
     """
     Where the queried path was supposed to begin.
     """
 
-    goal: Point
+    goal: MetricPoint
     """
     Where the queried path was supposed to end.
     """
@@ -137,7 +141,7 @@ class PointOutsideSearchSpaceError(UsageError):
     over, so nothing is known about whether it is free.
     """
 
-    point: Point
+    point: MetricPoint
     """
     The point that lies outside the search space.
     """
@@ -156,4 +160,26 @@ class PointOutsideSearchSpaceError(UsageError):
         return (
             "widen the search space so that it covers the point, or query a point "
             "within it."
+        )
+
+
+@dataclass(kw_only=True)
+class NoFreeSpaceError(UsageError):
+    """
+    Raised when a free point is asked of a graph of convex sets that holds no free space
+    at all.
+    """
+
+    point: MetricPoint
+    """
+    The point a free point was asked for.
+    """
+
+    def error_message(self) -> str:
+        return f"The graph holds no free space, so no free point is near {self.point}."
+
+    def suggest_correction(self) -> str:
+        return (
+            "reduce the clearance obstacles are bloated by, or widen the search space "
+            "the graph is built over."
         )

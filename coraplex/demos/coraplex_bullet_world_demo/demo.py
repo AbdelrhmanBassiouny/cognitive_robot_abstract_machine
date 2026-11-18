@@ -19,14 +19,16 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 
-from coraplex.datastructures.dataclasses import Context
-from coraplex.datastructures.enums import ExecutionType
+from coraplex.plans.context_extensions import RobotAccess, StatementGrounding
+from coraplex.plans.plan_transformation import PlanRewriting
 from coraplex.demonstrations import RobotDemonstration
-from coraplex.plans.factories import sequential
-from coraplex.plans.plan_node import PlanNode
+from coraplex.plans.executors import PlanExecutor, KinematicallySimulatedPlanExecutor
 from coraplex.robot_plans.actions.composite.transporting import TransportAction
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction, MoveTorsoAction
 from coraplex.robot_plans.plan_transformations import OpenDrawerBeforeMoveAndPickUp
+from cramph.composites import Sequence
+from cramph.context import ContextExtension, StatechartContext
+from cramph.statechart import Statechart
 from krrood.entity_query_language.factories import (
     an,
     entity,
@@ -58,8 +60,10 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Milk,
     Spoon,
 )
-from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
-from semantic_digital_twin.spatial_types.spatial_types import Pose
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
+)
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 from semantic_digital_twin.world import World
 
 # %% what the scene is built from
@@ -116,7 +120,7 @@ class PlaceSettingObject:
     The mesh the object is shaped by.
     """
 
-    start: HomogeneousTransformationMatrix
+    start: HomogeneousTransformationMatrix3Dimensional
     """
     Where the object stands before the plan begins, in :attr:`starts_on`'s frame.
     """
@@ -189,12 +193,12 @@ class PlaceSettingObject:
             ).evaluate()
         )
 
-    def target_location(self, world: World) -> Pose:
+    def target_location(self, world: World) -> Pose3Dimensional:
         """
         :param world: The world the table stands in.
         :return: Where on the table the object is laid.
         """
-        return Pose.from_xyz_rpy(
+        return Pose3Dimensional.from_xyz_rpy(
             self.along_table,
             self.across_table,
             self.height,
@@ -214,9 +218,9 @@ class BulletWorldDemonstration(RobotDemonstration):
 
     ros_node_name: str = "bullet_world_demo_node"
 
-    robot_start: HomogeneousTransformationMatrix = field(
-        default_factory=lambda: HomogeneousTransformationMatrix.from_xyz_rpy(
-            1.1, 2.5, 0
+    robot_start: HomogeneousTransformationMatrix3Dimensional = field(
+        default_factory=lambda: (
+            HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(1.1, 2.5, 0)
         )
     )
     """
@@ -229,7 +233,7 @@ class BulletWorldDemonstration(RobotDemonstration):
         default_factory=lambda: PlaceSettingObject(
             Milk,
             SceneFile.MILK,
-            HomogeneousTransformationMatrix.from_xyz_rpy(2.37, 2, 1.0345),
+            HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(2.37, 2, 1.0345),
             along_table=4.8,
             height=0.81,
         )
@@ -242,7 +246,7 @@ class BulletWorldDemonstration(RobotDemonstration):
         default_factory=lambda: PlaceSettingObject(
             Bowl,
             SceneFile.BOWL,
-            HomogeneousTransformationMatrix.from_xyz_rpy(2.4, 2.2, 0.98),
+            HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(2.4, 2.2, 0.98),
             along_table=5.0,
             height=0.76,
         )
@@ -255,7 +259,9 @@ class BulletWorldDemonstration(RobotDemonstration):
         default_factory=lambda: PlaceSettingObject(
             Spoon,
             SceneFile.SPOON,
-            HomogeneousTransformationMatrix.from_xyz_rpy(-0.05, -0.05, -0.01),
+            HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+                -0.05, -0.05, -0.01
+            ),
             along_table=5.2,
             height=0.73,
             across_table=3.25,
@@ -285,7 +291,7 @@ class BulletWorldDemonstration(RobotDemonstration):
         :return: The PR2, placed at :attr:`robot_start` through its odom.
         """
         return RobotSpecification(
-            semantic_annotation_type=self.used_robot, world_T_odom=self.robot_start
+            semantic_annotation_type=self.used_robot, localization_pose=self.robot_start
         )
 
     def is_scene_populated(self, world: World) -> bool:
@@ -302,16 +308,14 @@ class BulletWorldDemonstration(RobotDemonstration):
         with world.modify_world():
             WorldReasoner(world).reason()
 
-    def build_context(self, world: World) -> Context:
-        return Context(
-            world=world,
-            robot=world.get_semantic_annotations_by_type(self.used_robot)[0],
-            ros_node=self.ros_node,
-            sampling_seed=0,
-            alternative_motion_mappings=self.alternative_motion_mappings,
-            plan_transformations=[OpenDrawerBeforeMoveAndPickUp()],
-            _debug=self.debug,
-        )
+    def build_context_extensions(self, world: World) -> list[ContextExtension]:
+        return [
+            RobotAccess(
+                robot=world.get_semantic_annotations_by_type(self.used_robot)[0]
+            ),
+            StatementGrounding(),
+            PlanRewriting(transformations=[OpenDrawerBeforeMoveAndPickUp()]),
+        ]
 
     def segment_events(self, world: World) -> AbstractContextManager:
         """
@@ -331,41 +335,45 @@ class BulletWorldDemonstration(RobotDemonstration):
             ),
         )
 
-    def build_plan(self, context: Context) -> PlanNode:
+    def build_statechart(self, context: StatechartContext) -> Statechart:
         """
         Carry each object to its place on the table.
         """
         world = context.world
-        left_arm = context.robot.left_arm
-        return sequential(
-            [
-                ParkArmsAction(context.robot.all_arms),
-                MoveTorsoAction(TorsoState.HIGH),
-                TransportAction.from_graspable_by_closest_grasps(
-                    self.milk.annotation_in(world),
-                    self.milk.target_location(world),
-                    left_arm,
-                    context,
-                ),
-                TransportAction.from_graspable_by_closest_grasps(
-                    self.bowl.annotation_in(world),
-                    self.bowl.target_location(world),
-                    left_arm,
-                    context,
-                ),
-                TransportAction.from_graspable_by_closest_grasps(
-                    self.spoon.annotation_in(world),
-                    self.spoon.target_location(world),
-                    left_arm,
-                    context,
-                ),
-            ],
-            context=context,
-        ).plan
+        robot = context.require_extension(extension_type=RobotAccess).robot
+        left_arm = robot.left_arm
+        statechart = Statechart(context=context)
+        statechart.add_node(
+            node=Sequence(
+                nodes=[
+                    ParkArmsAction(arms=robot.all_arms),
+                    MoveTorsoAction(torso_state=TorsoState.HIGH),
+                    TransportAction.from_graspable_by_closest_grasps(
+                        self.milk.annotation_in(world),
+                        self.milk.target_location(world),
+                        left_arm,
+                        context,
+                    ),
+                    TransportAction.from_graspable_by_closest_grasps(
+                        self.bowl.annotation_in(world),
+                        self.bowl.target_location(world),
+                        left_arm,
+                        context,
+                    ),
+                    TransportAction.from_graspable_by_closest_grasps(
+                        self.spoon.annotation_in(world),
+                        self.spoon.target_location(world),
+                        left_arm,
+                        context,
+                    ),
+                ]
+            )
+        )
+        return statechart
 
 
 def main(
-    execution_type: ExecutionType = ExecutionType.KINEMATICALLY_SIMULATED,
+    executor_type: type[PlanExecutor] = KinematicallySimulatedPlanExecutor,
     collision_avoidance: bool = True,
     event_segmentation: bool = True,
     debug: bool = False,
@@ -373,15 +381,16 @@ def main(
     """
     Run the demonstration.
 
-    :param execution_type: Whether to drive the real robot or simulate it.
-    :param collision_avoidance: Whether every motion state chart avoids collisions.
+    :param executor_type: The executor running the plan, which decides whether it drives
+        the real robot or simulates it.
+    :param collision_avoidance: Whether the statechart avoids collisions.
     :param event_segmentation: Whether SegMind segments the run into events.
     :param debug: Whether to run in debug mode, publishing every copy of the world a
         candidate is tried in.
     """
     BulletWorldDemonstration(
         used_robot=PR2,
-        execution_type=execution_type,
+        executor_type=executor_type,
         collision_avoidance=collision_avoidance,
         event_segmentation=event_segmentation,
         debug=debug,

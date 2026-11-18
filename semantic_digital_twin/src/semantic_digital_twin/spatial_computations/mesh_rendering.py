@@ -11,11 +11,11 @@ import trimesh
 from numpy.typing import NDArray
 
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
-from semantic_digital_twin.spatial_types import (
-    HomogeneousTransformationMatrix,
-    Point3,
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
+    CartesianPoint3Dimensional,
     RotationMatrix,
-    Vector3,
+    Vector3Dimensional,
 )
 
 
@@ -66,7 +66,7 @@ class ViewDirection:
 
     def camera_pose(
         self, target: NDArray[np.float64], distance: float
-    ) -> HomogeneousTransformationMatrix:
+    ) -> HomogeneousTransformationMatrix3Dimensional:
         """
         :param target: The point the camera looks at.
         :param distance: How far the camera is from it.
@@ -80,11 +80,11 @@ class ViewDirection:
         towards_camera = self.towards_camera
         zenith = np.array([0.0, 0.0, 1.0])
         image_up = zenith - (zenith @ towards_camera) * towards_camera
-        return HomogeneousTransformationMatrix.from_point_rotation_matrix(
-            point=Point3(*(target + towards_camera * distance)),
+        return HomogeneousTransformationMatrix3Dimensional.from_point_rotation_matrix(
+            point=CartesianPoint3Dimensional(*(target + towards_camera * distance)),
             rotation_matrix=RotationMatrix.from_vectors(
-                x=Vector3(*-towards_camera),
-                y=Vector3(*-image_up / np.linalg.norm(image_up)),
+                x=Vector3Dimensional(*-towards_camera),
+                y=Vector3Dimensional(*-image_up / np.linalg.norm(image_up)),
             ),
         )
 
@@ -122,8 +122,10 @@ class CameraRing:
     """
 
     directions: list[ViewDirection] = field(
-        default_factory=lambda: ViewDirection.around(8, np.radians(25.0))
-        + ViewDirection.around(3, np.radians(65.0))
+        default_factory=lambda: (
+            ViewDirection.around(8, np.radians(25.0))
+            + ViewDirection.around(3, np.radians(65.0))
+        )
     )
     """
     The directions the mesh is looked at from.

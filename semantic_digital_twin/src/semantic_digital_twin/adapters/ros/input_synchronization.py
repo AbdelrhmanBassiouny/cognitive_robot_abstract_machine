@@ -22,7 +22,9 @@ from semantic_digital_twin.robots.input_source import (
     BasePoseSource,
     JointPositionSource,
 )
-from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
+)
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection1DOF,
     Connection6DoF,
@@ -68,6 +70,10 @@ class TopicInputSynchronizer(
 class JointStateInputSynchronizer(TopicInputSynchronizer[JointState], ABC):
     """
     Writes the positions of a joint state message into the world state.
+
+    A message reports the position of each joint, with the joint's multiplier and offset
+    applied, so a mimic joint reported next to the joint it mimics leaves both where the
+    message put them.
     """
 
     def apply_message(self, message: JointState) -> None:
@@ -77,7 +83,9 @@ class JointStateInputSynchronizer(TopicInputSynchronizer[JointState], ABC):
             )
             if not self.writes(connection):
                 continue
-            self.world.state[connection.raw_dof.id].position = position
+            self.world.state[connection.raw_dof.id].position = (
+                position - connection.offset
+            ) / connection.multiplier
 
     def writes(self, connection: ActiveConnection1DOF) -> bool:
         """
@@ -191,14 +199,16 @@ class OdometrySynchronizer(TopicInputSynchronizer[Odometry]):
 
     def apply_message(self, message: Odometry) -> None:
         pose = message.pose.pose
-        self.connection.origin = HomogeneousTransformationMatrix.from_xyz_quaternion(
-            pos_x=pose.position.x,
-            pos_y=pose.position.y,
-            pos_z=pose.position.z,
-            quat_w=pose.orientation.w,
-            quat_x=pose.orientation.x,
-            quat_y=pose.orientation.y,
-            quat_z=pose.orientation.z,
+        self.connection.origin = (
+            HomogeneousTransformationMatrix3Dimensional.from_xyz_quaternion(
+                pos_x=pose.position.x,
+                pos_y=pose.position.y,
+                pos_z=pose.position.z,
+                quat_w=pose.orientation.w,
+                quat_x=pose.orientation.x,
+                quat_y=pose.orientation.y,
+                quat_z=pose.orientation.z,
+            )
         )
 
 
@@ -258,15 +268,17 @@ class TfFrameSynchronizer(InputSynchronizer, HasROS2Node):
             parent_T_child = self.tf_wrapper.lookup_pose(
                 tf_parent_frame, tf_child_frame
             ).pose
-            connection.origin = HomogeneousTransformationMatrix.from_xyz_quaternion(
-                pos_x=parent_T_child.position.x,
-                pos_y=parent_T_child.position.y,
-                pos_z=parent_T_child.position.z,
-                quat_w=parent_T_child.orientation.w,
-                quat_x=parent_T_child.orientation.x,
-                quat_y=parent_T_child.orientation.y,
-                quat_z=parent_T_child.orientation.z,
-                reference_frame=connection.parent,
-                child_frame=connection.child,
+            connection.origin = (
+                HomogeneousTransformationMatrix3Dimensional.from_xyz_quaternion(
+                    pos_x=parent_T_child.position.x,
+                    pos_y=parent_T_child.position.y,
+                    pos_z=parent_T_child.position.z,
+                    quat_w=parent_T_child.orientation.w,
+                    quat_x=parent_T_child.orientation.x,
+                    quat_y=parent_T_child.orientation.y,
+                    quat_z=parent_T_child.orientation.z,
+                    reference_frame=connection.parent,
+                    child_frame=connection.child,
+                )
             )
         return bool(self.connection_to_frames)

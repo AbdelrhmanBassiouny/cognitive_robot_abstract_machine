@@ -6,11 +6,13 @@ from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
-from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
-from semantic_digital_twin.spatial_types.spatial_types import (
-    Pose,
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
+)
+from krrood_spatial_math.spatial_types import (
+    Pose3Dimensional,
     RotationMatrix,
-    Vector3,
+    Vector3Dimensional,
 )
 from semantic_digital_twin.world_description.connections import (
     Connection6DoF,
@@ -33,7 +35,7 @@ def boxed_pr2_world(simple_pr2_context):
     """
     A PR2 next to a graspable box of known extents, a meter above the world root.
     """
-    world, robot, context = simple_pr2_context
+    world, robot, extensions = simple_pr2_context
     with world.modify_world():
         box = Body(
             name=PrefixedName("approach_box"),
@@ -41,7 +43,7 @@ def boxed_pr2_world(simple_pr2_context):
         )
         connection = Connection6DoF.create_with_dofs(world, world.root, box)
         world.add_connection(connection)
-        connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
+        connection.origin = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
             1, 0, 1, reference_frame=world.root
         )
         graspable = Milk(root=box)
@@ -65,10 +67,12 @@ def grasp_from_above(graspable) -> GraspCandidate:
     """
     return GraspCandidate(
         graspable,
-        Pose(
-            position=Vector3(0, 0, BOX_SCALE.z / 2).point3,
+        Pose3Dimensional(
+            position=Vector3Dimensional(
+                0, 0, BOX_SCALE.z / 2
+            ).cartesian_point_3_dimensional,
             orientation=RotationMatrix.from_vectors(
-                x=Vector3.NEGATIVE_Z(), y=Vector3.X()
+                x=Vector3Dimensional.NEGATIVE_Z(), y=Vector3Dimensional.X()
             ).quaternion,
             reference_frame=graspable.root,
         ),
@@ -167,8 +171,10 @@ def test_a_grasp_outside_the_body_is_approached_from_the_clearance_alone(
     action = HasApproachesGraspPoses()
     in_front = GraspCandidate(
         graspable,
-        Pose(
-            position=Vector3(-BOX_SCALE.x, 0, 0).point3,
+        Pose3Dimensional(
+            position=Vector3Dimensional(
+                -BOX_SCALE.x, 0, 0
+            ).cartesian_point_3_dimensional,
             reference_frame=graspable.root,
         ),
     )
@@ -189,7 +195,7 @@ def test_a_diagonal_approach_leaves_the_body_through_its_nearest_face(
     action = HasApproachesGraspPoses()
     diagonal = GraspCandidate(
         graspable,
-        Pose(
+        Pose3Dimensional(
             orientation=RotationMatrix.from_rpy(yaw=np.pi / 4).quaternion,
             reference_frame=graspable.root,
         ),

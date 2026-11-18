@@ -18,13 +18,13 @@ from semantic_digital_twin.adapters.ros.msg_converter import (
 )
 from semantic_digital_twin.datastructures.lidar_reading import LidarReading
 from semantic_digital_twin.datastructures.scan_pattern import ScanPattern
-from semantic_digital_twin.spatial_types import (
-    HomogeneousTransformationMatrix,
-    Point3,
-    Vector3,
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
+    CartesianPoint3Dimensional,
+    Vector3Dimensional,
     Quaternion,
 )
-from semantic_digital_twin.spatial_types.spatial_types import Pose
+from krrood_spatial_math.spatial_types import Pose3Dimensional
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import (
     Color,
@@ -37,24 +37,48 @@ from semantic_digital_twin.world_description.geometry import (
 
 
 @dataclass
-class TransformStampedToSemDTConverter(
+class TransformToSemDTConverter(
     Ros2ToSemDTConverter[
-        geometry_msgs.TransformStamped, HomogeneousTransformationMatrix
+        geometry_msgs.Transform, HomogeneousTransformationMatrix3Dimensional
     ]
 ):
+    """
+    Converts a transform that names no frames into a transformation matrix without
+    reference and child frame.
+    """
 
     @classmethod
-    def convert(cls, data: InputType, world: World) -> OutputType:
-        result = HomogeneousTransformationMatrix.from_xyz_quaternion(
-            pos_x=data.transform.translation.x,
-            pos_y=data.transform.translation.y,
-            pos_z=data.transform.translation.z,
-            quat_x=data.transform.rotation.x,
-            quat_y=data.transform.rotation.y,
-            quat_z=data.transform.rotation.z,
-            quat_w=data.transform.rotation.w,
+    def convert(
+        cls, data: geometry_msgs.Transform, world: World
+    ) -> HomogeneousTransformationMatrix3Dimensional:
+        return HomogeneousTransformationMatrix3Dimensional.from_xyz_quaternion(
+            pos_x=data.translation.x,
+            pos_y=data.translation.y,
+            pos_z=data.translation.z,
+            quat_x=data.rotation.x,
+            quat_y=data.rotation.y,
+            quat_z=data.rotation.z,
+            quat_w=data.rotation.w,
         )
-        if data.child_frame_id != "":
+
+
+@dataclass
+class TransformStampedToSemDTConverter(
+    Ros2ToSemDTConverter[
+        geometry_msgs.TransformStamped, HomogeneousTransformationMatrix3Dimensional
+    ]
+):
+    """
+    Converts a transform into a transformation matrix between the bodies of the world
+    that its header and child frame name; a frame left empty stays unset.
+    """
+
+    @classmethod
+    def convert(
+        cls, data: geometry_msgs.TransformStamped, world: World
+    ) -> HomogeneousTransformationMatrix3Dimensional:
+        result = TransformToSemDTConverter.convert(data.transform, world)
+        if data.header.frame_id != "":
             result.reference_frame = world.get_kinematic_structure_entity_by_name(
                 data.header.frame_id
             )
@@ -67,12 +91,11 @@ class TransformStampedToSemDTConverter(
 
 @dataclass
 class PoseStampedToSemDTConverter(
-    Ros2ToSemDTConverter[geometry_msgs.PoseStamped, Pose]
+    Ros2ToSemDTConverter[geometry_msgs.PoseStamped, Pose3Dimensional]
 ):
-
     @classmethod
-    def convert(cls, data: geometry_msgs.PoseStamped, world: World) -> Pose:
-        result = Pose.from_xyz_quaternion(
+    def convert(cls, data: geometry_msgs.PoseStamped, world: World) -> Pose3Dimensional:
+        result = Pose3Dimensional.from_xyz_quaternion(
             pos_x=data.pose.position.x,
             pos_y=data.pose.position.y,
             pos_z=data.pose.position.z,
@@ -89,11 +112,10 @@ class PoseStampedToSemDTConverter(
 
 
 @dataclass
-class PoseToSemDTConverter(Ros2ToSemDTConverter[geometry_msgs.Pose, Pose]):
-
+class PoseToSemDTConverter(Ros2ToSemDTConverter[geometry_msgs.Pose, Pose3Dimensional]):
     @classmethod
-    def convert(cls, data: geometry_msgs.Pose, world: World) -> Pose:
-        result = Pose.from_xyz_quaternion(
+    def convert(cls, data: geometry_msgs.Pose, world: World) -> Pose3Dimensional:
+        result = Pose3Dimensional.from_xyz_quaternion(
             pos_x=data.position.x,
             pos_y=data.position.y,
             pos_z=data.position.z,
@@ -107,12 +129,11 @@ class PoseToSemDTConverter(Ros2ToSemDTConverter[geometry_msgs.Pose, Pose]):
 
 @dataclass
 class PointStampedToSemDTConverter(
-    Ros2ToSemDTConverter[geometry_msgs.PointStamped, Point3]
+    Ros2ToSemDTConverter[geometry_msgs.PointStamped, CartesianPoint3Dimensional]
 ):
-
     @classmethod
     def convert(cls, data: OutputType, world: World) -> InputType:
-        result = Point3(
+        result = CartesianPoint3Dimensional(
             data.point.x,
             data.point.y,
             data.point.z,
@@ -126,12 +147,13 @@ class PointStampedToSemDTConverter(
 
 @dataclass
 class Vector3StampedToSemDTConverter(
-    Ros2ToSemDTConverter[geometry_msgs.Vector3Stamped, Vector3]
+    Ros2ToSemDTConverter[geometry_msgs.Vector3Stamped, Vector3Dimensional]
 ):
-
     @classmethod
-    def convert(cls, data: geometry_msgs.Vector3Stamped, world: World) -> Vector3:
-        result = Vector3(
+    def convert(
+        cls, data: geometry_msgs.Vector3Stamped, world: World
+    ) -> Vector3Dimensional:
+        result = Vector3Dimensional(
             data.vector.x,
             data.vector.y,
             data.vector.z,
@@ -147,7 +169,6 @@ class Vector3StampedToSemDTConverter(
 class QuaternionToSemDTConverter(
     Ros2ToSemDTConverter[geometry_msgs.QuaternionStamped, Quaternion]
 ):
-
     @classmethod
     def convert(cls, data: geometry_msgs.QuaternionStamped, world: World) -> Quaternion:
         result = Quaternion(
@@ -165,15 +186,13 @@ class QuaternionToSemDTConverter(
 
 @dataclass
 class ColorToSemDTConverter(Ros2ToSemDTConverter[ColorRGBA, Color]):
-
     @classmethod
     def convert(cls, data: OutputType, world: World) -> InputType:
-        return Color(data.r, data.g, data.b, data.a)
+        return Color.from_rgba(red=data.r, green=data.g, blue=data.b, opacity=data.a)
 
 
 @dataclass
 class CubeMarkerToSemDTConverter(Ros2ToSemDTConverter[Marker, Box]):
-
     @classmethod
     def can_convert(cls, data: Any) -> bool:
         return super().can_convert(data) and data.type == Marker.CUBE
@@ -193,7 +212,6 @@ class CubeMarkerToSemDTConverter(Ros2ToSemDTConverter[Marker, Box]):
 
 @dataclass
 class CylinderMarkerToSemDTConverter(Ros2ToSemDTConverter[Marker, Cylinder]):
-
     @classmethod
     def can_convert(cls, data: Any) -> bool:
         return super().can_convert(data) and data.type == Marker.CYLINDER
@@ -214,7 +232,6 @@ class CylinderMarkerToSemDTConverter(Ros2ToSemDTConverter[Marker, Cylinder]):
 
 @dataclass
 class SphereMarkerToSemDTConverter(Ros2ToSemDTConverter[Marker, Sphere]):
-
     @classmethod
     def can_convert(cls, data: Any) -> bool:
         return super().can_convert(data) and data.type == Marker.SPHERE
@@ -234,7 +251,6 @@ class SphereMarkerToSemDTConverter(Ros2ToSemDTConverter[Marker, Sphere]):
 
 @dataclass
 class MeshMarkerToSemDTConverter(Ros2ToSemDTConverter[Marker, Mesh]):
-
     @classmethod
     def can_convert(cls, data: Any) -> bool:
         return super().can_convert(data) and data.type == Marker.MESH_RESOURCE
@@ -265,7 +281,6 @@ class MeshMarkerToSemDTConverter(Ros2ToSemDTConverter[Marker, Mesh]):
 
 @dataclass
 class LaserScanToSemDTConverter(Ros2ToSemDTConverter[LaserScan, LidarReading]):
-
     @classmethod
     def convert(cls, data: LaserScan, world: World) -> LidarReading:
         root = world.get_kinematic_structure_entity_by_name(data.header.frame_id)

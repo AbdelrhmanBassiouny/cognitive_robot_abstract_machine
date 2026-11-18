@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+# %% Imports
 from abc import ABC
 from dataclasses import dataclass
-from typing_extensions import TYPE_CHECKING, Iterable, Any
 
 import numpy as np
 import trimesh.boolean
 from trimesh.collision import CollisionManager
+from typing_extensions import TYPE_CHECKING, Iterable, Any
 
 from krrood.entity_query_language.predicate import (
     Predicate,
@@ -29,14 +30,18 @@ from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech impor
     Verb,
 )
 from krrood.inheritance_path_length import inheritance_path_length
+from krrood.symbolic_math.symbolic_math import Scalar
 from semantic_digital_twin.spatial_computations.ik_solver import (
     MaxIterationsException,
     UnreachableException,
 )
-from semantic_digital_twin.spatial_types import Vector3, Point3, math
-from semantic_digital_twin.spatial_types.spatial_types import (
-    HomogeneousTransformationMatrix,
-    Pose,
+from krrood_spatial_math.spatial_types import (
+    Vector3Dimensional,
+    CartesianPoint3Dimensional,
+)
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
+    Pose3Dimensional,
 )
 from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
 from semantic_digital_twin.world_description.world_entity import (
@@ -102,19 +107,21 @@ class InContactWith(Triple[TBody, TBody]):
         return result.distance
 
     @classmethod
-    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+    def _verbalization_fragment_(
+        cls, *, fields: RenderedFields
+    ) -> VerbalizationFragment:
         """
         Reads as *"the body is in contact with the other body"*.
 
         :param fields: The rendered fragment for each field, keyed by field name.
         """
         return clause(
-            Noun(fields["body1"]),
+            Noun(content=fields["body1"]),
             Copula(),
             Prepositions.IN,
-            Noun.bare("contact"),
+            Noun.bare(head="contact"),
             Prepositions.WITH,
-            Noun(fields["body2"]),
+            Noun(content=fields["body2"]),
         )
 
 
@@ -124,7 +131,7 @@ class Reachable(Predicate):
     Whether a kinematic chain can put its tip at a pose, answered by inverse kinematics.
     """
 
-    pose: HomogeneousTransformationMatrix
+    pose: HomogeneousTransformationMatrix3Dimensional
     """
     The pose to reach.
     """
@@ -157,25 +164,27 @@ class Reachable(Predicate):
         return True
 
     @classmethod
-    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+    def _verbalization_fragment_(
+        cls, *, fields: RenderedFields
+    ) -> VerbalizationFragment:
         """
         Reads as *"the pose is reachable by the tip"*.
 
         :param fields: The rendered fragment for each field, keyed by field name.
         """
         return clause(
-            Noun(fields["pose"]),
+            Noun(content=fields["pose"]),
             Copula(),
-            Adjective("reachable"),
+            Adjective(word="reachable"),
             Prepositions.BY,
-            Noun(fields["tip"]),
+            Noun(content=fields["tip"]),
         )
 
 
 @symbolic_function
 def compute_euclidean_planar_distance(
-    body1: Body, body2: Body, ignore_dimension: Vector3
-):
+    body1: Body, body2: Body, ignore_dimension: Vector3Dimensional
+) -> Scalar:
     """
     Computes the Euclidean distance between two bodies in 2D space, ignoring a specific
     dimension specified by the user. The ignored dimension is set to zero before the
@@ -195,13 +204,13 @@ def compute_euclidean_planar_distance(
     body1_position = body1.global_pose.position
     body2_position = body2.global_pose.position
 
-    if np.allclose(ignore_dimension, Vector3.X()):
+    if np.allclose(ignore_dimension, Vector3Dimensional.X()):
         body1_position.x = 0.0
         body2_position.x = 0.0
-    elif np.allclose(ignore_dimension, Vector3.Y()):
+    elif np.allclose(ignore_dimension, Vector3Dimensional.Y()):
         body1_position.y = 0.0
         body2_position.y = 0.0
-    elif np.allclose(ignore_dimension, Vector3.Z()):
+    elif np.allclose(ignore_dimension, Vector3Dimensional.Z()):
         body1_position.z = 0.0
         body2_position.z = 0.0
 
@@ -242,11 +251,13 @@ class SupportedBy(Triple[TBody, TBody]):
     How far apart, in metres, the two may be and still count as touching, and so how far
     above the supporting body the supported body may stand and still rest on it.
 
-    A body is set down by a motion that stops where it can rather than exactly on the
-    surface, so a support read from overlapping volume alone would hold for almost no
-    placement at all. Measured on a robot stacking boxes, a placement missed the surface
-    it was aimed at by 1.9 mm; the default leaves room for that while staying far below
-    the centimetres by which a body that is genuinely in the air clears a surface.
+    A body is set down by a motion that stops where it can rather than
+    exactly on the surface, so a support read from overlapping volume
+    alone would hold for almost no placement at all. Measured on a robot
+    stacking boxes, a placement missed the surface it was aimed at by
+    1.9 mm; the default leaves room for that while staying far below the
+    centimetres by which a body that is genuinely in the air clears a
+    surface.
     """
 
     maximum_slope: float = np.radians(30.0)
@@ -264,7 +275,9 @@ class SupportedBy(Triple[TBody, TBody]):
         return self.supporting
 
     @classmethod
-    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+    def _verbalization_fragment_(
+        cls, *, fields: RenderedFields
+    ) -> VerbalizationFragment:
         """
         Reads as *"the supported body is supported by the supporting body"*.
 
@@ -274,11 +287,11 @@ class SupportedBy(Triple[TBody, TBody]):
         :param fields: The rendered fragment for each field, keyed by field name.
         """
         return clause(
-            Noun(fields["supported"]),
+            Noun(content=fields["supported"]),
             Copula(),
-            Adjective("supported"),
+            Adjective(word="supported"),
             Prepositions.BY,
-            Noun(fields["supporting"]),
+            Noun(content=fields["supporting"]),
         )
 
     def __call__(self) -> bool:
@@ -323,13 +336,17 @@ class Supports(Predicate):
             if candidate is self.supporting_body:
                 continue
             if SupportedBy(
-                candidate, self.supporting_body, self.maximum_intersection_height
+                supported=candidate,
+                supporting=self.supporting_body,
+                maximum_intersection_height=self.maximum_intersection_height,
             )():
                 return True
         return False
 
     @classmethod
-    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+    def _verbalization_fragment_(
+        cls, *, fields: RenderedFields
+    ) -> VerbalizationFragment:
         """
         Reads as *"the body is supporting a body"*, naming what is held up, which the
         class name leaves implicit.
@@ -337,10 +354,10 @@ class Supports(Predicate):
         :param fields: The rendered fragment for each field, keyed by field name.
         """
         return clause(
-            Noun(fields["supporting_body"]),
+            Noun(content=fields["supporting_body"]),
             Copula(),
-            Adjective("supporting"),
-            Noun("body"),
+            Adjective(word="supporting"),
+            Noun(content="body"),
         )
 
 
@@ -406,17 +423,19 @@ class InsideRegion(Triple[TBody, TRegion]):
         return intersection.volume / body_volume
 
     @classmethod
-    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+    def _verbalization_fragment_(
+        cls, *, fields: RenderedFields
+    ) -> VerbalizationFragment:
         """
         Reads as *"the body is inside the region"*.
 
         :param fields: The rendered fragment for each field, keyed by field name.
         """
         return clause(
-            Noun(fields["body"]),
+            Noun(content=fields["body"]),
             Copula(),
             Prepositions.INSIDE,
-            Noun(fields["region"]),
+            Noun(content=fields["region"]),
         )
 
 
@@ -446,12 +465,12 @@ class PointSpatialRelation(Predicate, ABC):
     Check if the point is spatially related to the other point.
     """
 
-    point: Point3
+    point: CartesianPoint3Dimensional
     """
     The point for which the check should be done.
     """
 
-    other: Point3
+    other: CartesianPoint3Dimensional
     """
     The other point.
     """
@@ -467,7 +486,9 @@ class ViewDependentSpatialRelation(PointSpatialRelation, ABC):
     """
 
     @classmethod
-    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+    def _verbalization_fragment_(
+        cls, *, fields: RenderedFields
+    ) -> VerbalizationFragment:
         """
         Reads as *"the point is left of the other point, seen from the point of view"*,
         with the direction taken from the relation's own name.
@@ -476,15 +497,15 @@ class ViewDependentSpatialRelation(PointSpatialRelation, ABC):
         """
         direction = camel_case_to_words(cls.__name__).lower()
         return clause(
-            Noun(fields["point"]),
+            Noun(content=fields["point"]),
             Copula(),
-            Adjective(direction),
-            Noun(fields["other"]),
+            Adjective(word=direction),
+            Noun(content=fields["other"]),
             Prepositions.FROM,
-            Noun(fields["point_of_view"]),
+            Noun(content=fields["point_of_view"]),
         )
 
-    point_of_view: HomogeneousTransformationMatrix
+    point_of_view: HomogeneousTransformationMatrix3Dimensional
     """
     The reference spot from where to look at the bodies.
     """
@@ -509,7 +530,7 @@ class ViewDependentSpatialRelation(PointSpatialRelation, ABC):
         ref_np = self.point_of_view.to_np()
         front_world = ref_np[:3, index]
         front_norm = front_world / (np.linalg.norm(front_world) + self.eps)
-        front_norm = Vector3(
+        front_norm = Vector3Dimensional(
             x=front_norm[0],
             y=front_norm[1],
             z=front_norm[2],
@@ -654,17 +675,19 @@ class InsideOf(KinematicStructureEntitySpatialRelation):
         return float(inside.mean())
 
     @classmethod
-    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+    def _verbalization_fragment_(
+        cls, *, fields: RenderedFields
+    ) -> VerbalizationFragment:
         """
         Reads as *"the body is inside the other"*.
 
         :param fields: The rendered fragment for each field, keyed by field name.
         """
         return clause(
-            Noun(fields["body"]),
+            Noun(content=fields["body"]),
             Copula(),
             Prepositions.INSIDE,
-            Noun(fields["other"]),
+            Noun(content=fields["other"]),
         )
 
 
@@ -688,13 +711,13 @@ class ContainsType(Predicate):
         return any(isinstance(obj, self.obj_type) for obj in self.iterable)
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, *, fields):
         return clause(
-            Noun(fields["iterable"]),
-            Verb("contain"),
-            Noun("instance"),
+            Noun(content=fields["iterable"]),
+            Verb(lemma="contain"),
+            Noun(content="instance"),
             Prepositions.OF,
-            Noun(fields["obj_type"]),
+            Noun(content=fields["obj_type"]),
         )
 
 
@@ -712,7 +735,7 @@ class PlaceIsOccupied(Predicate):
     The stretch of space asked about, in its own local frame.
     """
 
-    pose: Pose
+    pose: Pose3Dimensional
     """
     Where that box stands.
     """
@@ -761,13 +784,15 @@ class PlaceIsOccupied(Predicate):
         return False
 
     @classmethod
-    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+    def _verbalization_fragment_(
+        cls, *, fields: RenderedFields
+    ) -> VerbalizationFragment:
         """
         Reads as *"the place is occupied"*.
 
         :param fields: The rendered fragment for each field, keyed by field name.
         """
-        return clause(Noun(fields["box"]), Copula(), Adjective("occupied"))
+        return clause(Noun(content=fields["box"]), Copula(), Adjective(word="occupied"))
 
 
 @symbolic_function

@@ -11,7 +11,9 @@ import coraplex
 from semantic_digital_twin.adapters.mesh import STLParser
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import Arm
-from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
+)
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import Box, Color, Scale
@@ -52,22 +54,22 @@ WIPE_MOUNT = {"pitch": math.pi / 2}
 Sponge mount transform on the right gripper's tool frame.
 """
 
-BREAD_COLOR = Color(0.55, 0.35, 0.17)
+BREAD_COLOR = Color.from_rgba(red=0.55, green=0.35, blue=0.17)
 """
 Brownish color for the bread.
 """
 
-CUP_COLOR = Color(0.3, 0.5, 0.9)
+CUP_COLOR = Color.from_rgba(red=0.3, green=0.5, blue=0.9)
 """
 Blueish color for the cup.
 """
 
-BOWL_COLOR = Color(0.8, 0.2, 0.2)
+BOWL_COLOR = Color.from_rgba(red=0.8, green=0.2, blue=0.2)
 """
 Redish color for the bowl.
 """
 
-SPONGE_COLOR = Color(0.95, 0.85, 0.3)
+SPONGE_COLOR = Color.from_rgba(red=0.95, green=0.85, blue=0.3)
 """
 Yellowish color for the sponge.
 """
@@ -80,7 +82,9 @@ def parse_object(stl_file_name: str, color: Color | None = None) -> World:
         appearance if None.
     :return: A world containing the mesh from the demo resources.
     """
-    object_world = STLParser(os.path.join(OBJECTS_DIRECTORY, stl_file_name)).parse()
+    object_world = STLParser(
+        os.path.join(OBJECTS_DIRECTORY, stl_file_name)
+    ).create_world()
     if color is not None:
         object_world.root.visual.dye_shapes(color)
     return object_world
@@ -103,7 +107,7 @@ def attach_sponge(world: World, arm: Arm) -> Body:
     connection = FixedConnection(
         parent=tool_frame,
         child=sponge_body,
-        parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+        parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
             reference_frame=tool_frame, **WIPE_MOUNT
         ),
     )

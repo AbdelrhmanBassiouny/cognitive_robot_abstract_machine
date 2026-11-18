@@ -41,8 +41,8 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Drawer,
     Handle,
 )
-from semantic_digital_twin.spatial_types.spatial_types import (
-    HomogeneousTransformationMatrix,
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
 )
 from semantic_digital_twin.utils import camel_case_split
 from semantic_digital_twin.world import World
@@ -109,7 +109,7 @@ class RoboCasaTask:
     The bodies in :attr:`world` that the task requires the robot to interact with.
     """
 
-    robot_base_pose: HomogeneousTransformationMatrix
+    robot_base_pose: HomogeneousTransformationMatrix3Dimensional
     """
     The pose, relative to the world root, at which RoboCasa intends the robot to start,
     for spawning the ``semantic_digital_twin``-owned robot.
@@ -157,7 +157,7 @@ def _parse_robosuite_mjcf(parser: MJCFParser) -> World:
         for geom in body.geoms:
             if geom.group == GeomVisibilityAndCollisionType.VISIBLE_AND_COLLIDABLE_1:
                 geom.group = GeomVisibilityAndCollisionType.ONLY_COLLIDABLE
-    return parser.parse()
+    return parser.create_world()
 
 
 def _category_from_class_name(class_name: str) -> str:
@@ -393,7 +393,7 @@ class RoboCasaDatasetLoader:
             world=world,
             instruction=episode_metadata["lang"],
             manipulated_objects=manipulated_objects,
-            robot_base_pose=HomogeneousTransformationMatrix.from_xyz_rpy(
+            robot_base_pose=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                 *episode_metadata["init_robot_base_pos"],
                 *episode_metadata["init_robot_base_ori"],
             ),
@@ -671,7 +671,7 @@ class RoboCasaDatasetLoader:
         Attach a SemanticAnnotation to the root body of a loaded object.
 
         The object's own body is the first body in the world with collision geometry:
-        MJCFParser.parse() always creates an empty placeholder root body named after the
+        :meth:`~semantic_digital_twin.adapters.mjcf.MJCFParser.create_world` always creates an empty placeholder root body named after the
         MJCF worldbody, distinct from the loaded content.
 
         :param world: The world the object was parsed into.

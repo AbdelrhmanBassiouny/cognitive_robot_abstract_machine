@@ -23,9 +23,9 @@ from semantic_digital_twin.world_description.soft_connections import (
 )
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.geometry import Cylinder, Color
-from semantic_digital_twin.spatial_types import (
-    HomogeneousTransformationMatrix,
-    Vector3,
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
+    Vector3Dimensional,
 )
 
 if TYPE_CHECKING:
@@ -107,12 +107,12 @@ class SoftEndEffector(EndEffector):
     """
 
     @property
-    def approach_axis(self) -> Vector3:
-        return Vector3.X(reference_frame=self.tool_frame)
+    def approach_axis(self) -> Vector3Dimensional:
+        return Vector3Dimensional.X(reference_frame=self.tool_frame)
 
     @property
-    def closing_axis(self) -> Vector3:
-        return Vector3.Y(reference_frame=self.tool_frame)
+    def closing_axis(self) -> Vector3Dimensional:
+        return Vector3Dimensional.Y(reference_frame=self.tool_frame)
 
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(cls, robot_root):
@@ -252,12 +252,14 @@ class SoftTrunk(SemanticAnnotation):
                 for segment_index in range(section.resolution):
                     color_val = (section_index + 1) / len(sections)
                     visual_shape = Cylinder(
-                        origin=HomogeneousTransformationMatrix.from_xyz_rpy(
+                        origin=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                             z=-segment_length / 2
                         ),
                         width=section.radius * 2,
                         height=segment_length,
-                        color=Color(0.0, color_val, 1.0 - color_val, 1.0),
+                        color=Color.from_rgba(
+                            red=0.0, green=color_val, blue=1.0 - color_val, opacity=1.0
+                        ),
                     )
 
                     curr_body = Body(
@@ -376,12 +378,14 @@ class SoftTrunk(SemanticAnnotation):
                 for segment_index in range(section.resolution):
                     color_val = (section_index + 1) / len(sections)
                     visual_shape = Cylinder(
-                        origin=HomogeneousTransformationMatrix.from_xyz_rpy(
+                        origin=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                             z=-segment_length / 2
                         ),
                         width=section.radius * 2,
                         height=segment_length,
-                        color=Color(color_val, 0.2, 1.0 - color_val, 1.0),
+                        color=Color.from_rgba(
+                            red=color_val, green=0.2, blue=1.0 - color_val, opacity=1.0
+                        ),
                     )
 
                     curr_body = Body(

@@ -1,9 +1,15 @@
+"""
+The shapes of bodies, with their colors, textures, meshes and scales.
+"""
+
 from __future__ import annotations
 
 import itertools
+from colorsys import hsv_to_rgb, rgb_to_hsv
 import logging
 import math
 import os
+import re
 import shutil
 from abc import ABC, abstractmethod
 from copy import deepcopy
@@ -19,22 +25,24 @@ import trimesh.exchange.stl
 from PIL import Image
 from plyfile import PlyData
 from trimesh.visual.texture import TextureVisuals, SimpleMaterial
-from typing_extensions import Any, Self, TYPE_CHECKING, TypeVar
+from typing_extensions import Any, Self, TYPE_CHECKING, TypeVar, Sequence
 
-from krrimage.color import Color
 from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json, from_json
 from krrood.bounds import Bounds, BoundsInterface
+from krrood.patterns.classproperty import classproperty
 from random_events.interval import SimpleInterval, Bound, closed
 from random_events.product_algebra import SimpleEvent
 from semantic_digital_twin.datastructures.variables import SpatialVariables
+from semantic_digital_twin.exceptions import MalformedHexColor
 from semantic_digital_twin.mixin import HasSimulatorProperties
-from semantic_digital_twin.spatial_types import (
-    HomogeneousTransformationMatrix,
-    Point,
-    Point2,
-    Point3,
-    Vector3,
+from krrood_spatial_math.point import MetricPoint
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
+    CartesianPoint2Dimensional,
+    CartesianPoint3Dimensional,
+    Vector3Dimensional,
 )
+from semantic_digital_twin.world_description.exceptions import InvalidColorChannelCount
 from semantic_digital_twin.world_description.mesh_file_storage import (
     MeshFileSources,
     MeshFileStorage,
@@ -52,6 +60,260 @@ if TYPE_CHECKING:
     )
 
 logger = logging.getLogger(__name__)
+
+# %% Color representation
+
+
+@dataclass(unsafe_hash=True)
+class Color:
+    """
+    A color stored in HSV with RGB channel access and independent opacity.
+
+    Channel values are normalized from zero to one. The default color is opaque white.
+    Equality and hashing compare the stored hue, saturation, value, and opacity.
+    """
+
+    hue: float = 0.0
+    """
+    Position around the hue wheel, from zero inclusive to one exclusive.
+    """
+
+    saturation: float = 0.0
+    """
+    Color saturation from zero to one inclusive.
+    """
+
+    value: float = 1.0
+    """
+    Color value from zero to one inclusive.
+    """
+
+    opacity: float = 1.0
+    """
+    Opacity from zero to one inclusive.
+    """
+
+    def set_rgb(self, red: float, green: float, blue: float) -> None:
+        """
+        Replace the color's RGB channels while preserving opacity.
+        """
+        self.hue, self.saturation, self.value = rgb_to_hsv(
+            float(red), float(green), float(blue)
+        )
+
+    @property
+    def R(self) -> float:
+        """
+        Red intensity in the RGB representation.
+        """
+        return self.to_rgb()[0]
+
+    @property
+    def G(self) -> float:
+        """
+        Green intensity in the RGB representation.
+        """
+        return self.to_rgb()[1]
+
+    @property
+    def B(self) -> float:
+        """
+        Blue intensity in the RGB representation.
+        """
+        return self.to_rgb()[2]
+
+    @property
+    def A(self) -> float:
+        """
+        Opacity of the color.
+        """
+        return self.opacity
+
+    def to_rgba(self) -> tuple[float, float, float, float]:
+        """
+        Return RGB channels followed by opacity.
+        """
+        return (*self.to_rgb(), self.opacity)
+
+    def to_rgb(self) -> tuple[float, float, float]:
+        """
+        Return RGB channels converted from the stored HSV coordinates.
+        """
+        return hsv_to_rgb(self.hue, self.saturation, self.value)
+
+    @classproperty
+    def opencv_maximum_channel_value(cls) -> int:
+        """Largest channel value in an 8-bit OpenCV HSV_FULL image."""
+        return np.iinfo(np.uint8).max
+
+    @classproperty
+    def opencv_hue_channel_count(cls) -> int:
+        """Number of hue steps in one turn of an 8-bit OpenCV HSV_FULL image."""
+        return cls.opencv_maximum_channel_value + 1
+
+    @classmethod
+    def from_opencv_hue_saturation_value_full(
+        cls, hue: int, saturation: int, value: int
+    ) -> Self:
+        """Create a color from OpenCV's 8-bit HSV_FULL channels."""
+        return cls(
+            hue=hue / cls.opencv_hue_channel_count,
+            saturation=saturation / cls.opencv_maximum_channel_value,
+            value=value / cls.opencv_maximum_channel_value,
+        )
+
+    def to_opencv_hue_saturation_value_full(self) -> tuple[int, int, int]:
+        """Return OpenCV's 8-bit HSV_FULL channels, excluding opacity."""
+        return (
+            int(self.hue * self.opencv_hue_channel_count),
+            round(self.saturation * self.opencv_maximum_channel_value),
+            round(self.value * self.opencv_maximum_channel_value),
+        )
+
+    def to_hex(self, prefix: str = "#") -> str:
+        """
+        Return two hexadecimal digits per RGB channel, excluding opacity.
+        """
+        return prefix + "".join(
+            f"{round(channel * 255):02X}" for channel in self.to_rgb()
+        )
+
+    @classmethod
+    def from_list(cls, color: Sequence[float]) -> Self:
+        """
+        Create a color from three RGB or four RGBA channels.
+        """
+        if len(color) not in (3, 4):
+            raise InvalidColorChannelCount(channel_count=len(color))
+        return cls.from_rgba(*color)
+
+    @classmethod
+    def from_rgba(
+        cls,
+        red: float = 1.0,
+        green: float = 1.0,
+        blue: float = 1.0,
+        opacity: float = 1.0,
+    ) -> Self:
+        """
+        Create a color from normalized RGB channels and independent opacity.
+        """
+        color = cls(opacity=float(opacity))
+        color.set_rgb(red, green, blue)
+        return color
+
+    @classmethod
+    def from_hex(
+        cls,
+        hex_color: str,
+        prefix: str = "#",
+        pattern: str = "(?:[0-9a-fA-F]{2}){3,4}",
+    ) -> Self:
+        """
+        Read RGB or RGBA hexadecimal pairs, with an optional prefix.
+
+        :raises MalformedHexColor: If the supplied text is not hexadecimal color data.
+        """
+        digits = hex_color.removeprefix(prefix)
+        if re.fullmatch(pattern, digits) is None:
+            raise MalformedHexColor(hex_color)
+        return cls.from_list(
+            [
+                int(digits[index : index + 2], 16) / 255
+                for index in range(0, len(digits), 2)
+            ]
+        )
+
+    @classmethod
+    def PINK(cls) -> Self:
+        """
+        Create an opaque pink color.
+        """
+        return cls.from_rgba(red=1, green=0, blue=1, opacity=1)
+
+    @classmethod
+    def BLACK(cls) -> Self:
+        """
+        Create an opaque black color.
+        """
+        return cls.from_rgba(red=0, green=0, blue=0, opacity=1)
+
+    @classmethod
+    def WHITE(cls) -> Self:
+        """
+        Create an opaque white color.
+        """
+        return cls.from_rgba(red=1, green=1, blue=1, opacity=1)
+
+    @classmethod
+    def RED(cls) -> Self:
+        """
+        Create an opaque red color.
+        """
+        return cls.from_rgba(red=1, green=0, blue=0, opacity=1)
+
+    @classmethod
+    def GREEN(cls) -> Self:
+        """
+        Create an opaque green color.
+        """
+        return cls.from_rgba(red=0, green=1, blue=0, opacity=1)
+
+    @classmethod
+    def BLUE(cls) -> Self:
+        """
+        Create an opaque blue color.
+        """
+        return cls.from_rgba(red=0, green=0, blue=1, opacity=1)
+
+    @classmethod
+    def YELLOW(cls) -> Self:
+        """
+        Create an opaque yellow color.
+        """
+        return cls.from_rgba(red=1, green=1, blue=0, opacity=1)
+
+    @classmethod
+    def CYAN(cls) -> Self:
+        """
+        Create an opaque cyan color.
+        """
+        return cls.from_rgba(red=0, green=1, blue=1, opacity=1)
+
+    @classmethod
+    def MAGENTA(cls) -> Self:
+        """
+        Create an opaque magenta color.
+        """
+        return cls.from_rgba(red=1, green=0, blue=1, opacity=1)
+
+    @classmethod
+    def GREY(cls) -> Self:
+        """
+        Create an opaque middle gray color.
+        """
+        return cls.from_rgba(red=0.5, green=0.5, blue=0.5, opacity=1)
+
+    @classmethod
+    def GRAY(cls) -> Self:
+        """
+        Create an opaque gray color.
+        """
+        return cls.from_rgba(red=0.498, green=0.498, blue=0.498, opacity=1)
+
+    @classmethod
+    def BEIGE(cls) -> Self:
+        """
+        Create an opaque beige color.
+        """
+        return cls.from_rgba(red=1, green=0.827, blue=0.6078, opacity=1)
+
+    @classmethod
+    def ORANGE(cls) -> Self:
+        """
+        Create an opaque orange color.
+        """
+        return cls.from_rgba(red=1, green=0.647, blue=0, opacity=1)
 
 
 @dataclass
@@ -112,6 +374,73 @@ class SurfaceFinish(StrEnum):
     """
 
 
+class MeshFileFormat(StrEnum):
+    """
+    A file format meshes are stored in, named by its file extension.
+    """
+
+    GLB = auto()
+    """
+    Binary glTF: per-vertex colours and textures in one file, positions as 32-bit
+    floats.
+    """
+
+    OBJ = auto()
+    """
+    Wavefront OBJ, as text: positions rounded to eight decimals, colours without
+    alpha, textures in a material and an image file beside it.
+    """
+
+    STL = auto()
+    """
+    Stereolithography: triangles without colours, each with vertices of its own.
+    """
+
+    DAE = auto()
+    """
+    COLLADA.
+    """
+
+    PLY = auto()
+    """
+    Polygon File Format.
+    """
+
+
+@dataclass
+class _MeshGeometry:
+    """
+    The geometry a :class:`Mesh` is serialized as, in place of the file it reads.
+    """
+
+    vertices: npt.NDArray[np.float64]
+    """
+    The positions of the vertices, before the mesh's scale is applied.
+    """
+
+    faces: npt.NDArray[np.int64]
+    """
+    The vertex indices of each triangle.
+    """
+
+    vertex_colors: npt.NDArray[np.uint8] | None = None
+    """
+    The RGBA colour of each vertex, or ``None`` for an uncoloured mesh.
+    """
+
+
+class TrimeshMetadataKey(StrEnum):
+    """
+    A key of the metadata trimesh attaches to a mesh it reads.
+    """
+
+    RAW_PLY_FILE = "_ply_raw"
+    """
+    Every element of the PLY file the mesh was read from, which trimesh copies into
+    every mesh cut from it.
+    """
+
+
 @dataclass
 class Scale:
     """
@@ -146,7 +475,7 @@ class Scale:
 
     def to_simple_event(
         self,
-        extend_result_in_direction: Vector3 | None = None,
+        extend_result_in_direction: Vector3Dimensional | None = None,
         amount: float = 0.0,
     ) -> SimpleEvent:
         simple_event = SimpleEvent.from_data(
@@ -165,7 +494,7 @@ class Scale:
         return simple_event
 
     def _extend_simple_event_in_direction(
-        self, simple_event: SimpleEvent, direction: Vector3, amount: float
+        self, simple_event: SimpleEvent, direction: Vector3Dimensional, amount: float
     ) -> SimpleEvent:
         """
         Extend the inner event in the specified direction to create the container
@@ -202,8 +531,8 @@ class Scale:
         return simple_event
 
     def to_bounding_box(self) -> VolumetricBoundingBox:
-        min_point = Point3(-self.x / 2, -self.y / 2, -self.z / 2)
-        max_point = Point3(self.x / 2, self.y / 2, self.z / 2)
+        min_point = CartesianPoint3Dimensional(-self.x / 2, -self.y / 2, -self.z / 2)
+        max_point = CartesianPoint3Dimensional(self.x / 2, self.y / 2, self.z / 2)
         return VolumetricBoundingBox.from_min_max(min_point, max_point, None)
 
     def to_np(self) -> np.ndarray:
@@ -220,8 +549,8 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
     Base class for all shapes in the world.
     """
 
-    origin: HomogeneousTransformationMatrix = field(
-        default_factory=HomogeneousTransformationMatrix
+    origin: HomogeneousTransformationMatrix3Dimensional = field(
+        default_factory=HomogeneousTransformationMatrix3Dimensional
     )
 
     color: Color = field(default_factory=Color)
@@ -300,7 +629,7 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
         }
 
     @classmethod
-    def _from_json(cls, data: dict[str, Any], **kwargs) -> Self:
+    def _from_json(cls, *, data: dict[str, Any], **kwargs) -> Self:
         return cls(
             **{
                 field_.name: from_json(data[field_.name], **kwargs)
@@ -335,7 +664,7 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
         """
         Creates a copy of this shape without the reference frame.
         """
-        new_origin = HomogeneousTransformationMatrix(
+        new_origin = HomogeneousTransformationMatrix3Dimensional(
             self.origin.to_np(),
         )
         shape_props = fields(self)
@@ -371,10 +700,12 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
         center_x = (bounding_box.min_x + bounding_box.max_x) / 2
         center_y = (bounding_box.min_y + bounding_box.max_y) / 2
         center_z = (bounding_box.min_z + bounding_box.max_z) / 2
-        self.origin = HomogeneousTransformationMatrix.from_point_rotation_matrix(
-            point=Point3(-center_x, -center_y, -center_z),
-            rotation_matrix=self.origin.rotation_matrix,
-            reference_frame=self.origin.reference_frame,
+        self.origin = (
+            HomogeneousTransformationMatrix3Dimensional.from_point_rotation_matrix(
+                point=CartesianPoint3Dimensional(-center_x, -center_y, -center_z),
+                rotation_matrix=self.origin.rotation_matrix,
+                reference_frame=self.origin.reference_frame,
+            )
         )
 
 
@@ -427,9 +758,22 @@ class Mesh(Shape):
 
         :param filename: The path of the mesh file.
         :param process: Whether trimesh merges vertices and drops degenerate faces.
-        :return: The loaded mesh, measured in meters.
+        :return: The loaded mesh, measured in meters, without a copy of the raw file.
         """
-        mesh = trimesh.load_mesh(filename, process=process)
+        scene = trimesh.load_scene(filename, process=process)
+        placements = [scene.graph[node] for node in scene.graph.nodes_geometry]
+        # Merging the scene into one mesh copies even a file's only mesh twice, and
+        # trimesh converts the colours of every copy, so a lone mesh in place is taken
+        # as it is.
+        if (
+            len(placements) == 1
+            and np.allclose(placements[0][0], np.eye(4))
+            and isinstance(scene.geometry[placements[0][1]], trimesh.Trimesh)
+        ):
+            mesh = scene.geometry[placements[0][1]]
+        else:
+            mesh = scene.to_mesh()
+        mesh.metadata.pop(TrimeshMetadataKey.RAW_PLY_FILE, None)
         if mesh.units is not None:
             mesh.convert_units("meters")
         return mesh
@@ -455,41 +799,31 @@ class Mesh(Shape):
         # survives serialization (e.g. across the ROS world synchronizer).
         if isinstance(base_mesh.visual, TextureVisuals):
             base_mesh.visual = base_mesh.visual.to_color()
-        mesh_dict = base_mesh.to_dict()
-        if base_mesh.visual.kind is not None:
-            mesh_dict["vertex_colors"] = np.asarray(
-                base_mesh.visual.vertex_colors
-            ).tolist()
-        file_type = self.filename.split(".")[-1]
-        return {
-            **super().to_json(**kwargs),
-            "mesh": mesh_dict,
-            "scale": to_json(self.scale, **kwargs),
-            "file_type": file_type,
-        }
+        geometry = _MeshGeometry(
+            vertices=base_mesh.vertices.view(np.ndarray),
+            faces=base_mesh.faces.view(np.ndarray),
+            vertex_colors=(
+                None
+                if base_mesh.visual.kind is None
+                else np.asarray(base_mesh.visual.vertex_colors)
+            ),
+        )
+        return {**super().to_json(**kwargs), "mesh": to_json(geometry, **kwargs)}
 
     @classmethod
     def _from_json(cls, data: dict[str, Any], **kwargs) -> Mesh:
+        geometry = from_json(data["mesh"], **kwargs)
         # Recreate the trimesh without processing to preserve exact topology
-        vertex_colors = data["mesh"].get("vertex_colors")
         mesh = trimesh.Trimesh(
-            vertices=data["mesh"]["vertices"],
-            faces=data["mesh"]["faces"],
-            vertex_colors=vertex_colors,
+            vertices=geometry.vertices,
+            faces=geometry.faces,
+            vertex_colors=geometry.vertex_colors,
             process=False,
         )
-        origin = from_json(data["origin"], **kwargs)
-        scale = from_json(data["scale"], **kwargs)
-        file_type = data["file_type"]
-        # Export colored meshes as OBJ, which preserves per-vertex colors and is
-        # readable by the visualizer and the collision loader.
-        if vertex_colors is not None:
-            file_type = "obj"
         return cls.from_trimesh(
             mesh=mesh,
-            origin=origin,
-            scale=scale,
-            file_type=file_type,
+            origin=from_json(data["origin"], **kwargs),
+            scale=from_json(data["scale"], **kwargs),
             finish=from_json(data.get("finish"), **kwargs),
         )
 
@@ -541,11 +875,20 @@ class Mesh(Shape):
         return MeshFileSources().resolve(self.filename)
 
     @property
+    def stored_mesh(self) -> trimesh.Trimesh:
+        """
+        The mesh with exactly the vertices and faces its file stores, before this
+        shape's scale is applied.
+        """
+        return self._load_in_meters(str(self.local_file), process=False)
+
+    @property
     def unscaled_mesh(self) -> trimesh.Trimesh:
         """
-        The mesh exactly as the file describes it, before this shape's scale is applied.
+        The mesh :attr:`stored_mesh` describes, with its duplicate vertices welded
+        unless it is coloured per vertex, before this shape's scale is applied.
         """
-        mesh = self._load_in_meters(str(self.local_file), process=False)
+        mesh = self.stored_mesh
         if mesh.visual.kind != "vertex":
             # Welding duplicate vertices is what makes a mesh watertight, which volume
             # and boolean operations require; formats like STL give every face its own
@@ -609,7 +952,7 @@ class Mesh(Shape):
         cls,
         ply_file_path: str,
         texture_file_path: str | None = None,
-        origin: HomogeneousTransformationMatrix | None = None,
+        origin: HomogeneousTransformationMatrix3Dimensional | None = None,
         scale: Scale | None = None,
     ) -> Mesh:
         """
@@ -653,7 +996,7 @@ class Mesh(Shape):
             mesh=mesh,
             origin=origin,
             scale=scale,
-            file_type="obj",
+            file_type=MeshFileFormat.OBJ,
             texture_file_path=texture_file_path,
         )
 
@@ -661,12 +1004,12 @@ class Mesh(Shape):
     def from_trimesh(
         cls,
         mesh: trimesh.Trimesh,
-        origin: HomogeneousTransformationMatrix | None = None,
+        origin: HomogeneousTransformationMatrix3Dimensional | None = None,
         scale: Scale | None = None,
         uv: np.ndarray | None = None,
         texture_file_path: str | None = None,
         directory: Path | None = None,
-        file_type: str = "obj",
+        file_type: MeshFileFormat = MeshFileFormat.GLB,
         finish: SurfaceFinish | None = None,
     ) -> Mesh:
         """
@@ -691,7 +1034,7 @@ class Mesh(Shape):
         """
         file_type = file_type.lower()
         if origin is None:
-            origin = HomogeneousTransformationMatrix()
+            origin = HomogeneousTransformationMatrix3Dimensional()
         if scale is None:
             scale = Scale()
         if uv is not None:
@@ -723,7 +1066,7 @@ class Mesh(Shape):
     def box(
         cls,
         extents: tuple[float, float, float] = (1.0, 1.0, 1.0),
-        origin: HomogeneousTransformationMatrix | None = None,
+        origin: HomogeneousTransformationMatrix3Dimensional | None = None,
         scale: Scale | None = None,
     ) -> Mesh:
         """
@@ -745,7 +1088,7 @@ class Mesh(Shape):
         cls,
         side: float,
         height: float,
-        origin: HomogeneousTransformationMatrix | None = None,
+        origin: HomogeneousTransformationMatrix3Dimensional | None = None,
     ) -> Mesh:
         """
         Create an upright prism of equilateral cross-section, its apex pointing along +x.
@@ -801,7 +1144,7 @@ class Mesh(Shape):
     @classmethod
     def from_3d_points(
         cls,
-        points_3d: list[Point3],
+        points_3d: list[CartesianPoint3Dimensional],
         reference_frame: KinematicStructureEntity | None = None,
         minimum_thickness: float = 0.005,
         singular_value_ratio_tolerance: float = 1e-7,
@@ -822,9 +1165,9 @@ class Mesh(Shape):
         """
         points = np.asarray([point.to_np()[:3] for point in points_3d], dtype=float)
         points = np.unique(points, axis=0)
-        assert (
-            len(points) >= 3
-        ), "At least 4 unique points are required to define a 3D region."
+        assert len(points) >= 3, (
+            "At least 4 unique points are required to define a 3D region."
+        )
 
         centered_points = points - points.mean(axis=0, keepdims=True)
         assert np.any(centered_points), "Points must not be all identical."
@@ -873,7 +1216,9 @@ class Mesh(Shape):
 
         return cls.from_trimesh(
             mesh=hull,
-            origin=HomogeneousTransformationMatrix(reference_frame=reference_frame),
+            origin=HomogeneousTransformationMatrix3Dimensional(
+                reference_frame=reference_frame
+            ),
         )
 
     @classmethod
@@ -1063,9 +1408,9 @@ class CoordinateBounds(Bounds[npt.NDArray[np.float64]]):
         against this region, using the slab method.
 
         .. note::
-            ``start``/``direction`` are plain arrays rather than :class:`Point3`/
-            :class:`Vector3` on purpose: this runs once per graph node on every
-            collision check, and :class:`Point3`/:class:`Vector3` arithmetic pays a
+            ``start``/``direction`` are plain arrays rather than :class:`CartesianPoint3Dimensional`/
+            :class:`Vector3Dimensional` on purpose: this runs once per graph node on every
+            collision check, and :class:`CartesianPoint3Dimensional`/:class:`Vector3Dimensional` arithmetic pays a
             symbolic (casadi) cost on every access. Callers should convert to arrays
             once before looping, not per call.
 
@@ -1093,12 +1438,12 @@ class CoordinateBounds(Bounds[npt.NDArray[np.float64]]):
         return SimpleInterval.from_data(t_min, t_max, Bound.CLOSED, Bound.CLOSED)
 
 
-PointT = TypeVar("PointT", bound=Point)
+PointT = TypeVar("PointT", bound=MetricPoint)
 """
 The point type an :class:`AxisAlignedBox` subclass is asked about --
-:class:`~semantic_digital_twin.spatial_types.Point3` for a box expressed over three
-axes, :class:`~semantic_digital_twin.spatial_types.Point2` for one expressed over a
-plane.
+:class:`~krrood_spatial_math.spatial_types.CartesianPoint3Dimensional` for a box expressed over
+three axes, :class:`~krrood_spatial_math.spatial_types.CartesianPoint2Dimensional` for one
+expressed over a plane.
 """
 
 
@@ -1175,7 +1520,9 @@ class AxisAlignedBox(BoundsInterface[PointT], ABC):
     @classmethod
     @abstractmethod
     def from_simple_event(
-        cls, simple_event: SimpleEvent, origin: HomogeneousTransformationMatrix
+        cls,
+        simple_event: SimpleEvent,
+        origin: HomogeneousTransformationMatrix3Dimensional,
     ) -> list[Self]:
         """
         Create a list of bounding boxes from a simple random event.
@@ -1211,16 +1558,16 @@ class AxisAlignedBox(BoundsInterface[PointT], ABC):
         :param coordinates: The corner's coordinate along each of :meth:`axes`.
         :return: The corner, in the reference frame of the box's origin.
         """
-        point_type = self.get_type_of_generic_parameter(PointT)
+        point_type = self.get_type_of_generic_parameter(parameter=PointT)
         return point_type(*coordinates, reference_frame=self.origin.reference_frame)
 
     def to_array_bounds(self) -> CoordinateBounds:
         """
         Express this bounding box's lower and upper corners as plain-float vectors.
 
-        Array-based, not ``Point3``-based, for the same reason as
+        Array-based, not ``CartesianPoint3Dimensional``-based, for the same reason as
         :meth:`from_array_bounds`: :meth:`~semantic_digital_twin.world_description.graph_of_convex_sets.boxes.GraphOfBoundingBoxes.calculate_connectivity`
-        reads these generically across dimensionality, and a 2D box has no ``Point3``
+        reads these generically across dimensionality, and a 2D box has no ``CartesianPoint3Dimensional``
         corners of its own.
 
         :return: The corners, in the same frame as ``origin``.
@@ -1228,23 +1575,23 @@ class AxisAlignedBox(BoundsInterface[PointT], ABC):
         intervals = self._ordered_intervals
         lower = np.array([interval.lower for interval in intervals], dtype=np.float64)
         upper = np.array([interval.upper for interval in intervals], dtype=np.float64)
-        return CoordinateBounds(lower, upper)
+        return CoordinateBounds(lower=lower, upper=upper)
 
     @classmethod
     def from_array_bounds(
         cls,
         lower: npt.NDArray[np.float64],
         upper: npt.NDArray[np.float64],
-        origin: HomogeneousTransformationMatrix,
+        origin: HomogeneousTransformationMatrix3Dimensional,
     ) -> Self:
         """
         Rebuild a bounding box from the plain-float corners :meth:`to_array_bounds`
         returns.
 
-        Array-based rather than ``Point3``-based on purpose:
+        Array-based rather than ``CartesianPoint3Dimensional``-based on purpose:
         :meth:`~semantic_digital_twin.world_description.graph_of_convex_sets.boxes.GraphOfBoundingBoxes.calculate_connectivity`
         uses this to rebuild a box generically across dimensionality, and a 2D box has
-        no ``Point3`` corners to build from.
+        no ``CartesianPoint3Dimensional`` corners to build from.
 
         :param lower: The lower corner.
         :param upper: The upper corner.
@@ -1254,7 +1601,7 @@ class AxisAlignedBox(BoundsInterface[PointT], ABC):
         return cls(*lower, *upper, origin)
 
     def transform_to_origin(
-        self, reference_T_new_origin: HomogeneousTransformationMatrix
+        self, reference_T_new_origin: HomogeneousTransformationMatrix3Dimensional
     ) -> Self:
         """
         Transform the bounding box to a different reference frame.
@@ -1262,7 +1609,7 @@ class AxisAlignedBox(BoundsInterface[PointT], ABC):
         :param reference_T_new_origin: The origin to express the box relative to.
         :return: The box, re-expressed relative to ``reference_T_new_origin``.
         """
-        reference_T_new_origin = HomogeneousTransformationMatrix(
+        reference_T_new_origin = HomogeneousTransformationMatrix3Dimensional(
             data=reference_T_new_origin.to_np(),
             reference_frame=reference_T_new_origin.reference_frame,
         )
@@ -1274,8 +1621,10 @@ class AxisAlignedBox(BoundsInterface[PointT], ABC):
         self_T_new_pose = reference_T_new_origin.inverse() @ new_origin_reference_T_self
 
         list_self_T_corner = [
-            HomogeneousTransformationMatrix.from_point_rotation_matrix(
-                corner.to_point3() if isinstance(corner, Point2) else corner
+            HomogeneousTransformationMatrix3Dimensional.from_point_rotation_matrix(
+                corner.to_cartesian_point_3_dimensional()
+                if isinstance(corner, CartesianPoint2Dimensional)
+                else corner
             ).to_np()
             for corner in self.get_points()
         ]
@@ -1314,7 +1663,7 @@ class AxisAlignedBox(BoundsInterface[PointT], ABC):
 
 
 @dataclass(eq=False)
-class VolumetricBoundingBox(AxisAlignedBox[Point3]):
+class VolumetricBoundingBox(AxisAlignedBox[CartesianPoint3Dimensional]):
     """
     An axis-aligned box in three-dimensional space.
     """
@@ -1349,7 +1698,7 @@ class VolumetricBoundingBox(AxisAlignedBox[Point3]):
     The maximum z-coordinate of the bounding box, relative to the origin.
     """
 
-    origin: HomogeneousTransformationMatrix
+    origin: HomogeneousTransformationMatrix3Dimensional
     """
     The origin of the bounding box.
     """
@@ -1423,11 +1772,11 @@ class VolumetricBoundingBox(AxisAlignedBox[Point3]):
         return [self.depth, self.width, self.height]
 
     @property
-    def center(self) -> Point3:
+    def center(self) -> CartesianPoint3Dimensional:
         """
         :return: The center point of the bounding box, in the same frame as ``origin``.
         """
-        return Point3(
+        return CartesianPoint3Dimensional(
             self.x_interval.center(),
             self.y_interval.center(),
             self.z_interval.center(),
@@ -1455,7 +1804,7 @@ class VolumetricBoundingBox(AxisAlignedBox[Point3]):
             self.origin,
         )
 
-    def contains(self, point: Point3) -> bool:
+    def contains(self, point: CartesianPoint3Dimensional) -> bool:
         """
         Check if the bounding box contains a point.
         """
@@ -1467,7 +1816,9 @@ class VolumetricBoundingBox(AxisAlignedBox[Point3]):
 
     @classmethod
     def from_simple_event(
-        cls, simple_event: SimpleEvent, origin: HomogeneousTransformationMatrix
+        cls,
+        simple_event: SimpleEvent,
+        origin: HomogeneousTransformationMatrix3Dimensional,
     ) -> list[Self]:
         """
         Create a list of bounding boxes from a simple random event.
@@ -1526,7 +1877,7 @@ class VolumetricBoundingBox(AxisAlignedBox[Point3]):
     def from_mesh(
         cls,
         mesh: trimesh.Trimesh,
-        origin: HomogeneousTransformationMatrix,
+        origin: HomogeneousTransformationMatrix3Dimensional,
     ) -> Self:
         """
         Create a bounding box from a trimesh object.
@@ -1546,14 +1897,14 @@ class VolumetricBoundingBox(AxisAlignedBox[Point3]):
             origin=origin,
         )
 
-    def get_points(self) -> list[Point3]:
+    def get_points(self) -> list[CartesianPoint3Dimensional]:
         """
-        Get the 8 corners of the bounding box as Point3 objects.
+        Get the 8 corners of the bounding box as CartesianPoint3Dimensional objects.
 
-        :return: A list of Point3 objects representing the corners of the bounding box.
+        :return: A list of CartesianPoint3Dimensional objects representing the corners of the bounding box.
         """
         return [
-            Point3(x, y, z)
+            CartesianPoint3Dimensional(x, y, z)
             for x in (self.min_x, self.max_x)
             for y in (self.min_y, self.max_y)
             for z in (self.min_z, self.max_z)
@@ -1562,9 +1913,9 @@ class VolumetricBoundingBox(AxisAlignedBox[Point3]):
     @classmethod
     def from_min_max(
         cls,
-        min_point: Point3,
-        max_point: Point3,
-        origin: HomogeneousTransformationMatrix,
+        min_point: CartesianPoint3Dimensional,
+        max_point: CartesianPoint3Dimensional,
+        origin: HomogeneousTransformationMatrix3Dimensional,
     ) -> Self:
         """
         Set the axis-aligned bounding box from a minimum and maximum point.
@@ -1572,9 +1923,9 @@ class VolumetricBoundingBox(AxisAlignedBox[Point3]):
         :param min_point: The minimum point
         :param max_point: The maximum point
         """
-        assert (
-            min_point.reference_frame == max_point.reference_frame
-        ), "The reference frames of the minimum and maximum points must be the same."
+        assert min_point.reference_frame == max_point.reference_frame, (
+            "The reference frames of the minimum and maximum points must be the same."
+        )
         return cls(*min_point.to_np()[:3], *max_point.to_np()[:3], origin=origin)
 
     def as_shape(self) -> Box:
@@ -1586,7 +1937,7 @@ class VolumetricBoundingBox(AxisAlignedBox[Point3]):
         x = (self.max_x + self.min_x) / 2 + float(self.origin.x)
         y = (self.max_y + self.min_y) / 2 + float(self.origin.y)
         z = (self.max_z + self.min_z) / 2 + float(self.origin.z)
-        origin = HomogeneousTransformationMatrix.from_xyz_rpy(
+        origin = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
             x, y, z, 0, 0, 0, self.origin.reference_frame
         )
         return Box(origin=origin, scale=scale)
@@ -1604,7 +1955,7 @@ class VolumetricBoundingBox(AxisAlignedBox[Point3]):
 
 
 @dataclass(eq=False)
-class PlanarBoundingBox(AxisAlignedBox[Point2]):
+class PlanarBoundingBox(AxisAlignedBox[CartesianPoint2Dimensional]):
     """
     An axis-aligned box in the x-y plane, with no z-extent.
 
@@ -1633,7 +1984,7 @@ class PlanarBoundingBox(AxisAlignedBox[Point2]):
     The maximum y-coordinate of the bounding box, relative to the origin.
     """
 
-    origin: HomogeneousTransformationMatrix
+    origin: HomogeneousTransformationMatrix3Dimensional
     """
     The origin of the bounding box.
     """
@@ -1686,11 +2037,11 @@ class PlanarBoundingBox(AxisAlignedBox[Point2]):
         return self.depth * self.width
 
     @property
-    def center(self) -> Point2:
+    def center(self) -> CartesianPoint2Dimensional:
         """
         :return: The center of the bounding box, in the same frame as ``origin``.
         """
-        return Point2(
+        return CartesianPoint2Dimensional(
             self.x_interval.center(),
             self.y_interval.center(),
             reference_frame=self.origin.reference_frame,
@@ -1712,7 +2063,7 @@ class PlanarBoundingBox(AxisAlignedBox[Point2]):
             self.origin,
         )
 
-    def contains(self, point: Point2) -> bool:
+    def contains(self, point: CartesianPoint2Dimensional) -> bool:
         """
         Check if the bounding box contains a point.
         """
@@ -1742,7 +2093,9 @@ class PlanarBoundingBox(AxisAlignedBox[Point2]):
 
     @classmethod
     def from_simple_event(
-        cls, simple_event: SimpleEvent, origin: HomogeneousTransformationMatrix
+        cls,
+        simple_event: SimpleEvent,
+        origin: HomogeneousTransformationMatrix3Dimensional,
     ) -> list[Self]:
         """
         Create a list of bounding boxes from a simple random event.
@@ -1759,15 +2112,17 @@ class PlanarBoundingBox(AxisAlignedBox[Point2]):
             result.append(cls(x.lower, y.lower, x.upper, y.upper, origin))
         return result
 
-    def get_points(self) -> list[Point2]:
+    def get_points(self) -> list[CartesianPoint2Dimensional]:
         """
-        Get the 4 corners of the bounding box as ``Point2`` objects, in the box's own
+        Get the 4 corners of the bounding box as ``CartesianPoint2Dimensional`` objects, in the box's own
         local frame.
 
-        :return: A list of Point2 objects representing the corners of the bounding box.
+        :return: A list of CartesianPoint2Dimensional objects representing the corners of the bounding box.
         """
         return [
-            Point2(x, y, reference_frame=self.origin.reference_frame)
+            CartesianPoint2Dimensional(
+                x, y, reference_frame=self.origin.reference_frame
+            )
             for x in (self.min_x, self.max_x)
             for y in (self.min_y, self.max_y)
         ]

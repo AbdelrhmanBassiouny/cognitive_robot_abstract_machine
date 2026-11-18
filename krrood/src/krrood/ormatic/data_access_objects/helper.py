@@ -1,3 +1,7 @@
+"""
+Looks up the data access object class and alternative mapping of a class.
+"""
+
 from __future__ import annotations
 
 import inspect
@@ -5,7 +9,8 @@ from functools import lru_cache
 from typing_extensions import get_origin, Any, TYPE_CHECKING
 
 
-from krrood.ormatic.exceptions import NoGenericError, NoDAOFoundError
+from krrood.ormatic.exceptions import NoDAOFoundError
+from krrood.patterns.exceptions import NoGenericError
 from krrood.utils import recursive_subclasses
 
 if TYPE_CHECKING:
@@ -217,6 +222,6 @@ def to_dao(
 
     dao_clazz = get_data_access_object_class(type(source_object))
     if dao_clazz is None:
-        raise NoDAOFoundError(source_object)
+        raise NoDAOFoundError(obj=source_object)
     state = state or ToDataAccessObjectState()
-    return dao_clazz.to_dao(source_object, state)
+    return dao_clazz.to_dao(source_object=source_object, state=state)

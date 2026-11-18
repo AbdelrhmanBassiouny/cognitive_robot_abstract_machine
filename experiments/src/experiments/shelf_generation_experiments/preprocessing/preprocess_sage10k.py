@@ -36,11 +36,11 @@ from experiments.shelf_generation_experiments.shelf_schema import (
     RelationalCircuitExperimentShelf,
     RelationalCircuitExperimentShelfLayer,
 )
-from semantic_digital_twin.spatial_types import (
-    HomogeneousTransformationMatrix,
-    Point2,
-    Pose,
-    Pose2D,
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
+    CartesianPoint2Dimensional,
+    Pose3Dimensional,
+    Pose2Dimensional,
 )
 from semantic_digital_twin.world_description.geometry import (
     Scale,
@@ -84,11 +84,11 @@ class PreprocessedObject:
     The scale of the object.
     """
 
-    pose: Pose
+    pose: Pose3Dimensional
     """
     Pose of the object.
 
-    ``roll``/``pitch``/``yaw`` are in radians, as :class:`~semantic_digital_twin.spatial_types.spatial_types.Pose`
+    ``roll``/``pitch``/``yaw`` are in radians, as :class:`~krrood_spatial_math.spatial_types.Pose3Dimensional`
     requires -- everywhere else in this schema reasons about rotation in degrees, so it is
     converted at the boundary where a value enters or leaves this field.
     """
@@ -139,7 +139,9 @@ class PreprocessedObject:
         """
         corrected = measurements.corrected_position(
             source_id=sage10k_object.source_id,
-            position=Point2(x=sage10k_object.position.x, y=sage10k_object.position.y),
+            position=CartesianPoint2Dimensional(
+                x=sage10k_object.position.x, y=sage10k_object.position.y
+            ),
             yaw_degrees=sage10k_object.rotation.z,
         )
         return PreprocessedObject(
@@ -152,7 +154,7 @@ class PreprocessedObject:
                 y=sage10k_object.dimensions.width,
                 z=sage10k_object.dimensions.height,
             ),
-            pose=Pose.from_xyz_rpy(
+            pose=Pose3Dimensional.from_xyz_rpy(
                 x=corrected.position.x,
                 y=corrected.position.y,
                 z=sage10k_object.position.z,
@@ -438,7 +440,7 @@ class ShelfExtractor:
 
     @staticmethod
     def _is_within_shelf_footprint(
-        position: Point2,
+        position: CartesianPoint2Dimensional,
         shelf: PreprocessedObject,
         maximum_relative_x: float,
         maximum_relative_y: float,
@@ -458,8 +460,10 @@ class ShelfExtractor:
         :param maximum_relative_y: Half the shelf's length, inset by the margin.
         :return: Whether the position falls within the inset footprint.
         """
-        world_offset = Point2(x=position.x - shelf.pose.x, y=position.y - shelf.pose.y)
-        shelf_T_world = HomogeneousTransformationMatrix.from_xyz_rpy(
+        world_offset = CartesianPoint2Dimensional(
+            x=position.x - shelf.pose.x, y=position.y - shelf.pose.y
+        )
+        shelf_T_world = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
             yaw=-float(shelf.pose.yaw)
         )
         local_offset = world_offset.transform(shelf_T_world)
@@ -504,10 +508,10 @@ class ShelfExtractor:
         content_frame_yaw_radians = RelationalCircuitExperimentShelf.content_frame_yaw(
             float(shelf.pose.yaw)
         )
-        world_offset = Point2(
+        world_offset = CartesianPoint2Dimensional(
             x=object_.pose.x - shelf.pose.x, y=object_.pose.y - shelf.pose.y
         )
-        content_T_world = HomogeneousTransformationMatrix.from_xyz_rpy(
+        content_T_world = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
             yaw=-content_frame_yaw_radians
         )
         local_offset = world_offset.transform(content_T_world)
@@ -517,7 +521,7 @@ class ShelfExtractor:
         return RelationalCircuitExperimentObject2D(
             object_type=object_.object_type,
             scale=object_.scale,
-            pose=Pose2D.from_xy_yaw(
+            pose=Pose2Dimensional.from_xy_yaw(
                 x=local_offset.x, y=local_offset.y, yaw=yaw_radians
             ),
             source_id=object_.source_id,
@@ -619,7 +623,7 @@ class ShelfExtractor:
             for object_ in members
             if object_.position_is_mesh_corrected
             and ShelfExtractor._is_within_shelf_footprint(
-                Point2(x=object_.pose.x, y=object_.pose.y),
+                CartesianPoint2Dimensional(x=object_.pose.x, y=object_.pose.y),
                 shelf,
                 maximum_relative_x,
                 maximum_relative_y,
@@ -642,8 +646,9 @@ class ShelfExtractor:
 
         ordered_groups = sorted(
             objects_by_label.values(),
-            key=lambda objects: sum(float(object_.pose.z) for object_ in objects)
-            / len(objects),
+            key=lambda objects: (
+                sum(float(object_.pose.z) for object_ in objects) / len(objects)
+            ),
         )
         # The shelf's recorded position is its mesh's origin, so its real base and
         # top follow from where the mesh reaches around that origin.
@@ -1145,15 +1150,15 @@ def main() -> None:
     sage10k_database_uri = os.environ.get("SAGE10k_DATABASE_URI")
     processed_database_uri = os.environ.get("SAGE10K_PROCESSED_DATABASE_URI")
     scenes_root = os.environ.get("SAGE10K_SCENES_ROOT")
-    assert (
-        sage10k_database_uri is not None
-    ), "Please set the SAGE10k_DATABASE_URI environment variable."
-    assert (
-        processed_database_uri is not None
-    ), "Please set the SAGE10K_PROCESSED_DATABASE_URI environment variable."
-    assert (
-        scenes_root is not None
-    ), "Please set the SAGE10K_SCENES_ROOT environment variable."
+    assert sage10k_database_uri is not None, (
+        "Please set the SAGE10k_DATABASE_URI environment variable."
+    )
+    assert processed_database_uri is not None, (
+        "Please set the SAGE10K_PROCESSED_DATABASE_URI environment variable."
+    )
+    assert scenes_root is not None, (
+        "Please set the SAGE10K_SCENES_ROOT environment variable."
+    )
 
     Sage10kPreprocessingRun(
         sage10k_database_uri=sage10k_database_uri,

@@ -18,10 +18,10 @@ from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.exceptions import ParsingError, SimulationNotStartedError
 from semantic_digital_twin.robots.hsrb import HSRB
 from semantic_digital_twin.robots.tracy import Tracy
-from semantic_digital_twin.spatial_types.spatial_types import (
-    HomogeneousTransformationMatrix,
-    Vector3,
-    Pose,
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
+    Vector3Dimensional,
+    Pose3Dimensional,
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
@@ -40,6 +40,7 @@ from semantic_digital_twin.world_description.geometry import (
     Color,
     Cylinder,
     Mesh,
+    MeshFileFormat,
     Texture,
 )
 from semantic_digital_twin.world_description.inertial_properties import Inertial
@@ -59,6 +60,7 @@ from semantic_digital_twin.adapters.multi_sim import (
     MujocoSim,
     MujocoActuator,
     MujocoBuilder,
+    MujocoContactDimensionality,
     MujocoGeom,
     MujocoLight,
     MujocoSynchronizer,
@@ -117,17 +119,17 @@ def stop_multisim_if_running(multi_sim: MujocoSim) -> None:
 
 @pytest.fixture
 def test_urdf_1_world():
-    return URDFParser.from_file(file_path=TEST_URDF_1).parse()
+    return URDFParser.from_file(file_path=TEST_URDF_1).create_world()
 
 
 @pytest.fixture
 def test_mjcf_1_world():
-    return MJCFParser(TEST_MJCF_1).parse()
+    return MJCFParser(TEST_MJCF_1).create_world()
 
 
 @pytest.fixture
 def test_mjcf_2_world():
-    return MJCFParser(TEST_MJCF_2).parse()
+    return MJCFParser(TEST_MJCF_2).create_world()
 
 
 def test_every_simulation_saves_its_world_to_a_file_of_its_own(tmp_path):
@@ -190,7 +192,7 @@ def test_world_multi_sim_in_5s(test_urdf_1_world):
 
 def test_apartment_multi_sim_in_5s():
     try:
-        test_urdf_2_world = URDFParser.from_file(file_path=TEST_URDF_2).parse()
+        test_urdf_2_world = URDFParser.from_file(file_path=TEST_URDF_2).create_world()
     except ParsingError:
         pytest.skip("Skipping HSRB krrood_test due to URDF parsing error.")
 
@@ -227,13 +229,13 @@ def test_world_multi_sim_with_change(test_urdf_1_world):
         start_time = time.time()
 
         new_body = Body(name=PrefixedName("test_body"))
-        box_origin = HomogeneousTransformationMatrix.from_xyz_rpy(
+        box_origin = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
             x=0.2, y=0.4, z=3.0, roll=0, pitch=0.5, yaw=0, reference_frame=new_body
         )
         box = Box(
             origin=box_origin,
             scale=Scale(1.0, 1.5, 0.5),
-            color=Color(1.0, 0.0, 0.0, 1.0),
+            color=Color.from_rgba(red=1.0, green=0.0, blue=0.0, opacity=1.0),
         )
         new_body.collision = ShapeCollection([box], reference_frame=new_body)
 
@@ -255,8 +257,10 @@ def test_world_multi_sim_with_change(test_urdf_1_world):
         region = Region(name=PrefixedName("test_region"))
         region_box = Box(
             scale=Scale(0.1, 0.5, 0.2),
-            origin=HomogeneousTransformationMatrix.from_xyz_rpy(reference_frame=region),
-            color=Color(0.0, 1.0, 0.0, 0.8),
+            origin=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+                reference_frame=region
+            ),
+            color=Color.from_rgba(red=0.0, green=1.0, blue=0.0, opacity=0.8),
         )
         region.area = ShapeCollection([region_box], reference_frame=region)
 
@@ -266,7 +270,7 @@ def test_world_multi_sim_with_change(test_urdf_1_world):
                 FixedConnection(
                     parent=test_urdf_1_world.root,
                     child=region,
-                    parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                         z=0.5
                     ),
                 )
@@ -620,7 +624,7 @@ def test_a_cylinder_keeps_its_size_through_a_round_trip(tmp_path):
         world=_world_with_one_cylinder(cylinder), file_path=str(tmp_path / "scene.xml")
     )
 
-    parsed_world = MJCFParser(str(tmp_path / "scene.xml")).parse()
+    parsed_world = MJCFParser(str(tmp_path / "scene.xml")).create_world()
 
     [parsed_cylinder] = parsed_world.get_body_by_name("link").collision.shapes
     assert (parsed_cylinder.width, parsed_cylinder.height) == pytest.approx(
@@ -648,7 +652,7 @@ def test_contact_declarations_and_gravity_compensation_survive_a_round_trip(tmp_
 
     builder = MujocoBuilder()
     builder.build_world(world=world, file_path=str(tmp_path / "scene.xml"))
-    parsed_world = MJCFParser(str(tmp_path / "scene.xml")).parse()
+    parsed_world = MJCFParser(str(tmp_path / "scene.xml")).create_world()
 
     parsed_link = parsed_world.get_body_by_name("link")
     [parsed_shape] = parsed_link.collision.shapes
@@ -656,6 +660,58 @@ def test_contact_declarations_and_gravity_compensation_survive_a_round_trip(tmp_
         GravityCompensation(fraction=0.5)
     )
     assert parsed_shape.get_simulator_property_of_type(ContactParameters) == contact
+
+
+def test_a_shape_with_contact_parameters_resolves_all_of_its_friction(tmp_path):
+    """
+    MuJoCo ignores the torsional and rolling friction of a contact resolved in fewer
+    dimensions, which would leave a held object free to pivot between the fingers.
+    """
+    world = World()
+    with world.modify_world():
+        root = Body(name=PrefixedName("root"))
+        world.add_body(root)
+        link = Body(
+            name=PrefixedName("link"),
+            collision=ShapeCollection([Box(scale=Scale(1, 1, 1))]),
+        )
+        ContactParameters.create_for_grasped_object().apply_to([link])
+        world.add_kinematic_structure_entity(link)
+        world.add_connection(FixedConnection(parent=root, child=link))
+
+    builder = MujocoBuilder()
+    builder.build_world(world=world, file_path=str(tmp_path / "scene.xml"))
+
+    [geom] = [
+        geom
+        for body in builder.spec.bodies
+        for geom in body.geoms
+        if body.name == "link"
+    ]
+    assert geom.condim == MujocoContactDimensionality.SLIDING_TORSIONAL_AND_ROLLING
+
+
+def test_a_parsed_geom_resolves_its_contacts_in_the_dimensions_it_declared(tmp_path):
+    scene = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "dataset",
+        "contact_dimensionality_scene.xml",
+    )
+    declared = mujoco.MjSpec.from_file(scene)
+    builder = MujocoBuilder()
+    builder.build_world(
+        world=MJCFParser(scene).create_world(), file_path=str(tmp_path / "scene.xml")
+    )
+
+    assert {
+        body.name: [geom.condim for geom in body.geoms]
+        for body in builder.spec.bodies
+        if body.geoms
+    } == {
+        body.name: [geom.condim for geom in body.geoms]
+        for body in declared.bodies
+        if body.geoms
+    }
 
 
 def test_a_simulated_body_weighs_what_its_inertial_says_not_what_its_shapes_would():
@@ -745,7 +801,7 @@ def test_builder_writes_a_negative_multiplier_mimic_joints_own_range(tmp_path):
                 name=PrefixedName("knuckle_joint"),
                 parent=root,
                 child=knuckle,
-                axis=Vector3.Z(reference_frame=knuckle),
+                axis=Vector3Dimensional.Z(reference_frame=knuckle),
                 raw_dof=degree_of_freedom,
             )
         )
@@ -754,7 +810,7 @@ def test_builder_writes_a_negative_multiplier_mimic_joints_own_range(tmp_path):
                 name=PrefixedName("mirrored_knuckle_joint"),
                 parent=root,
                 child=mirrored_knuckle,
-                axis=Vector3.Z(reference_frame=mirrored_knuckle),
+                axis=Vector3Dimensional.Z(reference_frame=mirrored_knuckle),
                 raw_dof=degree_of_freedom,
                 multiplier=-1.0,
             )
@@ -771,7 +827,7 @@ def test_builder_writes_a_negative_multiplier_mimic_joints_own_range(tmp_path):
 
 def test_mujoco_with_tracy_dae_files():
     try:
-        dae_world = URDFParser.from_file(file_path=TEST_URDF_TRACY).parse()
+        dae_world = URDFParser.from_file(file_path=TEST_URDF_TRACY).create_world()
     except ParsingError:
         pytest.skip("Skipping tracy test due to URDF parsing error.")
 
@@ -805,8 +861,8 @@ def test_mujocosim_world_with_added_objects(test_urdf_1_world):
         "milk.stl",
     )
     stl_parser = STLParser(milk_path)
-    mesh_world = stl_parser.parse()
-    transformation = HomogeneousTransformationMatrix.from_xyz_rpy(
+    mesh_world = stl_parser.create_world()
+    transformation = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
         x=0.5, reference_frame=test_urdf_1_world.root
     )
 
@@ -834,13 +890,13 @@ def test_mujocosim_world_with_added_objects(test_urdf_1_world):
 def test_spawn_body_with_connections():
     def spawn_robot_body(spawn_world: World) -> Body:
         spawn_body = Body(name=PrefixedName("robot"))
-        box_origin = HomogeneousTransformationMatrix.from_xyz_rpy(
+        box_origin = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
             x=0, y=0, z=0.5, roll=0, pitch=0, yaw=0, reference_frame=spawn_body
         )
         box = Box(
             origin=box_origin,
             scale=Scale(0.4, 0.4, 1.0),
-            color=Color(0.9, 0.9, 0.9, 1.0),
+            color=Color.from_rgba(red=0.9, green=0.9, blue=0.9, opacity=1.0),
         )
         spawn_body.collision = ShapeCollection([box], reference_frame=spawn_body)
 
@@ -856,20 +912,22 @@ def test_spawn_body_with_connections():
         cylinder = Cylinder(
             width=0.2,
             height=0.1,
-            color=Color(0.9, 0.1, 0.1, 1.0),
+            color=Color.from_rgba(red=0.9, green=0.1, blue=0.1, opacity=1.0),
         )
         spawn_left_shoulder_body.collision = ShapeCollection(
             [cylinder], reference_frame=spawn_left_shoulder_body
         )
         dof = DegreeOfFreedom(name=PrefixedName("left_shoulder_joint"))
-        left_shoulder_origin = HomogeneousTransformationMatrix.from_xyz_quaternion(
-            pos_x=0,
-            pos_y=0.3,
-            pos_z=0.9,
-            quat_w=0.707,
-            quat_x=0.707,
-            quat_y=0,
-            quat_z=0,
+        left_shoulder_origin = (
+            HomogeneousTransformationMatrix3Dimensional.from_xyz_quaternion(
+                pos_x=0,
+                pos_y=0.3,
+                pos_z=0.9,
+                quat_w=0.707,
+                quat_x=0.707,
+                quat_y=0,
+                quat_z=0,
+            )
         )
 
         with spawn_world.modify_world():
@@ -879,7 +937,7 @@ def test_spawn_body_with_connections():
                     name=dof.name,
                     parent=root_body,
                     child=spawn_left_shoulder_body,
-                    axis=Vector3.Z(reference_frame=spawn_left_shoulder_body),
+                    axis=Vector3Dimensional.Z(reference_frame=spawn_left_shoulder_body),
                     raw_dof=dof,
                     parent_T_connection_expression=left_shoulder_origin,
                 )
@@ -889,20 +947,22 @@ def test_spawn_body_with_connections():
         cylinder = Cylinder(
             width=0.2,
             height=0.1,
-            color=Color(0.9, 0.1, 0.1, 1.0),
+            color=Color.from_rgba(red=0.9, green=0.1, blue=0.1, opacity=1.0),
         )
         spawn_right_shoulder_body.collision = ShapeCollection(
             [cylinder], reference_frame=spawn_right_shoulder_body
         )
         dof = DegreeOfFreedom(name=PrefixedName("right_shoulder_joint"))
-        right_shoulder_origin = HomogeneousTransformationMatrix.from_xyz_quaternion(
-            pos_x=0,
-            pos_y=-0.3,
-            pos_z=0.9,
-            quat_w=0.707,
-            quat_x=0.707,
-            quat_y=0,
-            quat_z=0,
+        right_shoulder_origin = (
+            HomogeneousTransformationMatrix3Dimensional.from_xyz_quaternion(
+                pos_x=0,
+                pos_y=-0.3,
+                pos_z=0.9,
+                quat_w=0.707,
+                quat_x=0.707,
+                quat_y=0,
+                quat_z=0,
+            )
         )
 
         with spawn_world.modify_world():
@@ -912,7 +972,9 @@ def test_spawn_body_with_connections():
                     name=dof.name,
                     parent=root_body,
                     child=spawn_right_shoulder_body,
-                    axis=Vector3.Z(reference_frame=spawn_right_shoulder_body),
+                    axis=Vector3Dimensional.Z(
+                        reference_frame=spawn_right_shoulder_body
+                    ),
                     raw_dof=dof,
                     parent_T_connection_expression=right_shoulder_origin,
                 )
@@ -962,7 +1024,7 @@ def test_body_frame_excludes_joint_state_at_build_time():
     # A tip offset from the joint axis, so a rotation actually moves its position
     # (the joint child sits on the axis and would not reveal the bug).
     tip_link = Body(name=PrefixedName("tip"))
-    rotated_origin = HomogeneousTransformationMatrix.from_xyz_quaternion(
+    rotated_origin = HomogeneousTransformationMatrix3Dimensional.from_xyz_quaternion(
         pos_x=0.3,
         pos_y=0.0,
         pos_z=0.9,
@@ -971,7 +1033,9 @@ def test_body_frame_excludes_joint_state_at_build_time():
         quat_y=0.0,
         quat_z=0.0,
     )
-    tip_offset = HomogeneousTransformationMatrix.from_xyz_rpy(x=0.5, y=0.2, z=0.0)
+    tip_offset = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+        x=0.5, y=0.2, z=0.0
+    )
     rotated_joint_dof = DegreeOfFreedom(name=PrefixedName("rotated_joint"))
     with world.modify_world():
         world.add_body(base_body)
@@ -981,7 +1045,7 @@ def test_body_frame_excludes_joint_state_at_build_time():
                 name=rotated_joint_dof.name,
                 parent=base_body,
                 child=rotated_link,
-                axis=Vector3.Z(reference_frame=rotated_link),
+                axis=Vector3Dimensional.Z(reference_frame=rotated_link),
                 raw_dof=rotated_joint_dof,
                 parent_T_connection_expression=rotated_origin,
             )
@@ -1038,11 +1102,11 @@ def test_world_sim_state_sync():
         plane_body.collision = ShapeCollection(
             [
                 Box(
-                    origin=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    origin=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                         reference_frame=plane_body
                     ),
                     scale=Scale(2.0, 2.0, plane_half_thickness * 2),
-                    color=Color(1.0, 1.0, 0.0, 1.0),
+                    color=Color.from_rgba(red=1.0, green=1.0, blue=0.0, opacity=1.0),
                 )
             ],
             reference_frame=plane_body,
@@ -1052,13 +1116,13 @@ def test_world_sim_state_sync():
         falling_box.collision = ShapeCollection(
             [
                 Box(
-                    origin=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    origin=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                         reference_frame=falling_box
                     ),
                     scale=Scale(
                         box_half_size * 2, box_half_size * 2, box_half_size * 2
                     ),
-                    color=Color(1.0, 0.0, 0.0, 1.0),
+                    color=Color.from_rgba(red=1.0, green=0.0, blue=0.0, opacity=1.0),
                 )
             ],
             reference_frame=falling_box,
@@ -1090,15 +1154,17 @@ def test_world_sim_state_sync():
         falling_box, box_connection = spawn_state_sync_scene(world)
 
         body_names = multi_sim.simulator.get_all_body_names().result
-        assert {"ground_plane", "falling_box"}.issubset(
-            body_names
-        ), f"scene bodies were not spawned in the simulator; bodies={body_names}"
+        assert {"ground_plane", "falling_box"}.issubset(body_names), (
+            f"scene bodies were not spawned in the simulator; bodies={body_names}"
+        )
 
-        box_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
-            x=float(init_pos[0]),
-            y=float(init_pos[1]),
-            z=float(init_pos[2]),
-            reference_frame=falling_box,
+        box_connection.origin = (
+            HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+                x=float(init_pos[0]),
+                y=float(init_pos[1]),
+                z=float(init_pos[2]),
+                reference_frame=falling_box,
+            )
         )
         time.sleep(2.5)
 
@@ -1468,11 +1534,11 @@ def _build_box_on_plane_world() -> BoxOnPlaneWorld:
         ground_plane.collision = ShapeCollection(
             [
                 Box(
-                    origin=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    origin=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                         reference_frame=ground_plane
                     ),
                     scale=Scale(2.0, 2.0, 0.1),
-                    color=Color(1.0, 1.0, 0.0, 1.0),
+                    color=Color.from_rgba(red=1.0, green=1.0, blue=0.0, opacity=1.0),
                 )
             ],
             reference_frame=ground_plane,
@@ -1483,11 +1549,11 @@ def _build_box_on_plane_world() -> BoxOnPlaneWorld:
         box.collision = ShapeCollection(
             [
                 Box(
-                    origin=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    origin=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                         reference_frame=box
                     ),
                     scale=Scale(0.2, 0.2, 0.2),
-                    color=Color(1.0, 0.0, 0.0, 1.0),
+                    color=Color.from_rgba(red=1.0, green=0.0, blue=0.0, opacity=1.0),
                 )
             ],
             reference_frame=box,
@@ -1532,20 +1598,22 @@ def test_pose_written_during_sim_to_world_pull_reaches_the_simulator():
 
     def blocking_read(connection, qpos_address):
         pull_is_inside.set()
-        assert let_pull_finish.wait(
-            timeout=10
-        ), "test did not release the sim → world pull"
+        assert let_pull_finish.wait(timeout=10), (
+            "test did not release the sim → world pull"
+        )
         return original_read(connection, qpos_address)
 
     write_failed = []
 
     def write_new_pose():
         try:
-            box_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
-                x=float(target_xyz[0]),
-                y=float(target_xyz[1]),
-                z=float(target_xyz[2]),
-                reference_frame=box,
+            box_connection.origin = (
+                HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+                    x=float(target_xyz[0]),
+                    y=float(target_xyz[1]),
+                    z=float(target_xyz[2]),
+                    reference_frame=box,
+                )
             )
         except BaseException as error:  # surfaced on the main thread below
             write_failed.append(error)
@@ -1623,11 +1691,13 @@ def test_pose_write_waits_for_the_running_physics_step():
 
     def write_new_pose():
         try:
-            box_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
-                x=float(target_xyz[0]),
-                y=float(target_xyz[1]),
-                z=float(target_xyz[2]),
-                reference_frame=box,
+            box_connection.origin = (
+                HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+                    x=float(target_xyz[0]),
+                    y=float(target_xyz[1]),
+                    z=float(target_xyz[2]),
+                    reference_frame=box,
+                )
             )
         except BaseException as error:  # surfaced on the main thread below
             write_failed.append(error)
@@ -1697,11 +1767,11 @@ def test_prebuilt_world_multiple_free_bodies_start_at_authored_poses():
         ground_plane.collision = ShapeCollection(
             [
                 Box(
-                    origin=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    origin=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                         reference_frame=ground_plane
                     ),
                     scale=Scale(2.0, 2.0, 0.1),
-                    color=Color(1.0, 1.0, 0.0, 1.0),
+                    color=Color.from_rgba(red=1.0, green=1.0, blue=0.0, opacity=1.0),
                 )
             ],
             reference_frame=ground_plane,
@@ -1710,7 +1780,7 @@ def test_prebuilt_world_multiple_free_bodies_start_at_authored_poses():
             FixedConnection(
                 parent=root,
                 child=ground_plane,
-                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                     z=-0.05, reference_frame=root
                 ),
             )
@@ -1721,13 +1791,15 @@ def test_prebuilt_world_multiple_free_bodies_start_at_authored_poses():
             cube.collision = ShapeCollection(
                 [
                     Box(
-                        origin=HomogeneousTransformationMatrix.from_xyz_rpy(
+                        origin=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                             reference_frame=cube
                         ),
                         scale=Scale(
                             box_half_size * 2, box_half_size * 2, box_half_size * 2
                         ),
-                        color=Color(0.9, 0.3, 0.3, 1.0),
+                        color=Color.from_rgba(
+                            red=0.9, green=0.3, blue=0.3, opacity=1.0
+                        ),
                     )
                 ],
                 reference_frame=cube,
@@ -1737,7 +1809,7 @@ def test_prebuilt_world_multiple_free_bodies_start_at_authored_poses():
                     world=world,
                     parent=root,
                     child=cube,
-                    parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                         x=float(cube_offset[0]),
                         y=float(cube_offset[1]),
                         z=float(cube_offset[2]),
@@ -1770,6 +1842,60 @@ def test_prebuilt_world_multiple_free_bodies_start_at_authored_poses():
         stop_multisim_if_running(multi_sim)
 
 
+# %% meshes written as glb
+
+
+def _textured_tetrahedron_as_glb(directory, texture_color: tuple[int, int, int]) -> str:
+    """
+    Writes a tetrahedron painted with a one-coloured texture as a GLB file.
+
+    :param directory: The directory to write the mesh and its texture into.
+    :param texture_color: The colour of the texture image.
+    :return: The path of the written mesh.
+    """
+    texture_file = directory / "wood.png"
+    Image.new("RGB", (4, 4), color=texture_color).save(texture_file)
+    tetrahedron = trimesh.Trimesh(
+        vertices=[[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]],
+        faces=[[0, 1, 2], [0, 1, 3], [0, 2, 3], [1, 2, 3]],
+        process=False,
+    )
+    corner_uv = numpy.tile([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], (4, 1))
+    return Mesh.from_trimesh(
+        mesh=tetrahedron,
+        uv=corner_uv,
+        texture_file_path=str(texture_file),
+        directory=directory,
+        file_type=MeshFileFormat.GLB,
+    ).filename
+
+
+def test_meshes_written_as_glb_compile(tmp_path):
+    box = trimesh.creation.box(extents=(1.0, 1.0, 1.0))
+    glb_file = Mesh.from_trimesh(
+        mesh=box, directory=tmp_path, file_type=MeshFileFormat.GLB
+    ).filename
+    world = _world_with_meshes(visual_file=glb_file, collision_file=glb_file)
+    builder = MujocoBuilder()
+    builder.build_world(world=world, file_path=str(tmp_path / "scene.xml"))
+
+    model = builder.spec.compile()
+
+    assert model.nmesh == len(builder.spec.meshes)
+
+
+def test_a_textured_mesh_written_as_glb_keeps_its_texture(tmp_path):
+    texture_color = (120, 60, 20)
+    glb_file = _textured_tetrahedron_as_glb(tmp_path, texture_color=texture_color)
+    world = _world_with_meshes(visual_file=glb_file, collision_file=glb_file)
+    builder = MujocoBuilder()
+
+    builder.build_world(world=world, file_path=str(tmp_path / "scene.xml"))
+
+    [texture] = builder.spec.textures
+    assert Image.open(texture.file).convert("RGB").getpixel((0, 0)) == texture_color
+
+
 # %% stepped simulation
 
 
@@ -1783,7 +1909,7 @@ def falling_box_world() -> World:
         geometry = ShapeCollection(
             [
                 Box(
-                    origin=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    origin=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                         reference_frame=box
                     ),
                     scale=Scale(0.1, 0.1, 0.1),
@@ -1797,7 +1923,7 @@ def falling_box_world() -> World:
                 world=world,
                 parent=root,
                 child=box,
-                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                     z=1.0, reference_frame=root
                 ),
             )

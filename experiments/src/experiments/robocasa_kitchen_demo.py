@@ -38,9 +38,6 @@ from semantic_digital_twin.adapters.robocasa_dataset.mujoco_compat import (
 with robocasa_version_assertions_relaxed():
     from robocasa.models.scenes.scene_registry import LayoutType, StyleType
 
-from coraplex.datastructures.dataclasses import Context
-from coraplex.execution_environment import kinematically_simulated_robot
-from coraplex.plans.factories import sequential
 from coraplex.plans.failures import PlanFailure
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.robot_plans.actions.core.robot_body import (
@@ -58,11 +55,16 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Apple,
     CounterTop,
 )
-from semantic_digital_twin.spatial_types.spatial_types import (
-    HomogeneousTransformationMatrix,
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import OmniDrive
+from coraplex.plans.context_extensions import RobotAccess
+from cramph.context import StatechartContext
+from coraplex.plans.executors import KinematicallySimulatedPlanExecutor
+from cramph.statechart import Statechart
+from cramph.composites import Sequence
 
 try:
     import rclpy
@@ -343,18 +345,18 @@ def _spawn_robot_and_prepare_pick_up(
 
     pr2_world = URDFParser.from_file(
         "package://iai_pr2_description/robots/pr2_with_ft2_cableguide.xacro"
-    ).parse()
+    ).create_world()
     with world.modify_world():
         drive = OmniDrive.create_with_dofs(
             parent=world.root, child=pr2_world.root, world=world
         )
         world.merge_world(pr2_world, drive)
-        drive.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
+        drive.origin = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
             place_x, robot_y, 0.0, 0.0, 0.0, robot_yaw
         )
         world.merge_world_at_pose(
             apple_world,
-            HomogeneousTransformationMatrix.from_xyz_quaternion(
+            HomogeneousTransformationMatrix3Dimensional.from_xyz_quaternion(
                 place_x,
                 apple_y,
                 apple_z,
@@ -365,22 +367,19 @@ def _spawn_robot_and_prepare_pick_up(
         world.add_semantic_annotation(Apple(root=world.get_body_by_name(apple_name)))
 
     pr2 = PR2.from_world(world)
-    context = Context(world=world, robot=pr2, _debug=False, ros_node=None)
-    context.evaluate_conditions = False
 
     apple = world.get_body_by_name(apple_name)
     apple_annotation = world.get_semantic_annotations_by_type(Apple)[0]
-    plan = sequential(
-        [
-            ParkArmsAction(pr2.all_arms),
-            MoveTorsoAction(TorsoState.HIGH),
+    plan = Sequence(
+        nodes=[
+            ParkArmsAction(arms=pr2.all_arms),
+            MoveTorsoAction(torso_state=TorsoState.HIGH),
             PickUpAction(
-                apple_annotation.grasp_candidates()[0],
-                pr2.right_arm,
+                grasp=apple_annotation.grasp_candidates()[0],
+                arm=pr2.right_arm,
             ),
-        ],
-        context=context,
-    ).plan
+        ]
+    )
 
     def perform() -> None:
         height_before = world.compute_forward_kinematics(world.root, apple).to_np()[
@@ -388,8 +387,15 @@ def _spawn_robot_and_prepare_pick_up(
         ]
         logger.info("Spawned PR2; parking arms, raising torso, picking up an apple ...")
         try:
-            with kinematically_simulated_robot:
-                plan.perform()
+            executor = KinematicallySimulatedPlanExecutor(
+                context=StatechartContext.with_extensions(
+                    world=world, extensions=[RobotAccess(robot=pr2)]
+                )
+            )
+            statechart = Statechart(context=executor.context)
+            statechart.add_node(node=plan)
+            executor.compile(statechart=statechart)
+            executor.execute()
         except PlanFailure as failure:
             logger.warning("Robot could not complete the pick-up: %s", failure)
             return

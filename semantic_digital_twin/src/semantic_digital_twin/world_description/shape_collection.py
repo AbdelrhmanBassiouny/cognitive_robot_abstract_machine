@@ -15,9 +15,9 @@ from typing_extensions import TYPE_CHECKING
 from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json, from_json
 from random_events.product_algebra import Event, SimpleEvent
 from semantic_digital_twin.exceptions import MismatchingWorld
-from semantic_digital_twin.spatial_types import (
-    HomogeneousTransformationMatrix,
-    Point3,
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
+    CartesianPoint3Dimensional,
 )
 from semantic_digital_twin.world_description.geometry import (
     Shape,
@@ -161,7 +161,7 @@ class ShapeCollection(SubclassJSONSerializer):
         return concatenate(transformed_meshes)
 
     def as_bounding_box_collection_at_origin(
-        self, origin: HomogeneousTransformationMatrix
+        self, origin: HomogeneousTransformationMatrix3Dimensional
     ) -> BoundingBoxCollection:
         """
         Provides the bounding box collection for this entity given a transformation
@@ -195,7 +195,7 @@ class ShapeCollection(SubclassJSONSerializer):
         :returns: A collection of bounding boxes in world-space coordinates.
         """
         return self.as_bounding_box_collection_at_origin(
-            HomogeneousTransformationMatrix(reference_frame=reference_frame)
+            HomogeneousTransformationMatrix3Dimensional(reference_frame=reference_frame)
         )
 
     def to_json(self, **kwargs) -> dict[str, Any]:
@@ -205,10 +205,10 @@ class ShapeCollection(SubclassJSONSerializer):
         }
 
     @classmethod
-    def _from_json(cls, data: dict[str, Any], **kwargs) -> Self:
+    def _from_json(cls, *, data: dict[str, Any], **kwargs) -> Self:
         """
-        The collection belongs to the frame all its shapes are expressed in, which is the
-        entity it was written from, such as a body whose shapes are replaced.
+        The collection belongs to the frame all its shapes are expressed in, which is
+        the entity it was written from, such as a body whose shapes are replaced.
         """
         shapes = [from_json(d, **kwargs) for d in data["shapes"]]
         frames = {
@@ -218,14 +218,14 @@ class ShapeCollection(SubclassJSONSerializer):
         reference_frame = next(iter(frames.values())) if len(frames) == 1 else None
         return cls(shapes=shapes, reference_frame=reference_frame)
 
-    def center_of_mass_in_world(self) -> Point3:
+    def center_of_mass_in_world(self) -> CartesianPoint3Dimensional:
         """
         :return: The center of mass of this shape collection in the world coordinate frame.
         """
         # Center of mass in the body's local frame (collision geometry)
         com_local: np.ndarray[np.float64] = self.combined_mesh.center_mass  # (3,)
         # Transform to world frame using the body's global pose
-        com = Point3(
+        com = CartesianPoint3Dimensional(
             x=com_local[0],
             y=com_local[1],
             z=com_local[2],
@@ -237,21 +237,25 @@ class ShapeCollection(SubclassJSONSerializer):
     def scale(self):
         return (
             self.as_bounding_box_collection_at_origin(
-                HomogeneousTransformationMatrix(reference_frame=self.reference_frame)
+                HomogeneousTransformationMatrix3Dimensional(
+                    reference_frame=self.reference_frame
+                )
             )
             .bounding_box()
             .scale
         )
 
     @property
-    def min_point(self) -> Point3:
-        return Point3.from_iterable(
+    def min_point(self) -> CartesianPoint3Dimensional:
+        return CartesianPoint3Dimensional.from_iterable(
             self.combined_mesh.bounds[0], reference_frame=self.reference_frame
         )
 
     @property
-    def max_point(self) -> Point3:
-        return Point3.from_iterable(self.combined_mesh.bounds[1], self.reference_frame)
+    def max_point(self) -> CartesianPoint3Dimensional:
+        return CartesianPoint3Dimensional.from_iterable(
+            self.combined_mesh.bounds[1], self.reference_frame
+        )
 
 
 @dataclass
@@ -275,9 +279,9 @@ class BoundingBoxCollection(Generic[BoxT, PointT], ShapeCollection):
         if not self.reference_frame:
             raise ValueError("BoundingBoxCollection must have a reference frame.")
         for box in self.bounding_boxes:
-            assert (
-                box.origin.reference_frame == self.reference_frame
-            ), "All bounding boxes must have the same reference frame."
+            assert box.origin.reference_frame == self.reference_frame, (
+                "All bounding boxes must have the same reference frame."
+            )
 
     def __iter__(self) -> Iterator[BoxT]:
         return iter(self.bounding_boxes)
@@ -311,9 +315,9 @@ class BoundingBoxCollection(Generic[BoxT, PointT], ShapeCollection):
         :param other: The other bounding box collection.
         :return: The merged bounding box collection.
         """
-        assert (
-            self.reference_frame == other.reference_frame
-        ), "The reference frames of the bounding box collections must be the same."
+        assert self.reference_frame == other.reference_frame, (
+            "The reference frames of the bounding box collections must be the same."
+        )
         return type(self)(
             reference_frame=self.reference_frame,
             shapes=self.bounding_boxes + other.bounding_boxes,
@@ -372,9 +376,13 @@ class BoundingBoxCollection(Generic[BoxT, PointT], ShapeCollection):
                 np.array([interval.upper for interval in combination])
                 - origin_coordinates
             )
-            origin = HomogeneousTransformationMatrix.from_point_rotation_matrix(
-                point=Point3.from_iterable(_padded_to_3d(origin_coordinates)),
-                reference_frame=reference_frame,
+            origin = (
+                HomogeneousTransformationMatrix3Dimensional.from_point_rotation_matrix(
+                    point=CartesianPoint3Dimensional.from_iterable(
+                        _padded_to_3d(origin_coordinates)
+                    ),
+                    reference_frame=reference_frame,
+                )
             )
             box = box_type.from_array_bounds(lower, upper, origin)
             if not keep_surface and any(
@@ -421,9 +429,9 @@ class BoundingBoxCollection(Generic[BoxT, PointT], ShapeCollection):
         if len(shapes) == 0:
             return cls(shapes=[])
         for shape in shapes:
-            assert (
-                shape.origin.reference_frame == shapes[0].origin.reference_frame
-            ), "All shapes must have the same reference frame."
+            assert shape.origin.reference_frame == shapes[0].origin.reference_frame, (
+                "All shapes must have the same reference frame."
+            )
 
         local_bbs = [shape.local_frame_bounding_box for shape in shapes]
         return cls(
@@ -448,7 +456,9 @@ class BoundingBoxCollection(Generic[BoxT, PointT], ShapeCollection):
         return box_type.from_array_bounds(
             lower,
             upper,
-            HomogeneousTransformationMatrix(reference_frame=self.reference_frame),
+            HomogeneousTransformationMatrix3Dimensional(
+                reference_frame=self.reference_frame
+            ),
         )
 
 

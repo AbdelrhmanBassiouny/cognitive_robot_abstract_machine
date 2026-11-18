@@ -39,15 +39,15 @@ from semantic_digital_twin.world_description.geometry import Box, Scale, Color
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection, BoundingBoxCollection
 from semantic_digital_twin.world_description.world_entity import Body
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix3Dimensional
 from semantic_digital_twin.world import World
 
 box_world = World()
 
 with box_world.modify_world():
     box = Body(name=PrefixedName("box"), collision=ShapeCollection([Box(scale=Scale(0.5, 0.5, 0.5),
-                                                        color=Color(1., 1., 1., 1.),
-                                                        origin=HomogeneousTransformationMatrix.from_xyz_rpy(0,0,0,0,0,0),)],
+                                                        color=Color.from_rgba(red=1., green=1., blue=1., opacity=1.),
+                                                        origin=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(0,0,0,0,0,0),)],
                                                         ))
     box_world.add_kinematic_structure_entity(box)
     
@@ -64,9 +64,9 @@ from semantic_digital_twin.world_description.geometry import VolumetricBoundingB
 
 search_space = BoundingBoxCollection([VolumetricBoundingBox(min_x=-1, max_x=1,
                            min_y=-1, max_y=1,
-                           min_z=0.1, max_z=0.2, origin=HomogeneousTransformationMatrix(reference_frame=box_world.root))], box_world.root)
+                           min_z=0.1, max_z=0.2, origin=HomogeneousTransformationMatrix3Dimensional(reference_frame=box_world.root))], box_world.root)
                            
-graph_of_bounding_boxes = VolumetricGraphOfBoundingBoxes.free_space_from_world(box_world, search_space=search_space)
+graph_of_bounding_boxes = VolumetricGraphOfBoundingBoxes.free_space_from_world(world=box_world, search_space=search_space)
 ```
 
 Let's have a look at the free space constructed. We can see that it is a rectangular catwalk around the obstacle.
@@ -90,10 +90,10 @@ graph_of_bounding_boxes.draw()
 Let's use graph theory to find a path!
 
 ```{code-cell} ipython3
-from semantic_digital_twin.spatial_types import Point3
+from krrood_spatial_math.spatial_types import CartesianPoint3Dimensional
 
-start = Point3(-0.75, 0, 0.15, reference_frame=box_world.root)
-goal = Point3(0.75, 0, 0.15, reference_frame=box_world.root)
+start = CartesianPoint3Dimensional(-0.75, 0, 0.15, reference_frame=box_world.root)
+goal = CartesianPoint3Dimensional(0.75, 0, 0.15, reference_frame=box_world.root)
 path = graph_of_bounding_boxes.path_from_to(start, goal)
 print("A potential path is", [(point.x, point.y) for point in path])
 ```
@@ -110,12 +110,12 @@ from semantic_digital_twin.adapters.urdf import URDFParser
 apartment = os.path.realpath(os.path.join(Path(files("semantic_digital_twin")).parent.parent, "resources", "urdf", "kitchen.urdf"))
 
 apartment_parser = URDFParser.from_file(apartment)
-world = apartment_parser.parse()
+world = apartment_parser.create_world()
 
 search_space = BoundingBoxCollection([VolumetricBoundingBox(min_x=-2, max_x=2,
                            min_y=-2, max_y=2,
-                           min_z=0., max_z=2, origin=HomogeneousTransformationMatrix(reference_frame=world.root))], world.root)
-graph_of_bounding_boxes = VolumetricGraphOfBoundingBoxes.free_space_from_world(world, search_space=search_space)
+                           min_z=0., max_z=2, origin=HomogeneousTransformationMatrix3Dimensional(reference_frame=world.root))], world.root)
+graph_of_bounding_boxes = VolumetricGraphOfBoundingBoxes.free_space_from_world(world=world, search_space=search_space)
 ```
 
 We can now see the algebraic representation of the occupied and free space. The free space is the complement of the occupied space.
@@ -144,8 +144,8 @@ This allows the accessing of locations using a sequence of local problems put to
 Finally, let's find a way from here to there:
 
 ```{code-cell} ipython3
-start = Point3(-0.75, 0, 1.15, reference_frame=world.root)
-goal = Point3(0.75, 0, 1.15, reference_frame=world.root)
+start = CartesianPoint3Dimensional(-0.75, 0, 1.15, reference_frame=world.root)
+goal = CartesianPoint3Dimensional(0.75, 0, 1.15, reference_frame=world.root)
 path = graph_of_bounding_boxes.path_from_to(start, goal)
 print("A potential path is", [(point.x, point.y, point.z) for point in path])
 ```

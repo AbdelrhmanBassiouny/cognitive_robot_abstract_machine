@@ -18,7 +18,9 @@ from semantic_digital_twin.exceptions import (
 from semantic_digital_twin.semantic_annotations.part_whole import (
     IsPartWholeRelationship,
 )
-from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
+)
 from semantic_digital_twin.specifications.base import SpawnSpecification
 from semantic_digital_twin.specifications.connections import (
     FixedConnectionSpecification,
@@ -129,7 +131,7 @@ class SemanticAnnotationWithRootSpecification(SpawnSpecification[TSemanticAnnota
         world: World,
         name: str | None = None,
         parent: KinematicStructureEntity | None = None,
-        parent_T_self: HomogeneousTransformationMatrix | None = None,
+        parent_T_self: HomogeneousTransformationMatrix3Dimensional | None = None,
     ) -> TSemanticAnnotation:
         """
         Materialize the annotation in ``world``: spawn its root entity, attach it to
@@ -231,8 +233,8 @@ class SemanticAnnotationWithRootSpecification(SpawnSpecification[TSemanticAnnota
         return {
             wrapped_field.name: wrapped_field
             for wrapped_field in WrappedClass(
-                self.semantic_annotation_type
-            ).fields_with_metadata(IsPartWholeRelationship)
+                clazz=self.semantic_annotation_type
+            ).fields_with_metadata(metadata_type=IsPartWholeRelationship)
         }
 
     def _mount_part_specifications(

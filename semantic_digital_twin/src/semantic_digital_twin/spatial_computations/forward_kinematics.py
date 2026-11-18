@@ -16,8 +16,9 @@ from krrood.symbolic_math.symbolic_math import (
 )
 from semantic_digital_twin.callbacks.callback import ModelChangeCallback
 from semantic_digital_twin.datastructures.types import NpMatrix4x4
-from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
-from semantic_digital_twin.spatial_types.math import inverse_frame
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
+)
 from semantic_digital_twin.world_description.world_entity import (
     Connection,
     KinematicStructureEntity,
@@ -57,9 +58,9 @@ class ForwardKinematicsManager(ModelChangeCallback):
     `forward_kinematics_for_all_bodies` that corresponds to that body.
     """
 
-    root_T_kse_expression_cache: dict[UUID, HomogeneousTransformationMatrix] = field(
-        init=False, repr=False
-    )
+    root_T_kse_expression_cache: dict[
+        UUID, HomogeneousTransformationMatrix3Dimensional
+    ] = field(init=False, repr=False)
 
     body_id_to_all_fk_index: dict[UUID, int] = field(init=False, repr=False)
 
@@ -95,7 +96,7 @@ class ForwardKinematicsManager(ModelChangeCallback):
 
     def update_root_T_kse_expression_cache(self):
         self.root_T_kse_expression_cache = {
-            self._world.root.id: HomogeneousTransformationMatrix()
+            self._world.root.id: HomogeneousTransformationMatrix3Dimensional()
         }
         for parent, childs in rustworkx.bfs_successors(
             self._world.kinematic_structure, self._world.root.index
@@ -112,7 +113,7 @@ class ForwardKinematicsManager(ModelChangeCallback):
         Compiles forward kinematics expressions for fast evaluation.
         """
         all_fks = Matrix.vstack(
-            [
+            list_of_matrices=[
                 self.root_T_kse_expression_cache[body.id]
                 for body in self._world.kinematic_structure_entities
             ]
@@ -123,7 +124,9 @@ class ForwardKinematicsManager(ModelChangeCallback):
                 self._world.state.position_float_variables
             )
         )
-        self.compiled_all_fks.bind_args_to_memory_view(0, self._world.state.positions)
+        self.compiled_all_fks.bind_args_to_memory_view(
+            arg_idx=0, numpy_array=self._world.state.positions
+        )
         self.body_id_to_all_fk_index = {
             body.id: i * 4
             for i, body in enumerate(self._world.kinematic_structure_entities)
@@ -141,7 +144,7 @@ class ForwardKinematicsManager(ModelChangeCallback):
     @copy_memoize
     def compose_expression(
         self, root: KinematicStructureEntity, tip: KinematicStructureEntity
-    ) -> HomogeneousTransformationMatrix:
+    ) -> HomogeneousTransformationMatrix3Dimensional:
         """
         :param root: The root KinematicStructureEntity in the kinematic chain.
             It determines the starting point of the forward kinematics calculation.
@@ -155,7 +158,7 @@ class ForwardKinematicsManager(ModelChangeCallback):
             root, tip
         )
         with CasadiLock():
-            fk = HomogeneousTransformationMatrix()
+            fk = HomogeneousTransformationMatrix3Dimensional()
             connection: Connection
             for connection in root_chain:
                 tip_T_root = connection.origin_expression.inverse()
@@ -168,7 +171,7 @@ class ForwardKinematicsManager(ModelChangeCallback):
 
     def compute(
         self, root: KinematicStructureEntity, tip: KinematicStructureEntity
-    ) -> HomogeneousTransformationMatrix:
+    ) -> HomogeneousTransformationMatrix3Dimensional:
         """
         Compute the forward kinematics from the root KinematicStructureEntity to the tip
         KinematicStructureEntity.
@@ -182,7 +185,7 @@ class ForwardKinematicsManager(ModelChangeCallback):
         :return: Transformation matrix representing the relative pose of the tip
             KinematicStructureEntity with respect to the root KinematicStructureEntity.
         """
-        return HomogeneousTransformationMatrix(
+        return HomogeneousTransformationMatrix3Dimensional(
             data=self.compute_np(root, tip), reference_frame=root
         )
 
@@ -215,7 +218,11 @@ class ForwardKinematicsManager(ModelChangeCallback):
         if not root_is_world:
             i = self.body_id_to_all_fk_index[root]
             map_T_root = self.forward_kinematics_for_all_bodies[i : i + 4]
-            root_T_map = inverse_frame(map_T_root)
+            root_T_map = (
+                HomogeneousTransformationMatrix3Dimensional.invert_numeric_matrix(
+                    map_T_root
+                )
+            )
             if tip_is_world:
                 return root_T_map
 

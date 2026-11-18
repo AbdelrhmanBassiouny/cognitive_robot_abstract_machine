@@ -29,7 +29,7 @@ from random_events.plotting import EventPlotter
 from random_events.product_algebra import Event
 from typing_extensions import Sequence
 
-from semantic_digital_twin.spatial_types import Point3
+from krrood_spatial_math.spatial_types import CartesianPoint3Dimensional
 from semantic_digital_twin.world_description.geometry import CoordinateBounds
 from semantic_digital_twin.world_description.graph_of_convex_sets.plotting import (
     FigurePalette,
@@ -248,7 +248,7 @@ class EndpointsVolumeLayer(VolumeLayer):
 
     @staticmethod
     def _endpoint_trace(
-        endpoint: Point3, label: str, symbol: str, color: str
+        endpoint: CartesianPoint3Dimensional, label: str, symbol: str, color: str
     ) -> go.Scatter3d:
         """
         :param endpoint: The point to mark.
@@ -399,7 +399,9 @@ class SceneCamera:
     each other.
     """
 
-    eye: Point3 = field(default_factory=lambda: Point3(1.25, -1.25, 1.15))
+    eye: CartesianPoint3Dimensional = field(
+        default_factory=lambda: CartesianPoint3Dimensional(1.25, -1.25, 1.15)
+    )
     """
     The viewpoint, in units of the scene's own size.
     """
@@ -539,8 +541,7 @@ class GraphOfConvexSetsVolumeFigure:
         figure.update_layout(
             title=dict(
                 text=(
-                    "Graph of convex sets navigation in "
-                    f"{self.scene.environment_name}"
+                    f"Graph of convex sets navigation in {self.scene.environment_name}"
                 ),
                 x=0.01,
                 font=dict(size=20, color=palette.text_primary),

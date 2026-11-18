@@ -30,16 +30,17 @@ dependencies = [
     "numba>=0.61.2",
     "pyyaml",
     "transforms3d",
-    "opencv-python>=4.11.0.86",
+    # 5.1.0.95 has no Linux wheel and no source distribution, so the workspace cannot be installed on Linux
+    "opencv-python>=4.11.0.86,<5.1",
     "matplotlib>=3.0",
     "setuptools",
-    "pooch",
-    "filelock",
-    "krrood",
-    "semantic_digital_twin",
+    "krrood>=26.10.0",
+    "semantic_digital_twin>=26.10.0",
+    "krrood_spatial_math[casadi]>=26.10.0",
     "transformers",
     "faiss-cpu",
-    "ultralytics"
+    "ultralytics",
+    "trimesh"
 ]
 
 [project.urls]
@@ -56,6 +57,7 @@ version = {attr = "robokudo._version.__version__"}
 [dependency-groups]
 workspace = [
     "krrood",
+    "krrood_spatial_math",
     "semantic_digital_twin",
 ]
 

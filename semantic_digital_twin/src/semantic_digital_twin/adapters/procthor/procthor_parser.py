@@ -11,6 +11,10 @@ from sqlalchemy import select
 from sqlalchemy.exc import NoResultFound, MultipleResultsFound
 from sqlalchemy.orm import Session
 
+from semantic_digital_twin.adapters.procthor.exceptions import (
+    ProcthorDoorWallNotFound,
+    UnpairedProcthorWalls,
+)
 from semantic_digital_twin.specifications.connections import (
     RevoluteConnectionSpecification,
 )
@@ -34,15 +38,16 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Bathroom,
     LivingRoom,
 )
-from semantic_digital_twin.spatial_types.spatial_types import (
-    HomogeneousTransformationMatrix,
-    Point3,
-    Vector3,
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
+    CartesianPoint3Dimensional,
+    Vector3Dimensional,
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import Scale
 from semantic_digital_twin.world_description.world_entity import Body
+from semantic_digital_twin.world_source import WorldSource
 
 
 @dataclass
@@ -62,7 +67,7 @@ class ProcthorDoor:
     Width of the parent wall, since we define the door relative to the wall's horizontal center.
     """
 
-    world_T_parent_wall: HomogeneousTransformationMatrix
+    world_T_parent_wall: HomogeneousTransformationMatrix3Dimensional
     """
     Transformation matrix from world root to the parent wall's origin.
     """
@@ -127,7 +132,7 @@ class ProcthorDoor:
         return Scale(self.thickness, width, height)
 
     @cached_property
-    def wall_T_door(self) -> HomogeneousTransformationMatrix:
+    def wall_T_door(self) -> HomogeneousTransformationMatrix3Dimensional:
         """
         Computes the door position from the wall's horizontal center. Converts the Unity's left-handed Y-up, Z-forward
         convention to the semantic digital twin's right-handed Z-up, X-forward convention.
@@ -141,8 +146,8 @@ class ProcthorDoor:
 
         # In unity, doors are defined as holes in the wall, so we express them as children of walls.
         # This means we just need to translate them, and can assume no rotation
-        return HomogeneousTransformationMatrix.from_point_rotation_matrix(
-            Point3(0, -width_origin_center, height_origin_center)
+        return HomogeneousTransformationMatrix3Dimensional.from_point_rotation_matrix(
+            CartesianPoint3Dimensional(0, -width_origin_center, height_origin_center)
         )
 
     def _add_double_door_to_world(self, world: World) -> DoubleDoor:
@@ -152,7 +157,7 @@ class ProcthorDoor:
         one_door_scale = Scale(self.thickness, self.scale.y * 0.5, self.scale.z)
         x_direction: float = one_door_scale.x / 2
         y_direction: float = one_door_scale.y / 2
-        handle_directions = [Vector3.Y(), Vector3.NEGATIVE_Y()]
+        handle_directions = [Vector3Dimensional.Y(), Vector3Dimensional.NEGATIVE_Y()]
 
         doors = []
 
@@ -161,7 +166,7 @@ class ProcthorDoor:
 
             horizontal_direction = (
                 HorizontalSemanticDirection.RIGHT
-                if np.allclose(direction, Vector3.Y())
+                if np.allclose(direction, Vector3Dimensional.Y())
                 else HorizontalSemanticDirection.LEFT
             )
             semantic_position = SemanticPositionDescription(
@@ -172,11 +177,11 @@ class ProcthorDoor:
                 vertical_direction_chain=[VerticalSemanticDirection.FULLY_CENTER],
             )
 
-            wall_T_door = HomogeneousTransformationMatrix.from_xyz_rpy(
+            wall_T_door = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                 x=x_direction,
                 y=(
                     (-y_direction)
-                    if np.allclose(direction, Vector3.Y())
+                    if np.allclose(direction, Vector3Dimensional.Y())
                     else y_direction
                 ),
             )
@@ -207,7 +212,7 @@ class ProcthorDoor:
         world: World,
         name: str | None = None,
         scale: Scale | None = None,
-        world_T_door: HomogeneousTransformationMatrix | None = None,
+        world_T_door: HomogeneousTransformationMatrix3Dimensional | None = None,
     ) -> Door:
         """
         Parses the parameters according to the single door assumptions, and returns a single door factory.
@@ -218,7 +223,7 @@ class ProcthorDoor:
         sampled_2d_point = semantic_handle_position.sample_point_from_event(
             scale.to_simple_event().as_composite_set().marginal(SpatialVariables.yz)
         )
-        door_T_handle = HomogeneousTransformationMatrix.from_xyz_rpy(
+        door_T_handle = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
             x=scale.x / 2, y=sampled_2d_point[0], z=sampled_2d_point[1]
         )
 
@@ -241,7 +246,9 @@ class ProcthorDoor:
             )
             door.add(handle)
 
-        door.mount_on_movable_joint(RevoluteConnectionSpecification(axis=Vector3.Z()))
+        door.mount_on_movable_joint(
+            RevoluteConnectionSpecification(axis=Vector3Dimensional.Z())
+        )
         return door
 
     def add_to_world(self, world: World) -> Door | DoubleDoor:
@@ -374,7 +381,7 @@ class ProcthorWall:
         return Scale(x=self.wall_thickness, y=width, z=height)
 
     @cached_property
-    def world_T_wall(self) -> HomogeneousTransformationMatrix:
+    def world_T_wall(self) -> HomogeneousTransformationMatrix3Dimensional:
         """
         Computes the wall's world position matrix from the wall's x and z coordinates.
         Calculates the yaw angle using the atan2 function based on the wall's width and depth.
@@ -388,7 +395,7 @@ class ProcthorWall:
         x_center = (self.x_coords[0] + self.x_coords[-1]) * 0.5
         z_center = (self.z_coords[0] + self.z_coords[-1]) * 0.5
 
-        world_T_wall = HomogeneousTransformationMatrix.from_xyz_rpy(
+        world_T_wall = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
             x_center, 0, z_center, 0.0, yaw, 0
         )
 
@@ -441,7 +448,7 @@ class ProcthorRoom:
     Name of the room, constructed from the room type and room ID.
     """
 
-    centered_polytope: list[Point3] = field(init=False)
+    centered_polytope: list[CartesianPoint3Dimensional] = field(init=False)
     """
     Polytope representing the room's floor polygon, centered around its local 0, 0, 0 coordinate
     """
@@ -460,7 +467,7 @@ class ProcthorRoom:
         self.z_center = sum(z_coords) / polytope_length
 
         self.centered_polytope = [
-            Point3(
+            CartesianPoint3Dimensional(
                 v["z"] - self.z_center,
                 -(v["x"] - self.x_center),
                 v["y"] - self.y_center,
@@ -472,14 +479,18 @@ class ProcthorRoom:
         self.name = f"{self.room_dict['roomType']}_{room_id}"
 
     @cached_property
-    def world_T_room(self) -> HomogeneousTransformationMatrix:
+    def world_T_room(self) -> HomogeneousTransformationMatrix3Dimensional:
         """
         Computes the room's world transform
         """
 
-        world_P_room = Point3(self.z_center, -self.x_center, self.y_center)
+        world_P_room = CartesianPoint3Dimensional(
+            self.z_center, -self.x_center, self.y_center
+        )
 
-        return HomogeneousTransformationMatrix.from_point_rotation_matrix(world_P_room)
+        return HomogeneousTransformationMatrix3Dimensional.from_point_rotation_matrix(
+            world_P_room
+        )
 
     def add_to_world(self, world: World):
         """
@@ -527,14 +538,14 @@ class ProcthorObject:
     """
 
     @cached_property
-    def world_T_obj(self) -> HomogeneousTransformationMatrix:
+    def world_T_obj(self) -> HomogeneousTransformationMatrix3Dimensional:
         """
         Computes the object's world transformation matrix from its position and rotation. Converts Unity's
         left-handed Y-up, Z-forward convention to the right-handed Z-up, X-forward convention.
         """
         obj_position = self.object_dict["position"]
         obj_rotation = self.object_dict["rotation"]
-        world_T_obj = HomogeneousTransformationMatrix.from_xyz_rpy(
+        world_T_obj = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
             obj_position["x"],
             obj_position["y"],
             obj_position["z"],
@@ -543,7 +554,7 @@ class ProcthorObject:
             math.radians(obj_rotation["z"]),
         )
 
-        return HomogeneousTransformationMatrix(
+        return HomogeneousTransformationMatrix3Dimensional(
             unity_to_semantic_digital_twin_transform(world_T_obj)
         )
 
@@ -563,7 +574,6 @@ class ProcthorObject:
             return None
 
         with body_world.modify_world():
-
             for child in self.object_dict.get("children", {}):
                 child_object = ProcthorObject(child, self.session)
                 world_T_child = child_object.world_T_obj
@@ -582,8 +592,8 @@ class ProcthorObject:
 
 
 def unity_to_semantic_digital_twin_transform(
-    unity_transform_matrix: HomogeneousTransformationMatrix,
-) -> HomogeneousTransformationMatrix:
+    unity_transform_matrix: HomogeneousTransformationMatrix3Dimensional,
+) -> HomogeneousTransformationMatrix3Dimensional:
     """
     Convert a left-handed Y-up, Z-forward Unity transform to the right-handed Z-up, X-forward convention used in the
     semantic digital twin.
@@ -611,13 +621,13 @@ def unity_to_semantic_digital_twin_transform(
 
     unity_transform_matrix = np.asarray(unity_transform_matrix, float).reshape(4, 4)
 
-    return HomogeneousTransformationMatrix(
+    return HomogeneousTransformationMatrix3Dimensional(
         data=conjugation_matrix @ unity_transform_matrix @ inverse_conjugation_matrix
     )
 
 
 @dataclass
-class ProcTHORParser:
+class ProcTHORParser(WorldSource):
     """
     Parses a Procthor JSON file into a semantic digital twin World.
     """
@@ -642,12 +652,10 @@ class ProcTHORParser:
             name=Path(file_path).stem, house=json.load(open(file_path)), session=session
         )
 
-    def parse(self) -> World:
+    def create_world(self) -> World:
         """
-        Parses a JSON file from procthor into a world.
-        Room floor areas are constructed from the supplied polygons
-        Walls and doors are constructed from the supplied polygons
-        Objects are imported from the database
+        :return: A world holding the house's rooms, walls and doors, and its objects if
+            :attr:`session` is given to import them from.
         """
 
         house_name = self.name
@@ -723,13 +731,11 @@ class ProcTHORParser:
         :param walls: List of walls without doors
 
         :return: List of ProcthorWall instances, each representing a pair of walls with the same polygon.
-        :raises AssertionError: If the number of walls is not even, as we assume that walls are always paired.
+        :raises UnpairedProcthorWalls: If the number of walls is not even.
         """
 
-        assert len(walls) % 2 == 0, (
-            f"Expected an even number of walls, but found {len(walls)}. "
-            f"We assumed that this is never the case, this case may need to be handled now."
-        )
+        if len(walls) % 2 != 0:
+            raise UnpairedProcthorWalls(wall_count=len(walls))
 
         def _polygon_key(poly):
             return frozenset((p["x"], p["y"], p["z"]) for p in poly)
@@ -756,7 +762,7 @@ class ProcTHORParser:
         :param doors: List of door dictionaries
 
         :returns: Tuple containing a list of ProcthorWall instances and a set of used wall IDs.
-        :raises AssertionError: If a door does not have exactly two walls associated with it.
+        :raises ProcthorDoorWallNotFound: If a door refers to a wall that is not given.
         """
         walls_by_id = {wall["id"]: wall for wall in walls}
         used_wall_ids = set()
@@ -766,13 +772,10 @@ class ProcTHORParser:
             wall_ids = [door.get("wall0"), door.get("wall1")]
             found_walls = []
             for wall_id in wall_ids:
-                wall = walls_by_id[wall_id]
-                found_walls.append(wall)
+                if wall_id not in walls_by_id:
+                    raise ProcthorDoorWallNotFound(door_id=door["id"], wall_id=wall_id)
+                found_walls.append(walls_by_id[wall_id])
                 used_wall_ids.add(wall_id)
-
-            assert (
-                len(found_walls) == 2
-            ), f"Door {door['id']} should have two walls, but found {len(found_walls)}."
 
             procthor_walls.append(
                 ProcthorWall(door_dicts=[door], wall_dicts=found_walls)

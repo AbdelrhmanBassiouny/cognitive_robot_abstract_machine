@@ -1,10 +1,32 @@
-from robokudo.world_descriptor import BaseWorldDescriptor, ObjectSpec, RegionSpec
-from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+# %% Imports
+from semantic_digital_twin.world_description.world_entity import Body
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.datastructures.camera_model import (
+    CameraModality,
+    CameraRange,
+    PinholeCameraModel,
+)
+from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
+from semantic_digital_twin.datastructures.field_of_view import FieldOfView
+from semantic_digital_twin.robots.robot_parts import Camera
+from robokudo.world_descriptor import (
+    BaseWorldDescriptor,
+    CameraPlacement,
+    ObjectSpec,
+    RegionSpec,
+)
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
+)
 from semantic_digital_twin.world_description.geometry import Scale, Color
+
+# %% World descriptor
 
 
 class WorldDescriptor(BaseWorldDescriptor):
-    """A compact tabletop world for SemDT RayTracer with cylindrical target objects."""
+    """
+    A compact tabletop world for SemDT RayTracer with cylindrical target objects.
+    """
 
     def __init__(self) -> None:
         super().__init__()
@@ -23,8 +45,8 @@ class WorldDescriptor(BaseWorldDescriptor):
             ObjectSpec(
                 name="table",
                 box_scale=Scale(1.20, 0.80, table_thickness),
-                color=Color(0.65, 0.58, 0.48, 1.0),
-                pose=HomogeneousTransformationMatrix.from_xyz_rpy(
+                color=Color.from_rgba(red=0.65, green=0.58, blue=0.48, opacity=1.0),
+                pose=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                     x=-1.10,
                     y=1.25,
                     z=table_top_z - (table_thickness / 2.0),
@@ -35,8 +57,8 @@ class WorldDescriptor(BaseWorldDescriptor):
                 name="cylinder_red",
                 cylinder_width=red_cylinder_width,
                 cylinder_height=red_cylinder_height,
-                color=Color(0.83, 0.20, 0.20, 1.0),
-                pose=HomogeneousTransformationMatrix.from_xyz_rpy(
+                color=Color.from_rgba(red=0.83, green=0.20, blue=0.20, opacity=1.0),
+                pose=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                     x=-1.20,
                     y=1.20,
                     z=table_top_z + (red_cylinder_height / 2.0),
@@ -47,8 +69,8 @@ class WorldDescriptor(BaseWorldDescriptor):
                 name="cylinder_blue",
                 cylinder_width=blue_cylinder_width,
                 cylinder_height=blue_cylinder_height,
-                color=Color(0.22, 0.37, 0.82, 1.0),
-                pose=HomogeneousTransformationMatrix.from_xyz_rpy(
+                color=Color.from_rgba(red=0.22, green=0.37, blue=0.82, opacity=1.0),
+                pose=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                     x=-1.00,
                     y=1.32,
                     z=table_top_z + (blue_cylinder_height / 2.0),
@@ -63,8 +85,8 @@ class WorldDescriptor(BaseWorldDescriptor):
                 name="table_surface_region",
                 box_scale=Scale(1.00, 0.60, table_surface_region_thickness),
                 parent_name="table",
-                color=Color(0.10, 0.70, 0.30, 0.20),
-                pose=HomogeneousTransformationMatrix.from_xyz_rpy(
+                color=Color.from_rgba(red=0.10, green=0.70, blue=0.30, opacity=0.20),
+                pose=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                     x=0.0,
                     y=0.0,
                     z=(table_thickness / 2.0) + (table_surface_region_thickness / 2.0),
@@ -75,3 +97,33 @@ class WorldDescriptor(BaseWorldDescriptor):
 
         self.build_objects(root, object_specs)
         self.build_regions(root, region_specs)
+        camera_name = PrefixedName(name="semdt_camera_optical_frame")
+        self.build_camera(
+            root,
+            CameraPlacement(
+                camera=Camera(
+                    name=camera_name,
+                    root=Body(name=camera_name),
+                    camera_model=PinholeCameraModel.from_field_of_view(
+                        resolution=CameraResolution(), field_of_view=FieldOfView()
+                    ),
+                    camera_range=CameraRange(
+                        minimum_distance=0.05, maximum_distance=8.0
+                    ),
+                    modalities=(
+                        CameraModality.COLOR,
+                        CameraModality.DEPTH,
+                        CameraModality.SEGMENTATION,
+                    ),
+                ),
+                parent_T_camera=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+                    x=-1.20,
+                    y=0.40,
+                    z=1.05,
+                    roll=-2.2689280275926285,
+                    pitch=0.0,
+                    yaw=-0.2707963267948965,
+                    reference_frame=root,
+                ),
+            ),
+        )

@@ -101,7 +101,7 @@ world = World.create_with_root_body()
 table_top = BodySpecification.box(
     name="table_top", 
     scale=Scale(1.2, 0.8, 0.05), 
-    color=Color(0.6, 0.4, 0.2, 1.0)
+    color=Color.from_rgba(red=0.6, green=0.4, blue=0.2, opacity=1.0)
 ).spawn(world)
 
 assert table_top.name.name == "table_top"
@@ -117,13 +117,13 @@ parent frame. Because a specification is reusable, that placement and the name c
 *overridden* when you spawn, together with the `parent` the entity attaches to.
 
 ```{code-cell} ipython3
-from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix3Dimensional
 
 # Bake a default pose straight into the specification.
 leg = BodySpecification.box(
     name="leg_0",
     scale=Scale(0.05, 0.05, 0.7),
-    parent_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(x=0.55, y=0.35, z=-0.35),
+    parent_T_self=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(x=0.55, y=0.35, z=-0.35),
 ).spawn(world, parent=table_top)
 
 # The same specification is reusable; override the pose (and name) per spawn.
@@ -133,7 +133,7 @@ for index, (x, y) in enumerate([(0.55, -0.35), (-0.55, 0.35), (-0.55, -0.35)], s
         world,
         name=f"leg_{index}",
         parent=table_top,
-        parent_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(x=x, y=y, z=-0.35),
+        parent_T_self=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(x=x, y=y, z=-0.35),
     )
 
 # root + table_top + four legs
@@ -187,7 +187,7 @@ corresponding `Body` constructors:
 from importlib.resources import files
 from pathlib import Path
 
-from semantic_digital_twin.spatial_types import Point3
+from krrood_spatial_math.spatial_types import CartesianPoint3Dimensional
 
 resources = Path(files("semantic_digital_twin")).parent.parent / "resources"
 
@@ -206,7 +206,7 @@ crate = BodySpecification.from_event("crate", outer - inner).spawn(world)
 # The convex hull of a point cloud.
 hull = BodySpecification.from_3d_points(
     "hull",
-    [Point3(0, 0, 0), Point3(0.2, 0, 0), Point3(0, 0.2, 0), Point3(0, 0, 0.2)],
+    [CartesianPoint3Dimensional(0, 0, 0), CartesianPoint3Dimensional(0.2, 0, 0), CartesianPoint3Dimensional(0, 0.2, 0), CartesianPoint3Dimensional(0, 0, 0.2)],
 ).spawn(world)
 
 assert len(milk_mesh.collision.shapes) == 1
@@ -293,14 +293,14 @@ rotation to its translation.
 from semantic_digital_twin.specifications.connections import (
     PrismaticConnectionSpecification,
 )
-from semantic_digital_twin.spatial_types import Vector3
+from krrood_spatial_math.spatial_types import Vector3Dimensional
 
 world = World.create_with_root_body()
 
 drawer = BodySpecification.box(
     name="drawer",
     scale=Scale(0.4, 0.5, 0.2),
-    connection_specification=PrismaticConnectionSpecification(axis=Vector3.Z()),
+    connection_specification=PrismaticConnectionSpecification(axis=Vector3Dimensional.Z()),
 ).spawn(world)
 
 assert isinstance(drawer.parent_connection, PrismaticConnection)
@@ -337,7 +337,7 @@ connection = FixedConnectionSpecification().connect(
     world,
     parent=world.root,
     child=free_body,
-    parent_T_connection=HomogeneousTransformationMatrix.from_xyz_rpy(x=1, y=2, z=3),
+    parent_T_connection=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(x=1, y=2, z=3),
 )
 
 assert connection.child is free_body
@@ -373,7 +373,7 @@ milk = SemanticAnnotationWithRootSpecification(
     root_specification=BodySpecification.box(
          name="milk", 
          scale=Scale(0.1, 0.1, 0.2),
-         parent_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(x=0.3, z=0.8)
+         parent_T_self=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(x=0.3, z=0.8)
     ),
 ).spawn(world)
 
@@ -403,7 +403,7 @@ drawer = SemanticAnnotationWithRootSpecification(
     root_specification=BodySpecification.box(
         "drawer",
         Scale(0.4, 0.5, 0.2),
-        connection_specification=PrismaticConnectionSpecification(axis=Vector3.X()),
+        connection_specification=PrismaticConnectionSpecification(axis=Vector3Dimensional.X()),
     ),
 ).spawn(world)
 
@@ -479,12 +479,12 @@ handle_specification = Handle.get_annotation_specification(
 left = handle_specification.spawn(
     world,
     name="left_handle",
-    parent_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(y=-0.2),
+    parent_T_self=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(y=-0.2),
 )
 right = handle_specification.spawn(
     world,
     name="right_handle",
-    parent_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(y=0.2),
+    parent_T_self=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(y=0.2),
 )
 
 assert left.name.name == "left_handle" and right.name.name == "right_handle"
@@ -538,13 +538,13 @@ window_left = Aperture.get_annotation_specification(
     "window_left", Aperture.get_default_root_kinematic_structure_entity_specification(scale=Scale(0.1, 0.5, 0.5))
 )
 window_left.root_specification.parent_T_self = (
-    HomogeneousTransformationMatrix.from_xyz_rpy(y=-0.8)
+    HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(y=-0.8)
 )
 window_right = Aperture.get_annotation_specification(
     "window_right", Aperture.get_default_root_kinematic_structure_entity_specification(scale=Scale(0.1, 0.5, 0.5))
 )
 window_right.root_specification.parent_T_self = (
-    HomogeneousTransformationMatrix.from_xyz_rpy(y=0.8)
+    HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(y=0.8)
 )
 
 wall = Wall.get_annotation_specification(
@@ -579,12 +579,12 @@ from semantic_digital_twin.world_description.connections import RevoluteConnecti
 
 world = World.create_with_root_body()
 
-hinge_T_door = HomogeneousTransformationMatrix.from_xyz_rpy(y=0.5)
+hinge_T_door = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(y=0.5)
 door = Door.get_annotation_specification(
     "door",
     Door.get_default_root_kinematic_structure_entity_specification(scale=Scale(0.03, 1, 2)),
     parent_connection_specification=RevoluteConnectionSpecification(
-        axis=Vector3.Z(), connection_T_child=hinge_T_door
+        axis=Vector3Dimensional.Z(), connection_T_child=hinge_T_door
     ),
 ).spawn(world)
 assert isinstance(door.movable_joint, RevoluteConnection)
@@ -593,7 +593,7 @@ door.movable_joint.position = np.pi / 2
 world.notify_state_change()
 
 # The door's centre swung a quarter turn around the hinge, not around itself.
-expected = hinge_T_door.inverse() @ HomogeneousTransformationMatrix.from_xyz_rpy(yaw=np.pi / 2) @ hinge_T_door
+expected = hinge_T_door.inverse() @ HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(yaw=np.pi / 2) @ hinge_T_door
 assert np.allclose(door.root.global_transform.to_np(), expected.to_np())
 print("Door centre after opening:", door.root.global_transform.position.to_np()[:3])
 ```
@@ -605,10 +605,11 @@ field, a key that is not a part-whole field, or a part-whole field smuggled in t
 ## World specifications
 
 The largest building block is `WorldSpecification`, which describes an entire scene: an
-environment, an optional robot, and the objects placed around them. Its environment is held as the
-parser that builds it — usually obtained from a model file with the `from_urdf` or `from_mjcf`
-classmethods. Calling `to_domain_object` re-parses the environment every time, so one specification
-can produce many independent worlds and no two of them share an entity identifier.
+environment, an optional robot, and the objects placed around them. Its environment comes from a
+world source — usually a parser obtained from a model file with the `from_urdf` or `from_mjcf`
+classmethods, or a map written in code. Calling `create_world` creates the environment anew every
+time, so one specification can produce many independent worlds and no two of them share an entity
+identifier.
 
 ```{code-cell} ipython3
 import os
@@ -633,12 +634,12 @@ specification = WorldSpecification.from_urdf(
     ],
 )
 
-world = specification.to_domain_object()
+world = specification.create_world()
 assert len(world.get_semantic_annotations_by_type(Milk)) == 1
 assert world.get_body_by_name("cup") is not None
 
 # The specification is reusable: each call yields an independent world.
-another_world = specification.to_domain_object()
+another_world = specification.create_world()
 assert world is not another_world
 assert len(another_world.get_semantic_annotations_by_type(Milk)) == 1
 print("Materialized two independent worlds, each with one milk and one cup")
@@ -650,7 +651,7 @@ print("Materialized two independent worlds, each with one milk and one cup")
 mjcf_world = WorldSpecification.from_mjcf(
     str(resources / "mjcf" / "table.xml"),
     objects=[BodySpecification.box("cup", Scale(0.07, 0.07, 0.1))],
-).to_domain_object()
+).create_world()
 
 assert mjcf_world.get_body_by_name("cup") is not None
 print("MJCF table world has", len(mjcf_world.bodies), "bodies")
@@ -660,11 +661,27 @@ print("MJCF table world has", len(mjcf_world.bodies), "bodies")
 
 A world specification can also merge robots into the environment. Each one is described by a
 `RobotSpecification`, which bundles a robot's [semantic annotation class](adding-robots) with
-the poses that place it: `world_T_odom` sets the localization pose, and `odom_T_robot_start`
-the robot's start pose. The robot is parsed from its own description and inserted as
-`world.root -> odom -> connection -> robot`. The connection attaching the robot to its `odom`
-is the drive determined by the robot's mobile base, or a fixed connection when the robot has
-no mobile base.
+the poses that place it. The robot is parsed from its own description and inserted below the
+world root by its localization, at `localization_pose`:
+
+- A robot with a mobile base is inserted as `world.root -> odometry -> drive -> robot`. The
+  odometry body is named as its mobile base declares, and the drive is the one the mobile base
+  creates. `odometry_T_robot_start` sets the robot's start pose relative to its odometry body.
+- Any other robot is inserted as `world.root -> robot`, with the root of its description
+  attached directly. It has no odometry body, so it takes no start pose.
+
+A few more fields cover robots whose world has to line up with a running system:
+
+- `localization_connection_type` attaches the localized body to the world root. It is fixed by
+  default; a `Connection6DoF` lets the localization move, for example when it is read from tf.
+- `description_parser` reads the robot's description instead of the file the robot class
+  declares, for example a `URDFParser` of the XML on the `/robot_description` topic. The robot
+  keeps the names the parser gives it, so a parser with an empty `prefix` leaves them
+  unprefixed and matching the frames the robot publishes.
+
+`RobotSpecification.specify_real_robot` sets both for a robot as it runs on the real system:
+it keeps the names of the description, and it localizes a robot with a mobile base by a
+`Connection6DoF` and any other robot by a fixed connection.
 
 ```{code-cell} ipython3
 from semantic_digital_twin.specifications.robots import RobotSpecification
@@ -675,18 +692,18 @@ world = WorldSpecification.from_urdf(
     robots=[
         RobotSpecification(
             semantic_annotation_type=PR2,
-            world_T_odom=HomogeneousTransformationMatrix.from_xyz_rpy(x=1.0),
-            odom_T_robot_start=HomogeneousTransformationMatrix.from_xyz_rpy(y=2.0),
+            localization_pose=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(x=1.0),
+            odometry_T_robot_start=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(y=2.0),
         )
     ],
-).to_domain_object()
+).create_world()
 ```
 
 Because `robots` is a list, a world can hold several of them, each with its own localization —
 including several instances of the same robot. Names are not unique in a world, so two PR2s
-contribute two joints called `pr2/torso_lift_joint`. Each robot is therefore annotated while it
-still owns the world it was parsed into, and its `odom` body carries its own identifier as a
-name prefix, so the localization frames stay distinguishable.
+contribute two joints called `pr2/torso_lift_joint` and two odometry bodies called
+`pr2/odom_combined`, told apart by their identifiers. Each robot is therefore annotated while it
+still owns the world it was parsed into.
 
 ```{code-cell} ipython3
 two_robot_world = WorldSpecification.from_urdf(
@@ -694,14 +711,14 @@ two_robot_world = WorldSpecification.from_urdf(
     robots=[
         RobotSpecification(
             semantic_annotation_type=PR2,
-            world_T_odom=HomogeneousTransformationMatrix.from_xyz_rpy(x=1.0),
+            localization_pose=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(x=1.0),
         ),
         RobotSpecification(
             semantic_annotation_type=PR2,
-            world_T_odom=HomogeneousTransformationMatrix.from_xyz_rpy(x=-1.0),
+            localization_pose=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(x=-1.0),
         ),
     ],
-).to_domain_object()
+).create_world()
 
 assert len(two_robot_world.get_semantic_annotations_by_type(PR2)) == 2
 print("Two independently localized PR2s share one world")
@@ -733,11 +750,11 @@ world = WorldSpecification.from_urdf(
             root_specification=BodySpecification.box(
                 "milk",
                 Scale(0.1, 0.1, 0.2),
-                parent_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(x=0.3, z=0.8),
+                parent_T_self=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(x=0.3, z=0.8),
             ),
         ),
     ],
-).to_domain_object()
+).create_world()
 
 assert len(world.get_semantic_annotations_by_type(Drawer)) == 1
 assert len(world.get_semantic_annotations_by_type(Milk)) == 1

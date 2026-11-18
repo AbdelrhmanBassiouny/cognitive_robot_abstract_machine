@@ -8,9 +8,9 @@ from typing_extensions import Callable, TYPE_CHECKING
 
 import numpy as np
 
-from semantic_digital_twin.spatial_types import Point3
-from semantic_digital_twin.spatial_types.spatial_types import (
-    HomogeneousTransformationMatrix,
+from krrood_spatial_math.spatial_types import CartesianPoint3Dimensional
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
 )
 from semantic_digital_twin.world_description.geometry import Mesh
 from semantic_digital_twin.world_description.world_entity import Body
@@ -89,7 +89,6 @@ class CenterLocalGeometryAndPreserveWorldPose(Step):
 
     def _apply(self, world: World) -> World:
         for body in world.bodies_topologically_sorted:
-
             vertices = []
 
             for coll in body.collision:
@@ -117,8 +116,8 @@ class CenterLocalGeometryAndPreserveWorldPose(Step):
                         m.vertices -= center
 
             old_origin_T_new_origin = (
-                HomogeneousTransformationMatrix.from_point_rotation_matrix(
-                    Point3(*center)
+                HomogeneousTransformationMatrix3Dimensional.from_point_rotation_matrix(
+                    CartesianPoint3Dimensional(*center)
                 )
             )
 
@@ -127,16 +126,17 @@ class CenterLocalGeometryAndPreserveWorldPose(Step):
                     body.parent_connection.parent_T_connection_expression
                 )
 
-                body.parent_connection.parent_T_connection_expression = (
-                    parent_T_old_origin @ old_origin_T_new_origin
+                body.parent_connection.update_parent_T_connection(
+                    parent_T_connection=parent_T_old_origin @ old_origin_T_new_origin
                 )
 
             for child in world.compute_child_kinematic_structure_entities(body):
                 old_origin_T_child_origin = (
                     child.parent_connection.parent_T_connection_expression
                 )
-                child.parent_connection.parent_T_connection_expression = (
-                    old_origin_T_new_origin.inverse() @ old_origin_T_child_origin
+                child.parent_connection.update_parent_T_connection(
+                    parent_T_connection=old_origin_T_new_origin.inverse()
+                    @ old_origin_T_child_origin
                 )
         return world
 

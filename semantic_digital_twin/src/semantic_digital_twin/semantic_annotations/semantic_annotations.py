@@ -1,23 +1,18 @@
+"""
+Semantic annotations of the furniture, appliances, doors, handles and other things a
+world contains.
+"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing_extensions import (
-    List,
-    Iterable,
-    Iterator,
-    Optional,
-    Self,
-    Tuple,
-    TYPE_CHECKING,
-    Union,
-)
+from typing_extensions import Iterable, Iterator, Self, TYPE_CHECKING
 
-import math
 
 import numpy as np
 
-from krrood.ormatic.utils import classproperty
+from krrood.patterns.classproperty import classproperty
 from krrood.symbolic_math import symbolic_math
 from random_events.interval import closed
 from random_events.product_algebra import SimpleEvent
@@ -33,6 +28,8 @@ from semantic_digital_twin.exceptions import (
     MissingMovableJointError,
 )
 from semantic_digital_twin.reasoning.predicates import InsideOf
+from semantic_digital_twin.robots.exceptions import MissingMobileBaseError
+from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
 from semantic_digital_twin.semantic_annotations.part_whole import (
     IsPartWholeRelationship,
 )
@@ -55,23 +52,22 @@ from semantic_digital_twin.semantic_annotations.mixins import (
     HasSink,
     HasShelfLayers,
     HasGraspCandidates,
-    HasPinchableWall,
     HasRim,
+    HasDrawnGraspsByDefault,
 )
-from krrood.entity_query_language.factories import and_, or_
-from krrood.entity_query_language.query.match import Match
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
-from semantic_digital_twin.grasping.surface_grasp import (
-    SurfaceGrasp,
-    any_surface_grasp,
-    from_any_side,
+from semantic_digital_twin.grasping.grasp_strategies import (
+    GraspABar,
+    GraspAcrossTheLength,
+    GraspStrategy,
+    PinchARim,
 )
-from semantic_digital_twin.spatial_types import (
-    Point3,
-    HomogeneousTransformationMatrix,
-    Vector3,
+from krrood_spatial_math.spatial_types import (
+    CartesianPoint3Dimensional,
+    HomogeneousTransformationMatrix3Dimensional,
+    Vector3Dimensional,
 )
-from semantic_digital_twin.spatial_types.spatial_types import Pose, RotationMatrix
+from krrood_spatial_math.spatial_types import Pose3Dimensional, RotationMatrix
 from semantic_digital_twin.world_description.connections import (
     FixedConnection,
 )
@@ -98,7 +94,11 @@ from semantic_digital_twin.specifications.semantic_annotations import (
 )
 
 if TYPE_CHECKING:
+    from semantic_digital_twin.robots.robot_parts import AbstractRobot
     from semantic_digital_twin.world import World
+    from semantic_digital_twin.world_description.graph_of_convex_sets.boxes import (
+        PlanarGraphOfBoundingBoxes,
+    )
 
 
 @dataclass(eq=False)
@@ -115,42 +115,9 @@ class Handle(HasGraspCandidates):
     open or close an object.
     """
 
-    def default_grasp_candidates(self) -> list[GraspCandidate]:
-        """
-        :return: Grasps drawn uniformly from :meth:`surface_grasp_statement`.
-        """
-        return self.drawn_grasp_candidates()
-
-    def surface_grasp_statement(
-        self,
-        require_lifting: bool = False,
-        lowest_height: float = 0.1,
-        highest_height: float = 0.9,
-        shallowest_depth: float = 0.0,
-        deepest_depth: float = 0.5,
-    ) -> Match[SurfaceGrasp]:
-        """
-        :param require_lifting: Whether to ask only for grasps that lift the object.
-        :param lowest_height: The lowest height to grasp the handle at, as a fraction
-            of its bounding box from its bottom to its top.
-        :param highest_height: The height to grasp the handle below, as such a
-            fraction.
-        :param shallowest_depth: The least depth to close the fingers at, as a fraction
-            of the handle's thinnest extent.
-        :param deepest_depth: The depth to close the fingers short of, as such a
-            fraction.
-        :return: The handle between the two heights, closing on it between the two
-            depths.
-        """
-        thinnest_extent = float(min(self.grasp_surface().extents))
-        grasp = any_surface_grasp(require_lifting)
-        return grasp.where(
-            grasp.height >= lowest_height,
-            grasp.height < highest_height,
-            grasp.depth >= shallowest_depth * thinnest_extent,
-            grasp.depth < deepest_depth * thinnest_extent,
-            *from_any_side(grasp),
-        )
+    @classproperty
+    def grasp_strategy(cls) -> GraspStrategy:
+        return GraspABar()
 
     @classmethod
     def _create_handle_geometry(
@@ -212,6 +179,40 @@ class Handle(HasGraspCandidates):
             name, handle_event, connection_specification=connection_specification
         )
 
+    def default_grasp_candidates(self) -> list[GraspCandidate]:
+        """
+        The grasps at the centre of the handle's bar that close around it, one
+        approaching from each of the four sides around it.
+
+        The bar runs along the longest extent of the root's collision geometry.
+
+        :raises NoGraspGeometry: If the root body has no collision geometry to tell
+            which way the bar runs.
+        """
+        if not self.root.has_collision():
+            raise NoGraspGeometry(self)
+        mesh = self.root.combined_mesh
+        bar_axis = np.argmax(mesh.extents)
+        bar_direction = Vector3Dimensional.from_iterable(np.eye(3)[bar_axis])
+        across_bar = np.delete(np.eye(3), bar_axis, axis=0)
+        return [
+            GraspCandidate(
+                self,
+                Pose3Dimensional(
+                    position=CartesianPoint3Dimensional.from_iterable(
+                        mesh.bounds.mean(axis=0)
+                    ),
+                    orientation=RotationMatrix.from_vectors(
+                        x=approach, y=bar_direction.cross(approach)
+                    ).quaternion,
+                    reference_frame=self.root,
+                ),
+            )
+            for approach in map(
+                Vector3Dimensional.from_iterable, [*across_bar, *-across_bar]
+            )
+        ]
+
 
 @dataclass(eq=False)
 class Dishwasher(HasCaseAsRootBody, HasDoors, HasDrawers):
@@ -224,8 +225,21 @@ class Dishwasher(HasCaseAsRootBody, HasDoors, HasDrawers):
     """
 
     @classproperty
-    def _hole_direction_axis(cls) -> Vector3:
-        return Vector3.NEGATIVE_X()
+    def _hole_direction_axis(cls) -> Vector3Dimensional:
+        return Vector3Dimensional.NEGATIVE_X()
+
+
+@dataclass(eq=False)
+class WashingMachine(HasCaseAsRootBody, HasDoors, HasDrawers):
+    """
+    A washing machine is a household appliance that washes laundry in a drum.
+
+    It typically has a front door to load the drum and a pull-out detergent drawer.
+    """
+
+    @classproperty
+    def _hole_direction_axis(cls) -> Vector3Dimensional:
+        return Vector3Dimensional.NEGATIVE_X()
 
 
 @dataclass(eq=False)
@@ -242,7 +256,7 @@ class Aperture(HasRootRegion):
         name: str,
         world: World,
         body: Body,
-        parent_T_self: HomogeneousTransformationMatrix | None = None,
+        parent_T_self: HomogeneousTransformationMatrix3Dimensional | None = None,
     ) -> Self:
         world.update_forward_kinematics()
         body_scale = (
@@ -351,7 +365,7 @@ class EntryWay(Aperture):
         return RegionSpecification.box(
             name,
             scale or Scale(),
-            color=color or Color(R=1.0, G=1.0, B=1.0, A=0.2),
+            color=color or Color.from_rgba(red=1.0, green=1.0, blue=1.0, opacity=0.2),
             connection_specification=connection_specification,
         )
 
@@ -454,8 +468,8 @@ class Door(HasHandle, HasMovableJoint):
         )
 
     def calculate_self_T_movable_joint(
-        self, axis: Vector3
-    ) -> HomogeneousTransformationMatrix:
+        self, axis: Vector3Dimensional
+    ) -> HomogeneousTransformationMatrix3Dimensional:
         """
         Calculate where the door's hinge sits: on the edge opposite its handle.
 
@@ -480,7 +494,9 @@ class Door(HasHandle, HasMovableJoint):
                     else 1
                 )
                 offset = sign * (scale.z / 2)
-                door_T_hinge = HomogeneousTransformationMatrix.from_xyz_rpy(z=offset)
+                door_T_hinge = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+                    z=offset
+                )
 
             case [0, 0, 1, 0]:
                 sign = (
@@ -489,7 +505,9 @@ class Door(HasHandle, HasMovableJoint):
                     else 1
                 )
                 offset = sign * (scale.y / 2)
-                door_T_hinge = HomogeneousTransformationMatrix.from_xyz_rpy(y=offset)
+                door_T_hinge = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+                    y=offset
+                )
             case [1, 0, 0, 0]:
                 sign = (
                     symbolic_math.sign(-1 * door_P_handle.x)
@@ -497,7 +515,9 @@ class Door(HasHandle, HasMovableJoint):
                     else 1
                 )
                 offset = sign * (scale.x / 2)
-                door_T_hinge = HomogeneousTransformationMatrix.from_xyz_rpy(x=offset)
+                door_T_hinge = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+                    x=offset
+                )
 
             case _:
                 raise InvalidHingeActiveAxis(axis=axis)
@@ -515,7 +535,7 @@ class DoubleDoor(SemanticAnnotation):
     door_1: Door = field(kw_only=True)
 
     def calculate_left_right_door_from_view_point(
-        self, world_T_view_point: HomogeneousTransformationMatrix
+        self, world_T_view_point: HomogeneousTransformationMatrix3Dimensional
     ) -> tuple[Door, Door]:
         """
         Calculate which door is the left and which is the right door based on a given
@@ -538,12 +558,12 @@ class DoubleDoor(SemanticAnnotation):
 @dataclass(eq=False)
 class Drawer(Furniture, HasCaseAsRootBody, HasHandle, HasMovableJoint):
     @classproperty
-    def _hole_direction_axis(cls) -> Vector3:
-        return Vector3.Z()
+    def _hole_direction_axis(cls) -> Vector3Dimensional:
+        return Vector3Dimensional.Z()
 
     def calculate_self_T_movable_joint(
-        self, axis: Vector3
-    ) -> HomogeneousTransformationMatrix:
+        self, axis: Vector3Dimensional
+    ) -> HomogeneousTransformationMatrix3Dimensional:
         """
         A drawer slides, which moves it the same wherever its rails sit, so they sit at
         its origin.
@@ -551,19 +571,7 @@ class Drawer(Furniture, HasCaseAsRootBody, HasHandle, HasMovableJoint):
         :param axis: The axis the drawer slides along, in the drawer frame.
         :return: The identity: the rails' frame is the drawer's frame.
         """
-        return HomogeneousTransformationMatrix()
-
-    @property
-    def opening_ratio(self) -> float:
-        """
-        :return: How far this drawer stands pulled out, as a fraction of its travel.
-        """
-        if self.movable_joint is None:
-            raise MissingMovableJointError(self)
-        limits = self.movable_joint.dof.limits
-        return (self.movable_joint.position - limits.lower.position) / (
-            limits.upper.position - limits.lower.position
-        )
+        return HomogeneousTransformationMatrix3Dimensional()
 
 
 @dataclass(eq=False)
@@ -574,12 +582,12 @@ class Elevator(HasCaseAsRootBody, HasDoors, HasMovableJoint):
     """
 
     @classproperty
-    def _hole_direction_axis(cls) -> Vector3:
-        return Vector3.NEGATIVE_X()
+    def _hole_direction_axis(cls) -> Vector3Dimensional:
+        return Vector3Dimensional.NEGATIVE_X()
 
     def calculate_self_T_movable_joint(
-        self, axis: Vector3
-    ) -> HomogeneousTransformationMatrix:
+        self, axis: Vector3Dimensional
+    ) -> HomogeneousTransformationMatrix3Dimensional:
         """
         An elevator's drive slides it, which moves it the same wherever the drive sits,
         so it sits at the cabin's origin.
@@ -587,7 +595,7 @@ class Elevator(HasCaseAsRootBody, HasDoors, HasMovableJoint):
         :param axis: The axis the cabin travels along, in the cabin frame.
         :return: The identity: the drive's frame is the cabin's frame.
         """
-        return HomogeneousTransformationMatrix()
+        return HomogeneousTransformationMatrix3Dimensional()
 
     def open(self):
         """
@@ -669,12 +677,25 @@ class KitchenIsland(Furniture, HasRootBody, HasCabinets, HasCounterTop, HasDoors
 @dataclass(eq=False)
 class Cabinet(Furniture, HasCaseAsRootBody, HasDoors, HasDrawers):
     @classproperty
-    def _hole_direction_axis(cls) -> Vector3:
-        return Vector3.NEGATIVE_X()
+    def _hole_direction_axis(cls) -> Vector3Dimensional:
+        return Vector3Dimensional.NEGATIVE_X()
 
 
 @dataclass(eq=False)
 class Fridge(Cabinet): ...
+
+
+@dataclass(eq=False)
+class TumbleDryer(HasCaseAsRootBody, HasDoors, HasDrawers):
+    """
+    A tumble dryer is a household appliance that dries laundry in a rotating drum.
+
+    It typically has a front door to load the drum and a pull-out water tank.
+    """
+
+    @classproperty
+    def _hole_direction_axis(cls) -> Vector3Dimensional:
+        return Vector3Dimensional.NEGATIVE_X()
 
 
 @dataclass(eq=False)
@@ -695,17 +716,41 @@ class Wardrobe(Cabinet): ...
 
 @dataclass(eq=False)
 class Floor(HasSupportingSurface):
+    """
+    A floor that robots and furniture stand on.
+    """
+
+    def navigable_space(
+        self, *, robot: AbstractRobot, margin: float
+    ) -> PlanarGraphOfBoundingBoxes:
+        """
+        :param robot: A robot with a mobile base, standing on this floor.
+        :param margin: How far, beyond its radius, the base is to keep from obstacles.
+        :return: The free space above this floor that the robot's base can stand in,
+            kept clear of every obstacle up to the robot's height by the base's radius
+            and ``margin``.
+        :raises MissingMobileBaseError: If the robot has no mobile base.
+        """
+        if not isinstance(robot, HasMobileBase):
+            raise MissingMobileBaseError(robot_part=robot)
+        return self.planar_free_space(
+            max_height=robot.as_bounding_box_collection_in_frame(robot.root)
+            .bounding_box()
+            .scale.z,
+            bloat_obstacles=robot.mobile_base.base_radius + margin,
+        )
+
     @classmethod
     def create_with_new_body_from_polytope_in_world(
         cls,
         name: str,
         world: World,
-        floor_polytope: list[Point3],
-        world_root_T_self: HomogeneousTransformationMatrix | None = None,
+        floor_polytope: list[CartesianPoint3Dimensional],
+        world_root_T_self: HomogeneousTransformationMatrix3Dimensional | None = None,
     ) -> Self:
         """
         Create a Floor semantic annotation with a new body defined by the given list of
-        Point3.
+        CartesianPoint3Dimensional.
 
         :param name: The name of the floor body.
         :param floor_polytope: A list of 3D points defining the floor poly
@@ -776,7 +821,9 @@ class Level(HasRootRegion):
     """
 
     @property
-    def floor_plane(self) -> tuple[Point3, Point3]:
+    def floor_plane(
+        self,
+    ) -> tuple[CartesianPoint3Dimensional, CartesianPoint3Dimensional]:
         """
         The floor plane of a level, expressed as two points
 
@@ -789,7 +836,7 @@ class Level(HasRootRegion):
             self.root.area.max_point, self._world.root
         )
         min_z = min_point_global.z
-        return min_point_global, Point3(
+        return min_point_global, CartesianPoint3Dimensional(
             max_point_global.x,
             max_point_global.y,
             min_z,
@@ -826,7 +873,7 @@ class Wall(HasApertures):
             for door in self._world.get_semantic_annotations_by_type(Door)
             if door.entry_way
             and InsideOf(
-                door.entry_way.root, self.root, minimum_containment_ratio=0.1
+                body=door.entry_way.root, other=self.root, minimum_containment_ratio=0.1
             )()
         ]
 
@@ -880,10 +927,10 @@ class Wall(HasApertures):
 
     def bloated_bounding_box_collection(
         self,
-        origin: HomogeneousTransformationMatrix,
+        origin: HomogeneousTransformationMatrix3Dimensional,
         bloat_amount: float,
         obstacle_height_clearance: float = 0.01,
-    ) -> BoundingBoxCollection[VolumetricBoundingBox, Point3]:
+    ) -> BoundingBoxCollection[VolumetricBoundingBox, CartesianPoint3Dimensional]:
         """
         Bloat this wall's bounding boxes along their thinner dimension only -- the
         side that faces the room -- rather than symmetrically in x and y.
@@ -1022,32 +1069,14 @@ class Plate(HasSupportingSurface, Tableware):
 
 
 @dataclass(eq=False)
-class Rim(HasPinchableWall):
+class Rim(HasDrawnGraspsByDefault):
     """
     The upper edge of an open container's wall, which a gripper pinches from above.
     """
 
-    def default_grasp_candidates(self) -> list[GraspCandidate]:
-        """
-        :return: Grasps drawn uniformly from :meth:`surface_grasp_statement`.
-        """
-        return self.drawn_grasp_candidates()
-
-    def surface_grasp_statement(
-        self,
-        require_lifting: bool = False,
-        lowest_height: float = 0.25,
-        highest_height: float = 0.75,
-    ) -> Match[SurfaceGrasp]:
-        """
-        :param require_lifting: Whether to ask only for grasps that lift the container.
-        :param lowest_height: The lowest height to pinch the rim at, as a fraction of
-            its height.
-        :param highest_height: The height to pinch the rim below, as such a fraction.
-        :return: The rim between the two heights, pinched across its wall.
-        :raises NoGraspGeometry: If the rim has no wall to measure.
-        """
-        return self.wall_grasp_statement(lowest_height, highest_height, require_lifting)
+    @classproperty
+    def grasp_strategy(cls) -> GraspStrategy:
+        return PinchARim()
 
 
 @dataclass(eq=False)
@@ -1261,7 +1290,7 @@ class Desk(Table, HasLegs):
 
 
 @dataclass(eq=False)
-class Chair(Furniture):
+class Chair(Furniture, HasRootBody):
     """
     Abstract class for chairs.
     """
@@ -1288,8 +1317,8 @@ class TrashCan(HasCaseAsRootBody, Furniture):
     """
 
     @classproperty
-    def _hole_direction_axis(cls) -> Vector3:
-        return Vector3.Z()
+    def _hole_direction_axis(cls) -> Vector3Dimensional:
+        return Vector3Dimensional.Z()
 
 
 @dataclass(eq=False)
@@ -1435,77 +1464,26 @@ class Cutlery(HasHandle, Tableware):
         ).bounding_box()
         along_x = bounding_box.x_interval.upper - bounding_box.x_interval.lower
         along_y = bounding_box.y_interval.upper - bounding_box.y_interval.lower
-        finger_axis = Vector3.NEGATIVE_Y() if along_x >= along_y else Vector3.X()
+        finger_axis = (
+            Vector3Dimensional.NEGATIVE_Y()
+            if along_x >= along_y
+            else Vector3Dimensional.X()
+        )
         return [
             GraspCandidate(
                 self,
-                Pose(
+                Pose3Dimensional(
                     orientation=RotationMatrix.from_vectors(
-                        x=Vector3.NEGATIVE_Z(), y=finger_axis
+                        x=Vector3Dimensional.NEGATIVE_Z(), y=finger_axis
                     ).quaternion,
                     reference_frame=self.root,
                 ),
             )
         ]
 
-    def surface_grasp_statement(
-        self,
-        require_lifting: bool = False,
-        lowest_height: float = 0.2,
-        highest_height: float = 0.8,
-        shallowest_depth: float = 0.2,
-        deepest_depth: float = 0.6,
-        azimuth_tolerance: float = np.pi / 16,
-        largest_pitch: float = 0.6,
-        largest_roll: float = np.pi / 8,
-    ) -> Match[SurfaceGrasp]:
-        """
-        :param require_lifting: Whether to ask only for grasps that lift the object.
-        :param lowest_height: The lowest height to grasp at, as a fraction of the grasp
-            surface's bounding box from its bottom to its top.
-        :param highest_height: The height to grasp below, as such a fraction.
-        :param shallowest_depth: The least depth to close the fingers at, as a fraction
-            of the piece's length.
-        :param deepest_depth: The depth to close the fingers short of, as such a
-            fraction.
-        :param azimuth_tolerance: How far off its length axis the piece may be seen
-            from, either way, in radians.
-        :param largest_pitch: How far the approach may tilt off vertical, in radians.
-        :param largest_roll: How far the fingers may turn off closing across the
-            length, either way, in radians.
-        :return: Seen along its length from either end, the stretch between the two
-            depths, closing across it.
-        :raises NoGraspGeometry: If the root body has no shape to measure.
-        """
-        lowest, highest = self.grasp_surface().bounds
-        extents = highest - lowest
-        length_axis = max(
-            (Vector3.X().to_np()[:3], Vector3.Y().to_np()[:3]),
-            key=lambda axis: np.dot(extents, axis),
-        )
-        length = float(np.dot(extents, length_axis))
-        azimuth_of_length_axis = math.atan2(length_axis[1], length_axis[0])
-        end_azimuths = (azimuth_of_length_axis, azimuth_of_length_axis + np.pi)
-        grasp = any_surface_grasp(require_lifting)
-        return grasp.where(
-            grasp.height >= lowest_height,
-            grasp.height < highest_height,
-            grasp.depth >= shallowest_depth * length,
-            grasp.depth < deepest_depth * length,
-            or_(
-                *(
-                    and_(
-                        grasp.azimuth >= end_azimuth - azimuth_tolerance,
-                        grasp.azimuth < end_azimuth + azimuth_tolerance,
-                    )
-                    for end_azimuth in end_azimuths
-                )
-            ),
-            grasp.pitch >= 0.0,
-            grasp.pitch < largest_pitch,
-            grasp.roll >= np.pi / 2 - largest_roll,
-            grasp.roll < np.pi / 2 + largest_roll,
-        )
+    @classproperty
+    def grasp_strategy(cls) -> GraspStrategy:
+        return GraspAcrossTheLength()
 
 
 @dataclass(eq=False)
@@ -1573,15 +1551,15 @@ class ShapeSortingPiece(HasGraspCandidates):
         return [
             GraspCandidate(
                 self,
-                Pose(
-                    position=Point3(
+                Pose3Dimensional(
+                    position=CartesianPoint3Dimensional(
                         0.0,
                         0.0,
                         bottom_face + self.grasp_height,
                         reference_frame=self.root,
                     ),
                     orientation=RotationMatrix.from_vectors(
-                        x=Vector3.NEGATIVE_Z(), y=Vector3.X()
+                        x=Vector3Dimensional.NEGATIVE_Z(), y=Vector3Dimensional.X()
                     ).quaternion,
                     reference_frame=self.root,
                 ),
@@ -1603,15 +1581,15 @@ class BottleCap(HasMovableJoint):
     """
 
     def calculate_self_T_movable_joint(
-        self, axis: Vector3
-    ) -> HomogeneousTransformationMatrix:
+        self, axis: Vector3Dimensional
+    ) -> HomogeneousTransformationMatrix3Dimensional:
         """
         A cap screws about its own centre line, so its thread sits at its origin.
 
         :param axis: The thread axis, in the cap frame.
         :return: The identity: the thread's frame is the cap's frame.
         """
-        return HomogeneousTransformationMatrix()
+        return HomogeneousTransformationMatrix3Dimensional()
 
 
 @dataclass(eq=False)
@@ -1652,7 +1630,12 @@ class SemanticEnvironmentAnnotation(HasRootBody):
     """
 
     def obstacle_entities(
-        self, search_space: BoundingBoxCollection[VolumetricBoundingBox, Point3]
+        self,
+        *,
+        search_space: BoundingBoxCollection[
+            VolumetricBoundingBox, CartesianPoint3Dimensional
+        ],
+        excluded_bodies: Iterable[Body] = (),
     ) -> list[Body]:
         """
         Collect the obstacle bodies to consider within ``search_space``.
@@ -1662,23 +1645,26 @@ class SemanticEnvironmentAnnotation(HasRootBody):
 
         :param search_space: The search space; its reference frame is used to look up
             the owning world.
+        :param excluded_bodies: Bodies that are no obstacles either, such as an object
+            to be reached into.
         :return: The obstacle bodies to consider.
         """
         world = search_space.reference_frame._world
-        return [
-            body
-            for body in self.bodies_with_collision
-            if body not in world.robot_bodies_with_collision
-        ]
+        left_out = set(world.robot_bodies_with_collision) | set(excluded_bodies)
+        return [body for body in self.bodies_with_collision if body not in left_out]
 
     def build_bloated_obstacle_collection(
         self,
-        search_space: BoundingBoxCollection[VolumetricBoundingBox, Point3],
+        *,
+        search_space: BoundingBoxCollection[
+            VolumetricBoundingBox, CartesianPoint3Dimensional
+        ],
         semantic_wall_annotation: Wall | None = None,
         bloat_obstacles: float = 0.0,
         bloat_walls: float = 0.0,
         obstacle_height_clearance: float = 0.01,
-    ) -> BoundingBoxCollection[VolumetricBoundingBox, Point3]:
+        excluded_bodies: Iterable[Body] = (),
+    ) -> BoundingBoxCollection[VolumetricBoundingBox, CartesianPoint3Dimensional]:
         """
         Collect and bloat this annotation's obstacle bounding boxes.
 
@@ -1694,12 +1680,16 @@ class SemanticEnvironmentAnnotation(HasRootBody):
             dimension.
         :param obstacle_height_clearance: Amount to expand every obstacle bounding box
             in z, regardless of ``bloat_obstacles``/``bloat_walls``.
+        :param excluded_bodies: Bodies that are no obstacles, see
+            :meth:`obstacle_entities`.
         :return: A collection of the bloated obstacle and wall bounding boxes.
         """
         world_root = search_space.reference_frame
-        origin = HomogeneousTransformationMatrix(reference_frame=world_root)
+        origin = HomogeneousTransformationMatrix3Dimensional(reference_frame=world_root)
 
-        entities_to_consider = self.obstacle_entities(search_space)
+        entities_to_consider = self.obstacle_entities(
+            search_space=search_space, excluded_bodies=excluded_bodies
+        )
 
         collections = (
             entity.collision.as_bounding_box_collection_at_origin(origin)
@@ -1812,7 +1802,7 @@ class Tool(HasGraspCandidates, ABC):
         return end_effector
 
     @abstractmethod
-    def tool_alignment(self, target: Body | Pose) -> list[AlignmentPair]:
+    def tool_alignment(self, target: Body | Pose3Dimensional) -> list[AlignmentPair]:
         """
         :param target: The body or pose the tool acts on.
         :return: The normal pairs that must stay aligned while the tool acts on the
@@ -1846,7 +1836,7 @@ class ToolWithHandle(Tool, HasHandle, ABC):
                 FixedConnection(
                     parent=self.root,
                     child=tip_body,
-                    parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                         x=0.1,
                         y=0.0,
                         z=0.0,
@@ -1862,11 +1852,11 @@ class Whisk(ToolWithHandle):
     A whisk for mixing the contents of containers.
     """
 
-    def tool_alignment(self, target: Body | Pose) -> list[AlignmentPair]:
+    def tool_alignment(self, target: Body | Pose3Dimensional) -> list[AlignmentPair]:
         return [
             AlignmentPair(
-                tip_normal=Vector3(-1, 0, 0, reference_frame=self.root),
-                goal_normal=Vector3(0, 0, 1, reference_frame=target),
+                tip_normal=Vector3Dimensional(-1, 0, 0, reference_frame=self.root),
+                goal_normal=Vector3Dimensional(0, 0, 1, reference_frame=target),
             )
         ]
 
@@ -1877,15 +1867,15 @@ class CuttingKnife(ToolWithHandle):
     A knife for cutting food objects.
     """
 
-    def tool_alignment(self, target: Body | Pose) -> list[AlignmentPair]:
+    def tool_alignment(self, target: Body | Pose3Dimensional) -> list[AlignmentPair]:
         return [
             AlignmentPair(
-                tip_normal=Vector3(1, 0, 0, reference_frame=self.root),
-                goal_normal=Vector3(0, 1, 0, reference_frame=target),
+                tip_normal=Vector3Dimensional(1, 0, 0, reference_frame=self.root),
+                goal_normal=Vector3Dimensional(0, 1, 0, reference_frame=target),
             ),
             AlignmentPair(
-                tip_normal=Vector3(0, 0, 1, reference_frame=self.root),
-                goal_normal=Vector3(0, 0, 1, reference_frame=target),
+                tip_normal=Vector3Dimensional(0, 0, 1, reference_frame=self.root),
+                goal_normal=Vector3Dimensional(0, 0, 1, reference_frame=target),
             ),
         ]
 
@@ -1896,11 +1886,11 @@ class PouringCup(Tool, Container):
     A cup for pouring liquids into containers.
     """
 
-    def tool_alignment(self, target: Body | Pose) -> list[AlignmentPair]:
+    def tool_alignment(self, target: Body | Pose3Dimensional) -> list[AlignmentPair]:
         return [
             AlignmentPair(
-                tip_normal=Vector3(0, 0, 1, reference_frame=self.root),
-                goal_normal=Vector3(0, 0, 1, reference_frame=target),
+                tip_normal=Vector3Dimensional(0, 0, 1, reference_frame=self.root),
+                goal_normal=Vector3Dimensional(0, 0, 1, reference_frame=target),
             )
         ]
 
@@ -1914,22 +1904,22 @@ class Sponge(Tool):
         which is why its alignments use negative Z normals unlike the other tools.
     """
 
-    def tool_alignment(self, target: Body | Pose) -> list[AlignmentPair]:
+    def tool_alignment(self, target: Body | Pose3Dimensional) -> list[AlignmentPair]:
         if isinstance(target, Body):
             return [
                 AlignmentPair(
-                    tip_normal=Vector3(0, 0, 1, reference_frame=self.root),
-                    goal_normal=Vector3(0, 0, -1, reference_frame=target),
+                    tip_normal=Vector3Dimensional(0, 0, 1, reference_frame=self.root),
+                    goal_normal=Vector3Dimensional(0, 0, -1, reference_frame=target),
                 )
             ]
         return [
             AlignmentPair(
-                tip_normal=Vector3(0, 0, -1, reference_frame=self.root),
+                tip_normal=Vector3Dimensional(0, 0, -1, reference_frame=self.root),
                 goal_normal=self._pose_surface_normal(target),
             )
         ]
 
-    def _pose_surface_normal(self, pose: Pose) -> Vector3:
+    def _pose_surface_normal(self, pose: Pose3Dimensional) -> Vector3Dimensional:
         """
         :param pose: The pose whose surface normal is computed.
         :return: The pose's local Z axis expressed in the pose's reference frame.
@@ -1938,7 +1928,7 @@ class Sponge(Tool):
             pose.reference_frame if pose.reference_frame is not None else self.root
         )
         rotation = pose.rotation_matrix.to_np()[:3, :3]
-        return Vector3.from_iterable(
+        return Vector3Dimensional.from_iterable(
             rotation @ np.array([0.0, 0.0, 1.0]),
             reference_frame=reference_frame,
         )

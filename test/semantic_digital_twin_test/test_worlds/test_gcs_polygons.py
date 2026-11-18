@@ -3,13 +3,17 @@ import pytest
 import trimesh
 
 pytest.importorskip(
-    "pydrake", reason="drake is not installed - install the semantic_digital_twin 'iris' extra"
+    "pydrake",
+    reason="drake is not installed - install the semantic_digital_twin 'iris' extra",
 )
 from pydrake.geometry.optimization import HPolyhedron, VPolytope
 
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.exceptions import PointOccupiedError
-from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Point3
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
+    CartesianPoint3Dimensional,
+)
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import (
@@ -57,7 +61,7 @@ def unit_box_search_space(unit_box_world: World) -> BoundingBoxCollection:
                 max_y=3,
                 min_z=-0.5,
                 max_z=0.5,
-                origin=HomogeneousTransformationMatrix(
+                origin=HomogeneousTransformationMatrix3Dimensional(
                     reference_frame=unit_box_world.root
                 ),
             )
@@ -106,7 +110,7 @@ def non_convex_ring_search_space(non_convex_ring_world: World) -> BoundingBoxCol
                 max_y=3,
                 min_z=-0.5,
                 max_z=0.5,
-                origin=HomogeneousTransformationMatrix(
+                origin=HomogeneousTransformationMatrix3Dimensional(
                     reference_frame=non_convex_ring_world.root
                 ),
             )
@@ -141,8 +145,12 @@ class TestGraphOfConvexPolygons:
         unit_box_world: World,
         unit_box_graph_of_convex_polygons: GraphOfConvexPolygons,
     ):
-        start = Point3(-1.5, -1.5, 0.0, reference_frame=unit_box_world.root)
-        goal = Point3(2.5, 2.5, 0.0, reference_frame=unit_box_world.root)
+        start = CartesianPoint3Dimensional(
+            -1.5, -1.5, 0.0, reference_frame=unit_box_world.root
+        )
+        goal = CartesianPoint3Dimensional(
+            2.5, 2.5, 0.0, reference_frame=unit_box_world.root
+        )
 
         path = unit_box_graph_of_convex_polygons.path_from_to(start, goal)
 
@@ -156,8 +164,12 @@ class TestGraphOfConvexPolygons:
         unit_box_world: World,
         unit_box_graph_of_convex_polygons: GraphOfConvexPolygons,
     ):
-        occupied = Point3(0.0, 0.0, 0.0, reference_frame=unit_box_world.root)
-        free = Point3(2.5, 2.5, 0.0, reference_frame=unit_box_world.root)
+        occupied = CartesianPoint3Dimensional(
+            0.0, 0.0, 0.0, reference_frame=unit_box_world.root
+        )
+        free = CartesianPoint3Dimensional(
+            2.5, 2.5, 0.0, reference_frame=unit_box_world.root
+        )
         with pytest.raises(PointOccupiedError):
             unit_box_graph_of_convex_polygons.path_from_to(occupied, free)
 
@@ -166,8 +178,12 @@ class TestGraphOfConvexPolygons:
         unit_box_world: World,
         unit_box_graph_of_convex_polygons: GraphOfConvexPolygons,
     ):
-        occupied = Point3(0.0, 0.0, 0.0, reference_frame=unit_box_world.root)
-        free = Point3(-1.5, -1.5, 0.0, reference_frame=unit_box_world.root)
+        occupied = CartesianPoint3Dimensional(
+            0.0, 0.0, 0.0, reference_frame=unit_box_world.root
+        )
+        free = CartesianPoint3Dimensional(
+            -1.5, -1.5, 0.0, reference_frame=unit_box_world.root
+        )
         with pytest.raises(PointOccupiedError):
             unit_box_graph_of_convex_polygons.path_from_to(free, occupied)
 
@@ -176,8 +192,12 @@ class TestGraphOfConvexPolygons:
         unit_box_world: World,
         unit_box_graph_of_convex_polygons: GraphOfConvexPolygons,
     ):
-        start = Point3(-1.5, -1.5, 0.0, reference_frame=unit_box_world.root)
-        goal = Point3(2.5, 2.5, 0.0, reference_frame=unit_box_world.root)
+        start = CartesianPoint3Dimensional(
+            -1.5, -1.5, 0.0, reference_frame=unit_box_world.root
+        )
+        goal = CartesianPoint3Dimensional(
+            2.5, 2.5, 0.0, reference_frame=unit_box_world.root
+        )
 
         for start, goal in [(start, goal), (goal, start), (start, goal)]:
             path = unit_box_graph_of_convex_polygons.path_from_to(start, goal)
@@ -198,7 +218,9 @@ class TestGraphOfConvexPolygons:
             GraphOfConvexPolygons.from_world(unit_box_world, None)
 
     def test_from_world_rejects_a_multi_box_search_space(self, unit_box_world: World):
-        origin = HomogeneousTransformationMatrix(reference_frame=unit_box_world.root)
+        origin = HomogeneousTransformationMatrix3Dimensional(
+            reference_frame=unit_box_world.root
+        )
         two_boxes = BoundingBoxCollection(
             [
                 VolumetricBoundingBox(-2, -2, -0.5, -1, -1, 0.5, origin),
@@ -212,7 +234,9 @@ class TestGraphOfConvexPolygons:
     def test_extra_seed_points_are_seeded_before_the_coverage_grid(
         self, unit_box_world: World, unit_box_search_space: BoundingBoxCollection
     ):
-        far_corner = Point3(-1.9, -1.9, 0.0, reference_frame=unit_box_world.root)
+        far_corner = CartesianPoint3Dimensional(
+            -1.9, -1.9, 0.0, reference_frame=unit_box_world.root
+        )
         graph_of_convex_polygons = GraphOfConvexPolygons.from_world(
             unit_box_world,
             unit_box_search_space,
@@ -243,9 +267,13 @@ class TestGraphOfConvexPolygons:
         # The ring's bounding box spans roughly [-0.5, 0.5] in x/y; its own hole at the
         # center is not carved out by the bounding-box fallback, so the center must
         # still be treated as occupied.
-        center = Point3(0.0, 0.0, 0.0, reference_frame=non_convex_ring_world.root)
+        center = CartesianPoint3Dimensional(
+            0.0, 0.0, 0.0, reference_frame=non_convex_ring_world.root
+        )
         with pytest.raises(PointOccupiedError):
             graph_of_convex_polygons.path_from_to(
                 center,
-                Point3(2.5, 2.5, 0.0, reference_frame=non_convex_ring_world.root),
+                CartesianPoint3Dimensional(
+                    2.5, 2.5, 0.0, reference_frame=non_convex_ring_world.root
+                ),
             )

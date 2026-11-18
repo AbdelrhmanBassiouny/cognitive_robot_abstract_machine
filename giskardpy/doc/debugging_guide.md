@@ -21,8 +21,8 @@ A `DebugExpression`
 (`giskardpy.motion_statechart.graph_node.DebugExpression`) wraps three things:
 
 - a `name`, used as the label in every debugging tool,
-- an `expression` — either a `Scalar` or a spatial type (`Point3`, `Vector3`, `Quaternion`,
-  `RotationMatrix`, `HomogeneousTransformationMatrix`, or `Pose`), and
+- an `expression` — either a `Scalar` or a spatial type (`CartesianPoint3Dimensional`, `Vector3Dimensional`, `Quaternion`,
+  `RotationMatrix`, `HomogeneousTransformationMatrix3Dimensional`, or `Pose3Dimensional`), and
 - a `color`, used when the expression is rendered.
 
 A node registers a debug expression by appending it to `artifacts.debug_expressions` inside its
@@ -36,18 +36,18 @@ artifacts.debug_expressions.append(
     DebugExpression(
         name=f"{self.name}/current_normal",
         expression=root_V_tip_normal,
-        color=Color(1, 0, 0, 1),
+        color=Color.from_rgba(red=1, green=0, blue=0, opacity=1),
     )
 )
 ```
 
 See `tasks/align_planes.py` for a worked example. For Cartesian tasks there is a convenience
-helper, `CartesianTask.add_goal_and_current_debug_expressions(artifacts, goal, current)`
+helper, `CartesianTask.add_goal_and_current_debug_expressions(artifacts=..., goal=..., current=...)`
 (`tasks/cartesian_tasks.py`), which registers `<task name>/goal` (green) and
 `<task name>/current` (red) so the two can be told apart in RViz.
 
-The statechart gathers every node's debug expressions through
-`MotionStatechart.collect_debug_expressions()`; the visualizer and plotter below consume that
+Every node's debug expressions are gathered through
+`DebugExpression.collect_from(statechart)`; the visualizer and plotter below consume that
 list, so you only have to register the expression once.
 
 ```{note}
@@ -61,22 +61,28 @@ The `DebugExpressionPublisher`
 (`giskardpy.motion_statechart.debug_expression_publisher`) turns every spatial-typed debug
 expression into an RViz marker and republishes it whenever the world state changes.
 
-You do not construct it directly. Instead, enable the flag on the ROS executor:
+You do not construct it directly. Instead, add the `DebugExpressionPublishing` extension to
+the executor:
 
 ```python
-from giskardpy.ros_executor import Ros2Executor
-
-executor = Ros2Executor(
-    context=context,
-    ros_node=node,
-    publish_debug_expressions=True,
+from cramph.context import StatechartContext
+from cramph.executor import StatechartExecutor
+from giskardpy.motion_control import MotionControl
+from giskardpy.motion_statechart.debug_expression_publisher import (
+    DebugExpressionPublishing,
 )
-executor.compile(motion_statechart)
+from giskardpy.motion_statechart.ros_context import RosNodeAccess
+
+executor = StatechartExecutor(
+    context=StatechartContext(world=world),
+    extensions=[RosNodeAccess(ros_node=node), MotionControl(), DebugExpressionPublishing(ros_node=node)],
+)
+executor.compile(statechart=motion_statechart)
 ```
 
-On `compile()`, the executor builds the publisher and attaches it to the statechart. Each
+On `compile()`, the extension builds the publisher and attaches it to the statechart. Each
 expression's `name` becomes the marker namespace and label, so individual expressions can be
-toggled on and off in RViz's display tree. `Vector3` expressions are anchored to their
+toggled on and off in RViz's display tree. `Vector3Dimensional` expressions are anchored to their
 `visualisation_frame` so the arrow is drawn at the right body.
 
 This is the right tool for spatial reasoning: comparing a goal pose against the current pose,
@@ -89,7 +95,7 @@ Each spatial type renders as a different marker, and the `<task name>/goal` (gre
 ---
 width: 600px
 ---
-A `Pose` is drawn as a coordinate frame. Here `CartesianPose/goal` and `CartesianPose/current`
+A `Pose3Dimensional` is drawn as a coordinate frame. Here `CartesianPose/goal` and `CartesianPose/current`
 show the target and actual end-effector pose side by side.
 ```
 
@@ -97,7 +103,7 @@ show the target and actual end-effector pose side by side.
 ---
 width: 600px
 ---
-A `Point3` is drawn as a sphere — `CartesianPosition/goal` (green) and
+A `CartesianPoint3Dimensional` is drawn as a sphere — `CartesianPosition/goal` (green) and
 `CartesianPosition/current` (red).
 ```
 
@@ -105,50 +111,52 @@ A `Point3` is drawn as a sphere — `CartesianPosition/goal` (green) and
 ---
 width: 500px
 ---
-A `Vector3` is drawn as an arrow anchored to its `visualisation_frame`. Here the green
+A `Vector3Dimensional` is drawn as an arrow anchored to its `visualisation_frame`. Here the green
 `Pointing/goal` and red `Pointing/current` arrows show where the robot should point versus
 where it currently points.
 ```
 
 ## Plotting debug expressions
 
-To see how debug expressions evolve over an entire motion, attach a
+To see how debug expressions evolve over an entire motion, add a `DebugExpressionRecording`
+(`giskardpy.motion_control`) to the executor, after `MotionControl`. It holds a
 `DebugExpressionTrajectoryPlotter`
-(`giskardpy.motion_statechart.plotters.debug_expression_trajectory_plotter`) to the base
-`Executor`:
+(`giskardpy.motion_statechart.plotters.debug_expression_trajectory_plotter`):
 
 ```python
-from giskardpy.executor import Executor
-from giskardpy.motion_statechart.plotters.debug_expression_trajectory_plotter import (
-    DebugExpressionTrajectoryPlotter,
-)
+from cramph.context import StatechartContext
+from cramph.executor import StatechartExecutor
+from giskardpy.motion_control import DebugExpressionRecording, MotionControl
 
-executor = Executor(
-    context=context,
-    debug_expression_plotter=DebugExpressionTrajectoryPlotter(),
+executor = StatechartExecutor(
+    context=StatechartContext(world=world),
+    extensions=[MotionControl(), DebugExpressionRecording()],
 )
-executor.compile(motion_statechart)
+executor.compile(statechart=motion_statechart)
 executor.tick_until_end()
-executor.plot_debug_expressions("./debug_expressions.pdf")
+executor.require_extension(extension_type=DebugExpressionRecording).plotter.plot(
+    file_name="./debug_expressions.pdf"
+)
 ```
 
 The lifecycle is:
 
 - `compile()` calls the plotter's `reset(...)`, which builds a fresh trajectory from
-  `collect_debug_expressions()` and discards any previous recording.
-- Every `tick()` appends the current value of each expression at the current time.
-- `plot_debug_expressions(file_name)` writes the PDF. It raises `PlotterNotConfiguredError` if
-  no plotter was passed to the executor.
+  `DebugExpression.collect_from(statechart)` and discards any previous recording.
+- Every `tick()` appends the value of each expression after the commands of that tick were
+  applied.
+- `plotter.plot(file_name)` writes the PDF. `require_extension` raises
+  `MissingExecutorExtensionError` if the executor has no `DebugExpressionRecording`.
 
 The plot has one subplot per expression and one line per scalar component, sharing a common time
-axis — for example a `Point3` produces four lines (its homogeneous `x, y, z, w` components). The
+axis — for example a `CartesianPoint3Dimensional` produces four lines (its homogeneous `x, y, z, w` components). The
 plotter exposes a few layout knobs: `subplot_height_in_cm`, `second_width_in_cm`, and `legend`.
 
 ```{figure} img/test_pointing_debug_expressions.png
 ---
 width: 600px
 ---
-An example plot for a pointing task: the `Pointing/goal` and `Pointing/current` `Vector3`
+An example plot for a pointing task: the `Pointing/goal` and `Pointing/current` `Vector3Dimensional`
 expressions, each split into their four homogeneous components, show the goal vector and the
 current vector converging over the motion.
 ```
@@ -158,7 +166,7 @@ For a runnable end-to-end example, see
 
 ## Inspecting the QP with `QuadraticProgramDebugger`
 
-When implementing new MotionStatechart nodes, the controller may produce an unintended command, runs into limits, or the solve fails.
+When implementing new motion statechart nodes, the controller may produce an unintended command, runs into limits, or the solve fails.
 To debug this, it may help to look directly into the quadratic program (QP) itself. 
 The QP is just large, anonymous numeric arrays;
 the `QuadraticProgramDebugger` (`giskardpy.qp.qp_debugger`) re-labels those arrays with the corresponding

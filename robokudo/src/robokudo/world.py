@@ -17,8 +17,8 @@ from robokudo.utils.transform import (
     get_quaternion_from_transform_matrix,
     get_translation_from_transform_matrix,
 )
-from semantic_digital_twin.spatial_types.spatial_types import (
-    HomogeneousTransformationMatrix,
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
 )
 import trimesh.creation
 from semantic_digital_twin.world_description.geometry import Mesh, Scale, Box
@@ -33,6 +33,7 @@ from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.world import World, Body
 from semantic_digital_twin.world_description.connections import Connection6DoF
+from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 
 # Module-level singleton-like variables
 this = sys.modules[__name__]
@@ -202,7 +203,9 @@ def setup_world_for_camera_frame(
             world_body.visual.append(
                 Mesh.from_trimesh(
                     mesh=trimesh.creation.axis(),
-                    origin=HomogeneousTransformationMatrix(reference_frame=world_body),
+                    origin=HomogeneousTransformationMatrix3Dimensional(
+                        reference_frame=world_body
+                    ),
                 )
             )
 
@@ -213,7 +216,9 @@ def setup_world_for_camera_frame(
             camera_body.visual.append(
                 Mesh.from_trimesh(
                     mesh=trimesh.creation.axis(),
-                    origin=HomogeneousTransformationMatrix(reference_frame=camera_body),
+                    origin=HomogeneousTransformationMatrix3Dimensional(
+                        reference_frame=camera_body
+                    ),
                 )
             )
 
@@ -231,7 +236,7 @@ def setup_world_for_camera_frame(
 def update_connection_transform(
     to_name: PrefixedName,
     from_name: PrefixedName,
-    transform: HomogeneousTransformationMatrix,
+    transform: HomogeneousTransformationMatrix3Dimensional,
 ) -> None:
     """
     Update the connection connecting from_name to to_name with the given transformation.
@@ -263,17 +268,18 @@ def _get_world_body_from_cas(cas: CAS, rk_world: World) -> Body | None:
     """
     Return the world-frame body referenced by the CAS, if available.
     """
-    world_frame = cas.world_frame
-    if world_frame is None:
+    observation = cas.camera_observation
+    if observation is None or observation.world_T_camera is None:
         return None
-    return rk_world.get_body_by_name(PrefixedName(name=world_frame))
+    reference_frame = observation.world_T_camera.reference_frame
+    return rk_world.get_body_by_name(reference_frame.name)
 
 
 def _create_world_origin_and_scale_from_latest_bbox(
     object_belief: ObjectBeliefState,
     cas: CAS,
     world_body: Body,
-) -> tuple[HomogeneousTransformationMatrix, Scale] | None:
+) -> tuple[HomogeneousTransformationMatrix3Dimensional, Scale] | None:
     """
     Convert the latest camera-frame bbox into a world-frame SemDT origin and scale.
     """
@@ -290,7 +296,7 @@ def _create_world_origin_and_scale_from_latest_bbox(
     translation = list(get_translation_from_transform_matrix(pose_in_world_mat))
 
     object_belief_body = object_belief.body
-    origin = HomogeneousTransformationMatrix.from_xyz_quaternion(
+    origin = HomogeneousTransformationMatrix3Dimensional.from_xyz_quaternion(
         pos_x=translation[0],
         pos_y=translation[1],
         pos_z=translation[2],
@@ -328,10 +334,12 @@ def _update_belief_body_from_latest_bbox(
     origin, scale = origin_and_scale
     object_belief_body = object_belief.body
 
+    kept_shapes = [] if replace_existing_visuals else object_belief_body.visual.shapes
     with rk_world.modify_world():
-        if replace_existing_visuals:
-            object_belief_body.visual.shapes.clear()
-        object_belief_body.visual.append(Box(scale=scale))
+        object_belief_body.update_shapes(
+            visual=ShapeCollection([*kept_shapes, Box(scale=scale)]),
+            collision=object_belief_body.collision,
+        )
         world_T_object_belief.origin = origin
 
 

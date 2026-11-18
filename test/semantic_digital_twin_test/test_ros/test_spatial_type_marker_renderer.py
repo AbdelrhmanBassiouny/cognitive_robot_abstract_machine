@@ -1,39 +1,63 @@
+"""
+Tests rendering evaluated spatial types as RViz markers.
+"""
+
 import numpy as np
 import pytest
 from visualization_msgs.msg import Marker
 
-from krrood.symbolic_math.symbolic_math import Scalar
+from krrood.symbolic_math.symbolic_math import FloatVariable, Scalar
 from semantic_digital_twin.adapters.ros.visualization.exceptions import (
     CannotRenderSpatialTypeError,
 )
 from semantic_digital_twin.adapters.ros.visualization.spatial_type_marker_renderer import (
     SpatialTypeMarkerRenderer,
+    SpatialTypeMarkers,
     SpatialTypeVisualization,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.spatial_types import (
-    HomogeneousTransformationMatrix,
-    Point3,
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
+    CartesianPoint2Dimensional,
+    CartesianPoint3Dimensional,
+    Pose2Dimensional,
     Quaternion,
-    Vector3,
+    Vector3Dimensional,
 )
-from semantic_digital_twin.spatial_types.spatial_types import (
-    RotationMatrix,
-    SpatialType,
-)
+from krrood_spatial_math.spatial_types import RotationMatrix, SymbolicSpatialType
 from semantic_digital_twin.world_description.world_entity import Body
 
 ROOT_FRAME_NAME = "map"
 
 
-def render(spatial_type: SpatialType, **kwargs) -> list[Marker]:
-    request = SpatialTypeVisualization(spatial_type=spatial_type, **kwargs)
-    return SpatialTypeMarkerRenderer.render(request, ROOT_FRAME_NAME)
+def rendered_value(spatial_type: SymbolicSpatialType) -> np.ndarray:
+    """
+    The evaluated rendered expression of a spatial type.
+    """
+    renderer = SpatialTypeMarkerRenderer.find_spatial_type_renderer(
+        spatial_type=spatial_type
+    )
+    return renderer.rendered_expression(spatial_type=spatial_type).evaluate()
+
+
+def render(spatial_type: SymbolicSpatialType, **kwargs) -> list[Marker]:
+    """
+    Render a spatial type from its evaluated rendered expression.
+    """
+    spatial_type_markers = SpatialTypeMarkers.from_visualization(
+        visualization=SpatialTypeVisualization(spatial_type=spatial_type, **kwargs),
+        root_frame_name=ROOT_FRAME_NAME,
+    )
+    spatial_type_markers.update(rendered_value=rendered_value(spatial_type))
+    return spatial_type_markers.markers
+
+
+# %% markers per spatial type
 
 
 def test_point_renders_single_sphere():
     frame = Body(name=PrefixedName("frame"))
-    point = Point3(1, 2, 3, reference_frame=frame)
+    point = CartesianPoint3Dimensional(1, 2, 3, reference_frame=frame)
 
     markers = render(point)
 
@@ -50,7 +74,7 @@ def test_point_renders_single_sphere():
 
 
 def test_point_without_reference_frame_uses_root():
-    markers = render(Point3(0, 0, 0))
+    markers = render(CartesianPoint3Dimensional(0, 0, 0))
 
     assert markers[0].header.frame_id == ROOT_FRAME_NAME
 
@@ -58,7 +82,7 @@ def test_point_without_reference_frame_uses_root():
 def test_vector_renders_arrow_anchored_at_visualisation_frame():
     reference = Body(name=PrefixedName("reference"))
     visualisation = Body(name=PrefixedName("visualisation"))
-    vector = Vector3(
+    vector = Vector3Dimensional(
         x=1, y=0, z=0, reference_frame=reference, visualisation_frame=visualisation
     )
 
@@ -74,7 +98,9 @@ def test_vector_renders_arrow_anchored_at_visualisation_frame():
 
 def test_homogeneous_matrix_renders_axis_triad():
     frame = Body(name=PrefixedName("frame"))
-    pose = HomogeneousTransformationMatrix.from_xyz_rpy(1, 1, 1, reference_frame=frame)
+    pose = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+        1, 1, 1, reference_frame=frame
+    )
 
     markers = render(pose)
 
@@ -88,7 +114,7 @@ def test_homogeneous_matrix_renders_axis_triad():
 
 
 def test_pose_like_adds_text_marker_when_labeled():
-    pose = HomogeneousTransformationMatrix.from_xyz_rpy(0, 0, 0)
+    pose = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(0, 0, 0)
 
     markers = render(pose, label="goal")
 
@@ -120,13 +146,116 @@ def test_quaternion_renders_triad_at_origin():
     assert all(marker.type == Marker.ARROW for marker in markers)
 
 
+def test_pose_2d_renders_triad_at_its_position():
+    """
+    A 2D pose is drawn on the x-y plane of its reference frame.
+    """
+    markers = render(Pose2Dimensional(CartesianPoint2Dimensional(1, 2)))
+
+    assert len(markers) == 3
+    position = markers[0].pose.position
+    assert (position.x, position.y, position.z) == (1, 2, 0)
+
+
 def test_unsupported_spatial_type_raises():
     with pytest.raises(CannotRenderSpatialTypeError):
         render(Scalar(1.0))
 
 
 def test_namespace_and_id_offset_propagate():
-    markers = render(Point3(0, 0, 0), namespace="debug/point", marker_id_offset=10)
+    markers = render(
+        CartesianPoint3Dimensional(0, 0, 0),
+        namespace="debug/point",
+        marker_id_offset=10,
+    )
 
     assert markers[0].ns == "debug/point"
     assert markers[0].id == 10
+
+
+# %% rendered expressions
+
+
+def test_point_renders_its_position():
+    """
+    A point is drawn from its three coordinates, without the homogeneous entry.
+    """
+    assert rendered_value(CartesianPoint3Dimensional(1, 2, 3)).tolist() == [1, 2, 3]
+
+
+def test_vector_renders_its_components():
+    """
+    A vector is drawn from its three components, without the homogeneous entry.
+    """
+    assert rendered_value(Vector3Dimensional(4, 5, 6)).tolist() == [4, 5, 6]
+
+
+def test_pose_like_renders_position_and_quaternion():
+    """
+    A transformation is drawn from its position followed by its quaternion.
+    """
+    pose = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(1, 2, 3)
+
+    assert rendered_value(pose).tolist() == [1, 2, 3, 0, 0, 0, 1]
+
+
+def test_orientation_without_position_renders_at_origin():
+    """
+    A quaternion has no position, so it is drawn at the origin.
+    """
+    quaternion = Quaternion(x=0, y=0, z=1, w=0)
+
+    assert rendered_value(quaternion).tolist() == [0, 0, 0, 0, 0, 1, 0]
+
+
+# %% rendering from a given value
+
+
+def test_markers_are_drawn_from_the_given_value():
+    """
+    Rendering takes the given value and never evaluates the spatial type.
+    """
+    unresolvable = FloatVariable(name="unresolvable")
+    point = CartesianPoint3Dimensional(x=unresolvable)
+    spatial_type_markers = SpatialTypeMarkers.from_visualization(
+        visualization=SpatialTypeVisualization(spatial_type=point),
+        root_frame_name=ROOT_FRAME_NAME,
+    )
+
+    spatial_type_markers.update(rendered_value=np.array([7.0, 8.0, 9.0]))
+
+    position = spatial_type_markers.markers[0].pose.position
+    assert (position.x, position.y, position.z) == (7, 8, 9)
+
+
+@pytest.mark.parametrize(
+    "spatial_type",
+    [
+        CartesianPoint3Dimensional(),
+        Vector3Dimensional(),
+        HomogeneousTransformationMatrix3Dimensional(),
+    ],
+    ids=["point", "vector", "transform"],
+)
+def test_markers_updated_again_show_only_the_latest_value(spatial_type):
+    """
+    Updating markers that were updated before leaves nothing of the earlier value.
+    """
+    visualization = SpatialTypeVisualization(
+        spatial_type=spatial_type, label="label", namespace="namespace"
+    )
+    value_count = len(rendered_value(spatial_type))
+    earlier_value = np.arange(value_count) + 1.0
+    latest_value = np.arange(value_count) + 10.0
+    updated_twice = SpatialTypeMarkers.from_visualization(
+        visualization=visualization, root_frame_name=ROOT_FRAME_NAME
+    )
+    updated_once = SpatialTypeMarkers.from_visualization(
+        visualization=visualization, root_frame_name=ROOT_FRAME_NAME
+    )
+
+    updated_twice.update(rendered_value=earlier_value)
+    updated_twice.update(rendered_value=latest_value)
+    updated_once.update(rendered_value=latest_value)
+
+    assert updated_twice.markers == updated_once.markers

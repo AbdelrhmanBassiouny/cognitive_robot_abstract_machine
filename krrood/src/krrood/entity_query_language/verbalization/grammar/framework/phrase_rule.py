@@ -10,6 +10,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
 from krrood.entity_query_language.verbalization.fragments.features import (
     GrammaticalNumber,
 )
+from krrood.patterns.classproperty import classproperty
 from krrood.patterns.exceptions import AmbiguousRuleError
 from krrood.patterns.specificity_ranking import mro_depth, sole_maximum
 
@@ -32,7 +33,7 @@ if TYPE_CHECKING:
     )
 
 
-@dataclass(frozen=True)
+@dataclass(kw_only=True, frozen=True)
 class RenderOptions:
     """The per-recursion render flags, bundled so a new one is a single field here rather than a
     new positional parameter threaded through every recursion site.
@@ -56,7 +57,7 @@ class RenderOptions:
     candidate set (*"one of A, B, or C"*) rather than as a subject noun (*"an int"*)."""
 
 
-@dataclass
+@dataclass(kw_only=True)
 class RuleContext:
     """
     Per-node context handed to a rule's ``build``.
@@ -78,8 +79,8 @@ class RuleContext:
 
     def child(
         self,
-        node: FoldNode,
         *,
+        node: FoldNode,
         number: GrammaticalNumber = GrammaticalNumber.SINGULAR,
         inline: bool = False,
         as_value: bool = False,
@@ -160,7 +161,15 @@ class PhraseRule(ABC):
     """``True`` on a rule whose construct is itself a query body, so an entity found anywhere
     within it renders as a nested noun phrase."""
 
-    def when(self, node: FoldNode, context: RuleContext) -> bool:
+    @classproperty
+    def joins_grammar(cls) -> bool:
+        """
+        ``True`` when the grammar loads this rule. A rule that must stay out of it, such as
+        one a test defines, and its subclasses set this to ``False``.
+        """
+        return True
+
+    def when(self, *, node: FoldNode, context: RuleContext) -> bool:
         """
         Extra precondition beyond ``isinstance(node, construct)``.
 
@@ -174,7 +183,7 @@ class PhraseRule(ABC):
         return True
 
     @abstractmethod
-    def build(self, node: FoldNode, context: RuleContext) -> VerbalizationFragment:
+    def build(self, *, node: FoldNode, context: RuleContext) -> VerbalizationFragment:
         """
         Build the fragment for *node*.
 
@@ -233,7 +242,7 @@ def select(
     candidates = [
         rule
         for rule in rules
-        if isinstance(node, rule.construct) and rule.when(node, context)
+        if isinstance(node, rule.construct) and rule.when(node=node, context=context)
     ]
     return sole_maximum(
         candidates,

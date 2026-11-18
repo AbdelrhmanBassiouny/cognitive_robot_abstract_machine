@@ -1,4 +1,10 @@
+"""
+Tests of graphs of convex sets built from a world's free space, and the questions they
+answer.
+"""
+
 import os.path
+from copy import deepcopy
 
 import numpy as np
 import plotly.graph_objects as go
@@ -18,10 +24,17 @@ from semantic_digital_twin.exceptions import (
     NoSupportingSurfaceError,
     PointOccupiedError,
 )
+from semantic_digital_twin.robots.exceptions import MissingMobileBaseError
+from semantic_digital_twin.robots.hsrb import HSRB
+from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Floor
-from semantic_digital_twin.spatial_types import Point2, Point3, Pose
-from semantic_digital_twin.spatial_types.spatial_types import (
-    HomogeneousTransformationMatrix,
+from krrood_spatial_math.spatial_types import (
+    CartesianPoint2Dimensional,
+    CartesianPoint3Dimensional,
+    Pose3Dimensional,
+)
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
@@ -40,6 +53,7 @@ from semantic_digital_twin.world_description.graph_of_convex_sets.boxes import (
 )
 from semantic_digital_twin.world_description.graph_of_convex_sets.exceptions import (
     AmbiguousSelectedVariableError,
+    NoFreeSpaceError,
     PointOutsideSearchSpaceError,
 )
 from semantic_digital_twin.world_description.shape_collection import (
@@ -110,10 +124,10 @@ def test_reachability(
     """
     Verify if a path can be found around the unit box.
     """
-    start_point = Point3(
+    start_point = CartesianPoint3Dimensional(
         -1, -1, 0.5, reference_frame=graph_of_convex_sets_unit_box.world.root
     )
-    target_point = Point3(
+    target_point = CartesianPoint3Dimensional(
         2, 2, 0.5, reference_frame=graph_of_convex_sets_unit_box.world.root
     )
 
@@ -152,7 +166,7 @@ def test_from_world(table_world: World):
                 max_y=2,
                 min_z=0,
                 max_z=2,
-                origin=HomogeneousTransformationMatrix(
+                origin=HomogeneousTransformationMatrix3Dimensional(
                     reference_frame=table_world.root
                 ),
             )
@@ -160,14 +174,18 @@ def test_from_world(table_world: World):
         table_world.root,
     )
     graph_of_convex_sets = VolumetricGraphOfBoundingBoxes.free_space_from_world(
-        table_world, search_space=search_space
+        world=table_world, search_space=search_space
     )
     assert graph_of_convex_sets is not None
     assert len(graph_of_convex_sets.graph.nodes()) > 0
     assert len(graph_of_convex_sets.graph.edges()) > 0
 
-    start = Point3(-4.5, -0.5, 0.4, reference_frame=table_world.root)
-    target = Point3(-2.5, 1.5, 0.9, reference_frame=table_world.root)
+    start = CartesianPoint3Dimensional(
+        -4.5, -0.5, 0.4, reference_frame=table_world.root
+    )
+    target = CartesianPoint3Dimensional(
+        -2.5, 1.5, 0.9, reference_frame=table_world.root
+    )
 
     path = graph_of_convex_sets.path_from_to(start, target)
 
@@ -175,9 +193,52 @@ def test_from_world(table_world: World):
     assert len(path) > 1
 
     with pytest.raises(PointOutsideSearchSpaceError):
-        start_unsearched = Point3(-10, -10, -10, reference_frame=table_world.root)
-        target_unsearched = Point3(10, 10, 10, reference_frame=table_world.root)
+        start_unsearched = CartesianPoint3Dimensional(
+            -10, -10, -10, reference_frame=table_world.root
+        )
+        target_unsearched = CartesianPoint3Dimensional(
+            10, 10, 10, reference_frame=table_world.root
+        )
         graph_of_convex_sets.path_from_to(start_unsearched, target_unsearched)
+
+
+def test_a_body_left_out_of_the_obstacles_leaves_its_space_free(table_world: World):
+    """
+    What is to be reached into, such as an object to grasp, is left out of the
+    obstacles, so that the space it fills counts as free.
+    """
+    search_space = BoundingBoxCollection(
+        [
+            VolumetricBoundingBox(
+                min_x=-5,
+                max_x=-2,
+                min_y=-1,
+                max_y=2,
+                min_z=0,
+                max_z=2,
+                origin=HomogeneousTransformationMatrix3Dimensional(
+                    reference_frame=table_world.root
+                ),
+            )
+        ],
+        table_world.root,
+    )
+    top = table_world.get_body_by_name("top")
+    inside_the_top = (
+        top.collision.as_bounding_box_collection_in_frame(table_world.root)
+        .bounding_box()
+        .center
+    )
+
+    with_the_top = VolumetricGraphOfBoundingBoxes.free_space_from_world(
+        world=table_world, search_space=search_space
+    )
+    without_the_top = VolumetricGraphOfBoundingBoxes.free_space_from_world(
+        world=table_world, search_space=search_space, excluded_bodies=[top]
+    )
+
+    assert not with_the_top.is_free(point=inside_the_top)
+    assert without_the_top.is_free(point=inside_the_top)
 
 
 def test_constrain_to_free_space_requires_floatlike_fields(table_world: World):
@@ -196,13 +257,15 @@ def test_constrain_to_free_space_requires_floatlike_fields(table_world: World):
                 1,
                 1,
                 1,
-                HomogeneousTransformationMatrix(reference_frame=table_world.root),
+                HomogeneousTransformationMatrix3Dimensional(
+                    reference_frame=table_world.root
+                ),
             )
         ],
         table_world.root,
     )
     graph_of_convex_sets = VolumetricGraphOfBoundingBoxes.free_space_from_world(
-        table_world, search_space=search_space
+        world=table_world, search_space=search_space
     )
 
     query = entity(variable(str))
@@ -228,16 +291,18 @@ def test_constrain_to_free_space_adds_a_where_condition(table_world: World):
                 1,
                 1,
                 1,
-                HomogeneousTransformationMatrix(reference_frame=table_world.root),
+                HomogeneousTransformationMatrix3Dimensional(
+                    reference_frame=table_world.root
+                ),
             )
         ],
         table_world.root,
     )
     graph_of_convex_sets = VolumetricGraphOfBoundingBoxes.free_space_from_world(
-        table_world, search_space=search_space
+        world=table_world, search_space=search_space
     )
 
-    query = a(Point3)(x=..., y=..., z=..., reference_frame=None)
+    query = a(CartesianPoint3Dimensional)(x=..., y=..., z=..., reference_frame=None)
 
     condition = graph_of_convex_sets.constrain_to_free_space(query._get_expression_())
 
@@ -262,16 +327,20 @@ def test_constrain_to_free_space_rejects_a_query_selecting_multiple_variables(
                 1,
                 1,
                 1,
-                HomogeneousTransformationMatrix(reference_frame=table_world.root),
+                HomogeneousTransformationMatrix3Dimensional(
+                    reference_frame=table_world.root
+                ),
             )
         ],
         table_world.root,
     )
     graph_of_convex_sets = VolumetricGraphOfBoundingBoxes.free_space_from_world(
-        table_world, search_space=search_space
+        world=table_world, search_space=search_space
     )
 
-    query = set_of(variable(Point3), variable(Point3))
+    query = set_of(
+        variable(CartesianPoint3Dimensional), variable(CartesianPoint3Dimensional)
+    )
 
     with pytest.raises(AmbiguousSelectedVariableError):
         graph_of_convex_sets.constrain_to_free_space(query)
@@ -290,7 +359,7 @@ def test_navigation_map_from_world(table_world: World):
                 max_y=2,
                 min_z=0,
                 max_z=2,
-                origin=HomogeneousTransformationMatrix(
+                origin=HomogeneousTransformationMatrix3Dimensional(
                     reference_frame=table_world.root
                 ),
             )
@@ -316,10 +385,13 @@ def test_navigation_map_from_world(table_world: World):
     )
 
 
-def test_navigation_map_path_returns_point2_waypoints(table_world: World):
+def test_navigation_map_path_returns_cartesian_point_2_dimensional_waypoints(
+    table_world: World,
+):
     """
-    A planar GCS's path is expressed in Point2, not Point3: there is no z to report, and
-    interior waypoints (portals between boxes) carry no meaningful orientation.
+    A planar GCS's path is expressed in CartesianPoint2Dimensional, not
+    CartesianPoint3Dimensional: there is no z to report, and interior waypoints (portals
+    between boxes) carry no meaningful orientation.
     """
     search_space = BoundingBoxCollection(
         [
@@ -330,7 +402,7 @@ def test_navigation_map_path_returns_point2_waypoints(table_world: World):
                 max_y=2,
                 min_z=0,
                 max_z=2,
-                origin=HomogeneousTransformationMatrix(
+                origin=HomogeneousTransformationMatrix3Dimensional(
                     reference_frame=table_world.root
                 ),
             )
@@ -341,14 +413,14 @@ def test_navigation_map_path_returns_point2_waypoints(table_world: World):
         table_world, search_space=search_space
     )
 
-    start = Point2(-4.5, -0.5, reference_frame=table_world.root)
-    goal = Point2(-2.5, 1.5, reference_frame=table_world.root)
+    start = CartesianPoint2Dimensional(-4.5, -0.5, reference_frame=table_world.root)
+    goal = CartesianPoint2Dimensional(-2.5, 1.5, reference_frame=table_world.root)
     path = graph_of_convex_sets.path_from_to(start, goal)
 
     assert path is not None
     assert len(path) > 1
     for waypoint in path:
-        assert isinstance(waypoint, Point2)
+        assert isinstance(waypoint, CartesianPoint2Dimensional)
 
 
 def test_from_world_with_rotated_box():
@@ -371,8 +443,10 @@ def test_from_world_with_rotated_box():
 
         # Box 2: at (2, 0, 0) rotated 45 deg around Z
         rotated_box_body = Body(name=PrefixedName("box_two"))
-        rotated_box_body_pose = HomogeneousTransformationMatrix.from_xyz_rpy(
-            2, 0, 0, 0, np.pi / 4, np.pi / 4, reference_frame=root_body
+        rotated_box_body_pose = (
+            HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+                2, 0, 0, 0, np.pi / 4, np.pi / 4, reference_frame=root_body
+            )
         )
         world.add_connection(
             FixedConnection.create_with_dofs(
@@ -398,7 +472,7 @@ def test_from_world_with_rotated_box():
                 max_y=5,
                 min_z=0,
                 max_z=2,
-                origin=HomogeneousTransformationMatrix(
+                origin=HomogeneousTransformationMatrix3Dimensional(
                     reference_frame=vertical_stabilized_base
                 ),
             )
@@ -407,19 +481,19 @@ def test_from_world_with_rotated_box():
     )
 
     graph_of_convex_sets = VolumetricGraphOfBoundingBoxes.free_space_from_world(
-        world, search_space=search_space
+        world=world, search_space=search_space
     )
 
     assert len(graph_of_convex_sets.graph.nodes()) > 0
 
-    start = Point3(-1, 0, 0.5, reference_frame=world.root)
-    target = Point3(4, 0, 0.5, reference_frame=world.root)
+    start = CartesianPoint3Dimensional(-1, 0, 0.5, reference_frame=world.root)
+    target = CartesianPoint3Dimensional(4, 0, 0.5, reference_frame=world.root)
 
     path = graph_of_convex_sets.path_from_to(start, target)
     assert path is not None
 
     for bounding_box in graph_of_convex_sets.graph.nodes():
-        bounding_box_T_world: Pose = world.transform(
+        bounding_box_T_world: Pose3Dimensional = world.transform(
             bounding_box.as_shape().origin, world.root
         ).pose
 
@@ -469,8 +543,8 @@ def test_path_from_to_prefers_shorter_distance_over_fewer_hops():
         graph_of_convex_sets.add_node(box)
     graph_of_convex_sets.calculate_connectivity()
 
-    start = Point3(0.5, 0.5, 0.5, reference_frame=world.root)
-    goal = Point3(10.5, 0.5, 0.5, reference_frame=world.root)
+    start = CartesianPoint3Dimensional(0.5, 0.5, 0.5, reference_frame=world.root)
+    goal = CartesianPoint3Dimensional(10.5, 0.5, 0.5, reference_frame=world.root)
 
     path = graph_of_convex_sets.path_from_to(start, goal)
 
@@ -505,8 +579,8 @@ def test_path_from_to_shortcuts_redundant_waypoints():
         graph_of_convex_sets.add_node(box)
     graph_of_convex_sets.calculate_connectivity()
 
-    start = Point3(0.5, 0.5, 0.5, reference_frame=world.root)
-    goal = Point3(10.5, 0.5, 0.5, reference_frame=world.root)
+    start = CartesianPoint3Dimensional(0.5, 0.5, 0.5, reference_frame=world.root)
+    goal = CartesianPoint3Dimensional(10.5, 0.5, 0.5, reference_frame=world.root)
 
     path = graph_of_convex_sets.path_from_to(start, goal)
 
@@ -525,7 +599,7 @@ def test_path_from_to_scales_to_a_real_apartment_scene():
 
     It now runs a single-source Dijkstra search instead.
     """
-    world = MJCFParser(os.path.join(MJCF_DIR, "iai_apartment.xml")).parse()
+    world = MJCFParser(os.path.join(MJCF_DIR, "iai_apartment.xml")).create_world()
     search_space = BoundingBoxCollection(
         [
             VolumetricBoundingBox(
@@ -535,19 +609,21 @@ def test_path_from_to_scales_to_a_real_apartment_scene():
                 max_y=2.4,
                 min_z=0.0,
                 max_z=1.2,
-                origin=HomogeneousTransformationMatrix(reference_frame=world.root),
+                origin=HomogeneousTransformationMatrix3Dimensional(
+                    reference_frame=world.root
+                ),
             )
         ],
         world.root,
     )
     graph_of_convex_sets = VolumetricGraphOfBoundingBoxes.free_space_from_world(
-        world, search_space=search_space, bloat_obstacles=0.06
+        world=world, search_space=search_space, bloat_obstacles=0.06
     )
     # Confirms this is a genuinely large graph, not an accidentally-trivial one.
     assert len(graph_of_convex_sets.graph.nodes()) > 1000
 
-    start = Point3(0.8, 1.0, 0.6, reference_frame=world.root)
-    goal = Point3(0.8, 2.3, 0.6, reference_frame=world.root)
+    start = CartesianPoint3Dimensional(0.8, 1.0, 0.6, reference_frame=world.root)
+    goal = CartesianPoint3Dimensional(0.8, 2.3, 0.6, reference_frame=world.root)
     path = graph_of_convex_sets.path_from_to(start, goal)
 
     assert path is not None
@@ -577,13 +653,55 @@ def _floor_with_an_obstacle_standing_on_it() -> Floor:
                 world,
                 world.root,
                 obstacle,
-                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                     0.0, 0.0, 0.5, reference_frame=world.root
                 ),
             )
         )
         obstacle.collision.append(Box(scale=Scale(0.4, 0.4, 1.0)))
     return floor
+
+
+def test_a_robot_navigates_only_where_its_base_keeps_its_margin_from_obstacles(
+    hsr_world_copy: World,
+):
+    """
+    The space a robot navigates is the floor's free space kept clear of every obstacle
+    by the base's radius and the margin asked for.
+    """
+    floor = _floor_with_an_obstacle_standing_on_it()
+    world = floor._world
+    world.merge_world(hsr_world_copy)
+    robot = world.get_semantic_annotations_by_type(HSRB)[0]
+    margin = 0.1
+    obstacle_half_side = 0.2
+    clearance = obstacle_half_side + robot.mobile_base.base_radius + margin
+
+    navigable_space = floor.navigable_space(robot=robot, margin=margin)
+
+    assert not navigable_space.is_free(
+        point=CartesianPoint2Dimensional(
+            clearance - 0.05, 0.0, reference_frame=world.root
+        )
+    )
+    assert navigable_space.is_free(
+        point=CartesianPoint2Dimensional(
+            clearance + 0.05, 0.0, reference_frame=world.root
+        )
+    )
+
+
+def test_a_robot_without_a_mobile_base_has_no_navigable_space(tracy_world: World):
+    """
+    Only a robot that drives on a mobile base navigates a floor.
+    """
+    floor = _floor_with_an_obstacle_standing_on_it()
+    world = floor._world
+    world.merge_world(deepcopy(tracy_world))
+    robot = world.get_semantic_annotations_by_type(Tracy)[0]
+
+    with pytest.raises(MissingMobileBaseError):
+        floor.navigable_space(robot=robot, margin=0.1)
 
 
 def test_planar_free_space_uses_the_supporting_surface_as_search_space():
@@ -626,7 +744,7 @@ def test_planar_free_space_computes_a_missing_supporting_surface():
     graph = floor.planar_free_space(max_height=2.0)
 
     surface_box = floor.supporting_surface.area.as_bounding_box_collection_at_origin(
-        HomogeneousTransformationMatrix(reference_frame=floor.root)
+        HomogeneousTransformationMatrix3Dimensional(reference_frame=floor.root)
     ).bounding_box()
     search_box = graph.search_space.bounding_box()
     assert search_box.min_x == pytest.approx(surface_box.min_x)
@@ -669,7 +787,7 @@ def test_path_from_to_answers_every_waypoint_in_the_search_spaces_frame():
             name="floor",
             world=world,
             scale=Scale(6, 6, 0.01),
-            world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
+            world_root_T_self=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                 10.0, 0.0, 0.0, reference_frame=world.root
             ),
         )
@@ -679,7 +797,7 @@ def test_path_from_to_answers_every_waypoint_in_the_search_spaces_frame():
                 world,
                 world.root,
                 wall,
-                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                     10.0, 0.0, 0.5, reference_frame=world.root
                 ),
             )
@@ -688,9 +806,9 @@ def test_path_from_to_answers_every_waypoint_in_the_search_spaces_frame():
 
     graph = floor.planar_free_space(max_height=1.0)
 
-    world_P_start = Point2(8.0, 0.0, reference_frame=world.root)
+    world_P_start = CartesianPoint2Dimensional(8.0, 0.0, reference_frame=world.root)
     path = graph.path_from_to(
-        world_P_start, Point2(12.0, 0.0, reference_frame=world.root)
+        world_P_start, CartesianPoint2Dimensional(12.0, 0.0, reference_frame=world.root)
     )
 
     # The wall forces a detour, so the path carries waypoints beyond its two endpoints.
@@ -722,7 +840,7 @@ def _navigation_map_around_the_table(
                 max_y=2,
                 min_z=0,
                 max_z=2,
-                origin=HomogeneousTransformationMatrix(
+                origin=HomogeneousTransformationMatrix3Dimensional(
                     reference_frame=table_world.root
                 ),
             )
@@ -741,8 +859,8 @@ def test_path_from_to_rejects_a_point_outside_the_search_space(table_world: Worl
     """
     navigation_map = _navigation_map_around_the_table(table_world)
 
-    free = Point2(-4.5, -0.5, reference_frame=table_world.root)
-    unsearched = Point2(10, 10, reference_frame=table_world.root)
+    free = CartesianPoint2Dimensional(-4.5, -0.5, reference_frame=table_world.root)
+    unsearched = CartesianPoint2Dimensional(10, 10, reference_frame=table_world.root)
 
     with pytest.raises(PointOutsideSearchSpaceError) as raised:
         navigation_map.path_from_to(free, unsearched)
@@ -757,8 +875,10 @@ def test_path_from_to_rejects_a_point_inside_an_obstacle(table_world: World):
     """
     navigation_map = _navigation_map_around_the_table(table_world)
 
-    free = Point2(-4.5, -0.5, reference_frame=table_world.root)
-    under_the_table = Point2(-3.5, 0.5, reference_frame=table_world.root)
+    free = CartesianPoint2Dimensional(-4.5, -0.5, reference_frame=table_world.root)
+    under_the_table = CartesianPoint2Dimensional(
+        -3.5, 0.5, reference_frame=table_world.root
+    )
 
     with pytest.raises(PointOccupiedError):
         navigation_map.path_from_to(free, under_the_table)
@@ -772,8 +892,12 @@ def test_path_from_to_accepts_points_in_another_reference_frame(table_world: Wor
     navigation_map = _navigation_map_around_the_table(table_world)
     table_top = table_world.get_body_by_name("top")
 
-    world_P_start = Point2(-4.5, -0.5, reference_frame=table_world.root)
-    world_P_goal = Point2(-2.5, 1.5, reference_frame=table_world.root)
+    world_P_start = CartesianPoint2Dimensional(
+        -4.5, -0.5, reference_frame=table_world.root
+    )
+    world_P_goal = CartesianPoint2Dimensional(
+        -2.5, 1.5, reference_frame=table_world.root
+    )
 
     path = navigation_map.path_from_to(
         table_world.transform(world_P_start, table_top),
@@ -803,7 +927,7 @@ def test_node_of_point_answers_with_the_free_box_a_point_falls_into(
     """
     navigation_map = _navigation_map_around_the_table(table_world)
 
-    free = Point2(-4.5, -0.5, reference_frame=table_world.root)
+    free = CartesianPoint2Dimensional(-4.5, -0.5, reference_frame=table_world.root)
 
     assert navigation_map.node_of_point(free).contains(free)
 
@@ -815,7 +939,9 @@ def test_node_of_point_rejects_a_point_no_free_box_covers(table_world: World):
     """
     navigation_map = _navigation_map_around_the_table(table_world)
 
-    under_the_table = Point2(-3.5, 0.5, reference_frame=table_world.root)
+    under_the_table = CartesianPoint2Dimensional(
+        -3.5, 0.5, reference_frame=table_world.root
+    )
 
     with pytest.raises(PointOccupiedError):
         navigation_map.node_of_point(under_the_table)
@@ -828,7 +954,7 @@ def test_node_of_point_rejects_a_point_outside_the_search_space(table_world: Wor
     """
     navigation_map = _navigation_map_around_the_table(table_world)
 
-    unsearched = Point2(10, 10, reference_frame=table_world.root)
+    unsearched = CartesianPoint2Dimensional(10, 10, reference_frame=table_world.root)
 
     with pytest.raises(PointOutsideSearchSpaceError):
         navigation_map.node_of_point(unsearched)
@@ -843,6 +969,173 @@ def test_the_unchecked_lookup_answers_with_nothing_for_an_occupied_point(
     """
     navigation_map = _navigation_map_around_the_table(table_world)
 
-    under_the_table = Point2(-3.5, 0.5, reference_frame=table_world.root)
+    under_the_table = CartesianPoint2Dimensional(
+        -3.5, 0.5, reference_frame=table_world.root
+    )
 
     assert navigation_map._node_of_point(under_the_table) is None
+
+
+# %% asking whether a point is free
+
+
+def test_a_point_in_a_free_box_is_free(table_world: World):
+    """
+    A point beside the table, where a free box lies, is free.
+    """
+    navigation_map = _navigation_map_around_the_table(table_world)
+
+    assert navigation_map.is_free(
+        point=CartesianPoint2Dimensional(-4.5, -0.5, reference_frame=table_world.root)
+    )
+
+
+def test_a_point_no_free_box_covers_is_not_free(table_world: World):
+    """
+    A point under the table, which no free box covers, is not free.
+    """
+    navigation_map = _navigation_map_around_the_table(table_world)
+
+    assert not navigation_map.is_free(
+        point=CartesianPoint2Dimensional(-3.5, 0.5, reference_frame=table_world.root)
+    )
+
+
+def test_a_point_outside_the_search_space_is_not_free(table_world: World):
+    """
+    Nothing is known about what stands beyond the search space, so nothing there is free
+    to move to.
+    """
+    navigation_map = _navigation_map_around_the_table(table_world)
+
+    assert not navigation_map.is_free(
+        point=CartesianPoint2Dimensional(10, 10, reference_frame=table_world.root)
+    )
+
+
+def test_whether_a_point_is_free_does_not_depend_on_its_frame(table_world: World):
+    """
+    A free point is free whichever frame it is given in.
+    """
+    navigation_map = _navigation_map_around_the_table(table_world)
+    table_top = table_world.get_body_by_name("top")
+    free = CartesianPoint2Dimensional(-4.5, -0.5, reference_frame=table_world.root)
+
+    assert navigation_map.is_free(point=table_world.transform(free, table_top))
+
+
+# %% the free point nearest a point
+
+
+def test_the_nearest_free_point_of_a_free_point_is_the_point_itself(table_world: World):
+    """
+    A point that is free already is its own nearest free point.
+    """
+    navigation_map = _navigation_map_around_the_table(table_world)
+    free = CartesianPoint2Dimensional(-4.5, -0.5, reference_frame=table_world.root)
+
+    nearest = table_world.transform(
+        navigation_map.nearest_free_point(point=free), table_world.root
+    )
+
+    assert nearest.to_np()[:2] == pytest.approx(free.to_np()[:2])
+
+
+def test_the_nearest_free_point_of_an_occupied_point_is_free_and_nearer_than_others(
+    table_world: World,
+):
+    """
+    Of all free points, the one answered lies nearest: no free box comes closer.
+    """
+    navigation_map = _navigation_map_around_the_table(table_world)
+    under_the_table = CartesianPoint2Dimensional(
+        -3.5, 0.5, reference_frame=table_world.root
+    )
+
+    nearest = navigation_map.nearest_free_point(point=under_the_table)
+
+    assert navigation_map.is_free(point=nearest)
+    distance = np.linalg.norm(
+        table_world.transform(nearest, table_world.root).to_np()[:2]
+        - under_the_table.to_np()[:2]
+    )
+    corners = [
+        table_world.transform(corner, table_world.root).to_np()[:2]
+        for node in navigation_map.graph.nodes()
+        for corner in node.get_points()
+    ]
+    assert all(
+        np.linalg.norm(corner - under_the_table.to_np()[:2]) >= distance - 1e-9
+        for corner in corners
+    )
+
+
+def test_a_graph_without_free_space_has_no_nearest_free_point(table_world: World):
+    """
+    Where no free space was found there is no free point to answer with.
+    """
+    empty = PlanarGraphOfBoundingBoxes(
+        world=table_world,
+        search_space=_navigation_map_around_the_table(table_world).search_space,
+    )
+
+    with pytest.raises(NoFreeSpaceError):
+        empty.nearest_free_point(
+            point=CartesianPoint2Dimensional(
+                -4.5, -0.5, reference_frame=table_world.root
+            )
+        )
+
+
+# %% keeping clearance above and below obstacles
+
+
+def test_free_space_from_world_keeps_the_given_height_clearance_off_obstacles():
+    """
+    Free space starts only the given height clearance above the top of an obstacle.
+    """
+    world = World()
+    with world.modify_world():
+        root_body = Body(name=PrefixedName("map"))
+        world.add_kinematic_structure_entity(root_body)
+        box_body = Body(name=PrefixedName("box"))
+        world.add_connection(
+            FixedConnection.create_with_dofs(world, root_body, box_body)
+        )
+        box_body.collision.append(Box(scale=Scale(1, 1, 1)))
+    search_space = BoundingBoxCollection(
+        [
+            VolumetricBoundingBox(
+                min_x=-2,
+                max_x=2,
+                min_y=-2,
+                max_y=2,
+                min_z=-1,
+                max_z=2,
+                origin=HomogeneousTransformationMatrix3Dimensional(
+                    reference_frame=root_body
+                ),
+            )
+        ],
+        reference_frame=root_body,
+    )
+    height_clearance = 0.2
+
+    graph_of_convex_sets = VolumetricGraphOfBoundingBoxes.free_space_from_world(
+        world=world,
+        search_space=search_space,
+        obstacle_height_clearance=height_clearance,
+    )
+
+    box_top = 0.5
+    within_the_clearance = CartesianPoint3Dimensional(
+        0, 0, box_top + height_clearance / 2, reference_frame=root_body
+    )
+    above_the_clearance = CartesianPoint3Dimensional(
+        0, 0, box_top + 2 * height_clearance, reference_frame=root_body
+    )
+    with pytest.raises(PointOccupiedError):
+        graph_of_convex_sets.node_of_point(within_the_clearance)
+    assert graph_of_convex_sets.node_of_point(above_the_clearance).contains(
+        above_the_clearance
+    )

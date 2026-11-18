@@ -4,11 +4,16 @@ import unittest
 from dataclasses import asdict
 
 import numpy as np
+import pytest
 from importlib.resources import files
 from pathlib import Path
 from sqlalchemy.orm import Session
 
 from krrood.ormatic.utils import create_engine
+from semantic_digital_twin.adapters.procthor.exceptions import (
+    ProcthorDoorWallNotFound,
+    UnpairedProcthorWalls,
+)
 from semantic_digital_twin.adapters.procthor.procthor_parser import (
     ProcTHORParser,
     ProcthorRoom,
@@ -26,8 +31,8 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Floor,
     Door,
 )
-from semantic_digital_twin.spatial_types.spatial_types import (
-    HomogeneousTransformationMatrix,
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import Scale
@@ -35,7 +40,6 @@ from semantic_digital_twin.world_description.world_entity import Region, Body
 
 
 class ProcTHORTestCase(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -56,7 +60,7 @@ class ProcTHORTestCase(unittest.TestCase):
     def test_unity_to_semantic_digital_twin_transform_identity_matrix(self):
         m = np.eye(4)
         result = unity_to_semantic_digital_twin_transform(
-            HomogeneousTransformationMatrix(data=m)
+            HomogeneousTransformationMatrix3Dimensional(data=m)
         )
         np.testing.assert_allclose(result.to_np(), np.eye(4), rtol=1e-6, atol=1e-6)
 
@@ -67,7 +71,7 @@ class ProcTHORTestCase(unittest.TestCase):
         m = np.eye(4)
         m[0, 3] = 1.0
         result = unity_to_semantic_digital_twin_transform(
-            HomogeneousTransformationMatrix(data=m)
+            HomogeneousTransformationMatrix3Dimensional(data=m)
         )
         self.assertAlmostEqual(result.position.to_np()[1], -1.0)
         np.testing.assert_allclose(result.rotation_matrix.to_np()[:3, :3], np.eye(3))
@@ -79,7 +83,7 @@ class ProcTHORTestCase(unittest.TestCase):
         m = np.eye(4)
         m[2, 3] = 2.0
         result = unity_to_semantic_digital_twin_transform(
-            HomogeneousTransformationMatrix(data=m)
+            HomogeneousTransformationMatrix3Dimensional(data=m)
         )
         self.assertAlmostEqual(float(result.position.x), 2.0, places=6)
         np.testing.assert_allclose(result.rotation_matrix.to_np()[:3, :3], np.eye(3))
@@ -98,7 +102,7 @@ class ProcTHORTestCase(unittest.TestCase):
             ]
         )
         result = unity_to_semantic_digital_twin_transform(
-            HomogeneousTransformationMatrix(data=m)
+            HomogeneousTransformationMatrix3Dimensional(data=m)
         )
 
         expected = np.eye(4)
@@ -120,7 +124,7 @@ class ProcTHORTestCase(unittest.TestCase):
             procthor_room.world_T_room.rotation_matrix.to_np(), np.eye(4)
         )
         np.testing.assert_array_equal(
-            procthor_room.world_T_room.translation_matrix.to_np()[:3, 3],
+            procthor_room.world_T_room.position.to_np()[:3],
             np.array([1.5, -1.5, 0]),
         )
 
@@ -152,7 +156,7 @@ class ProcTHORTestCase(unittest.TestCase):
             door_dict=door,
             parent_wall_width=0.05,
             thickness=0.03,
-            world_T_parent_wall=HomogeneousTransformationMatrix(),
+            world_T_parent_wall=HomogeneousTransformationMatrix3Dimensional(),
         )
 
         bounds = (
@@ -170,7 +174,7 @@ class ProcTHORTestCase(unittest.TestCase):
             door_dict=door,
             parent_wall_width=0.05,
             thickness=0.03,
-            world_T_parent_wall=HomogeneousTransformationMatrix(),
+            world_T_parent_wall=HomogeneousTransformationMatrix3Dimensional(),
         )
 
         scale = procthor_door.scale
@@ -183,7 +187,7 @@ class ProcTHORTestCase(unittest.TestCase):
             door_dict=door,
             parent_wall_width=0.05,
             thickness=0.03,
-            world_T_parent_wall=HomogeneousTransformationMatrix(),
+            world_T_parent_wall=HomogeneousTransformationMatrix3Dimensional(),
         )
 
         expected_rotation = np.array(
@@ -207,7 +211,7 @@ class ProcTHORTestCase(unittest.TestCase):
             door_dict=door,
             parent_wall_width=0.05,
             thickness=0.03,
-            world_T_parent_wall=HomogeneousTransformationMatrix(),
+            world_T_parent_wall=HomogeneousTransformationMatrix3Dimensional(),
         )
 
         double_door = procthor_door.add_to_world(self.world)
@@ -355,7 +359,7 @@ class ProcTHORTestCase(unittest.TestCase):
 
         world = ProcTHORParser(
             "test_house", house=self.house_json, session=session
-        ).parse()
+        ).create_world()
 
         world.merge_world(obj_world)
 
@@ -369,7 +373,7 @@ class ProcTHORTestCase(unittest.TestCase):
                 "procthor_json",
                 "house_0.json",
             )
-        ).parse()
+        ).create_world()
 
         assert world is not None
 
@@ -383,6 +387,21 @@ class ProcTHORTestCase(unittest.TestCase):
 
         resolved_string = resolver.resolve("whitebread_a_slice_8_mesh")
         self.assertEqual(Bread, resolved_string)
+
+
+def test_odd_number_of_walls_without_door_is_rejected():
+    with pytest.raises(UnpairedProcthorWalls) as error:
+        ProcTHORParser._build_procthor_wall_from_polygon([{"id": "wall|0"}])
+    assert error.value.wall_count == 1
+
+
+def test_door_referring_to_missing_wall_is_rejected():
+    door = {"id": "door|0", "wall0": "wall|0", "wall1": "wall|1"}
+    with pytest.raises(ProcthorDoorWallNotFound) as error:
+        ProcTHORParser._build_procthor_wall_from_door(
+            walls=[{"id": "wall|0"}], doors=[door]
+        )
+    assert error.value.wall_id == door["wall1"]
 
 
 if __name__ == "__main__":

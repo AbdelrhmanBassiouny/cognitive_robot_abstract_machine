@@ -5,7 +5,9 @@ from random_events.interval import Bound, SimpleInterval
 from krrood.bounds import BoundsInterface
 from krrood.utils import get_generic_type_parameters
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
+)
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import (
     AxisAlignedBox,
@@ -19,11 +21,11 @@ from semantic_digital_twin.world_description.world_entity import Body
 
 
 @pytest.fixture
-def origin() -> HomogeneousTransformationMatrix:
+def origin() -> HomogeneousTransformationMatrix3Dimensional:
     world = World()
     with world.modify_world():
         world.add_kinematic_structure_entity(Body(name=PrefixedName("map")))
-    return HomogeneousTransformationMatrix.from_xyz_rpy(
+    return HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
         1, 2, 3, reference_frame=world.root
     )
 
@@ -67,7 +69,7 @@ def test_a_box_gives_its_coordinates_as_bounds_that_clip_segments(box):
 
 
 def test_a_segment_through_the_bounds_is_clipped_to_the_part_inside():
-    bounds = CoordinateBounds(np.array([0.0, 0.0]), np.array([1.0, 1.0]))
+    bounds = CoordinateBounds(lower=np.array([0.0, 0.0]), upper=np.array([1.0, 1.0]))
     start = np.array([-1.0, 0.5])
     direction = np.array([4.0, 0.0])
     assert bounds.clip_segment(start, direction) == SimpleInterval.from_data(
@@ -76,7 +78,7 @@ def test_a_segment_through_the_bounds_is_clipped_to_the_part_inside():
 
 
 def test_a_segment_that_misses_the_bounds_is_not_clipped():
-    bounds = CoordinateBounds(np.array([0.0, 0.0]), np.array([1.0, 1.0]))
+    bounds = CoordinateBounds(lower=np.array([0.0, 0.0]), upper=np.array([1.0, 1.0]))
     start = np.array([-1.0, 2.0])
     direction = np.array([4.0, 0.0])
     assert bounds.clip_segment(start, direction) is None

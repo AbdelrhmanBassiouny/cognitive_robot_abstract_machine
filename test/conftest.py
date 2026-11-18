@@ -23,6 +23,7 @@ from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedomLimits,
 )
 
+from .dataset.robots_on_a_drive import RobotOnADifferentialDrive, RobotOnAnOmniDrive
 from .living_worlds import (
     LivingWorlds,
 )
@@ -34,17 +35,19 @@ try:
 except ImportError:
     Garmi = None
 
-try:
-    from coraplex.datastructures.dataclasses import Context
-except ModuleNotFoundError:
-    # ROS dependencies.
-    Context = None
+from .sampling import SAMPLING_SEED
 
 try:
-    from giskardpy.middleware.ros2 import rospy
+    from .plan_running import robot_extensions
 except ModuleNotFoundError:
     # ROS dependencies.
-    rospy = None
+    robot_extensions = None
+
+try:
+    from semantic_digital_twin.adapters.ros import background_node
+except ModuleNotFoundError:
+    # ROS dependencies.
+    background_node = None
 from semantic_digital_twin.adapters.package_resolver import PathResolver
 from semantic_digital_twin.collision_checking.collision_matrix import (
     MaxAvoidedCollisionsOverride,
@@ -55,7 +58,6 @@ CallbackT = TypeVar("CallbackT", bound=Callback)
 """
 The kind of publisher a test started.
 """
-
 from krrood.class_diagrams.class_diagram import ClassDiagram
 from krrood.symbol_graph.symbol_graph import SymbolGraph, Symbol
 from krrood.ontomatic.property_descriptor.attribute_introspector import (
@@ -69,6 +71,10 @@ from semantic_digital_twin.exceptions import ParsingError
 from semantic_digital_twin.predefined_maps.apartment_environment import (
     ApartmentEnvironment,
 )
+from semantic_digital_twin.robots.robot_part_mixins import (
+    HasMobileBase,
+    TGenericMobileBase,
+)
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.robots.hsrb import HSRB
 from semantic_digital_twin.robots.minimal_robot import MinimalRobot
@@ -81,7 +87,6 @@ from semantic_digital_twin.robots.icub3 import ICub3
 from semantic_digital_twin.robots.justin import Justin
 from semantic_digital_twin.robots.mmp_dresden import MMPDresden
 from semantic_digital_twin.robots.unitree_g1 import UnitreeG1
-
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Milk,
     Table,
@@ -101,17 +106,12 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Level,
     SemanticEnvironmentAnnotation,
 )
-from semantic_digital_twin.spatial_types import (
-    HomogeneousTransformationMatrix,
-    Vector3,
-    Point3,
-    Pose,
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
+    Vector3Dimensional,
+    CartesianPoint3Dimensional,
 )
-from semantic_digital_twin.utils import (
-    rclpy_installed,
-    tracy_installed,
-    daisy_installed,
-)
+from semantic_digital_twin.utils import rclpy_installed
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
     OmniDrive,
@@ -132,52 +132,42 @@ from semantic_digital_twin.world_description.world_entity import (
     Body,
     Region,
 )
-
 ###############################
 ### Fixture Usage Guide #######
 ###############################
 
 """
-This file composes the Pytest fixtures for all tests in the monorepo. 
+This file composes the Pytest fixtures for all tests in the monorepo.
+
 Some basic facts about fixtures:
- * conftest.py and test directories inherit the fixtures from contests from upper directories 
- * Fixtures can be scoped, possible values are: function, class, module, package, session 
- * Fixtures can use other fixtures 
+ * conftest.py and test directories inherit the fixtures from contests from upper directories
+ * Fixtures can be scoped, possible values are: function, class, module, package, session
+ * Fixtures can use other fixtures
     * This only works the requesting fixture is scoped less or equal the the requested fixture (function requesting session works)
- * The return/yield value of fixtures is being cached. 
+ * The return/yield value of fixtures is being cached.
     * In case of worlds this is important since always the same world is returned by a session scoped fixture
 
 General Remarks:
     * Apparently generating the robot semantic view takes some time so it should be done in the session scoped setup
 
-The structure of fixtures in this conftest: 
-    * World setup fixtures: 
+The structure of fixtures in this conftest:
+    * World setup fixtures:
         These setup a world and return it, they are scoped for a whole session
-         THEY SHOULD NOT BE USED DIRECTLY! 
-         This is the case since the returned world will always be the same and changing the state or model of it will 
+         THEY SHOULD NOT BE USED DIRECTLY!
+         This is the case since the returned world will always be the same and changing the state or model of it will
          cause side effects in other tests. They can only be used if the test does not change the state or model
-    * Merging setup fixtures: 
-        These combine one or more different worlds from other fixtures. 
-        THEY SHOULD NOT BE USED DIRECTLY 
-        for the same reason as the world setup fixtures. 
+    * Merging setup fixtures:
+        These combine one or more different worlds from other fixtures.
+        THEY SHOULD NOT BE USED DIRECTLY
+        for the same reason as the world setup fixtures.
     * State reset fixture:
-        This fixtures are scoped for functions and reset the state between tests runs. 
+        This fixtures are scoped for functions and reset the state between tests runs.
         THEY CAN BE USED FOR TESTS THAT ONLY CHANGE THE STATE
-        Since resetting the state between test runs is easy this is the most common fixture for tests 
-    * Model changing fixtures: 
-        This fixtures are scoped for functions, they are a copy of the world from the world setup and are discarded 
-        after the test since there is no good method to reset the model after a test has changed it. 
-
+        Since resetting the state between test runs is easy this is the most common fixture for tests
+    * Model changing fixtures:
+        This fixtures are scoped for functions, they are a copy of the world from the world setup and are discarded
+        after the test since there is no good method to reset the model after a test has changed it.
 """
-
-
-# %% repeatable location samples
-
-SAMPLING_SEED = 0
-"""
-The sampling seed of every plan context the tests build, so location samples repeat.
-"""
-
 
 LIVING_WORLDS = pytest.StashKey[LivingWorlds]()
 """
@@ -241,7 +231,7 @@ def _session_class_diagram() -> ClassDiagram:
     # SymbolGraph singleton reset below only needs to drop per-test instance state, not
     # this class-level graph.
     return ClassDiagram(
-        recursive_subclasses(Symbol) + [World],
+        classes=recursive_subclasses(Symbol) + [World],
         introspector=DescriptorAwareIntrospector(),
     )
 
@@ -281,7 +271,7 @@ def mini_world() -> World:
         body = Body(name=PrefixedName("root"))
         body2 = Body(name=PrefixedName("tip"))
         connection = RevoluteConnection.create_with_dofs(
-            world=world, parent=body, child=body2, axis=Vector3.Z()
+            world=world, parent=body, child=body2, axis=Vector3Dimensional.Z()
         )
         world.add_connection(connection)
     return world
@@ -289,7 +279,10 @@ def mini_world() -> World:
 
 @pytest.fixture()
 def world_with_two_bodies() -> tuple[World, Body, Body]:
-    """A fresh world with an unconnected parent and child body, ready to receive a connection."""
+    """
+    A fresh world with an unconnected parent and child body, ready to receive a
+    connection.
+    """
     world = World()
     parent = Body(name=PrefixedName("parent"))
     child = Body(name=PrefixedName("child"))
@@ -305,7 +298,7 @@ def cylinder_bot_world():
             collision=ShapeCollection(shapes=[Cylinder(width=0.1, height=0.5)]),
         )
         robot_world.add_body(robot)
-        MinimalRobot.from_world(robot_world)
+        RobotOnAnOmniDrive.from_world(robot_world)
     world = World()
     with world.modify_world():
         body = Body(
@@ -318,7 +311,7 @@ def cylinder_bot_world():
         env_connection = FixedConnection(
             parent=body,
             child=environment,
-            parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+            parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                 1
             ),
         )
@@ -331,7 +324,7 @@ def cylinder_bot_world():
         env_connection2 = FixedConnection(
             parent=body,
             child=environment2,
-            parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+            parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                 y=0.5
             ),
         )
@@ -341,7 +334,7 @@ def cylinder_bot_world():
             world=world, parent=body, child=robot_world.root
         )
         world.merge_world(robot_world, connection)
-        connection.has_hardware_interface = True
+        world.set_dofs_has_hardware_interface(connection.active_dofs, True)
 
         world.collision_manager.max_avoided_bodies_rules.append(
             MaxAvoidedCollisionsOverride(2, {robot})
@@ -394,8 +387,8 @@ def self_collision_bot_world():
             RevoluteConnection.create_with_dofs(
                 parent=robot,
                 child=l_shoulder,
-                axis=Vector3.Z(),
-                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                axis=Vector3Dimensional.Z(),
+                parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                     x=0.2, y=0.2
                 ),
                 world=world,
@@ -405,8 +398,8 @@ def self_collision_bot_world():
             RevoluteConnection.create_with_dofs(
                 parent=l_shoulder,
                 child=l_tip,
-                axis=Vector3.Z(),
-                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                axis=Vector3Dimensional.Z(),
+                parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                     x=0.2
                 ),
                 world=world,
@@ -416,7 +409,7 @@ def self_collision_bot_world():
             FixedConnection(
                 parent=l_tip,
                 child=l_thumb,
-                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                     y=-0.05, z=0.1
                 ),
             )
@@ -426,8 +419,8 @@ def self_collision_bot_world():
             RevoluteConnection.create_with_dofs(
                 parent=robot,
                 child=r_shoulder,
-                axis=Vector3.Z(),
-                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                axis=Vector3Dimensional.Z(),
+                parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                     x=0.2,
                     y=-0.2,
                 ),
@@ -438,8 +431,8 @@ def self_collision_bot_world():
             RevoluteConnection.create_with_dofs(
                 parent=r_shoulder,
                 child=r_tip,
-                axis=Vector3.Z(),
-                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                axis=Vector3Dimensional.Z(),
+                parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                     x=0.2
                 ),
                 world=world,
@@ -449,7 +442,7 @@ def self_collision_bot_world():
             FixedConnection(
                 parent=r_tip,
                 child=r_thumb,
-                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                     y=0.05, z=0.1
                 ),
             )
@@ -459,7 +452,7 @@ def self_collision_bot_world():
     return world
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def supported_abstract_robots():
     return [
         PR2,
@@ -486,7 +479,7 @@ def cylinder_bot_diff_world():
             collision=ShapeCollection(shapes=[Cylinder(width=0.1, height=0.5)]),
         )
         robot_world.add_body(robot)
-        MinimalRobot.from_world(robot_world)
+        RobotOnADifferentialDrive.from_world(robot_world)
     world = World()
     with world.modify_world():
         body = Body(
@@ -499,7 +492,7 @@ def cylinder_bot_diff_world():
         env_connection = FixedConnection(
             parent=body,
             child=environment,
-            parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+            parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                 1
             ),
         )
@@ -509,22 +502,24 @@ def cylinder_bot_diff_world():
             world=world, parent=body, child=robot_world.root
         )
         world.merge_world(robot_world, connection)
-        connection.has_hardware_interface = True
+        world.set_dofs_has_hardware_interface(connection.active_dofs, True)
 
     return world
 
 
 def world_with_urdf_factory(
-    robot_semantic_annotation: type[AbstractRobot],
-    robot_starting_pose: HomogeneousTransformationMatrix | None = None,
+    robot_semantic_annotation: type[HasMobileBase],
+    robot_starting_pose: HomogeneousTransformationMatrix3Dimensional | None = None,
     urdf_path_resolver: PathResolver | None = None,
-    robot_localization_pose: HomogeneousTransformationMatrix | None = None,
+    robot_localization_pose: HomogeneousTransformationMatrix3Dimensional | None = None,
 ):
     """
     Builds this tree:
     map -> odom_combined -> "urdf tree"
     """
-    drive_connection_type = robot_semantic_annotation.get_drive_connection_type()
+    drive_connection_type = robot_semantic_annotation.get_type_of_generic_parameter(
+        parameter=TGenericMobileBase
+    ).get_drive_connection_type()
     urdf_parser = URDFParser.from_file(
         file_path=robot_semantic_annotation.get_ros_file_path(),
         path_resolver=urdf_path_resolver,
@@ -532,7 +527,7 @@ def world_with_urdf_factory(
             robot_semantic_annotation.uses_visual_as_collision_backup
         ),
     )
-    world_with_urdf = urdf_parser.parse()
+    world_with_urdf = urdf_parser.create_world()
     if robot_semantic_annotation is not None:
         robot_semantic_annotation.from_world(world_with_urdf)
 
@@ -552,7 +547,7 @@ def world_with_urdf_factory(
             world=world_with_urdf,
         )
         world_with_urdf.add_connection(c_root_bf)
-        c_root_bf.has_hardware_interface = True
+        world_with_urdf.set_dofs_has_hardware_interface(c_root_bf.active_dofs, True)
     if robot_localization_pose is not None:
         map_C_localization.origin = robot_localization_pose
 
@@ -580,9 +575,7 @@ def _hsr_world_setup():
 
 @pytest.fixture(scope="function")
 def hsr_world_copy(_hsr_world_setup):
-    result = deepcopy(_hsr_world_setup)
-    HSRB.from_world(result)
-    return result
+    return deepcopy(_hsr_world_setup)
 
 
 @pytest.fixture(scope="session")
@@ -597,23 +590,32 @@ def _garmi_world_setup():
 
 @pytest.fixture(scope="session")
 def tracy_world():
-    if not tracy_installed():
+    if not Tracy.is_description_installed():
         pytest.skip("Tracy not installed")
     tracy_parser = URDFParser.from_file(file_path=Tracy.get_ros_file_path())
-    world_with_tracy = tracy_parser.parse()
+    world_with_tracy = tracy_parser.create_world()
     Tracy.from_world(world_with_tracy)
     return world_with_tracy
 
 
 @pytest.fixture(scope="session")
 def daisy_world():
-    if not daisy_installed():
+    if not DAiSy.is_description_installed():
         pytest.skip("DAiSy not installed")
-    daisy = "package://iai_daisy_description/robots/daisy.urdf.xacro"
-    daisy_parser = URDFParser.from_file(file_path=daisy)
-    world_with_daisy = daisy_parser.parse()
-    DAiSy.from_world(world_with_daisy)
+    try:
+        daisy_parser = URDFParser.from_file(file_path=DAiSy.get_ros_file_path())
+        world_with_daisy = daisy_parser.create_world()
+        DAiSy.from_world(world_with_daisy)
+    except Exception:
+        pytest.skip(
+            "DAiSy URDF could not be parsed (missing dependency or body mismatch)"
+        )
     return world_with_daisy
+
+
+@pytest.fixture(scope="function")
+def daisy_world_copy(daisy_world):
+    return deepcopy(daisy_world)
 
 
 @pytest.fixture(scope="session")
@@ -642,7 +644,7 @@ def _apartment_world_setup():
             "worlds",
             "apartment.urdf",
         )
-    ).parse()
+    ).create_world()
     milk_world = STLParser(
         os.path.join(
             os.path.dirname(__file__),
@@ -652,7 +654,7 @@ def _apartment_world_setup():
             "objects",
             "milk.stl",
         )
-    ).parse()
+    ).create_world()
     cereal_world = STLParser(
         os.path.join(
             os.path.dirname(__file__),
@@ -662,7 +664,7 @@ def _apartment_world_setup():
             "objects",
             "breakfast_cereal.stl",
         )
-    ).parse()
+    ).create_world()
     spoon_world = STLParser(
         os.path.join(
             os.path.dirname(__file__),
@@ -672,17 +674,17 @@ def _apartment_world_setup():
             "objects",
             "spoon.stl",
         )
-    ).parse()
+    ).create_world()
 
     apartment_world.merge_world_at_pose(
         milk_world,
-        HomogeneousTransformationMatrix.from_xyz_rpy(
+        HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
             2.37, 2, 1.05, reference_frame=apartment_world.root
         ),
     )
     apartment_world.merge_world_at_pose(
         cereal_world,
-        HomogeneousTransformationMatrix.from_xyz_rpy(
+        HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
             2.37, 2.5, 1.05, reference_frame=apartment_world.root
         ),
     )
@@ -691,7 +693,7 @@ def _apartment_world_setup():
         FixedConnection(
             parent=apartment_world.get_body_by_name("cabinet10_drawer_top"),
             child=spoon_world.root,
-            parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+            parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                 -0.05, -0.05, -0.02
             ),
         ),
@@ -703,7 +705,9 @@ def _apartment_world_setup():
                 root=apartment_world.root, _world=apartment_world
             )
             .as_bounding_box_collection_at_origin(
-                HomogeneousTransformationMatrix(reference_frame=apartment_world.root)
+                HomogeneousTransformationMatrix3Dimensional(
+                    reference_frame=apartment_world.root
+                )
             )
             .bounding_box()
         )
@@ -711,7 +715,7 @@ def _apartment_world_setup():
             name="apartment_floor",
             world=apartment_world,
             scale=Scale(footprint.depth, footprint.width, 0.01),
-            world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
+            world_root_T_self=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                 float(footprint.center.x),
                 float(footprint.center.y),
                 -0.01 / 2,
@@ -752,7 +756,7 @@ def _elevator_world_setup():
                 scale=Scale(2, 2, 2), wall_thickness=0.05
             ),
             parent_connection_specification=PrismaticConnectionSpecification(
-                axis=Vector3.Z(),
+                axis=Vector3Dimensional.Z(),
                 dof_limits=DegreeOfFreedomLimits.from_position_range_and_speed(
                     maximum_speed=1.0
                 ),
@@ -765,12 +769,12 @@ def _elevator_world_setup():
             door = Door.create_with_new_body_in_world(
                 name=f"{name.name}_door{i}",
                 world=world,
-                world_root_T_self=HomogeneousTransformationMatrix.from_point_rotation_matrix(
-                    Point3(-scale.x / 2, door_y, 0),
+                world_root_T_self=HomogeneousTransformationMatrix3Dimensional.from_point_rotation_matrix(
+                    CartesianPoint3Dimensional(-scale.x / 2, door_y, 0),
                     reference_frame=world.root,
                 ),
                 parent_connection_specification=PrismaticConnectionSpecification(
-                    axis=(Vector3.Y() * ((-1) ** (i + 1))),
+                    axis=(Vector3Dimensional.Y() * ((-1) ** (i + 1))),
                     dof_limits=DegreeOfFreedomLimits.from_position_range_and_speed(
                         lower_position=0.0, upper_position=door_travel
                     ),
@@ -797,11 +801,7 @@ def apartment_world_pr2_copy_with_context(_apartment_world_setup, _pr2_world_set
     return (
         result,
         result.get_semantic_annotations_by_type(AbstractRobot)[0],
-        Context(
-            result,
-            result.get_semantic_annotations_by_type(AbstractRobot)[0],
-            sampling_seed=SAMPLING_SEED,
-        ),
+        robot_extensions(result.get_semantic_annotations_by_type(AbstractRobot)[0]),
     )
 
 
@@ -827,14 +827,14 @@ def _simple_apartment_setup():
         box_1_connection = FixedConnection(
             parent=world.root,
             child=box,
-            parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+            parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                 2, 0, 0.375, reference_frame=world.root
             ),
         )
         box_2_connection = FixedConnection(
             parent=root,
             child=box_2,
-            parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+            parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                 -2, 0, 0.375
             ),
         )
@@ -863,28 +863,28 @@ def _simple_apartment_setup():
         wall_1_connection = FixedConnection(
             parent=root,
             child=wall1,
-            parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+            parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                 0, -4, 1
             ),
         )
         wall_2_connection = FixedConnection(
             parent=root,
             child=wall2,
-            parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+            parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                 0, 4, 1
             ),
         )
         wall_3_connection = FixedConnection(
             parent=root,
             child=wall3,
-            parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+            parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                 -4, 0, 1, yaw=np.pi / 2
             ),
         )
         wall_4_connection = FixedConnection(
             parent=root,
             child=wall4,
-            parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+            parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                 4, 0, 1, yaw=np.pi / 2
             ),
         )
@@ -905,10 +905,12 @@ def _simple_apartment_setup():
             "objects",
             "milk.stl",
         )
-    ).parse()
+    ).create_world()
     world.merge_world_at_pose(
         milk_world,
-        HomogeneousTransformationMatrix.from_xyz_rpy(-1.7, 0, 1.02, yaw=np.pi),
+        HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+            -1.7, 0, 1.02, yaw=np.pi
+        ),
     )
     return world
 
@@ -924,7 +926,7 @@ def kitchen_world():
         "kitchen-small.urdf",
     )
     parser = URDFParser.from_file(file_path=path)
-    world = parser.parse()
+    world = parser.create_world()
     world.validate()
     return world
 
@@ -944,14 +946,14 @@ def multi_story_building(_elevator_world_setup):
     BuildingFloor().spawn(
         world,
         "floor_2",
-        parent_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(0, 0, 3),
+        parent_T_self=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(0, 0, 3),
     )
     world.merge_world(
         elevator_copy,
         FixedConnection(
             parent=world.root,
             child=elevator_copy.root,
-            parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+            parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                 -5, 0, 1, yaw=np.pi
             ),
         ),
@@ -973,7 +975,7 @@ def multi_story_building(_elevator_world_setup):
             FixedConnection(
                 parent=world.root,
                 child=region,
-                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                     0, 0, center_height
                 ),
             )
@@ -1004,7 +1006,7 @@ def apartment_environment_world(apartment_meshes):
     """
     A world holding nothing but the apartment of :class:`ApartmentEnvironment`.
     """
-    return ApartmentEnvironment().get_world()
+    return ApartmentEnvironment().create_world()
 
 
 @pytest.fixture(scope="session")
@@ -1018,8 +1020,10 @@ def pr2_apartment_world(_pr2_world_setup, _apartment_world_setup):
     apartment_copy = deepcopy(_apartment_world_setup)
 
     pr2_copy.merge_world(apartment_copy)
-    pr2_copy.get_body_by_name("base_footprint").parent_connection.origin = (
-        HomogeneousTransformationMatrix.from_xyz_rpy(1.3, 2, 0)
+    pr2_copy.get_body_by_name(
+        "base_footprint"
+    ).parent_connection.origin = (
+        HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(1.3, 2, 0)
     )
     return pr2_copy
 
@@ -1033,7 +1037,7 @@ def simple_pr2_world_setup(_pr2_world_setup, _simple_apartment_setup):
     return (
         pr2_copy,
         robot_view,
-        Context(pr2_copy, robot_view, sampling_seed=SAMPLING_SEED),
+        robot_extensions(robot_view),
     )
 
 
@@ -1044,13 +1048,13 @@ def hsr_apartment_world(_hsr_world_setup, _apartment_world_setup):
     robot_view = hsr_copy.get_semantic_annotations_by_type(HSRB)[0]
 
     apartment_copy.merge_world_at_pose(
-        hsr_copy, HomogeneousTransformationMatrix.from_xyz_rpy(1.5, 2, 0)
+        hsr_copy, HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(1.5, 2, 0)
     )
 
     return (
         apartment_copy,
         robot_view,
-        Context(apartment_copy, robot_view, sampling_seed=SAMPLING_SEED),
+        robot_extensions(robot_view),
     )
 
 
@@ -1060,7 +1064,8 @@ def stretch_apartment_world(_stretch_world_setup, _apartment_world_setup):
     stretch_copy = deepcopy(_stretch_world_setup)
 
     apartment_copy.merge_world_at_pose(
-        stretch_copy, HomogeneousTransformationMatrix.from_xyz_rpy(1.5, 2, 0)
+        stretch_copy,
+        HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(1.5, 2, 0),
     )
 
     return apartment_copy
@@ -1144,7 +1149,7 @@ def ros_publishers():
 
 
 @pytest.fixture(scope="function")
-def init_rospy():
+def init_background_node():
     """
     Gives a test the global Giskard ros node.
 
@@ -1152,22 +1157,24 @@ def init_rospy():
         This fixture drives the same global ros context as :func:`rclpy_node`, so the
         two cannot be used together.
     """
-    if rospy is None:
+    if background_node is None:
         pytest.skip("ROS not installed")
 
-    rospy.init_node("giskard")
+    background_node.init_node("giskard")
 
     try:
         yield None
     finally:
         # Cleanly reset TF and shutdown ROS2 node/executor
-        rospy.shutdown()
+        background_node.shutdown()
 
 
 @pytest.fixture(scope="function")
 def rclpy_node():
     """
-    You can use this fixture if you want to use the marker visualizer of semDT and need a ros node.
+    You can use this fixture if you want to use the marker visualizer of semDT and need
+    a ros node.
+
     ..warning::
         This fixture can not be used in multiple tests at once
     """
@@ -1212,7 +1219,7 @@ def kitchen_environment_fixture():
         fruit_table = Table.create_with_new_body_in_world(
             world=world,
             name="fruit_table",
-            world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
+            world_root_T_self=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                 x=1, y=1, z=0
             ),
             scale=Scale(2, 2, 1),
@@ -1221,7 +1228,7 @@ def kitchen_environment_fixture():
         vegetable_table = Table.create_with_new_body_in_world(
             world=world,
             name="vegetable_table",
-            world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
+            world_root_T_self=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                 x=1, y=1, z=2
             ),
             scale=Scale(2, 2, 1),
@@ -1230,7 +1237,7 @@ def kitchen_environment_fixture():
         empty_table = Table.create_with_new_body_in_world(
             world=world,
             name="empty_table",
-            world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
+            world_root_T_self=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                 x=1, y=1, z=4
             ),
             scale=Scale(2, 2, 1),
@@ -1239,7 +1246,7 @@ def kitchen_environment_fixture():
         empty_table2 = Table.create_with_new_body_in_world(
             world=world,
             name="empty_table2",
-            world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
+            world_root_T_self=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                 x=1, y=1, z=6
             ),
             scale=Scale(2, 2, 1),
@@ -1248,7 +1255,7 @@ def kitchen_environment_fixture():
         apple = Apple.create_with_new_body_in_world(
             world=world,
             name="apple",
-            world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
+            world_root_T_self=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                 x=1, y=1, z=0.55
             ),
             scale=Scale(0.10, 0.10, 0.10),
@@ -1259,7 +1266,7 @@ def kitchen_environment_fixture():
         orange = Orange.create_with_new_body_in_world(
             world=world,
             name="orange",
-            world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
+            world_root_T_self=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                 x=1, y=0.5, z=0.55
             ),
             scale=Scale(0.10, 0.10, 0.10),
@@ -1270,7 +1277,7 @@ def kitchen_environment_fixture():
         banana1 = Banana.create_with_new_body_in_world(
             world=world,
             name="banana1",
-            world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
+            world_root_T_self=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                 x=1, y=0.6, z=0.75
             ),
             scale=Scale(0.10, 0.10, 0.60),
@@ -1281,7 +1288,7 @@ def kitchen_environment_fixture():
         carrot = Carrot.create_with_new_body_in_world(
             world=world,
             name="carrot",
-            world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
+            world_root_T_self=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                 x=1, y=1, z=2.6
             ),
             scale=Scale(0.05, 0.05, 0.20),
@@ -1292,7 +1299,7 @@ def kitchen_environment_fixture():
         lettuce = Lettuce.create_with_new_body_in_world(
             world=world,
             name="lettuce",
-            world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
+            world_root_T_self=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                 x=1, y=1.5, z=2.55
             ),
             scale=Scale(0.15, 0.15, 0.10),
@@ -1303,7 +1310,7 @@ def kitchen_environment_fixture():
         banana = Banana.create_with_new_body_in_world(
             world=world,
             name="banana",
-            world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
+            world_root_T_self=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                 x=10, y=10, z=10
             ),
             scale=Scale(0.20, 0.05, 0.05),
@@ -1322,7 +1329,7 @@ def kitchen_environment_fixture():
     root_C_fake_robot = FixedConnection(
         parent=root,
         child=fake_robot_body,
-        parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(),
+        parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(),
     )
     all_elements_connections.append(root_C_fake_robot)
 

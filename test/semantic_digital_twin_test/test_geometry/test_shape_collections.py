@@ -1,6 +1,6 @@
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.spatial_types.spatial_types import (
-    HomogeneousTransformationMatrix,
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
@@ -19,7 +19,7 @@ def test_post_init_transformation():
             FixedConnection(
                 parent=root,
                 child=b1,
-                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                parent_T_connection_expression=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                     x=1, reference_frame=root
                 ),
             )
@@ -27,7 +27,9 @@ def test_post_init_transformation():
 
     shape = Sphere(
         radius=1,
-        origin=HomogeneousTransformationMatrix.from_xyz_rpy(x=3, reference_frame=root),
+        origin=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+            x=3, reference_frame=root
+        ),
     )
     shape_collection = ShapeCollection(
         shapes=[shape],
@@ -39,7 +41,9 @@ def test_post_init_transformation():
 
     shape = Sphere(
         radius=1,
-        origin=HomogeneousTransformationMatrix.from_xyz_rpy(x=3, reference_frame=root),
+        origin=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+            x=3, reference_frame=root
+        ),
     )
 
     shape_collection = ShapeCollection(reference_frame=b1)

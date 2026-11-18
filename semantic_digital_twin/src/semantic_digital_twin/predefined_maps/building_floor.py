@@ -13,7 +13,10 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Handle,
     Wall,
 )
-from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Vector3
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
+    Vector3Dimensional,
+)
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import Color, Scale
 from semantic_digital_twin.world_description.world_entity import (
@@ -45,7 +48,7 @@ class SingleDoorRoom:
 
     door_color: Color = field(default_factory=lambda: Color.RED())
     """
-    Color of the door to to visually distinguish it from the wall
+    Color of the door to to visually distinguish it from the wall.
     """
 
     def spawn(
@@ -53,7 +56,7 @@ class SingleDoorRoom:
         world: World,
         name: str,
         parent: KinematicStructureEntity | None = None,
-        parent_T_self: HomogeneousTransformationMatrix | None = None,
+        parent_T_self: HomogeneousTransformationMatrix3Dimensional | None = None,
     ) -> Floor:
         """
         Materialize this room in ``world``: a floor, four walls, and a hinged door with
@@ -68,13 +71,16 @@ class SingleDoorRoom:
         :return: The room's floor annotation.
         """
         floor = Floor.get_annotation_specification(
-            f"{name}_floor", Floor.get_default_root_kinematic_structure_entity_specification(scale=self.scale.xy)
+            f"{name}_floor",
+            Floor.get_default_root_kinematic_structure_entity_specification(
+                scale=self.scale.xy
+            ),
         ).spawn(world, parent=parent, parent_T_self=parent_T_self)
 
         wall = None
         for i in range(4):
             yaw = (np.pi / 2) * i
-            wall_pose = HomogeneousTransformationMatrix.from_xyz_rpy(
+            wall_pose = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                 (self.scale.x / 2) * np.cos(yaw),
                 (self.scale.y / 2) * np.sin(yaw),
                 0,
@@ -89,9 +95,11 @@ class SingleDoorRoom:
                 ),
             ).spawn(world, parent=floor.root, parent_T_self=wall_pose)
 
-        handle_root_specification = Handle.get_default_root_kinematic_structure_entity_specification()
+        handle_root_specification = (
+            Handle.get_default_root_kinematic_structure_entity_specification()
+        )
         handle_root_specification.parent_T_self = (
-            HomogeneousTransformationMatrix.from_xyz_rpy(
+            HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                 y=self.door_scale.y / 2 * 0.9, yaw=np.pi
             )
         )
@@ -100,7 +108,7 @@ class SingleDoorRoom:
             Door.get_default_root_kinematic_structure_entity_specification(
                 scale=self.door_scale,
                 connection_specification=RevoluteConnectionSpecification(
-                    axis=Vector3.Z()
+                    axis=Vector3Dimensional.Z()
                 ),
             ),
             part_specifications={
@@ -111,7 +119,7 @@ class SingleDoorRoom:
         ).spawn(
             world,
             parent=wall.root,
-            parent_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
+            parent_T_self=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                 z=self.door_scale.z / 2
             ),
         )
@@ -144,7 +152,7 @@ class BuildingFloor:
         world: World,
         name: str,
         parent: KinematicStructureEntity | None = None,
-        parent_T_self: HomogeneousTransformationMatrix | None = None,
+        parent_T_self: HomogeneousTransformationMatrix3Dimensional | None = None,
     ) -> Floor:
         """
         Materialize this building floor in ``world``: a floor slab with a room in each
@@ -152,22 +160,28 @@ class BuildingFloor:
 
         :param world: The world the building floor is added to.
         :param name: Prefix for the names of every entity this building floor creates.
-        :param parent: The entity the floor slab attaches to. If None, ``world.root``
-            is used.
+        :param parent: The entity the floor slab attaches to. If None, ``world.root`` is
+            used.
         :param parent_T_self: Placement of the floor slab in ``parent``'s frame.
             Identity if None.
         :return: The floor slab's annotation.
         """
         floor = Floor.get_annotation_specification(
             f"{name}_floor",
-            Floor.get_default_root_kinematic_structure_entity_specification(scale=self.floor_scale),
+            Floor.get_default_root_kinematic_structure_entity_specification(
+                scale=self.floor_scale
+            ),
         ).spawn(world, parent=parent, parent_T_self=parent_T_self)
 
         room_poses = [
-            HomogeneousTransformationMatrix.from_xyz_rpy(-1.0, 2.5, 0),
-            HomogeneousTransformationMatrix.from_xyz_rpy(-1.0, -2.5, 0, yaw=np.pi),
-            HomogeneousTransformationMatrix.from_xyz_rpy(1.0, 2.5, 0),
-            HomogeneousTransformationMatrix.from_xyz_rpy(1.0, -2.5, 0, yaw=np.pi),
+            HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(-1.0, 2.5, 0),
+            HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+                -1.0, -2.5, 0, yaw=np.pi
+            ),
+            HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(1.0, 2.5, 0),
+            HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+                1.0, -2.5, 0, yaw=np.pi
+            ),
         ]
         for i, room_pose in enumerate(room_poses):
             self.room.spawn(

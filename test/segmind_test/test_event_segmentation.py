@@ -12,7 +12,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 
 import pytest
-from giskardpy.motion_statechart.context import MotionStatechartContext
+from cramph.executor import StatechartExecutor
 from krrood.exceptions import DataclassException
 
 from segmind.datastructures.events import (
@@ -31,7 +31,9 @@ from segmind.detectors.coarse_event_detector_nodes import PickUpDetector
 from segmind.event_segmentation import Segmind
 from segmind.exceptions import NoSemanticAnnotationToWatch
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Food, Milk
-from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from krrood_spatial_math.spatial_types import (
+    HomogeneousTransformationMatrix3Dimensional,
+)
 from semantic_digital_twin.world_description.world_entity import Body
 
 from .conftest import RESTING_ON_THE_TABLE
@@ -72,8 +74,10 @@ def _stand_the_milk_on_the_table(milk: Body) -> None:
     Put the milk where it rests on the table, so a move of it is a move from rest.
     """
     rest_x, rest_y, rest_z = RESTING_ON_THE_TABLE
-    milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
-        rest_x, rest_y, rest_z, reference_frame=milk.parent_connection.parent
+    milk.parent_connection.origin = (
+        HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+            rest_x, rest_y, rest_z, reference_frame=milk.parent_connection.parent
+        )
     )
 
 
@@ -150,11 +154,13 @@ def test_what_happens_while_a_run_is_watched_is_detected(milk_in_the_apartment):
 
     with segmentation:
         rest_x, rest_y, rest_z = RESTING_ON_THE_TABLE
-        milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
-            rest_x + MOVED_ALONG_X,
-            rest_y,
-            rest_z,
-            reference_frame=milk.parent_connection.parent,
+        milk.parent_connection.origin = (
+            HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+                rest_x + MOVED_ALONG_X,
+                rest_y,
+                rest_z,
+                reference_frame=milk.parent_connection.parent,
+            )
         )
         seen = translated.wait(TICK_TIMEOUT)
 
@@ -170,7 +176,7 @@ def test_what_happens_while_a_run_is_watched_is_detected(milk_in_the_apartment):
 # %% detectors that detect nothing, to watch the watching itself
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(kw_only=True, eq=False, repr=False)
 class DetectorCountingItsTicks(AbstractDetector):
     """
     Detects nothing, and records how often and on which thread it was ticked.
@@ -193,7 +199,6 @@ class DetectorCountingItsTicks(AbstractDetector):
 
     def update_context_and_events(
         self,
-        context: MotionStatechartContext,
         segmind_context: SegmindContext,
         tracked_objects: list[Body],
     ) -> list[DetectionEvent]:
@@ -203,7 +208,7 @@ class DetectorCountingItsTicks(AbstractDetector):
         return []
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(kw_only=True, eq=False, repr=False)
 class DetectorTakingItsTime(AbstractDetector):
     """
     Detects nothing, and spends a fixed time on every tick.
@@ -216,7 +221,6 @@ class DetectorTakingItsTime(AbstractDetector):
 
     def update_context_and_events(
         self,
-        context: MotionStatechartContext,
         segmind_context: SegmindContext,
         tracked_objects: list[Body],
     ) -> list[DetectionEvent]:
@@ -241,8 +245,10 @@ def test_detectors_are_ticked_on_a_thread_of_their_own(milk_in_the_apartment):
 def test_a_body_moved_while_watched_is_seen_translating(milk_in_the_apartment):
     world, milk, _ = milk_in_the_apartment
     rest_x, rest_y, rest_z = RESTING_ON_THE_TABLE
-    milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
-        rest_x, rest_y, rest_z, reference_frame=milk.parent_connection.parent
+    milk.parent_connection.origin = (
+        HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+            rest_x, rest_y, rest_z, reference_frame=milk.parent_connection.parent
+        )
     )
     translated = threading.Event()
     segmentation = Segmind(
@@ -253,11 +259,13 @@ def test_a_body_moved_while_watched_is_seen_translating(milk_in_the_apartment):
     )
 
     with segmentation:
-        milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
-            rest_x + MOVED_ALONG_X,
-            rest_y,
-            rest_z,
-            reference_frame=milk.parent_connection.parent,
+        milk.parent_connection.origin = (
+            HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+                rest_x + MOVED_ALONG_X,
+                rest_y,
+                rest_z,
+                reference_frame=milk.parent_connection.parent,
+            )
         )
         seen = translated.wait(TICK_TIMEOUT)
 
@@ -303,7 +311,7 @@ def test_changing_the_world_is_not_held_up_by_watching_it(milk_in_the_apartment)
         started = time.monotonic()
         for step in range(CHANGES_WHILE_WATCHED):
             milk.parent_connection.origin = (
-                HomogeneousTransformationMatrix.from_xyz_rpy(
+                HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                     rest_x + 0.01 * step,
                     rest_y,
                     rest_z,
@@ -334,7 +342,7 @@ def test_changing_the_world_is_not_held_up_by_ticks_longer_than_the_tick_period(
         started = time.monotonic()
         for step in range(CHANGES_WHILE_WATCHED):
             milk.parent_connection.origin = (
-                HomogeneousTransformationMatrix.from_xyz_rpy(
+                HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
                     rest_x + 0.01 * step,
                     rest_y,
                     rest_z,
@@ -397,8 +405,10 @@ def test_a_body_that_stopped_as_watching_ends_is_seen_at_rest(milk_in_the_apartm
     """
     world, milk, _ = milk_in_the_apartment
     rest_x, rest_y, rest_z = RESTING_ON_THE_TABLE
-    milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
-        rest_x, rest_y, rest_z, reference_frame=milk.parent_connection.parent
+    milk.parent_connection.origin = (
+        HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+            rest_x, rest_y, rest_z, reference_frame=milk.parent_connection.parent
+        )
     )
     translated = threading.Event()
     segmentation = Segmind(
@@ -410,11 +420,13 @@ def test_a_body_that_stopped_as_watching_ends_is_seen_at_rest(milk_in_the_apartm
     )
 
     with segmentation:
-        milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
-            rest_x + MOVED_ALONG_X,
-            rest_y,
-            rest_z,
-            reference_frame=milk.parent_connection.parent,
+        milk.parent_connection.origin = (
+            HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+                rest_x + MOVED_ALONG_X,
+                rest_y,
+                rest_z,
+                reference_frame=milk.parent_connection.parent,
+            )
         )
         translated.wait(TICK_TIMEOUT)
 

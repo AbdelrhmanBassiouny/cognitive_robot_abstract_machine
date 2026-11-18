@@ -4,14 +4,14 @@ import semantic_digital_twin.orm.ormatic_interface  # type: ignore  # noqa: F401
 from krrood.ormatic.data_access_objects.helper import to_dao
 from krrood.parametrization.feature_extraction.feature_extractor import FeatureExtractor
 from krrood.symbolic_math.symbolic_math import FloatVariable
-from semantic_digital_twin.spatial_types.spatial_types import (
+from krrood_spatial_math.spatial_types import (
     AxisAngle,
-    HomogeneousTransformationMatrix,
-    Point3,
-    Pose,
+    HomogeneousTransformationMatrix3Dimensional,
+    CartesianPoint3Dimensional,
+    Pose3Dimensional,
     Quaternion,
     RotationMatrix,
-    Vector3,
+    Vector3Dimensional,
 )
 from semantic_digital_twin.world_description.inertial_properties import Inertial
 
@@ -23,9 +23,9 @@ def feature_names(extractor: FeatureExtractor) -> list[str]:
 
 
 def test_features_of_a_pose_are_read_from_the_pose_itself():
-    pose = Pose.from_xyz_rpy(x=1.0, y=2.0, z=3.0, yaw=0.5)
+    pose = Pose3Dimensional.from_xyz_rpy(x=1.0, y=2.0, z=3.0, yaw=0.5)
 
-    extractor = FeatureExtractor.from_instances([pose])
+    extractor = FeatureExtractor.from_instances(instances=[pose])
 
     assert feature_names(extractor) == [
         "position.x",
@@ -36,7 +36,7 @@ def test_features_of_a_pose_are_read_from_the_pose_itself():
         "axis_angle.axis.y",
         "axis_angle.axis.z",
     ]
-    values = extractor.apply_mapping(pose)
+    values = extractor.apply_mapping(instance=pose)
     assert all(type(value) is float for value in values)
     assert values[:3] == [1.0, 2.0, 3.0]
     assert values[3:] == pytest.approx(
@@ -47,13 +47,15 @@ def test_features_of_a_pose_are_read_from_the_pose_itself():
 @pytest.mark.parametrize(
     "instance",
     [
-        Point3(1.0, 2.0, 3.0),
-        Vector3(1.0, 2.0, 3.0),
+        CartesianPoint3Dimensional(1.0, 2.0, 3.0),
+        Vector3Dimensional(1.0, 2.0, 3.0),
         Quaternion(0.0, 0.0, 0.0, 1.0),
-        AxisAngle(axis=Vector3(0.0, 1.0, 0.0), angle=0.4),
+        AxisAngle(axis=Vector3Dimensional(0.0, 1.0, 0.0), angle=0.4),
         RotationMatrix.from_rpy(roll=0.1, pitch=0.2, yaw=0.3),
-        HomogeneousTransformationMatrix.from_xyz_rpy(x=1.0, y=2.0, z=3.0, yaw=0.3),
-        Pose.from_xyz_rpy(x=1.0, y=2.0, z=3.0, yaw=0.5),
+        HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
+            x=1.0, y=2.0, z=3.0, yaw=0.3
+        ),
+        Pose3Dimensional.from_xyz_rpy(x=1.0, y=2.0, z=3.0, yaw=0.5),
         Inertial(mass=2.0),
     ],
     ids=lambda instance: type(instance).__name__,
@@ -63,20 +65,20 @@ def test_features_of_a_domain_object_match_those_of_its_data_access_object(insta
     A data access object stores a number where the domain object may hold a constant
     symbolic expression, and both have to yield the same features.
     """
-    extractor = FeatureExtractor.from_instances([instance])
+    extractor = FeatureExtractor.from_instances(instances=[instance])
     assert extractor.features
 
     data_access_object = to_dao(instance)
     expected = [
-        feature.apply_mapping_on_external_root(data_access_object)
+        feature.apply_mapping_on_external_root(instance=data_access_object)
         for feature in extractor.features
     ]
-    assert extractor.apply_mapping(instance) == pytest.approx(expected)
+    assert extractor.apply_mapping(instance=instance) == pytest.approx(expected)
 
 
 def test_a_symbolic_expression_with_free_variables_is_not_a_feature():
-    point = Point3(FloatVariable(name="x"), 2.0, 3.0)
+    point = CartesianPoint3Dimensional(FloatVariable(name="x"), 2.0, 3.0)
 
-    extractor = FeatureExtractor.from_instances([point])
+    extractor = FeatureExtractor.from_instances(instances=[point])
 
     assert feature_names(extractor) == ["y", "z"]

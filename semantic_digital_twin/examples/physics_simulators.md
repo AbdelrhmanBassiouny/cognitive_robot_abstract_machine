@@ -100,7 +100,7 @@ scene_xml_str = """
 </worldbody>
 </mujoco>
 """
-world = MJCFParser.from_xml_string(scene_xml_str).parse()
+world = MJCFParser.from_xml_string(scene_xml_str).create_world()
 
 
 rt = RayTracer(world)
@@ -196,7 +196,7 @@ from semantic_digital_twin.adapters.multi_sim import MujocoSim
 from semantic_digital_twin.adapters.ros.tf_publisher import TFPublisher
 from semantic_digital_twin.adapters.ros.visualization.viz_marker import VizMarkerPublisher
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Vector3
+from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix3Dimensional, Vector3Dimensional
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
     Connection6DoF,
@@ -214,7 +214,7 @@ def spawn_free_box(
     name: str = "box",
     position: tuple = (0.0, 0.0, 1.5),
     scale: Scale = Scale(0.1, 0.1, 0.1),
-    color: Color = Color(1.0, 1.0, 0.0, 1.0),
+    color: Color = Color.from_rgba(red=1.0, green=1.0, blue=0.0, opacity=1.0),
 ) -> Body:
     """
     Spawn a free-floating box attached to the world root via a 6-DoF connection.
@@ -222,7 +222,7 @@ def spawn_free_box(
     spawn_body = Body(name=PrefixedName(name))
 
     box = Box(
-        origin=HomogeneousTransformationMatrix.from_xyz_rpy(
+        origin=HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
             reference_frame=spawn_body,
         ),
         scale=scale,
@@ -239,7 +239,7 @@ def spawn_free_box(
         spawn_world.add_connection(connection)
 
         # Set the initial world pose of the box via the 6-DoF DoF state.
-        connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
+        connection.origin = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
             x=position[0],
             y=position[1],
             z=position[2],
@@ -256,14 +256,14 @@ def spawn_robot_body(spawn_world: World) -> Body:
     spawn_body = Body(name=PrefixedName("robot"))
 
     # Shape origin is expressed relative to the body frame.
-    box_origin = HomogeneousTransformationMatrix.from_xyz_rpy(
+    box_origin = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
         z=0.5,
         reference_frame=spawn_body,
     )
     box = Box(
         origin=box_origin,
         scale=Scale(0.4, 0.4, 1.0),
-        color=Color(0.9, 0.9, 0.9, 1.0),
+        color=Color.from_rgba(red=0.9, green=0.9, blue=0.9, opacity=1.0),
     )
     spawn_body.collision = ShapeCollection([box], reference_frame=spawn_body)
 
@@ -282,14 +282,14 @@ def spawn_arm(spawn_world: World, root_body: Body) -> RevoluteConnection:
     spawn_arm_body = Body(name=PrefixedName("arm"))
 
     # Offset the box shape so the link extends along +Y from the joint origin.
-    box_origin = HomogeneousTransformationMatrix.from_xyz_rpy(
+    box_origin = HomogeneousTransformationMatrix3Dimensional.from_xyz_rpy(
         y=0.25,
         reference_frame=spawn_arm_body,
     )
     box = Box(
         origin=box_origin,
         scale=Scale(0.1, 0.5, 0.1),
-        color=Color(0.9, 0.1, 0.1, 1.0),
+        color=Color.from_rgba(red=0.9, green=0.1, blue=0.1, opacity=1.0),
     )
     spawn_arm_body.collision = ShapeCollection(
         [box], reference_frame=spawn_arm_body
@@ -298,7 +298,7 @@ def spawn_arm(spawn_world: World, root_body: Body) -> RevoluteConnection:
     dof = DegreeOfFreedom(name=PrefixedName("arm_joint"))
 
     # Mount the joint on top of the robot base and rotate into a horizontal pose.
-    connection_origin = HomogeneousTransformationMatrix.from_xyz_quaternion(
+    connection_origin = HomogeneousTransformationMatrix3Dimensional.from_xyz_quaternion(
         pos_x=0.0,
         pos_y=0.3,
         pos_z=0.9,
@@ -314,7 +314,7 @@ def spawn_arm(spawn_world: World, root_body: Body) -> RevoluteConnection:
             name=dof.name,
             parent=root_body,
             child=spawn_arm_body,
-            axis=Vector3.Z(reference_frame=spawn_arm_body),
+            axis=Vector3Dimensional.Z(reference_frame=spawn_arm_body),
             dof_id=dof.id,
             parent_T_connection_expression=connection_origin,
         )
