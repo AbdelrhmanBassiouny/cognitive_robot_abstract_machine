@@ -35,24 +35,6 @@ tracks:
   name: krrood command line
   wave: extras
 items:
-- id: eql-probabilistic-split
-  title: Core EQL imports no random_events or probabilistic_model
-  branch: claude/friendly-volta-bny36w
-  status: in progress
-  recommended_model: sonnet
-  track: core-boundaries
-  pull_request_number: 609
-  session: https://claude.ai/code/session_01JxHGiNCuZYy4zJDsmbyfwZ
-  depends_on: []
-  blockers:
-  - 'CI only, read at f65ac70135 (merges cleanly into main): fork checks queued, upstream
-    PR 985 checks pending. LucaKro and tomsch420 approved; no unresolved upstream threads.'
-  - Fork thread on the rule registry (test_grammar_registry.py) stays open until CI is green,
-    then the owner resolves it. Pytest, ruff, docformatter and krrood check not run here.
-  notes: PR 609 ready, promoted as upstream PR 985. Probabilistic parts, causal_relation included,
-    live in krrood.parametrization; every EQL module imports with random_events/probabilistic_model
-    blocked (fresh-interpreter test). Verbalization rules are collected lazily (PhraseRuleRegistry.loaded_rules,
-    user decision). number_like_field is a plain int/float-not-bool/Enum check.
 - id: verbalization-realization-split
   title: Verbalization vocabulary stays in krrood-eql, realization moves out of it
   branch: claude/blissful-mendel-6dsd0l
@@ -109,7 +91,6 @@ items:
   recommended_model: opus
   track: packaging
   depends_on:
-  - eql-probabilistic-split
   - verbalization-realization-split
   - namespace-package
   notes: 'One workspace member per distribution (krrood-core, -eql, -serialization, -ormatic,
@@ -134,4 +115,4 @@ items:
     engine: rule, section, checker, instructions, formatting. It keeps krrood''s shipped rules
     (EQL a/an, serializer, core-boundary) as a basstler-rules ruleset and the krrood command
     mounted on basstler-rules'' commands. Absorbs command-line-on-cyclopts.'
-landed_item_count: 4
+landed_item_count: 5
