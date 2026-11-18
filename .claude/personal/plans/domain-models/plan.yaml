@@ -43,20 +43,18 @@ items:
   recommended_model: sonnet
   blockers:
     - >-
-      Waits on the student's port in their own fork of cram2. #524 is the code source only and is
-      not restacked: at a4e9bbdb it conflicts with #527 (6f2bd2c4) in 7 files (checked 2026-11-18).
-    - >-
-      The port opens to cram2 only after #527 merges there, and must implement
-      transform_into_own_frame and use #527's 3Dimensional/2Dimensional names (#525, 2026-11-18).
+      #524 conflicts with #527 (6f2bd2c4) in 7 files at a4e9bbdb; the port on this branch resolves
+      them (checked 2026-11-18).
+    - "Opens to cram2 only after #527 merges there."
   depends_on:
   - planar-point-interface
-  session: https://claude.ai/code/session_01JxHGiM2mprwspsz9viDuqf
-  notes: 'Handed over to a student, working in their own fork of cram2 (plan: https://claude.ai/artifact/B6CFhypVTivS8majdp34xA,
-    explainer: https://claude.ai/artifact/BHXvkTMLZQdpUzA1Beqcdt). #524 is the code source only:
-    port krrimage onto #527''s head as krrood_image in a fresh branch, ImageCoordinateSystem an
-    AffineFrame, ImagePoint an AffinePoint; move Color as cram2 main has it (#761 merged). Draft
-    PR in the student''s fork until #527 is in cram2, then rebase on main and open to cram2; its
-    number replaces 524 here.'
+  session: https://claude.ai/code/session_018wfiv6J6Mq2STmirioFcCn
+  notes: >
+    Done by us on #524's own branch (the student handover ended 2026-11-18): merge #527 in, rename
+    krrimage to krrood_image, ImageCoordinateSystem an AffineFrame on an ImagePlane, ImagePoint a
+    Point with an ImageVector, implement transform_into_own_frame where a frame needs it, and move
+    Color as cram2 main has it (HSV) with every import migrated and nothing re-exported. Opens to
+    cram2 after #527 merges there.
 - id: image-extensions
   title: Depth and segmentation images, camera intrinsics, SemDT's CameraResolution and VideoResolution
     collapsed into Resolution
