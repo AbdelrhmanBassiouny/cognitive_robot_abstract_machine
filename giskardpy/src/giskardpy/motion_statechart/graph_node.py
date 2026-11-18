@@ -36,7 +36,7 @@ from krrood_spatial_math.spatial_types import (
     Pose3Dimensional,
 )
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
-from semantic_digital_twin.world_description.geometry import Color
+from krrood_image.color import Color
 
 from cramph.node import NodeArtifacts, StatechartNode, EndStatechart
 

@@ -159,7 +159,7 @@ class BuildProgress:
 # %% a single package's interface
 
 
-@dataclass
+@dataclass(kw_only=True)
 class OrmInterface:
     """
     The ORM interface a single package generates.
@@ -173,6 +173,12 @@ class OrmInterface:
     repository_root: Path
     """
     Root of the checkout the package lives in.
+    """
+
+    further_source_folders: tuple[Path, ...] = ()
+    """
+    Source folders of other packages, relative to :attr:`repository_root`, whose modules
+    this interface also maps.
     """
 
     @cached_property
@@ -231,6 +237,13 @@ class OrmInterface:
         return self.repository_root / self.package_name / "src" / self.package_name
 
     @property
+    def further_sources(self) -> list[Path]:
+        """
+        The source folders of other packages whose modules this interface also maps.
+        """
+        return [self.repository_root / folder for folder in self.further_source_folders]
+
+    @property
     def mapping_engine_sources(self) -> list[Path]:
         """
         The folders of the library that maps this package's classes and of the module
@@ -244,14 +257,18 @@ class OrmInterface:
     def inputs(self) -> list[Path]:
         """
         The files this package contributes to a build: its generator, the modules of its
-        source folder, and those of the mapping engine.
+        source folder and of its further source folders, and those of the mapping engine.
 
         The interface itself is written by a build rather than read by one, so it is not
         among them.
         """
         modules = [
             module
-            for source_folder in (self.sources, *self.mapping_engine_sources)
+            for source_folder in (
+                self.sources,
+                *self.further_sources,
+                *self.mapping_engine_sources,
+            )
             for module in source_folder.rglob(SOURCE_FILE_PATTERN)
             if module != self.path
         ]
@@ -562,12 +579,22 @@ class OrmPackage(StrEnum):
 
 WORKSPACE_ORM_INTERFACES = WorkspaceOrmInterfaces(
     (
-        OrmInterface(OrmPackage.SEMANTIC_DIGITAL_TWIN, REPOSITORY_ROOT),
-        OrmInterface(OrmPackage.CRAMPH, REPOSITORY_ROOT),
-        OrmInterface(OrmPackage.SEGMIND, REPOSITORY_ROOT),
-        OrmInterface(OrmPackage.GISKARDPY, REPOSITORY_ROOT),
-        OrmInterface(OrmPackage.CORAPLEX, REPOSITORY_ROOT),
-        OrmInterface(OrmPackage.EXPERIMENTS, REPOSITORY_ROOT),
+        OrmInterface(
+            package_name=OrmPackage.SEMANTIC_DIGITAL_TWIN,
+            repository_root=REPOSITORY_ROOT,
+            further_source_folders=(
+                Path("domain_models") / "krrood_image" / "src" / "krrood_image",
+            ),
+        ),
+        OrmInterface(package_name=OrmPackage.CRAMPH, repository_root=REPOSITORY_ROOT),
+        OrmInterface(package_name=OrmPackage.SEGMIND, repository_root=REPOSITORY_ROOT),
+        OrmInterface(
+            package_name=OrmPackage.GISKARDPY, repository_root=REPOSITORY_ROOT
+        ),
+        OrmInterface(package_name=OrmPackage.CORAPLEX, repository_root=REPOSITORY_ROOT),
+        OrmInterface(
+            package_name=OrmPackage.EXPERIMENTS, repository_root=REPOSITORY_ROOT
+        ),
     )
 )
 """

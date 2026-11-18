@@ -113,7 +113,11 @@ from semantic_digital_twin.world_description.connection_properties import JointD
 from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedomLimits,
 )
-from semantic_digital_twin.world_description.geometry import Color, Scale, Box
+from semantic_digital_twin.world_description.geometry import (
+    Scale,
+    Box,
+)
+from krrood_image.color import Color
 from semantic_digital_twin.world_description.inertial_properties import Inertial
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import (

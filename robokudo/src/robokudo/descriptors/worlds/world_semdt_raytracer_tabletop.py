@@ -1,3 +1,7 @@
+"""
+A tabletop world for simulating a camera with the semantic digital twin's ray tracer.
+"""
+
 # %% Imports
 from semantic_digital_twin.datastructures.camera_model import (
     CameraModality,
@@ -22,7 +26,11 @@ from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix3Dimensional,
 )
 from semantic_digital_twin.world_description.connections import Connection6DoF
-from semantic_digital_twin.world_description.geometry import Color, Mesh, Scale
+from semantic_digital_twin.world_description.geometry import (
+    Mesh,
+    Scale,
+)
+from krrood_image.color import Color
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
 

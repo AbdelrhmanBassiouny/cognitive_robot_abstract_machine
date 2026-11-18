@@ -1,3 +1,8 @@
+"""
+Queries over a world's semantic annotations: what lies on which surface, which object is
+nearest, and filtering and sorting annotations by colour, label and volume.
+"""
+
 from krrood.inheritance_path_length import (
     nearest_common_ancestor,
     inheritance_path_length,
@@ -28,7 +33,7 @@ from semantic_digital_twin.semantic_annotations.mixins import (
     HasRootBody,
 )
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.geometry import Color
+from krrood_image.color import Color
 
 from semantic_digital_twin.world_description.world_entity import (
     Body,

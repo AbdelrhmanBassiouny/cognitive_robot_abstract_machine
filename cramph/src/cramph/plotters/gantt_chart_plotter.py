@@ -16,7 +16,7 @@ import numpy as np
 from cramph.context import StatechartContext
 from cramph.data_types import LifeCycleValue, ObservationStateValue
 from cramph.node import StatechartNode
-from semantic_digital_twin.world_description.geometry import Color
+from krrood_image.color import Color
 
 logger = logging.getLogger(__name__)
 

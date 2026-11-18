@@ -10,7 +10,7 @@ import numpy
 import pytest
 import torch
 from py_trees.common import Status
-from semantic_digital_twin.world_description.geometry import Color
+from krrood_image.color import Color
 
 from robokudo.types.cv import ColorToDepthRatio
 from robokudo.annotators.open_vocabulary_object_detection_annotator import (

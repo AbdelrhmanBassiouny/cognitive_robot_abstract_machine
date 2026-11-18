@@ -82,9 +82,9 @@ from semantic_digital_twin.world_description.connections import (
 )
 from semantic_digital_twin.world_description.geometry import (
     VolumetricBoundingBox,
-    Color,
     Scale,
 )
+from krrood_image.color import Color
 from semantic_digital_twin.world_description.shape_collection import (
     BoundingBoxCollection,
 )

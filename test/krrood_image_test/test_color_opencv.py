@@ -1,10 +1,15 @@
+"""
+Tests for converting colours to and from the 8-bit hue, saturation and value channels of
+OpenCV's ``HSV_FULL`` images.
+"""
+
 from __future__ import annotations
 
 # %% Imports
 
 import pytest
 
-from semantic_digital_twin.world_description.geometry import Color
+from krrood_image.color import Color
 
 # %% OpenCV channel conversion
 

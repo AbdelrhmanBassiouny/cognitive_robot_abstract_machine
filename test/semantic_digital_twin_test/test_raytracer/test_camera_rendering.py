@@ -42,7 +42,7 @@ from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix3Dimensional,
 )
 from semantic_digital_twin.testing import ray_test_world
-from semantic_digital_twin.world_description.geometry import Color
+from krrood_image.color import Color
 from semantic_digital_twin.world_description.world_entity import Body
 from semantic_digital_twin.world import World
 

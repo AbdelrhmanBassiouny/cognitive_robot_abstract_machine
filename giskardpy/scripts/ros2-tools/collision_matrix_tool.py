@@ -1,5 +1,10 @@
 #!/usr/bin/env python
 
+"""
+A Qt application for viewing and editing a robot's self-collision matrix: which pairs
+of bodies are never checked for collisions, and why.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -49,7 +54,7 @@ from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.robots.minimal_robot import MinimalRobot
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
-from semantic_digital_twin.world_description.geometry import Color
+from krrood_image.color import Color
 from semantic_digital_twin.world_description.world_entity import Body
 from krrood.patterns.called_positionally import called_positionally
 

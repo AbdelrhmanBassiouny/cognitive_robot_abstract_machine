@@ -84,8 +84,8 @@ from semantic_digital_twin.world_description.geometry import (
     Shape,
     Mesh,
     MeshFileFormat,
-    Color,
 )
+from krrood_image.color import Color
 from semantic_digital_twin.world_description.contact import (
     ContactFriction,
     ContactParameters,

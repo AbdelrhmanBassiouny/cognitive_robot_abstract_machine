@@ -1,3 +1,8 @@
+"""
+Tests for publishing a world's shapes as ROS visualization markers and its bodies' poses
+as tf frames.
+"""
+
 import os
 from dataclasses import dataclass, field
 from time import sleep
@@ -28,7 +33,12 @@ from semantic_digital_twin.world_description.connections import (
     OmniDrive,
     FixedConnection,
 )
-from semantic_digital_twin.world_description.geometry import Mesh, Box, Color, Scale
+from semantic_digital_twin.world_description.geometry import (
+    Mesh,
+    Box,
+    Scale,
+)
+from krrood_image.color import Color
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body, Region
 

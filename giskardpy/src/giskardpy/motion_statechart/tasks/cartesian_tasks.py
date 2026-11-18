@@ -47,7 +47,7 @@ from krrood_spatial_math.spatial_types import (
     Vector3Dimensional,
 )
 from krrood_spatial_math.spatial_types import Pose3Dimensional, SymbolicSpatialType
-from semantic_digital_twin.world_description.geometry import Color
+from krrood_image.color import Color
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )

@@ -1,3 +1,8 @@
+"""
+A tabletop world of cylindrical objects for simulating a camera with the semantic
+digital twin's ray tracer.
+"""
+
 # %% Imports
 from semantic_digital_twin.world_description.world_entity import Body
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -18,7 +23,8 @@ from robokudo.world_descriptor import (
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix3Dimensional,
 )
-from semantic_digital_twin.world_description.geometry import Scale, Color
+from semantic_digital_twin.world_description.geometry import Scale
+from krrood_image.color import Color
 
 # %% World descriptor
 

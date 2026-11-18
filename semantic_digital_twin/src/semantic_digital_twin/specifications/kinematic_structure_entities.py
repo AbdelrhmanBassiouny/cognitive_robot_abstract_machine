@@ -25,13 +25,13 @@ from semantic_digital_twin.specifications.connections import (
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import (
     Box,
-    Color,
     Cylinder,
     Mesh,
     Scale,
     Sphere,
     VolumetricBoundingBox,
 )
+from krrood_image.color import Color
 from semantic_digital_twin.world_description.inertial_properties import Inertial
 from semantic_digital_twin.world_description.shape_collection import (
     BoundingBoxCollection,

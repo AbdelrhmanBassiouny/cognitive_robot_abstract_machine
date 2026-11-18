@@ -1,3 +1,8 @@
+"""
+Collections of the shapes a body is made of, and of axis-aligned bounding boxes that
+share one reference frame.
+"""
+
 from __future__ import annotations
 
 import itertools
@@ -24,8 +29,8 @@ from semantic_digital_twin.world_description.geometry import (
     AxisAlignedBox,
     PointT,
     VolumetricBoundingBox,
-    Color,
 )
+from krrood_image.color import Color
 
 BoxT = TypeVar("BoxT", bound=AxisAlignedBox)
 """

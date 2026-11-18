@@ -25,7 +25,7 @@ import robokudo.utils.cv_helper
 from robokudo.cas import CASViews
 from robokudo.types.scene import ObjectHypothesis
 from robokudo.utils.error_handling import catch_and_raise_to_blackboard
-from semantic_digital_twin.world_description.geometry import Color
+from krrood_image.color import Color
 
 if TYPE_CHECKING:
     import numpy.typing as numpy_typing

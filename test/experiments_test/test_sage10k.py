@@ -27,7 +27,8 @@ from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedomLimits,
 )
-from semantic_digital_twin.world_description.geometry import Color, Scale
+from semantic_digital_twin.world_description.geometry import Scale
+from krrood_image.color import Color
 from coraplex.plans.executors import PlanExecutor
 from coraplex.plans.context_extensions import RobotAccess, StatementGrounding
 from ..plan_running import run_plan

@@ -1,3 +1,8 @@
+"""
+Options, setup and fixtures shared by every package's tests: the worlds, robots and
+simulators they run against, and the ORM interfaces they build.
+"""
+
 import os
 import threading
 import time
@@ -125,8 +130,8 @@ from semantic_digital_twin.world_description.geometry import (
     Scale,
     Cylinder,
     Sphere,
-    Color,
 )
+from krrood_image.color import Color
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import (
     Body,

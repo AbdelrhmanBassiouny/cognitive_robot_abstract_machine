@@ -15,7 +15,7 @@ from giskardpy.motion_statechart.graph_node import (
 from krrood_spatial_math.spatial_types import Vector3Dimensional
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import EndEffector
-from semantic_digital_twin.world_description.geometry import Color
+from krrood_image.color import Color
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )

@@ -1,3 +1,7 @@
+"""
+Reading URDF files into a world, including the limits and axes of their joints.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -46,9 +50,9 @@ from semantic_digital_twin.world_description.geometry import (
     Cylinder,
     Mesh,
     Scale,
-    Color,
     Shape,
 )
+from krrood_image.color import Color
 from semantic_digital_twin.world_description.inertial_properties import (
     Inertial,
     InertiaTensor,
@@ -478,7 +482,7 @@ class URDFParser(WorldModelParser):
         if material is None:
             return None
         if material.color is not None:
-            color = Color.from_rgba(*material.color.rgba)
+            color = Color.from_list(color=material.color.rgba)
         else:
             named_colors = {
                 named.name: named.color
@@ -487,7 +491,7 @@ class URDFParser(WorldModelParser):
             }
             if material.name not in named_colors:
                 return None
-            color = Color.from_rgba(*named_colors[material.name].rgba)
+            color = Color.from_list(color=named_colors[material.name].rgba)
         # The mesh's file is read only when there is a color to give.
         if isinstance(shape, Mesh) and shape.is_textured:
             return None

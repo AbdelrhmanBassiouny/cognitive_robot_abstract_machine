@@ -1,3 +1,8 @@
+"""
+Tests for shapes: their origins and bounding boxes, and how meshes and their colours are
+written to files and serialized.
+"""
+
 import gc
 import math
 import os
@@ -22,7 +27,6 @@ from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import (
     Box,
-    Color,
     Cylinder,
     Mesh,
     MeshFileFormat,
@@ -32,6 +36,7 @@ from semantic_digital_twin.world_description.geometry import (
     Texture,
     TrimeshMetadataKey,
 )
+from krrood_image.color import Color
 from semantic_digital_twin.world_description.mesh_file_storage import MeshFileStorage
 from semantic_digital_twin.world_description.world_entity import Body
 

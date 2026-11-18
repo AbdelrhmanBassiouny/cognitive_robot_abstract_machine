@@ -1,10 +1,15 @@
+"""
+The fonts, shapes, borders, sizes and colours a statechart drawing uses for its nodes
+and observations.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, StrEnum
 
 
-from semantic_digital_twin.world_description.geometry import Color
+from krrood_image.color import Color
 from cramph.data_types import ObservationStateValue, TransitionKind
 
 # %% fonts
@@ -170,7 +175,7 @@ class ObservationDrawingStyle(Enum):
         :param line_width_factor: The multiple of :attr:`DrawingMetrics.line_width` a
             line carrying this value is drawn with.
         """
-        self.color = Color.from_hex(color_hex)
+        self.color = Color.from_hex(hex_color=color_hex)
         self.line_width_factor = line_width_factor
 
     @classmethod

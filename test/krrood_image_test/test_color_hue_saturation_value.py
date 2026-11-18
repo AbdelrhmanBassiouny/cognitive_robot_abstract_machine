@@ -1,3 +1,8 @@
+"""
+Tests for colours stored as hue, saturation and value: reading their red, green and blue
+channels, equality, hashing and JSON.
+"""
+
 from __future__ import annotations
 
 # %% Imports
@@ -6,8 +11,8 @@ from copy import copy
 import pytest
 
 from krrood.adapters.json_serializer import from_json, to_json
-from semantic_digital_twin.world_description.geometry import Color
-from semantic_digital_twin.world_description.exceptions import InvalidColorChannelCount
+from krrood_image.color import Color
+from krrood_image.exceptions import InvalidColorChannelCount
 
 
 # %% Stored hue, saturation, and value
@@ -66,7 +71,7 @@ def test_invalid_channel_count_raises_color_exception() -> None:
     A color requires RGB channels and optional opacity.
     """
     with pytest.raises(InvalidColorChannelCount):
-        Color.from_list([])
+        Color.from_list(color=[])
 
 
 # %% Color identity

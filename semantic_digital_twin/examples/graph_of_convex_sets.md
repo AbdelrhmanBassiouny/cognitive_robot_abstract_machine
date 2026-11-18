@@ -35,7 +35,11 @@ You can read more about GCS [here](https://arxiv.org/abs/2101.11565).
 Let's get hands on! First, we need to create a world that makes navigation non-trivial.
 
 ```{code-cell} ipython3
-from semantic_digital_twin.world_description.geometry import Box, Scale, Color
+from semantic_digital_twin.world_description.geometry import (
+    Box,
+    Scale,
+)
+from krrood_image.color import Color
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection, BoundingBoxCollection
 from semantic_digital_twin.world_description.world_entity import Body
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName

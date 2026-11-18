@@ -1,3 +1,7 @@
+"""
+Tests for spawning a region of free space over a floor with the graph of convex sets.
+"""
+
 import numpy as np
 import pytest
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Floor
@@ -7,7 +11,11 @@ from semantic_digital_twin.world_description.shape_collection import (
     BoundingBoxCollection,
     ShapeCollection,
 )
-from semantic_digital_twin.world_description.geometry import Color, Scale, Box
+from semantic_digital_twin.world_description.geometry import (
+    Scale,
+    Box,
+)
+from krrood_image.color import Color
 from semantic_digital_twin.world_description.graph_of_convex_sets.boxes import (
     PlanarGraphOfBoundingBoxes,
 )

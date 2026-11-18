@@ -1,11 +1,13 @@
-"""Which packages ``scripts/sync_version.py`` writes a version into, and where.
+"""
+Which packages ``scripts/sync_version.py`` writes a version into, and where.
 
-The script is a standalone file rather than part of an importable
-package, so it is loaded from its path.
+The script is a standalone file rather than part of an importable package, so it is
+loaded from its path.
 """
 
 from __future__ import annotations
 
+import ast
 import importlib.util
 import shutil
 import sys
@@ -21,12 +23,15 @@ from packaging.utils import canonicalize_name
 # %% the script under test
 
 SYNC_VERSION_SCRIPT = Path(__file__).parents[2] / "scripts" / "sync_version.py"
-"""The script under test."""
+"""
+The script under test.
+"""
 
 
 def load_sync_version() -> ModuleType:
-    """Registered under its name before it runs, as an import would be, since a
-    dataclass looks its own module up while it is defined.
+    """
+    Registered under its name before it runs, as an import would be, since a dataclass
+    looks its own module up while it is defined.
 
     :return: The script, imported from its file.
     """
@@ -44,8 +49,10 @@ sync_version = load_sync_version()
 repository = sync_version.Repository.of_this_script()
 
 RELEASE_WORKSPACE = Path(__file__).parent / "dataset" / "release_workspace"
-"""A miniature workspace: a root and members, one of them nested and one
-without a version module of its own."""
+"""
+A miniature workspace: a root and members, one of them nested and one without a version
+module of its own.
+"""
 
 
 @pytest.fixture
@@ -89,8 +96,9 @@ def test_every_version_module_in_the_repository_is_found():
 
 
 def test_members_are_read_from_the_workspace_declaration(release_workspace):
-    """A member below the first directory level, such as ``nested/beta``, is a
-    package too."""
+    """
+    A member below the first directory level, such as ``nested/beta``, is a package too.
+    """
     directories = {
         package.directory.relative_to(release_workspace.root)
         for package in release_workspace.versioned_packages()
@@ -109,6 +117,32 @@ def test_every_version_module_is_written_with_the_repository_version(
         assert package.version_file.read_text() == package.version_module_text(
             release_workspace.version
         )
+
+
+def test_a_written_version_module_has_a_docstring(release_workspace):
+    """
+    A version module is checked like any other module, so the one the script writes
+    carries the module docstring every module needs.
+    """
+    release_workspace.synchronize()
+
+    for package in release_workspace.versioned_packages():
+        written = ast.parse(package.version_file.read_text())
+        assert ast.get_docstring(written) is not None
+
+
+def test_a_written_version_module_reads_back_as_the_repository_version(
+    release_workspace,
+):
+    """
+    The docstring leaves ``__version__`` the version the repository carries.
+    """
+    release_workspace.synchronize()
+
+    for package in release_workspace.versioned_packages():
+        namespace = {}
+        exec(package.version_file.read_text(), namespace)
+        assert namespace["__version__"] == release_workspace.version
 
 
 # %% bounding the dependencies on other packages
@@ -227,14 +261,18 @@ def test_check_writes_nothing_and_fails_while_outdated(release_workspace, monkey
 
 # %% this repository
 def test_this_repository_is_synchronized():
-    """Fails when a version or a bound on another package was edited by hand or
-    a package was added without running ``scripts/sync_version.py``."""
+    """
+    Fails when a version or a bound on another package was edited by hand or a package
+    was added without running ``scripts/sync_version.py``.
+    """
     assert repository.outdated_files() == []
 
 
 def test_every_dependency_on_another_package_of_this_repository_requires_its_version():
-    """Read back from the files with a TOML parser, independent of how the
-    script writes them."""
+    """
+    Read back from the files with a TOML parser, independent of how the script writes
+    them.
+    """
     packages = repository.versioned_packages()
     siblings = {package.distribution_name for package in packages}
     expected = SpecifierSet(f">={repository.version}")

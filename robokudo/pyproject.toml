@@ -37,6 +37,7 @@ dependencies = [
     "krrood>=26.10.0",
     "semantic_digital_twin>=26.10.0",
     "krrood_spatial_math[casadi]>=26.10.0",
+    "krrood_image>=26.10.0",
     "transformers",
     "faiss-cpu",
     "ultralytics",
@@ -57,6 +58,7 @@ version = {attr = "robokudo._version.__version__"}
 [dependency-groups]
 workspace = [
     "krrood",
+    "krrood_image",
     "krrood_spatial_math",
     "semantic_digital_twin",
 ]

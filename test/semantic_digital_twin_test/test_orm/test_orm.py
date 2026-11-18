@@ -1,3 +1,8 @@
+"""
+Tests for storing worlds, their degrees of freedom, robots and semantic annotations in a
+database and reading them back.
+"""
+
 import dataclasses
 import os
 import time
@@ -18,7 +23,11 @@ from semantic_digital_twin.world_description.connections import RevoluteConnecti
 from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedomLimits,
 )
-from semantic_digital_twin.world_description.geometry import Box, Scale, Color
+from semantic_digital_twin.world_description.geometry import (
+    Box,
+    Scale,
+)
+from krrood_image.color import Color
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix3Dimensional,

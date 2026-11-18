@@ -1,3 +1,8 @@
+"""
+Generates the semantic digital twin's ORM interface from its dataclasses and the colours
+of :mod:`krrood_image.color`.
+"""
+
 # ----------------------------------------------------------------------------------------------------------------------
 # This script generates the ORM classes for the semantic_digital_twin package.
 # Dataclasses can be mapped automatically to the ORM model
@@ -12,6 +17,7 @@ from pathlib import Path
 
 import trimesh
 
+import krrood_image.color
 import semantic_digital_twin
 import semantic_digital_twin.orm.model
 
@@ -76,7 +82,7 @@ def generate_orm():
     logging.getLogger("krrood").setLevel(logging.DEBUG)
 
     ormatic = ORMatic.from_package(
-        packages=[semantic_digital_twin],
+        packages=[semantic_digital_twin, krrood_image.color],
         ormatic_interface_dependencies=[],
         ignored_classes=ignore_classes,
         type_mappings={

@@ -10,3 +10,5 @@ models and on libraries outside this repository.
 - `krrood_compute_resources`: the processor cores, memory and GPUs a computation runs on,
   and how a machine is divided among processes that run side by side; with the extras
   `[jax]` and `[torch]`, the memory of the devices of those libraries.
+- `krrood_image`: images, the image planes they lie on, the positions, displacements,
+  boxes and pixels on them, and colours.

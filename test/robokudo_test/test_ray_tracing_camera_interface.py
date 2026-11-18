@@ -1,3 +1,8 @@
+"""
+Tests for the RoboKudo camera interface that renders colour and depth images of a world
+with the ray tracer.
+"""
+
 from __future__ import annotations
 
 # %% Imports
@@ -25,7 +30,7 @@ from semantic_digital_twin.datastructures.camera_rendering import (
     RenderedRGBDFrame,
     BodyColorRenderingMode,
 )
-from semantic_digital_twin.world_description.geometry import Color
+from krrood_image.color import Color
 
 # %% Interface integration
 
