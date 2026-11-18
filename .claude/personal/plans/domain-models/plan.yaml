@@ -42,19 +42,15 @@ items:
   status: in_progress
   recommended_model: sonnet
   blockers:
-    - >-
-      #524 conflicts with #527 (6f2bd2c4) in 7 files at a4e9bbdb; the port on this branch resolves
-      them (checked 2026-11-18).
     - "Opens to cram2 only after #527 merges there."
   depends_on:
   - planar-point-interface
   session: https://claude.ai/code/session_018wfiv6J6Mq2STmirioFcCn
   notes: >
-    Done by us on #524's own branch (the student handover ended 2026-11-18): merge #527 in, rename
-    krrimage to krrood_image, ImageCoordinateSystem an AffineFrame on an ImagePlane, ImagePoint a
-    Point with an ImageVector, implement transform_into_own_frame where a frame needs it, and move
-    Color as cram2 main has it (HSV) with every import migrated and nothing re-exported. Opens to
-    cram2 after #527 merges there.
+    Ported on #524's own branch (81506f8a, clean against #527's 6f2bd2c4): krrood_image with
+    ImagePlane a EuclideanSpace2Dimensional, ImageCoordinateSystem an AffineFrame,
+    ImagePoint/ImageVector; HSV Color moved keyword-only with every import and call migrated
+    (api-break). CI at 81506f8a not yet read. Opens to cram2 after #527 merges there.
 - id: image-extensions
   title: Depth and segmentation images, camera intrinsics, SemDT's CameraResolution and VideoResolution
     collapsed into Resolution
