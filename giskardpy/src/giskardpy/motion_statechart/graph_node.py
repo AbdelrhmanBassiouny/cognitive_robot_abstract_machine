@@ -1,6 +1,8 @@
 """
-The nodes of a motion statechart, the tasks among them, and the artifacts a node adds to
-motion control.
+The nodes of a motion statechart and the tasks built on them.
+
+A node hands its constraints for the QP controller and its debug expressions over in its
+artifacts.
 """
 
 from __future__ import annotations
@@ -10,7 +12,7 @@ from dataclasses import field, dataclass
 from functools import cached_property
 
 import numpy as np
-from typing_extensions import TYPE_CHECKING, Self
+from typing_extensions import Self
 
 import krrood.symbolic_math.symbolic_math as sm
 from giskardpy.motion_statechart.constraint_builders import GeometricConstraintBuilder
@@ -37,9 +39,6 @@ from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFr
 from krrood_image.color import Color
 
 from cramph.node import NodeArtifacts, StatechartNode, EndStatechart
-
-if TYPE_CHECKING:
-    from cramph.statechart import Statechart
 
 
 @dataclass(kw_only=True)
@@ -84,19 +83,6 @@ class DebugExpression:
         :return: The current value of the tracked expression.
         """
         return self.expression.evaluate()
-
-    @classmethod
-    def collect_from(cls, *, statechart: Statechart) -> list[DebugExpression]:
-        """
-        :param statechart: The statechart whose nodes registered debug expressions.
-        :return: The debug expressions of every motion node of `statechart`, in node
-            order.
-        """
-        return [
-            debug_expression
-            for node in statechart.get_nodes_by_type(node_type=MotionStatechartNode)
-            for debug_expression in node.debug_expressions
-        ]
 
 
 @dataclass(kw_only=True)
