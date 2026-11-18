@@ -1,11 +1,10 @@
 ## Plan
-- krrood_image ported onto #527; HSV Color moved keyword-only, every caller migrated.
+- Merge #527's head 1392bb20 into #524; resolve its 7 conflicts (ci.yml, cramph styles, domain_models README, experiments + root pyproject, graph_node, version test).
+- Check krrood_image against #527's EmbeddedPlane 2D-frame change; run krrood_image, spatial-math, version tests; push via maintenance push.
 
 ## Done
-- Merged #527 (6f2bd2c4); pushed 81506f8a, merge probe clean.
-- Local tests green except ROS/graphviz/PyQt5-only ones; PR description rewritten.
+- CI green at 81506f8a (14/14); no review threads.
 
 ## Next
-- Read CI at 81506f8a (SemDT ORM generation, ROS, RoboKudo, giskardpy are first checked there).
-- Labels to set: api-break, new-feature.
+- #527 itself conflicts with main 8fdae4a2 (8 SemDT files) - its owner's resolve.
 - Open to cram2 once #527 merges there.
