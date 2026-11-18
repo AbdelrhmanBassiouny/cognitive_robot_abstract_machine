@@ -87,24 +87,25 @@ items:
 - id: planar-point-interface
   title: krrood_spatial_math's casadi-free base (spaces, coordinate systems and frames, points,
     coordinate changes, SpaceMap) and SemDT's spatial types implementing it, with the folded
-    planar, rename, projection, action and frame-check items
+    planar, rename, projection, action, frame-check and world-as-space items
   branch: claude/krrspatial-interfaces
   pull_request_number: 527
   track: spatial
   status: in_progress
   recommended_model: opus
   blockers:
-  - 'CI on ca5d6c6d (main 34c9f204 merged) not read. No cram2 pull request yet. Owner
-    to decide: krrood check flags dot, euclidean_distance, projection_line, unproject as
-    positional; the ambient_space and Point Generic review threads.'
-  - '#524 must move to Point/Vector and the Dimensional names.'
+  - 'CI on 6f2bd2c4 not read (running when pushed). No cram2 pull request yet. Owner to decide
+    on #527: whether transformations keep accepting frameless values, the flatten-test rename,
+    and krrood check flagging dot, euclidean_distance, projection_line, unproject as positional.'
+  - '#524 must move to Point/Vector, the Dimensional names and transform_into_own_frame.'
   depends_on: []
   session: https://claude.ai/code/session_018wfiv5c5ocSWwDLYMCNudx
   notes: '#527: the casadi-free base and SemDT adopting it, with the planar, imports, projection,
-    action and frame-check items folded in. The 2026-11-12 review decisions are in the roadmap
-    rules and the PR. api-break; migration in the PR description. Next: CI, review, promote.
-    Open: whether CartesianPoint2Dimensional/Pose2Dimensional.transform refuse frames on
-    other planes.'
+    action, frame-check and world-as-euclidean-space items folded in. World is the
+    EuclideanSpace3Dimensional its bodies chart; express_in_own_frame checks spaces before
+    transform_into_own_frame. api-break; migration in the PR description. Next: CI, review,
+    promote. Open: whether CartesianPoint2Dimensional/Pose2Dimensional.transform refuse frames
+    on other planes.'
 - id: image-coordinate-change
   title: krrood_image's ImageCoordinateChange (scale and shift per axis) for crops and resizes,
     with cv2 resampling
@@ -119,22 +120,6 @@ items:
     found in a crop maps back to the whole image. ColorImage.cropped/resized do the pixel
     work with cv2 and return the change; it also yields the 2x3 matrix cv2.warpAffine takes.
     Pasting one image into another maps between two planes: a SpaceMap, not a change.'
-- id: world-as-euclidean-space
-  title: SemDT's World is the EuclideanSpace its bodies chart; CartesianFrame3D.express_in_own_frame
-    checks the space before changing coordinates
-  branch: claude/world-as-euclidean-space
-  track: spatial
-  status: not_started
-  recommended_model: opus
-  depends_on:
-  - planar-point-interface
-  notes: 'World implements EuclideanSpace3D (one world, one space). test/living_worlds.py
-    wraps an existing __new__ instead of refusing it (approved). CoordinateSystem.space becomes
-    an abstract property returning SpaceT | None; KinematicStructureEntity returns _world,
-    never raising. express_in_own_frame is a template method: raises for no frame, a frame
-    not in a space, or frames of different spaces, then calls an abstract hook. #526 gives
-    KinematicStructureEntity a space property returning None; this item makes it return _world.
-    If a world ever holds unrelated parts, switch to has-a.'
 - id: perception-typed-images
   title: SemDT's ray tracer renders, and RoboKudo's CAS holds, krrood_image images instead
     of bare arrays
@@ -160,7 +145,7 @@ items:
   recommended_model: sonnet
   depends_on:
   - perception-typed-images
-  - world-as-euclidean-space
+  - planar-point-interface
   notes: 'CameraObservation (camera, effective model, world_T_camera, timestamp) is a Capture
     of the frame''s images: the effective model comes from each image''s coordinate system,
     not stored; instant holds the world and time, or a sampled camera pose when no state trajectory
