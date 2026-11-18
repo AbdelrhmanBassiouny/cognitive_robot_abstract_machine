@@ -1,12 +1,12 @@
 ## Plan
-- Fix the regression the merge of main (145201d78f) caused in `test_realization_split`, once the developer chooses how: the symbol graph imports `krrood.parametrization`, whose `__init__` loads the grammar and so `inflect`.
-- Answer the open question on CI enforcing boundaries (thread left open, reply posted).
+- Answer the open thread on CI enforcing boundaries (reply posted, left for the developer).
+- Decide whether `krrood.parametrization.__init__` should keep importing the grammar eagerly.
 
-## Done (read at 2ee94db3bd)
-- Stack pass: main caught up, branch restacked, no conflicts (merge probe clean), no upstream pull request.
-- Review threads: determiner table is an RST list-table; `MorphologyProcessor.rewrite` dispatches over `LeafRealization` subclasses; the split test derives its libraries from the realization modules' imports. Three threads resolved.
-- 813 verbalization and core-boundary tests pass; the split test fails on the regression above.
+## Done (read at 6f9e035fd7)
+- Regression fixed: the symbol graph's type-hint scope now defers TYPE_CHECKING imports (`DeferredImportScope`), so building a clause loads no realization library.
+- Negation and number are each asked in one place (`PolarRealization`, `AgreeingRealization`); the two new review threads are resolved.
+- 917 verbalization, class-diagram and core-boundary tests pass; `krrood check` clean on touched files.
 
 ## Next
-- Developer's decision on the fix, then rerun the verbalization and core-boundary tests.
-- CI checks on the new head were still running when read.
+- CI checks on the new head were not read yet.
+- Developer: the `as_fragment` rename and the rest of `test_eql` / `semantic_digital_twin` were not run.
