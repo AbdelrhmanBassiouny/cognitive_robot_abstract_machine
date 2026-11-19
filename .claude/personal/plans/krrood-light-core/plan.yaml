@@ -65,7 +65,7 @@ items:
   recommended_model: opus
   track: packaging
   pull_request_number: 613
-  session: https://claude.ai/code/session_01JxHGiLTU7BtWTE8D32kxWW
+  session: https://claude.ai/code/session_018wfiv8qPLnzvQMPTLyqtdk
   depends_on: []
   notes: No krrood/__init__.py. One workspace member per part at krrood/<distribution>/src/krrood/<part>
     (krrood-core, -eql, -serialization, -ormatic, -rdr, -ontomatic, -probabilistic, -development-tools...),
