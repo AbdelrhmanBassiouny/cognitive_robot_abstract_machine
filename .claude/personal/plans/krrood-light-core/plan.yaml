@@ -42,12 +42,12 @@ items:
   recommended_model: sonnet
   track: packaging
   depends_on:
-  - krrood-distributions
-  notes: 'One CI job, only when krrood or its pyproject changes: installs krrood-core from
-    base and head into empty environments and compares installed size and distribution count
-    (deterministic), then median import time over alternating runs on the same runner. Fails
-    only past a relative and an absolute threshold, both named settings; prints both numbers
-    in the job summary. Catches a heavy package added to core''s own dependencies.'
+  - namespace-package
+  notes: 'One CI job, only when krrood or its pyproject changes: installs krrood-core from base
+    and head into empty environments and compares installed size and distribution count (deterministic),
+    then median import time over alternating runs on the same runner. Fails only past a relative
+    and an absolute threshold, both named settings; prints both numbers in the job summary.
+    Catches a heavy package added to core''s own dependencies.'
 - id: command-line-on-cyclopts
   title: krrood's command line is built on cyclopts
   branch: null
@@ -58,33 +58,21 @@ items:
   notes: 'Asked in review of #547. Absorbed by development-tools-on-basstler-rules: krrood''s
     command is then mounted on basstler-rules'' cyclopts commands. Delete once that item starts.'
 - id: namespace-package
-  title: 'krrood is a namespace package: krrood/__init__.py removed'
+  title: krrood is a namespace package split into krrood-* distributions, a krrood package depending
+    on all, per-distribution CI
   branch: claude/sweet-bardeen-gphaq8
   status: in progress
-  recommended_model: sonnet
+  recommended_model: opus
   track: packaging
   pull_request_number: 613
   session: https://claude.ai/code/session_01JxHGiLTU7BtWTE8D32kxWW
   depends_on: []
-  notes: Several distributions share the krrood. prefix only if none ships krrood/__init__.py.
-    Each distribution reads its version with importlib.metadata; the krrood logger moves to
-    the package that uses it; every `from krrood import logger` and krrood.__version__ reader
-    is fixed. Breaking for outside readers of krrood.__version__.
-- id: krrood-distributions
-  title: krrood-* distributions as workspace members, a krrood package depending on all, per-distribution
-    CI
-  branch: null
-  status: not_started
-  recommended_model: opus
-  track: packaging
-  depends_on:
-  - namespace-package
-  notes: 'One workspace member per distribution (krrood-core, -eql, -serialization, -ormatic,
-    -rdr, -ontomatic, -probabilistic, -development-tools...), cut by the decoupling items;
-    sibling pins == root VERSION. A krrood distribution depending on all keeps `pip install
-    krrood` whole. random_events and probabilistic_model depend on krrood-core/-eql only,
-    ending the krrood <-> random_events cycle. #546''s checker checks a per-distribution map.
-    CI installs each alone on Linux and Windows.'
+  notes: No krrood/__init__.py. One workspace member per part at krrood/<distribution>/src/krrood/<part>
+    (krrood-core, -eql, -serialization, -ormatic, -rdr, -ontomatic, -probabilistic, -development-tools...),
+    pinned == root VERSION; krrood/pyproject.toml becomes the krrood distribution depending
+    on all. EQL stops importing ORMatic first. random_events and probabilistic_model depend
+    on krrood-core/-eql only. The core-boundary checker reads a per-distribution map. CI installs
+    each alone on Linux and Windows.
 - id: development-tools-on-basstler-rules
   title: krrood-development-tools builds on basstler-rules' rule engine
   branch: null
@@ -92,7 +80,7 @@ items:
   recommended_model: opus
   track: command-line
   depends_on:
-  - krrood-distributions
+  - namespace-package
   blockers:
   - Waits on basstler's basstler-packages/krrood-sync (basstler-rules is the engine) and its
     first PyPI release (basstler-packages/pypi-release).
