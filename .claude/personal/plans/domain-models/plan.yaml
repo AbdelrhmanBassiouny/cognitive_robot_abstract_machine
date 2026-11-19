@@ -95,7 +95,7 @@ items:
   blockers:
   - 'cram2#1019 has LucaKro''s changes-requested review. 3fc103c0 makes coplanar frames span
     one EmbeddedPlane and has the SE(2) constructor refuse frames on two planes; replies are
-    drafted in the PR-progress note for the owner to post. CI on 3fc103c0 not read yet.'
+    drafted in the PR-progress note for the owner to post. CI on 4a54dac8 not read yet.'
   - '#524 must move to Point/Vector, the Dimensional names and transform_into_own_frame, and
     conflicts with main in its own files (ci.yml, pyproject files, test/conftest.py).'
   depends_on: []
@@ -104,7 +104,7 @@ items:
     action, frame-check and world-as-euclidean-space items folded in. World is the
     EuclideanSpace3Dimensional its bodies chart; express_in_own_frame checks spaces before
     transform_into_own_frame. Two EmbeddedPlanes are equal when coplanar in one space
-    (compare_xy_plane); SE(2) changes relate only frames on one plane facing one side.
+    (compare_embedded_plane); SE(2) changes relate only frames on one plane facing one side.
     api-break; migration in the PR description. Promoted as cram2#1019.'
 - id: image-coordinate-change
   title: krrood_image's ImageCoordinateChange (scale and shift per axis) for crops and resizes,
