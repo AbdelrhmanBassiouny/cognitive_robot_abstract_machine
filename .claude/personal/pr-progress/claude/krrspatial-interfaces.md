@@ -1,11 +1,12 @@
 Plan
-- Keep #527 conflict-free with main and read CI on each push.
+- Resolve 2026-11-19: merge main, then answer cram2#1019's changes-requested review.
+- Owner chose: two frames' x-y planes are one EmbeddedPlane when coplanar in one world (the 23 Oct plan decision); the SE(2) constructor refuses frames on different or mirrored planes.
+- Upstream replies are drafted here for the owner to post, not posted.
 
 Done
-- Merged main 8fdae4a2 (1fa0d0e5): took main's IK-solver removal, kept the Dimensional names; merged SemDT tests pass apart from missing ROS packages.
-- Rewrote the PR description as one-sentence points plus a text class diagram.
+- Merged main b691f5af (c9ac60d8): Displacement/Twist split and keyword-only create_with_dofs kept in the Dimensional names; merge probe clean at c9ac60d8.
 
 Next
-- Read CI on 1fa0d0e5; the probabilistic_model failure on 50da1bed is unread.
-- Owner: MetricPoint/Vector thread, frameless values, flatten-test rename; ready vs draft.
-- Restack #524 (krrood_image) onto the renames.
+- Tests first, then: XYPlaneRelation + CartesianFrame3Dimensional.compare_xy_plane, EmbeddedPlane equality, SE(2) constructor check (answers threads 3624 and 3665).
+- Draft replies for cram2#1019's 5 threads and the review.
+- #524 (krrood_image) conflicts with main in its own files (ci.yml, pyproject files, conftest, version test): needs its own resolve.
