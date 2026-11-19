@@ -35,23 +35,6 @@ tracks:
   name: krrood command line
   wave: extras
 items:
-- id: verbalization-realization-split
-  title: Verbalization vocabulary stays in krrood-eql, realization moves out of it
-  branch: claude/blissful-mendel-6dsd0l
-  status: in progress
-  recommended_model: opus
-  track: core-boundaries
-  pull_request_number: 611
-  session: https://claude.ai/code/session_018wfiv9XBF7AeVSKhCMyXBH
-  blockers:
-    - ""
-  depends_on: []
-  notes: 'User-approved: _verbalization_fragment_ stays abstract and unchanged. The vocabulary
-    (clause, Noun, Verb, fragments) is declarative; only morphology (inflect ~1.7 s, lemminflect,
-    typeguard) and the pipeline (jinja2, IPython) move out of krrood-eql (which distribution
-    is decided in krrood-distributions). Needs navigation_path and parts_of_speech to stop
-    calling morphology while building a clause (cardinal, verb_lemma become fragments realized
-    later).'
 - id: core-weight-regression-check
   title: CI compares core install size and import time against the base branch
   branch: null
@@ -95,7 +78,6 @@ items:
   recommended_model: opus
   track: packaging
   depends_on:
-  - verbalization-realization-split
   - namespace-package
   notes: 'One workspace member per distribution (krrood-core, -eql, -serialization, -ormatic,
     -rdr, -ontomatic, -probabilistic, -development-tools...), cut by the decoupling items;
@@ -119,4 +101,4 @@ items:
     engine: rule, section, checker, instructions, formatting. It keeps krrood''s shipped rules
     (EQL a/an, serializer, core-boundary) as a basstler-rules ruleset and the krrood command
     mounted on basstler-rules'' commands. Absorbs command-line-on-cyclopts.'
-landed_item_count: 5
+landed_item_count: 6
