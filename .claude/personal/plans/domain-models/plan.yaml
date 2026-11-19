@@ -93,20 +93,18 @@ items:
   status: in_progress
   recommended_model: opus
   blockers:
-  - 'cram2#1019: changes requested (ichumuh, LucaKro). Type variables (47f984f6) and the 2D
-    module split (e859218f) are done; replies and two proposals (simpler new spaces, explicit
-    plane normal) wait for the owner in the PR-progress note.'
-  - 'Fork CI: small_packages fails main''s `krrood check` (1128 findings on touched lines),
-    set aside by the owner; CI on e859218f not read yet. #524 conflicts with main in its own
-    files and needs its own resolve.'
+  - 'cram2#1019: changes requested (ichumuh, LucaKro). All four of ichumuh''s asks are done
+    (47f984f6, e859218f, 14519d1f); replies wait for the owner in the PR-progress note.'
+  - 'Fork CI: small_packages fails main''s `krrood check` on touched lines, set aside by the
+    owner; CI on 14519d1f not read yet. #524 conflicts with main in its own files and needs
+    its own resolve.'
   depends_on: []
   session: https://claude.ai/code/session_01JxHGiLRgwm8kRFq7Zyxhbg
   notes: '#527: the casadi-free base and SemDT adopting it, with the planar, imports, projection,
     action, frame-check and world-as-euclidean-space items folded in. World is the EuclideanSpace3Dimensional
-    its bodies chart; express_in_own_frame checks spaces before transform_into_own_frame.
-    Two EmbeddedPlanes are equal when coplanar in one space (compare_embedded_plane); SE(2)
-    changes relate only frames on one plane facing one side. api-break; migration in the PR
-    description. Promoted as cram2#1019.'
+    its bodies chart. Coplanar EmbeddedPlanes are equal; EmbeddedPlane.normal is the frame''s
+    z_axis. New spaces subclass StoredPoint[frame, vector] and StoredVector[frame], whose
+    fields are the coordinates. api-break; migration in the PR description. Promoted as cram2#1019.'
 - id: image-coordinate-change
   title: krrood_image's ImageCoordinateChange (scale and shift per axis) for crops and resizes,
     with cv2 resampling
