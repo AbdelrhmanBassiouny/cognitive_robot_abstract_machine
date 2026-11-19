@@ -2,10 +2,10 @@ Plan
 - Answer cram2#1019's reviews; the owner posts the replies below.
 
 Done
-- c9ac60d8 merges main b691f5af; probe clean. 3fc103c0: coplanar EmbeddedPlanes equal; SE(2) constructor refuses frames on two planes or mirrored. 4a54dac8: renamed to EmbeddedPlaneRelation, compare_embedded_plane(_in_own_space), embedded_plane_relation.
+- c9ac60d8 merges main b691f5af; probe clean. 3fc103c0: coplanar EmbeddedPlanes equal; SE(2) constructor refuses frames on two planes or mirrored. 4a54dac8 + 9c624d9e: renamed to EmbeddedPlaneRelation, compare_embedded_plane(_in_own_space), embedded_plane_relation.
 
 Next
-- Owner: post the replies below; read CI on 4a54dac8; discuss the fork's MetricPoint/Vector thread.
+- Owner: post the replies below; read CI on 9c624d9e; discuss the fork's MetricPoint/Vector thread.
 - #524: restack conflicts in its own files; needs its own resolve.
 
 Replies for cram2#1019
