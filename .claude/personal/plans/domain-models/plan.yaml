@@ -93,14 +93,14 @@ items:
   status: in_progress
   recommended_model: opus
   blockers:
-  - 'Fork CI: small_packages red on main''s `krrood check --since HEAD^1`: 1128 findings in
-    270 files the PR''s lines touch (mostly missing docstrings, 82 methods to make keyword-only).
-    Fix scope is the owner''s call. Main 113e87ec merged in 8f214196, tests pass locally.'
-  - 'cram2#1019: changes requested (ichumuh, LucaKro). Agreed: split 2D/3D types into files,
-    explicit EmbeddedPlane normal. Open: SpaceT-style type variable names, effort to implement
-    a new space. #524 still needs its own resolve.'
+  - 'cram2#1019: changes requested (ichumuh, LucaKro). Type variables (47f984f6) and the 2D
+    module split (e859218f) are done; replies and two proposals (simpler new spaces, explicit
+    plane normal) wait for the owner in the PR-progress note.'
+  - 'Fork CI: small_packages fails main''s `krrood check` (1128 findings on touched lines),
+    set aside by the owner; CI on e859218f not read yet. #524 conflicts with main in its own
+    files and needs its own resolve.'
   depends_on: []
-  session: https://claude.ai/code/session_018wfiv5c5ocSWwDLYMCNudx
+  session: https://claude.ai/code/session_01JxHGiLRgwm8kRFq7Zyxhbg
   notes: '#527: the casadi-free base and SemDT adopting it, with the planar, imports, projection,
     action, frame-check and world-as-euclidean-space items folded in. World is the EuclideanSpace3Dimensional
     its bodies chart; express_in_own_frame checks spaces before transform_into_own_frame.
