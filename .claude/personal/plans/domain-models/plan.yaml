@@ -93,11 +93,15 @@ items:
   status: in_progress
   recommended_model: opus
   blockers:
-  - 'cram2#1019: changes requested (ichumuh, LucaKro). All four of ichumuh''s asks are done
-    (47f984f6, e859218f, 14519d1f); replies wait for the owner in the PR-progress note.'
-  - 'Fork CI: small_packages fails main''s `krrood check` on touched lines, set aside by the
-    owner; CI on 14519d1f not read yet. #524 conflicts with main in its own files and needs
-    its own resolve.'
+    - >-
+      cram2#1019 at 9fa919d7: changes requested (LucaKro, ichumuh), 22 threads open; 16 outdated and
+      done. Open on current lines: drop SymbolicAxisCoordinates and CrossProductVector bases,
+      homogeneous_weight as bool, giskard .rotation_matrix, simpler new spaces. Drafted replies were
+      lost.
+    - >-
+      CI at 9fa919d7: fork fails only small_packages (krrood check, set aside); upstream also fails
+      coraplex_garmi_clean_up_demo, logs not read. Merge probe vs cram2 main 82707c74 clean. #524
+      conflicts and needs its own resolve.
   depends_on: []
   session: https://claude.ai/code/session_01JxHGiLRgwm8kRFq7Zyxhbg
   notes: '#527: the casadi-free base and SemDT adopting it, with the planar, imports, projection,
