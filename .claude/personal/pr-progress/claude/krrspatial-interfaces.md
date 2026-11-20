@@ -3,13 +3,15 @@ Plan
 - Design doc (implemented): https://claude.ai/artifact/3aEJ5hBBxZ7GGBMNK6XXKq
 
 Done
-- 387b26e3: cross product on the frame kind (CartesianFrame3Dimensional.cross_product; FrameHasNoCrossProductError); CrossProductVector, SymbolicAxisCoordinates removed; coordinate_system_arguments overridden once by SymbolicSpatialValue.
-- 6501202762 (owner chose C): AffineFrame.axes names the axes (FrameAxis X/Y/Z for any straight-axis frame; Cartesian kinds return them); AxisCoordinates reads/builds through frame_kind.axes and raises MissingAxisCoordinatesError at definition; AxisCoordinate marker and coordinate_names removed.
-- 802b43fd: README "Adding a space" models camera pixels end to end (CropAndResize change, asserted results); test_readme_example.py runs it. PR description gained the example and an effort table.
-- 7c0b1bda: homogeneous_weight -> bool has_position (owner's call); apply_transformation appends int(has_position).
-- Verified at 7c0b1bda: test/krrood_spatial_math_test 733 passed; pre-commit clean. SemDT/giskard/coraplex not run (ROS).
+- Every code ask of the owner's cram2#1019 review is in the branch up to 7c0b1bda (cross product and axes on the frame kind, README pixel-space example, bool has_position). test/krrood_spatial_math_test: 733 passed; pre-commit clean; SemDT, giskard and coraplex not run locally (ROS).
+
+Read 2026-11-20 at 7c0b1bda
+- Merge probe against cram2 main 82707c74: clean.
+- Fork CI: 45 of 46 pass. Only small_packages fails, at `krrood check --since HEAD^1`: rule violations in files the PR touches, set aside by the owner.
+- Fork review threads: 60 of 64 read, all resolved.
+- Not checked: cram2#1019's CI and threads (the Action answered 404, a helper session did not finish cloning).
 
 Next
-- Owner: post the replies in .claude/personal/review-replies/cram2-1019.md (notes branch), updated to 7c0b1bda.
+- Owner: post the replies in .claude/personal/review-replies/cram2-1019.md (notes branch).
+- #524 needs its own resolve.
 - Possible follow-up: a reusable law test for coordinate changes (inverse @ change is no change).
-- Read CI on 7c0b1bda. #524 needs its own resolve.
