@@ -91,7 +91,6 @@ perception_interactive_rule_tuning	knowledge-directed-requests
 claude/knowledge-directed-perception-vz2hhq	knowledge-directed-requests
 claude/camera-pose-fitted-p2mk7d	knowledge-directed-requests
 claude/detector-consolidation-analysis-rgg3xg	knowledge-directed-requests
-claude/sweet-bardeen-gphaq8	krrood-light-core
 infer-required-match-attributes	match-implicit-prediction
 complete-domain-objects	match-implicit-prediction
 krrood_eql_orm_fixes	montessori-eql-stack
