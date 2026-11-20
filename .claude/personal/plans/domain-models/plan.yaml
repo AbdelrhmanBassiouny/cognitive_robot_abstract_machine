@@ -98,7 +98,7 @@ items:
       387b26e3 or answered; replies for all 22 open threads wait for the owner in
       review-replies/cram2-1019.md on the notes branch.
     - >-
-      CI on 802b43fd not read yet. At 9fa919d7: fork failed only small_packages (krrood check, set
+      CI on 7c0b1bda not read yet. At 9fa919d7: fork failed only small_packages (krrood check, set
       aside); upstream also failed coraplex_garmi_clean_up_demo, logs not read. #524 conflicts in
       its own files and needs its own resolve.
   depends_on: []
