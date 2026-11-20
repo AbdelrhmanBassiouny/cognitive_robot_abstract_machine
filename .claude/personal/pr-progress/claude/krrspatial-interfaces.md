@@ -9,5 +9,5 @@ Done
 
 Next
 - Owner: post replies from scratchpad cram2-1019-replies.md (all threads drafted, incl. :478, :494, :1720, :1999, 2D :53/:178). No reply to LucaKro.
-- Read CI on b94baaf4 (giskard fix 72d1d766 not run locally); small_packages fails only on krrood check --since HEAD^1 (set aside).
+- CI on 72d1d766: all test jobs green. Read CI on b94baaf4 when it finishes. small_packages fails only on krrood check --since HEAD^1 (973 findings; owner: leave them), so its tests are skipped.
 - Optional: VectorPair adjoint action, then SE interface on SymbolicSpatialValue.
