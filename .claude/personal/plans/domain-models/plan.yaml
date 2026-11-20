@@ -94,13 +94,11 @@ items:
   recommended_model: opus
   blockers:
     - >-
-      cram2#1019: changes requested (LucaKro, ichumuh). Code asks are done (7c0b1bda); the owner
-      posts the 22 drafted replies (review-replies/cram2-1019.md, notes branch). Upstream threads
-      and CI not read 2026-11-20.
+      cram2#1019: changes requested (LucaKro, ichumuh). Code asks are done; the owner posts the 22
+      drafted replies (review-replies/cram2-1019.md, notes branch).
     - >-
-      Fork CI at 7c0b1bda: 45 of 46 pass; small_packages fails at krrood check --since HEAD^1 (set
-      aside by the owner). Merge probe vs cram2 main 82707c74 clean. #524 conflicts in its own files
-      and needs its own resolve.
+      cram2#1019 CI at 7c0b1bda: garmi demo failed on foreign-world frames, fixed in f2f740c9c0, not
+      yet re-run; small_packages (krrood check) set aside by the owner. #524 needs its own resolve.
   depends_on: []
   session: https://claude.ai/code/session_01JxHGiLRgwm8kRFq7Zyxhbg
   notes: >
