@@ -1,13 +1,12 @@
 Plan
 - Answer cram2#1019's reviews; the owner posts the replies and resolves the threads.
+- Design doc (agreed, not implemented): https://claude.ai/artifact/3aEJ5hBBxZ7GGBMNK6XXKq
 
 Done
-- da13cf2b merges cram2 main 9b8526c8 (krrood split into distributions); probe clean at da13cf2b.
-- ecf34a48/eb339524/ba90e001: derived generic parameters, Point[vector], Line[point], LineSegment[line], conflict error, AGENTS rule, docs page.
-- aaadf0e6/d03875ba/72d1d766: RotationMatrix is an SO(3) transformation; planar values stay on their plane.
-- 80066fb8: values bind SymbolicSpatialValue[change type]; one transform via from_transformation; ValueOnEmbeddedPlane removed; derived params of all bases apply; giskard uses T.rotation_matrix @ R.
+- 80066fb8: values bind their change type; one transform on SymbolicSpatialType; ValueOnEmbeddedPlane gone; giskard T.rotation_matrix @ R. da13cf2b merges cram2 main 9b8526c8; probe clean.
+- aaadf0e6: planar transform onto another plane (parallel too) raises; answers Luca's height thread.
 
 Next
-- Owner: post replies from scratchpad cram2-1019-replies.md (all threads drafted, incl. 2D :1/:50/:87 and giskard :674). No reply to LucaKro.
-- Read CI on da13cf2b. Upstream garmi demo failed on b94baaf4; log unreadable here (needs cram2 API access). small_packages krrood check findings: owner leaves them.
-- Optional: VectorPair adjoint action, then SE interface on SymbolicSpatialValue.
+- Implement the doc: Point derives GenericCoordinateChange (moved to coordinate_system.py); apply_transformation (name kept) lives in the abstract layer for Vector/Point (homogeneous weight), Pose, Orientation, VectorPair (adjoint); drop SpecialEuclideanGroupAction and HomogeneousCoordinates. Open: cross keyword-only (32 callers).
+- Draft replies for :1767, :317, :1378, cartesian_monitors :140; earlier drafts in scratchpad cram2-1019-replies.md. No reply to LucaKro.
+- Upstream CI: garmi demo and small_packages fail (logs show only exit 1).
