@@ -94,21 +94,24 @@ items:
   recommended_model: opus
   blockers:
     - >-
-      cram2#1019 at 9fa919d7: changes requested (LucaKro, ichumuh), 22 threads open; 16 outdated and
-      done. Open on current lines: drop SymbolicAxisCoordinates and CrossProductVector bases,
-      homogeneous_weight as bool, giskard .rotation_matrix, simpler new spaces. Drafted replies were
-      lost.
+      cram2#1019: changes requested (LucaKro, ichumuh). The asks on current lines are done in
+      387b26e3 or answered; replies for all 22 open threads wait for the owner in
+      review-replies/cram2-1019.md on the notes branch.
     - >-
-      CI at 9fa919d7: fork fails only small_packages (krrood check, set aside); upstream also fails
-      coraplex_garmi_clean_up_demo, logs not read. Merge probe vs cram2 main 82707c74 clean. #524
-      conflicts and needs its own resolve.
+      CI on 387b26e3 not read yet. At 9fa919d7: fork failed only small_packages (krrood check, set
+      aside); upstream also failed coraplex_garmi_clean_up_demo, logs not read. #524 conflicts in
+      its own files and needs its own resolve.
   depends_on: []
   session: https://claude.ai/code/session_01JxHGiLRgwm8kRFq7Zyxhbg
-  notes: '#527: the casadi-free base and SemDT adopting it, with the planar, imports, projection,
-    action, frame-check and world-as-euclidean-space items folded in. World is the EuclideanSpace3Dimensional
-    its bodies chart. Coplanar EmbeddedPlanes are equal; EmbeddedPlane.normal is the frame''s
-    z_axis. New spaces subclass StoredPoint[frame, vector] and StoredVector[frame], whose
-    fields are the coordinates. api-break; migration in the PR description. Promoted as cram2#1019.'
+  notes: >
+    #527: the casadi-free base and SemDT adopting it, with the planar, imports, projection, action,
+    frame-check and world-as-euclidean-space items folded in. World is the EuclideanSpace its bodies
+    chart. Coplanar EmbeddedPlanes are equal; EmbeddedPlane.normal is the frame's z_axis.
+
+    New spaces subclass Point[vector] and Vector[frame] and mark their coordinate fields with
+    AxisCoordinate. Lengths, inner and cross products belong to the frame kind (CartesianFrame,
+    CartesianFrame3Dimensional), which Vector.norm, dot and cross ask. api-break; migration in the
+    PR description. Promoted as cram2#1019.
 - id: image-coordinate-change
   title: krrood_image's ImageCoordinateChange (scale and shift per axis) for crops and resizes,
     with cv2 resampling
