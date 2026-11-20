@@ -1,11 +1,12 @@
 ## Plan
-- Get #613 (namespace-package) green and through review.
+- Get #613 (namespace-package) green and through review; release (VERSION bump of every cram2 package) is a separate PR.
 
 ## Done
-- ea4e4846a2: review round 1 (authors, trimesh to rustworkx-utils extra, general declared-dependency test).
-- 1eda7b423c: CI fix. Blocker uses an import finder plus path cleanup (SciPy torch probe, pdbpp pdb hijack); docstrings `krrood check --since HEAD^1` wanted.
-- fbcf3d8f3c: merged fork main 38804f6fff (no conflicts; mixin.py change followed into krrood-core); merge-probe CLEAN.
+- fbcf3d8f3c: merged fork main 38804f6fff; merge-probe CLEAN; CI 37/37 green.
+- e57fa625a: README, LICENSE, classifiers, setuptools>=77 per distribution; test_distribution_metadata.py; 13 builds and twine check clean.
+- 20700ffe0: removed never-run .github/workflows/krrood/publish-to-test-pypi.yml; PR description updated.
 
 ## Next
-- Read CI at fbcf3d8f3c when prompted (ea4e4846a2: install-alone 23/23 green; krrood and small_packages failures fixed in 1eda7b423c).
+- Read CI at 20700ffe0 when prompted.
+- Release PR must publish random_events with krrood (krrood-probabilistic needs random_events>=26.10.0) and raise krrood lower bounds; register 12 PyPI pending publishers.
 - Open threads waiting on the developer: EQL→rustworkx-utils optional, who uses `scripts/import_distribution_modules.py`, Naren/David emails.
