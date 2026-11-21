@@ -1,9 +1,9 @@
 schema_version: 1
 id: ontomatic-reasoning
 title: 'Ontomatic past the port: close the OWL 2 RL gaps, then grow towards OWL 2 DL'
-description: 'Once ontomatic-port has Ontomatic on main at parity with the paper, close the OWL 2 RL gaps
-  the AAMAS 2027 supplement lists (6 unsupported and 18 partial rules) and the paper''s limitations, then
-  extend Ontomatic natively in Python towards OWL 2 DL: profile detection, EL classification, witnesses
+description: 'Once Sorin Arion''s Ontomatic port has it on main at parity with the paper, close the OWL
+  2 RL gaps the AAMAS 2027 supplement lists (6 unsupported and 18 partial rules) and the paper''s limitations,
+  then extend Ontomatic natively in Python towards OWL 2 DL: profile detection, EL classification, witnesses
   for existentials and open-world query answers.
 
   '
@@ -30,78 +30,93 @@ items:
   branch: rl-unsupported-constructs
   title: oneOf, someValuesFrom owl:Thing, owl:Nothing, subclass and subproperty cycles
   track: rl-gaps
-  depends_on:
-  - ontomatic-port/closure-verification
+  depends_on: []
   status: not_started
   recommended_model: sonnet
+  blockers:
+  - Waits on closure-verification in Sorin Arion's ontomatic-port plan (sorinar329's notes, tracking issue
+    sorinar329#26).
 - id: rl-data-properties
   branch: rl-data-properties
   title: Multi-valued data properties, datatype check, data-property cardinality and disjointness
   track: rl-gaps
-  depends_on:
-  - ontomatic-port/closure-verification
+  depends_on: []
   status: not_started
   recommended_model: sonnet
+  blockers:
+  - Waits on closure-verification in Sorin Arion's ontomatic-port plan (sorinar329's notes, tracking issue
+    sorinar329#26).
 - id: rl-nested-expressions
   branch: rl-nested-expressions
   title: Unions and complements inside class expressions, intersections as equivalent classes
   track: rl-gaps
-  depends_on:
-  - ontomatic-port/closure-verification
+  depends_on: []
   status: not_started
   recommended_model: opus
+  blockers:
+  - Waits on closure-verification in Sorin Arion's ontomatic-port plan (sorinar329's notes, tracking issue
+    sorinar329#26).
 - id: rl-runtime-classification
   branch: rl-runtime-classification
   title: Evaluate every compiled class axiom at runtime, not only hasValue
   track: rl-gaps
-  depends_on:
-  - ontomatic-port/closure-verification
+  depends_on: []
   status: not_started
   recommended_model: sonnet
+  blockers:
+  - Waits on closure-verification in Sorin Arion's ontomatic-port plan (sorinar329's notes, tracking issue
+    sorinar329#26).
 - id: roles-without-markers
   branch: roles-without-markers
   title: Designate roles without roleFor markers, keep multiply classified individuals whole
   track: rl-gaps
-  depends_on:
-  - ontomatic-port/closure-verification
+  depends_on: []
   status: not_started
   recommended_model: opus
+  blockers:
+  - Waits on closure-verification in Sorin Arion's ontomatic-port plan (sorinar329's notes, tracking issue
+    sorinar329#26).
 - id: inference-retraction
   branch: inference-retraction
   title: Retract inferred facts incrementally over recorded provenance
   track: rl-gaps
-  depends_on:
-  - ontomatic-port/closure-verification
-  - ontomatic-port/descriptor-provenance
+  depends_on: []
   status: not_started
   recommended_model: opus
+  blockers:
+  - Waits on closure-verification, descriptor-provenance in Sorin Arion's ontomatic-port plan (sorinar329's
+    notes, tracking issue sorinar329#26).
 - id: owl-profile-detection
   branch: owl-profile-detection
   title: Classify the ontology and each axiom into OWL 2 EL/QL/RL/DL with reasons
   track: dl-extensions
-  depends_on:
-  - ontomatic-port/terminology-model
+  depends_on: []
   status: not_started
   recommended_model: sonnet
+  blockers:
+  - Waits on terminology-model in Sorin Arion's ontomatic-port plan (sorinar329's notes, tracking issue
+    sorinar329#26).
 - id: el-classification
   branch: el-classification
   title: Consequence-based OWL 2 EL TBox classification compiled as inheritance
   track: dl-extensions
   depends_on:
   - owl-profile-detection
-  - ontomatic-port/model-compiler
   status: not_started
   recommended_model: opus
   notes: Brings LUBM into scope.
+  blockers:
+  - Waits on model-compiler in Sorin Arion's ontomatic-port plan (sorinar329's notes, tracking issue sorinar329#26).
 - id: existential-witnesses
   branch: existential-witnesses
   title: Witness objects for existentials in superclass position, chase with blocking
   track: dl-extensions
   depends_on:
   - el-classification
-  - ontomatic-port/abox-loader
   status: not_started
   recommended_model: opus
+  blockers:
+  - Waits on abox-loader in Sorin Arion's ontomatic-port plan (sorinar329's notes, tracking issue sorinar329#26).
 - id: open-world-query-answers
   branch: open-world-query-answers
   title: Unions, complements and allValuesFrom as three-valued query-time conditions
