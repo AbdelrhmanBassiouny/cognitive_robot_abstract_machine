@@ -113,14 +113,7 @@ claude/beautiful-thompson-561yjg	ontomatic-port
 ormatic-collection-translation	ontomatic-port
 ormatic-identifier-selection	ontomatic-port
 ormatic-reference-fixes	ontomatic-port
-descriptor-characteristics	ontomatic-port
-descriptor-provenance	ontomatic-port
-terminology-model	ontomatic-port
-model-compiler	ontomatic-port
-abox-loader	ontomatic-port
-owl2rl-consistency-check	ontomatic-port
-closure-verification	ontomatic-port
-owl2bench-experiments	ontomatic-port
+eql-inference-object-per-binding	ontomatic-port
 rl-unsupported-constructs	ontomatic-reasoning
 rl-data-properties	ontomatic-reasoning
 rl-nested-expressions	ontomatic-reasoning

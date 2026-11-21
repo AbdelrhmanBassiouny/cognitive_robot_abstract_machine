@@ -1,10 +1,9 @@
 schema_version: 1
 id: ontomatic-port
-title: Port Ontomatic and the paper's EQL/ORMatic work to upstream
-description: 'Bring Ontomatic (OWL ontology to KRROOD model, ABox loading with OWL 2 RL materialization,
-  AAMAS 2027 paper Section 5) from the fork''s aamas27-experiments branch onto current main
-  as a clean rewrite-in-place, and land the paper''s EQL/ORMatic work alongside it. Closing
-  the OWL 2 RL gaps and going past RL is ontomatic-reasoning.
+title: Port the paper's EQL/ORMatic work to upstream
+description: 'Land the AAMAS 2027 paper''s EQL/ORMatic work from aamas27-unification-revision on cram2
+  main, one PR per root cause. Ontomatic itself is ported in Sorin Arion''s ontomatic-port plan (sorinar329''s
+  notes, tracking issue sorinar329#26); going past OWL 2 RL is ontomatic-reasoning.
 
   '
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
@@ -12,17 +11,12 @@ tracking_issue: 507
 waves:
 - id: port
   name: Port to upstream
-  description: Parity with the paper on current main, cleaned up per AGENTS.md.
+  description: The paper's EQL/ORMatic behaviour on current main, cleaned up per AGENTS.md.
 tracks:
 - id: paper-eql-ormatic
   name: Paper EQL/ORMatic work
   wave: port
-  description: Split aamas27-unification-revision (15 commits) into per-root-cause PRs off
-    main.
-- id: ontomatic-core
-  name: Ontomatic port
-  wave: port
-  description: Descriptors, terminology, compiler, loader, check, verification, experiments.
+  description: Split aamas27-unification-revision (15 commits) into per-root-cause PRs off main.
 items:
 - id: eql-predicate-call-memo
   branch: claude/beautiful-thompson-561yjg
@@ -65,76 +59,13 @@ items:
   status: not_started
   recommended_model: sonnet
   notes: Source commits 8316e4c8b8, 9936287aac.
-- id: descriptor-characteristics
-  branch: descriptor-characteristics
-  title: Property characteristics and chain axioms on upstream property descriptors
-  track: ontomatic-core
+
+- id: eql-inference-object-per-binding
+  branch: eql-inference-object-per-binding
+  title: 'EQL: one inferred object per class and argument binding'
+  track: paper-eql-ormatic
   depends_on: []
-  status: not_started
+  status: not started
   recommended_model: sonnet
-  notes: Port ontomatic/property_descriptor/mixins.py from aamas27-experiments onto main's
-    descriptors.
-- id: descriptor-provenance
-  branch: descriptor-provenance
-  title: Inferred facts with provenance and fact placement in PropertyDescriptorRelation
-  track: ontomatic-core
-  depends_on:
-  - descriptor-characteristics
-  status: not_started
-  recommended_model: sonnet
-  notes: InferredThrough, premises/explain, equivalence/inverse/symmetry/chain inference.
-- id: terminology-model
-  branch: terminology-model
-  title: Typed Terminology read from RDF, profile report, explicit domain/range rules
-  track: ontomatic-core
-  depends_on: []
-  status: not_started
-  recommended_model: opus
-  notes: Seed from owl2rl_tbox.py; replaces ClassInfo/PropertyInfo and the rdrs/property_inference
-    files.
-- id: model-compiler
-  branch: model-compiler
-  title: Compile a Terminology into Python modules on krrood.code_generation
-  track: ontomatic-core
-  depends_on:
-  - terminology-model
-  - descriptor-characteristics
-  status: not_started
-  recommended_model: opus
-  notes: 'Fixes: sufficient conditions as a disjunction, owl:Thing filler, owl:Nothing, hierarchy
-    cycles.'
-- id: abox-loader
-  branch: abox-loader
-  title: ABox loader as the Algorithm 1 pipeline of step classes
-  track: ontomatic-core
-  depends_on:
-  - model-compiler
-  - descriptor-provenance
-  status: not_started
-  recommended_model: sonnet
-  notes: 'Fixes: line_profiler, tqdm and timing inside library code.'
-- id: owl2rl-consistency-check
-  branch: owl2rl-consistency-check
-  title: OWL 2 RL equality and consistency check on a rule registry
-  track: ontomatic-core
-  depends_on:
-  - abox-loader
-  status: not_started
-  recommended_model: sonnet
-- id: closure-verification
-  branch: closure-verification
-  title: Differential tests against owlrl's closure and the 78-rule coverage test
-  track: ontomatic-core
-  depends_on:
-  - owl2rl-consistency-check
-  status: not_started
-  recommended_model: sonnet
-- id: owl2bench-experiments
-  branch: owl2bench-experiments
-  title: OWL2Bench model generation, queries and closure comparison in experiments/
-  track: ontomatic-core
-  depends_on:
-  - closure-verification
-  status: not_started
-  recommended_model: sonnet
-  notes: From krrood_experiments aamas27-* and the supplement; large runs skipped in CI.
+  notes: 'Source commit 3308cb252f: inference(H)(k=t, ...) denotes a function term, so re-evaluating a
+    rule returns the object it inferred before instead of a duplicate. Not on main yet.'
