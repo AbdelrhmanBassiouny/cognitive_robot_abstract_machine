@@ -1,0 +1,82 @@
+schema_version: 1
+id: krrood-static-generic-bindings
+title: "krrood static generic bindings: the review triage reads derived type parameters"
+description: >
+  basstler's review triage, and later its rule fixers, read the types krrood's generic
+  patterns fix (the derived type parameters of SubClassSafeGeneric) without importing,
+  checking out or installing the pull request's code, and with no stubs or hand-written
+  second bindings. One binding computation is shared by the runtime and a libcst reader.
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 616
+waves:
+  - id: wave-1
+    name: "Shared bindings and the triage's extension point"
+tracks:
+  - id: krrood-bindings
+    name: "krrood: one binding computation, read at runtime and statically"
+    wave: wave-1
+  - id: triage-extension
+    name: "basstler: the review triage asks registered resolvers"
+    wave: wave-1
+items:
+  - id: generic-binding-core
+    recommended_model: opus
+    title: "SubClassSafeGeneric computes its bindings on a class model a runtime reader builds"
+    track: krrood-bindings
+    depends_on: [domain-models/planar-point-interface]
+    status: not started
+    notes: >
+      krrood-core. Move the binding computation (renames, transitive resolution, derived
+      parameters incl. through renames, conflict errors) onto a class model: type
+      parameters, bases with type arguments, derived declarations. A runtime reader builds
+      it from class objects; SubClassSafeGeneric and get_type_of_generic_parameter use it.
+      Field narrowing stays runtime only. Behaviour-preserving: test_subclass_safe_generic
+      guards it. DerivedGenericParameter lands with #527.
+  - id: derived-parameter-declaration-rule
+    recommended_model: sonnet
+    title: "krrood check: derived parameters and type parameters are declared statically readably"
+    track: krrood-bindings
+    depends_on: [domain-models/planar-point-interface]
+    status: not started
+    notes: >
+      A checkable rule with its checker: derived_generic_parameters returns a literal tuple
+      of DerivedGenericParameter(parameter=Name, source=Name), and every type parameter is a
+      module-level TypeVar(...) assignment, so the static reader can read every declaration.
+  - id: static-generic-binding-reader
+    recommended_model: opus
+    title: "A libcst reader builds the class model from source, without importing it"
+    track: krrood-bindings
+    depends_on: [generic-binding-core, derived-parameter-declaration-rule]
+    status: not started
+    notes: >
+      krrood development tools. Builds the class model from modules read from files or a
+      commit tree, resolving bases and TypeVars across modules and packages by qualified
+      name; a name it cannot resolve is reported unknown, never guessed. Every runtime
+      binding test also runs through it and must give the same bindings.
+  - id: triage-receiver-resolver-extension-point
+    recommended_model: sonnet
+    title: "The review triage asks registered resolvers for receivers the type checker leaves open"
+    repository: KAOS-repositories/basstler
+    track: triage-extension
+    depends_on: []
+    status: not started
+    notes: >
+      A receiver-resolver interface registered through an entry-point group, asked when
+      the type checker answers a bound class or Unknown for a method call's receiver.
+      basstler knows nothing of krrood. Builds on the review-triage-pyrefly-fallback
+      branch's Pyrefly reveal_type work (review_triage/type_checkers.py).
+  - id: krrood-receiver-resolver
+    recommended_model: sonnet
+    title: "krrood development tools resolve receivers typed by derived type parameters"
+    track: krrood-bindings
+    depends_on:
+      - static-generic-binding-reader
+      - triage-receiver-resolver-extension-point
+      - krrood-light-core/development-tools-on-basstler-rules
+    status: not started
+    notes: >
+      Registers a resolver answering receivers typed by derived parameters through the
+      static reader. That dependency brings basstler-rules; the review triage must be
+      importable from what krrood depends on, or a dependency on it is added. Done when
+      static_types.py, extended with derived cases (a point's coordinate_system as its
+      concrete frame), gets the concrete class where Pyrefly answers the bound.
