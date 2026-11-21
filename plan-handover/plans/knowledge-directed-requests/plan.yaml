@@ -1,0 +1,357 @@
+schema_version: 1
+id: knowledge-directed-requests
+title: 'Knowledge-directed perception: query language and method selection'
+description: 'The requests wave of knowledge-directed-perception (split out on 2026-09-05
+  to get every successor under the plan-size budget): perception as an entity query language
+  backend beside the native and SQLAlchemy ones, so asking is evaluating rather than calling
+  a pipeline by hand. The backend pushes what it can of a query''s conditions into the search
+  and filters the rest over the detections that come back; a rule tree over the target and
+  the surface says which detector runs and how its parameters are set.'
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 201
+waves:
+- id: requests
+  name: A query is answered by looking
+  description: 'Perception becomes an entity query language backend beside the native and
+    SQLAlchemy ones, so asking is evaluating rather than calling a pipeline by hand: the backend
+    pushes what it can of a query''s conditions into the search, filters the rest over the
+    detections that come back, and a rule tree over the target and the surface says which
+    detector runs.'
+tracks:
+- id: request-language
+  name: Perception as a query backend
+  wave: requests
+  description: 'The backend itself and the compiler behind it, following the shape SQLAlchemyBackend
+    already set: take the query, translate it into another engine''s plan, execute it there.'
+- id: method-selection
+  name: Choosing how to look
+  wave: requests
+  description: The digital twin extension and the rule tree that reads it. The annotation
+    touches only semantic_digital_twin, so it can be written before or alongside the request
+    language.
+- id: demo-requests
+  name: The demo asks by query
+  wave: requests
+- id: perception-join
+  name: Joining the grounding and requests lineages
+  wave: requests
+items:
+- id: perception-backend
+  title: Answer a query by looking, as a backend of the entity query language
+  branch: perception_eql_backend
+  pull_request_number: 222
+  track: request-language
+  depends_on: []
+  status: in_progress
+  recommended_model: opus
+  notes: 'Answers a query by looking, as a `PerceptionBackend` beside `EntityQueryLanguageBackend`
+    and `SQLAlchemyBackend` - `SQLAlchemyBackend` already sets the shape (translate the query
+    into another engine''s plan, run it there), and the compiler from a query to a detection
+    pipeline is the same move against a camera. It subclasses `SelectiveBackend`: a camera
+    reports what is really there and cannot invent an attribute nobody can see (the plan''s
+    own open question, answered here).'
+- id: perception-predicates-guide-the-search
+  title: Guide the search by predicates and annotations, not by attribute names
+  branch: claude/plan-item-kickoff-perception-ogf2g9
+  pull_request_number: 227
+  track: request-language
+  depends_on:
+  - perception-backend
+  status: in_progress
+  recommended_model: opus
+  notes: 'Raised by the developer across five review threads on #222, which are one ask: a
+    look should be narrowed by what the world means, not by an attribute spelled as a string.
+    SUPPORTING_SURFACE_ATTRIBUTE_NAME = "supporting_surface" and the mimic''s PLACE_ATTRIBUTE_NAME
+    are the smell; AGENTS.md''s own rule against a literal duplicating a value with its own
+    source of truth condemns them independently of the redesign, and #222 leaves them standing
+    with a test asserting the name is a real field.'
+- id: search-clipped-to-a-predicates-region
+  title: Clip the search to the region a spatial predicate allows
+  branch: claude/kdp-search-constraints-pfaph7
+  pull_request_number: 238
+  track: request-language
+  depends_on:
+  - perception-predicates-guide-the-search
+  status: in_progress
+  recommended_model: sonnet
+  blockers:
+  - One of the six review threads of 2026-09-02 is still open, and it is the developer's to
+    close rather than work for this item.
+  notes: Clips the search to the region a spatial predicate allows - the same economy the
+    supporting-surface pushdown already buys, stated in the world's vocabulary instead of
+    an attribute's, so narrowing stops being a filter over what a detector returned and becomes
+    less picture to search in the first place. Depends on `perception-predicates-guide-the-
+    search` (where a statement's predicates are read at all) and `pieces-looked-for-where-
+    expected` (which owns the *believed place* type this item's clip is built from) - building
+    either half twice is the duplication this plan has already paid for.
+  external_dependencies:
+  - reference: knowledge-directed-grounding/pieces-looked-for-where-expected
+    title: Look for a piece where it is expected, not only where a colour blob appears
+    status: in progress
+    plan_description: 'The scene grounding wave of knowledge-directed-perception (split out
+      on 2026-09-05 to get every successor under the plan-size budget): the three faults visible
+      on the running demo - a clip that shows the floor, pieces on the board''s lid that are
+      never found, and duplicate detections on the board''s borders - are one fault, the scene
+      being described by constants instead of read from the world the node already fetches.'
+    branch: claude/plan-item-kickoff-kdp-o4l189
+    pull_request_url: https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/232
+    notes: The structural change the rest of the plan's perception work needs. Today a piece
+      is only found where colour segmentation isolated a blob, so one wearing the lid's own
+      hue, or touching another piece, is never fitted however plainly its edges show.
+- id: imagination-world-rejects-what-a-predicate-refuses
+  title: Reject what a predicate refuses, by testing it in a copy of the world
+  branch: claude/knowledge-directed-perception-imagination-g9hsnr
+  pull_request_number: 255
+  track: request-language
+  depends_on:
+  - perception-predicates-guide-the-search
+  - search-clipped-to-a-predicates-region
+  status: in_progress
+  recommended_model: opus
+  notes: 'The developer''s third mechanism on r3893499716, deferred out of #227 as a second
+    pull request''s worth of work: a predicate no search algorithm covers is still answerable,
+    by detecting what the other conditions do reach, spawning what was found into a copy of
+    the world, evaluating the predicate there against real Body and SemanticAnnotations, and
+    deleting what it rejects. It is what closes the gap #227 leaves open.'
+- id: how-to-look-concluded-from-the-request
+  title: Work out how to answer a look from the request, instead of being handed a pipeline
+  branch: claude/plan-item-kickoff-perception-idzwsk
+  pull_request_number: 266
+  track: request-language
+  depends_on:
+  - choose-detection-method
+  - detector-parameters-from-knowledge
+  status: in_progress
+  recommended_model: opus
+  notes: 'Raised by the developer on `search-clipped-to-a-predicates-region`''s review (r3915356623),
+    2026-09-02: the pipeline''s own six fields are not one kind of thing - the world already
+    supplies the table, lid, world and reference frame (`of_world`); `detector-parameters-
+    from-knowledge` concludes `headroom`; only the two detectors are genuinely hand-wired.'
+- id: surfaces-found-by-looking
+  title: Find a surface in the image from what the world says it is like
+  branch: claude/plan-item-kickoff-kdp-34snn0
+  pull_request_number: 259
+  track: method-selection
+  depends_on:
+  - perception-backend
+  - choose-detection-method
+  status: in_progress
+  recommended_model: sonnet
+  notes: Finds a surface in the picture from what the twin already says it is like - a large
+    horizontal plane, mirror-finished, colourless, of about the modelled size - stated as
+    an entity query language expression rather than read off a constant or a body's collision
+    shape, since neither is a measurement of where the table really is and the demo has already
+    drifted from its own model once. `SurfaceFinder`/`SurfaceRules` is `choose-detection-method`'s
+    claim turned on the surface itself.
+- id: choose-detection-method
+  title: Choose the detector by rule from the target and the surface
+  branch: claude/choose-detection-method-gf64yp
+  pull_request_number: 231
+  track: method-selection
+  depends_on:
+  - perception-backend
+  status: in_progress
+  recommended_model: sonnet
+  notes: 'The detector interface the backend dispatches to, chosen by a rule tree over properties
+    of the surface and the target - this is where perception measurably gets better as the
+    robot knows more, and the item the paper''s central claim rests on. Two shapes for the
+    same claim were both built and layered at the developer''s direction: each detector declares
+    the looks it can answer as an entity query language condition (his own suggestion, r3893463818),
+    and a ripple-down tree chooses among the ones that can (the item''s own original design).
+    Built 2026-08-31 as PR #231, `69f30348a`.'
+- id: detector-parameters-from-knowledge
+  title: Take the detectors' numbers from the objects and the surfaces they look at
+  branch: claude/knowledge-directed-perception-detector-zrm57t
+  pull_request_number: 239
+  track: method-selection
+  depends_on:
+  - choose-detection-method
+  status: in_progress
+  recommended_model: opus
+  notes: The detectors' numbers - hue windows, size ranges, edge-agreement thresholds, mesh
+    classification thresholds, and (widened 2026-08-31) the numbers that say *how to search*
+    (seed radius, step, candidate set, required lead) - are knowledge about the pieces, the
+    surfaces and the lighting, not properties of the detector reading them. They move onto
+    the twin's objects and surfaces, concluded for a run by a ripple-down rule tree the same
+    way `choose-detection-method`'s tree concludes which detector runs; the contour accept/reject
+    chain (`pipeline.py:619`) becomes rules the same way.
+- id: tune-detection-rules-against-the-camera
+  title: Conclude a detection rule while watching the camera, with its numbers on sliders
+  branch: perception_interactive_rule_tuning
+  pull_request_number: null
+  track: method-selection
+  depends_on:
+  - detector-parameters-from-knowledge
+  status: not_started
+  recommended_model: sonnet
+  notes: 'The developer''s own suggestion on #202: an interactive presenter for the ripple-down
+    rules'' `ConclusionHelper`, showing the live camera feed beside the parameters it would
+    conclude, so an expert sees what a value does before committing it as a rule. Needs `detector-parameters-from-knowledge`''s
+    rule-concluded parameters to present. Un-deferred 2026-08-31 at the developer''s direction:
+    what the deferral was mostly paying for - the interactive expert interface, the model-file
+    store, the `@rdr` decorator - is already written, open, out of draft and reviewed on the
+    RDR stack.'
+- id: a-look-is-described-by-a-match
+  title: Describe a look by an underspecified match over the twin's own entities, not by a
+    case class
+  branch: claude/knowledge-directed-perception-vz2hhq
+  pull_request_number: 275
+  track: method-selection
+  depends_on:
+  - choose-detection-method
+  - surfaces-found-by-looking
+  - how-to-look-concluded-from-the-request
+  status: in_progress
+  recommended_model: opus
+  notes: 'Added 2026-09-05 at the developer''s direction on #259 (r3940339984 and r3940357436):
+    "why not replace this with an EQL match statement of semdt semantic annotation or kinematic
+    structure entities?", and "eql based rdrs (pr 77 for example) can take an underspecified
+    match statement and get needed information from it to evaluate the rule tree of the rdr."
+    Every rule tree on this plan states its conditions over a hand-written case class that
+    flattens what the world already states, because the tree needs one variable to bind: TargetOnSurface
+    on #231, RequestedLook on #266, and SoughtSurface on…'
+- id: camera-pose-fitted-to-the-model
+  title: Correct where the camera stands by fitting what is seen to what the twin models
+  branch: claude/camera-pose-fitted-p2mk7d
+  pull_request_number: 286
+  track: method-selection
+  depends_on:
+  - surfaces-found-by-looking
+  status: in_progress
+  recommended_model: sonnet
+  notes: 'Added 2026-09-05 at the developer''s direction on #259, folding the two threads
+    he asked to keep together (r3940349876 and r3940351882): "since we have a 3d model of
+    the world, we can use this information to maybe even calibrate the camera ...'
+  external_dependencies:
+  - reference: knowledge-directed-grounding/holes-fitted-like-pieces
+    title: Find the board's holes by fitting its whole known layout, not one contour at a
+      time
+    status: in progress
+    plan_description: 'The scene grounding wave of knowledge-directed-perception (split out
+      on 2026-09-05 to get every successor under the plan-size budget): the three faults visible
+      on the running demo - a clip that shows the floor, pieces on the board''s lid that are
+      never found, and duplicate detections on the board''s borders - are one fault, the scene
+      being described by constants instead of read from the world the node already fetches.'
+    branch: claude/plan-item-kickoff-ge8541
+    pull_request_url: https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/236
+    notes: 'The board''s holes are found by fitting the mesh''s own rigid six-hole layout
+      over the lid in one shot - three degrees of freedom for all six holes together, seeded
+      from the board detection''s own pose - rather than classifying each contour on its own.
+      A free per-contour fit was tried first and is what put the fault there: a triangular
+      prism template laid anywhere near the board''s middle reaches 0.85-0.89 agreement in
+      every capture, higher than any genuine piece on the lid, and converges on the same spot
+      each time.'
+- id: observation-matched-against-the-piece-set
+  title: Recognise a piece by matching what was seen against the piece set's instances, in
+    EQL
+  branch: null
+  pull_request_number: null
+  track: method-selection
+  depends_on:
+  - a-look-is-described-by-a-match
+  - detector-parameters-from-knowledge
+  status: not_started
+  recommended_model: sonnet
+  notes: 'Added 2026-10-13 at the developer''s direction, from the KnownPiece thread on #488
+    (r4250836397). A seen blob becomes a partial EQL description (outline from above, measured
+    hue, height) resolved against the PieceSet instances with tolerance predicates (hue, height,
+    outline fit), replacing PieceMatcher''s Python hue filter and outline fit and detector_choice.py''s
+    exact colour equality. #265 is an integration branch, so the parts it needs are taken
+    from #222/#275, not from #265.'
+  external_dependencies:
+  - reference: montessori-perception-split/shape-vocabulary-on-main
+    title: Land the Montessori shape vocabulary, the board's hole geometry and the piece set
+    status: in progress
+    plan_description: '#202 lands the Montessori perception package on main as one 65-file,
+      +11,220-line pull request. Its import graph cuts cleanly into layers that each stand
+      on main plus the layers below them, with their own tests. This plan builds those layers
+      as a stack of pull requests, each holding exactly #202''s final file contents, and ends
+      with #202 itself retargeted onto the stack so that it shows only the ROS runtime. No
+      history is rewritten, so every branch already stacked on #202 stays valid.'
+    branch: claude/ecstatic-knuth-curscv
+    pull_request_url: https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/488
+    notes: 'Shape-sorting vocabulary in semantic_digital_twin (ShapeSortingPiece + Cube/Cylinder/...Piece,
+      ShapeSortingHole, ShapeSortingBoard, all in shape_sorting_toy/ with the board mesh,
+      hole specifications, PieceSet, PieceColor; Polygon2D, Color.hue_distance, convex footprint),
+      shared with main''s coraplex Tracy demo; experiments keeps PieceColorMatcher. No longer
+      a verbatim cut of #202: #202 adopts these names when it merges main and this layer.
+      Promoted upstream as cram2#804. pieces.py:203 thread''s EQL matching is item observation-matched-against-the-piece-set.'
+- id: demo-asks-by-query
+  title: The demo's perception runs because a query was evaluated
+  pull_request_number: null
+  track: demo-requests
+  depends_on:
+  - choose-detection-method
+  status: not_started
+  recommended_model: sonnet
+  notes: 'Lands on the tracy_icra demo branch, which knowledge-directed-expectation/demo-detects-and-recovers-a-failed-insert
+    tracks. Every perception call in montessori_demo.py goes through the backend rather than
+    calling the pipeline by hand, and the detector that answers is the one the rule tree chose
+    from the surface and the target - visibly a different one for the steel table than for
+    the board''s lid. This is the wave''s claim made demonstrable: the same question, answered
+    differently because the robot knows what it is looking at.'
+  external_dependencies:
+  - reference: knowledge-directed-grounding/demo-runs-on-grounded-perception
+    title: The demo sees only the table, finds pieces on the lid, and reports each once
+    status: not started
+    plan_description: 'The scene grounding wave of knowledge-directed-perception (split out
+      on 2026-09-05 to get every successor under the plan-size budget): the three faults visible
+      on the running demo - a clip that shows the floor, pieces on the board''s lid that are
+      never found, and duplicate detections on the board''s borders - are one fault, the scene
+      being described by constants instead of read from the world the node already fetches.'
+    notes: 'Lands on the tracy_icra demo branch, which knowledge-directed-expectation/demo-detects-and-recovers-a-failed-insert
+      tracks. Wave one is finished when the three faults are gone on the real robot, not when
+      their pull requests are approved: the clipped windows show the table and nothing beyond
+      it, a cube resting on the board''s lid is detected there, and no detection rides the
+      board''s borders. Verified against the live camera, with a captured frame kept for the
+      tests.'
+- id: perception-join
+  title: Join the two perception lineages, in the pull request that already is the join
+  branch: claude/detector-consolidation-analysis-rgg3xg
+  pull_request_number: 299
+  track: perception-join
+  depends_on:
+  - a-look-is-described-by-a-match
+  status: blocked
+  recommended_model: sonnet
+  notes: '#299''s 9c4840bf94 already is the join commit -- its own message says the two detectors
+    "arrived on the same detector from different branches of #231, onto the rewrite #236 had
+    already landed" -- sitting on #265 because no other base held both lineages. knowledge-directed-grounding''s
+    chain (#202 to #270) is correctly stacked and is one side; knowledge-directed-requests''
+    (#231 to #275, plus #259) is the other. Merging the tips leaves roughly 23 conflict hunks
+    over 1,100 lines, 13 of them in pipeline.py.'
+  blockers:
+  - 'Eleven commits on #265 touch #299''s own eight files and are on no lineage branch. Four
+    are convergence glue a correctly ordered stack does not need; the other seven are perception-direct-commits.'
+  external_dependencies:
+  - reference: knowledge-directed-grounding/competing-explanations
+    title: Decide a detection by comparing explanations, not against a fixed threshold
+    status: in progress
+    plan_description: 'The scene grounding wave of knowledge-directed-perception (split out
+      on 2026-09-05 to get every successor under the plan-size budget): the three faults visible
+      on the running demo - a clip that shows the floor, pieces on the board''s lid that are
+      never found, and duplicate detections on the board''s borders - are one fault, the scene
+      being described by constants instead of read from the world the node already fetches.'
+    branch: claude/plan-item-kickoff-kdp-r8nttk
+    pull_request_url: https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/270
+    notes: 'PieceMatcher.minimum_agreement is one number, 0.62, standing for how much of an
+      outline must lie along a seen edge before a piece is reported, and its recorded justification
+      is that a correct piece reaches 0.63 to 0.86 while the best wrong piece of the same
+      colour reaches 0.62. Measured on 2026-08-31, that boundary does not hold anywhere near
+      the board: a triangular prism template reaches 0.85 to 0.89 on the board''s own middle
+      in every capture, above every genuine piece detection on the lid in the same captures,
+      which run 0.64 to 0.71 for the most part.'
+- id: perception-direct-commits
+  title: Replay the seven perception features that reached no pull request
+  branch: null
+  pull_request_number: null
+  track: perception-join
+  depends_on:
+  - perception-join
+  status: not_started
+  recommended_model: haiku
+  notes: '6c968260eb, 9ab3729019, 746f8ea3c6, 280832645d, 3d6504f7d9, 4bf6694f1d and 54b4ec5848
+    -- real features pushed straight onto #265, in no pull request''s diff. The other four
+    of the eleven (0e4d632b3f, a3acc06fbe, 83c3eae1b7, 5f63f0f503) are reconciliation glue
+    that exists only because the lineages were merged all at once, and a correctly ordered
+    stack should not need them.'
