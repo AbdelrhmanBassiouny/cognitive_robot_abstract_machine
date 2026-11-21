@@ -1,0 +1,126 @@
+schema_version: 1
+id: montessori-perception-split
+title: Split the Montessori perception package's landing into reviewable layers
+description: '#202 lands the Montessori perception package on main as one 65-file, +11,220-line
+  pull request. Its import graph cuts cleanly into layers that each stand on main plus the
+  layers below them, with their own tests. This plan builds those layers as a stack of pull
+  requests, each holding exactly #202''s final file contents, and ends with #202 itself retargeted
+  onto the stack so that it shows only the ROS runtime. No history is rewritten, so every
+  branch already stacked on #202 stays valid.'
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 486
+waves:
+- id: split
+  name: '#202 as a stack of layers'
+  description: One wave. The layers stack in import order; network_limits stands apart.
+tracks:
+- id: stack
+  name: The layer stack
+  wave: split
+  description: 'Sequential: each layer imports only main and the layers below it.'
+- id: standalone
+  name: Independent of the stack
+  wave: split
+  description: Imports nothing else in
+items:
+- id: shape-vocabulary-on-main
+  title: Land the Montessori shape vocabulary, the board's hole geometry and the piece set
+  branch: claude/ecstatic-knuth-curscv
+  track: stack
+  blockers:
+  - 'Waiting on CI at a958c9e117 and the developer''s call on two open #488 threads (generality;
+    PieceColor as a Color enum). cram2#804''s description and its 3 outdated threads are the
+    developer''s to update upstream.'
+  depends_on: []
+  status: in_progress
+  recommended_model: sonnet
+  pull_request_number: 488
+  notes: 'Shape-sorting vocabulary in semantic_digital_twin (ShapeSortingPiece + Cube/Cylinder/...Piece,
+    ShapeSortingHole, ShapeSortingBoard, all in shape_sorting_toy/ with the board mesh, hole
+    specifications, PieceSet, PieceColor; Polygon2D, Color.hue_distance, convex footprint),
+    shared with main''s coraplex Tracy demo; experiments keeps PieceColorMatcher. No longer
+    a verbatim cut of #202: #202 adopts these names when it merges main and this layer. Promoted
+    upstream as cram2#804.
+
+    pieces.py:203 thread''s EQL matching is item observation-matched-against-the-piece-set.
+
+    '
+- id: simulated-world-on-main
+  title: Land the simulated Montessori world
+  branch: null
+  track: stack
+  depends_on:
+  - shape-vocabulary-on-main
+  status: not_started
+  recommended_model: haiku
+  notes: montessori/world.py, test_montessori_world.py, dataset/synthetic_fixed_arm_robot.py
+    and .urdf, and dataset/__init__.py - 5 files, ~1,770 lines. Has to land before any detection
+    code, because pipeline.py reads BOARD_SCALE from world.py. That one constant brings in
+    all 1,169 lines of world.py; detect-per-supporting-surface (knowledge-directed-grounding)
+    removes that use later.
+- id: frame-reading-on-main
+  title: Land reading, rectifying and showing camera frames
+  branch: null
+  track: stack
+  depends_on:
+  - simulated-world-on-main
+  status: not_started
+  recommended_model: haiku
+  notes: perception/__init__.py, perception/exceptions.py, camera.py, orthophoto.py, viewer.py,
+    the opencv dependency in experiments/pyproject.toml, and test_montessori_camera.py and
+    test_montessori_viewer.py - 8 files, ~1,570 lines. Needs only main, so it could branch
+    off main instead. It is stacked linearly so that every later layer has a single parent.
+- id: piece-recognition-on-main
+  title: Land outline measurement and recognising a piece from its edges
+  branch: null
+  track: stack
+  depends_on:
+  - frame-reading-on-main
+  status: not_started
+  recommended_model: sonnet
+  notes: 'footprint.py, detections.py, edges.py and piece_matcher.py, test_montessori_footprint.py,
+    and the direct piece-recognition tests. Those tests are split verbatim out of test_montessori_piece_matching.py
+    into a module of their own, since that file imports pipeline.py at the top and uses the
+    shared scene fixtures. This is the first half of the ~3,560-line detection layer, cut
+    in two at the developer''s decision (2026-10-02). Fallback if the piece-matcher tests
+    turn out not to stand without the pipeline: fold this item into detection-pipeline-on-main
+    rather than land code here that nothing tests.'
+- id: detection-pipeline-on-main
+  title: Land the detection pipeline, its overlays and the simulated scene it is tested on
+  branch: null
+  track: stack
+  depends_on:
+  - piece-recognition-on-main
+  status: not_started
+  recommended_model: sonnet
+  notes: pipeline.py, overlay.py, colors.py and scene_source.py, dataset/montessori_scene_renderer.py
+    and montessori_scene_fixtures.py, test_montessori_views.py, test_montessori_perception.py,
+    and the rest of test_montessori_piece_matching.py. The second half of the detection layer.
+- id: captures-on-main
+  title: Land the real-camera captures and reading them back
+  branch: null
+  track: stack
+  depends_on:
+  - detection-pipeline-on-main
+  status: not_started
+  recommended_model: haiku
+  notes: perception/captures.py, the 18 files under montessori/resources/captures (3 MB),
+    dataset/montessori_capture_truths.py, test_montessori_captures.py, and the .gitignore
+    rosbags rule - 22 files, ~790 lines. Needs only frame-reading-on-main; it is stacked linearly
+    for the same reason as that layer.
+- id: perception-node-on-main
+  title: '#202 itself, retargeted: the ROS runtime on top of the stack'
+  branch: null
+  pull_request_number: 202
+  track: stack
+  depends_on:
+  - captures-on-main
+  status: not_started
+  recommended_model: sonnet
+  notes: 'perception/node.py, markers.py, recordings.py, watch_camera.py, capture_from_bag.py,
+    tracy_experiments/equipment.py and tracy_experiments/__init__.py - 7 files, ~1,770 lines,
+    all importing rclpy, so nothing here can run their tests. The item is to merge the top
+    of the stack, and network-limits-on-main''s branch, into montessori_perception_on_main
+    (node.py''s check_large_messages_can_arrive() call becomes LargeMessageReceiver().check_messages_can_arrive(),
+    per #487), retarget #202''s base to captures-on-main''s branch, and rewrite #202''s description
+    to cover only this layer.'
