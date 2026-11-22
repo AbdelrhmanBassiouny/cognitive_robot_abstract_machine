@@ -80,3 +80,11 @@ items:
       importable from what krrood depends on, or a dependency on it is added. Done when
       static_types.py, extended with derived cases (a point's coordinate_system as its
       concrete frame), gets the concrete class where Pyrefly answers the bound.
+
+  - id: member-type-hint-resolution
+    title: "krrood's type hint of a member resolves the type parameters its owning class binds"
+    branch: null
+    track: krrood-bindings
+    depends_on: []
+    status: not started
+    recommended_model: opus
