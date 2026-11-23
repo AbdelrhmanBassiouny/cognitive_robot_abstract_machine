@@ -98,22 +98,20 @@ items:
   recommended_model: opus
   blockers:
     - >-
-      cram2#1019: ichumuh's 2026-11-23 follow-up leaves 5 threads open (cross product onto
-      Vector3Dimensional, inner product off frames, 2D like 3D without embedded-plane relations,
-      MotionVectorPair 3D-only, benchmark). Plan under discussion with the owner.
+      cram2#1019: ichumuh's second 2026-11-23 review answered at 1d6570c2; the owner posts the
+      drafted replies (review-replies/cram2-1019-2026-11-23-second.md, notes branch).
     - >-
-      At cc75214c vs main: T @ point/vector 5x slower, norm 5.3x, dot 2.4x, T @ pose 2.8x (generic
-      per-coordinate path); compiled graphs identical. Merge probe clean at cc75214c; fork CI 39
-      passed, 8 running; upstream CI pending.
+      CI on 1d6570c2 not read yet; the Giskard control-loop benchmark needs ROS and is left to CI.
+      #524 conflicts with this branch in 20 files and needs its own resolve.
   depends_on: []
   session: https://claude.ai/code/session_01JxHGiLRgwm8kRFq7Zyxhbg
-  notes: '#527: the casadi-free base and SemDT adopting it, the planar, imports, projection,
-    action, frame-check and world-as-space items folded in. Frame kinds name their axes; new
-    spaces subclass Point[vector] and Vector[frame, coordinate], one field per axis. Being
-    symbolic is the coordinate type, with no float default: a value type leaving it open takes
-    sm.Scalar. api-break; migration in the PR description. Promoted as cram2#1019.
-
-    '
+  notes: >
+    #527: the casadi-free base and SemDT adopting it, the planar, imports, projection, action,
+    frame-check and world-as-space items folded in. Frame kinds name their axes and give a Gram
+    matrix; the inner product is EuclideanSpace's, cross only Vector3Dimensional's. A frame states
+    the embedded_plane it lies on in every state; SemDT derives it from connections, and planar
+    changes compare planes by identity. api-break; migration in the PR description. Promoted as
+    cram2#1019.
 - id: image-coordinate-change
   title: krrood_image's ImageCoordinateChange (scale and shift per axis) for crops and resizes,
     with cv2 resampling
