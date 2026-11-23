@@ -1,15 +1,17 @@
 Plan
-- Answer cram2#1019's reviews; the owner posts the replies and resolves the threads.
+- Keep the branch mergeable with cram2 main, and answer cram2#1019's reviews; the owner decides the open design threads.
 - Design doc (implemented): https://claude.ai/artifact/3aEJ5hBBxZ7GGBMNK6XXKq
 
 Done
-- Every code ask of the owner's cram2#1019 review is in the branch up to 7c0b1bda. test/krrood_spatial_math_test: 733 passed at 7c0b1bda.
-- f2f740c9c0: World.rebind_world_entities rebinds the frames of a spatial value or change (its deep copy shares them), so a trial's rebuilt nodes are given in the copy's frames. Cause of cram2#1019's coraplex_garmi_clean_up_demo failure: ReferenceFrameMismatchError naming one frame twice, from DistanceMonitor's tip point. Tests fail without it, pass with it; test_world.py: 173 passed, 15 errors/failures from missing robot description packages. The demo itself was not run (no ROS here).
+- 9f5540e0 merges cram2 main 44e1f109 (#795 RoboKudo world synchronization, #1043 spatial math docs). RoboKudo takes main's side, with HomogeneousTransformationMatrix, Point3 and Point2 renamed in every file main changed; the branch's edits there were renames only. The docs pages use the new names and a Frame on the CartesianFrame3Dimensional interface; both pages execute. README keeps this branch's text plus main's docs link.
+- test/krrood_spatial_math_test at 9f5540e0: 737 passed (README example and mypy static checks included). RoboKudo tests not run (need ROS); its changed files compile.
 
-Read 2026-11-20
-- Merge probe vs cram2 main 82707c74 at 7c0b1bda: clean. Fork CI at 7c0b1bda: 45 of 46, small_packages (krrood check) set aside. Upstream CI at 7c0b1bda: that and the garmi demo failed.
+Read 2026-11-23
+- Merge probe vs cram2 main 44e1f109 at 9f5540e0: clean.
+- CI at 0e5450d6: fork 45/46 and upstream 56/58, small_packages failing on both (krrood check, set aside by the owner). CI on 9f5540e0 not read yet.
+- cram2#1019: ichumuh requested changes again on 2026-11-23, 12 open threads; the owner replied to most the same day.
 
 Next
-- Read the CI of f2f740c9c0 on both PRs, the garmi demo above all.
-- Owner: post the replies in .claude/personal/review-replies/cram2-1019.md (notes branch).
-- #524 needs its own resolve.
+- Read the CI of 9f5540e0 on both PRs.
+- Owner: decide the open cram2#1019 threads (metric and cross product on frame kinds, EmbeddedPlaneRelation, has_position and "weight" wording, operator module, Vector3 returns).
+- #524 conflicts with this branch in 20 files; it needs its own resolve.
