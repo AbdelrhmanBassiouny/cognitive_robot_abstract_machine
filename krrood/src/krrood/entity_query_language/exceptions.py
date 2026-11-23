@@ -978,6 +978,32 @@ class SelectiveBackendCannotResolveEllipsisMatch(DataclassException):
 
 
 @dataclass
+class GenerativeBackendCannotFillInADomainObject(DataclassException):
+    """
+    Raised when a generative backend evaluates a match whose nested pattern with a
+    domain leaves an attribute as ``...`` or marks it with ``cause``: the object is taken
+    from the domain as it is.
+    """
+
+    pattern: Match
+    """
+    The nested pattern with a domain that leaves an attribute to fill in.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.pattern} takes an existing object from its domain, so a generative "
+            f"backend cannot fill in its attribute left as ``...`` or marked with ``cause``."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "State a value or a condition for the attribute, or remove the domain so "
+            "that the object is constructed."
+        )
+
+
+@dataclass
 class BackendCannotEvaluateCause(DataclassException):
     """
     Raised when a match with a :class:`~krrood.entity_query_language.operators.causal.Cause`
