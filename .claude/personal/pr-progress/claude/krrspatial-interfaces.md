@@ -1,12 +1,13 @@
-Plan
-- Keep the branch mergeable with cram2 main and answer cram2#1019's reviews; the owner posts the replies.
-- Design doc (implemented): https://claude.ai/artifact/3aEJ5hBBxZ7GGBMNK6XXKq
+## Plan
+- Answer every ichumuh comment on cram2#1019 in #527, decided with the owner first.
+- Speed: casadi points/vectors hand changes their homogeneous column; within ~15% of main.
+- Cross product onto Vector3Dimensional; MotionVectorPair folded into the 3D VectorPair.
+- Open: 2D model and dot/norm placement (options under discussion); perf guard via the experiments control-loop benchmark.
 
-Done
-- 9f5540e0: merges cram2 main 44e1f109 (#795, #1043); merge probe clean.
-- 44c4f534 and f0712a33 answer ichumuh's 2026-11-23 review: unknown plane relations raise; MathematicalOperation replaces the operation string; cross_product returns its operands' type; has_position replaces "weight"; a kind of frame keeps only inner_product and cross_product (norm and distance moved onto the values). test/krrood_spatial_math_test: 739 passed; krrood symbolic math: 312 passed. SemDT and RoboKudo tests not run (need ROS).
+## Done
+- Benchmark at cc75214c vs main e7eaded0: T@point/vector 5x, norm 5.3x, dot 2.4x, T@pose 2.8x slower; compiled graphs identical.
+- Plane check: 210 us per T2 with frames (FK each time); state-dependent: an IMU pitch of 1e-5 makes map->base raise.
+- Kept ...Dimensional naming (owner).
 
-Next
-- Owner: post the 12 drafted replies in .claude/personal/review-replies/cram2-1019-2026-11-23.md (notes branch).
-- Read the CI of f0712a33 on both PRs.
-- #524 conflicts with this branch in 20 files; it needs its own resolve.
+## Next
+- Owner decides 2D model and dot/norm; then TDD implementation on claude/krrspatial-interfaces.
