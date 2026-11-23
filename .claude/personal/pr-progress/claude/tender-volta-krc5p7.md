@@ -1,12 +1,11 @@
 ## Plan
-- Facts take expression values, bound in the state they extend; drop FactValueIsNotConstant
-- Type-check assigned attribute values against the class diagram (AssignedValueHasWrongType)
-- Effects: Assignment, Append, ObjectCreation, ObjectRemoval, each optionally conditional, combined against the predecessor state
-- ActionSchema: precondition/effects on a symbolic twin; is_applicable, apply, applicable_actions
-- Tests first, in test/krrood_test/test_planning with a Symbol-based blocks mimic
+- ActionSchema, effects (Assignment, ElementInsertion, ObjectCreation, ObjectRemoval), facts with expression values, class-diagram type check
 
 ## Done
-- Branch, draft PR #617, item recorded in progress
+- Implemented and pushed (38610d26e); 98 planning tests, 1710 EQL/class-diagram tests, doctests and pre-commit pass
+- Owner decision: State.with_facts renamed to State.add_facts; with_change named apply_change
+- PR #617 description and labels (new-feature, api-break) current
 
 ## Next
-- Failing tests for facts with expression values and the type check
+- Owner review of the draft; discuss the add_facts rename with eql-planning-robots (#522)
+- test_quantifier_overload_types.py not run locally (no mypy)
