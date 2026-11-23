@@ -1,12 +1,16 @@
-**Plan**
-- #67 stalled on a base_expressions.py conflict with D-core-serialization; merge it, keep the pre-installed-context fix, restack descendants.
+<!-- BEGIN-PR-PROGRESS -->
+## Plan
+- Land D-core-support (#67) on `main`: merge `main` into the branch, resolve the directory-rename conflicts, push, return to draft.
+- Carry the fix into the descendants (#98, #159, #210, #68, #81), which are still in the old `krrood/src` layout.
 
-**Done**
-- Merged the base as ff9a89984 (probe clean at that commit); set the active conditions root in `_evaluate_within_`; both conditions-root tests fail without it and pass with it.
-- Local runs at ff9a89984: test_eql_rdr 112 passed, test_eql 1442 passed / 3 skipped (typing-overload module excluded, no mypy).
-- Restacked D-core-expert (conflicts resolved), single-class, backend and the D-ui/D-store/D-deco branches.
+## Done (2026-11-23)
+- Retargeted #67 from `D-core-serialization` to `main`.
+- Merged `main` (`2f2f5aafc`) as `adb130ec2`: the seven `rdr/` modules this branch adds were relocated to `krrood/krrood-eql/src`, content unchanged. Pushed; #67 back to draft.
+- Read at `adb130ec2`: `test_eql` 1604 passed / 4 skipped; `test_eql_rdr` 95 passed / 25 skipped.
 
-**Next**
-- Read CI on #67 (none read after the push).
-- claude/rdr-why-answer-6fnw2o conflicts in explanation.py and observer.py: its owner decides.
-- #67 stays ready (the developer chose that); threads at rule_tree_view.py:255 and test_conclusion_domain.py are the developer's to resolve.
+## Next
+- CI at `adb130ec2` not read; last read (2026-11-17, older head) had `test_each_lib (krrood)` failing, cause not read.
+- 25 `test_eql_rdr` tests skip here ("Failed to load zoo dataset": no network to UCI); not checked locally, so CI is their check.
+- Descendant restack not carried: `maintenance restack --stacked-on D-core-support` stopped at `D-core-engine` (git-command-failed, checkout refused). Each descendant meets the same `krrood/src` -> `krrood-eql/src` rename; run `/plan-item-resolve` on them.
+- Open threads: `rule_tree_view.py:255` (answered, redesign not taken), `test_conclusion_domain.py` (left for the developer).
+<!-- END-PR-PROGRESS -->
