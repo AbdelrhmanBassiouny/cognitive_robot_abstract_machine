@@ -98,12 +98,11 @@ items:
   recommended_model: opus
   blockers:
     - >-
-      cram2#1019: ichumuh requested changes again 2026-11-23, 12 open threads (metric and cross
-      product on frame kinds, EmbeddedPlaneRelation, has_position/weight wording, operator module,
-      Vector3 returns); owner replied, decisions open.
+      cram2#1019: ichumuh's 2026-11-23 review answered in 44c4f534; the owner posts the 12 drafted
+      replies (review-replies/cram2-1019-2026-11-23.md, notes branch).
     - >-
-      CI on merge 9f5540e0 (cram2 main 44e1f109) not read yet; small_packages set aside by the
-      owner. #524 conflicts with this branch in 20 files and needs its own resolve.
+      CI on 44c4f534 not read yet; small_packages set aside by the owner. #524 conflicts with this
+      branch in 20 files and needs its own resolve.
   depends_on: []
   session: https://claude.ai/code/session_01JxHGiLRgwm8kRFq7Zyxhbg
   notes: '#527: the casadi-free base and SemDT adopting it, the planar, imports, projection,
