@@ -50,7 +50,10 @@ class Animal:
     name: str
     has_fur: bool = False
     can_fly: bool = False
-    habitat: Optional[Species] = None
+    habitat: Species | None = None
+    """
+    Where the animal lives, if known.
+    """
 
 
 CaseTypeNamedLikeAFactory = make_dataclass(
@@ -391,7 +394,7 @@ class BirdRiskCase(FunctionCase):
     name: str
     """The ``name`` argument of the call."""
 
-    _output: Optional[float] = None
+    _output: float | None = None
     """The value the call returns."""
 
 

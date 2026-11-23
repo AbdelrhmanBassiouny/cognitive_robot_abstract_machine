@@ -1,21 +1,10 @@
 """
-The *mechanism* for how to get answers (rule conditions and conclusions) from an expert.
+How an RDR gets answers (rule conditions and conclusions) from an expert.
 
 An :class:`ExpertInterface` is the I/O strategy an :class:`~krrood.entity_query_language.rdr.expert.Expert`
-delegates to. The :class:`Expert` decides *what* to ask (a condition, or a conclusion +
-condition) and *how to validate* it; the interface owns the build-namespace → render →
-run → validate → re-prompt loop. Concrete interfaces implement only :meth:`ExpertInterface._run`.
-
-Two value objects carry the request across the boundary:
-
-* :class:`CaseContext` — the concrete case, the shared EQL variable, and the current /
-  target conclusions.
-* :class:`AnswerRequest` — one named answer the expert must supply, with a validator and
-  an example.
-
-The expert writes **EQL expressions**: conditions that are built over the
-``case_variable`` (the shared rule-tree variable), while ``case_instance`` is the concrete
-object they can inspect and experiment on.
+delegates to; concrete interfaces implement only :meth:`ExpertInterface._run`.
+:class:`CaseContext` describes the case being answered and :class:`AnswerRequest` one
+answer the expert must supply.
 """
 
 from __future__ import annotations
@@ -23,14 +12,13 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
-from typing_extensions import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing_extensions import TYPE_CHECKING, Any, Callable, Dict, List
 
 from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
 from krrood.entity_query_language.rdr.exceptions import ExpertAbort
 from krrood.entity_query_language.scope import get_definition_scope
 
 if TYPE_CHECKING:
-    from krrood.entity_query_language.core.base_expressions import SymbolicExpression
     from krrood.entity_query_language.rdr.conclusion_helper import ConclusionHelper
     from krrood.entity_query_language.rdr.conclusion_domain import ConclusionDomain
     from krrood.entity_query_language.rdr.condition_resolver import ResolvedCondition
@@ -50,7 +38,7 @@ EXIT_NAME = "exit"
 _ABORT_FLAG = "__expert_abort__"
 
 
-@dataclass
+@dataclass(kw_only=True)
 class CaseContext:
     """
     The data an expert needs to author a rule for one case.
@@ -76,13 +64,13 @@ class CaseContext:
     The known correct conclusion, or absent (sentinel) when the expert must label it.
     """
 
-    trace: Optional[ClassificationTrace] = None
+    trace: ClassificationTrace | None = None
     """
     The classification trace for this case, for visualizing the rule tree (``None`` when
     the RDR is empty / no classification was run).
     """
 
-    conclusion_domain: Optional[ConclusionDomain] = None
+    conclusion_domain: ConclusionDomain | None = None
     """
     The resolved allowable-value domain of the conclusion attribute, when the expert
     must label the case (``None`` on the conditions-only path, where the conclusion is
@@ -97,14 +85,14 @@ class CaseContext:
     Empty by default.
     """
 
-    corner_case: Optional[Any] = None
+    corner_case: Any | None = None
     """
     The corner case of the firing rule, when a rule fired during the classification
     trace.
 
     ``None`` when no rule fired (first rule or alternative path).
     """
-    suggested_condition: Optional[ResolvedCondition] = None
+    suggested_condition: ResolvedCondition | None = None
     """
     The full auto-resolved condition (expression + resolver provenance) suggested to the
     expert in HINT mode; ``None`` when no hint is available (AUTOMATIC mode or resolver
@@ -122,7 +110,7 @@ class CaseContext:
         return self.current_conclusion is not ...
 
 
-@dataclass
+@dataclass(kw_only=True)
 class AnswerRequest:
     """
     One named answer the expert must place in the namespace, with validation.
@@ -133,7 +121,7 @@ class AnswerRequest:
     The namespace variable the expert assigns (e.g. ``"conditions"``).
     """
 
-    validate: Callable[[Any], Optional[str]]
+    validate: Callable[[Any], str | None]
     """
     Returns an error message if the assigned value is unacceptable, else ``None``.
     """
@@ -153,14 +141,14 @@ class AnswerRequest:
     """
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ExpertInterface(ABC):
     """
     The I/O strategy an :class:`Expert` uses as the interaction interface through which
     answers and questions are communicated.
     """
 
-    on_save: Optional[Callable[[], None]] = field(default=None, kw_only=True)
+    on_save: Callable[[], None] | None = field(default=None, kw_only=True)
     """
     Zero-arg callable that persists the model state.
 
@@ -181,41 +169,55 @@ class ExpertInterface(ABC):
 
     def interact(
         self,
+        *,
         context: CaseContext,
         requests: List[AnswerRequest],
-        initial_errors: Optional[Dict[str, str]] = None,
+        initial_errors: Dict[str, str] | None = None,
     ) -> Dict[str, Any]:
         """
-        Drive the request loop until every required answer validates.
+        Collect answers from the expert, re-prompting with the validation errors until
+        every request validates.
 
-        Builds a namespace from the case-definition scope plus ``case_instance`` /
-        ``case_variable`` and the EQL factories, runs the (subclass-specific) collection
-        step, validates, and re-prompts with an error summary on failure. An explicit
-        ``exit()`` raises :class:`ExpertAbort`.
+        :raises ExpertAbort: When the expert calls ``exit()``.
 
         :param initial_errors: Errors from a previous interaction cycle to display on
             the first render (e.g. a post-submission validation failure from the
             caller).
         :return:``{request.name: value}`` for every request, all validated.
         """
-        namespace = self._build_namespace(context, requests)
+        namespace = self._build_namespace(context=context, requests=requests)
 
         def validate() -> Dict[str, str]:
-            return self._validate(namespace, requests)
+            """
+            :return: The validation error of every request that currently fails.
+            """
+            return self._validate(namespace=namespace, requests=requests)
 
         errors: Dict[str, str] = initial_errors or {}
         while True:
-            header = self._render_header(context, requests, errors)
-            self._run(namespace, header, validate)
+            header = self._render_header(
+                context=context, requests=requests, errors=errors
+            )
+            self._run(namespace=namespace, header=header, validate=validate)
             if namespace.get(_ABORT_FLAG):
-                raise ExpertAbort(missing=self._missing_required(namespace, requests))
+                raise ExpertAbort(
+                    missing=self._missing_required(
+                        namespace=namespace, requests=requests
+                    )
+                )
             errors = validate()
             if not errors:
                 return {r.name: namespace.get(r.name) for r in requests}
 
     def _build_namespace(
-        self, context: CaseContext, requests: List[AnswerRequest]
+        self, *, context: CaseContext, requests: List[AnswerRequest]
     ) -> Dict[str, Any]:
+        """
+        :param context: The case being answered.
+        :param requests: The answers to pre-populate with their defaults.
+        :return: The namespace the expert's answers are evaluated in: the case's
+            definition scope, the case and its variable, ``exit()`` and the defaults.
+        """
         namespace = get_definition_scope(context.case_variable)
         namespace[CASE_INSTANCE_NAME] = context.case_instance
         namespace[CASE_VARIABLE_NAME] = context.case_variable
@@ -227,7 +229,7 @@ class ExpertInterface(ABC):
 
     @staticmethod
     def _validate(
-        namespace: Dict[str, Any], requests: List[AnswerRequest]
+        *, namespace: Dict[str, Any], requests: List[AnswerRequest]
     ) -> Dict[str, str]:
         """
         Run every request's validator against its current namespace value.
@@ -246,7 +248,7 @@ class ExpertInterface(ABC):
 
     @classmethod
     def _missing_required(
-        cls, namespace: Dict[str, Any], requests: List[AnswerRequest]
+        cls, *, namespace: Dict[str, Any], requests: List[AnswerRequest]
     ) -> List[str]:
         """
         :param namespace: The interaction namespace, keyed by answer name.
@@ -254,11 +256,12 @@ class ExpertInterface(ABC):
         :return: The names of the required requests whose current value still fails
             validation.
         """
-        errors = cls._validate(namespace, requests)
+        errors = cls._validate(namespace=namespace, requests=requests)
         return [r.name for r in requests if r.required and r.name in errors]
 
     def _render_header(
         self,
+        *,
         context: CaseContext,
         requests: List[AnswerRequest],
         errors: Dict[str, str],
@@ -287,7 +290,7 @@ class ExpertInterface(ABC):
             lines.append(f"[error] {name}: {message}")
         return "\n".join(lines)
 
-    def make_progress_reporter(self) -> Optional[ProgressReporter]:
+    def make_progress_reporter(self) -> ProgressReporter | None:
         """
         Return a :class:`ProgressReporter` for this interface, or ``None``.
 
@@ -299,19 +302,16 @@ class ExpertInterface(ABC):
     @abstractmethod
     def _run(
         self,
+        *,
         namespace: Dict[str, Any],
         header: str,
         validate: Callable[[], Dict[str, str]],
     ) -> None:
         """
-        Present ``header`` and let the expert populate the answer names in
-        ``namespace``.
+        Present ``header`` and let the expert populate the answer names in ``namespace``.
 
-        Implementations must leave the expert's assignments (and any ``exit()`` flag)
-        visible in ``namespace`` when they return. ``validate`` re-runs the request
-        validators against the current namespace and is available to interfaces that
-        want to enforce the post-condition before returning (e.g. veto a premature shell
-        exit).
+        The expert's assignments, and any ``exit()`` flag, must be visible in ``namespace``
+        on return.
 
         :param namespace: The interaction namespace to populate with answers.
         :param header: The rendered header text to present to the expert.
@@ -321,7 +321,7 @@ class ExpertInterface(ABC):
         ...
 
 
-@dataclass
+@dataclass(kw_only=True)
 class FunctionInterface(ExpertInterface):
     """
     A non-interactive interface that delegates to a plain ``(context, requests) ->
@@ -339,7 +339,7 @@ class FunctionInterface(ExpertInterface):
     :func:`abort` semantics by raising :class:`ExpertAbort` instead.
     """
 
-    _context: Optional[CaseContext] = field(init=False, default=None)
+    _context: CaseContext | None = field(init=False, default=None)
     """
     The context of the in-flight :meth:`interact` call, threaded to :meth:`_run`.
     """
@@ -351,16 +351,25 @@ class FunctionInterface(ExpertInterface):
 
     def interact(
         self,
+        *,
         context: CaseContext,
         requests: List[AnswerRequest],
-        initial_errors: Optional[Dict[str, str]] = None,
+        initial_errors: Dict[str, str] | None = None,
     ) -> Dict[str, Any]:
+        """
+        Remember ``context`` and ``requests`` for :meth:`_run`, then collect the answers.
+
+        See :meth:`ExpertInterface.interact`.
+        """
         self._context = context
         self._requests = requests
-        return super().interact(context, requests, initial_errors=initial_errors)
+        return super().interact(
+            context=context, requests=requests, initial_errors=initial_errors
+        )
 
     def _run(
         self,
+        *,
         namespace: Dict[str, Any],
         header: str,
         validate: Callable[[], Dict[str, str]],
@@ -370,7 +379,15 @@ class FunctionInterface(ExpertInterface):
 
 
 def _make_exit(namespace: Dict[str, Any]) -> Callable[[], None]:
-    def exit() -> None:
+    """
+    :param namespace: The interaction namespace the abort flag is set in.
+    :return: The ``exit()`` function the expert calls to cancel the interaction.
+    """
+
+    def abort() -> None:
+        """
+        Flag the interaction as aborted.
+        """
         namespace[_ABORT_FLAG] = True
 
-    return exit
+    return abort

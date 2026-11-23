@@ -5,6 +5,8 @@ Rule trees here are hand-built to exercise the observer directly, independent of
 incremental fitting.
 """
 
+from __future__ import annotations
+
 import pytest
 
 from krrood.entity_query_language.factories import (
@@ -23,11 +25,18 @@ animals, targets = load_zoo_animals()
 
 
 def _first_with_target(species: Species) -> Animal:
+    """
+    The first loaded animal whose ground-truth species is ``species``.
+    """
     return next(animal for animal, target in zip(animals, targets) if target is species)
 
 
 @pytest.mark.skipif(len(animals) == 0, reason="Failed to load zoo dataset")
 class TestConclusionObserver:
+    """
+    Classifying single cases with hand-built rule trees.
+    """
+
     def _build_flat_tree(self):
         """
         Milk -> mammal ; else feathers -> bird ; else fins -> fish.
@@ -43,6 +52,9 @@ class TestConclusionObserver:
         return animal, animal.species, query
 
     def test_classifies_mammal(self):
+        """
+        The root rule fires for a mammal.
+        """
         animal, species, query = self._build_flat_tree()
         observer = classify_case(
             query, animal, species, _first_with_target(Species.mammal)
@@ -50,6 +62,9 @@ class TestConclusionObserver:
         assert observer.conclusion == Species.mammal
 
     def test_classifies_bird_via_alternative(self):
+        """
+        The first alternative fires for a bird.
+        """
         animal, species, query = self._build_flat_tree()
         observer = classify_case(
             query, animal, species, _first_with_target(Species.bird)
@@ -57,6 +72,9 @@ class TestConclusionObserver:
         assert observer.conclusion == Species.bird
 
     def test_classifies_fish_via_second_alternative(self):
+        """
+        The second alternative fires for a fish.
+        """
         animal, species, query = self._build_flat_tree()
         observer = classify_case(
             query, animal, species, _first_with_target(Species.fish)
@@ -64,6 +82,9 @@ class TestConclusionObserver:
         assert observer.conclusion == Species.fish
 
     def test_no_rule_fires_returns_none(self):
+        """
+        No conclusion is recorded when no rule fires.
+        """
         animal, species, query = self._build_flat_tree()
         # An insect has no milk, feathers, or fins → no rule fires.
         observer = classify_case(
@@ -93,6 +114,9 @@ class TestConclusionObserver:
         assert fish_observer.conclusion == Species.fish
 
     def test_observer_captures_satisfied_condition_ids(self):
+        """
+        A fired conclusion records the ids of the conditions that held.
+        """
         animal, species, query = self._build_flat_tree()
         observer = classify_case(
             query, animal, species, _first_with_target(Species.mammal)
@@ -103,6 +127,9 @@ class TestConclusionObserver:
         assert len(satisfied_condition_ids) > 0
 
     def test_distinct_conclusion_is_single_for_mutually_exclusive(self):
+        """
+        Mutually exclusive rules yield a single distinct conclusion.
+        """
         animal, species, query = self._build_flat_tree()
         observer = classify_case(
             query, animal, species, _first_with_target(Species.mammal)
@@ -112,6 +139,10 @@ class TestConclusionObserver:
     def test_repeated_classification_does_not_accumulate(self):
         # Guards the ReEnterableLazyIterable.set_iterable reset: classifying many
         # cases in sequence must not leak prior cases into the domain.
+        """
+        Classifying several cases in sequence does not leak earlier cases into later
+        ones.
+        """
         animal, species, query = self._build_flat_tree()
         mammal = _first_with_target(Species.mammal)
         bird = _first_with_target(Species.bird)
@@ -135,6 +166,9 @@ class TestAttributeConditionTruthiness:
     """
 
     def _build_attribute_query(self):
+        """
+        Build a tree whose condition is the bare attribute ``milk``.
+        """
         animal = variable(Animal, domain=[])
         query = entity(animal).where(animal.milk)  # plain Attribute, no == True
         with query:
@@ -142,6 +176,9 @@ class TestAttributeConditionTruthiness:
         return animal, animal.species, query
 
     def _build_comparator_query(self):
+        """
+        Build a tree whose condition compares ``milk`` to ``True``.
+        """
         animal = variable(Animal, domain=[])
         query = entity(animal).where(animal.milk == True)
         with query:
@@ -149,6 +186,9 @@ class TestAttributeConditionTruthiness:
         return animal, animal.species, query
 
     def test_attribute_condition_fires_when_true(self):
+        """
+        A bare attribute condition fires when the attribute is true.
+        """
         animal, species, query = self._build_attribute_query()
         observer = classify_case(
             query, animal, species, make_animal("aardvark", milk=True)
@@ -156,6 +196,9 @@ class TestAttributeConditionTruthiness:
         assert observer.conclusion == Species.mammal
 
     def test_attribute_condition_does_not_fire_when_false(self):
+        """
+        A bare attribute condition does not fire when the attribute is false.
+        """
         animal, species, query = self._build_attribute_query()
         observer = classify_case(
             query, animal, species, make_animal("bass", milk=False)
@@ -163,6 +206,9 @@ class TestAttributeConditionTruthiness:
         assert observer.conclusion is ...
 
     def test_comparator_condition_fires_when_true(self):
+        """
+        A comparison condition fires when it holds.
+        """
         animal, species, query = self._build_comparator_query()
         observer = classify_case(
             query, animal, species, make_animal("aardvark", milk=True)
@@ -170,6 +216,9 @@ class TestAttributeConditionTruthiness:
         assert observer.conclusion == Species.mammal
 
     def test_comparator_condition_does_not_fire_when_false(self):
+        """
+        A comparison condition does not fire when it does not hold.
+        """
         animal, species, query = self._build_comparator_query()
         observer = classify_case(
             query, animal, species, make_animal("bass", milk=False)

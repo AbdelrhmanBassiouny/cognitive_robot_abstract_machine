@@ -12,7 +12,7 @@ import pickle
 
 from dataclasses import dataclass
 
-from typing_extensions import List, Optional, Self, Tuple
+from typing_extensions import List, Self, Tuple
 
 from krrood.class_diagrams.utils import get_type_hints_of_object
 
@@ -33,7 +33,7 @@ DEFAULT_CACHE_FILE = os.path.join(
 )
 
 
-def _load_cached(cache_file: str) -> Optional[dict]:
+def _load_cached(cache_file: str) -> dict | None:
     """
     Load the {features, targets, ids} parts from the per-key pickle files, or None.
     """
@@ -50,6 +50,10 @@ def _load_cached(cache_file: str) -> Optional[dict]:
 
 
 def _save_cache(dataset, cache_file: str) -> None:
+    """
+    Write ``dataset``'s features, targets and ids to ``cache_file``, which gets a
+    ``.pkl`` suffix if it lacks one.
+    """
     if not cache_file.endswith(".pkl"):
         cache_file += ".pkl"
     parts = {
@@ -62,7 +66,7 @@ def _save_cache(dataset, cache_file: str) -> None:
             pickle.dump(value, f)
 
 
-def _fetch_zoo(cache_file: Optional[str]) -> Optional[dict]:
+def _fetch_zoo(cache_file: str | None) -> dict | None:
     """
     Return {features, targets, ids} dataframes from cache or the UCI repo.
     """
@@ -85,7 +89,7 @@ def _fetch_zoo(cache_file: Optional[str]) -> Optional[dict]:
 
 
 def load_zoo_animals(
-    cache_file: Optional[str] = DEFAULT_CACHE_FILE,
+    cache_file: str | None = DEFAULT_CACHE_FILE,
 ) -> Tuple[List[Animal], List[Species]]:
     """
     :param cache_file: Where to cache/load the dataset; ``None`` forces a fresh fetch.
@@ -119,7 +123,7 @@ def load_zoo_animals(
     return animals, targets
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ZooDataset:
     """
     The loaded zoo dataset: the animals and the ground-truth species they carry.
@@ -139,17 +143,21 @@ class ZooDataset:
     """
 
     @classmethod
-    def load(cls, cache_file: Optional[str] = DEFAULT_CACHE_FILE) -> Self:
+    def load(cls, *, cache_file: str | None = DEFAULT_CACHE_FILE) -> Self:
         """
         :param cache_file: Where the downloaded dataset is cached.
         :return: The dataset, empty when it can neither be read nor downloaded.
         """
-        return cls(*load_zoo_animals(cache_file))
+        animals, targets = load_zoo_animals(cache_file)
+        return cls(animals=animals, targets=targets)
 
     def __len__(self) -> int:
+        """
+        The number of animals.
+        """
         return len(self.animals)
 
-    def first(self, species: Species) -> Animal:
+    def first(self, *, species: Species) -> Animal:
         """
         :param species: The ground-truth label to look for.
         :return: The first animal in the dataset carrying that label.

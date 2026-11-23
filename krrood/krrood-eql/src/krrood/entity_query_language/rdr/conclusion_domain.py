@@ -1,16 +1,9 @@
 """
-Resolve the set of values an RDR conclusion attribute may take, from its declared type.
+The set of values an RDR conclusion attribute may take, resolved from its declared type.
 
-When the expert labels a case with no ground truth (the ``ask_for_rule`` path), the RDR can
-derive *what the conclusion is allowed to be* directly from the conclusion attribute's type
-hint — without asking. For an :class:`enum.Enum` (or ``bool``) the allowable values are a
-finite, enumerable set; for an open type (``str`` / an arbitrary class) the domain is not
-enumerable and we fall back to a type check.
-
-:class:`ConclusionDomain` is that resolved description; :func:`resolve_conclusion_domain`
-builds one for ``owner_type.attribute_name``. Both are consumed by the conclusion validator
-(reject out-of-domain answers) and by the interactive shell (show the allowable values, inject
-enum members for tab-completion, source the example).
+An :class:`enum.Enum` or ``bool`` attribute has a finite, enumerable domain; an open
+type such as ``str`` is only type-checked. :func:`resolve_conclusion_domain` builds a
+:class:`ConclusionDomain` for ``owner_type.attribute_name``.
 """
 
 from __future__ import annotations
@@ -19,7 +12,7 @@ import enum
 import inspect
 from dataclasses import dataclass
 
-from typing_extensions import Any, Dict, Optional, Tuple, get_args
+from typing_extensions import Any, Dict, Tuple, get_args
 
 from krrood.class_diagrams.exceptions import CouldNotResolveType
 from krrood.class_diagrams.utils import get_type_hints_of_object, is_union_annotation
@@ -28,20 +21,37 @@ from krrood.class_diagrams.utils import get_type_hints_of_object, is_union_annot
 _NONE_TYPE = type(None)
 
 
-@dataclass(frozen=True)
+@dataclass(kw_only=True, frozen=True)
 class ConclusionDomain:
-    """The values an RDR conclusion attribute may take, resolved from its declared type."""
+    """
+    The values an RDR conclusion attribute may take, resolved from its declared type.
+    """
 
     expected_types: Tuple[type, ...]
-    """The declared non-``None`` types of the attribute (``isinstance`` targets). Empty when
-    the annotation could not be resolved (then any non-``None`` value is accepted)."""
+    """
+    The declared non-``None`` types of the attribute (``isinstance`` targets).
+
+    Empty when the annotation could not be resolved (then any non-``None`` value is
+    accepted).
+    """
+
     members: Tuple[Any, ...]
-    """The enumerable allowable values (Enum members, or ``True``/``False``); empty when the
-    domain is not enumerable."""
+    """
+    The enumerable allowable values (Enum members, or ``True``/``False``); empty when
+    the domain is not enumerable.
+    """
+
     is_enumerable: bool
-    """Whether the domain is a finite, enumerable set (an Enum or ``bool``)."""
+    """
+    Whether the domain is a finite, enumerable set (an Enum or ``bool``).
+    """
+
     allows_none: bool
-    """Whether the declared type admits ``None`` (an ``Optional`` / ``... | None`` annotation)."""
+    """
+    Whether the declared type admits ``None`` (an ``Optional`` / ``...
+
+    | None`` annotation).
+    """
 
     @property
     def type_display(self) -> str:
@@ -50,7 +60,7 @@ class ConclusionDomain:
             return "value"
         return " or ".join(t.__name__ for t in self.expected_types)
 
-    def contains(self, value: Any) -> bool:
+    def contains(self, *, value: Any) -> bool:
         """:return: Whether ``value`` is one of the enumerable members.
 
         Type-aware so that an ``int`` is not accepted for a ``bool`` domain (``1 == True``).
@@ -66,7 +76,7 @@ class ConclusionDomain:
             return ", ".join(repr(member) for member in self.members)
         return self.type_display
 
-    def example_for(self, name: str) -> str:
+    def example_for(self, *, name: str) -> str:
         """:return: A copy-pasteable example assignment for the answer named ``name``."""
         if self.is_enumerable and self.members:
             return f"{name} = {self.members[0]!r}"
@@ -76,8 +86,9 @@ class ConclusionDomain:
         """
         Names to inject into the expert's shell so the allowable values tab-complete.
 
-        :return: ``{EnumType.__name__: EnumType}`` for each Enum among the expected types (so
-            the expert can type ``Species.<tab>``); empty for non-enumerable / builtin domains.
+        :return:``{EnumType.__name__: EnumType}`` for each Enum among the expected types
+            (so the expert can type ``Species.<tab>``); empty for non-enumerable /
+            builtin domains.
         """
         bindings: Dict[str, Any] = {}
         for expected in self.expected_types:

@@ -1,11 +1,9 @@
 """
-An optional :class:`ProgressReporter` abstraction for RDR fitting, and an IPython
-implementation backed by :mod:`tqdm`.
+An optional :class:`ProgressReporter` for RDR fitting, and a :mod:`tqdm`-backed
+implementation for IPython.
 
-The ProgressReporter is obtained from an ``ExpertInterface`` via the optional factory
-method :meth:`ExpertInterface.make_progress_reporter`.  Interfaces that don't want
-progress simply inherit the default (returns ``None``), and ``fit()`` calls its
-lifecycle methods only when a reporter is available.
+An interface obtains one from :meth:`ExpertInterface.make_progress_reporter`, which
+returns ``None`` when it wants no progress output.
 """
 
 from __future__ import annotations
@@ -14,7 +12,7 @@ import tqdm
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
-from typing_extensions import List, Optional, Tuple, Dict
+from typing_extensions import List, Tuple, Dict
 
 
 class ProgressReporter(ABC):
@@ -28,7 +26,7 @@ class ProgressReporter(ABC):
     """
 
     @abstractmethod
-    def start(self, total: int, description: str = "") -> None:
+    def start(self, *, total: int, description: str = "") -> None:
         """
         Begin tracking progress toward *total* items.
 
@@ -37,7 +35,7 @@ class ProgressReporter(ABC):
         """
 
     @abstractmethod
-    def update(self, n: int = 1) -> None:
+    def update(self, *, n: int = 1) -> None:
         """
         Advance the counter by *n* completed items.
 
@@ -45,7 +43,7 @@ class ProgressReporter(ABC):
         """
 
     @abstractmethod
-    def reset(self, total: int) -> None:
+    def reset(self, *, total: int) -> None:
         """
         Reset the counter for a new pass with an updated *total*.
 
@@ -59,16 +57,11 @@ class ProgressReporter(ABC):
         """
 
 
-@dataclass
+@dataclass(kw_only=True)
 class IPythonProgressBar(ProgressReporter):
     """
-    A colourful terminal progress bar for use with an IPythonInterface expert.
-
-    Wraps a :class:`tqdm.tqdm` progress bar whose colour is green for visual
-    consistency with the RDR interface's :class:`~krrood.entity_query_language.rdr.interactive.Palette`
-    ``good`` colour.
-
-    When *use_color* is ``False`` the bar is rendered in plain ASCII.
+    A terminal progress bar, green when coloured and plain ASCII otherwise, backed by
+    :class:`tqdm.tqdm`.
     """
 
     use_color: bool = True
@@ -76,19 +69,19 @@ class IPythonProgressBar(ProgressReporter):
     Whether the bar uses ANSI colour (green) or plain ASCII.
     """
 
-    _progress_bar: Optional[tqdm.tqdm] = field(default=None, init=False, repr=False)
+    _progress_bar: tqdm.tqdm | None = field(default=None, init=False, repr=False)
     """
     The wrapped :class:`tqdm.tqdm` instance, or ``None`` before :meth:`start`.
     """
 
-    def start(self, total: int, description: str = "") -> None:
+    def start(self, *, total: int, description: str = "") -> None:
         self._progress_bar = _make_tqdm(total, description, self.use_color)
 
-    def update(self, n: int = 1) -> None:
+    def update(self, *, n: int = 1) -> None:
         if self._progress_bar is not None:
             self._progress_bar.update(n)
 
-    def reset(self, total: int) -> None:
+    def reset(self, *, total: int) -> None:
         if self._progress_bar is not None:
             self._progress_bar.reset(total)
 
@@ -99,6 +92,12 @@ class IPythonProgressBar(ProgressReporter):
 
 
 def _make_tqdm(total: int, description: str, use_color: bool) -> tqdm.tqdm:
+    """
+    :param total: The number of cases the bar counts up to.
+    :param description: The label shown beside the bar.
+    :param use_color: Whether the bar is green rather than plain ASCII.
+    :return: A new progress bar.
+    """
     return tqdm.tqdm(
         total=total,
         desc=description,
@@ -110,7 +109,7 @@ def _make_tqdm(total: int, description: str, use_color: bool) -> tqdm.tqdm:
     )
 
 
-@dataclass
+@dataclass(kw_only=True)
 class RecordedCall:
     """
     One lifecycle call captured by :class:`SpyProgressReporter`.
@@ -121,18 +120,13 @@ class RecordedCall:
     The name of the :class:`ProgressReporter` method that was called.
     """
 
-    args: Tuple
-    """
-    The positional arguments the method was called with.
-    """
-
     kwargs: Dict
     """
     The keyword arguments the method was called with.
     """
 
 
-@dataclass
+@dataclass(kw_only=True)
 class SpyProgressReporter(ProgressReporter):
     """
     A test double that records calls to :class:`ProgressReporter` without displaying
@@ -147,16 +141,19 @@ class SpyProgressReporter(ProgressReporter):
     The ordered sequence of recorded lifecycle calls.
     """
 
-    def start(self, total: int, description: str = "") -> None:
+    def start(self, *, total: int, description: str = "") -> None:
         self.events.append(
-            RecordedCall("start", (total,), {"description": description})
+            RecordedCall(
+                method_name="start",
+                kwargs={"total": total, "description": description},
+            )
         )
 
-    def update(self, n: int = 1) -> None:
-        self.events.append(RecordedCall("update", (n,), {}))
+    def update(self, *, n: int = 1) -> None:
+        self.events.append(RecordedCall(method_name="update", kwargs={"n": n}))
 
-    def reset(self, total: int) -> None:
-        self.events.append(RecordedCall("reset", (total,), {}))
+    def reset(self, *, total: int) -> None:
+        self.events.append(RecordedCall(method_name="reset", kwargs={"total": total}))
 
     def finish(self) -> None:
-        self.events.append(RecordedCall("finish", (), {}))
+        self.events.append(RecordedCall(method_name="finish", kwargs={}))

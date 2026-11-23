@@ -1,34 +1,18 @@
 """
 Textual, rule-level visualization of an EQL RDR rule tree.
 
-This renders the rule tree the way an RDR expert thinks about it — one line per rule
-(``if <conditions> then <conclusion>``), nested by refinement depth — rather than the
-per-operation expression graph that :mod:`~krrood.entity_query_language.query_graph`
-draws. It is deliberately dependency-light (just ``colorama``), matching the style of
-:mod:`~krrood.entity_query_language.rdr.case_table`.
-
-Each rule is coloured by what happened to it during the classification that is being
-explained:
-
-* **green**  — the rule *fired* (its condition was satisfied),
-* **red**    — the rule was *evaluated* but its condition did not hold,
-* **grey**   — the rule was *not evaluated* (a branch the evaluation short-circuited).
-
-The status is read straight from the evaluation observers' id-sets (``satisfied`` /
-``evaluated``); see :class:`~krrood.entity_query_language.rdr.observer.ClassificationTrace`.
-
-To keep a large tree readable the rendered rows are *elided*: the first few rules are
-shown, then a vertical-dots row, then the few rules ending at the rule that fired (so the
-firing rule is always the last visible row).
+One line per rule (``if <conditions> then <conclusion>``), nested by refinement depth
+and coloured by what happened to it: fired, evaluated but not fired, or not evaluated.
+Long trees are elided to the first few rules and the rules ending at the one that fired.
 """
 
 from __future__ import annotations
 
 import enum
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from typing_extensions import TYPE_CHECKING, Any, List, Optional
+from typing_extensions import TYPE_CHECKING, Any, List
 from uuid import UUID
 
 from colorama import Fore, Style
@@ -41,10 +25,9 @@ from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.operators.core_logical_operators import (
     AND,
     OR,
-    LogicalOperator,
     Not,
 )
-from krrood.entity_query_language.rules.conclusion import Add, Conclusion
+from krrood.entity_query_language.rules.conclusion import Add
 from krrood.entity_query_language.rules.conclusion_selector import (
     Alternative,
     ConclusionSelector,
@@ -81,10 +64,12 @@ class TreeGlyph(enum.StrEnum):
     """
     Blank space where an ancestor's branch has already ended.
     """
+
     BRANCH = "├─ "
     """
     Connects to a rule that has later siblings at the same depth.
     """
+
     BRANCH_LAST = "└─ "
     """
     Connects to the last rule among its siblings at the same depth.
@@ -142,15 +127,13 @@ class RuleStatus(enum.StrEnum):
         }[self]
 
 
-@dataclass
+@dataclass(kw_only=True)
 class RuleView:
     """
     One rule (a condition plus its conclusion(s)) at a place in the rule tree.
 
-    A flat, render-ready projection of a leaf condition node in the ``Refinement`` /
-    ``Alternative`` / ``Next`` selector DAG. The ``condition`` is the node whose
-    ``_id_`` the evaluation trackers key on, so status resolution is a plain membership
-    test.
+    A flat projection of a leaf condition node of the ``Refinement`` / ``Alternative`` /
+    ``Next`` selector DAG.
     """
 
     condition: SymbolicExpression
@@ -186,6 +169,13 @@ def walk_rules(conditions_root: SymbolicExpression) -> List[RuleView]:
     rules: List[RuleView] = []
 
     def visit(node: SymbolicExpression, depth: int, kind: RuleKind) -> None:
+        """
+        Append the rules under ``node`` to ``rules``, in pre-order.
+
+        :param node: The selector or condition node to descend into.
+        :param depth: The refinement depth of ``node``.
+        :param kind: How ``node`` relates to the rule before it.
+        """
         match node:
             case Refinement():
                 visit(node.left, depth, kind)
@@ -212,8 +202,8 @@ def walk_rules(conditions_root: SymbolicExpression) -> List[RuleView]:
 
 def resolve_status(
     rule: RuleView,
-    satisfied_ids: Optional[OrderedSet[UUID]],
-    evaluated_ids: Optional[OrderedSet[UUID]],
+    satisfied_ids: OrderedSet[UUID] | None,
+    evaluated_ids: OrderedSet[UUID] | None,
 ) -> RuleStatus:
     """
     Classify a rule as fired / evaluated-not-fired / not-evaluated from the observer id-
@@ -237,16 +227,10 @@ def enforce_parent_consistency(
     rules: List[RuleView],
 ) -> List[RuleStatus]:
     """
-    Downgrade refinement FIRED status to NOT_EVALUATED when its visual parent didn't
-    fire.
+    Downgrade a refinement's ``FIRED`` status to ``NOT_EVALUATED`` when its parent rule,
+    the nearest preceding rule one level shallower, did not fire.
 
-    A refinement (except-if) at depth > 0 can only truly fire when its visual parent
-    (the nearest preceding rule at depth-1) also fired — the refinement's selector
-    evaluates its right branch only when the left side was satisfied.  A FIRED status on
-    the refinement when the parent is not FIRED indicates a node-sharing issue in the
-    rule tree (e.g. the same cached condition node appearing in two branches). This
-    function corrects the display to avoid a visually nonsensical "green child under a
-    red parent".
+    A refinement is only evaluated once its parent's condition held.
 
     :param statuses: One status per rule, aligned index-for-index with ``rules``.
     :param rules: The rules in display order.
@@ -294,14 +278,8 @@ def _attribute_path(attribute: Attribute) -> str:
 
 def _format_conclusion_selector(expression: ConclusionSelector) -> str:
     """
-    Render a :class:`ConclusionSelector` in a compact, readable form.
-
-    ConclusionSelectors (Alternative, Refinement, Next) are control-flow nodes, not
-    conditions. When they appear as guard expressions in backward-inference output the
-    default dataclass ``repr`` is unreadable — it dumps all internal fields including
-    ``_conclusions_``, parent references, and evaluation flags.
-
-    This helper renders them via their child expressions instead.
+    Render a :class:`ConclusionSelector` through its child expressions, as ``(a else
+    b)``, ``(a except if b)`` or ``next (a, b)``.
 
     :param expression: The selector node to render.
     :return: The compact rendering.
@@ -436,7 +414,7 @@ def _connector(depths: List[int], index: int) -> str:
     return "".join(parts)
 
 
-@dataclass
+@dataclass(kw_only=True)
 class RuleTreeRenderer:
     """
     Renders a flat list of :class:`RuleView` rows as a coloured, elided text tree.
@@ -459,10 +437,11 @@ class RuleTreeRenderer:
 
     def render(
         self,
+        *,
         rules: List[RuleView],
-        satisfied_ids: Optional[OrderedSet[UUID]],
-        evaluated_ids: Optional[OrderedSet[UUID]],
-        fired_index: Optional[int],
+        satisfied_ids: OrderedSet[UUID] | None,
+        evaluated_ids: OrderedSet[UUID] | None,
+        fired_index: int | None,
     ) -> str:
         """
         :param rules: The rules in display order (from :func:`walk_rules`).
@@ -479,13 +458,18 @@ class RuleTreeRenderer:
         ]
         statuses = enforce_parent_consistency(statuses, rules)
         lines = [
-            self._render_row(rule, _connector(depths, index), statuses[index])
+            self._render_row(
+                rule=rule, connector=_connector(depths, index), status=statuses[index]
+            )
             for index, rule in enumerate(rules)
         ]
-        return "\n".join(self._elide(lines, len(rules), fired_index))
+        return "\n".join(
+            self._elide(lines=lines, total=len(rules), fired_index=fired_index)
+        )
 
     def _render_row(
         self,
+        *,
         rule: RuleView,
         connector: str,
         status: RuleStatus,
@@ -502,7 +486,7 @@ class RuleTreeRenderer:
         return f"{connector}{text}"
 
     def _elide(
-        self, lines: List[str], total: int, fired_index: Optional[int]
+        self, *, lines: List[str], total: int, fired_index: int | None
     ) -> List[str]:
         """
         Keep the first :attr:`head` rows + the :attr:`tail` rows ending on the fired
@@ -525,9 +509,7 @@ class RuleTreeRenderer:
         return lines[: self.head] + [marker] + lines[tail_start : anchor + 1]
 
 
-def _fired_index(
-    rules: List[RuleView], firing_anchor_id: Optional[UUID]
-) -> Optional[int]:
+def _fired_index(rules: List[RuleView], firing_anchor_id: UUID | None) -> int | None:
     """
     :param rules: The rules in display order.
     :param firing_anchor_id: The id of the condition node that fired, or ``None``.
@@ -564,8 +546,8 @@ def render_rule_tree(
     fired_index = _fired_index(rules, trace.firing_anchor_id)
     renderer = RuleTreeRenderer(head=head, tail=tail, use_color=use_color)
     return renderer.render(
-        rules,
-        trace.satisfied_condition_ids,
-        trace.evaluated_expression_ids,
-        fired_index,
+        rules=rules,
+        satisfied_ids=trace.satisfied_condition_ids,
+        evaluated_ids=trace.evaluated_expression_ids,
+        fired_index=fired_index,
     )

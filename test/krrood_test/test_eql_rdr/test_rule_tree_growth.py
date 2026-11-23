@@ -5,6 +5,8 @@ Growing a tree dynamically (outside any ``with`` block) must produce the same
 classifications as building the equivalent tree statically with ``with`` blocks.
 """
 
+from __future__ import annotations
+
 import pytest
 
 from krrood.entity_query_language.factories import (
@@ -36,7 +38,15 @@ zoo = ZooDataset.load()
 
 @pytest.mark.skipif(len(zoo) == 0, reason="Failed to load zoo dataset")
 class TestRuleTreeGrowth:
+    """
+    Splicing refinements and alternatives into a rule tree after it was built.
+    """
+
     def test_dynamic_alternative_insertion(self):
+        """
+        A case that fires no rule starts to be classified once an alternative covering
+        it is inserted.
+        """
         animal = variable(Animal, domain=[])
         query = entity(animal).where(animal.milk == True)
         with query:
@@ -73,6 +83,10 @@ class TestRuleTreeGrowth:
         )
 
     def test_dynamic_refinement_override(self):
+        """
+        A refinement inserted under a rule overrides that rule's conclusion for the
+        cases it covers.
+        """
         animal = variable(Animal, domain=[])
         query = entity(animal).where(animal.backbone == True)
         with query:
@@ -110,6 +124,9 @@ class TestRuleTreeGrowth:
 
     def test_dynamic_growth_matches_static_tree(self):
         # Static tree: milk->mammal ; alt feathers->bird ; alt fins->fish
+        """
+        A tree grown by insertion classifies like the same tree written out statically.
+        """
         s_animal = variable(Animal, domain=[])
         s_query = entity(s_animal).where(s_animal.milk == True)
         with s_query:
@@ -148,6 +165,9 @@ class TestRuleTreeGrowth:
 
     def test_refinement_then_alternative_nested(self):
         # Grow: backbone->fish ; refine milk->mammal ; alt(of refinement) aquatic->(stay mammal? no)
+        """
+        An alternative can be inserted under a refinement that was itself inserted.
+        """
         animal = variable(Animal, domain=[])
         query = entity(animal).where(animal.backbone == True)
         with query:
@@ -184,13 +204,8 @@ class TestRuleTreeGrowth:
 
     def test_clone_expression_does_not_corrupt_original_parents(self):
         """
-        Regression test: ``expr._node_for_new_position_()`` must NOT mutate the original
-        expression's ``_parents_`` list.  The bug this guards against was that a shallow
-        copy left ``clone._parents_`` as the **same list** as ``expr._parents_``.  Then
-        ``clone._parent_ = None`` (the old code) would go through the setter and
-        wrench ``expr._parent__`` out of the **shared** ``_parents_`` list, leaving
-        the original with an inconsistent ``_parent__`` that wasn't tracked in
-        ``_parents_``.  Later ``_remove_parent_`` would crash with ``ValueError``.
+        Cloning an expression for a new position leaves the original's ``_parents_``
+        untouched.
         """
         animal = variable(Animal, domain=[])
         query = entity(animal).where(animal.milk == True)
@@ -227,19 +242,8 @@ class TestRuleTreeGrowth:
 
     def test_shared_anchor_refinement_does_not_corrupt_sibling_alternative(self):
         """
-        Regression test: inserting a refinement at a MappedVariable anchor that also
-        appears as a sub-expression inside a sibling alternative condition must not
-        corrupt that sibling condition.
-
-        Bug: ``backbone`` is used both as the mammal-rule anchor (inside a Refinement)
-        AND as the left operand of the molusc condition ``backbone == False``.  When
-        ``backbone == False`` was created its ``_parent_`` overwrote the Refinement
-        pointer.  ``insert_at`` then called ``_replace_child_`` on the Comparator
-        instead of the Refinement, turning the molusc condition into
-        ``(backbone except if not_eggs) == False``.
-
-        Fix: ``insert_at`` scans ``anchor._parents_`` for the most recent
-        ConclusionSelector rather than relying on ``anchor._parent_``.
+        A refinement inserted at an anchor that also appears inside a sibling
+        alternative's condition leaves that condition intact.
         """
         animal = variable(Animal, domain=[])
 
@@ -258,10 +262,8 @@ class TestRuleTreeGrowth:
             Species.fish,
         )
 
-        # Rule 3: backbone == False → molusc (alternative at the conditions root).
-        # Uses the SAME backbone MappedVariable singleton in a Comparator.
-        # This overwrites backbone._parent_ from Refinement to Comparator —
-        # reproducing the exact condition for the bug.
+        # Rule 3: backbone == False → molusc (alternative at the conditions root),
+        # built on the same backbone variable the refinement anchors on.
         molusc_condition = animal.backbone == False
         insert_alternative(
             query._conditions_root_,
@@ -285,10 +287,7 @@ class TestRuleTreeGrowth:
         # the anchor rather than beside it.
         assert not isinstance(molusc_condition.left, ConclusionSelector)
 
-        # Classification sanity: molusc case (backbone=False) must still classify as
-        # molusc.  Without the fix the corrupted condition "(backbone except if
-        # not_eggs) == False" does not evaluate the same as "backbone == False",
-        # so this fails.
+        # The molusc case (backbone=False) must still classify as molusc.
         molusc_case = make_animal("test_molusc", backbone=False, eggs=True)
         assert (
             classify_case(query, animal, animal.species, molusc_case).conclusion
@@ -350,16 +349,9 @@ class TestRuleTreeGrowth:
 
 @pytest.mark.skipif(len(zoo) == 0, reason="Failed to load zoo dataset")
 class TestBareAttributeWhereCondition:
-    """Regression: alternative/refinement DSL when WHERE condition is a bare MappedVariable.
-
-    When ``entity(v).where(v.attr)`` is used (bare attribute, not a Comparator),
-    Python evaluates ``alternative(v.attr == X)`` by creating ``Comparator(attr, X)``
-    BEFORE calling ``alternative()``.  That creation overwrites ``attr._parent_`` from
-    ``Where`` to ``Comparator``.  The subsequent ``_conditions_root_`` traversal used to
-    follow the clobbered ``_parent_`` up to ``Comparator`` (which has no Filter ancestor),
-    returning ``Comparator`` as the anchor instead of ``attr``.  The resulting
-    ``Alternative(Comparator, Comparator)`` was never connected to ``Where``, leaving
-    ``Where._child_ = attr`` (bare) and all conclusions unreachable → ``...`` for every case.
+    """
+    Alternatives and refinements added when the ``where`` condition is a bare attribute
+    rather than a comparison.
     """
 
     def test_alternative_with_bare_attr_where_condition(self):
@@ -399,13 +391,9 @@ class TestBareAttributeWhereCondition:
         )
 
     def test_refinement_with_bare_attr_where_condition(self):
-        """Regression: refinement(bare_attr == X) when bare_attr IS the WHERE condition.
-
-        Before the fix, evaluating ``backbone == False`` clobbered ``backbone._parent_``
-        from ``Where`` to the newly-created ``Comparator``.  ``insert_at`` then called
-        ``Comparator._replace_child_`` instead of ``Where._replace_child_``, corrupting
-        the molusc condition and leaving ``Where._child_ = backbone`` (bare, disconnected
-        from the Refinement sub-tree).
+        """
+        A refinement added under a bare-attribute ``where`` condition stays connected to
+        that condition.
         """
         animal_var = variable(Animal, domain=[])
         query = entity(animal_var).where(animal_var.backbone)

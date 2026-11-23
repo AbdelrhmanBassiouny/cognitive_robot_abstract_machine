@@ -1,17 +1,14 @@
 """
 Live growth of an EQL rule-tree DAG.
 
-These helpers splice a new rule (a condition plus its ``Add`` conclusion) into an
-existing rule tree at an explicit anchor, without relying on the ``with`` context stack.
-They are the mechanism an RDR uses to add a refinement or alternative after observing a
-misclassification.
-
-Conditions and conclusion values are live EQL expression objects, never strings.
+Splices a new rule (a condition plus its ``Add`` conclusion) into an existing rule tree
+at an explicit anchor, as a refinement or an alternative. Conditions and conclusion
+values are live EQL expression objects, never strings.
 """
 
 from __future__ import annotations
 
-from typing_extensions import Any, Type
+from typing_extensions import Any
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
@@ -27,7 +24,7 @@ from krrood.entity_query_language.rules.conclusion_selector import (
 
 
 def _insert_rule(
-    selector: Type[ConclusionSelector],
+    selector: type[ConclusionSelector],
     anchor: SymbolicExpression,
     condition: SymbolicExpression,
     conclusion_variable: CanBehaveLikeAVariable,

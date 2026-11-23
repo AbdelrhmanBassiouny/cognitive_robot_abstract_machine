@@ -1,3 +1,8 @@
+"""
+Tests for EQL rules: conditions, conclusions and their evaluation.
+"""
+
+from __future__ import annotations
 import pytest
 
 from krrood.entity_query_language.factories import (
@@ -966,12 +971,8 @@ def test_conclusions_fire_with_a_pre_installed_evaluation_context(
     handles_and_containers_world,
 ):
     """
-    A conclusion must still fire when an ``EvaluationContext`` is already active.
-
-    Callers like RDR's ``classify_case``/``trace_case`` install an ``EvaluationContext``
-    before evaluating, so no node of the pass starts a context of its own. The active
-    conditions root must still be set in that case; otherwise no node is the active root
-    and no conclusion fires.
+    A conclusion fires when an ``EvaluationContext`` is already active before the
+    evaluation starts, as RDR's ``classify_case`` installs one.
     """
     world = handles_and_containers_world
     container = variable(Container, domain=world.bodies)
@@ -1001,14 +1002,8 @@ def test_conclusions_fire_with_a_pre_installed_evaluation_context(
 
 def test_conclusions_respect_a_bare_attribute_conditions_root_truthiness():
     """
-    A conclusion gated on a bare-attribute conditions root must respect that root's own
-    truth value.
-
-    When the conditions root is itself a bare attribute Comparator acting as a Filter
-    condition (rather than a logical combinator like ``AND``/``OR``/``NOT``), the gate
-    in ``_evaluate_conclusions_and_update_bindings_`` must reflect the comparator's own
-    truth value for the case being evaluated, rather than staying constant regardless of
-    the attribute's actual value.
+    A conclusion gated on a bare-attribute conditions root fires only for the cases
+    where that attribute is true.
     """
     milk_true = Body(name="milk_true")
     milk_false = Body(name="milk_false")

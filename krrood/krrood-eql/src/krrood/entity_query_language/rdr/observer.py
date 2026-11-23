@@ -1,17 +1,16 @@
 """
 Observer that reads RDR conclusions out of an EQL evaluation.
 
-Classification in the EQL-native RDR is plain EQL evaluation of the rule-tree query.
-This module provides the aspect that listens to that evaluation and extracts the
-inferred conclusion for the underspecified attribute, without the rule tree (or the core
-evaluation methods) knowing anything about RDR.
+Classification in the EQL-native RDR is plain evaluation of the rule-tree query.
+:class:`ConclusionObserver` listens to it and extracts the inferred conclusion of the
+underspecified attribute.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import Any, List, Optional, Self, Tuple
+from typing_extensions import Any, List, Self, Tuple
 from uuid import UUID
 
 from ordered_set import OrderedSet
@@ -31,7 +30,7 @@ from krrood.entity_query_language.evaluation import (
 )
 
 
-@dataclass
+@dataclass(kw_only=True)
 class FiredConclusion:
     """
     A single conclusion observed during evaluation of the rule tree.
@@ -46,7 +45,7 @@ class FiredConclusion:
 
     result: OperationResult
     """The full result, carrying ``bindings`` and ``satisfied_condition_ids``."""
-    anchor: Optional[SymbolicExpression] = None
+    anchor: SymbolicExpression | None = None
     """
     The condition node of the rule that produced this conclusion (the firing ``Add``'s
     parent).
@@ -54,13 +53,13 @@ class FiredConclusion:
     This is the insertion point for a refinement that overrides this conclusion.
     """
 
-    add_node: Optional[Add] = None
+    add_node: Add | None = None
     """
     The ``Add`` conclusion node that fired.
     """
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ConclusionObserver(EvaluationObserver):
     """
     Collects the conclusion bound to a target variable during EQL evaluation.
@@ -94,12 +93,18 @@ class ConclusionObserver(EvaluationObserver):
         self.fired = []
 
     def on_conclusions_processed(
-        self, expression: SymbolicExpression, result: OperationResult
+        self, *, expression: SymbolicExpression, result: OperationResult
     ) -> None:
+        """
+        Record a :class:`FiredConclusion` when the conclusion attribute is bound in
+        ``result``.
+
+        See :meth:`EvaluationObserver.on_conclusions_processed`.
+        """
         if self.conclusion_id not in result.bindings:
             return
         value = result.bindings[self.conclusion_id]
-        add_node = self._find_firing_add(expression, value)
+        add_node = self._find_firing_add(conditions_root=expression, value=value)
         anchor = add_node._parent_ if add_node is not None else expression
         self.fired.append(
             FiredConclusion(
@@ -112,8 +117,8 @@ class ConclusionObserver(EvaluationObserver):
         )
 
     def _find_firing_add(
-        self, conditions_root: SymbolicExpression, value: Any
-    ) -> Optional[Add]:
+        self, *, conditions_root: SymbolicExpression, value: Any
+    ) -> Add | None:
         """
         :return: The ``Add`` (among the conclusions that propagated to ``conditions_root``)
             whose value matches the inferred ``value`` — i.e. the conclusion that won.
@@ -154,14 +159,10 @@ def _classify_case_with_context(
     case: Any,
 ) -> Tuple[ConclusionObserver, EvaluationContext]:
     """
-    Evaluate ``rule_tree_query`` for a single ``case`` and return both the observer that
-    captured the conclusion(s) and the evaluation context used, so callers that also
-    need the context's id-sets (e.g. :func:`trace_case`) don't re-run the evaluation.
+    Evaluate ``rule_tree_query`` against the single ``case``, observing the conclusions
+    it fires.
 
-    The case is bound by re-targeting ``case_variable``'s domain to ``[case]`` so the
-    shared rule-tree DAG is evaluated against exactly this case. A
-    :class:`ConclusionObserver` is installed (alongside the default trackers, so
-    ``satisfied_condition_ids`` is populated for later insertion-point logic).
+    The case is bound by narrowing ``case_variable``'s domain to ``[case]``.
 
     :param rule_tree_query: The root EQL query of the rule tree.
     :param case_variable: The shared variable the rule tree ranges over.
@@ -170,7 +171,7 @@ def _classify_case_with_context(
     :return: The :class:`ConclusionObserver` and the :class:`EvaluationContext` used.
     """
     case_variable._update_domain_(domain=[case])
-    observer = ConclusionObserver(conclusion_variable)
+    observer = ConclusionObserver(conclusion_variable=conclusion_variable)
     context = EvaluationContext(
         observers=[observer, EvaluationTracker(), SatisfiedConditionTracker()]
     )
@@ -204,7 +205,7 @@ def classify_case(
     return observer
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ClassificationTrace:
     """
     A read-model of one classification, for explaining/visualizing the rule tree.
@@ -214,22 +215,22 @@ class ClassificationTrace:
     that actually fired — without re-running evaluation or touching the core pipeline.
     """
 
-    rule_tree_root: Optional[SymbolicExpression]
+    rule_tree_root: SymbolicExpression | None
     """
     The root of the rule tree's condition DAG (``None`` for an empty tree).
     """
 
-    satisfied_condition_ids: Optional[OrderedSet[UUID]]
+    satisfied_condition_ids: OrderedSet[UUID] | None
     """
     Ids of condition nodes whose truth value was True (the fired rules).
     """
 
-    evaluated_expression_ids: Optional[OrderedSet[UUID]]
+    evaluated_expression_ids: OrderedSet[UUID] | None
     """
     Ids of every expression that was evaluated (fired ∪ evaluated-not-fired).
     """
 
-    firing_anchor: Optional[SymbolicExpression] = None
+    firing_anchor: SymbolicExpression | None = None
     """
     The condition node of the rule that produced the winning conclusion.
     """
@@ -240,16 +241,17 @@ class ClassificationTrace:
     """
 
     @property
-    def firing_anchor_id(self) -> Optional[UUID]:
+    def firing_anchor_id(self) -> UUID | None:
         """:return: The id of :attr:`firing_anchor`, or ``None`` if no rule fired."""
         return self.firing_anchor._id_ if self.firing_anchor is not None else None
 
     @classmethod
     def from_observer(
         cls,
+        *,
         observer: ConclusionObserver,
-        rule_tree_root: Optional[SymbolicExpression],
-        evaluated_ids: Optional[OrderedSet[UUID]],
+        rule_tree_root: SymbolicExpression | None,
+        evaluated_ids: OrderedSet[UUID] | None,
     ) -> Self:
         """
         Build a trace from a finished :class:`ConclusionObserver` and the evaluated set.
@@ -271,7 +273,7 @@ def trace_case(
     case_variable: CanBehaveLikeAVariable,
     conclusion_variable: CanBehaveLikeAVariable,
     case: Any,
-    rule_tree_root: Optional[SymbolicExpression] = None,
+    rule_tree_root: SymbolicExpression | None = None,
 ) -> ClassificationTrace:
     """
     Evaluate ``rule_tree_query`` for one ``case`` and capture a
@@ -293,4 +295,6 @@ def trace_case(
         rule_tree_query, case_variable, conclusion_variable, case
     )
     evaluated = context.evaluated_expression_ids.snapshot()
-    return ClassificationTrace.from_observer(observer, rule_tree_root, evaluated)
+    return ClassificationTrace.from_observer(
+        observer=observer, rule_tree_root=rule_tree_root, evaluated_ids=evaluated
+    )

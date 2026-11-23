@@ -11,8 +11,6 @@ from __future__ import annotations
 import enum
 from dataclasses import dataclass
 
-from typing_extensions import Optional
-
 
 class Species(enum.Enum):
     """
@@ -57,10 +55,13 @@ class Species(enum.Enum):
     """
 
     def __repr__(self) -> str:
+        """
+        The qualified member name, as written in source.
+        """
         return f"Species.{self.name}"
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Animal:
     """
     A zoo animal described by its boolean/numeric traits.
@@ -149,7 +150,7 @@ class Animal:
     Whether the animal is approximately cat-sized or larger.
     """
 
-    species: Optional[Species] = None
+    species: Species | None = None
     """
     The animal's species; ``None`` when unclassified (the attribute the RDR predicts).
     """
