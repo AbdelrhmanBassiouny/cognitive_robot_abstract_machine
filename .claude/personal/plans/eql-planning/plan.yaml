@@ -41,11 +41,13 @@ items:
     on aamas27-unification-revision): fold into whichever PR lands that cache. Keys on the
     State that fluent-state-overlay introduces. Deferred at kickoff on 2026-10-20.'
 - id: action-schema-progression
-  branch: eql-planning/action-schema-progression
+  branch: claude/tender-volta-krc5p7
   title: ActionSchema with an EQL precondition and assignment effects, applied to a State
   track: planning-core
+  pull_request_number: 617
+  session: https://claude.ai/code/session_01JxHGiPZGhUcg34K5Aagazz
   depends_on: []
-  status: not_started
+  status: in progress
   recommended_model: opus
   notes: 'Effects can create and remove objects (state-objects-and-domains). Field types of
     the class diagram type-check effects. Effects are facts (State.with_facts) whose value
