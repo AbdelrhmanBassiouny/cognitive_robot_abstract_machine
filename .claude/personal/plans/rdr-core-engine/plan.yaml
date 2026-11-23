@@ -40,10 +40,13 @@ items:
   depends_on: []
   status: in_progress
   recommended_model: sonnet
-  notes: Merged D-core-serialization into it 2026-11-04 (ff9a89984, merge probe clean). The
-    one core-EQL fix still needed sets the active conditions root in `_evaluate_within_`,
-    for pre-installed contexts; the gate fix is gone. Descendants restacked except `claude/rdr-why-answer-6fnw2o`
-    (conflicts in explanation.py, observer.py). CI after the push not read.
+  notes: Retargeted to `main` and merged it 2026-11-23 (adb130ec2); the seven rdr modules
+    this branch adds were relocated to `krrood/krrood-eql/src`, content unchanged. The core-EQL
+    fix sets the active conditions root in `_evaluate_within_`. Tests read at that head, `test_eql`
+    1604 passed and `test_eql_rdr` 95 passed, 25 skipped (no network for the zoo dataset). CI at
+    that head not read. No upstream pull request.
+  blockers:
+  - 'Descendants #98, #159, #210, #68 and `claude/rdr-why-answer-6fnw2o` are not carried: `maintenance restack --stacked-on D-core-support` stopped at `D-core-engine` (git-command-failed). Each is still in the old `krrood/src` layout and meets the same rename conflict.'
 - id: d-core-expert
   title: 'RDR engine: Expert policy split'
   branch: D-core-expert
