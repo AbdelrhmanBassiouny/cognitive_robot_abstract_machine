@@ -98,11 +98,13 @@ items:
   recommended_model: opus
   blockers:
     - >-
-      cram2#1019: ichumuh's 2026-11-23 review answered in 44c4f534; the owner posts the 12 drafted
-      replies (review-replies/cram2-1019-2026-11-23.md, notes branch).
+      cram2#1019: ichumuh's 2026-11-23 follow-up leaves 5 threads open (cross product onto
+      Vector3Dimensional, inner product off frames, 2D like 3D without embedded-plane relations,
+      MotionVectorPair 3D-only, benchmark). Plan under discussion with the owner.
     - >-
-      CI on 44c4f534 not read yet; small_packages set aside by the owner. #524 conflicts with this
-      branch in 20 files and needs its own resolve.
+      At cc75214c vs main: T @ point/vector 5x slower, norm 5.3x, dot 2.4x, T @ pose 2.8x (generic
+      per-coordinate path); compiled graphs identical. Merge probe clean at cc75214c; fork CI 39
+      passed, 8 running; upstream CI pending.
   depends_on: []
   session: https://claude.ai/code/session_01JxHGiLRgwm8kRFq7Zyxhbg
   notes: '#527: the casadi-free base and SemDT adopting it, the planar, imports, projection,
