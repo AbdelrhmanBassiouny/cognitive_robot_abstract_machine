@@ -33,6 +33,8 @@ dependencies = [
     "lemminflect",
     "ordered_set>=4",
     "rustworkx>=0.14.0",
+    "tqdm",
+    "colorama",
 ]
 
 [project.optional-dependencies]
