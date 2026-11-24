@@ -46,6 +46,11 @@ items:
   track: planning-core
   pull_request_number: 617
   session: https://claude.ai/code/session_01JxHGiPZGhUcg34K5Aagazz
+  blockers:
+    - >-
+      Owner review on #617 at 38610d26: 21 open threads. Scope call pending: build and return
+      composed EQL queries instead of evaluating in each method (effect.py:70), with hierarchical
+      verbalization. Design threads await the owner's answers.
   depends_on: []
   status: in progress
   recommended_model: opus
