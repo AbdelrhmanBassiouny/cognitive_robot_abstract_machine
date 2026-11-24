@@ -1,0 +1,62 @@
+"""
+Concatenation utilities for the Entity Query Language.
+
+This module defines the Concatenation operator that merges values from multiple
+selectable expressions.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing_extensions import Iterable
+
+from krrood.entity_query_language.core.base_expressions import (
+    Bindings,
+    OperationResult,
+    Selectable,
+)
+from krrood.entity_query_language.operators.set_operations import (
+    EvaluatesChildrenInSequence,
+)
+from krrood.entity_query_language.utils import T
+from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
+
+
+@dataclass(kw_only=True, eq=False, repr=False)
+class Concatenation(EvaluatesChildrenInSequence, CanBehaveLikeAVariable[T]):
+    """
+    Concatenation of two or more variables.
+
+    Selects the value each child selected, rather than claiming a truth about it, so a
+    falsy value is concatenated like any other.
+    """
+
+    _operation_children_: tuple[Selectable, ...] = field(default_factory=tuple)
+    """
+    The children of the concatenate operation.
+
+    They must be selectables.
+    """
+
+    def __post_init__(self):
+        if not all(
+            isinstance(child, Selectable) for child in self._operation_children_
+        ):
+            raise ValueError(
+                f"All children of Concatenate must be Selectable instances."
+            )
+        super().__post_init__()
+        self._var_ = self
+
+    def _evaluate__(self, *, sources: OperationResult) -> Iterable[OperationResult]:
+        yield from (
+            result.update(other={self._id_: result.previous_operation_result.value})
+            for result in super()._evaluate__(sources=sources)
+        )
+
+    @property
+    def _variables_(self) -> tuple[Selectable[T], ...]:
+        """
+        The variables to concatenate.
+        """
+        return self._operation_children_

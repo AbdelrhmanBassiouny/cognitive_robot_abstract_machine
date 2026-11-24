@@ -24,7 +24,7 @@ from semantic_digital_twin.grasping.surface_grasp import SurfaceGrasp
 
 if TYPE_CHECKING:
     from semantic_digital_twin.grasping.object_relative_grasp import GraspResult
-    from semantic_digital_twin.semantic_annotations.mixins import HasGraspCandidates
+    from semantic_digital_twin.semantic_annotations.mixins import IsGraspable
 
 # %% the strategy
 
@@ -40,7 +40,7 @@ class GraspStrategy(Generic[GraspT], SubClassSafeGeneric, ABC):
 
     def statement(
         self,
-        graspable: HasGraspCandidates,
+        graspable: IsGraspable,
         result_pattern: Callable[[], Match[GraspResult]] | None = None,
     ) -> Match[GraspT]:
         """
@@ -50,13 +50,13 @@ class GraspStrategy(Generic[GraspT], SubClassSafeGeneric, ABC):
         :return: The statement of where this strategy allows the object to be grasped.
         :raises NoGraspGeometry: If the object has no shape to measure.
         """
-        grasp_type = self.get_type_of_generic_parameter(GraspT)
+        grasp_type = self.get_type_of_generic_parameter(parameter=GraspT)
         grasp = grasp_type.any_pattern(result_pattern() if result_pattern else None)
         return grasp.where(*self.conditions(grasp, graspable))
 
     @abstractmethod
     def conditions(
-        self, grasp: Match[GraspT], graspable: HasGraspCandidates
+        self, grasp: Match[GraspT], graspable: IsGraspable
     ) -> list[ConditionType]:
         """
         :param grasp: The grasp of a statement.
@@ -75,35 +75,37 @@ class SurfaceGraspStrategy(GraspStrategy[SurfaceGrasp], ABC):
     Where on its surface an object may be grasped.
     """
 
-    depth: Bounds[float] = field(default_factory=lambda: Bounds(0.0, 0.5))
+    depth: Bounds[float] = field(default_factory=lambda: Bounds(lower=0.0, upper=0.5))
     """
     The depths to close the fingers at, as fractions of :meth:`depth_unit`, the upper
     one excluded.
     """
 
-    yaw: Bounds[float] = field(default_factory=lambda: Bounds(0.0, 2 * math.pi))
+    yaw: Bounds[float] = field(
+        default_factory=lambda: Bounds(lower=0.0, upper=2 * math.pi)
+    )
     """
     The yaws to approach from, in radians, the upper one excluded.
     """
 
-    pitch: Bounds[float] = field(default_factory=lambda: Bounds(0.0, 1.2))
+    pitch: Bounds[float] = field(default_factory=lambda: Bounds(lower=0.0, upper=1.2))
     """
     How far the approach may tilt off vertical, in radians, the upper bound excluded.
     """
 
     roll: Bounds[float] = field(
-        default_factory=lambda: Bounds(-math.pi / 4, math.pi / 4)
+        default_factory=lambda: Bounds(lower=-math.pi / 4, upper=math.pi / 4)
     )
     """
     The rolls to close the fingers at, in radians, the upper one excluded.
     """
 
     def conditions(
-        self, grasp: Match[SurfaceGrasp], graspable: HasGraspCandidates
+        self, grasp: Match[SurfaceGrasp], graspable: IsGraspable
     ) -> list[ConditionType]:
         surface = graspable.grasp_surface()
         heights = self.grasped_heights(surface)
-        depth_unit = self.depth_unit(graspable, surface)
+        depth_unit = self.depth_unit(graspable=graspable, surface=surface)
         return [
             grasp.height >= heights.lower,
             grasp.height < heights.upper,
@@ -126,9 +128,7 @@ class SurfaceGraspStrategy(GraspStrategy[SurfaceGrasp], ABC):
         """
 
     @abstractmethod
-    def depth_unit(
-        self, graspable: HasGraspCandidates, surface: trimesh.Trimesh
-    ) -> float:
+    def depth_unit(self, *, graspable: IsGraspable, surface: trimesh.Trimesh) -> float:
         """
         :param graspable: The object grasped.
         :param surface: The object's grasp surface, in its root body's frame.
@@ -143,7 +143,9 @@ class GraspBetweenHeights(SurfaceGraspStrategy, ABC):
     A strategy that grasps an object between two fixed heights.
     """
 
-    height: Bounds[float] = field(default_factory=lambda: Bounds(0.05, 0.95))
+    height: Bounds[float] = field(
+        default_factory=lambda: Bounds(lower=0.05, upper=0.95)
+    )
     """
     The heights to grasp at, as fractions of the grasp surface's bounding box from its
     bottom to its top, the upper one excluded.
@@ -160,9 +162,7 @@ class GraspFromAnySide(GraspBetweenHeights):
     extent deep.
     """
 
-    def depth_unit(
-        self, graspable: HasGraspCandidates, surface: trimesh.Trimesh
-    ) -> float:
+    def depth_unit(self, *, graspable: IsGraspable, surface: trimesh.Trimesh) -> float:
         """
         :return: The narrower horizontal extent of the grasp surface.
         """
@@ -179,20 +179,24 @@ class AxialGraspStrategy(GraspStrategy[AxialGrasp], ABC):
     grasped.
     """
 
-    position: Bounds[float] = field(default_factory=lambda: Bounds(0.0, 1.0))
+    position: Bounds[float] = field(
+        default_factory=lambda: Bounds(lower=0.0, upper=1.0)
+    )
     """
     Where along the axis to close the gripper, as fractions of the axis from its lower
     end to its upper end, both included.
     """
 
-    angle: Bounds[float] = field(default_factory=lambda: Bounds(0.0, 2 * math.pi))
+    angle: Bounds[float] = field(
+        default_factory=lambda: Bounds(lower=0.0, upper=2 * math.pi)
+    )
     """
     How far the approach may be turned about the axis, in radians, both included; equal
     bounds fix the side the object is approached from.
     """
 
     def conditions(
-        self, grasp: Match[AxialGrasp], graspable: HasGraspCandidates
+        self, grasp: Match[AxialGrasp], graspable: IsGraspable
     ) -> list[ConditionType]:
         return [
             grasp.position >= self.position.lower,
@@ -209,7 +213,9 @@ class GraspABar(AxialGraspStrategy):
     away from the ends of the bar.
     """
 
-    position: Bounds[float] = field(default_factory=lambda: Bounds(0.1, 0.9))
+    position: Bounds[float] = field(
+        default_factory=lambda: Bounds(lower=0.1, upper=0.9)
+    )
 
 
 @dataclass
@@ -219,9 +225,11 @@ class GraspAcrossTheLength(AxialGraspStrategy):
     closing across its length.
     """
 
-    position: Bounds[float] = field(default_factory=lambda: Bounds(0.2, 0.8))
+    position: Bounds[float] = field(
+        default_factory=lambda: Bounds(lower=0.2, upper=0.8)
+    )
 
-    angle: Bounds[float] = field(default_factory=lambda: Bounds(0.0, 0.0))
+    angle: Bounds[float] = field(default_factory=lambda: Bounds(lower=0.0, upper=0.0))
 
 
 # %% pinching a thin wall
@@ -234,12 +242,12 @@ class PinchAWall(SurfaceGraspStrategy, ABC):
     closing across the wall.
     """
 
-    depth: Bounds[float] = field(default_factory=lambda: Bounds(0.25, 0.75))
+    depth: Bounds[float] = field(default_factory=lambda: Bounds(lower=0.25, upper=0.75))
 
-    pitch: Bounds[float] = field(default_factory=lambda: Bounds(0.0, 0.5))
+    pitch: Bounds[float] = field(default_factory=lambda: Bounds(lower=0.0, upper=0.5))
 
     roll: Bounds[float] = field(
-        default_factory=lambda: Bounds(-math.pi / 8, math.pi / 8)
+        default_factory=lambda: Bounds(lower=-math.pi / 8, upper=math.pi / 8)
     )
 
     number_of_directions: int = 12
@@ -247,9 +255,7 @@ class PinchAWall(SurfaceGraspStrategy, ABC):
     In how many directions around the object the wall's thickness is measured.
     """
 
-    def depth_unit(
-        self, graspable: HasGraspCandidates, surface: trimesh.Trimesh
-    ) -> float:
+    def depth_unit(self, *, graspable: IsGraspable, surface: trimesh.Trimesh) -> float:
         """
         Cast rays outward from the middle of the grasp surface, halfway between the
         grasped heights, and take the distance between the first two surfaces each ray
@@ -292,7 +298,9 @@ class PinchARim(PinchAWall, GraspBetweenHeights):
     rim itself.
     """
 
-    height: Bounds[float] = field(default_factory=lambda: Bounds(0.25, 0.75))
+    height: Bounds[float] = field(
+        default_factory=lambda: Bounds(lower=0.25, upper=0.75)
+    )
 
 
 @dataclass
@@ -307,7 +315,9 @@ class PinchTheTopOfAWall(PinchAWall):
     How far below the container's highest point its rim reaches, in meters.
     """
 
-    rim_fraction: Bounds[float] = field(default_factory=lambda: Bounds(0.25, 0.75))
+    rim_fraction: Bounds[float] = field(
+        default_factory=lambda: Bounds(lower=0.25, upper=0.75)
+    )
     """
     How far below the highest point to pinch, as fractions of :attr:`rim_depth`.
     """
@@ -318,6 +328,6 @@ class PinchTheTopOfAWall(PinchAWall):
         """
         rim_depth_fraction = self.rim_depth / float(surface.extents[2])
         return Bounds(
-            1 - self.rim_fraction.upper * rim_depth_fraction,
-            1 - self.rim_fraction.lower * rim_depth_fraction,
+            lower=1 - self.rim_fraction.upper * rim_depth_fraction,
+            upper=1 - self.rim_fraction.lower * rim_depth_fraction,
         )

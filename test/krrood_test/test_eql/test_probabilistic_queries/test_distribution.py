@@ -1,9 +1,17 @@
+"""
+Distributions a match describes.
+"""
+
 import pytest
 from random_events.interval import closed
 from random_events.product_algebra import SimpleEvent
 
-from krrood.entity_query_language.backends import ProbabilisticBackend
-from krrood.entity_query_language.factories import a, distribution_of, variable
+from krrood.parametrization.probabilistic_backend import ProbabilisticBackend
+from krrood.entity_query_language.factories import (
+    a,
+    variable,
+)
+from krrood.entity_query_language.factories import distribution_of
 from krrood.parametrization.model_registries import DictRegistry
 
 from ._fixtures import Coin, build_three_independent_variables_circuit
@@ -11,7 +19,7 @@ from ._fixtures import Coin, build_three_independent_variables_circuit
 
 def test_distribution_conditions_and_truncates():
     circuit, var_a, var_b, var_c = build_three_independent_variables_circuit()
-    backend = ProbabilisticBackend(model_registry=DictRegistry({Coin: circuit}))
+    backend = ProbabilisticBackend(model_registry=DictRegistry(models={Coin: circuit}))
 
     x = a(Coin)(a=..., b=..., c=1.5)
     x.where(x.a > 0.2)
@@ -34,7 +42,7 @@ def test_distribution_conditions_and_truncates():
 
 def test_distribution_narrowed_to_selected_variables():
     circuit, var_a, var_b, var_c = build_three_independent_variables_circuit()
-    backend = ProbabilisticBackend(model_registry=DictRegistry({Coin: circuit}))
+    backend = ProbabilisticBackend(model_registry=DictRegistry(models={Coin: circuit}))
 
     x = a(Coin)(a=..., b=..., c=1.5)
     x.where(x.a > 0.2)
@@ -47,7 +55,7 @@ def test_distribution_narrowed_to_selected_variables():
 
 def test_distribution_no_conditions_or_where_is_the_full_joint():
     circuit, var_a, var_b, var_c = build_three_independent_variables_circuit()
-    backend = ProbabilisticBackend(model_registry=DictRegistry({Coin: circuit}))
+    backend = ProbabilisticBackend(model_registry=DictRegistry(models={Coin: circuit}))
 
     x = a(Coin)(a=..., b=..., c=...)
     result = distribution_of(x).first(backend=backend)

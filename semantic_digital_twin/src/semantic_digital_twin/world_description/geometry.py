@@ -1,3 +1,7 @@
+"""
+The shapes of bodies, with their colors, textures, meshes and scales.
+"""
+
 from __future__ import annotations
 
 import itertools
@@ -25,7 +29,7 @@ from typing_extensions import Any, Self, TYPE_CHECKING, TypeVar, Sequence
 
 from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json, from_json
 from krrood.bounds import Bounds, BoundsInterface
-from krrood.ormatic.utils import classproperty
+from krrood.patterns.classproperty import classproperty
 from random_events.interval import SimpleInterval, Bound, closed
 from random_events.product_algebra import SimpleEvent
 from semantic_digital_twin.datastructures.variables import SpatialVariables
@@ -625,7 +629,7 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
         }
 
     @classmethod
-    def _from_json(cls, data: dict[str, Any], **kwargs) -> Self:
+    def _from_json(cls, *, data: dict[str, Any], **kwargs) -> Self:
         return cls(
             **{
                 field_.name: from_json(data[field_.name], **kwargs)
@@ -869,11 +873,20 @@ class Mesh(Shape):
         return MeshFileSources().resolve(self.filename)
 
     @property
+    def stored_mesh(self) -> trimesh.Trimesh:
+        """
+        The mesh with exactly the vertices and faces its file stores, before this
+        shape's scale is applied.
+        """
+        return self._load_in_meters(str(self.local_file), process=False)
+
+    @property
     def unscaled_mesh(self) -> trimesh.Trimesh:
         """
-        The mesh exactly as the file describes it, before this shape's scale is applied.
+        The mesh :attr:`stored_mesh` describes, with its duplicate vertices welded
+        unless it is coloured per vertex, before this shape's scale is applied.
         """
-        mesh = self._load_in_meters(str(self.local_file), process=False)
+        mesh = self.stored_mesh
         if mesh.visual.kind != "vertex":
             # Welding duplicate vertices is what makes a mesh watertight, which volume
             # and boolean operations require; formats like STL give every face its own
@@ -1539,7 +1552,7 @@ class AxisAlignedBox(BoundsInterface[PointT], ABC):
         :param coordinates: The corner's coordinate along each of :meth:`axes`.
         :return: The corner, in the reference frame of the box's origin.
         """
-        point_type = self.get_type_of_generic_parameter(PointT)
+        point_type = self.get_type_of_generic_parameter(parameter=PointT)
         return point_type(*coordinates, reference_frame=self.origin.reference_frame)
 
     def to_array_bounds(self) -> CoordinateBounds:
@@ -1556,7 +1569,7 @@ class AxisAlignedBox(BoundsInterface[PointT], ABC):
         intervals = self._ordered_intervals
         lower = np.array([interval.lower for interval in intervals], dtype=np.float64)
         upper = np.array([interval.upper for interval in intervals], dtype=np.float64)
-        return CoordinateBounds(lower, upper)
+        return CoordinateBounds(lower=lower, upper=upper)
 
     @classmethod
     def from_array_bounds(

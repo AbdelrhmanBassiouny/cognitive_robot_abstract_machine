@@ -1,16 +1,16 @@
+"""
+Exceptions of the ROS 2 adapters of semantic digital twin.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from uuid import UUID
 
-from typing_extensions import TYPE_CHECKING
-
 from krrood.exceptions import DataclassException
+from krrood_synchronization.messages import Sender
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.exceptions import UsageError
-
-if TYPE_CHECKING:
-    from semantic_digital_twin.adapters.ros.messages import MetaData
 
 
 @dataclass
@@ -83,16 +83,16 @@ class LaserScanBeamCountMismatch(ROS2ConversionError):
 # %% world updates that cannot be applied
 
 
-@dataclass
+@dataclass(kw_only=True)
 class WorldUpdateReferencesUnknownEntityError(UsageError):
     """
     Raised when an update refers to an entity this world never received, which leaves
     everything the missing update carried out of reach.
     """
 
-    publisher: MetaData
+    sender: Sender
     """
-    The synchronizer whose update could not be applied.
+    The node whose update could not be applied.
     """
 
     entity_id: UUID
@@ -114,7 +114,7 @@ class WorldUpdateReferencesUnknownEntityError(UsageError):
             else f"'{self.entity_id}'"
         )
         return (
-            f"The update of '{self.publisher.node_name}' refers to the entity "
+            f"The update of '{self.sender.node_name}' refers to the entity "
             f"{named_entity}, which this world never received."
         )
 
@@ -124,3 +124,104 @@ class WorldUpdateReferencesUnknownEntityError(UsageError):
             "before it exists reach nobody, and every later change that builds on them "
             "cannot be applied."
         )
+
+
+# %% services
+
+
+@dataclass
+class ServiceUnavailableError(DataclassException):
+    """
+    Raised when a service does not become available in time.
+    """
+
+    service_name: str
+    """
+    The service that was waited for.
+    """
+
+    def error_message(self) -> str:
+        return f'The service "{self.service_name}" is not available.'
+
+    def suggest_correction(self) -> str:
+        return "Make sure the node offering the service is running."
+
+
+# %% topics and messages
+
+
+@dataclass
+class TopicNotFoundError(DataclassException):
+    """
+    Raised when no topic of a message type is found on the ROS 2 graph.
+    """
+
+    message_type_name: str
+    """
+    The name ROS 2 gives the message type that was looked for, e.g.
+    ``nav_msgs/msg/Odometry``.
+    """
+
+    node_name: str | None = None
+    """
+    The node whose topics were searched, any node if ``None``.
+    """
+
+    def error_message(self) -> str:
+        if self.node_name is None:
+            return f'No topic of type "{self.message_type_name}" was found.'
+        return (
+            f'The node "{self.node_name}" has no topic of type '
+            f'"{self.message_type_name}".'
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Make sure the node that publishes or subscribes to the topic is running, "
+            "or name the topic explicitly."
+        )
+
+
+@dataclass
+class AmbiguousTopicError(DataclassException):
+    """
+    Raised when a single topic of a message type was expected but several were found.
+    """
+
+    message_type_name: str
+    """
+    The name ROS 2 gives the message type that was looked for, e.g.
+    ``nav_msgs/msg/Odometry``.
+    """
+
+    topic_names: list[str]
+    """
+    The topics of that type that were found.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f'Expected one topic of type "{self.message_type_name}", but found '
+            f"{len(self.topic_names)}: {self.topic_names}."
+        )
+
+    def suggest_correction(self) -> str:
+        return "Name the topic explicitly."
+
+
+@dataclass
+class NoMessageReceivedError(DataclassException):
+    """
+    Raised when no message arrives on a topic in time.
+    """
+
+    topic: str
+    """
+    The topic that was waited on.
+    """
+
+    def error_message(self) -> str:
+        return f'No message arrived on "{self.topic}" in time.'
+
+    def suggest_correction(self) -> str:
+        return "Make sure a node publishes on the topic, or wait longer."

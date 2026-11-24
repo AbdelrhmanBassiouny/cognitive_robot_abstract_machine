@@ -1,0 +1,286 @@
+"""
+Query operations for the Entity Query Language.
+
+This module implements core query operations such as filtering (Where/Having), grouping, and ordering over
+symbolic expressions and their aggregated results.
+"""
+
+from __future__ import annotations
+
+import uuid
+from collections import defaultdict
+from dataclasses import dataclass, field
+from functools import cached_property, lru_cache
+
+from typing_extensions import Tuple, Any, Iterator, Iterable, Dict, Hashable
+
+from krrood.entity_query_language.operators.aggregators import (
+    Aggregator,
+    Count,
+    CountAll,
+)
+from krrood.entity_query_language.core.base_expressions import (
+    SymbolicExpression,
+    UnaryExpression,
+    Bindings,
+    OperationResult,
+    BinaryExpression,
+    Filter,
+    Selectable,
+)
+from krrood.entity_query_language.exceptions import (
+    UnsupportedAggregationOfAGroupedByVariable,
+)
+from krrood.entity_query_language.operators.set_operations import (
+    MultiArityExpressionThatPerformsACartesianProduct,
+)
+from krrood.entity_query_language.utils import is_iterable
+from krrood.utils import ensure_hashable
+from krrood.entity_query_language.core.mapped_variable import MappedVariable
+from krrood.entity_query_language.core.expression_structure import root_variable_ids
+from krrood.patterns.caching import memoize
+
+GroupKey = Tuple[Any, ...]
+"""
+A tuple representing values of variables that are used in the grouped_by clause.
+"""
+
+
+@dataclass(kw_only=True, eq=False, repr=False)
+class Where(Filter, UnaryExpression):
+    """
+    A symbolic expression that represents the `where()` statement of `QueryObjectDescriptor`. It is used to filter
+    ungrouped data. Is constructed through the `Where()` method of the `QueryObjectDescriptor`.
+    """
+
+    @property
+    def condition(self) -> SymbolicExpression:
+        return self._child_
+
+    def _evaluate__(self, *, sources: OperationResult) -> Iterator[OperationResult]:
+        yield from (
+            result
+            for result in self._evaluate_child_as_condition_(
+                child=self._child_, sources=sources
+            )
+            if result.is_true
+        )
+
+
+@dataclass(kw_only=True, eq=False, repr=False)
+class Having(Filter, BinaryExpression):
+    """
+    A symbolic having expression that can be used to filter the grouped results of a query.
+    Is constructed through the `QueryObjectDescriptor` using the `having()` method.
+    """
+
+    left: GroupedBy
+    """
+    The grouped by expression that is used to group the results of the query. This is a child of the Having expression.
+    As the results need to be grouped before filtering.
+    """
+    right: SymbolicExpression
+    """
+    The condition expression that is used to filter the grouped results of the query.
+    """
+
+    @property
+    def condition(self) -> SymbolicExpression:
+        return self.right
+
+    @property
+    def grouped_by(self) -> GroupedBy:
+        return self.left
+
+    def _evaluate__(
+        self,
+        *,
+        sources: OperationResult,
+    ) -> Iterable[OperationResult]:
+        yield from (
+            self._build_operation_result_with_truth_(
+                truth=annotated_result.is_true,
+                bindings=grouping_result.bindings | annotated_result.bindings,
+            )
+            for grouping_result in self.grouped_by._evaluate_(sources=sources)
+            for annotated_result in self._evaluate_child_as_condition_(
+                child=self.condition, sources=grouping_result
+            )
+            if annotated_result.is_true
+        )
+
+
+GroupBindings = Dict[GroupKey, OperationResult]
+"""
+A dictionary for grouped bindings which maps a group key to its corresponding bindings.
+"""
+
+
+@dataclass(kw_only=True, eq=False, repr=False)
+class GroupedBy(MultiArityExpressionThatPerformsACartesianProduct):
+    """
+    This operation groups the results of a query by specific variables. This is useful for aggregating results
+    separately for each group.
+    """
+
+    aggregators: tuple[Aggregator, ...] = field(default_factory=tuple)
+    """
+    The aggregators to apply to the grouped results.
+    """
+    variables_to_group_by: tuple[Selectable, ...] = ()
+    """
+    The variables to group the results by their values.
+    """
+
+    def _evaluate__(
+        self, *, sources: OperationResult | None = None
+    ) -> Iterator[OperationResult]:
+        """
+        Generate results grouped by the specified variables in the grouped_by clause.
+
+        :param sources: The current bindings.
+        :return: An iterator of OperationResult objects, each representing a group of child results.
+        """
+
+        if any(
+            not isinstance(var, Count)
+            for var in self.aggregators_of_grouped_by_variables
+        ):
+            raise UnsupportedAggregationOfAGroupedByVariable(grouped_by=self)
+
+        groups, group_key_count = self.get_groups_and_group_key_count(sources=sources)
+
+        for group_key, group in groups.items():
+            if self.count_occurrences_of_group_keys:
+                group[self.count_occurrences_of_group_keys._id_] = group_key_count[
+                    group_key
+                ]
+            for count_all in self._aggregators_of_type_count_all_:
+                group[count_all._id_] = group_key_count[group_key]
+
+        yield from groups.values()
+
+    def get_groups_and_group_key_count(
+        self, *, sources: OperationResult | None
+    ) -> tuple[GroupBindings, dict[GroupKey, int]]:
+        """
+        Create a dictionary of groups and a dictionary of group keys to their corresponding counts starting from the
+        initial bindings, then applying the constraints in the where expression then grouping by the variables in the
+        grouped_by clause.
+
+        :param sources: The initial bindings.
+        :return: A tuple containing the dictionary of groups and the dictionary of group keys to their corresponding counts.
+        """
+
+        groups = defaultdict(lambda: OperationResult(bindings={}, operand=self))
+        group_key_count = defaultdict(lambda: 0)
+
+        for res in self._evaluate_product_(sources=sources):
+            group_key = tuple(
+                ensure_hashable(res[var._id_]) for var in self.variables_to_group_by
+            )
+
+            res[self._id_] = res.bindings
+            group_key_count[group_key] += 1
+
+            self.update_group_from_bindings(
+                group=groups[group_key], results=res.bindings
+            )
+
+        if len(groups) == 0:
+            # if there are no groups, add one empty group with an empty list for each aggregated
+            # variable. CountAll has no child to seed; the empty group's row count of zero is
+            # injected later by its own identifier.
+            for aggregator in self.aggregators:
+                if isinstance(aggregator, CountAll):
+                    continue
+                groups[()][aggregator._child_._id_] = []
+
+        return groups, group_key_count
+
+    @lru_cache
+    def get_group_key(self, *, result_values: frozenset[uuid.UUID]) -> GroupKey:
+        """
+        :param result_values: The values of the variables to group by in the current result.
+        :return: A tuple of the values of the variables to group by representing a group key.
+        """
+        return tuple(ensure_hashable(value) for value in result_values)
+
+    def update_group_from_bindings(self, *, group: OperationResult, results: Bindings):
+        """
+        Updates the group with the given results.
+
+        :param group: The group to be updated.
+        :param results: The results to be added to the group.
+        """
+        for id_, val in results.items():
+            if id_ in self.ids_of_variables_to_group_by:
+                group[id_] = val
+            elif self.is_already_grouped(var_id=id_):
+                group[id_] = val if is_iterable(val) else [val]
+            else:
+                if id_ not in group:
+                    group[id_] = []
+                group[id_].append(val)
+
+    @memoize
+    def is_already_grouped(self, *, var_id: uuid.UUID) -> bool:
+        expression = self._get_expression_by_id_(id_=var_id)
+        return (
+            len(self.variables_to_group_by) == 1
+            and isinstance(expression, MappedVariable)
+            and expression._child_._id_ in self.ids_of_variables_to_group_by
+        )
+
+    @cached_property
+    def count_occurrences_of_group_keys(self) -> Count | None:
+        """
+        :return: The first Count aggregator that is counting occurrences of group keys, if any.
+        """
+        return next(
+            (
+                agg
+                for agg in self.aggregators_of_grouped_by_variables
+                if isinstance(agg, Count)
+            ),
+            None,
+        )
+
+    @cached_property
+    def _aggregators_of_type_count_all_(self) -> tuple[CountAll, ...]:
+        """
+        :return: The aggregators that count all rows per group.
+        """
+        return tuple(agg for agg in self.aggregators if isinstance(agg, CountAll))
+
+    @cached_property
+    def aggregators_of_grouped_by_variables(self):
+        """
+        :return: A list of the aggregators that are aggregating over
+         expressions having variables that are in the grouped_by clause.
+        """
+        return [
+            var
+            for var in self.aggregators
+            if var._child_ is not None
+            and var._child_._id_ in self.ids_of_variables_to_group_by
+        ]
+
+    @cached_property
+    def ids_of_variables_to_group_by(self) -> tuple[uuid.UUID, ...]:
+        """
+        :return: A tuple of the binding IDs of the variables to group by.
+        """
+        return tuple(var._id_ for var in self.variables_to_group_by)
+
+    @cached_property
+    def group_key_root_ids(self) -> set[uuid.UUID]:
+        """
+        :return: The ids of the distinct ``Variable`` chain-roots of the group-by keys (e.g. for a
+            key ``employee.department`` the root is the ``employee`` variable).
+        """
+        return root_variable_ids(self.variables_to_group_by)
+
+    @property
+    def _name_(self) -> str:
+        return f"{self.__class__.__name__}({', '.join([var._name_ for var in self.variables_to_group_by])})"

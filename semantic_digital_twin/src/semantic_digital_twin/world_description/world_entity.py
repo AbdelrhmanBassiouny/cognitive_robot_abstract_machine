@@ -50,6 +50,7 @@ from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
     Point3,
     Pose,
+    SpatialType,
 )
 from semantic_digital_twin.utils import camel_case_split
 from semantic_digital_twin.world_description.geometry import Mesh
@@ -99,7 +100,7 @@ class WorldEntity(Symbol, HasName[PrefixedName]):
         if self.name is None:
             self.name = PrefixedName(f"{self.__class__.__name__}_{hash(self)}")
         if self._world is not None:
-            self.add_to_world(self._world)
+            self.add_to_world(world=self._world)
 
     def __eq__(self, other):
         if not isinstance(other, type(self)):
@@ -109,7 +110,7 @@ class WorldEntity(Symbol, HasName[PrefixedName]):
             return NotImplemented
         return hash(self) == hash(other)
 
-    def add_to_world(self, world: World):
+    def add_to_world(self, *, world: World):
         """
         Register this entity as part of the given world.
 
@@ -161,13 +162,10 @@ class WorldEntityWithID(WorldEntity, SubclassJSONSerializer, HasID):
     def __hash__(self):
         return self._hash
 
-    def add_to_world(self, world: World):
-        super().add_to_world(world)
-
     def to_json(self, **kwargs) -> dict[str, Any]:
         result = super().to_json(**kwargs)
         introspector = DataclassOnlyIntrospector()
-        for field_ in introspector.discover(self.__class__):
+        for field_ in introspector.discover(owner_cls=self.__class__):
             value = getattr(self, field_.public_name)
 
             if isinstance(value, (list, set)):
@@ -202,12 +200,14 @@ class WorldEntityWithID(WorldEntity, SubclassJSONSerializer, HasID):
         :param from_json_kwargs: The kwargs passed to the _from_json method.
         :return: The instance of WorldEntityWithIDKwargsTracker.
         """
-        tracker = WorldEntityWithIDKwargsTracker.from_kwargs(from_json_kwargs)
-        tracker.add(self.id, self)
+        tracker = WorldEntityWithIDKwargsTracker.from_kwargs(
+            from_json_kwargs=from_json_kwargs
+        )
+        tracker.add(key=self.id, tracked_object=self)
         return tracker
 
     @classmethod
-    def _from_json(cls, data: dict[str, Any], **kwargs) -> Self:
+    def _from_json(cls, *, data: dict[str, Any], **kwargs) -> Self:
         """
         .. warn::
 
@@ -215,13 +215,15 @@ class WorldEntityWithID(WorldEntity, SubclassJSONSerializer, HasID):
             Whenever this happens, the UUIDs are resolved to WorldEntityWithID objects, which leads to undefined
             behavior.
         """
-        tracker = WorldEntityWithIDKwargsTracker.from_kwargs(kwargs)
+        tracker = WorldEntityWithIDKwargsTracker.from_kwargs(from_json_kwargs=kwargs)
 
         half_initialized_instance = cls.__new__(cls)
         half_initialized_instance.id = from_json(data["id"], **kwargs)
-        if tracker.has(half_initialized_instance.id):
-            return tracker.get(half_initialized_instance.id)
-        tracker.add(half_initialized_instance.id, half_initialized_instance)
+        if tracker.has(key=half_initialized_instance.id):
+            return tracker.get(key=half_initialized_instance.id)
+        tracker.add(
+            key=half_initialized_instance.id, tracked_object=half_initialized_instance
+        )
 
         fields_ = {f.name: f for f in fields(cls)}
 
@@ -254,33 +256,48 @@ class WorldEntityWithID(WorldEntity, SubclassJSONSerializer, HasID):
 
     @classmethod
     def _item_from_json(cls, data: dict[str, Any], **kwargs) -> Any:
-        state = WorldEntityWithIDKwargsTracker.from_kwargs(kwargs)
+        state = WorldEntityWithIDKwargsTracker.from_kwargs(from_json_kwargs=kwargs)
         obj = from_json(data, **kwargs)
 
         if isinstance(obj, uuid.UUID):
             obj = from_json(data, **kwargs)
-            return state.get(obj)
+            return state.get(key=obj)
         else:
             return obj
 
     def copy_for_world(self, world: World) -> Self:
         """
-        Copy the object, while updating all references to WorldEntityWithID objects to
-        point to the new world.
+        Copy the object, while updating all references to WorldEntityWithID objects,
+        including the frames of its spatial types, to point to the new world.
 
         This assumes that the referenced objects are already in the new world.
         """
+
+        def _resolve_frame(
+            frame: CartesianFrame3D | None, world: World
+        ) -> CartesianFrame3D | None:
+            if isinstance(frame, KinematicStructureEntity):
+                return world.get_kinematic_structure_entity_by_id(frame.id)
+            return frame
 
         def _resolve_item(item: Any, world: World) -> Any:
             if isinstance(item, WorldEntityWithID):
                 return world.get_world_entity_with_id_by_id(item.id)
             elif isinstance(item, JointState):
                 return item.copy_for_world(world)
+            elif isinstance(item, ShapeCollection):
+                return item.copy_without_reference_frame()
+            elif isinstance(item, SpatialType):
+                copied = deepcopy(item)
+                copied.reference_frame = _resolve_frame(item.reference_frame, world)
+                if isinstance(item, HomogeneousTransformationMatrix):
+                    copied.child_frame = _resolve_frame(item.child_frame, world)
+                return copied
             return deepcopy(item)
 
         result = {}
         introspector = DataclassOnlyIntrospector()
-        for field_ in introspector.discover(self.__class__):
+        for field_ in introspector.discover(owner_cls=self.__class__):
             value = getattr(self, field_.public_name)
 
             if isinstance(value, CollectionKind.ELEMENT_SEQUENCE.value):
@@ -315,19 +332,19 @@ class ReferencedWorldEntity(SubclassJSONSerializer):
     """
 
     def to_json(self, **kwargs) -> dict[str, Any]:
-        return DataclassJSONSerializer.to_json(self, **kwargs)
+        return DataclassJSONSerializer.to_json(instance=self, **kwargs)
 
     @classmethod
-    def _from_json(cls, data: dict[str, Any], **kwargs) -> WorldEntityWithID:
+    def _from_json(cls, *, data: dict[str, Any], **kwargs) -> WorldEntityWithID:
         """
         :return: The entity of the reader's world that the reference refers to.
         :raises MissingWorldError: If the keyword arguments carry no world to find the
             entity in.
         :raises WorldEntityWithIDNotInKwargs: If the world holds no entity with the id.
         """
-        reference = DataclassJSONSerializer.from_json(data, clazz=cls, **kwargs)
-        tracker = WorldEntityWithIDKwargsTracker.from_kwargs(kwargs)
-        return tracker.get(reference.id, name=reference.name)
+        reference = DataclassJSONSerializer.from_json(data=data, clazz=cls, **kwargs)
+        tracker = WorldEntityWithIDKwargsTracker.from_kwargs(from_json_kwargs=kwargs)
+        return tracker.get(key=reference.id, name=reference.name)
 
 
 @dataclass
@@ -337,8 +354,8 @@ class WorldEntityReferenceWriter(ReferenceWriter[WorldEntityWithID]):
     has the world the entities belong to.
     """
 
-    def write_reference(self, entity: WorldEntityWithID) -> dict[str, Any]:
-        return ReferencedWorldEntity(id=entity.id, name=entity.name).to_json()
+    def write_reference(self, *, obj: WorldEntityWithID) -> dict[str, Any]:
+        return ReferencedWorldEntity(id=obj.id, name=obj.name).to_json()
 
 
 @dataclass(eq=False)
@@ -647,15 +664,6 @@ class Body(KinematicStructureEntity):
             filter(lambda sem: isinstance(sem, type_), self._semantic_annotations)
         )
 
-    def copy_for_world(self, new_world: World) -> Self:
-        return Body(
-            name=self.name,
-            id=self.id,
-            visual=self.visual.copy_without_reference_frame(),
-            collision=self.collision.copy_without_reference_frame(),
-            inertial=deepcopy(self.inertial),
-        )
-
 
 @dataclass(eq=False)
 class Region(KinematicStructureEntity):
@@ -699,13 +707,6 @@ class Region(KinematicStructureEntity):
             shape.origin.reference_frame = result
         result.area = area
         return result
-
-    def copy_for_world(self, new_world: World) -> Self:
-        return Region(
-            name=self.name,
-            id=self.id,
-            area=self.area.copy_without_reference_frame(),
-        )
 
 
 GenericKinematicStructureEntity = TypeVar(
@@ -768,7 +769,7 @@ class SemanticAnnotation(WorldEntityWithSimulatorProperties):
     def __cached_hash__(self):
         introspector = DataclassOnlyIntrospector()
         result = [self.__class__]
-        for field_ in introspector.discover(self.__class__):
+        for field_ in introspector.discover(owner_cls=self.__class__):
             value = getattr(self, field_.public_name)
             if isinstance(value, (list, set)):
                 result.extend(
@@ -829,7 +830,7 @@ class SemanticAnnotation(WorldEntityWithSimulatorProperties):
 
         result = []
         introspector = DataclassOnlyIntrospector()
-        for field_ in introspector.discover(self.__class__):
+        for field_ in introspector.discover(owner_cls=self.__class__):
             value = getattr(self, field_.public_name)
 
             if isinstance(value, CollectionKind.ELEMENT_SEQUENCE.value):
@@ -925,7 +926,7 @@ class SemanticAnnotation(WorldEntityWithSimulatorProperties):
         dependencies = set()
         introspector = DataclassOnlyIntrospector()
 
-        for field_info in introspector.discover(self.__class__):
+        for field_info in introspector.discover(owner_cls=self.__class__):
             value = getattr(self, field_info.public_name)
 
             if isinstance(value, SemanticAnnotation):
@@ -970,6 +971,13 @@ class Connection(WorldEntityWithSimulatorProperties, ABC):
     parent_T_connection_expression: HomogeneousTransformationMatrix = field(
         default=None
     )
+    """
+    The constant pose of the connection relative to its parent.
+
+    .. warning:: In a world, change it only through :meth:`update_parent_T_connection`:
+        a direct assignment is not recorded, published or rolled back.
+    """
+
     _kinematics: HomogeneousTransformationMatrix = field(
         default_factory=HomogeneousTransformationMatrix, init=False
     )
@@ -985,6 +993,9 @@ class Connection(WorldEntityWithSimulatorProperties, ABC):
 
     This split is necessary for copying Connections, because they need parent_T_connection as an input parameter and 
     connection_T_child is generated in the __post_init__ method.
+
+    .. warning:: Set it only before the connection is added to a world: a later
+        assignment is not recorded, published or rolled back. Replace the connection.
     """
 
     def __post_init__(self):
@@ -1008,15 +1019,10 @@ class Connection(WorldEntityWithSimulatorProperties, ABC):
                 f"connection_T_child must be constant for connection. This one contains free variables: {self.parent_T_connection_expression.free_variables()}"
             )
 
-        if (
-            self.parent_T_connection_expression.reference_frame is not None
-            and self.parent_T_connection_expression.reference_frame != self.parent
-        ):
-            raise ReferenceFrameMismatchError(
-                expected_frame=self.parent,
-                actual_frame=self.parent_T_connection_expression.reference_frame,
-                context=f"parent_T_connection_expression of connection '{self.name}'",
-            )
+        self._validate_parent_T_connection_frame(
+            parent_T_connection=self.parent_T_connection_expression
+        )
+        self.parent_T_connection_expression.reference_frame = self.parent
         if (
             self.connection_T_child_expression.child_frame is not None
             and self.connection_T_child_expression.child_frame != self.child
@@ -1027,8 +1033,48 @@ class Connection(WorldEntityWithSimulatorProperties, ABC):
                 context=f"child frame of connection_T_child_expression of connection '{self.name}'",
             )
 
-        self.parent_T_connection_expression.reference_frame = self.parent
         self.connection_T_child_expression.child_frame = self.child
+
+    @synchronized_attribute_modification
+    def update_parent_T_connection(
+        self, *, parent_T_connection: HomogeneousTransformationMatrix
+    ) -> None:
+        """
+        Replace the constant pose of this connection relative to its parent and record
+        the change in the world's modification history.
+
+        :param parent_T_connection: The new pose of the connection relative to its
+            parent; it must be constant.
+        :raises ReferenceFrameMismatchError: If the pose is expressed relative to
+            another frame than the parent.
+        """
+        self._validate_parent_T_connection_frame(
+            parent_T_connection=parent_T_connection
+        )
+        self.parent_T_connection_expression = (
+            parent_T_connection.copy_with_new_reference_frames(
+                new_reference_frame=self.parent,
+                new_child_frame=parent_T_connection.child_frame,
+            )
+        )
+
+    def _validate_parent_T_connection_frame(
+        self, *, parent_T_connection: HomogeneousTransformationMatrix
+    ) -> None:
+        """
+        :param parent_T_connection: A pose of this connection relative to its parent.
+        :raises ReferenceFrameMismatchError: If the pose is expressed relative to
+            another frame than the parent.
+        """
+        if (
+            parent_T_connection.reference_frame is not None
+            and parent_T_connection.reference_frame != self.parent
+        ):
+            raise ReferenceFrameMismatchError(
+                expected_frame=self.parent,
+                actual_frame=parent_T_connection.reference_frame,
+                context=f"parent_T_connection_expression of connection '{self.name}'",
+            )
 
     @classmethod
     def _serialized_fields(cls) -> list[Field]:
@@ -1048,7 +1094,9 @@ class Connection(WorldEntityWithSimulatorProperties, ABC):
         for field_ in self._serialized_fields():
             value = getattr(self, field_.name)
             if isinstance(value, WorldEntityWithID):
-                WorldEntityReference(field_.name).write(result, value)
+                WorldEntityReference(subject=field_.name).write(
+                    data=result, identified_object=value
+                )
             else:
                 result[field_.name] = to_json(value, **kwargs)
         return result
@@ -1057,9 +1105,9 @@ class Connection(WorldEntityWithSimulatorProperties, ABC):
     def _from_json(cls, data: dict[str, Any], **kwargs) -> Self:
         arguments = {}
         for field_ in cls._serialized_fields():
-            reference = WorldEntityReference(field_.name)
+            reference = WorldEntityReference(subject=field_.name)
             if reference.id_key in data:
-                arguments[field_.name] = reference.resolve(data, **kwargs)
+                arguments[field_.name] = reference.resolve(data=data, **kwargs)
             elif field_.name in data:
                 arguments[field_.name] = from_json(data[field_.name], **kwargs)
         return cls(**arguments)
@@ -1142,7 +1190,7 @@ class Connection(WorldEntityWithSimulatorProperties, ABC):
         """
         position = parent_T_child.position[:3]
         orientation = parent_T_child.quaternion
-        return Matrix.vstack([position, orientation]).T
+        return Matrix.vstack(list_of_matrices=[position, orientation]).T
 
     def origin_as_position_quaternion(self) -> Matrix:
         return self._as_position_quaternion(self.origin_expression)
@@ -1169,10 +1217,10 @@ class Connection(WorldEntityWithSimulatorProperties, ABC):
     @abstractmethod
     def create_with_dofs(
         cls,
+        *,
         world: World,
         parent: KinematicStructureEntity,
         child: KinematicStructureEntity,
-        *,
         name: PrefixedName | None = None,
         parent_T_connection_expression: HomogeneousTransformationMatrix | None = None,
         connection_T_child_expression: HomogeneousTransformationMatrix | None = None,
@@ -1192,61 +1240,6 @@ class Connection(WorldEntityWithSimulatorProperties, ABC):
             connection.
         """
 
-    def _find_references_in_world(
-        self, world: World
-    ) -> tuple[
-        KinematicStructureEntity,
-        KinematicStructureEntity,
-        HomogeneousTransformationMatrix,
-        HomogeneousTransformationMatrix,
-    ]:
-        """
-        Finds the reference frames to this connection in the given world and returns
-        them as usable objects.
-
-        :param world: Reference to the world where the reference frames are searched.
-        :return: The other parent and child and new connection expressions with correct
-            reference frames.
-        """
-        other_parent = world.get_kinematic_structure_entity_by_id(self.parent.id)
-        other_child = world.get_kinematic_structure_entity_by_id(self.child.id)
-
-        parent_T_connection = deepcopy(self.parent_T_connection_expression)
-        parent_T_connection.reference_frame = (
-            world.get_kinematic_structure_entity_by_id(
-                parent_T_connection.reference_frame.id
-            )
-        )
-
-        connection_T_child = deepcopy(self.connection_T_child_expression)
-        connection_T_child.child_frame = world.get_kinematic_structure_entity_by_id(
-            connection_T_child.child_frame.id
-        )
-        return other_parent, other_child, parent_T_connection, connection_T_child
-
-    def copy_for_world(self, world: World) -> Self:
-        """
-        Copies this connection to the given world the parent and child references are
-        updated to the new world as well as the references from the expression.
-
-        :param world: World in which the connection should be copied.
-        :return: The copied connection.
-        """
-        (
-            other_parent,
-            other_child,
-            parent_T_connection_expression,
-            connection_T_child_expression,
-        ) = self._find_references_in_world(world)
-
-        return self.__class__(
-            other_parent,
-            other_child,
-            parent_T_connection_expression=parent_T_connection_expression,
-            connection_T_child_expression=connection_T_child_expression,
-            name=PrefixedName(self.name.name, prefix=self.name.prefix),
-        )
-
     def copy_with_new_parent(
         self,
         new_parent: KinematicStructureEntity,
@@ -1255,17 +1248,17 @@ class Connection(WorldEntityWithSimulatorProperties, ABC):
         """
         Create a copy of this connection re-parented under ``new_parent``, using
         ``parent_T_connection_expression`` as the new parent offset and keeping the same
-        name, child and ``connection_T_child_expression``.
-
-        Subclasses carrying extra state (e.g. an active degree of freedom) override this
-        to preserve it. Used to move a branch without collapsing its connection.
+        name, child, degrees of freedom and everything else the connection was built
+        with. Used to move a branch without collapsing its connection.
         """
-        return self.__class__(
+        return replace(
+            self,
             name=PrefixedName(self.name.name, prefix=self.name.prefix),
             parent=new_parent,
-            child=self.child,
             parent_T_connection_expression=parent_T_connection_expression,
-            connection_T_child_expression=self.connection_T_child_expression,
+            simulator_additional_properties=deepcopy(
+                self.simulator_additional_properties
+            ),
         )
 
     def copy_with_new_child(self, new_child: KinematicStructureEntity) -> Self:
@@ -1283,6 +1276,9 @@ class Connection(WorldEntityWithSimulatorProperties, ABC):
             child=new_child,
             connection_T_child_expression=connection_T_child_expression,
             name=None,
+            simulator_additional_properties=deepcopy(
+                self.simulator_additional_properties
+            ),
         )
 
     def update_references_for_world(self, world: World):
@@ -1394,6 +1390,16 @@ class Actuator(WorldEntityWithSimulatorProperties):
         :param dof: The degree of freedom to add.
         """
         self._dofs.append(dof)
+
+    def copy_for_world(self, world: World) -> Self:
+        """
+        :meth:`WorldEntityWithID.copy_for_world`, where the copy also drives the degrees
+        of freedom of ``world`` with the ids of this actuator's.
+        """
+        copied = super().copy_for_world(world)
+        for degree_of_freedom in self.dofs:
+            copied.add_dof(world.get_degree_of_freedom_by_id(degree_of_freedom.id))
+        return copied
 
     @property
     def set_point(self) -> float:

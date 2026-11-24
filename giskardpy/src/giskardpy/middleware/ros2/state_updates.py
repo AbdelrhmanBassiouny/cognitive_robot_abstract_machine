@@ -8,7 +8,7 @@ whatever observes the copy sees the goal progress.
 
 from __future__ import annotations
 
-from cramph.data_types import StatechartPayloadKey
+from cramph.reported_statechart import StatechartPayloadKey
 from dataclasses import dataclass
 
 from typing_extensions import Any, Self
@@ -21,7 +21,7 @@ from giskardpy.middleware.ros2.exceptions import StateUpdateAheadOfStatechartErr
 # %% the states Giskard reports
 
 
-@dataclass
+@dataclass(kw_only=True)
 class StatechartStateUpdate:
     """
     The state of every node of a running goal at one tick, as Giskard reported it.
@@ -53,7 +53,7 @@ class StatechartStateUpdate:
     """
 
     @classmethod
-    def from_json(cls, payload: dict[str, Any], statechart: Statechart) -> Self:
+    def from_json(cls, *, payload: dict[str, Any], statechart: Statechart) -> Self:
         """
         :param payload: The feedback or result of a goal, as Giskard sent it.
         :param statechart: The client's copy of the statechart of the goal.
@@ -63,15 +63,15 @@ class StatechartStateUpdate:
             statechart=statechart,
             tick_count=payload[StatechartPayloadKey.TICK_COUNT],
             life_cycle_state=LifeCycleState.from_json(
-                payload[StatechartPayloadKey.LIFE_CYCLE_STATE],
+                data=payload[StatechartPayloadKey.LIFE_CYCLE_STATE],
                 statechart=statechart,
             ),
             observation_state=ObservationState.from_json(
-                payload[StatechartPayloadKey.OBSERVATION_STATE],
+                data=payload[StatechartPayloadKey.OBSERVATION_STATE],
                 statechart=statechart,
             ),
             last_observation_state=LastObservationState.from_json(
-                payload[StatechartPayloadKey.LAST_OBSERVATION_STATE],
+                data=payload[StatechartPayloadKey.LAST_OBSERVATION_STATE],
                 statechart=statechart,
             ),
         )

@@ -23,7 +23,7 @@ from semantic_digital_twin.part_finding.locating import LocatedFacesFinder
 from semantic_digital_twin.part_finding.splitting import PartSplitter
 from krrood_spatial_math.spatial_types import (
     HomogeneousTransformationMatrix,
-    Twist,
+    Displacement,
     Vector3,
 )
 from semantic_digital_twin.world import World
@@ -52,8 +52,8 @@ class RecordingPerformer(GraspPerformer):
         return GraspResult(
             object_raised=True,
             motion_completed=True,
-            object_displacement=Twist(translation=Vector3(0.0, 0.0, 0.2)),
-            slip=Twist(),
+            object_displacement=Displacement(translation=Vector3(0.0, 0.0, 0.2)),
+            slip=Displacement(),
         )
 
 
@@ -130,7 +130,7 @@ def test_drawn_grasps_lie_where_the_annotation_states(carton):
 
 
 def test_trials_draw_grasps_where_the_strategy_they_are_given_states(carton):
-    strategy = GraspFromAnySide(depth=Bounds(0.5, 0.8))
+    strategy = GraspFromAnySide(depth=Bounds(lower=0.5, upper=0.8))
     trials = GraspTrials(
         graspable=carton,
         performer=RecordingPerformer(),

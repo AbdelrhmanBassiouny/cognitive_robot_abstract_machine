@@ -1,3 +1,7 @@
+"""
+Probabilistic circuits as rustworkx graphs of sum, product and leaf units.
+"""
+
 from __future__ import annotations
 import numpy.typing as npt
 
@@ -356,8 +360,12 @@ class LeafUnit(Unit):
     def weighted_leaf_products(self) -> list[WeightedLeafProduct]:
         return [WeightedLeafProduct(log_weight=0.0, leaves=[self])]
 
-    def log_likelihood(self, events: npt.NDArray):
-        self.result_of_current_query = self.distribution.log_likelihood(events)
+    def log_likelihood(self, *, events: npt.NDArray) -> None:
+        """
+        Keeps the log-likelihood of the events under the distribution of this leaf as
+        the result of the current query.
+        """
+        self.result_of_current_query = self.distribution.log_likelihood(events=events)
 
     def cumulative_distribution(self, events: npt.NDArray):
         self.result_of_current_query = (
@@ -455,7 +463,7 @@ class LeafUnit(Unit):
         return result
 
     @classmethod
-    def _from_json(cls, data: dict[str, Any], **kwargs) -> Self:
+    def _from_json(cls, *, data: dict[str, Any], **kwargs) -> Self:
         distribution = from_json(data["distribution"])
         return cls(distribution)
 
@@ -534,7 +542,7 @@ class InnerUnit(Unit, ABC):
         return self
 
     @classmethod
-    def _from_json(cls, data: dict[str, Any], **kwargs) -> Self:
+    def _from_json(cls, *, data: dict[str, Any], **kwargs) -> Self:
         return cls()
 
     def add_subcircuit(self, subcircuit: Unit, log_weight: float = None):
@@ -555,6 +563,10 @@ class InnerUnit(Unit, ABC):
 
 @dataclass(eq=False)
 class SumUnit(InnerUnit):
+    """
+    A unit that mixes its subcircuits, each weighted by the probability of its edge.
+    """
+
     _latent_variable: Symbolic | None = None
     """
     The latent variable of this unit.
@@ -737,7 +749,6 @@ class SumUnit(InnerUnit):
         other_subcircuits = other.subcircuits
 
         for own_index, own_subcircuit in enumerate(own_subcircuits):
-
             # create denominator of weight
             own_index = own_latent_variable.domain.simple_sets[0].element.__class__(
                 own_index
@@ -769,7 +780,6 @@ class SumUnit(InnerUnit):
             proxy_product_node.add_subcircuit(proxy_sum_node)
 
             for other_index, other_subcircuit in enumerate(other_subcircuits):
-
                 # create numerator of weight
                 other_index = other_latent_variable.domain.simple_sets[
                     0
@@ -825,7 +835,6 @@ class SumUnit(InnerUnit):
 
         # if this has only one child
         if len(self.subcircuits) == 1:
-
             # redirect every incoming edge to the child
             incoming_edges = list(self.probabilistic_circuit.in_edges(self))
             for parent, _, data in incoming_edges:
@@ -838,7 +847,6 @@ class SumUnit(InnerUnit):
 
         # for every subcircuit
         for weight, subcircuit in self.log_weighted_subcircuits:
-
             # if the weight is 0, skip this subcircuit
             if weight == -np.inf:
                 # remove the edge
@@ -846,7 +854,6 @@ class SumUnit(InnerUnit):
 
             # if the simplified subcircuit is of the same type as this
             if type(subcircuit) is type(self):
-
                 # type hinting
                 subcircuit: Self
 
@@ -926,7 +933,7 @@ class SumUnit(InnerUnit):
         """
         result = np.full(len(samples), np.nan)
         for index, subcircuit in enumerate(self.subcircuits):
-            likelihood = subcircuit.log_likelihood(samples)
+            likelihood = subcircuit.log_likelihood(events=samples)
             result[likelihood > -np.inf] = index
         return result
 
@@ -1018,10 +1025,8 @@ class ProductUnit(InnerUnit):
 
         # for every subcircuit
         for subcircuit in self.subcircuits:
-
             # if the simplified subcircuit is of the same type as this
             if type(subcircuit) is type(self):
-
                 # type hinting
                 subcircuit: Self
 
@@ -1332,14 +1337,14 @@ class ProbabilisticCircuit(GroundableCircuit[Unit], SubclassJSONSerializer):
         else:
             raise ValueError(f"No root found.")
 
-    def log_likelihood(self, events: npt.NDArray) -> npt.NDArray:
+    def log_likelihood(self, *, events: npt.NDArray) -> npt.NDArray:
         variable_to_index_map = self.variable_to_index_map
         for layer in reversed(self.layers):
             for unit in layer:  # open all the procesess
                 if unit.is_leaf:
                     unit: LeafUnit
                     unit.log_likelihood(
-                        events[
+                        events=events[
                             :,
                             [
                                 variable_to_index_map[variable]
@@ -1944,7 +1949,7 @@ class ProbabilisticCircuit(GroundableCircuit[Unit], SubclassJSONSerializer):
         return cls()
 
     @classmethod
-    def _from_json(cls, data: dict[str, Any], **kwargs) -> Self:
+    def _from_json(cls, *, data: dict[str, Any], **kwargs) -> Self:
         result = cls.parameters_from_json(data)
         hash_remap: dict[int, Unit] = dict()
 
@@ -2180,7 +2185,6 @@ class ProbabilisticCircuit(GroundableCircuit[Unit], SubclassJSONSerializer):
         """
         old_leafs = self.leaves
         for leaf in old_leafs:
-
             if isinstance(leaf, UnivariateDiscreteLeaf):
                 leaf: UnivariateDiscreteLeaf
                 sum_leaf = leaf.as_deterministic_sum()
@@ -2197,15 +2201,21 @@ class ProbabilisticCircuit(GroundableCircuit[Unit], SubclassJSONSerializer):
                 self.graph.remove_node(leaf)
         self._invalidate_topology_cache()
 
-    def apply_translation(self, translation: dict[Variable, float]):
+    def apply_translation(self, *, translation: dict[Variable, float]) -> None:
+        """
+        Translates the distribution of every leaf over a numeric variable.
+        """
         for leaf in self.leaves:
             if any(v.is_numeric for v in leaf.variables):
-                leaf.distribution.apply_translation(translation)
+                leaf.distribution.apply_translation(translation=translation)
 
-    def apply_scaling(self, scale: dict[Variable, float]):
+    def apply_scaling(self, *, scaling: dict[Variable, float]) -> None:
+        """
+        Scales the distribution of every leaf over a numeric variable.
+        """
         for leaf in self.leaves:
             if any(v.is_numeric for v in leaf.variables):
-                leaf.distribution.apply_scaling(scale)
+                leaf.distribution.apply_scaling(scaling=scaling)
 
     def mount(self, other: Unit) -> dict[int, Unit]:
         """
@@ -2344,7 +2354,6 @@ class ShallowProbabilisticCircuit(ProbabilisticCircuit):
 
 @dataclass
 class UnivariateLeaf(LeafUnit):
-
     @property
     def variable(self) -> Variable:
         return self.distribution.variables[0]
@@ -2352,9 +2361,21 @@ class UnivariateLeaf(LeafUnit):
 
 @dataclass
 class UnivariateContinuousLeaf(UnivariateLeaf):
+    """
+    A leaf of a distribution over one continuous variable.
+    """
+
     distribution: ContinuousDistribution | None
 
     __hash__ = Unit.__hash__
+
+    def log_likelihood(self, *, events: npt.NDArray) -> None:
+        """
+        Like :meth:`LeafUnit.log_likelihood`, but reads the events as numbers, so that
+        rows of a circuit over symbolic and continuous variables may hold the domain
+        elements of the symbolic ones.
+        """
+        super().log_likelihood(events=np.asarray(events, dtype=float))
 
     def log_truncated_of_simple_event_in_place(
         self, event: SimpleEvent, singleton_allowed: bool = False
@@ -2391,7 +2412,6 @@ class UnivariateContinuousLeaf(UnivariateLeaf):
 
 @dataclass
 class UnivariateDiscreteLeaf(UnivariateLeaf):
-
     distribution: DiscreteDistribution | None
     __hash__ = Unit.__hash__
 
@@ -2428,9 +2448,9 @@ class UnivariateDiscreteLeaf(UnivariateLeaf):
         :param mixture: The mixture to create the distribution from.
         :return: The discrete distribution.
         """
-        assert (
-            len(mixture.variables) == 1
-        ), "Can only convert univariate sum units to discrete distributions."
+        assert len(mixture.variables) == 1, (
+            "Can only convert univariate sum units to discrete distributions."
+        )
         variable = mixture.variables[0]
         probabilities = MissingDict(float)
 
@@ -2501,7 +2521,9 @@ class MultivariateLeaf(LeafUnit):
                 leaf(make_dirac(variable, point[variable]), self.probabilistic_circuit)
             )
         result.result_of_current_query = self.distribution.log_likelihood(
-            np.array([[point[variable] for variable in self.distribution.variables]])
+            events=np.array(
+                [[point[variable] for variable in self.distribution.variables]]
+            )
         )[0]
 
         self.connect_incoming_edges_to(result)

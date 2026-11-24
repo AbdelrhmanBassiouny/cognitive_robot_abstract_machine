@@ -1,6 +1,11 @@
+"""
+Tests of extracting features from spatial types and their data access objects.
+"""
+
+from __future__ import annotations
+
 import pytest
 
-import semantic_digital_twin.orm.ormatic_interface  # type: ignore  # noqa: F401
 from krrood.ormatic.data_access_objects.helper import to_dao
 from krrood.parametrization.feature_extraction.feature_extractor import FeatureExtractor
 from krrood.symbolic_math.symbolic_math import FloatVariable
@@ -25,7 +30,7 @@ def feature_names(extractor: FeatureExtractor) -> list[str]:
 def test_features_of_a_pose_are_read_from_the_pose_itself():
     pose = Pose.from_xyz_rpy(x=1.0, y=2.0, z=3.0, yaw=0.5)
 
-    extractor = FeatureExtractor.from_instances([pose])
+    extractor = FeatureExtractor.from_instances(instances=[pose])
 
     assert feature_names(extractor) == [
         "position.x",
@@ -36,7 +41,7 @@ def test_features_of_a_pose_are_read_from_the_pose_itself():
         "axis_angle.axis.y",
         "axis_angle.axis.z",
     ]
-    values = extractor.apply_mapping(pose)
+    values = extractor.apply_mapping(instance=pose)
     assert all(type(value) is float for value in values)
     assert values[:3] == [1.0, 2.0, 3.0]
     assert values[3:] == pytest.approx(
@@ -63,20 +68,20 @@ def test_features_of_a_domain_object_match_those_of_its_data_access_object(insta
     A data access object stores a number where the domain object may hold a constant
     symbolic expression, and both have to yield the same features.
     """
-    extractor = FeatureExtractor.from_instances([instance])
+    extractor = FeatureExtractor.from_instances(instances=[instance])
     assert extractor.features
 
     data_access_object = to_dao(instance)
     expected = [
-        feature.apply_mapping_on_external_root(data_access_object)
+        feature.apply_mapping_on_external_root(instance=data_access_object)
         for feature in extractor.features
     ]
-    assert extractor.apply_mapping(instance) == pytest.approx(expected)
+    assert extractor.apply_mapping(instance=instance) == pytest.approx(expected)
 
 
 def test_a_symbolic_expression_with_free_variables_is_not_a_feature():
     point = Point3(FloatVariable(name="x"), 2.0, 3.0)
 
-    extractor = FeatureExtractor.from_instances([point])
+    extractor = FeatureExtractor.from_instances(instances=[point])
 
     assert feature_names(extractor) == ["y", "z"]

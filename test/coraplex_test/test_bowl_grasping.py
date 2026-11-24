@@ -1,3 +1,9 @@
+"""
+Tests of grasping a bowl by its rim, closing the fingers on the bowl's wall.
+"""
+
+from __future__ import annotations
+
 from pathlib import Path
 
 import numpy as np
@@ -168,7 +174,11 @@ def test_transporting_a_bowl_grasps_it_at_its_rim(pr2_and_bowl):
     Sequence(nodes=[transport])
 
     first_pick_up = next(
-        iter(EntityQueryLanguageGenerativeBackend().evaluate(transport.pick_up))
+        iter(
+            EntityQueryLanguageGenerativeBackend().evaluate(
+                expression=transport.pick_up
+            )
+        )
     )
-    grasp_position = first_pick_up.pick_up.grasp.grasp_pose.to_np()[:3, 3]
+    grasp_position = first_pick_up.pick_up.grasp_candidate.grasp_pose.to_np()[:3, 3]
     assert distances_to_surface(bowl, grasp_position[None, :])[0] < GRIPPABLE_DISTANCE

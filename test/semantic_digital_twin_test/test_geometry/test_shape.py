@@ -109,7 +109,7 @@ def test_mesh_color_survives_serialization(tmp_path):
     source.visual.vertex_colors = np.tile([200, 50, 50, 255], (len(source.vertices), 1))
 
     mesh = Mesh.from_trimesh(mesh=source, directory=tmp_path, file_type="ply")
-    restored = Mesh.from_json(mesh.to_json())
+    restored = Mesh.from_json(data=mesh.to_json())
 
     assert Path(restored.filename).suffix == f".{MeshFileFormat.GLB}"
     assert (restored.mesh.visual.vertex_colors[:, :3] == [200, 50, 50]).all()
@@ -242,7 +242,7 @@ def test_per_vertex_colors_survive_serialization_unwelded(tmp_path):
     source = coplanar_triangles_with_shared_positions()
     mesh = Mesh.from_trimesh(mesh=source, directory=tmp_path, file_type="obj")
 
-    restored = Mesh.from_json(mesh.to_json())
+    restored = Mesh.from_json(data=mesh.to_json())
 
     np.testing.assert_array_equal(
         np.asarray(restored.mesh.visual.vertex_colors),
@@ -265,7 +265,7 @@ def test_serialization_reproduces_the_same_mesh():
         )
     )
 
-    restored = Mesh.from_json(original.to_json())
+    restored = Mesh.from_json(data=original.to_json())
 
     np.testing.assert_allclose(
         np.asarray(restored.mesh.vertices),
@@ -293,7 +293,7 @@ def test_serialization_preserves_watertightness_of_a_closed_mesh():
     )
     assert original.mesh.is_volume
 
-    restored = Mesh.from_json(original.to_json())
+    restored = Mesh.from_json(data=original.to_json())
 
     assert restored.mesh.is_volume
     np.testing.assert_allclose(restored.mesh.volume, original.mesh.volume, rtol=1e-6)
@@ -327,7 +327,7 @@ def test_textured_primitive_survives_serialization():
         scale=Scale(1.0, 1.0, 1.0), texture=Texture(file_path="/textures/marble.png")
     )
 
-    restored = Box.from_json(box.to_json())
+    restored = Box.from_json(data=box.to_json())
 
     assert restored.texture == box.texture
     assert restored == box
@@ -560,7 +560,9 @@ def test_mesh_in_frame_in_the_shapes_own_frame_matches_its_local_mesh():
         root = Body(name=PrefixedName("map"))
         world.add_kinematic_structure_entity(root)
         obstacle = Body(name=PrefixedName("obstacle"))
-        world.add_connection(FixedConnection.create_with_dofs(world, root, obstacle))
+        world.add_connection(
+            FixedConnection.create_with_dofs(world=world, parent=root, child=obstacle)
+        )
         shape = Box(scale=Scale(1.0, 1.0, 1.0))
         obstacle.collision.append(shape)
 
@@ -605,7 +607,7 @@ def test_a_mesh_restored_from_json_is_written_as_glb_whatever_file_it_came_from(
         mesh=trimesh.creation.box(), directory=tmp_path, file_type="stl"
     )
 
-    restored = Mesh.from_json(mesh.to_json())
+    restored = Mesh.from_json(data=mesh.to_json())
 
     assert Path(restored.filename).suffix == f".{MeshFileFormat.GLB}"
 
@@ -619,7 +621,7 @@ def test_a_mesh_keeps_its_positions_exactly_through_a_json_round_trip(tmp_path):
     sphere.apply_translation([10.123456789, -7.3, 2.0])
     mesh = Mesh.from_trimesh(mesh=sphere, directory=tmp_path)
 
-    restored = Mesh.from_json(mesh.to_json())
+    restored = Mesh.from_json(data=mesh.to_json())
 
     np.testing.assert_array_equal(restored.mesh.vertices, mesh.mesh.vertices)
 

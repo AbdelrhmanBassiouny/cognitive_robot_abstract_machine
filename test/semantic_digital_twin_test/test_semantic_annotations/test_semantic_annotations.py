@@ -1,5 +1,12 @@
+"""
+Tests of the semantic annotations of an environment and how they are found in a world.
+"""
+
 import logging
 
+import numpy as np
+
+from krrood.adapters.json_serializer import from_json, to_json
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.explanation.explanation import explain_inference
 from krrood.entity_query_language.factories import entity, variable, in_, inference, an
@@ -19,7 +26,8 @@ from semantic_digital_twin.predefined_maps.kitchen_environment import (
 )
 from semantic_digital_twin.reasoning.world_reasoner import WorldReasoner
 from semantic_digital_twin.robots.minimal_robot import MinimalRobot
-from semantic_digital_twin.robots.robot_parts import AbstractRobot, KinematicChain
+from semantic_digital_twin.robots.robot_parts import AbstractRobot, RobotKinematicChain
+from semantic_digital_twin.semantic_annotations.mixins import IsPerceivable
 from semantic_digital_twin.semantic_annotations.semantic_annotations import *
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Handle,
@@ -157,9 +165,9 @@ def test_build_bloated_obstacle_collection_includes_bloated_walls():
         world.add_kinematic_structure_entity(root)
         world.add_connection(
             FixedConnection.create_with_dofs(
-                world,
-                root,
-                obstacle_body,
+                world=world,
+                parent=root,
+                child=obstacle_body,
                 parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
                     -2.0, 0.0, 0.0, reference_frame=root
                 ),
@@ -167,9 +175,9 @@ def test_build_bloated_obstacle_collection_includes_bloated_walls():
         )
         world.add_connection(
             FixedConnection.create_with_dofs(
-                world,
-                root,
-                wall_body,
+                world=world,
+                parent=root,
+                child=wall_body,
                 parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
                     2.0, 0.0, 0.0, reference_frame=root
                 ),
@@ -189,7 +197,9 @@ def test_build_bloated_obstacle_collection_includes_bloated_walls():
     wall_annotation = Wall(root=wall_body, _world=world)
 
     result = obstacle_annotation.build_bloated_obstacle_collection(
-        search_space, semantic_wall_annotation=wall_annotation, bloat_walls=0.5
+        search_space=search_space,
+        semantic_wall_annotation=wall_annotation,
+        bloat_walls=0.5,
     )
 
     assert len(result.bounding_boxes) == 2
@@ -313,8 +323,8 @@ def test_verbalize_query_that_inferred_semantic_annotations(apartment_world_copy
     explanation = explain_inference(drawer)
     verbalization_paragraph = verbalize_expression(explanation.query_root)
     verbalization_hierarchical = VerbalizationPipeline(
-        HierarchicalRenderer()
-    ).verbalize(explanation.query_root)
+        renderer=HierarchicalRenderer()
+    ).verbalize(expression=explanation.query_root)
     assert verbalization_paragraph == (
         "If the child of a PrismaticConnection has collision geometry,"
         " the child of the PrismaticConnection is not part of a robot,"
@@ -354,7 +364,7 @@ def test_semantic_annotation_serialization_deserialization_once(apartment_world_
     tracker = WorldEntityWithIDKwargsTracker.from_world(apartment_world_copy)
     kwargs = tracker.create_kwargs()
 
-    door_de = Door.from_json(door_se, **kwargs)
+    door_de = Door.from_json(data=door_se, **kwargs)
 
     assert type(door.handle) == type(door_de.handle)
     assert type(door.root) == type(door_de.root)
@@ -380,11 +390,14 @@ def test_minimal_robot_annotation(pr2_world_state_reset):
 
 
 def test_kinematic_chain_with_root_equal_tip_has_no_connections():
+    """
+    A kinematic chain whose root is its tip has no connections.
+    """
 
     @dataclass(eq=False)
-    class ReviewKinematicChain(KinematicChain):
+    class ReviewKinematicChain(RobotKinematicChain):
         """
-        Minimal concrete KinematicChain for chain tests.
+        Minimal concrete RobotKinematicChain for chain tests.
         """
 
         def setup_hardware_interfaces(self):
@@ -689,3 +702,40 @@ def test_every_kitchen_drawer_stands_closed_at_the_lower_limit_of_its_rails(
     kitchen_environment_world.notify_state_change()
 
     assert [drawer.opening_ratio for drawer in drawers] == [0] * len(drawers)
+
+
+# %% perceived objects
+
+
+def test_unknown_object_keeps_its_class_label_when_sent_to_another_process():
+    """
+    A perceived object keeps its class label through serialization to another process.
+    """
+    world = World()
+    body = Body(name=PrefixedName("unknown_object"))
+    with world.modify_world():
+        world.add_body(body)
+        unknown_object = UnknownObject(root=body, class_label="fork")
+        world.add_semantic_annotation(unknown_object)
+    tracker = WorldEntityWithIDKwargsTracker.from_world(world)
+
+    received = from_json(to_json(unknown_object), **tracker.create_kwargs())
+
+    assert type(received) is UnknownObject
+    assert received.root is body
+    assert received.class_label == unknown_object.class_label
+
+
+def test_human_is_found_among_the_perceivable_objects_with_its_class_label():
+    """
+    A human is a perceivable object and keeps its class label.
+    """
+    world = World()
+    body = Body(name=PrefixedName("human"))
+    with world.modify_world():
+        world.add_body(body)
+        human = Human(root=body, class_label="person")
+        world.add_semantic_annotation(human)
+
+    assert world.get_semantic_annotations_by_type(IsPerceivable) == [human]
+    assert human.class_label == "person"

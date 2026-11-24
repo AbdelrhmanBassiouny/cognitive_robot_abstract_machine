@@ -1,3 +1,9 @@
+"""
+Symbolic spatial types, such as points, vectors, rotations, transformations, poses,
+displacements, twists and screw axes, that carry the Cartesian frames they are
+expressed in.
+"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -5,12 +11,16 @@ from copy import deepcopy, copy
 from dataclasses import dataclass, field
 from enum import Enum, StrEnum
 
+import math
+import sys
+
 import casadi as ca
 import numpy as np
 from typing_extensions import Any, overload, Self, Callable, TypeVar
 
 import krrood.symbolic_math.symbolic_math as sm
 from krrood.adapters.json_serializer import SubclassJSONSerializer
+from krrood.patterns.classproperty import classproperty
 from krrood.symbolic_math.exceptions import (
     WrongDimensionsError,
     UnsupportedOperationError,
@@ -110,7 +120,7 @@ class SpatialType(ValueInCartesianFrame3D, ABC):
             result.update(self._constant_to_json())
         else:
             result[sm.SymbolicMathJSONKey.EXPRESSION] = (
-                sm.ExpressionGraph.from_expression(self).to_json(**kwargs)
+                sm.ExpressionGraph.from_expression(expression=self).to_json(**kwargs)
             )
         return result
 
@@ -121,8 +131,8 @@ class SpatialType(ValueInCartesianFrame3D, ABC):
         :param data: The json of this value.
         """
         if self.reference_frame is not None:
-            CartesianFrame3DReference(SpatialFrameKey.REFERENCE).write(
-                data, self.reference_frame
+            CartesianFrame3DReference(subject=SpatialFrameKey.REFERENCE).write(
+                data=data, identified_object=self.reference_frame
             )
 
     @abstractmethod
@@ -132,12 +142,16 @@ class SpatialType(ValueInCartesianFrame3D, ABC):
         """
 
     @classmethod
-    def _from_json(cls, data: dict[str, Any], **kwargs) -> Self:
+    def _from_json(cls, *, data: dict[str, Any], **kwargs: Any) -> Self:
+        """
+        Extends :meth:`SubclassJSONSerializer._from_json` by reading a constant value
+        from its numbers and a symbolic one from its expression graph.
+        """
         if sm.SymbolicMathJSONKey.EXPRESSION not in data:
-            return cls._from_constant_json(data, **kwargs)
+            return cls._from_constant_json(data=data, **kwargs)
         result = sm.ExpressionGraph.from_json(
-            data[sm.SymbolicMathJSONKey.EXPRESSION], **kwargs
-        ).to_expression(cls)
+            data=data[sm.SymbolicMathJSONKey.EXPRESSION], **kwargs
+        ).to_expression(expression_type=cls)
         result._frames_from_json(data, **kwargs)
         return result
 
@@ -154,7 +168,7 @@ class SpatialType(ValueInCartesianFrame3D, ABC):
 
     @classmethod
     @abstractmethod
-    def _from_constant_json(cls, data: dict[str, Any], **kwargs) -> Self:
+    def _from_constant_json(cls, *, data: dict[str, Any], **kwargs: Any) -> Self:
         """
         :param data: The json of a constant value, as :meth:`_constant_to_json` wrote it.
         :param kwargs: The kwargs of the ``_from_json`` that is reading it.
@@ -173,10 +187,10 @@ class SpatialType(ValueInCartesianFrame3D, ABC):
         :param kwargs: addition kwargs of _from_json
         :return: None if the spatial type refers to no such entity.
         """
-        reference = CartesianFrame3DReference(frame)
+        reference = CartesianFrame3DReference(subject=frame)
         if not data.get(reference.id_key):
             return None
-        return reference.resolve(data, **kwargs)
+        return reference.resolve(data=data, **kwargs)
 
     @staticmethod
     def _ensure_consistent_frame(
@@ -338,8 +352,8 @@ class HomogeneousTransformationMatrix(
     def _frames_to_json(self, data: dict[str, Any]) -> None:
         super()._frames_to_json(data)
         if self.child_frame is not None:
-            CartesianFrame3DReference(SpatialFrameKey.CHILD).write(
-                data, self.child_frame
+            CartesianFrame3DReference(subject=SpatialFrameKey.CHILD).write(
+                data=data, identified_object=self.child_frame
             )
 
     def _frames_from_json(self, data: dict[str, Any], **kwargs) -> None:
@@ -563,7 +577,7 @@ class HomogeneousTransformationMatrix(
             if isinstance(other, HomogeneousTransformationMatrix):
                 result.child_frame = other.child_frame
             return result
-        raise UnsupportedOperationError("dot", self, other)
+        raise UnsupportedOperationError(operation="dot", left=self, right=other)
 
     def __matmul__(self, other: GenericSpatialType) -> GenericSpatialType:
         return self.dot(other)
@@ -573,7 +587,7 @@ class HomogeneousTransformationMatrix(
             child_frame=self.reference_frame, reference_frame=self.child_frame
         )
         inv[:3, :3] = self[:3, :3].T
-        inv[:3, 3] = (-inv[:3, :3]).dot(self[:3, 3])
+        inv[:3, 3] = (-inv[:3, :3]).dot(other=self[:3, 3])
         return inv
 
     @staticmethod
@@ -599,7 +613,7 @@ class HomogeneousTransformationMatrix(
         """
         :return: The translation this transformation is composed of.
         """
-        result = Point3.from_casadi_sx(self.casadi_sx[:4, 3])
+        result = Point3.from_casadi_sx(casadi_sx=self.casadi_sx[:4, 3])
         result.reference_frame = self.reference_frame
         return result
 
@@ -644,6 +658,7 @@ class HomogeneousTransformationMatrix(
         """
         result = Pose.from_casadi_sx(casadi_sx=copy(self.casadi_sx))
         result.reference_frame = self.reference_frame
+        result.pinned_free_variables = list(self.pinned_free_variables)
         return result
 
     def _copy_with_data(self, data: ca.SX) -> HomogeneousTransformationMatrix:
@@ -703,7 +718,7 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         if data is None:
             self._casadi_sx = ca.SX.eye(4)
         else:
-            empty_data = to_sx(Matrix.eye(4))
+            empty_data = to_sx(Matrix.eye(size=4))
             empty_data[:3, :3] = sm.to_sx(data)[:3, :3]
             self._casadi_sx = empty_data
         super().__post_init__()
@@ -877,7 +892,7 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
             result = type(other).from_casadi_sx(casadi_sx=result_sx)
             result.reference_frame = self.reference_frame
             return result
-        raise UnsupportedOperationError("dot", self, other)
+        raise UnsupportedOperationError(operation="dot", left=self, right=other)
 
     def __matmul__(
         self, other: GenericRotatableSpatialType
@@ -903,7 +918,7 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         """
         :return: This rotation matrix as a matrix without spatial semantics.
         """
-        return sm.Matrix.from_casadi_sx(copy(self.casadi_sx))
+        return sm.Matrix.from_casadi_sx(casadi_sx=copy(self.casadi_sx))
 
     @classmethod
     def from_vectors(
@@ -998,7 +1013,7 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         # Every sine and cosine is built once, and through ca.SX.unary, because casadi's
         # overloaded functions spend most of their time choosing the overload.
         sin_roll, cos_roll, sin_pitch, cos_pitch, sin_yaw, cos_yaw = (
-            sm.Scalar.from_casadi_sx(ca.SX.unary(operation, sm.to_sx(angle)))
+            sm.Scalar.from_casadi_sx(casadi_sx=ca.SX.unary(operation, sm.to_sx(angle)))
             for angle in (roll, pitch, yaw)
             for operation in (ca.OP_SIN, ca.OP_COS)
         )
@@ -1058,9 +1073,9 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         Scales each of the axes to the length of one.
         """
         scale_v = 1.0
-        self[:3, 0] = self[:3, 0].scale(scale_v)
-        self[:3, 1] = self[:3, 1].scale(scale_v)
-        self[:3, 2] = self[:3, 2].scale(scale_v)
+        self[:3, 0] = self[:3, 0].scale(a=scale_v)
+        self[:3, 1] = self[:3, 1].scale(a=scale_v)
+        self[:3, 2] = self[:3, 2].scale(a=scale_v)
 
     @property
     def T(self) -> RotationMatrix:
@@ -1182,7 +1197,7 @@ class Point3(Point):
         """
         if isinstance(data, SpatialType) and reference_frame is None:
             reference_frame = data.reference_frame
-        result = cls.from_casadi_sx(copy(sm.to_sx(data)))
+        result = cls.from_casadi_sx(casadi_sx=copy(sm.to_sx(data)))
         result.reference_frame = reference_frame
         return result
 
@@ -1228,7 +1243,7 @@ class Point3(Point):
         }
 
     def norm(self) -> sm.Scalar:
-        return sm.Scalar.from_casadi_sx(ca.norm_2(self[:3].casadi_sx))
+        return sm.Scalar.from_casadi_sx(casadi_sx=ca.norm_2(self[:3].casadi_sx))
 
     @property
     def z(self) -> sm.Scalar:
@@ -1241,7 +1256,7 @@ class Point3(Point):
     def __add__(self, other: Vector3) -> Point3:
         if isinstance(other, Vector3):
             result = Point3.from_casadi_sx(
-                ca.SX.binary(ca.OP_ADD, self.casadi_sx, other.casadi_sx)
+                casadi_sx=ca.SX.binary(ca.OP_ADD, self.casadi_sx, other.casadi_sx)
             )
         else:
             return NotImplemented
@@ -1257,11 +1272,11 @@ class Point3(Point):
     def __sub__(self, other):
         if isinstance(other, Point3):
             result = Vector3.from_casadi_sx(
-                ca.SX.binary(ca.OP_SUB, self.casadi_sx, other.casadi_sx)
+                casadi_sx=ca.SX.binary(ca.OP_SUB, self.casadi_sx, other.casadi_sx)
             )
         elif isinstance(other, Vector3):
             result = Point3.from_casadi_sx(
-                ca.SX.binary(ca.OP_SUB, self.casadi_sx, other.casadi_sx)
+                casadi_sx=ca.SX.binary(ca.OP_SUB, self.casadi_sx, other.casadi_sx)
             )
         else:
             return NotImplemented
@@ -1269,7 +1284,7 @@ class Point3(Point):
         return result
 
     def __neg__(self) -> Point3:
-        result = Point3.from_casadi_sx(ca.SX.unary(ca.OP_NEG, self.casadi_sx))
+        result = Point3.from_casadi_sx(casadi_sx=ca.SX.unary(ca.OP_NEG, self.casadi_sx))
         result.reference_frame = self.reference_frame
         return result
 
@@ -1350,7 +1365,7 @@ class Point3(Point):
         """
         :return: The vector from the origin of the reference frame to this point.
         """
-        result = Vector3.from_casadi_sx(copy(self.casadi_sx))
+        result = Vector3.from_casadi_sx(casadi_sx=copy(self.casadi_sx))
         result.reference_frame = self.reference_frame
         return result
 
@@ -1359,10 +1374,10 @@ class Point3(Point):
         """
         :return: The coordinates of this point as a vector without spatial semantics.
         """
-        return sm.Vector.from_casadi_sx(copy(self.casadi_sx[:3]))
+        return sm.Vector.from_casadi_sx(casadi_sx=copy(self.casadi_sx[:3]))
 
     def euclidean_distance(self, other: Self) -> sm.Scalar:
-        return self.generic_vector.euclidean_distance(other.generic_vector)
+        return self.generic_vector.euclidean_distance(other=other.generic_vector)
 
 
 @dataclass(eq=False, init=False, repr=False)
@@ -1688,7 +1703,7 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
             visualisation_frame = data.visualisation_frame
         else:
             visualisation_frame = None
-        result = cls.from_casadi_sx(copy(sm.to_sx(data)))
+        result = cls.from_casadi_sx(casadi_sx=copy(sm.to_sx(data)))
         result.reference_frame = reference_frame
         result.visualisation_frame = visualisation_frame
         return result
@@ -1782,7 +1797,7 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     def __add__(self, other: Vector3) -> Vector3:
         if isinstance(other, Vector3):
             result = Vector3.from_casadi_sx(
-                ca.SX.binary(ca.OP_ADD, self.casadi_sx, other.casadi_sx)
+                casadi_sx=ca.SX.binary(ca.OP_ADD, self.casadi_sx, other.casadi_sx)
             )
         else:
             return NotImplemented
@@ -1792,7 +1807,7 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     def __sub__(self, other: Vector3) -> Vector3:
         if isinstance(other, Vector3):
             result = Vector3.from_casadi_sx(
-                ca.SX.binary(ca.OP_SUB, self.casadi_sx, other.casadi_sx)
+                casadi_sx=ca.SX.binary(ca.OP_SUB, self.casadi_sx, other.casadi_sx)
             )
         else:
             return NotImplemented
@@ -1802,7 +1817,7 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     def __mul__(self, other: sm.ScalarData) -> Vector3:
         if isinstance(other, sm.ScalarData):
             result = Vector3.from_casadi_sx(
-                ca.SX.binary(ca.OP_MUL, self.casadi_sx, sm.to_sx(other))
+                casadi_sx=ca.SX.binary(ca.OP_MUL, self.casadi_sx, sm.to_sx(other))
             )
         else:
             return NotImplemented
@@ -1812,7 +1827,7 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     def __rmul__(self, other: float) -> Vector3:
         if isinstance(other, (int, float)):
             result = Vector3.from_casadi_sx(
-                ca.SX.binary(ca.OP_MUL, self.casadi_sx, sm.to_sx(other))
+                casadi_sx=ca.SX.binary(ca.OP_MUL, self.casadi_sx, sm.to_sx(other))
             )
         else:
             return NotImplemented
@@ -1822,7 +1837,7 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     def __truediv__(self, other: sm.ScalarData) -> Vector3:
         if isinstance(other, sm.ScalarData):
             result = Vector3.from_casadi_sx(
-                ca.SX.binary(ca.OP_DIV, self.casadi_sx, sm.to_sx(other))
+                casadi_sx=ca.SX.binary(ca.OP_DIV, self.casadi_sx, sm.to_sx(other))
             )
         else:
             return NotImplemented
@@ -1831,6 +1846,7 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
     def safe_division(
         self,
+        *,
         other: sm.ScalarData,
         if_nan: Vector3 | None = None,
     ) -> sm.GenericSymbolicType:
@@ -1852,14 +1868,16 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         )
 
     def __neg__(self) -> Vector3:
-        result = Vector3.from_casadi_sx(ca.SX.unary(ca.OP_NEG, self.casadi_sx))
+        result = Vector3.from_casadi_sx(
+            casadi_sx=ca.SX.unary(ca.OP_NEG, self.casadi_sx)
+        )
         result.reference_frame = self.reference_frame
         return result
 
     def dot(self, other: Vector3) -> sm.Scalar:
         if isinstance(other, Vector3):
             return sm.Scalar.from_casadi_sx(
-                ca.mtimes(self.casadi_sx[:3].T, other.casadi_sx[:3])
+                casadi_sx=ca.mtimes(self.casadi_sx[:3].T, other.casadi_sx[:3])
             )
         raise UnsupportedOperationError("dot", self, other)
 
@@ -1873,13 +1891,13 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         return result
 
     def norm(self) -> sm.Scalar:
-        return sm.Scalar.from_casadi_sx(ca.norm_2(self.casadi_sx[:3]))
+        return sm.Scalar.from_casadi_sx(casadi_sx=ca.norm_2(self.casadi_sx[:3]))
 
     def scale(self, a: sm.ScalarData, unsafe: bool = False):
         if unsafe:
             self.casadi_sx = ((self / self.norm()) * a).casadi_sx
         else:
-            self.casadi_sx = (self.safe_division(self.norm()) * a).casadi_sx
+            self.casadi_sx = (self.safe_division(other=self.norm()) * a).casadi_sx
 
     def project_to_cone(
         self,
@@ -1961,7 +1979,7 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         """
         :return: The point this vector reaches from the origin of the reference frame.
         """
-        result = Point3.from_casadi_sx(copy(self.casadi_sx))
+        result = Point3.from_casadi_sx(casadi_sx=copy(self.casadi_sx))
         result.reference_frame = self.reference_frame
         return result
 
@@ -2239,7 +2257,7 @@ class Quaternion(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         """
         :return: This quaternion as a vector without spatial semantics.
         """
-        return sm.Vector.from_casadi_sx(copy(self.casadi_sx))
+        return sm.Vector.from_casadi_sx(casadi_sx=copy(self.casadi_sx))
 
     @property
     def rotation_matrix(self) -> RotationMatrix:
@@ -2300,8 +2318,8 @@ class Quaternion(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         sin_half_theta = sm.sqrt(1.0 - cos_half_theta * cos_half_theta)
         if2 = 0.001 - abs(sin_half_theta)
 
-        ratio_a = (sm.sin((1.0 - t) * half_theta)).safe_division(sin_half_theta)
-        ratio_b = sm.sin(t * half_theta).safe_division(sin_half_theta)
+        ratio_a = (sm.sin((1.0 - t) * half_theta)).safe_division(other=sin_half_theta)
+        ratio_b = sm.sin(t * half_theta).safe_division(other=sin_half_theta)
 
         mid_quaternion = Quaternion.from_iterable(
             self.generic_vector * 0.5 + other.generic_vector * 0.5
@@ -2421,7 +2439,9 @@ class AxisAngle(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
         # (1 - cos(angle)) times the axis times its transpose, which vanishes at no
         # turn; its column with the largest diagonal entry is the axis up to its sign
-        axis_outer_product = (rotation + rotation.T) / 2 - sm.Matrix.eye(3) * cosine
+        axis_outer_product = (rotation + rotation.T) / 2 - sm.Matrix.eye(
+            size=3
+        ) * cosine
         columns = [
             Vector3(*(axis_outer_product[row, column] for row in range(3)))
             for column in range(3)
@@ -2475,88 +2495,145 @@ class AxisAngle(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         return RotationMatrix.from_axis_angle(self)
 
 
-@dataclass(eq=False, init=False, repr=False)
-class Twist(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
+@dataclass(eq=False, init=False, repr=False, kw_only=True)
+class VectorPair(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer, ABC):
     """
-    How a rigid body moved: a translation and a rotation vector, both along the axes of
-    its reference frame.
+    Six numbers made of two vectors given along the axes of the same reference frame:
+    a rotational part in the upper three entries and a translational part in the lower
+    three, such as the angular and the linear velocity of a :class:`Twist`.
     """
 
     def __init__(
         self,
-        translation: Vector3 | None = None,
-        rotation_vector: Vector3 | None = None,
-        reference_frame: CartesianFrame3D | None = None,
-    ):
+        *,
+        rotational_part: Vector3 | None,
+        translational_part: Vector3 | None,
+        reference_frame: CartesianFrame3D | None,
+    ) -> None:
         """
-        :param translation: How far and in which direction the body moved, in meters.
-            Defaults to no translation.
-        :param rotation_vector: The axis the body turned around, scaled by the angle it
-            turned by in radians. Defaults to no rotation.
-        :param reference_frame: The frame along whose axes the body moved.
+        :param rotational_part: How the body turns, in the upper three entries; zero if
+            None.
+        :param translational_part: How a point of the body moves, in the lower three
+            entries; zero if None.
+        :param reference_frame: The frame along whose axes both vectors are given.
         """
-        if translation is None:
-            translation = Vector3()
-        if rotation_vector is None:
-            rotation_vector = Vector3()
+        if rotational_part is None:
+            rotational_part = Vector3()
+        if translational_part is None:
+            translational_part = Vector3()
         self.casadi_sx = sm.to_sx(
             [
-                translation.x,
-                translation.y,
-                translation.z,
-                rotation_vector.x,
-                rotation_vector.y,
-                rotation_vector.z,
+                rotational_part.x,
+                rotational_part.y,
+                rotational_part.z,
+                translational_part.x,
+                translational_part.y,
+                translational_part.z,
             ]
         )
         self.reference_frame = reference_frame
         super().__post_init__()
 
-    def _verify_type(self):
+    @classproperty
+    @abstractmethod
+    def _rotational_part_name(cls) -> str:
+        """
+        :return: The name of the rotational part, which is both its keyword in the
+            constructor and its key in the json.
+        """
+
+    @classproperty
+    @abstractmethod
+    def _translational_part_name(cls) -> str:
+        """
+        :return: The name of the translational part, which is both its keyword in the
+            constructor and its key in the json.
+        """
+
+    def _verify_type(self) -> None:
         if self.shape != (6, 1):
             raise WrongDimensionsError(
                 expected_dimensions=(6, 1), actual_dimensions=self.shape
             )
 
     @classmethod
-    def _from_constant_json(cls, data: dict[str, Any], **kwargs) -> Self:
+    def _from_constant_json(cls, *, data: dict[str, Any], **kwargs: Any) -> Self:
         reference_frame = cls._parse_optional_frame_from_json(
             data, frame=SpatialFrameKey.REFERENCE, **kwargs
         )
         return cls(
-            translation=Vector3(*data["translation"]),
-            rotation_vector=Vector3(*data["rotation_vector"]),
+            **{
+                cls._rotational_part_name: Vector3(*data[cls._rotational_part_name]),
+                cls._translational_part_name: Vector3(
+                    *data[cls._translational_part_name]
+                ),
+            },
             reference_frame=reference_frame,
         )
 
     def _constant_to_json(self) -> dict[str, Any]:
         return {
-            "translation": self.translation.to_np()[:3].tolist(),
-            "rotation_vector": self.rotation_vector.to_np()[:3].tolist(),
+            self._rotational_part_name: self._rotational_part.to_np()[:3].tolist(),
+            self._translational_part_name: self._translational_part.to_np()[
+                :3
+            ].tolist(),
         }
 
-    @classmethod
-    def from_transformation(cls, start_T_end: HomogeneousTransformationMatrix) -> Twist:
-        """
-        :param start_T_end: Where the body ended up, relative to where it started.
-        :return: The motion from the start to the end, in the reference frame of
-            ``start_T_end``, turning by an angle in [0, pi].
-        """
-        rotation = start_T_end.axis_angle
-        return cls(
-            translation=Vector3.from_iterable(start_T_end.position),
-            rotation_vector=rotation.axis * rotation.angle,
-            reference_frame=start_T_end.reference_frame,
-        )
-
     @property
-    def translation(self) -> Vector3:
+    def _rotational_part(self) -> Vector3:
         """
-        :return: How far and in which direction the body moved, in meters.
+        :return: How the body turns, in the upper three entries.
         """
         return Vector3(
             x=self[0], y=self[1], z=self[2], reference_frame=self.reference_frame
         )
+
+    @property
+    def _translational_part(self) -> Vector3:
+        """
+        :return: How a point of the body moves, in the lower three entries.
+        """
+        return Vector3(
+            x=self[3], y=self[4], z=self[5], reference_frame=self.reference_frame
+        )
+
+
+@dataclass(eq=False, init=False, repr=False, kw_only=True)
+class Displacement(VectorPair):
+    """
+    A rigid-body displacement: the transformation that rotates a body by
+    :attr:`rotation_vector` about its origin and moves that origin by
+    :attr:`translation`, both along the axes of the reference frame. Unlike a
+    :class:`Twist`, it is not a velocity.
+    """
+
+    def __init__(
+        self,
+        *,
+        rotation_vector: Vector3 | None = None,
+        translation: Vector3 | None = None,
+        reference_frame: CartesianFrame3D | None = None,
+    ) -> None:
+        """
+        :param rotation_vector: The axis the body turned around, scaled by the angle it
+            turned by in radians. Defaults to no rotation.
+        :param translation: Where the body's origin ended up, relative to where it
+            started, in meters. Defaults to no translation.
+        :param reference_frame: The frame along whose axes the body moved.
+        """
+        super().__init__(
+            rotational_part=rotation_vector,
+            translational_part=translation,
+            reference_frame=reference_frame,
+        )
+
+    @classproperty
+    def _rotational_part_name(cls) -> str:
+        return "rotation_vector"
+
+    @classproperty
+    def _translational_part_name(cls) -> str:
+        return "translation"
 
     @property
     def rotation_vector(self) -> Vector3:
@@ -2564,9 +2641,292 @@ class Twist(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         :return: The axis the body turned around, scaled by the angle it turned by in
             radians.
         """
-        return Vector3(
-            x=self[3], y=self[4], z=self[5], reference_frame=self.reference_frame
+        return self._rotational_part
+
+    @property
+    def translation(self) -> Vector3:
+        """
+        :return: Where the body's origin ended up, relative to where it started, in
+            meters.
+        """
+        return self._translational_part
+
+
+@dataclass(eq=False, init=False, repr=False, kw_only=True)
+class RigidMotionRate(VectorPair, ABC):
+    """
+    How a rigid body moves per unit of a parameter: how it turns, in the rotational
+    part, and how the point of the body at the origin of the reference frame moves, in
+    the translational part, both along that frame's axes.
+    """
+
+    @classproperty
+    def _series_rotation_angle(cls) -> float:
+        r"""
+        The rotation angle below which the left Jacobian's coefficients take three terms
+        of their series: omitting the fourth costs what the closed forms' round-off does
+        (`Todesco and Brüls <https://orbi.uliege.be/handle/2268/306081>`__, section 8):
+
+        .. math::
+
+            \frac{2 \varphi^6}{8!} = \frac{2 \varepsilon}{\varphi^2}
+            \quad\Rightarrow\quad
+            \varphi = (8!\,\varepsilon)^{1/8} \approx 0.042\ \text{rad},
+            \qquad \varepsilon\text{: machine epsilon}
+        """
+        return (math.factorial(8) * sys.float_info.epsilon) ** (1 / 8)
+
+    def _integrate(self, *, parameter_change: sm.ScalarData) -> Displacement:
+        """
+        The exponential of this rate times ``parameter_change`` (Solà, Deray and
+        Atchuthan, *A micro Lie theory*, equation (172)): the body turns by the
+        rotational part times the change, and its origin moves by
+        :meth:`_apply_left_jacobian` of the translational part times the change.
+
+        :param parameter_change: How much the parameter of the rate changed.
+        :return: The displacement of the body over that change, at this constant rate,
+            finite, also in its derivatives, where the body does not turn.
+        """
+        rotation = self._rotational_part * parameter_change
+        translation = self._translational_part * parameter_change
+        return Displacement(
+            rotation_vector=rotation,
+            translation=self._apply_left_jacobian(
+                rotation=rotation, translation=translation
+            ),
+            reference_frame=self.reference_frame,
         )
+
+    @classmethod
+    def _apply_left_jacobian(
+        cls, *, rotation: Vector3, translation: Vector3
+    ) -> Vector3:
+        r"""
+        :param rotation: The rotation vector :math:`r` the body turns by.
+        :param translation: The vector :math:`t` the origin of the body would move by
+            without turning.
+        :return: Where the origin of the body ends up when it turns while it moves:
+            :math:`t + a\,(r \times t) + b\,(r \times (r \times t))`, with :math:`a`
+            from :meth:`_first_order_coefficient` and :math:`b` from
+            :meth:`_second_order_coefficient`. This is the left Jacobian of :math:`r`
+            applied to :math:`t` (Eade, `Lie Groups for 2D and 3D Transformations
+            <https://www.ethaneade.com/lie.pdf>`__, section 3.2, equation (83)).
+        """
+        angle_squared = rotation.dot(rotation)
+        first_order = rotation.cross(translation)
+        second_order = rotation.cross(first_order)
+        return (
+            translation
+            + first_order * cls._first_order_coefficient(angle_squared=angle_squared)
+            + second_order * cls._second_order_coefficient(angle_squared=angle_squared)
+        )
+
+    @classmethod
+    def _first_order_coefficient(cls, *, angle_squared: sm.Scalar) -> sm.Scalar:
+        r"""
+        The coefficient :math:`a` of :math:`r \times t` in the left Jacobian: above
+        :attr:`_series_rotation_angle` the closed form, below it the first three terms
+        of its series (Eade, section 3.2, equations (76) and (75)):
+
+        .. math::
+
+            a = \frac{1 - \cos\varphi}{\varphi^2}
+            \approx \frac{1}{2!} - \frac{\varphi^2}{4!} + \frac{\varphi^4}{6!}
+
+        :param angle_squared: :math:`\varphi^2`, the square of the angle the body
+            turns by.
+        """
+        angle = sm.sqrt(angle_squared)
+        series = (
+            1 / math.factorial(2)
+            - angle_squared / math.factorial(4)
+            + angle_squared**2 / math.factorial(6)
+        )
+        closed_form = (1 - sm.cos(angle)) / angle_squared
+        return sm.if_less(
+            angle_squared, cls._series_rotation_angle**2, series, closed_form
+        )
+
+    @classmethod
+    def _second_order_coefficient(cls, *, angle_squared: sm.Scalar) -> sm.Scalar:
+        r"""
+        The coefficient :math:`b` of :math:`r \times (r \times t)` in the left Jacobian:
+        above :attr:`_series_rotation_angle` the closed form, below it the first three
+        terms of its series (Eade, section 3.2, equations (76) and (75)):
+
+        .. math::
+
+            b = \frac{\varphi - \sin\varphi}{\varphi^3}
+            \approx \frac{1}{3!} - \frac{\varphi^2}{5!} + \frac{\varphi^4}{7!}
+
+        :param angle_squared: :math:`\varphi^2`, the square of the angle the body
+            turns by.
+        """
+        angle = sm.sqrt(angle_squared)
+        series = (
+            1 / math.factorial(3)
+            - angle_squared / math.factorial(5)
+            + angle_squared**2 / math.factorial(7)
+        )
+        closed_form = (angle - sm.sin(angle)) / (angle_squared * angle)
+        return sm.if_less(
+            angle_squared, cls._series_rotation_angle**2, series, closed_form
+        )
+
+
+@dataclass(eq=False, init=False, repr=False, kw_only=True)
+class Twist(RigidMotionRate):
+    """
+    A twist ``(ω, v)``: how fast a rigid body turns, and how fast the point of the body
+    at the origin of the reference frame moves, both along that frame's axes and per
+    unit of the parameter they are taken with respect to, usually time. Unlike a
+    :class:`Displacement`, it is a velocity (Lynch and Park, *Modern Robotics*, §3.3.2).
+    """
+
+    def __init__(
+        self,
+        *,
+        angular_velocity: Vector3 | None = None,
+        linear_velocity: Vector3 | None = None,
+        reference_frame: CartesianFrame3D | None = None,
+    ) -> None:
+        """
+        :param angular_velocity: The axis the body turns around, scaled by how fast it
+            turns, in radians per unit of the parameter. Defaults to no turning.
+        :param linear_velocity: How fast the point of the body at the origin of the
+            reference frame moves, in meters per unit of the parameter. Defaults to
+            standing still.
+        :param reference_frame: The frame along whose axes both velocities are given.
+        """
+        super().__init__(
+            rotational_part=angular_velocity,
+            translational_part=linear_velocity,
+            reference_frame=reference_frame,
+        )
+
+    @classproperty
+    def _rotational_part_name(cls) -> str:
+        return "angular_velocity"
+
+    @classproperty
+    def _translational_part_name(cls) -> str:
+        return "linear_velocity"
+
+    @property
+    def angular_velocity(self) -> Vector3:
+        """
+        :return: The axis the body turns around, scaled by how fast it turns, in radians
+            per unit of the parameter.
+        """
+        return self._rotational_part
+
+    @property
+    def linear_velocity(self) -> Vector3:
+        """
+        :return: How fast the point of the body at the origin of the reference frame
+            moves, in meters per unit of the parameter.
+        """
+        return self._translational_part
+
+    def to_displacement(self, *, duration: sm.ScalarData) -> Displacement:
+        """
+        :param duration: How long the body moved at this constant twist, in units of
+            the parameter the twist is taken with respect to.
+        :return: The displacement of the body after moving that long at this twist.
+        """
+        return self._integrate(parameter_change=duration)
+
+
+@dataclass(eq=False, init=False, repr=False, kw_only=True)
+class ScrewAxis(RigidMotionRate):
+    """
+    How a rigid body's pose changes per unit of a position that moves it along a screw
+    axis: the axis's line, the pitch along it and the unit of the position. Unlike a
+    :class:`Twist`, it is not a velocity: it holds whatever the speed of the position.
+    """
+
+    def __init__(
+        self,
+        *,
+        rotation_per_unit_position: Vector3 | None = None,
+        translation_per_unit_position: Vector3 | None = None,
+        reference_frame: CartesianFrame3D | None = None,
+    ) -> None:
+        """
+        :param rotation_per_unit_position: The axis the body turns around, scaled by the
+            angle it turns by per unit of position, in radians. Defaults to no turning.
+        :param translation_per_unit_position: How far the point of the body at the
+            origin of the reference frame moves per unit of position, in meters.
+            Defaults to no moving.
+        :param reference_frame: The frame along whose axes both parts are given.
+        """
+        super().__init__(
+            rotational_part=rotation_per_unit_position,
+            translational_part=translation_per_unit_position,
+            reference_frame=reference_frame,
+        )
+
+    @classproperty
+    def _rotational_part_name(cls) -> str:
+        return "rotation_per_unit_position"
+
+    @classproperty
+    def _translational_part_name(cls) -> str:
+        return "translation_per_unit_position"
+
+    @property
+    def rotation_per_unit_position(self) -> Vector3:
+        """
+        :return: The axis the body turns around, scaled by the angle it turns by per
+            unit of position, in radians.
+        """
+        return self._rotational_part
+
+    @property
+    def translation_per_unit_position(self) -> Vector3:
+        """
+        :return: How far the point of the body at the origin of the reference frame
+            moves per unit of position, in meters.
+        """
+        return self._translational_part
+
+    @property
+    def unit_direction(self) -> Vector3:
+        """
+        :return: The unit vector along the axis: that of the rotation, or of the
+            translation for an axis that does not turn the body (Lynch and Park,
+            *Modern Robotics*, section 3.3.2.2). The zero vector for a zero screw axis.
+        """
+        rotation = self.rotation_per_unit_position
+        translation = self.translation_per_unit_position
+        angle_per_unit_position = rotation.norm()
+        result = sm.if_greater_zero(
+            angle_per_unit_position,
+            rotation.safe_division(other=angle_per_unit_position),
+            translation.safe_division(other=translation.norm()),
+        )
+        result.reference_frame = self.reference_frame
+        return result
+
+    def to_twist(self, *, position_velocity: sm.ScalarData) -> Twist:
+        """
+        :param position_velocity: How fast the position changes, per unit of the
+            parameter the twist is taken with respect to, usually time.
+        :return: The twist of the body while its position changes that fast.
+        """
+        return Twist(
+            angular_velocity=self.rotation_per_unit_position * position_velocity,
+            linear_velocity=self.translation_per_unit_position * position_velocity,
+            reference_frame=self.reference_frame,
+        )
+
+    def to_displacement(self, *, position: sm.ScalarData) -> Displacement:
+        """
+        :param position: How far the body moved along the screw axis, from zero.
+        :return: The displacement of the body after moving that far along this screw
+            axis.
+        """
+        return self._integrate(parameter_change=position)
 
 
 @dataclass(eq=False, init=False, repr=False)
@@ -2765,7 +3125,7 @@ class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
     @property
     def position(self) -> Point3:
-        result = Point3.from_casadi_sx(self.casadi_sx[:4, 3])
+        result = Point3.from_casadi_sx(casadi_sx=self.casadi_sx[:4, 3])
         result.reference_frame = self.reference_frame
         return result
 
