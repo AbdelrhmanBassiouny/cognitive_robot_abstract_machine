@@ -1294,10 +1294,15 @@ class AttributeMatch(AbstractMatchExpression[T]):
         :return: True if a type filter condition is needed for the attribute assignment, else False.
         """
         attr_type = self._type_
-        return (not attr_type) or (
-            (self.assigned_value._type_ and self.assigned_value._type_ is not attr_type)
-            and issubclass(self.assigned_value._type_, attr_type)
-        )
+        if not attr_type:
+            return True
+        if not isinstance(attr_type, type):
+            # A type variable or a generic alias cannot be compared with issubclass, so
+            # the value's type is checked when the query runs.
+            return True
+        return (
+            self.assigned_value._type_ and self.assigned_value._type_ is not attr_type
+        ) and issubclass(self.assigned_value._type_, attr_type)
 
     @property
     def _name_(self) -> str:
