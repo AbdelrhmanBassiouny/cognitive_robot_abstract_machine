@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from functools import cached_property, lru_cache
 from inspect import isclass
+from typing import TypeVar
 from types import UnionType
 from typing_extensions import (
     Callable,
@@ -1215,12 +1216,48 @@ class AttributeMatch(AbstractMatchExpression[T]):
         :return: The attribute's field when it is declared as a collection or an
             optional collection, else None.
         """
-        wrapped_field = get_wrapped_field(
-            self.attribute._owner_class_, self.attribute_name
-        )
+        pattern = self._parent_
+        if isinstance(pattern, AttributeMatch) and isinstance(
+            pattern.assigned_value, AbstractMatchExpression
+        ):
+            # Nested in an attribute, the class is the one the pattern assigned to that
+            # attribute names, as EndEffector in end_effector=an(EndEffector)(...).
+            pattern = pattern.assigned_value
+        pattern_class = getattr(pattern, "_type_", None)
+        wrapped_field = self._field_declared_below_(
+            pattern_class
+        ) or self._field_declared_below_(self.attribute._owner_class_)
         if wrapped_field is None or self._declared_collection_(wrapped_field) is None:
             return None
         return wrapped_field
+
+    def _field_declared_below_(self, owner_class: Any) -> WrappedField | None:
+        """
+        :param owner_class: The class the pattern is written for, or the class the
+            attribute is read from.
+        :return: The attribute's field as the class declares it or, for a class that
+            leaves it to its subclasses, such as an abstract end effector whose concrete
+            grippers declare their fingers, as the nearest subclass declares it.
+        """
+        if isinstance(owner_class, TypeVar):
+            # A field declared with a type variable holds values of its bound.
+            owner_class = owner_class.__bound__
+        if not isclass(owner_class):
+            return None
+        classes_to_search = [owner_class]
+        searched = set()
+        while classes_to_search:
+            candidate = classes_to_search.pop(0)
+            if candidate in searched:
+                continue
+            searched.add(candidate)
+            wrapped_field = get_wrapped_field(
+                owner_class=candidate, field_name=self.attribute_name
+            )
+            if wrapped_field is not None:
+                return wrapped_field
+            classes_to_search.extend(candidate.__subclasses__())
+        return None
 
     @cached_property
     def _collection_element_type_(self) -> type | None:
