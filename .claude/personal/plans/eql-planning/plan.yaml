@@ -48,16 +48,20 @@ items:
   session: https://claude.ai/code/session_01JxHGiPZGhUcg34K5Aagazz
   blockers:
     - >-
-      Owner review on #617 at 38610d26: 21 open threads, answered Nov 24; implementing the
-      composed-query API, insertion changes, a private Symbol persist flag and the failed
-      precondition in ActionIsNotApplicable.
+      Waiting on the owner: 4 open discussion threads on #617 (parameter variables in
+      __init_subclass__, the composed query, a value-type parameter on GroundTermExpression,
+      conditional effects). Fork CI at 484d201e not checked yet.
   depends_on: []
   status: in progress
   recommended_model: opus
-  notes: 'Draft PR #617 implements it: ActionSchema (applicable_actions, is_applicable,
-    apply), effects Assignment, ElementInsertion, ObjectCreation and ObjectRemoval (conditional,
-    read in the state before the action), facts with expression values, and class-diagram type
-    checks. Owner decided State.with_facts becomes State.add_facts (api-break for #522).'
+  notes: >
+    Draft PR #617: ActionSchema and Effect build queries (applicable_actions, to_symbolic,
+    get_change_to_state); State evaluates them (apply_effects, apply_action, satisfies). Insertions
+    are their own change; facts take expression values and are type-checked.
+
+    Owner decisions: with_facts becomes add_facts; private Symbol._persist_instance_; failed
+    conditions reported now, why goes to regression-and-explanation; composed query and
+    verbalization go to planning-query-verbalization. api-break for #522.
 - id: declared-setter-implications
   branch: eql-planning/declared-setter-implications
   title: Assignments follow the implications a setter declares, such as ontomatic inverse
