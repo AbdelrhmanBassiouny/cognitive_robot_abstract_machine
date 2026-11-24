@@ -121,7 +121,7 @@ class ElementQuantifier(Enum):
     """
 
     def condition_on_elements(
-        self, element: CanBehaveLikeAVariable, condition: ConditionType
+        self, *, element: CanBehaveLikeAVariable, condition: ConditionType
     ) -> SymbolicExpression:
         """
         :param element: A variable over the elements of a collection.
@@ -130,14 +130,14 @@ class ElementQuantifier(Enum):
         """
         match self:
             case ElementQuantifier.SOME:
-                return Exists(element, condition)
+                return Exists(left=element, right=condition)
             case ElementQuantifier.EVERY:
-                return ForAll(element, condition)
+                return ForAll(left=element, right=condition)
             case ElementQuantifier.NO:
-                return Exists(element, condition)._invert_()
+                return Exists(left=element, right=condition)._invert_()
 
     def conditions_on_value(
-        self, conditions: list[ConditionType]
+        self, *, conditions: list[ConditionType]
     ) -> list[ConditionType]:
         """
         :param conditions: The conditions of the pattern on an attribute holding one
@@ -516,9 +516,9 @@ class Match(
         if variable is not None and self._domain_ is not None:
             self._conditions_.append(
                 Comparator(
-                    _resolve_domain(self._type_, self._domain_),
-                    self._variable_,
-                    operator.contains,
+                    left=_resolve_domain(type_=self._type_, domain=self._domain_),
+                    right=self._variable_,
+                    operation=operator.contains,
                 )
             )
         for attr_name, attr_assigned_value in self._kwargs_.items():
@@ -582,7 +582,7 @@ class Match(
                 assigned_value=element,
                 index_access=index,
             )
-        self._conditions_.append(length(getattr(self._variable_, key)) == len(value))
+        self._conditions_.append(length(iterable=getattr(self._variable_, key)) == len(value))
 
     def _update_fields_(
         self,
@@ -637,7 +637,7 @@ class Match(
             :func:`~krrood.entity_query_language.factories.none_is`.
         """
         if self._element_quantifier_ is not ElementQuantifier.SOME:
-            raise ElementQuantifierWithoutAttribute(self)
+            raise ElementQuantifierWithoutAttribute(pattern=self)
         return super().evaluate(backend=backend, state=state)
 
     def _evaluate_natively_(self) -> Iterator:
@@ -751,7 +751,7 @@ class Match(
         """
         if self._type_union_ is None:
             return []
-        return [HasType(self._variable_, self._type_union_)]
+        return [HasType(variable=self._variable_, types_=self._type_union_)]
 
     @property
     def _conditions_on_stated_values_(self) -> Iterator[ConditionType]:
@@ -1067,14 +1067,14 @@ class AttributeMatch(AbstractMatchExpression[T]):
         element_quantifier = self.assigned_value._element_quantifier_
         if self.assigned_value._resolved_:
             self._conditions_.append(
-                self._condition_on_resolved_pattern_(element_quantifier)
+                self._condition_on_resolved_pattern_(element_quantifier=element_quantifier)
             )
             return
 
         if not self._states_an_element_of_the_attribute_:
             self._conditions_.extend(
                 element_quantifier.conditions_on_value(
-                    self._resolve_pattern_against_(attribute)
+                    conditions=self._resolve_pattern_against_(variable=attribute)
                 )
             )
             return
@@ -1085,12 +1085,15 @@ class AttributeMatch(AbstractMatchExpression[T]):
         self._variable_ = element
         self._conditions_.append(
             element_quantifier.condition_on_elements(
-                element, chained_logic(AND, *self._resolve_pattern_against_(element))
+                element=element,
+                condition=chained_logic(
+                    AND, *self._resolve_pattern_against_(variable=element)
+                ),
             )
         )
 
     def _condition_on_resolved_pattern_(
-        self, element_quantifier: ElementQuantifier
+        self, *, element_quantifier: ElementQuantifier
     ) -> SymbolicExpression:
         """
         :param element_quantifier: How many elements of the attribute the pattern
@@ -1111,16 +1114,21 @@ class AttributeMatch(AbstractMatchExpression[T]):
         ):
             element = Variable(_domain_=self.attribute)
             return ForAll(
-                element,
-                Exists(pattern_value, AND(pattern_value == element, pattern_holds)),
+                left=element,
+                right=Exists(
+                    left=pattern_value,
+                    right=AND(left=pattern_value == element, right=pattern_holds),
+                ),
             )
         return element_quantifier.condition_on_elements(
-            pattern_value,
-            AND(self._build_condition_on_assigned_value_(), pattern_holds),
+            element=pattern_value,
+            condition=AND(
+                left=self._build_condition_on_assigned_value_(), right=pattern_holds
+            ),
         )
 
     def _resolve_pattern_against_(
-        self, variable: CanBehaveLikeAVariable
+        self, *, variable: CanBehaveLikeAVariable
     ) -> list[ConditionType]:
         """
         Resolve the assigned pattern with *variable* as the object it describes.
@@ -1128,13 +1136,13 @@ class AttributeMatch(AbstractMatchExpression[T]):
         :param variable: The variable the pattern describes.
         :return: The conditions of the pattern on *variable*.
         """
-        self.assigned_value.resolve(variable, self)
+        self.assigned_value.resolve(variable=variable, parent=self)
         conditions = []
         quantifier_states_the_type = (
             self.assigned_value._element_quantifier_ is not ElementQuantifier.SOME
         )
         if self.is_type_filter_needed or quantifier_states_the_type:
-            conditions.append(HasType(variable, self.assigned_value._type_))
+            conditions.append(HasType(variable=variable, types_=self.assigned_value._type_))
         conditions.extend(self.assigned_value._conditions_)
         return conditions
 
@@ -1146,11 +1154,11 @@ class AttributeMatch(AbstractMatchExpression[T]):
         if not self._states_an_element_of_the_attribute_:
             return self.attribute == self.assigned_variable
         membership = Comparator(
-            self.attribute, self.assigned_variable, operator.contains
+            left=self.attribute, right=self.assigned_variable, operation=operator.contains
         )
         if self._collection_field_.is_optional:
             # An absent optional collection has no elements, so it contains nothing.
-            return AND(self.attribute != None, membership)
+            return AND(left=self.attribute != None, right=membership)
         return membership
 
     @cached_property
@@ -1191,7 +1199,7 @@ class AttributeMatch(AbstractMatchExpression[T]):
             return True
         if is_a_collection:
             return False
-        raise ValueFitsNeitherElementNorCollection(self, element_type)
+        raise ValueFitsNeitherElementNorCollection(attribute_match=self, element_type=element_type)
 
     @property
     def _attribute_holds_a_collection_(self) -> bool:

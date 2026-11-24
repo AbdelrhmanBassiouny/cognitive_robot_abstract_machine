@@ -110,7 +110,7 @@ def test_value_matches_owners_whose_optional_collection_contains_it(
     bag whose collection is ``None``.
     """
     _, heavy, bags = build_bags(bag_class, container_type)
-    matches = a(bag_class)(items=heavy).from_(bags).evaluate()
+    matches = a(bag_class)(items=heavy).from_(domain=bags).evaluate()
     assert names_of(matches) == ["both"]
 
 
@@ -120,7 +120,7 @@ def test_value_in_no_optional_collection_matches_nothing(bag_class, container_ty
     An item no bag holds matches no bag, including the one whose collection is ``None``.
     """
     _, _, bags = build_bags(bag_class, container_type)
-    matches = a(bag_class)(items=ShelfItem(9.0)).from_(bags).evaluate()
+    matches = a(bag_class)(items=ShelfItem(9.0)).from_(domain=bags).evaluate()
     assert list(matches) == []
 
 
@@ -134,7 +134,7 @@ def test_nested_pattern_matches_when_some_element_of_an_optional_collection_matc
     """
     _, _, bags = build_bags(bag_class, container_type)
     pattern = a(bag_class)(items=a(ShelfItem)(weight=2.0))
-    assert names_of(pattern.from_(bags).evaluate()) == ["both"]
+    assert names_of(pattern.from_(domain=bags).evaluate()) == ["both"]
 
 
 @pytest.mark.parametrize("bag_class, container_type", BAG_CLASSES_AND_CONTAINERS)
@@ -147,7 +147,7 @@ def test_unconstrained_pattern_excludes_the_owner_with_a_none_collection(
     """
     _, _, bags = build_bags(bag_class, container_type)
     pattern = a(bag_class)(items=a(ShelfItem)())
-    assert names_of(pattern.from_(bags).evaluate()) == ["both", "light"]
+    assert names_of(pattern.from_(domain=bags).evaluate()) == ["both", "light"]
 
 
 @pytest.mark.parametrize("bag_class, container_type", BAG_CLASSES_AND_CONTAINERS)
@@ -160,7 +160,7 @@ def test_variable_of_the_element_type_means_membership_in_an_optional_collection
     """
     light, _, bags = build_bags(bag_class, container_type)
     element = variable(ShelfItem, domain=[light])
-    matches = a(bag_class)(items=element).from_(bags).evaluate()
+    matches = a(bag_class)(items=element).from_(domain=bags).evaluate()
     assert names_of(matches) == ["both", "light"]
 
 
@@ -173,7 +173,7 @@ def test_none_keeps_equality_with_none(bag_class, container_type):
     ``items=None`` matches only the bag whose collection is ``None``.
     """
     _, _, bags = build_bags(bag_class, container_type)
-    matches = a(bag_class)(items=None).from_(bags).evaluate()
+    matches = a(bag_class)(items=None).from_(domain=bags).evaluate()
     assert names_of(matches) == ["none"]
 
 
@@ -183,7 +183,7 @@ def test_whole_collection_literal_keeps_equality(bag_class, container_type):
     A collection literal equal to the whole collection of one bag matches only that bag.
     """
     light, _, bags = build_bags(bag_class, container_type)
-    matches = a(bag_class)(items=container_type([light])).from_(bags).evaluate()
+    matches = a(bag_class)(items=container_type([light])).from_(domain=bags).evaluate()
     assert names_of(matches) == ["light"]
 
 

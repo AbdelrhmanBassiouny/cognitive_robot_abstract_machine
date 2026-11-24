@@ -103,7 +103,7 @@ def test_union_pattern_matches_an_object_of_any_class_of_the_union(pantry):
     """
     A pattern over a union selects the objects of each of its classes.
     """
-    products = a(Fruit | Vegetable).from_([pantry.apple, pantry.pea, pantry.salt])
+    products = a(Fruit | Vegetable).from_(domain=[pantry.apple, pantry.pea, pantry.salt])
 
     assert products.tolist() == [pantry.apple, pantry.pea]
 
@@ -112,7 +112,7 @@ def test_some_element_of_a_union(pantry):
     """
     Some product of a shelf is a fruit or a vegetable.
     """
-    shelves = a(Shelf)(products=a(Fruit | Vegetable)).from_(pantry.shelves)
+    shelves = a(Shelf)(products=a(Fruit | Vegetable)).from_(domain=pantry.shelves)
 
     assert set(shelves.tolist()) == {pantry.produce_shelf, pantry.mixed_shelf}
 
@@ -122,7 +122,7 @@ def test_every_element_of_a_union(pantry):
     Every product of a shelf is a fruit or a vegetable, vacuously so for the empty
     shelf.
     """
-    shelves = a(Shelf)(products=every_is(Fruit | Vegetable)).from_(pantry.shelves)
+    shelves = a(Shelf)(products=every_is(Fruit | Vegetable)).from_(domain=pantry.shelves)
 
     assert shelves.tolist() == [pantry.empty_shelf, pantry.produce_shelf]
 
@@ -131,7 +131,7 @@ def test_no_element_of_a_union(pantry):
     """
     No product of a shelf is a fruit or a vegetable, vacuously so for the empty shelf.
     """
-    shelves = a(Shelf)(products=none_is(Fruit | Vegetable)).from_(pantry.shelves)
+    shelves = a(Shelf)(products=none_is(Fruit | Vegetable)).from_(domain=pantry.shelves)
 
     assert shelves.tolist() == [pantry.empty_shelf, pantry.salt_shelf]
 
@@ -145,7 +145,7 @@ def test_union_pattern_takes_a_field_every_class_has(pantry):
     union: no shelf holds a green fruit or vegetable, except the produce shelf.
     """
     shelves = a(Shelf)(products=none_is(Fruit | Vegetable)(colour=Colour.GREEN)).from_(
-        pantry.shelves
+        domain=pantry.shelves
     )
 
     assert shelves.tolist() == [
@@ -163,8 +163,8 @@ def test_union_pattern_on_a_field_of_one_class_matches_like_its_base_class(pantr
     pantry.pea.grows_underground = True
     products = [pantry.apple, pantry.pea, pantry.salt]
 
-    union = a(Fruit | Vegetable)(grows_underground=True).from_(products)
-    base = a(Product)(grows_underground=True).from_(products)
+    union = a(Fruit | Vegetable)(grows_underground=True).from_(domain=products)
+    base = a(Product)(grows_underground=True).from_(domain=products)
 
     assert union.tolist() == base.tolist() == [pantry.pea]
 
@@ -177,7 +177,7 @@ def test_condition_on_no_element_of_a_union(pantry):
     heavy = none_is(Fruit | Vegetable)
     heavy.where(heavy.weight > 0.1)
 
-    shelves = a(Shelf)(products=heavy).from_(pantry.shelves)
+    shelves = a(Shelf)(products=heavy).from_(domain=pantry.shelves)
 
     assert shelves.tolist() == [pantry.empty_shelf, pantry.salt_shelf]
 

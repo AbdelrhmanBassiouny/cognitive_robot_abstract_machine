@@ -25,7 +25,7 @@ from krrood.entity_query_language.operators.set_operations import (
     PerformsCartesianProduct,
 )
 from krrood.entity_query_language.utils import is_iterable, make_set
-from krrood.ormatic.utils import classproperty
+from krrood.patterns.classproperty import classproperty
 
 
 @dataclass(kw_only=True, eq=False, repr=False)

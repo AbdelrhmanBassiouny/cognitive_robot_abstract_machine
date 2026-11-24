@@ -207,7 +207,7 @@ def test_match_root_reads_elements(store):
     """
     A path rooted at a match reads the elements as well.
     """
-    shelf = a(Shelf).from_(store.shelves)
+    shelf = a(Shelf).from_(domain=store.shelves)
     green = an(entity(shelf).where(shelf.products.colour == Colour.GREEN))
     assert green.tolist() == [store.mixed_shelf, store.green_shelf]
 

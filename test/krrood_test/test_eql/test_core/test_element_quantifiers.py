@@ -81,7 +81,7 @@ def test_every_element_matches_the_pattern(store):
     Every product of a shelf is red, vacuously so for the empty shelf.
     """
     shelves = a(Shelf)(products=every_is(Product)(colour=Colour.RED)).from_(
-        store.shelves
+        domain=store.shelves
     )
 
     assert shelves.tolist() == [store.empty_shelf, store.red_fruit_shelf]
@@ -91,7 +91,7 @@ def test_every_element_is_of_the_pattern_type(store):
     """
     The type of :func:`every_is` is stated of every element, not used to pick some.
     """
-    shelves = a(Shelf)(products=every_is(Fruit)).from_(store.shelves)
+    shelves = a(Shelf)(products=every_is(Fruit)).from_(domain=store.shelves)
 
     assert shelves.tolist() == [store.empty_shelf, store.red_fruit_shelf]
 
@@ -100,11 +100,11 @@ def test_every_is_on_a_single_value_matches_like_a(store):
     """
     On a field holding one object, :func:`every_is` is the same as :func:`a`.
     """
-    harbour = Stop("harbour")
-    journeys = [Journey("by sea", Route([harbour])), Journey("overland", Route())]
+    harbour = Stop(name="harbour")
+    journeys = [Journey(name="by sea", route=Route(stops=[harbour])), Journey(name="overland", route=Route())]
 
-    every_route = a(Journey)(route=every_is(Route)(stops=[harbour])).from_(journeys)
-    a_route = a(Journey)(route=a(Route)(stops=[harbour])).from_(journeys)
+    every_route = a(Journey)(route=every_is(Route)(stops=[harbour])).from_(domain=journeys)
+    a_route = a(Journey)(route=a(Route)(stops=[harbour])).from_(domain=journeys)
 
     assert every_route.tolist() == a_route.tolist() == [journeys[0]]
 
@@ -117,7 +117,7 @@ def test_no_element_matches_the_pattern(store):
     No product of a shelf is red, vacuously so for the empty shelf.
     """
     shelves = a(Shelf)(products=none_is(Product)(colour=Colour.RED)).from_(
-        store.shelves
+        domain=store.shelves
     )
 
     assert shelves.tolist() == [store.empty_shelf, store.green_shelf]
@@ -127,10 +127,10 @@ def test_none_is_on_a_single_value_negates_the_pattern(store):
     """
     On a field holding one object, :func:`none_is` states that the object does not match.
     """
-    harbour = Stop("harbour")
-    journeys = [Journey("by sea", Route([harbour])), Journey("overland", Route())]
+    harbour = Stop(name="harbour")
+    journeys = [Journey(name="by sea", route=Route(stops=[harbour])), Journey(name="overland", route=Route())]
 
-    result = a(Journey)(route=none_is(Route)(stops=[harbour])).from_(journeys)
+    result = a(Journey)(route=none_is(Route)(stops=[harbour])).from_(domain=journeys)
 
     assert result.tolist() == [journeys[1]]
 
@@ -145,7 +145,7 @@ def test_condition_on_every_element(store):
     light = every_is(Product)
     light.where(light.weight < 0.15)
 
-    shelves = a(Shelf)(products=light).from_(store.shelves)
+    shelves = a(Shelf)(products=light).from_(domain=store.shelves)
 
     assert shelves.tolist() == [store.empty_shelf, store.green_shelf]
 
@@ -157,7 +157,7 @@ def test_condition_on_no_element(store):
     heavy = none_is(Product)
     heavy.where(heavy.weight > 0.15)
 
-    shelves = a(Shelf)(products=heavy).from_(store.shelves)
+    shelves = a(Shelf)(products=heavy).from_(domain=store.shelves)
 
     assert shelves.tolist() == [store.empty_shelf, store.green_shelf]
 
@@ -170,7 +170,7 @@ def test_element_quantifier_outside_an_attribute_is_rejected(store, quantifier):
     """
     A pattern that is not the value of an attribute has no elements to quantify.
     """
-    shelves = quantifier(Shelf).from_(store.shelves)
+    shelves = quantifier(Shelf).from_(domain=store.shelves)
 
     with pytest.raises(ElementQuantifierWithoutAttribute):
         shelves.tolist()

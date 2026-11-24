@@ -162,7 +162,7 @@ class InstancesOfType(ExistingValues[T]):
     """
 
     def __post_init__(self):
-        self.set_iterable(RegisteredInstances(type_=self.type_))
+        self.set_iterable(iterable=RegisteredInstances(type_=self.type_))
 
     def __iter__(self) -> Iterator[T]:
         existing_ids = set()

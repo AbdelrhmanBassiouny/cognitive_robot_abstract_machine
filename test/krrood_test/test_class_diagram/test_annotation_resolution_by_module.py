@@ -99,14 +99,14 @@ def build_courses():
     :return: Courses Logic (taught by a dean), AI (taught by a lecturer), Databases
         (taught by both) and Orphan (taught by nobody).
     """
-    faculty = ResolutionOrganization("Faculty")
-    dean = Person("Dean", is_dean_of={faculty})
-    lecturer = Person("Lecturer")
+    faculty = ResolutionOrganization(name="Faculty")
+    dean = Person(name="Dean", is_dean_of={faculty})
+    lecturer = Person(name="Lecturer")
     return [
-        ResolutionCourse("Logic", {dean}),
-        ResolutionCourse("AI", {lecturer}),
-        ResolutionCourse("Databases", {lecturer, dean}),
-        ResolutionCourse("Orphan"),
+        ResolutionCourse(name="Logic", is_taught_by={dean}),
+        ResolutionCourse(name="AI", is_taught_by={lecturer}),
+        ResolutionCourse(name="Databases", is_taught_by={lecturer, dean}),
+        ResolutionCourse(name="Orphan"),
     ]
 
 
@@ -195,7 +195,7 @@ def test_two_level_match_over_test_local_classes_returns_the_right_rows():
     pattern = a(ResolutionCourse)(
         is_taught_by=a(Person)(is_dean_of=a(ResolutionOrganization)())
     )
-    assert names_of(pattern.from_(build_courses()).evaluate()) == [
+    assert names_of(pattern.from_(domain=build_courses()).evaluate()) == [
         "Databases",
         "Logic",
     ]
@@ -206,7 +206,7 @@ def test_one_level_match_over_test_local_classes_returns_the_right_rows():
     Matching courses taught by some person finds every taught course and not the orphan.
     """
     pattern = a(ResolutionCourse)(is_taught_by=a(Person)())
-    assert names_of(pattern.from_(build_courses()).evaluate()) == [
+    assert names_of(pattern.from_(domain=build_courses()).evaluate()) == [
         "AI",
         "Databases",
         "Logic",
