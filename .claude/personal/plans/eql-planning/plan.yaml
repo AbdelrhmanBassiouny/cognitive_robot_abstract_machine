@@ -48,9 +48,9 @@ items:
   session: https://claude.ai/code/session_01JxHGiPZGhUcg34K5Aagazz
   blockers:
     - >-
-      Owner review on #617 at 38610d26: 21 open threads. Scope call pending: build and return
-      composed EQL queries instead of evaluating in each method (effect.py:70), with hierarchical
-      verbalization. Design threads await the owner's answers.
+      Owner review on #617 at 38610d26: 21 open threads, answered Nov 24; implementing the
+      composed-query API, insertion changes, a private Symbol persist flag and the failed
+      precondition in ActionIsNotApplicable.
   depends_on: []
   status: in progress
   recommended_model: opus
@@ -119,3 +119,15 @@ items:
   - planning-backend-search
   status: not_started
   recommended_model: sonnet
+
+- id: planning-query-verbalization
+  branch: eql-planning/planning-query-verbalization
+  title: Hierarchical, natural verbalization of the composed queries action application builds
+  track: planning-core
+  depends_on:
+  - action-schema-progression
+  status: not_started
+  recommended_model: opus
+  notes: 'Split from #617 by the owner on Nov 24: #617 makes ActionSchema, Effect and State build
+    and return queries; this item extends EQL verbalization so the composed query reads naturally,
+    nested as the query is, with nothing hard-coded.'
