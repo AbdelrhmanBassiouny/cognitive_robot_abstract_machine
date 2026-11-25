@@ -174,3 +174,19 @@ items:
     JSONAttributeDiff holds JSON keyed by attribute name and mutates live objects; StateChange holds
     objects keyed by ground term and never mutates. Build both on one diff of a collection's added
     and removed elements. It changes the synchronization's serialized format: api-break.
+
+- id: typed-index-and-call-terms
+  branch: eql-planning/typed-index-and-call-terms
+  title: Type-check index and call ground terms from their declared types
+  track: planning-core
+  depends_on:
+  - action-schema-progression
+  status: not_started
+  recommended_model: sonnet
+  notes: >
+    Owner on Nov 25 (#617, ground_term.py): only AttributeTerm is type-checked today; IndexTerm and
+    CallTerm accept every value, since GroundTerm.accepts_value and accepts_element default to True.
+
+    Type IndexTerm from its container's declared element type and CallTerm from the method's return
+    annotation, so facts and effects on them raise AssignedValueHasWrongType and
+    InsertedElementHasWrongType as attributes do.

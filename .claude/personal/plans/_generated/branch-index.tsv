@@ -39,6 +39,7 @@ eql-planning/unified-planning-backend	eql-planning
 eql-planning/planning-query-verbalization	eql-planning
 eql-planning/action-application-query	eql-planning
 eql-planning/shared-attribute-diff	eql-planning
+eql-planning/typed-index-and-call-terms	eql-planning
 eql-planning-robots/montessori-planning-domain	eql-planning-robots
 eql-planning-robots/planner-as-showcase-backend	eql-planning-robots
 eql-planning-robots/blocking-restores-world-state	eql-planning-robots
