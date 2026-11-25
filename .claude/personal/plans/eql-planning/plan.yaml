@@ -48,9 +48,9 @@ items:
   session: https://claude.ai/code/session_01JxHGiPZGhUcg34K5Aagazz
   blockers:
     - >-
-      Waiting on the owner: 4 open discussion threads on #617 (parameter variables in
-      __init_subclass__, the composed query, a value-type parameter on GroundTermExpression,
-      conditional effects). Fork CI at 484d201e not checked yet.
+      Waiting on the owner: 5 open threads on #617 (parameter variables in __init_subclass__, the
+      composed query, apply_effects as a query, conditional and derived effects, keeping
+      Fact.ground_term). Fork CI at 793efe94 not checked yet.
   depends_on: []
   status: in progress
   recommended_model: opus
