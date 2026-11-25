@@ -148,7 +148,12 @@ items:
   - action-schema-progression
   status: not_started
   recommended_model: opus
-  notes: 'Owner on Nov 25 (#617): all of it, as its own item before verbalization. Each binding
-    becomes a StateChange inside the query; a new EQL aggregator folds an action''s changes into
-    one State; the precondition and the effect queries join into one query, which State.apply_effects
-    and apply_action return instead of evaluating. API #522 builds on.'
+  notes: >
+    Owner on Nov 25 (#617): all of it, as its own item before verbalization. Each binding becomes a
+    StateChange inside the query; a new EQL aggregator folds an action's changes into one State; the
+    precondition and the effect queries join into one query, which State.apply_effects and
+    apply_action return instead of evaluating. API #522 builds on.
+
+    Also: inference evaluates expressions inside tuple/dict arguments, so ground terms are built in
+    plain EQL (no symbolic function); Fact.ground_terms() then replaces Fact.ground_term as a query
+    for every term kind.
