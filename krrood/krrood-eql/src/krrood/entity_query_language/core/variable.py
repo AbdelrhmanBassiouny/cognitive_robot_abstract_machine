@@ -59,7 +59,7 @@ from krrood.entity_query_language._monitoring import (
     monitored,
 )
 from krrood.patterns.classproperty import classproperty
-from krrood.symbol_graph.symbol_graph import SymbolGraph
+from krrood.symbol_graph.symbol_graph import RegisteredInstances
 
 DomainType = Iterable[T] | HasSymbolicOperations
 """
@@ -155,9 +155,7 @@ class InstancesOfType(ExistingValues[T]):
     """
 
     def __post_init__(self):
-        self.set_iterable(
-            iterable=SymbolGraph().get_instances_of_type(type_=self.type_)
-        )
+        self.set_iterable(iterable=RegisteredInstances(type_=self.type_))
 
     def __iter__(self) -> Iterator[T]:
         existing_ids = set()
@@ -319,6 +317,14 @@ class Variable(CanHaveDomainSource[T]):
             self._values_domain_.set_iterable(
                 iterable=domain if is_iterable(domain) else [domain]
             )
+
+    def _restart_domain_from_source_(self) -> None:
+        """
+        Overrides :meth:`SymbolicExpression._restart_domain_from_source_`: a re-iterable
+        domain reads its source anew at the next evaluation.
+        """
+        if isinstance(self._values_domain_, ReEnterableLazyIterable):
+            self._values_domain_.restart_from_source()
 
     def _evaluate__(
         self,

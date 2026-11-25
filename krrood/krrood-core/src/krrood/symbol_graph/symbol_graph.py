@@ -77,18 +77,18 @@ class Symbol(DataclassFieldDescriptorOwner):
         return instance
 
 
-TSymbol = TypeVar("TSymbol", bound=Symbol)
+GenericSymbol = TypeVar("GenericSymbol", bound=Symbol)
 
 
 @dataclass(kw_only=True)
-class PredicateClassRelation(Generic[TSymbol], SubClassSafeGeneric):
+class PredicateClassRelation(Generic[GenericSymbol], SubClassSafeGeneric):
     """
     Edge data representing a predicate-based relation between two wrapped instances.
 
     The relation carries a flag indicating whether it was inferred or added directly.
     """
 
-    source: WrappedInstance[TSymbol]
+    source: WrappedInstance[GenericSymbol]
     """
     The source of the predicate
     """
@@ -135,17 +135,19 @@ class PredicateClassRelation(Generic[TSymbol], SubClassSafeGeneric):
 
 
 @dataclass(kw_only=True)
-class WrappedInstance(Generic[TSymbol], SubClassSafeGeneric):
+class WrappedInstance(Generic[GenericSymbol], SubClassSafeGeneric):
     """
     A node wrapper around a concrete Symbol instance used in the instance graph.
     """
 
-    instance: InitVar[TSymbol]
+    instance: InitVar[GenericSymbol]
     """
     The instance to wrap. Only passed as initialization variable.
     """
 
-    instance_reference: weakref.ReferenceType[TSymbol] = field(init=False, default=None)
+    instance_reference: weakref.ReferenceType[GenericSymbol] = field(
+        init=False, default=None
+    )
     """
     A weak reference to the symbol instance this wraps.
     """
@@ -173,12 +175,15 @@ class WrappedInstance(Generic[TSymbol], SubClassSafeGeneric):
     This is needed to clean it up from the cache after the instance reference died.
     """
 
-    def __post_init__(self, instance: TSymbol):
+    def __post_init__(self, instance: GenericSymbol) -> None:
+        """
+        Refer to *instance* weakly, so wrapping it does not keep it alive.
+        """
         self.instance_reference = weakref.ref(instance)
         self.instance_type = type(instance)
 
     @property
-    def instance(self) -> TSymbol | None:
+    def instance(self) -> GenericSymbol | None:
         """
         :return: The symbol that is referenced to. Can return None if this symbol is garbage collected already.
         """
@@ -415,8 +420,8 @@ class SymbolGraph(metaclass=SingletonMeta):
         self,
         *,
         wrapped_instance: WrappedInstance,
-        relation_type: type[PredicateClassRelation[TSymbol]],
-    ) -> Iterator[PredicateClassRelation[TSymbol]]:
+        relation_type: type[PredicateClassRelation[GenericSymbol]],
+    ) -> Iterator[PredicateClassRelation[GenericSymbol]]:
         """
         Get all relations with the given type that are incoming to the given wrapped instance.
 
@@ -542,3 +547,22 @@ class SymbolGraph(metaclass=SingletonMeta):
         else:
             graph = self._instance_graph
         ClassDiagram.graph_to_dot(filepath=filepath, graph=graph, format_=format_)
+
+
+@dataclass(kw_only=True)
+class RegisteredInstances(Generic[GenericSymbol]):
+    """
+    The instances of a symbol type that the :class:`SymbolGraph` holds at the moment of
+    each iteration, so iterating again sees instances registered since.
+    """
+
+    type_: type[GenericSymbol]
+    """
+    The symbol type whose instances, those of its subclasses included, are iterated.
+    """
+
+    def __iter__(self) -> Iterator[GenericSymbol]:
+        """
+        :return: The instances registered when the iteration starts.
+        """
+        return iter(SymbolGraph().get_instances_of_type(type_=self.type_))

@@ -8,6 +8,8 @@ from types import NoneType
 
 from typing_extensions import Any, TypeVar
 
+from krrood.patterns.role import Role
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -94,21 +96,25 @@ def get_wrapped_field(owner_class: type, field_name: str) -> WrappedField | None
     :param owner_class: The class of that owns the field.
     :param field_name: The name of the field.
     :return: The wrapped field of the class from the symbol graph if it exists, otherwise create a new
-    wrapped field instance for it.
+        wrapped field instance for it. A :class:`~krrood.patterns.role.Role` that does not
+        declare the field yields its role taker's field, as reading the attribute does.
     """
     wrapped_class = get_wrapped_class(owner_class)
     if wrapped_class is None:
         return None
     try:
         _ = wrapped_class.fields
-        return wrapped_class._wrapped_field_name_map_.get(field_name, None)
+        wrapped_field = wrapped_class._wrapped_field_name_map_.get(field_name, None)
     except ParseError:
         data_class_field = get_dataclass_field(owner_class, field_name)
-        return (
+        wrapped_field = (
             WrappedField(clazz=wrapped_class, field=data_class_field)
             if data_class_field
             else None
         )
+    if wrapped_field is not None or not issubclass(owner_class, Role):
+        return wrapped_field
+    return get_wrapped_field(owner_class.get_role_taker_type(), field_name)
 
 
 def get_dataclass_field(owner_class: type, field_name: str) -> Any | None:

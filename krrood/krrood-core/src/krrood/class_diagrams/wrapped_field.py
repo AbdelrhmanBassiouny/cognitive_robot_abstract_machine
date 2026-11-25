@@ -234,6 +234,47 @@ class WrappedField:
         return DeclaredValueKind.SINGLE_VALUE
 
     @cached_property
+    def declared_collection(self) -> Any | None:
+        """
+        The collection annotation the field declares, such as ``set[Course]`` for
+        ``set[Course] | None``; None when :attr:`declared_value_kind` is not a
+        collection.
+        """
+        if self.declared_value_kind is not DeclaredValueKind.COLLECTION:
+            return None
+        return next(
+            annotation
+            for annotation in self._union_members_
+            if DeclaredValueKind.from_annotation(annotation=annotation)
+            is DeclaredValueKind.COLLECTION
+        )
+
+    @cached_property
+    def element_classes(self) -> tuple[type, ...]:
+        """
+        The classes an element of :attr:`declared_collection` is an instance of, one per
+        union member and tuple position, such as ``(Part, Tool)`` for ``list[Part |
+        Tool]``; empty when an element type is not a class, such as ``Any``.
+        """
+        if self.declared_collection is None:
+            return ()
+        element_classes = []
+        for element_type in CollectionKind.declared_element_types(
+            annotation=self.declared_collection
+        ):
+            members = (
+                get_args(element_type)
+                if is_union_annotation(element_type)
+                else (element_type,)
+            )
+            for member in members:
+                member_class = get_origin(member) or member
+                if not isclass(member_class) or member_class is Any:
+                    return ()
+                element_classes.append(member_class)
+        return tuple(dict.fromkeys(element_classes))
+
+    @cached_property
     def _union_members_(self) -> tuple[Any, ...]:
         """
         The members of the field's annotation when it is a union, else the annotation
