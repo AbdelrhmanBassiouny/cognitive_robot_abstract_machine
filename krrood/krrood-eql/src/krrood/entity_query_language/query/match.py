@@ -578,6 +578,15 @@ class Match(
         :param value: The list or tuple containing elements to be resolved.
         :param parent: The parent match variable associated with the provided key.
         """
+        collection = getattr(self._variable_, key)
+        # An absent optional collection holds no elements to index or count, so its
+        # presence and length are required before any position is read.
+        self._conditions_.append(
+            AND(
+                left=collection != None,
+                right=length(iterable=collection) == len(value),
+            )
+        )
         # handle list like classes by wrapping the index access
         for index, element in enumerate(value):
             self._create_attribute_match_and_resolve(
@@ -586,14 +595,6 @@ class Match(
                 assigned_value=element,
                 index_access=index,
             )
-        collection = getattr(self._variable_, key)
-        # An absent optional collection holds no elements and has no length to compare.
-        self._conditions_.append(
-            AND(
-                left=collection != None,
-                right=length(iterable=collection) == len(value),
-            )
-        )
 
     def _update_fields_(
         self,
