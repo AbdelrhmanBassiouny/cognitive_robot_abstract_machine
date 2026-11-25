@@ -245,10 +245,19 @@ items:
   track: match-collections
   status: in_progress
   recommended_model: sonnet
-  session: https://claude.ai/code/session_01JxHGiLw14x2s6qUmLMbTjy
-  notes: 'Draft, stacked on #495; bug-fix, api-break (list/tuple == by order, list of patterns
-    needs the same length, ValueFitsNeitherElementNorCollection). Option A, chosen by the
-    owner in the shared doc vote on 2026-11-09.'
+  session: https://claude.ai/code/session_01JxHGiKTPsDmCr7TvDVN7M4
+  blockers:
+    - >-
+      Owner to answer four open #556 threads: set == list (test_collection_equality.py:54), list
+      domain re-read (test_domain_read_per_evaluation.py:36), repeated conditions, explicit element
+      type (match.py:983). CI at 1dca4e4ff9 not read.
+  notes: >
+    Draft on `main` (#495 merged); bug-fix, api-break (list/tuple == by order, a list of patterns
+    needs the same length, ValueFitsNeitherElementNorCollection, Role fields looked up on the
+    taker). Option A, chosen by the owner in the shared doc vote on 2026-11-09.
+
+    The 2026-11-25 review round is pushed at 1dca4e4ff9: 13 of 17 threads resolved; four answered
+    and left open for the owner.
   depends_on: []
 - id: match-generation
   title: Generative backends construct collection attributes and take a nested domain's object
