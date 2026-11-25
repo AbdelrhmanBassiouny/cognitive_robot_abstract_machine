@@ -72,10 +72,15 @@ items:
   - action-schema-progression
   status: not_started
   recommended_model: sonnet
-  notes: ontomatic PropertyDescriptor.__set__ applies inverse, super-property and transitive
+  notes: >
+    ontomatic PropertyDescriptor.__set__ applies inverse, super-property and transitive
     implications; a state assigning one side must assign the implied ones too, from the declared
-    structure. Lets a domain declare how its setter's effects are modelled, lifting AssignmentBypassesSetter
-    (#535) for it.
+    structure. Lets a domain declare how its setter's effects are modelled, lifting
+    AssignmentBypassesSetter (#535) for it.
+
+    Ramification (owner, #617): conditional, derived and setter-implied effects are one subject.
+    Decide per implication: a derived fluent with an EQL body, never in an effect, or a declared
+    implication the state assigns with the effect; each reads only its most direct cause.
 - id: planning-backend-search
   branch: eql-planning/planning-backend-search
   title: PlanningBackend answers a goal query with plans; breadth-first search on test domains
