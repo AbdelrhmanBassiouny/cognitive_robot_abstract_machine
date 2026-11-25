@@ -37,6 +37,7 @@ eql-planning/compiled-search-ff	eql-planning
 eql-planning/trajectory-constraints	eql-planning
 eql-planning/unified-planning-backend	eql-planning
 eql-planning/planning-query-verbalization	eql-planning
+eql-planning/action-application-query	eql-planning
 eql-planning-robots/montessori-planning-domain	eql-planning-robots
 eql-planning-robots/planner-as-showcase-backend	eql-planning-robots
 eql-planning-robots/blocking-restores-world-state	eql-planning-robots

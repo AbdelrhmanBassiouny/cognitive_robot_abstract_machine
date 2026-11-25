@@ -135,9 +135,21 @@ items:
   title: Hierarchical, natural verbalization of the composed queries action application builds
   track: planning-core
   depends_on:
+  - action-application-query
+  status: not_started
+  recommended_model: opus
+  notes: 'Split from #617 by the owner on Nov 24. Extends EQL verbalization so the composed query
+    action-application-query builds reads naturally, nested as the query is, with nothing hard-coded.'
+
+- id: action-application-query
+  branch: eql-planning/action-application-query
+  title: Applying an action is one EQL query, from its precondition to the new State
+  track: planning-core
+  depends_on:
   - action-schema-progression
   status: not_started
   recommended_model: opus
-  notes: 'Split from #617 by the owner on Nov 24: #617 makes ActionSchema, Effect and State build
-    and return queries; this item extends EQL verbalization so the composed query reads naturally,
-    nested as the query is, with nothing hard-coded.'
+  notes: 'Owner on Nov 25 (#617): all of it, as its own item before verbalization. Each binding
+    becomes a StateChange inside the query; a new EQL aggregator folds an action''s changes into
+    one State; the precondition and the effect queries join into one query, which State.apply_effects
+    and apply_action return instead of evaluating. API #522 builds on.'
