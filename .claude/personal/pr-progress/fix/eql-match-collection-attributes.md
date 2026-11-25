@@ -1,18 +1,11 @@
-# fix/eql-match-collection-attributes — PR #556 (eql-existential-semantics / match-collection-attributes)
-
-## Done (2026-11-04)
-- Split out of #495, stacked on it (`ca2cc78382`): option A collection matching, list/tuple
-  `==` by order, nested domain as a filter, optional collections. Local: 1652 passed.
-
-## Resolved (2026-11-09)
-- The owner chose **option A** in the shared doc vote, so no code change is needed. Recorded on the
-  #495 match.md thread (discussion_r4516037143). The owner resolves that thread.
-- Read at head `51441f7ebf`, which merges the base `b8b69c05ea`: the merge probe against the base is
-  clean; #556 has no review threads or comments; the branch has no upstream PR.
-- CI at `51441f7ebf`: still running when read. krrood, giskardpy, semantic_digital_twin, coraplex,
-  cramph, segmind, experiments and probabilistic_model were in progress; every completed check passed.
-  Local tests were *not* run at this head (krrood is not installed in this session).
-
-## Next
-- Draft. Labels: bug-fix, bug, api-break.
-- Read CI at `51441f7ebf`.
+### Plan
+Resolve the 17 owner review threads (11-23, 11-25), the only blocker. CI green and merge probe clean at 29b8c992ba; no upstream PR.
+- Move field-type logic out of `match.py` into `WrappedField`: element types as a tuple (union members, tuple positions), `CollectionKind` for the collection classes, element `Variable` typed
+- Comparator: convert sequences only when their types differ
+- Rename `TSymbol` to `GenericSymbol`; drop empty `()` after patterns in docs and tests
+- New tests: nested-list domain; a Role conditioned on its own name
+- Reply to every thread; resolve only finished ones; leave the questions (equality set-vs-list, live list domain, duplicate conditions) open
+### Done
+- Research, stack pass, merge probe, baseline 85 passed
+### Next
+- Implement task by task, TDD
