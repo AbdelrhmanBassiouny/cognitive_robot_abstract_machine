@@ -1,11 +1,10 @@
 ### Plan
-Resolve the 17 owner review threads (11-23, 11-25), the only blocker. CI green and merge probe clean at 29b8c992ba; no upstream PR.
-- Move field-type logic out of `match.py` into `WrappedField`: element types as a tuple (union members, tuple positions), `CollectionKind` for the collection classes, element `Variable` typed
-- Comparator: convert sequences only when their types differ
-- Rename `TSymbol` to `GenericSymbol`; drop empty `()` after patterns in docs and tests
-- New tests: nested-list domain; a Role conditioned on its own name
-- Reply to every thread; resolve only finished ones; leave the questions (equality set-vs-list, live list domain, duplicate conditions) open
+Wait on the owner's answers to the four open threads; carry the review round up the stack once #557 is resolved.
 ### Done
-- Research, stack pass, merge probe, baseline 85 passed
+- Review round pushed at 1dca4e4ff9 (98a82cae8f, 0b6137b70e, 1dca4e4ff9); 13/17 threads replied and resolved, 4 replied and left open
+- Merge probe vs upstream main clean at 1dca4e4ff9; local suites pass (1832+4 skipped, 362, 148)
+- Description and plan item rewritten
 ### Next
-- Implement task by task, TDD
+- Read CI at 1dca4e4ff9 (not read yet)
+- Owner: set == list; list domain re-read; repeated conditions; explicit element type
+- #557 conflicts with this branch; `maintenance restack --stacked-on` fails (git-command-failed at checkout of fix/eql-match-generation); resolve #557 with /plan-item-resolve 557, then restack
