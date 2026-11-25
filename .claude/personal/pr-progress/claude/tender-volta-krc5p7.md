@@ -1,15 +1,12 @@
-Plan (resolve of the Nov 25 review, at 528fddac):
-- Rename ActionSchema to AssertiveKnowledgeAction, module included (owner decision).
-- Rename Effect.get_change_to_state to get_change_to_state_query (owner decision).
-- Handle bool conditions in EQL's ConditionEvaluation, not in State.
-- accepts_element: False for a field that declares no collection; tests for numbers.Real/Integral fields.
-- Reword ConflictingAssignments.suggest_correction.
-- Fix the fork CI's krrood check findings: docstrings, with_objects_added/removed renamed to add_objects/remove_objects.
-- Reply inline on every fork thread; resolve those that are done.
-- Add a plan item to share one added/removed-elements diff with JSONAttributeDiff (upstream review, tomsch420).
+Plan:
+- Wait for the owner's next review of a2aa98e9 and for fork CI on it.
 
-Done:
-- Stack pass clean; merge probe CLEAN at 528fddac; baseline 146 tests pass.
+Done (at a2aa98e9, pushed):
+- AssertiveKnowledgeAction rename (module too); get_change_to_state_query; bool conditions in ConditionEvaluation; accepts_element per union member, Any no longer raises; ConflictingAssignments reworded; krrood check findings fixed (add_objects/remove_objects).
+- Tests pass locally: test_planning, test_class_diagram, test_symbol_graph, test_eql. krrood check passes.
+- Replied to all 14 fork threads; resolved 10. PR title and description updated.
+- Plan item shared-attribute-diff added (tracking issue #513).
 
 Next:
-- Implement, test, push through maintenance push, and update the PR description and plan notes.
+- 4 fork threads are open, waiting on the owner: ground_term.py:180, exceptions.py:190, state.py:157, state.py:160.
+- Upstream #1060: tomsch420 requested changes (dedupe, "is it an action"). The owner replies there; draft reply given in the session.
