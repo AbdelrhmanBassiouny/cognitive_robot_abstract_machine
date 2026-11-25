@@ -21,8 +21,8 @@ import pytest
 
 from typing_extensions import Iterable, List, Optional
 
+from krrood.entity_query_language.class_diagram_lookup import get_field_type_endpoint
 from krrood.entity_query_language.factories import a
-from krrood.symbol_graph.helpers import get_field_type_endpoint
 from krrood.symbol_graph.symbol_graph import Symbol
 
 from ..dataset.role_and_ontology import university_ontology_like_classes
@@ -33,12 +33,12 @@ from .annotation_resolution_helper_module import FallbackHolder, OccupiedBase
 # %% Domain
 
 
-@dataclass(eq=False)
+@dataclass(kw_only=True, eq=False)
 class ResolutionOrganization(Symbol):
     name: str
 
 
-@dataclass(eq=False)
+@dataclass(kw_only=True, eq=False)
 class Person(Symbol):
     """
     Deliberately named like the university dataset's ``Person``.
@@ -48,14 +48,14 @@ class Person(Symbol):
     is_dean_of: set[ResolutionOrganization] = field(default_factory=set)
 
 
-@dataclass(eq=False)
+@dataclass(kw_only=True, eq=False)
 class ResolutionCourse(Symbol):
     name: str
     is_taught_by: set[Person] = field(default_factory=set)
     coordinator: Optional[Person] = None
 
 
-@dataclass(eq=False)
+@dataclass(kw_only=True, eq=False)
 class Occupant(Symbol):
     """
     Deliberately named like the helper module's ``Occupant``.
@@ -64,7 +64,7 @@ class Occupant(Symbol):
     name: str = ""
 
 
-@dataclass(eq=False)
+@dataclass(kw_only=True, eq=False)
 class OccupiedSubclass(OccupiedBase):
     """
     Inherits a field typed by the helper module's ``Occupant`` and declares one typed by
@@ -99,14 +99,14 @@ def build_courses():
     :return: Courses Logic (taught by a dean), AI (taught by a lecturer), Databases
         (taught by both) and Orphan (taught by nobody).
     """
-    faculty = ResolutionOrganization("Faculty")
-    dean = Person("Dean", is_dean_of={faculty})
-    lecturer = Person("Lecturer")
+    faculty = ResolutionOrganization(name="Faculty")
+    dean = Person(name="Dean", is_dean_of={faculty})
+    lecturer = Person(name="Lecturer")
     return [
-        ResolutionCourse("Logic", {dean}),
-        ResolutionCourse("AI", {lecturer}),
-        ResolutionCourse("Databases", {lecturer, dean}),
-        ResolutionCourse("Orphan"),
+        ResolutionCourse(name="Logic", is_taught_by={dean}),
+        ResolutionCourse(name="AI", is_taught_by={lecturer}),
+        ResolutionCourse(name="Databases", is_taught_by={lecturer, dean}),
+        ResolutionCourse(name="Orphan"),
     ]
 
 
@@ -195,7 +195,7 @@ def test_two_level_match_over_test_local_classes_returns_the_right_rows():
     pattern = a(ResolutionCourse)(
         is_taught_by=a(Person)(is_dean_of=a(ResolutionOrganization)())
     )
-    assert names_of(pattern.from_(build_courses()).evaluate()) == [
+    assert names_of(pattern.from_(domain=build_courses()).evaluate()) == [
         "Databases",
         "Logic",
     ]
@@ -206,7 +206,7 @@ def test_one_level_match_over_test_local_classes_returns_the_right_rows():
     Matching courses taught by some person finds every taught course and not the orphan.
     """
     pattern = a(ResolutionCourse)(is_taught_by=a(Person)())
-    assert names_of(pattern.from_(build_courses()).evaluate()) == [
+    assert names_of(pattern.from_(domain=build_courses()).evaluate()) == [
         "AI",
         "Databases",
         "Logic",

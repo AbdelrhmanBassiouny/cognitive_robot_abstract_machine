@@ -1,3 +1,9 @@
+"""
+Tests of an ORM interface built on top of another one.
+"""
+
+from __future__ import annotations
+
 import importlib
 import importlib.util
 import sys
@@ -8,13 +14,14 @@ from krrood.ormatic.helper import (
     OrmaticInterfaceInformation,
 )
 from ..dataset.dataset_extension import AggregatorOfExternalInstances, CustomPosition
-from ..dataset import ormatic_interface
 
 
 def test_extension(tmp_path):
     """
     Test that existing ormatic interfaces can be extended.
     """
+    from ..dataset import ormatic_interface
+
     # import classes from the existing interface
     interface_info = get_classes_of_ormatic_interface(ormatic_interface)
     classes = interface_info.classes
@@ -27,10 +34,10 @@ def test_extension(tmp_path):
 
     # create the new ormatic interface
     class_diagram = ClassDiagram(
-        list(sorted(classes, key=lambda c: c.__name__, reverse=True))
+        classes=list(sorted(classes, key=lambda c: c.__name__, reverse=True))
     )
     instance = ORMatic(
-        class_diagram,
+        class_dependency_graph=class_diagram,
         interface_information=OrmaticInterfaceInformation(
             type_mappings=type_mappings,
             alternative_mappings=alternative_mappings,
@@ -42,7 +49,7 @@ def test_extension(tmp_path):
     # write to tempfile
     new_interface_file = tmp_path / "ormatic_interface.py"
     with open(new_interface_file, "w") as f:
-        instance.to_sqlalchemy_file(f)
+        instance.to_sqlalchemy_file(file=f)
 
     # Import the generated module
     spec = importlib.util.spec_from_file_location(

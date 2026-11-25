@@ -1,3 +1,7 @@
+"""
+Environments that generate the data an action's parametrization is learned from.
+"""
+
 import json
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
@@ -5,7 +9,7 @@ from pathlib import Path
 from typing_extensions import Any, Generic, TypeVar
 
 from krrood.adapters.json_serializer import from_json
-from krrood.entity_query_language.backends import ProbabilisticBackend
+from krrood.parametrization.probabilistic_backend import ProbabilisticBackend
 from krrood.entity_query_language.factories import a, an, variable
 from krrood.entity_query_language.query.match import Match
 from krrood.parametrization.model_registries import DictRegistry
@@ -33,17 +37,12 @@ from coraplex.robot_plans.actions.core.misc import MoveToReach
 from cramph.composites import StatementNode
 from cramph.node import StatechartNode
 from cramph.statechart import Statechart
-from random_events.interval import closed
-from random_events.product_algebra import SimpleEvent
 from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
     VizMarkerPublisher,
 )
 from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.robots.robot_parts import (
-    EndEffector,
-    AbstractRobot,
-)
+from semantic_digital_twin.robots.robot_parts import AbstractRobot, Arm
 from semantic_digital_twin.robots.pr2 import PR2
 from krrood_spatial_math.spatial_types import Point2, Point3, Pose, Pose2D
 from semantic_digital_twin.world import World
@@ -101,7 +100,7 @@ class TrainingEnvironment(Generic[TrainedAction], SubClassSafeGeneric, ABC):
         """
         :return: The type of action that is trained.
         """
-        return type(self).get_type_of_generic_parameter(TrainedAction)
+        return type(self).get_type_of_generic_parameter(parameter=TrainedAction)
 
     @abstractmethod
     def setup_world(self, *kwargs) -> World:
@@ -151,9 +150,9 @@ class TrainingEnvironment(Generic[TrainedAction], SubClassSafeGeneric, ABC):
 
         executor = episode.executor
         statechart = Statechart(context=executor.context)
-        statechart.add_node(episode.action)
+        statechart.add_node(node=episode.action)
         try:
-            executor.compile(statechart)
+            executor.compile(statechart=statechart)
             executor.execute()
         except EmptyUnderspecified:
             # No working solution found in this episode
@@ -196,7 +195,7 @@ class MoveToReachTrainingEnvironment(TrainingEnvironment[MoveToReach]):
             localization_body = Body(name=PrefixedName("odom_combined"))
 
             map_C_localization = Connection6DoF.create_with_dofs(
-                world_with_urdf, map, localization_body
+                world=world_with_urdf, parent=map, child=localization_body
             )
             world_with_urdf.add_connection(map_C_localization)
 
@@ -206,7 +205,7 @@ class MoveToReachTrainingEnvironment(TrainingEnvironment[MoveToReach]):
                 world=world_with_urdf,
             )
             world_with_urdf.add_connection(c_root_bf)
-            c_root_bf.has_hardware_interface = True
+            world_with_urdf.set_dofs_has_hardware_interface(c_root_bf.active_dofs, True)
 
         return world_with_urdf
 
@@ -229,11 +228,10 @@ class MoveToReachTrainingEnvironment(TrainingEnvironment[MoveToReach]):
                 reference_frame=None,
             ),
             hip_rotation=...,
-            end_effector=variable(EndEffector, world.semantic_annotations),
-            approach_clearance=...,
+            arm=variable(Arm, world.semantic_annotations),
         )
 
-        move_to_reach.limit(limit)
+        move_to_reach.limit(n=limit)
 
         if self.model_path:
             query_backend = self.setup_backend_from_path(move_to_reach)
@@ -241,10 +239,10 @@ class MoveToReachTrainingEnvironment(TrainingEnvironment[MoveToReach]):
             query_backend = self.setup_backend(move_to_reach)
 
         executor = KinematicallySimulatedPlanExecutor(
-            StatechartContext.with_extensions(
-                world,
-                [
-                    RobotAccess(robot),
+            context=StatechartContext.with_extensions(
+                world=world,
+                extensions=[
+                    RobotAccess(robot=robot),
                     StatementGrounding(query_backend=query_backend),
                 ],
             ),
@@ -262,31 +260,25 @@ class MoveToReachTrainingEnvironment(TrainingEnvironment[MoveToReach]):
         :param underspecified_action: The underspecified action to create a backend for.
         :return: The probabilistic backend
         """
-        parameters = UnderspecifiedParameters(underspecified_action)
+        parameters = UnderspecifiedParameters(statement=underspecified_action)
         robot_x = parameters.variable_of(
-            underspecified_action.target_pose_offset_robot.position.x
+            attribute=underspecified_action.target_pose_offset_robot.position.x
         )
         robot_y = parameters.variable_of(
-            underspecified_action.target_pose_offset_robot.position.y
+            attribute=underspecified_action.target_pose_offset_robot.position.y
         )
-        hip_rotation = parameters.variable_of(underspecified_action.hip_rotation)
-        approach_clearance = parameters.variable_of(
-            underspecified_action.approach_clearance
+        hip_rotation = parameters.variable_of(
+            attribute=underspecified_action.hip_rotation
         )
 
         distribution = fully_factorized(
-            means={approach_clearance: 0.05},
             variances={robot_x: 0.5, robot_y: 0.5, hip_rotation: 0.1},
             variables=parameters.variables.values(),
         )
 
-        hip_rotation_condition = SimpleEvent.from_data(
-            {approach_clearance: closed(0.0, 0.4)}
+        return ProbabilisticBackend(
+            model_registry=DictRegistry(models={self.action_type: distribution})
         )
-        hip_rotation_condition.fill_missing_variables(distribution.variables)
-        distribution.log_truncated_of_simple_event_in_place(hip_rotation_condition)
-
-        return ProbabilisticBackend(DictRegistry({self.action_type: distribution}))
 
     def setup_backend_from_path(self, underspecified_action: Match):
         """
@@ -301,7 +293,7 @@ class MoveToReachTrainingEnvironment(TrainingEnvironment[MoveToReach]):
             distribution: ProbabilisticCircuit = from_json(json.load(f))
 
         # expand model with new variables
-        parameters = UnderspecifiedParameters(underspecified_action)
+        parameters = UnderspecifiedParameters(statement=underspecified_action)
         variables_not_in_parameters = set(parameters.variables.values()) - set(
             distribution.variables
         )
@@ -312,4 +304,6 @@ class MoveToReachTrainingEnvironment(TrainingEnvironment[MoveToReach]):
             distribution, distribution_for_variables_not_in_parameters
         )
 
-        return ProbabilisticBackend(DictRegistry({self.action_type: distribution}))
+        return ProbabilisticBackend(
+            model_registry=DictRegistry(models={self.action_type: distribution})
+        )

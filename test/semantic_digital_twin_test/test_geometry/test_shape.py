@@ -1,3 +1,9 @@
+"""
+Tests of shapes, their meshes and their serialization.
+"""
+
+from __future__ import annotations
+
 import gc
 import math
 import os
@@ -13,6 +19,9 @@ from trimesh.visual import TextureVisuals
 from trimesh.visual.material import SimpleMaterial
 
 from krrood.adapters.json_serializer import from_json, to_json
+from semantic_digital_twin.world_description.exceptions import (
+    MeshFileNotPlaceableByAPose,
+)
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from krrood_spatial_math.spatial_types import HomogeneousTransformationMatrix, Point3
 from semantic_digital_twin.world import World
@@ -109,7 +118,7 @@ def test_mesh_color_survives_serialization(tmp_path):
     source.visual.vertex_colors = np.tile([200, 50, 50, 255], (len(source.vertices), 1))
 
     mesh = Mesh.from_trimesh(mesh=source, directory=tmp_path, file_type="ply")
-    restored = Mesh.from_json(mesh.to_json())
+    restored = Mesh.from_json(data=mesh.to_json())
 
     assert Path(restored.filename).suffix == f".{MeshFileFormat.GLB}"
     assert (restored.mesh.visual.vertex_colors[:, :3] == [200, 50, 50]).all()
@@ -242,7 +251,7 @@ def test_per_vertex_colors_survive_serialization_unwelded(tmp_path):
     source = coplanar_triangles_with_shared_positions()
     mesh = Mesh.from_trimesh(mesh=source, directory=tmp_path, file_type="obj")
 
-    restored = Mesh.from_json(mesh.to_json())
+    restored = Mesh.from_json(data=mesh.to_json())
 
     np.testing.assert_array_equal(
         np.asarray(restored.mesh.visual.vertex_colors),
@@ -265,7 +274,7 @@ def test_serialization_reproduces_the_same_mesh():
         )
     )
 
-    restored = Mesh.from_json(original.to_json())
+    restored = Mesh.from_json(data=original.to_json())
 
     np.testing.assert_allclose(
         np.asarray(restored.mesh.vertices),
@@ -293,7 +302,7 @@ def test_serialization_preserves_watertightness_of_a_closed_mesh():
     )
     assert original.mesh.is_volume
 
-    restored = Mesh.from_json(original.to_json())
+    restored = Mesh.from_json(data=original.to_json())
 
     assert restored.mesh.is_volume
     np.testing.assert_allclose(restored.mesh.volume, original.mesh.volume, rtol=1e-6)
@@ -327,7 +336,7 @@ def test_textured_primitive_survives_serialization():
         scale=Scale(1.0, 1.0, 1.0), texture=Texture(file_path="/textures/marble.png")
     )
 
-    restored = Box.from_json(box.to_json())
+    restored = Box.from_json(data=box.to_json())
 
     assert restored.texture == box.texture
     assert restored == box
@@ -560,7 +569,9 @@ def test_mesh_in_frame_in_the_shapes_own_frame_matches_its_local_mesh():
         root = Body(name=PrefixedName("map"))
         world.add_kinematic_structure_entity(root)
         obstacle = Body(name=PrefixedName("obstacle"))
-        world.add_connection(FixedConnection.create_with_dofs(world, root, obstacle))
+        world.add_connection(
+            FixedConnection.create_with_dofs(world=world, parent=root, child=obstacle)
+        )
         shape = Box(scale=Scale(1.0, 1.0, 1.0))
         obstacle.collision.append(shape)
 
@@ -605,7 +616,7 @@ def test_a_mesh_restored_from_json_is_written_as_glb_whatever_file_it_came_from(
         mesh=trimesh.creation.box(), directory=tmp_path, file_type="stl"
     )
 
-    restored = Mesh.from_json(mesh.to_json())
+    restored = Mesh.from_json(data=mesh.to_json())
 
     assert Path(restored.filename).suffix == f".{MeshFileFormat.GLB}"
 
@@ -619,7 +630,7 @@ def test_a_mesh_keeps_its_positions_exactly_through_a_json_round_trip(tmp_path):
     sphere.apply_translation([10.123456789, -7.3, 2.0])
     mesh = Mesh.from_trimesh(mesh=sphere, directory=tmp_path)
 
-    restored = Mesh.from_json(mesh.to_json())
+    restored = Mesh.from_json(data=mesh.to_json())
 
     np.testing.assert_array_equal(restored.mesh.vertices, mesh.mesh.vertices)
 
@@ -753,3 +764,85 @@ def test_telling_a_file_textured_does_not_merge_the_textures_of_its_parts(
     tracemalloc.stop()
 
     assert checking_peak < merging_peak / 2
+
+
+# %% meshes turned within their file
+
+CYLINDER_FILE = (
+    Path(files("semantic_digital_twin")).parent.parent
+    / "resources"
+    / "obj"
+    / "cylinder.obj"
+)
+"""
+A mesh file whose vertices are not symmetric under a quarter turn about the x axis.
+"""
+
+
+def turned_cylinder(scale: Scale) -> Mesh:
+    """
+    :param scale: The scale of the mesh.
+    :return: The cylinder, whose own frame lies shifted and a quarter turn about the x
+        axis within its file, placed off the origin of its body.
+    """
+    return Mesh(
+        filename=str(CYLINDER_FILE),
+        scale=scale,
+        origin=HomogeneousTransformationMatrix.from_xyz_rpy(
+            x=0.3, y=-0.2, z=1.0, yaw=0.4
+        ),
+        file_T_mesh=HomogeneousTransformationMatrix.from_xyz_quaternion(
+            pos_x=0.01,
+            pos_y=0.02,
+            pos_z=0.03,
+            quat_w=math.sqrt(0.5),
+            quat_x=math.sqrt(0.5),
+        ),
+    )
+
+
+def bounds_in_the_body(vertices: np.ndarray, body_T_vertices: np.ndarray) -> np.ndarray:
+    """
+    :return: The lower and upper corner of the vertices, given in a frame placed by
+        ``body_T_vertices``, in the body's frame.
+    """
+    in_body = vertices @ body_T_vertices[:3, :3].T + body_T_vertices[:3, 3]
+    return np.stack([in_body.min(axis=0), in_body.max(axis=0)])
+
+
+def test_a_mesh_turned_within_its_file_keeps_its_vertices_through_serialization():
+    """
+    A JSON round trip keeps the vertices of a mesh turned within its file.
+    """
+    mesh = turned_cylinder(scale=Scale(0.5, 0.6, 0.7))
+
+    deserialized = from_json(to_json(mesh))
+
+    assert np.sort(deserialized.mesh.vertices, axis=0) == pytest.approx(
+        np.sort(mesh.mesh.vertices, axis=0)
+    )
+
+
+def test_the_scaled_file_placed_at_its_file_origin_lies_where_the_mesh_does():
+    """
+    The file's scaled vertices, placed at the file origin, cover the mesh's bounds.
+    """
+    mesh = turned_cylinder(scale=Scale(0.5, 0.5, 0.5))
+
+    placed_file = bounds_in_the_body(
+        mesh.stored_mesh.vertices * mesh.scale.to_np(), mesh.file_origin.to_np()
+    )
+
+    assert placed_file == pytest.approx(
+        bounds_in_the_body(mesh.mesh.vertices, mesh.origin.to_np())
+    )
+
+
+def test_an_unevenly_scaled_mesh_turned_within_its_file_has_no_file_origin():
+    """
+    No pose places the file of a mesh that is turned within it and scaled unevenly.
+    """
+    mesh = turned_cylinder(scale=Scale(0.5, 0.6, 0.7))
+
+    with pytest.raises(MeshFileNotPlaceableByAPose):
+        mesh.file_origin

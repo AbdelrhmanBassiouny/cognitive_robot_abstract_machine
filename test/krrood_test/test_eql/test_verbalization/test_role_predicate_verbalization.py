@@ -8,10 +8,13 @@ from dataclasses import dataclass
 
 from krrood.entity_query_language.factories import variable
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
-from krrood.patterns.role_predicates import IsSameSemanticEntity
+from krrood.entity_query_language.role_predicates import (
+    IsSameSemanticEntity,
+    IsSubClassOrRole,
+)
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Document:
     """
     A minimal entity the identity predicate is verbalized over.
@@ -31,6 +34,21 @@ def test_is_same_semantic_entity_reads_with_a_single_determiner():
     """
     first, second = variable(Document, []), variable(Document, [])
     assert (
-        verbalize_expression(IsSameSemanticEntity(first, second))
+        verbalize_expression(
+            IsSameSemanticEntity(first_entity=first, second_entity=second)
+        )
         == "a Document is the same semantic entity as another Document"
+    )
+
+
+def test_is_subclass_or_role_gives_each_noun_its_own_preposition():
+    """
+    The subclass check reads *"… is a subclass of or a role for …"*: a class is a
+    subclass *of* another, but a role *for* it.
+    """
+    assert (
+        verbalize_expression(
+            IsSubClassOrRole(sub_class=variable(type, []), super_classes=(Document,))
+        )
+        == "a type is a subclass of or a role for Document"
     )

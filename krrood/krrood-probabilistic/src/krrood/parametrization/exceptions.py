@@ -1,0 +1,416 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from typing_extensions import Any, Hashable, TYPE_CHECKING
+
+import random_events.variable
+from krrood.entity_query_language.core.variable import Variable
+from krrood.exceptions import DataclassException, InputError
+from probabilistic_model.exceptions import ProbabilisticModelException
+
+if TYPE_CHECKING:
+    from krrood.entity_query_language.core.mapped_variable import MappedVariable
+    from krrood.entity_query_language.factories import ConditionType
+    from krrood.entity_query_language.query.match import AttributeMatch
+
+
+@dataclass(kw_only=True)
+class WhereExpressionIsFirstOrder(DataclassException):
+    """
+    Raised when a quantified `Where` expression is asked to be translated into a random
+    event, since a product algebra is propositional and constrains a fixed set of
+    variables instead of the objects a quantifier ranges over.
+    """
+
+    where_expression: ConditionType
+    """
+    The quantified expression that has no random event representation.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The where expression {self.where_expression} quantifies over a variable, "
+            f"which no fixed set of random event variables represents."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "State the condition over the attributes that are parameterized instead of "
+            "quantifying, or evaluate the quantified condition on the query results."
+        )
+
+
+@dataclass(kw_only=True)
+class WhereExpressionHasNoRandomEventRepresentation(DataclassException):
+    """
+    Raised when a part of a `Where` expression constrains something that no random event
+    variable stands for, for example a comparison between two variables.
+    """
+
+    where_expression: ConditionType
+    """
+    The expression that has no random event representation.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The where expression {self.where_expression} is neither a logical operator "
+            f"nor a comparison between a variable and a literal, so it constrains no "
+            f"random event variable."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Compare a variable against a literal value, and combine such comparisons "
+            "with and_, or_ and not_ only."
+        )
+
+
+@dataclass(kw_only=True)
+class EmptyVariableDomain(InputError):
+    variable: Variable
+
+    def error_message(self) -> str:
+        return f"The domain of the variable {self.variable} is empty. Domains must be non-empty for the variable to be valid."
+
+    def suggest_correction(self) -> str:
+        return ""
+
+
+@dataclass(kw_only=True)
+class InvalidEllipsis(InputError):
+    type_: type
+
+    def error_message(self) -> str:
+        return f"Ellipsis is not allowed for type {self.type_}. Ellipsis are only allowed for the leaf objects (random events compatible types, see `random_events.variable.Variable.compatible_types`)."
+
+    def suggest_correction(self) -> str:
+        return ""
+
+
+@dataclass(kw_only=True)
+class ModelVariableNotBound(ProbabilisticModelException):
+    """
+    Raised when bindings are translated into a sample of a probabilistic model, but
+    neither the bindings nor the literal values of the match give a variable of the
+    model a value.
+    """
+
+    variable: random_events.variable.Variable
+    """
+    The variable of the model that has no value.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The bindings give no value to the model variable {self.variable.name}, "
+            f"and the match states no literal value for it."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Bind the variable assigned to the attribute this model variable "
+            "corresponds to, keyed by that variable's identifier."
+        )
+
+
+@dataclass(kw_only=True)
+class ValueOutsideVariableDomain(ProbabilisticModelException):
+    """
+    Raised when bindings are translated into a sample of a probabilistic model, but a
+    value they give is outside the domain of a variable of the model, so no sample holds
+    it.
+    """
+
+    variable: random_events.variable.Variable
+    """
+    The variable of the model that has no value for the bound value.
+    """
+
+    value: Any
+    """
+    The bound value outside the domain of the variable.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The model variable {self.variable.name} has no value for {self.value!r}, "
+            f"which is outside the domain the match gives it."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Bind the variable assigned to the attribute only to values in its domain: "
+            "an object the pattern variable ranges over, or an element of the "
+            "attribute's type."
+        )
+
+
+@dataclass(kw_only=True)
+class DoRequiresCausalCircuitModel(ProbabilisticModelException):
+    """
+    Raised when a match has a ``cause`` intervention but the model registry resolved a
+    model that is not a
+    :class:`~probabilistic_model.probabilistic_circuit.causal.causal_circuit.CausalCircuit`.
+
+    ``cause`` needs a registered causal graph to know what to cut when intervening; a
+    plain (non-causal) probabilistic model has no such graph.
+    """
+
+    resolved_model: Any
+
+    def error_message(self) -> str:
+        return (
+            f"A cause intervention was used, but the model registry returned "
+            f"{type(self.resolved_model).__name__}, not a CausalCircuit. cause needs a "
+            f"registered causal graph to know what to cut when intervening."
+        )
+
+    def suggest_correction(self) -> str:
+        return "Use a model registry that returns a CausalCircuit for this class (see CausalCircuitRegistry)."
+
+
+@dataclass(kw_only=True)
+class MultipleEffectVariablesNotSupported(ProbabilisticModelException):
+    """
+    Raised when a query declares more than one effect variable via
+    ``causes_effect(...)``.
+
+    :meth:`~probabilistic_model.probabilistic_circuit.causal.causal_circuit.CausalCircuit.backdoor_adjustment`
+    takes exactly one effect variable -- there is no multi-effect form of the
+    interventional computation to route a query with several through. Multiple
+    ``cause`` fields are fine: each candidate is searched independently and the one
+    that best explains the effect becomes the primary cause.
+    """
+
+    variables: list[random_events.variable.Variable]
+    """
+    The declared effect variables.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"Found {len(self.variables)} effect variables "
+            f"({[v.name for v in self.variables]}), but a causal search supports "
+            f"exactly one."
+        )
+
+    def suggest_correction(self) -> str:
+        return "Declare exactly one effect per query."
+
+
+@dataclass(kw_only=True)
+class JointQueryAcrossClassesNotSupported(ProbabilisticModelException):
+    """
+    Raised when a probabilistic query (``probability_of(...)``, ``average(...)``)
+    doesn't reference attributes of exactly one EQL class -- either none at all, e.g.
+    ``probability_of(True)`` (a content-free condition names no class, so there is no
+    model to resolve it against), or more than one, e.g. ``average(x.A)`` combined
+    with attributes of a second class in the same call, for
+    ``x = variable(ClassOne)`` and ``y = variable(ClassTwo)``.
+
+    ``distribution_of(...)`` never raises this: it wraps a single ``Match``, which is
+    always for one class by construction.
+
+    Every :class:`~krrood.parametrization.model_registries.ModelRegistry` resolves a
+    single model per class, so there is no established way to ground a query
+    referencing zero, or more than one, classes' models yet.
+    """
+
+    owner_classes: set[type]
+    """
+    The distinct owner classes found among the query's referenced attributes -- empty
+    when it referenced none at all.
+    """
+
+    def error_message(self) -> str:
+        if not self.owner_classes:
+            return (
+                "The query referenced no class-bound attributes at all, so there is "
+                "no model to resolve it against."
+            )
+        names = ", ".join(sorted(cls.__name__ for cls in self.owner_classes))
+        return (
+            f"The query referenced attributes owned by {len(self.owner_classes)} "
+            f"different classes ({names}), but only a single-class query is "
+            f"supported."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Reference attributes reached from a single variable(...) root, or split "
+            "into separate queries."
+        )
+
+
+@dataclass(kw_only=True)
+class RelationalCircuitRegistryRequiresMatch(ProbabilisticModelException):
+    """
+    Raised when a
+    :class:`~krrood.parametrization.model_registries.RelationalCircuitRegistry` is asked
+    to resolve a model for parameters that aren't a
+    :class:`~krrood.parametrization.parameterizer.UnderspecifiedParameters` (i.e. not a
+    ``Match``, directly or wrapped by ``distribution_of(...)``) --
+    ``probability_of(...)`` and a bare ``average(...)`` build the lighter
+    :class:`~krrood.parametrization.parameterizer.ConditionParameters`/
+    :class:`~krrood.parametrization.parameterizer.SelectedAttributesParameters` instead,
+    which carry no match statement to ground.
+    """
+
+    parameters: Any
+    """
+    The parameters that were given instead of an ``UnderspecifiedParameters``.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"RelationalCircuitRegistry needs a Match's full statement to ground its "
+            f"circuit, but got {type(self.parameters).__name__}, which carries none."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Use RelationalCircuitRegistry only with distribution_of(...) (or a bare "
+            "Match), not probability_of(...)/average(...)."
+        )
+
+
+@dataclass(kw_only=True)
+class AmbiguousVariableName(ProbabilisticModelException):
+    """
+    Raised when several attributes of a match have the name of a variable of a
+    probabilistic model, so it is unclear which of them a sample of the variable sets.
+    """
+
+    variable: random_events.variable.Variable
+    """
+    The variable of the model.
+    """
+
+    attribute_matches: list[AttributeMatch]
+    """
+    The attributes of the match that have the name of the variable.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{len(self.attribute_matches)} attributes of the match have the name "
+            f"{self.variable.name} of a variable of the model, so a sample of the "
+            f"variable sets no single attribute."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Give every attribute of the match that the model answers its own variable "
+            "name."
+        )
+
+
+@dataclass(kw_only=True)
+class DomainElementsIndistinguishableInSamples(ProbabilisticModelException):
+    """
+    Raised when two elements of the domain of a symbolic variable have hashes that a
+    sample of a probabilistic model cannot tell apart.
+
+    A sample holds a hash as a float, which rounds hashes larger than ``2**53``, so
+    close hashes become the same value.
+    """
+
+    variable: random_events.variable.Variable
+    """
+    The symbolic variable.
+    """
+
+    elements: list[Hashable]
+    """
+    The elements of the domain whose hashes become the same value in a sample.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The elements {self.elements} of the domain of {self.variable.name} have "
+            f"hashes that become the same float in a sample of the model, so the "
+            f"element a sample refers to is unknown."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Give the elements hashes that differ by more than the spacing of floats at "
+            "their size, for instance values smaller than 2**53 for an integer "
+            "enumeration."
+        )
+
+
+@dataclass(kw_only=True)
+class AssignedValueHasNoRandomEventRepresentation(DataclassException):
+    """
+    Raised when an attribute of a match is assigned an expression that no random event
+    variable can stand for, so its value could neither be sampled nor conditioned on.
+    """
+
+    attribute_match: AttributeMatch
+    """
+    The attribute whose assigned expression has no random event representation.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The attribute {self.attribute_match} is assigned "
+            f"{self.attribute_match.assigned_variable}, which is neither a literal, a "
+            f"variable, an expression derived from a variable, nor a causal marker, so "
+            f"no random event variable stands for it."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Assign the attribute a literal, a variable with a domain, an expression "
+            "derived from a variable, or ``...``."
+        )
+
+
+@dataclass(kw_only=True)
+class UnboundedParameterError(ProbabilisticModelException):
+    """
+    Raised when a uniform prior is asked for a parameter that the statement's ``where``
+    conditions do not bound from below and above.
+    """
+
+    parameter_name: str
+    """
+    The parameter without bounds.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"'{self.parameter_name}' is not bounded from below and above by the "
+            f"statement's where conditions, so no uniform distribution over it exists."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            f"Bound '{self.parameter_name}' from below and above in the statement's "
+            f"where conditions."
+        )
+
+
+@dataclass(kw_only=True)
+class AttributeNotParameterized(InputError):
+    """
+    Raised when the random events variable of an attribute is requested from a query
+    that has no variable for that attribute.
+    """
+
+    attribute: MappedVariable
+    """
+    The attribute that has no variable.
+    """
+
+    def error_message(self) -> str:
+        return f"The query has no random events variable for {self.attribute}."
+
+    def suggest_correction(self) -> str:
+        return (
+            "Assign the attribute in the query's pattern, with ..., a value or a "
+            "variable, or constrain it in a where condition."
+        )

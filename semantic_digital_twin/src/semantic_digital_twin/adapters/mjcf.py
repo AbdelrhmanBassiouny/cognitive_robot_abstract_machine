@@ -1,3 +1,9 @@
+"""
+Parsing of MuJoCo MJCF files into a world.
+"""
+
+from __future__ import annotations
+
 import logging
 import os
 import tempfile
@@ -17,6 +23,7 @@ from semantic_digital_twin.adapters.multi_sim import (
     MujocoActuator,
     GeomVisibilityAndCollisionType,
     MujocoCamera,
+    MujocoContactDimensionality,
     MujocoEquality,
     MujocoGeom,
     MujocoBody,
@@ -177,6 +184,7 @@ class MJCFParser(WorldModelParser):
     def create_world(self) -> World:
         self.world = World()
         worldbody: mujoco.MjsBody = self.spec.worldbody
+        self._name_unnamed_bodies()
         with self.world.modify_world():
             self.parse_equalities()
             self.parse_tendons()
@@ -201,6 +209,21 @@ class MJCFParser(WorldModelParser):
                 self.parse_actuator(mujoco_actuator=mujoco_actuator)
 
         return self.world
+
+    def _name_unnamed_bodies(self) -> None:
+        """
+        Name every unnamed body of the scene after its parent, uniquely, since the world
+        tells its bodies apart by name.
+        """
+        taken = {mujoco_body.name for mujoco_body in self.spec.bodies}
+        for mujoco_body in self.spec.bodies[1:]:
+            if mujoco_body.name:
+                continue
+            index = 0
+            while f"{mujoco_body.parent.name}_body_{index}" in taken:
+                index += 1
+            mujoco_body.name = f"{mujoco_body.parent.name}_body_{index}"
+            taken.add(mujoco_body.name)
 
     @staticmethod
     def _compose_frame_chain(
@@ -262,7 +285,11 @@ class MJCFParser(WorldModelParser):
             shape.origin.reference_frame = body
             shape.add_simulator_property(
                 ContactParameters(
-                    friction=ContactFriction(*mujoco_geom.friction.tolist()),
+                    friction=MujocoContactDimensionality(
+                        mujoco_geom.condim
+                    ).acting_friction(
+                        friction=ContactFriction(*mujoco_geom.friction.tolist())
+                    ),
                     stiffness=ContactStiffness(
                         time_constant=timedelta(seconds=mujoco_geom.solref[0]),
                         damping_ratio=mujoco_geom.solref[1],
@@ -510,12 +537,25 @@ class MJCFParser(WorldModelParser):
                     mujoco_geom.material
                 )
                 meshscale = Scale(*mujoco_mesh.scale)
+                reference_orientation = mujoco_mesh.refquat / numpy.linalg.norm(
+                    mujoco_mesh.refquat
+                )
+                file_T_mesh = HomogeneousTransformationMatrix.from_xyz_quaternion(
+                    pos_x=mujoco_mesh.refpos[0],
+                    pos_y=mujoco_mesh.refpos[1],
+                    pos_z=mujoco_mesh.refpos[2],
+                    quat_w=reference_orientation[0],
+                    quat_x=reference_orientation[1],
+                    quat_y=reference_orientation[2],
+                    quat_z=reference_orientation[3],
+                )
                 if mujoco_material is None:
                     return Mesh(
                         filename=filename,
                         origin=origin_transform,
                         color=color,
                         scale=meshscale,
+                        file_T_mesh=file_T_mesh,
                     )
                 else:
                     texture_name = mujoco_material.textures[1]
@@ -527,6 +567,7 @@ class MJCFParser(WorldModelParser):
                             origin=origin_transform,
                             color=color,
                             scale=meshscale,
+                            file_T_mesh=file_T_mesh,
                         )
                     texturedir = os.path.join(
                         os.path.dirname(self.file_path), self.spec.texturedir
@@ -539,6 +580,7 @@ class MJCFParser(WorldModelParser):
                             color=color,
                             texture_file_path=texture_file_path,
                             scale=meshscale,
+                            file_T_mesh=file_T_mesh,
                         )
                     else:
                         return Mesh(
@@ -546,6 +588,7 @@ class MJCFParser(WorldModelParser):
                             origin=origin_transform,
                             color=color,
                             scale=meshscale,
+                            file_T_mesh=file_T_mesh,
                         )
 
         raise NotImplementedError(f"Geometry type {mujoco_geom.type} not implemented.")

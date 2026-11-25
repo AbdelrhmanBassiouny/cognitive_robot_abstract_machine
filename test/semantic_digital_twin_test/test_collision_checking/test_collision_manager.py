@@ -1,3 +1,10 @@
+"""
+The collision manager: the collision rules it keeps, the contacts it hands to its
+consumers, and what it tells a robot about how close it is to other bodies.
+"""
+
+from __future__ import annotations
+
 import numpy as np
 from copy import deepcopy
 from dataclasses import dataclass, field
@@ -30,7 +37,7 @@ from semantic_digital_twin.world import World
 class TestExternalCollisionExpressionManager:
     def test_simple(self, cylinder_bot_world):
         float_variable_data = FloatVariableData()
-        float_variable_data.register_expression(FloatVariable("muh"))
+        float_variable_data.register_expression(expression=FloatVariable("muh"))
 
         env1 = cylinder_bot_world.get_kinematic_structure_entity_by_name("environment")
         env2 = cylinder_bot_world.get_kinematic_structure_entity_by_name("environment2")
@@ -110,7 +117,7 @@ class TestExternalCollisionExpressionManager:
         assert len(variables) == external_collisions.block_size * 2 + 1
         expression = Vector(variables)
         compiled_expression = expression.compile(
-            VariableParameters.from_lists(variables)
+            parameters=VariableParameters.from_lists(variables)
         )
         result = compiled_expression(external_collisions.float_variable_data.data)
         assert np.allclose(result, external_collisions.float_variable_data.data)
@@ -123,7 +130,9 @@ class TestExternalCollisionExpressionManager:
             first
         )
         expr = root_b_V_contact_normal @ group_a_P_point_on_a.vector3
-        compiled_expression = expr.compile(VariableParameters.from_lists(variables))
+        compiled_expression = expr.compile(
+            parameters=VariableParameters.from_lists(variables)
+        )
         result = compiled_expression(external_collisions.float_variable_data.data)
         expected = (
             external_collisions.get_root_V_contact_normal_symbol(first).evaluate()
@@ -135,7 +144,7 @@ class TestExternalCollisionExpressionManager:
 class TestSelfCollisionExpressionManager:
     def test_simple(self, self_collision_bot_world):
         float_variable_data = FloatVariableData()
-        float_variable_data.register_expression(FloatVariable("muh"))
+        float_variable_data.register_expression(expression=FloatVariable("muh"))
 
         r_tip = self_collision_bot_world.get_kinematic_structure_entity_by_name("r_tip")
         l_tip = self_collision_bot_world.get_kinematic_structure_entity_by_name("l_tip")
@@ -206,7 +215,7 @@ class TestSelfCollisionExpressionManager:
         assert len(variables) == self_collisions.block_size + 1
         expression = Vector(variables)
         compiled_expression = expression.compile(
-            VariableParameters.from_lists(variables)
+            parameters=VariableParameters.from_lists(variables)
         )
         result = compiled_expression(self_collisions.float_variable_data.data)
         assert np.allclose(result, self_collisions.float_variable_data.data)
@@ -217,14 +226,16 @@ class TestSelfCollisionExpressionManager:
             first
         )
         expr = group_b_V_contact_normal @ group_b_P_point_on_b.vector3
-        compiled_expression = expr.compile(VariableParameters.from_lists(variables))
+        compiled_expression = expr.compile(
+            parameters=VariableParameters.from_lists(variables)
+        )
         result = compiled_expression(self_collisions.float_variable_data.data)
         expected = expr.evaluate()
         assert np.allclose(result, expected)
 
     def test_reset(self, self_collision_bot_world):
         float_variable_data = FloatVariableData()
-        float_variable_data.register_expression(FloatVariable("muh"))
+        float_variable_data.register_expression(expression=FloatVariable("muh"))
 
         r_tip = self_collision_bot_world.get_kinematic_structure_entity_by_name("r_tip")
         l_tip = self_collision_bot_world.get_kinematic_structure_entity_by_name("l_tip")
@@ -251,8 +262,8 @@ class TestSelfCollisionExpressionManager:
         self_collisions.register_groups_of_body_combination(root, r_tip)
         # insert a variable between the collision entries to possibly mess with the internal indexing
         v = FloatVariable("muh2")
-        float_variable_data.register_expression(v)
-        float_variable_data.set_value(v, 23)
+        float_variable_data.register_expression(expression=v)
+        float_variable_data.set_value(expression=v, value=23)
         self_collisions.register_groups_of_body_combination(l_tip, r_tip)
 
         self_collisions.reset_collision_data()
@@ -431,6 +442,101 @@ def test_robot_is_not_in_collision_when_nothing_is_checked(cylinder_bot_world):
     collision_manager.update_collision_matrix()
 
     assert not robot.is_in_collision
+
+
+# %% whether a robot keeps out of its buffer zones around the environment
+
+
+def test_robot_within_a_buffer_zone_is_not_yet_in_collision(cylinder_bot_world):
+    """
+    Collision avoidance keeps a robot out of its buffer zones softly and out of the
+    violated distance firmly, so a robot can be inside the first and not the second.
+    """
+    robot = cylinder_bot_world.get_semantic_annotations_by_type(MinimalRobot)[0]
+    environment = cylinder_bot_world.get_kinematic_structure_entity_by_name(
+        "environment"
+    )
+    collision_manager = cylinder_bot_world.collision_manager
+    collision_manager.extend_temporary_rule(
+        [
+            AvoidCollisionBetweenGroups(
+                buffer_zone_distance=10,
+                violated_distance=0.1,
+                body_group_a=[robot.root],
+                body_group_b=[environment],
+            )
+        ]
+    )
+    collision_manager.update_collision_matrix()
+
+    assert robot.is_within_an_external_buffer_zone
+    assert not robot.is_in_collision
+
+
+def test_robot_is_not_within_a_buffer_zone_exactly_at_its_distance(
+    cylinder_bot_world,
+):
+    """
+    A contact exactly at the buffer-zone distance keeps the robot out of the zone.
+    """
+    robot = cylinder_bot_world.get_semantic_annotations_by_type(MinimalRobot)[0]
+    environment = cylinder_bot_world.get_kinematic_structure_entity_by_name(
+        "environment"
+    )
+    collision_manager = cylinder_bot_world.collision_manager
+    collision_manager.extend_temporary_rule(
+        [
+            AvoidCollisionBetweenGroups(
+                buffer_zone_distance=10,
+                violated_distance=0.0,
+                body_group_a=[robot.root],
+                body_group_b=[environment],
+            )
+        ]
+    )
+    collision_manager.update_collision_matrix()
+    [contact] = [
+        contact
+        for contact in collision_manager.compute_collisions().contacts
+        if contact.body_a is environment or contact.body_b is environment
+    ]
+    collision_manager.clear_temporary_rules()
+    collision_manager.extend_temporary_rule(
+        [
+            AvoidCollisionBetweenGroups(
+                buffer_zone_distance=contact.distance,
+                violated_distance=0.0,
+                body_group_a=[robot.root],
+                body_group_b=[environment],
+            )
+        ]
+    )
+    collision_manager.update_collision_matrix()
+
+    assert not robot.is_within_an_external_buffer_zone
+
+
+def test_robot_close_to_itself_is_not_within_an_external_buffer_zone(
+    self_collision_bot_world,
+):
+    """
+    Only a body outside the robot puts it within an external buffer zone, however close
+    its own bodies come to each other.
+    """
+    robot = self_collision_bot_world.get_semantic_annotations_by_type(MinimalRobot)[0]
+    collision_manager = self_collision_bot_world.collision_manager
+    collision_manager.extend_temporary_rule(
+        [
+            AllowAllCollisions(),
+            AvoidSelfCollisions(
+                buffer_zone_distance=10, violated_distance=0.0, robot=robot
+            ),
+        ]
+    )
+    collision_manager.update_collision_matrix()
+    assert collision_manager.compute_collisions().contacts
+
+    assert not robot.is_within_an_external_buffer_zone
 
 
 # %% consumers stay out of the serialized model

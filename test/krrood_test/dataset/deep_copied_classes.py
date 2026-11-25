@@ -1,15 +1,19 @@
+"""
+Dataclasses deep-copied through their constructors by the deep-copy mixin.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
 from typing_extensions import Any, Self
 
-from krrood.patterns.dataclass_deep_copy import DataclassDeepcopyMixin
+from krrood.patterns.dataclass_deep_copy import DataclassDeepcopyMixin, DeepCopyOfField
 
 # %% immutable values a deep copy shares
 
 
-@dataclass
+@dataclass(kw_only=True)
 class UnitOfMeasurement:
     """
     An immutable value that every deep copy shares.
@@ -27,7 +31,7 @@ class UnitOfMeasurement:
 # %% dataclasses copied through their constructor
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Measurements(DataclassDeepcopyMixin):
     """
     Measured values whose total the constructor derives.
@@ -57,7 +61,7 @@ class Measurements(DataclassDeepcopyMixin):
         self.total = sum(self.values)
 
 
-@dataclass
+@dataclass(kw_only=True)
 class AnnotatedMeasurements(Measurements):
     """
     Measurements that carry notes about how they were taken.
@@ -69,7 +73,7 @@ class AnnotatedMeasurements(Measurements):
     """
 
 
-@dataclass
+@dataclass(kw_only=True)
 class PairOfMeasurements(DataclassDeepcopyMixin):
     """
     Two measurements that may be the same object.
@@ -89,7 +93,7 @@ class PairOfMeasurements(DataclassDeepcopyMixin):
 # %% identity-compared dataclasses
 
 
-@dataclass(eq=False)
+@dataclass(kw_only=True, eq=False)
 class SensorReading(DataclassDeepcopyMixin):
     """
     A reading that is equal only to itself.
@@ -98,4 +102,41 @@ class SensorReading(DataclassDeepcopyMixin):
     value: float
     """
     The value read.
+    """
+
+
+# %% fields a deep copy keeps
+
+
+@dataclass(kw_only=True, eq=False)
+class Logbook:
+    """
+    A record of readings, which refers back to each of them.
+    """
+
+    readings: list[LoggedReading] = field(default_factory=list)
+    """
+    The readings recorded in the logbook.
+    """
+
+
+@dataclass(kw_only=True, eq=False)
+class LoggedReading(DataclassDeepcopyMixin):
+    """
+    A reading whose copies stay recorded in the same logbook.
+    """
+
+    value: float
+    """
+    The value read.
+    """
+
+    notes: list[str] = field(default_factory=list)
+    """
+    The notes about the reading.
+    """
+
+    logbook: Logbook = field(metadata={DeepCopyOfField: DeepCopyOfField.SHARED})
+    """
+    The logbook the reading is recorded in.
     """

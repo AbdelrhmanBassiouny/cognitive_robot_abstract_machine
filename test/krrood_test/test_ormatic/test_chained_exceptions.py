@@ -9,7 +9,6 @@ from sqlalchemy import select
 from krrood.ormatic.data_access_objects.helper import to_dao
 
 from ..dataset.chained_exceptions import ExceptionWithOwnField
-from ..dataset.ormatic_interface import ExceptionMappingDAO, ExceptionWithOwnFieldDAO
 
 
 # %% fixtures
@@ -21,10 +20,12 @@ def chained_exception() -> ExceptionWithOwnField:
     An exception raised from a plain exception, itself raised from another plain
     exception, while handling a dataclass exception.
     """
-    context = ExceptionWithOwnField(1)
+    context = ExceptionWithOwnField(offending_value=1)
     cause = ValueError("the cause")
     cause.__cause__ = KeyError("the cause of the cause")
-    return ExceptionWithOwnField(2, raised_from=cause, raised_while_handling=context)
+    return ExceptionWithOwnField(
+        offending_value=2, raised_from=cause, raised_while_handling=context
+    )
 
 
 @pytest.fixture
@@ -34,6 +35,8 @@ def reloaded_exception(
     """
     The chained exception after a round trip through the database.
     """
+    from ..dataset.ormatic_interface import ExceptionWithOwnFieldDAO
+
     session.add(to_dao(chained_exception))
     session.commit()
     session.expunge_all()
@@ -87,6 +90,11 @@ def test_cause_of_plain_cause_survives_round_trip(
 def test_every_exception_is_a_row(
     chained_exception: ExceptionWithOwnField, session, database
 ):
+    """
+    Storing an exception stores its context and its chain of causes too, one row each.
+    """
+    from ..dataset.ormatic_interface import ExceptionMappingDAO
+
     session.add(to_dao(chained_exception))
     session.commit()
     chain = [

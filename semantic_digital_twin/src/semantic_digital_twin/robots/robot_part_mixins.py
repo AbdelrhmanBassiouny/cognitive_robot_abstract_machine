@@ -1,3 +1,8 @@
+"""
+Mixins that give a robot part the parts it has: fingers, sensors, end effectors and
+arms.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -18,7 +23,7 @@ from typing_extensions import (
 )
 
 
-from krrood.ormatic.utils import classproperty
+from krrood.patterns.classproperty import classproperty
 from krrood.patterns.subclass_safe_generic import (
     SubClassSafeGeneric,
 )
@@ -640,9 +645,9 @@ class HasLeftRightArm(
         return (
             first_arm
             if relation(
-                world_P_first_body,
-                world_P_second_body,
-                pov,
+                point=world_P_first_body,
+                other=world_P_second_body,
+                point_of_view=pov,
             )()
             else second_arm
         )

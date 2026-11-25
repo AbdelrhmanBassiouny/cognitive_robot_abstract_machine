@@ -1,0 +1,105 @@
+"""
+Conditional EQL operator constructs.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing_extensions import Any, List
+
+from krrood.entity_query_language.core.base_expressions import (
+    Selectable,
+    SymbolicExpression,
+)
+
+
+@dataclass(kw_only=True, eq=False)
+class CaseWhen(Selectable):
+    """
+    Represents a conditional expression: CASE WHEN condition THEN value ELSE else_value END.
+
+    Supports both local Python evaluation and SQL translation via the EQL translator.
+
+    .. code-block:: python
+
+        action = variable(MoveAction, domain=[])
+        query = an(set_of(
+            min(case_when(action.polymorphic_type == 'PickUpActionDAO', action.database_id))
+        ))
+    """
+
+    condition: SymbolicExpression
+    """
+    The condition to evaluate.
+    """
+
+    then_value: SymbolicExpression
+    """
+    The value returned if the condition is true.
+    """
+
+    else_value: SymbolicExpression | None = None
+    """
+    The value returned if the condition is false.
+
+    Defaults to None.
+    """
+
+    def __post_init__(self):
+        self._type_ = getattr(self.then_value, "_type_", None)
+        # Explicitly register children — _update_children_ converts non-SymbolicExpression
+        # values (like plain Python ints/strings) to Literal nodes automatically
+        if self.else_value is not None:
+            self.condition, self.then_value, self.else_value = self._update_children_(
+                self.condition, self.then_value, self.else_value
+            )
+        else:
+            self.condition, self.then_value = self._update_children_(
+                self.condition, self.then_value
+            )
+        super().__post_init__()
+
+    def _replace_child_field_(self, *, old_child: Any, new_child: Any) -> None:
+        """
+        Replace every operand that holds *old* with *new*.
+        """
+        operands = (self.condition, self.then_value, self.else_value)
+        if all(
+            operand is None or operand._id_ != old_child._id_ for operand in operands
+        ):
+            raise ValueError(
+                f"Child {old_child} not found in CaseWhen — "
+                f"expected one of: condition, then_value, else_value"
+            )
+        if self.condition._id_ == old_child._id_:
+            self.condition = new_child
+        if self.then_value._id_ == old_child._id_:
+            self.then_value = new_child
+        if self.else_value is not None and self.else_value._id_ == old_child._id_:
+            self.else_value = new_child
+
+    def _name_(self) -> str:
+        """
+        Return the symbolic name of this expression node.
+        """
+        return "case_when"
+
+    def _evaluate__(self, *, sources: Any) -> Any:
+        """
+        Evaluate the condition locally in Python.
+
+        :param sources: The variable bindings for evaluation
+        :return: then_value if condition is true, else_value otherwise
+        """
+        cond_result = self.condition._evaluate__(sources=sources)
+        is_true = (
+            bool(cond_result)
+            if not isinstance(cond_result, list)
+            else len(cond_result) > 0
+        )
+
+        if is_true:
+            return self.then_value._evaluate__(sources=sources)
+        if self.else_value is not None:
+            return self.else_value._evaluate__(sources=sources)
+        return None

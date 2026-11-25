@@ -9,6 +9,72 @@ from dataclasses import dataclass, field
 from robokudo.exceptions import InvalidCameraObservation, RoboKudoError
 from robokudo.types.image import ImageRotation
 from semantic_digital_twin.datastructures.camera_model import CameraDistortionModel
+from robokudo.datastructures.ros_image_encoding import ROSImageEncoding
+
+
+# %% Compressed depth
+
+
+@dataclass(kw_only=True)
+class UnsupportedDepthCompression(RoboKudoError, ValueError):
+    """
+    A depth message declares a transport other than compressed depth.
+    """
+
+    compression: str
+    """
+    Transport description supplied by the message.
+    """
+
+    def error_message(self) -> str:
+        return f"Unsupported depth compression: {self.compression!r}."
+
+    def suggest_correction(self) -> str:
+        return "Subscribe to a compressedDepth image topic."
+
+
+@dataclass(kw_only=True)
+class CompressedDepthDecodingFailed(RoboKudoError, ValueError):
+    """
+    A compressed-depth image payload cannot be decoded.
+    """
+
+    def error_message(self) -> str:
+        return "Could not decode the compressed depth image."
+
+    def suggest_correction(self) -> str:
+        return (
+            "Provide a valid compressedDepth header followed by an encoded depth image."
+        )
+
+
+@dataclass(kw_only=True)
+class UnsupportedDepthEncoding(RoboKudoError, ValueError):
+    """
+    A compressed depth message declares an unsupported sample representation.
+    """
+
+    encoding: str
+    """
+    Depth representation declared by the message.
+    """
+
+    def error_message(self) -> str:
+        return f"Unsupported compressed depth encoding: {self.encoding!r}."
+
+    def suggest_correction(self) -> str:
+        return (
+            f"Use {ROSImageEncoding.UINT16_SINGLE_CHANNEL} or "
+            f"{ROSImageEncoding.FLOAT32_SINGLE_CHANNEL} depth."
+        )
+
+
+# %% Stereo configuration
+@dataclass(kw_only=True)
+class InvalidStereoCameraConfiguration(RoboKudoError, ValueError):
+    """
+    Base for stereo settings that contradict the camera input contract.
+    """
 
 
 # %% Image rotation
@@ -99,6 +165,74 @@ class UnsupportedCameraDistortionModel(InvalidCameraObservation):
             if model is not CameraDistortionModel.NONE
         )
         return f"Supply calibration using one of the supported distortion models: {choices}."
+
+
+# %% Camera frames
+
+
+@dataclass(kw_only=True)
+class CameraFrameIsReferenceFrame(InvalidCameraObservation):
+    """
+    A camera pose is measured against the frame of the camera itself.
+    """
+
+    reason: str = field(init=False)
+    """
+    Description of the frame measured against itself.
+    """
+
+    frame: str
+    """
+    The name of the camera frame and of the frame its pose is measured against.
+    """
+
+    def __post_init__(self) -> None:
+        """
+        Name the camera frame the pose is measured against.
+        """
+        self.reason = (
+            f"the camera pose is measured against its own frame '{self.frame}'"
+        )
+
+    def suggest_correction(self) -> str:
+        """
+        Point to the frames of the world to measure the camera pose against.
+        """
+        return "Measure the camera pose against a frame of the world, such as its root."
+
+
+@dataclass(kw_only=True)
+class FrameNamesSeveralBodies(InvalidCameraObservation):
+    """
+    A frame of a camera pose names more than one body of the world.
+    """
+
+    reason: str = field(init=False)
+    """
+    Description of the ambiguous frame.
+    """
+
+    frame: str
+    """
+    The name of the frame.
+    """
+
+    body_names: tuple[str, ...]
+    """
+    The names of the bodies the frame names.
+    """
+
+    def __post_init__(self) -> None:
+        """
+        Name the ambiguous frame and the bodies it names.
+        """
+        self.reason = f"the frame '{self.frame}' names the bodies {self.body_names}"
+
+    def suggest_correction(self) -> str:
+        """
+        Ask for unique or full body names.
+        """
+        return "Give the bodies of the world unique names, or use their full names."
 
 
 # %% Semantic robot selection
@@ -253,6 +387,22 @@ class RecordedViewMissing(RoboKudoError):
 
     def suggest_correction(self) -> str:
         return "Restore the referenced view or select a complete recording."
+
+
+@dataclass(kw_only=True)
+class ReplayWorldShared(RoboKudoError, RuntimeError):
+    """
+    A recording is replayed into a world other processes share.
+    """
+
+    def error_message(self) -> str:
+        return (
+            "A recording can only be replayed into a world of RoboKudo's own, but "
+            "RoboKudo joined a world another process shares."
+        )
+
+    def suggest_correction(self) -> str:
+        return "Stop the process serving the shared world before replaying a recording."
 
 
 @dataclass

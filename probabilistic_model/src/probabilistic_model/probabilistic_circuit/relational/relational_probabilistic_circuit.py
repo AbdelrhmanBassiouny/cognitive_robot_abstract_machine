@@ -12,8 +12,9 @@ Relational probabilistic circuits.
 from __future__ import annotations
 
 import itertools
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
+import numpy as np
 import pandas as pd
 from typing_extensions import TYPE_CHECKING, Any, Callable, Hashable
 
@@ -88,6 +89,25 @@ class PartTrainingTable:
     Per row, the position among the training instances of the instance the part belongs
     to.
     """
+
+    def one_part_per_example(self, *, seed: int) -> PartTrainingTable:
+        """
+        :param seed: The seed of the draw.
+        :return: The table of one part per training instance that has any, drawn at
+            random among its parts, in the order of the instances.
+        """
+        generator = np.random.default_rng(seed)
+        positions = pd.Series(self.example_positions)
+        drawn = [
+            int(generator.choice(rows_of_example.index.to_numpy()))
+            for _, rows_of_example in positions.groupby(positions, sort=True)
+        ]
+        return replace(
+            self,
+            part_instances=[self.part_instances[row] for row in drawn],
+            rows=self.rows.iloc[drawn].reset_index(drop=True),
+            example_positions=[self.example_positions[row] for row in drawn],
+        )
 
 
 @dataclass
@@ -249,8 +269,8 @@ class RelationalProbabilisticCircuit:
         """
         if dataframe_from_parent is not None:
             return dataframe_from_parent
-        dataframe = feature_extractor.create_dataframe(instances)
-        dataframe = feature_extractor.preprocess_dataframe(dataframe)
+        dataframe = feature_extractor.create_dataframe(instances=instances)
+        dataframe = feature_extractor.preprocess_dataframe(df=dataframe)
         return dataframe.sort_index(axis=1)
 
     def _build_child_joint_dataframe(
@@ -283,10 +303,10 @@ class RelationalProbabilisticCircuit:
         """
         rows = []
         for instance in instances:
-            feature_vector = self.feature_extractor.apply_mapping(instance)
+            feature_vector = self.feature_extractor.apply_mapping(instance=instance)
             aggregation_row = [feature_vector[index] for index in aggregation_indices]
             for child in getattr(instance, exchangeable_part):
-                child_features = child_feature_extractor.apply_mapping(child)
+                child_features = child_feature_extractor.apply_mapping(instance=child)
                 rows.append(aggregation_row + child_features)
         child_aggregation_features = child_feature_extractor.aggregation_features
         child_column_names = [
@@ -330,7 +350,7 @@ class RelationalProbabilisticCircuit:
             instances,
             aggregation_indices,
             aggregation_names,
-            FeatureExtractor.from_instances(part_instances),
+            FeatureExtractor.from_instances(instances=part_instances),
         )
         return PartTrainingTable(
             part_instances=part_instances,
@@ -462,7 +482,7 @@ class RelationalProbabilisticCircuit:
         :raises InstanceNotOfClassError: If an instance is not of ``class_``.
         """
         self.class_ = self._class_of(instances, class_)
-        self.feature_extractor = FeatureExtractor.from_instances(instances)
+        self.feature_extractor = FeatureExtractor.from_instances(instances=instances)
         class_dataframe = self._build_class_dataframe(
             self.feature_extractor, instances, dataframe_from_parent
         )

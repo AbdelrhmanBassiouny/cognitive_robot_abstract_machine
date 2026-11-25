@@ -1,3 +1,9 @@
+"""
+Tests of converting between the world's types and ROS 2 messages.
+"""
+
+from __future__ import annotations
+
 import os
 import shutil
 import subprocess
@@ -41,6 +47,9 @@ from semantic_digital_twin.world_description.geometry import (
 )
 
 
+# %% transforms naming both frames
+
+
 def test_convert_transform(cylinder_bot_world):
     transform = geometry_msgs.TransformStamped()
     transform.header.frame_id = "map"
@@ -70,6 +79,53 @@ def test_convert_transform(cylinder_bot_world):
 
     transform2 = SemDTToRos2Converter.convert(transformation_matrix)
     assert transform == transform2
+
+
+# %% transforms that name fewer frames
+
+
+def test_convert_transform_without_frames(cylinder_bot_world):
+    transform = geometry_msgs.Transform()
+    transform.translation.x = 1.0
+    transform.translation.y = -2.0
+    transform.translation.z = 0.5
+    transform.rotation.z = 1.0
+    transform.rotation.w = 0.0
+
+    transformation_matrix = Ros2ToSemDTConverter.convert(
+        transform, world=cylinder_bot_world
+    )
+
+    expected = HomogeneousTransformationMatrix.from_xyz_quaternion(
+        pos_x=transform.translation.x,
+        pos_y=transform.translation.y,
+        pos_z=transform.translation.z,
+        quat_x=transform.rotation.x,
+        quat_y=transform.rotation.y,
+        quat_z=transform.rotation.z,
+        quat_w=transform.rotation.w,
+    )
+    assert (transformation_matrix.to_np() == expected.to_np()).all()
+    assert transformation_matrix.reference_frame is None
+    assert transformation_matrix.child_frame is None
+
+
+def test_convert_transform_stamped_without_a_child_frame(cylinder_bot_world):
+    transform = geometry_msgs.TransformStamped()
+    transform.header.frame_id = "map"
+    transform.transform.rotation.w = 1.0
+
+    transformation_matrix = Ros2ToSemDTConverter.convert(
+        transform, world=cylinder_bot_world
+    )
+
+    assert transformation_matrix.reference_frame == cylinder_bot_world.get_body_by_name(
+        "map"
+    )
+    assert transformation_matrix.child_frame is None
+
+
+# %% other spatial messages
 
 
 def test_convert_point_stamped(cylinder_bot_world):
@@ -402,6 +458,36 @@ def test_a_package_uri_mesh_is_found_in_the_local_install(
     mesh = Ros2ToSemDTConverter.convert(marker, cylinder_bot_world)
 
     assert mesh.filename == str(installed_mesh_file)
+
+
+# %% meshes turned within their file
+
+
+def test_a_mesh_turned_within_its_file_is_drawn_from_its_file_origin(
+    cylinder_bot_world, tmp_path
+):
+    """
+    The marker of a mesh turned within its file is posed at the mesh's file origin.
+    """
+    mesh_file = tmp_path / "jeroen_cup.stl"
+    shutil.copy(
+        Path(files("semantic_digital_twin")).parent.parent
+        / "resources"
+        / "stl"
+        / "jeroen_cup.stl",
+        mesh_file,
+    )
+    mesh = Mesh(
+        filename=str(mesh_file),
+        origin=map_origin(cylinder_bot_world),
+        file_T_mesh=HomogeneousTransformationMatrix.from_xyz_quaternion(
+            pos_x=0.01, quat_w=0.5**0.5, quat_x=0.5**0.5
+        ),
+    )
+
+    marker = SemDTToRos2Converter.convert(mesh)
+
+    assert marker.pose == PoseToRos2Converter.convert(mesh.file_origin.pose)
 
 
 # %% nothing converts the given object

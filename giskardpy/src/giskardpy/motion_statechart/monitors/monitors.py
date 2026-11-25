@@ -1,8 +1,13 @@
+"""
+General motion statechart monitors, such as the one that observes when the motion has
+reached a local minimum.
+"""
+
 from __future__ import annotations
 
-from dataclasses import field
+from dataclasses import dataclass, field
 
-from krrood.ormatic.utils import classproperty
+from krrood.patterns.classproperty import classproperty
 from cramph.node import EndedByOwner
 from cramph.context import ContextExtension
 from giskardpy.motion_statechart.context import MotionControlContext
@@ -12,7 +17,6 @@ from giskardpy.motion_statechart.graph_node import (
     velocity_convergence_expression,
 )
 from cramph.node import NodeArtifacts
-from giskardpy.utils.decorators import dataclass
 from krrood.symbolic_math.symbolic_math import FloatVariable
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 
@@ -85,8 +89,8 @@ class LocalMinimumReached(EndedByOwner, MotionStatechartNode):
     def on_start(self) -> None:
         if self.measure_from_own_start:
             self.context.float_variable_data.set_value(
-                self._start_cycle_variable,
-                self.context.tick_variable.evaluate()[0],
+                expression=self._start_cycle_variable,
+                value=self.context.tick_variable.evaluate()[0],
             )
 
     def set_up(self) -> None:
@@ -98,7 +102,7 @@ class LocalMinimumReached(EndedByOwner, MotionStatechartNode):
         if self.measure_from_own_start:
             self._start_cycle_variable = FloatVariable(f"{self.name}_start_cycle")
             self.context.float_variable_data.register_expression(
-                self._start_cycle_variable
+                expression=self._start_cycle_variable
             )
 
     def build_artifacts(self) -> NodeArtifacts:

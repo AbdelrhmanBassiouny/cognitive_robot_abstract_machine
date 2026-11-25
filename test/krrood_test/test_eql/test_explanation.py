@@ -1,3 +1,9 @@
+"""
+Tests of the explanations EQL records for the instances a query infers.
+"""
+
+from __future__ import annotations
+
 import gc
 import operator
 from copy import deepcopy
@@ -24,12 +30,24 @@ from krrood.entity_query_language.factories import (
     variable,
     a,
     an,
+    exists,
 )
 from krrood.entity_query_language.operators.comparator import Comparator
-from krrood.entity_query_language.operators.core_logical_operators import AND, OR
+from krrood.entity_query_language.operators.core_logical_operators import (
+    AND,
+    OR,
+    Not,
+)
 from krrood.entity_query_language.query.query import Query
 from krrood.entity_query_language.query_graph import QueryGraph
 from krrood.symbol_graph.symbol_graph import Symbol
+from ..dataset.rule_tree_domains import (
+    Birth,
+    Child,
+    ChildLabel,
+    Verdict,
+    Voter,
+)
 from ..dataset.semantic_world_like_classes import (
     Handle,
     PrismaticConnection,
@@ -38,12 +56,12 @@ from ..dataset.semantic_world_like_classes import (
 )
 
 
-@dataclass(unsafe_hash=True)
+@dataclass(kw_only=True, unsafe_hash=True)
 class Person(Symbol):
     name: str
 
 
-@dataclass(unsafe_hash=True)
+@dataclass(kw_only=True, unsafe_hash=True)
 class Item(Symbol):
     value: int
 
@@ -202,9 +220,9 @@ def test_query_root_resolves_to_the_evaluating_query_for_a_variable_reused_acros
     first_query = entity(person_var)
     first_results = list(first_query.evaluate())
     assert len(first_results) == 1
-    assert (
-        len(person_var._parents_) >= 2
-    ), "person_var must already be multi-parented after the first query for this to exercise the bug"
+    assert len(person_var._parents_) >= 2, (
+        "person_var must already be multi-parented after the first query for this to exercise the bug"
+    )
 
     second_query = entity(person_var)
     second_results = list(second_query.evaluate())
@@ -266,9 +284,9 @@ def test_variable_stack_tracking():
 
     v = variable_from([1, 2, 3])
 
-    assert monitored.is_monitored(v)
-    assert isinstance(monitored.get_stack(v), CallStack)
-    filenames = [f.filename for f in monitored.get_stack(v)]
+    assert monitored.is_monitored(target=v)
+    assert isinstance(monitored.get_stack(instance=v), CallStack)
+    filenames = [f.filename for f in monitored.get_stack(instance=v)]
     assert any("test_explanation.py" in f for f in filenames)
 
 
@@ -315,7 +333,7 @@ def _get_satisfied_names(ids, condition_root):
     """
     return {
         expression._name_
-        for expression in condition_root._subtree_expressions_with_ids_(ids)
+        for expression in condition_root._subtree_expressions_with_ids_(ids=ids)
     }
 
 
@@ -428,7 +446,7 @@ def test_satisfied_conditions_exclude_a_short_circuited_operator():
     assert len(true_results) == 1
 
     satisfied = val._conditions_root_._subtree_expressions_with_ids_(
-        true_results[0].satisfied_condition_ids
+        ids=true_results[0].satisfied_condition_ids
     )
     assert any(isinstance(expression, OR) for expression in satisfied)
     assert not any(isinstance(expression, AND) for expression in satisfied)
@@ -545,9 +563,9 @@ def test_satisfied_conditions_for_bare_condition_shared_with_an_unrelated_query(
     target = variable_from([1])
     query = entity(target).where(flag)
     query.build()
-    assert (
-        len(flag._parents_) == 2
-    ), "flag must be a genuinely shared DAG node for this test to exercise the bug"
+    assert len(flag._parents_) == 2, (
+        "flag must be a genuinely shared DAG node for this test to exercise the bug"
+    )
 
     true_results = _get_true_results(query)
     assert len(true_results) == 1
@@ -774,15 +792,15 @@ def test_query_graph_marks_a_shared_bare_condition_satisfied_from_its_own_query(
     target = variable_from([1])
     query = entity(target).where(flag)
     query.build()
-    assert (
-        len(flag._parents_) == 2
-    ), "flag must be a genuinely shared DAG node for this test to exercise the bug"
+    assert len(flag._parents_) == 2, (
+        "flag must be a genuinely shared DAG node for this test to exercise the bug"
+    )
 
     true_results = _get_true_results(query)
     result = true_results[0]
 
     query_graph = QueryGraph(
-        query, satisfied_condition_ids=result.satisfied_condition_ids
+        query=query, satisfied_condition_ids=result.satisfied_condition_ids
     )
     flag_node = query_graph.expression_node_map[flag]
     assert flag_node.is_satisfied, (
@@ -810,9 +828,9 @@ def test_query_graph_marks_a_node_reused_at_two_positions_satisfied_regardless_o
     sink = variable_from([1])
 
     query = entity(sink).where(and_(flag == True, flag))
-    assert (
-        len(flag._parents_) == 2
-    ), "flag must be a genuinely shared DAG node for this to exercise the behaviour"
+    assert len(flag._parents_) == 2, (
+        "flag must be a genuinely shared DAG node for this to exercise the behaviour"
+    )
 
     true_results = _get_true_results(query)
     result = true_results[0]
@@ -822,7 +840,7 @@ def test_query_graph_marks_a_node_reused_at_two_positions_satisfied_regardless_o
     )
 
     query_graph = QueryGraph(
-        query, satisfied_condition_ids=result.satisfied_condition_ids
+        query=query, satisfied_condition_ids=result.satisfied_condition_ids
     )
     flag_node = query_graph.expression_node_map[flag]
     assert flag_node.is_satisfied, (
@@ -847,12 +865,12 @@ def test_query_graph_satisfaction_colors():
     assert explanation is not None
 
     qg = QueryGraph(
-        explanation.query_root,
+        query=explanation.query_root,
         satisfied_condition_ids=explanation.satisfied_condition_ids,
     )
 
     original_colors = {
-        id(node.data): ColorLegend.from_expression(node.data).color
+        id(node.data): ColorLegend.from_expression(expression=node.data).color
         for node in qg.expression_node_map.values()
     }
 
@@ -889,7 +907,7 @@ def test_query_graph_faded_subtree_propagation():
     explanation = explain_inference(results[0])
 
     qg = QueryGraph(
-        explanation.query_root,
+        query=explanation.query_root,
         satisfied_condition_ids=explanation.satisfied_condition_ids,
     )
 
@@ -926,12 +944,12 @@ def test_query_graph_satisfaction_colors_all_satisfied():
     assert explanation is not None
 
     qg = QueryGraph(
-        explanation.query_root,
+        query=explanation.query_root,
         satisfied_condition_ids=explanation.satisfied_condition_ids,
     )
 
     original_colors = {
-        id(node.data): ColorLegend.from_expression(node.data).color
+        id(node.data): ColorLegend.from_expression(expression=node.data).color
         for node in qg.expression_node_map.values()
     }
 
@@ -970,6 +988,10 @@ def test_explanation_condition_graph_and_visualize():
 
 
 def test_nested_rule_explanation(drawer_rule):
+    """
+    The explanation of a drawer lists the comparisons its rule satisfied, each with the
+    values it held for.
+    """
     found_drawers = drawer_rule.tolist()
     explanation = explain_inference(found_drawers[0])
     assert explanation is not None
@@ -994,9 +1016,12 @@ def test_nested_rule_explanation(drawer_rule):
             assert condition.left._attribute_name_ == "child"
             assert condition.left._child_._type_ is FixedConnection
             assert isinstance(bindings[condition.left._child_._id_], FixedConnection)
+    container = found_drawers[0].container
+    handle = found_drawers[0].handle
     assert explanation.get_satisfied_conditions_as_string() == (
-        "(FixedConnection.parent == PrismaticConnection.child)"
-        "\nAND (FixedConnection.child == Handle)"
+        f"((FixedConnection.parent = {container!r}) == "
+        f"(PrismaticConnection.child = {container!r}))"
+        f"\nAND ((FixedConnection.child = {handle!r}) == (Handle = {handle!r}))"
     )
     explanation.condition_graph().visualize(filename="drawer_explanation.pdf")
 
@@ -1028,7 +1053,7 @@ def test_explanation_lifecycle_tied_to_instance():
         prismatic_connection = variable(PrismaticConnection, world.connections)
         fixed_connection = a(FixedConnection)(
             parent=prismatic_connection.child, child=handle
-        ).from_(world.connections)
+        ).from_(domain=world.connections)
         drawers = inference(Drawer)(
             container=fixed_connection.parent,
             handle=fixed_connection.child,
@@ -1054,9 +1079,9 @@ def test_explanation_lifecycle_tied_to_instance():
         "likely an InferenceExplanation or a class-level cache holding a strong "
         "reference to a WorldEntity."
     )
-    assert (
-        drawer_ref() is None
-    ), "Drawer should have been garbage-collected together with its World."
+    assert drawer_ref() is None, (
+        "Drawer should have been garbage-collected together with its World."
+    )
 
 
 @pytest.fixture
@@ -1066,7 +1091,7 @@ def drawer_rule(doors_and_drawers_world):
     prismatic_connection = variable(PrismaticConnection, world.connections)
     fixed_connection = a(FixedConnection)(
         parent=prismatic_connection.child, child=handle
-    ).from_(world.connections)
+    ).from_(domain=world.connections)
     return inference(Drawer)(
         container=fixed_connection.parent,
         handle=fixed_connection.child,
@@ -1085,3 +1110,41 @@ def test_a_copy_of_an_inferred_instance_shares_its_explanation():
     assert copied_bob is not bob
     assert copied_bob == bob
     assert explain_inference(copied_bob) is explain_inference(bob)
+
+
+# %% values and negations in the satisfied conditions
+
+
+def test_a_satisfied_comparison_is_shown_with_the_values_it_held_for():
+    """
+    A satisfied comparison is shown with the value each of its operands held.
+    """
+    child = variable(Child, domain=[Child(name="a", age=30)])
+    labels = an(
+        entity(inference(ChildLabel)(child=child, text="adult")).where(child.age >= 18)
+    ).tolist()
+
+    assert (
+        explain_inference(labels[0]).get_satisfied_conditions_as_string()
+        == "((Child.age = 30) >= 18)"
+    )
+
+
+def test_a_satisfied_negated_exists_is_part_of_the_satisfied_conditions():
+    """
+    A negated exists that held is listed among the satisfied conditions.
+    """
+    alice, bob = Voter(name="alice"), Voter(name="bob")
+    voter = variable(Voter, domain=[alice, bob])
+    birth = variable(Birth, domain=[Birth(voter=bob)])
+    negation = not_(exists(birth, birth.voter == voter))
+    verdicts = an(
+        entity(inference(Verdict)(voter=voter, approves=True)).where(negation)
+    ).tolist()
+
+    satisfied = explain_inference(
+        verdicts[0]
+    ).get_satisfied_conditions_and_their_bindings()
+
+    assert [verdict.voter for verdict in verdicts] == [alice]
+    assert [type(condition.condition) for condition in satisfied] == [Not]

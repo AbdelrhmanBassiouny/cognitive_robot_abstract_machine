@@ -8,6 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import rustworkx as rx
+from krrood.patterns.field_metadata import JSONMetadata
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from typing_extensions import Generic, Iterable, Iterator, TypeVar
 
@@ -22,12 +23,21 @@ class Graph(Generic[NodeType], SubClassSafeGeneric):
     A graph whose nodes are the objects it holds, each held once.
     """
 
-    graph: rx.PyDiGraph = field(default_factory=lambda: rx.PyDiGraph(multigraph=False))
+    graph: rx.PyDiGraph = field(
+        default_factory=lambda: rx.PyDiGraph(multigraph=False),
+        kw_only=True,
+        metadata=JSONMetadata(serialize=False).as_dict(),
+    )
     """
     The graph, whose node data are the nodes.
     """
 
-    indices: dict[NodeType, int] = field(default_factory=dict, repr=False)
+    indices: dict[NodeType, int] = field(
+        default_factory=dict,
+        repr=False,
+        kw_only=True,
+        metadata=JSONMetadata(serialize=False).as_dict(),
+    )
     """
     The index of every node in :attr:`graph`.
     """

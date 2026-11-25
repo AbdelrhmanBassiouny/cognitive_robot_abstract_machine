@@ -201,7 +201,7 @@ def test_value_in_collection_matches_owners_containing_it():
     ``takes_course=logic`` matches the students whose courses include Logic.
     """
     (logic, _, _), students = build_university()
-    matches = a(CampusStudent)(takes_course=logic).from_(students).evaluate()
+    matches = a(CampusStudent)(takes_course=logic).from_(domain=students).evaluate()
     assert names_of(matches) == ["Alice", "Carol"]
 
 
@@ -210,7 +210,7 @@ def test_membership_with_a_different_element():
     ``takes_course=ai`` matches the students whose courses include AI.
     """
     (_, ai, _), students = build_university()
-    matches = a(CampusStudent)(takes_course=ai).from_(students).evaluate()
+    matches = a(CampusStudent)(takes_course=ai).from_(domain=students).evaluate()
     assert names_of(matches) == ["Alice", "Bob"]
 
 
@@ -220,7 +220,7 @@ def test_value_in_no_collection_matches_nothing():
     """
     _, students = build_university()
     unused = CampusCourse("Unused")
-    matches = a(CampusStudent)(takes_course=unused).from_(students).evaluate()
+    matches = a(CampusStudent)(takes_course=unused).from_(domain=students).evaluate()
     assert list(matches) == []
 
 
@@ -233,7 +233,7 @@ def test_membership_in_list_attribute():
         TaggedEntry("blue", tags=["blue"]),
         TaggedEntry("none"),
     ]
-    matches = a(TaggedEntry)(tags="red").from_(entries).evaluate()
+    matches = a(TaggedEntry)(tags="red").from_(domain=entries).evaluate()
     assert plain_names_of(matches) == ["both"]
 
 
@@ -242,7 +242,7 @@ def test_membership_in_tuple_attribute():
     A plain value matches the owners of a ``tuple[str, ...]`` attribute holding it.
     """
     entries = [TaggedEntry("both", labels=("x", "y")), TaggedEntry("y", labels=("y",))]
-    matches = a(TaggedEntry)(labels="x").from_(entries).evaluate()
+    matches = a(TaggedEntry)(labels="x").from_(domain=entries).evaluate()
     assert plain_names_of(matches) == ["both"]
 
 
@@ -253,7 +253,7 @@ def test_variable_of_the_element_type_means_membership():
     """
     (logic, _, _), students = build_university()
     course = variable(CampusCourse, domain=[logic])
-    matches = a(CampusStudent)(takes_course=course).from_(students).evaluate()
+    matches = a(CampusStudent)(takes_course=course).from_(domain=students).evaluate()
     assert names_of(matches) == ["Alice", "Carol"]
 
 
@@ -266,7 +266,7 @@ def test_nested_pattern_matches_when_some_element_matches():
     """
     _, students = build_university()
     pattern = a(CampusStudent)(takes_course=a(CampusCourse)(name="Databases"))
-    assert names_of(pattern.from_(students).evaluate()) == ["Carol"]
+    assert names_of(pattern.from_(domain=students).evaluate()) == ["Carol"]
 
 
 def test_unconstrained_pattern_matches_each_owner_with_an_element_once():
@@ -276,7 +276,11 @@ def test_unconstrained_pattern_matches_each_owner_with_an_element_once():
     """
     _, students = build_university()
     pattern = a(CampusStudent)(takes_course=a(CampusCourse)())
-    assert names_of(pattern.from_(students).evaluate()) == ["Alice", "Bob", "Carol"]
+    assert names_of(pattern.from_(domain=students).evaluate()) == [
+        "Alice",
+        "Bob",
+        "Carol",
+    ]
 
 
 def test_nested_pattern_with_condition_satisfied_by_two_elements_yields_owner_once():
@@ -292,7 +296,7 @@ def test_nested_pattern_with_condition_satisfied_by_two_elements_yields_owner_on
         ),
     ]
     pattern = a(CampusStudent)(takes_course=a(CampusCourse)(name="Seminar"))
-    assert names_of(pattern.from_(students).evaluate()) == ["Once", "Twice"]
+    assert names_of(pattern.from_(domain=students).evaluate()) == ["Once", "Twice"]
 
 
 def test_pattern_evaluated_before_it_is_nested_still_restricts_the_elements():
@@ -309,10 +313,10 @@ def test_pattern_evaluated_before_it_is_nested_still_restricts_the_elements():
         ),
         CampusStudent(role_taker=CampusMember("Never"), takes_course={other}),
     ]
-    seminar = a(CampusCourse)(name="Seminar").from_([*seminars, other])
+    seminar = a(CampusCourse)(name="Seminar").from_(domain=[*seminars, other])
     seminar.tolist()
     pattern = a(CampusStudent)(takes_course=seminar)
-    assert names_of(pattern.from_(students).evaluate()) == ["Once", "Twice"]
+    assert names_of(pattern.from_(domain=students).evaluate()) == ["Once", "Twice"]
 
 
 def test_condition_on_a_pattern_before_it_is_nested_restricts_the_elements():
@@ -325,10 +329,10 @@ def test_condition_on_a_pattern_before_it_is_nested_restricts_the_elements():
         CampusStudent(role_taker=CampusMember("Seminar"), takes_course={seminar}),
         CampusStudent(role_taker=CampusMember("Other"), takes_course={other}),
     ]
-    course = a(CampusCourse).from_([seminar, other])
+    course = a(CampusCourse).from_(domain=[seminar, other])
     course.where(course.name == "Seminar")
     pattern = a(CampusStudent)(takes_course=course)
-    assert names_of(pattern.from_(students).evaluate()) == ["Seminar"]
+    assert names_of(pattern.from_(domain=students).evaluate()) == ["Seminar"]
 
 
 def test_pattern_of_a_subtype_filters_the_elements_by_type():
@@ -345,7 +349,7 @@ def test_pattern_of_a_subtype_filters_the_elements_by_type():
         ),
     ]
     pattern = a(CampusStudent)(takes_course=a(SeminarCourse)())
-    assert names_of(pattern.from_(students).evaluate()) == ["Seminarist"]
+    assert names_of(pattern.from_(domain=students).evaluate()) == ["Seminarist"]
 
 
 # %% Two-level nesting through two collection attributes
@@ -357,7 +361,10 @@ def test_two_level_nesting_through_collection_attributes():
     dean, Erin's course has no teacher and Dave takes nothing.
     """
     students = build_deanery()
-    assert names_of(dean_pattern().from_(students).evaluate()) == ["Alice", "Carol"]
+    assert names_of(dean_pattern().from_(domain=students).evaluate()) == [
+        "Alice",
+        "Carol",
+    ]
 
 
 def test_two_level_nesting_yields_each_student_once():
@@ -369,7 +376,11 @@ def test_two_level_nesting_yields_each_student_once():
     pattern = a(CampusStudent)(
         takes_course=a(CampusCourse)(is_taught_by=a(CampusMember)())
     )
-    assert names_of(pattern.from_(students).evaluate()) == ["Alice", "Bob", "Carol"]
+    assert names_of(pattern.from_(domain=students).evaluate()) == [
+        "Alice",
+        "Bob",
+        "Carol",
+    ]
 
 
 # %% Combination with single-valued keywords
@@ -385,7 +396,7 @@ def test_nested_pattern_combined_with_single_valued_keyword_requires_both():
         a(CampusStudent)(
             role_taker=alice_member, takes_course=a(CampusCourse)(name="Logic")
         )
-        .from_(students)
+        .from_(domain=students)
         .evaluate()
     )
     assert names_of(matches) == ["Alice"]
@@ -401,7 +412,7 @@ def test_nested_pattern_combined_with_failing_single_valued_keyword_matches_noth
         a(CampusStudent)(
             role_taker=bob_member, takes_course=a(CampusCourse)(name="Logic")
         )
-        .from_(students)
+        .from_(domain=students)
         .evaluate()
     )
     assert list(matches) == []
@@ -414,7 +425,7 @@ def test_value_membership_combined_with_nested_role_taker_pattern():
     (logic, _, _), students = build_university()
     matches = (
         a(CampusStudent)(takes_course=logic, role_taker=a(CampusMember)(name="Carol"))
-        .from_(students)
+        .from_(domain=students)
         .evaluate()
     )
     assert names_of(matches) == ["Carol"]
@@ -428,7 +439,7 @@ def test_collection_literal_keeps_whole_collection_equality():
     A set literal matches only the students whose whole collection equals it.
     """
     (_, ai, _), students = build_university()
-    matches = a(CampusStudent)(takes_course={ai}).from_(students).evaluate()
+    matches = a(CampusStudent)(takes_course={ai}).from_(domain=students).evaluate()
     assert names_of(matches) == ["Bob"]
 
 
@@ -439,7 +450,9 @@ def test_variable_of_a_collection_type_keeps_whole_collection_equality():
     """
     (_, ai, _), students = build_university()
     collection = variable(set, domain=[{ai}])
-    matches = a(CampusStudent)(takes_course=collection).from_(students).evaluate()
+    matches = (
+        a(CampusStudent)(takes_course=collection).from_(domain=students).evaluate()
+    )
     assert names_of(matches) == ["Bob"]
 
 
@@ -451,7 +464,7 @@ def test_list_literal_keeps_whole_collection_equality():
         TaggedEntry("pair", tags=["red", "blue"]),
         TaggedEntry("single", ["red"]),
     ]
-    matches = a(TaggedEntry)(tags=["red"]).from_(entries).evaluate()
+    matches = a(TaggedEntry)(tags=["red"]).from_(domain=entries).evaluate()
     assert plain_names_of(matches) == ["single"]
 
 
@@ -460,7 +473,7 @@ def test_single_valued_attribute_keeps_equality():
     A single-valued attribute is matched by equality.
     """
     courses, _ = build_university()
-    matches = a(CampusCourse)(name="AI").from_(list(courses)).evaluate()
+    matches = a(CampusCourse)(name="AI").from_(domain=list(courses)).evaluate()
     assert plain_names_of(matches) == ["AI"]
 
 
@@ -476,7 +489,7 @@ def test_list_of_patterns_keeps_positional_matching():
     pattern = a(CoursePlaylist)(
         courses=[a(CampusCourse)(name="Logic"), a(CampusCourse)(name="AI")]
     )
-    assert plain_names_of(pattern.from_(playlists).evaluate()) == ["forward"]
+    assert plain_names_of(pattern.from_(domain=playlists).evaluate()) == ["forward"]
 
 
 def test_type_attribute_keeps_equality_with_a_class():
@@ -488,7 +501,7 @@ def test_type_attribute_keeps_equality_with_a_class():
         CourseRegistration("seminar", kind=SeminarCourse),
     ]
     pattern = a(CourseRegistration)(kind=SeminarCourse)
-    assert plain_names_of(pattern.from_(registrations).evaluate()) == ["seminar"]
+    assert plain_names_of(pattern.from_(domain=registrations).evaluate()) == ["seminar"]
 
 
 # %% Whole lists and tuples compare by order, length and duplicates
@@ -503,7 +516,7 @@ def test_list_literal_respects_order():
         CoursePlaylist("forward", [logic, ai]),
         CoursePlaylist("backward", [ai, logic]),
     ]
-    matches = a(CoursePlaylist)(courses=[logic, ai]).from_(playlists).evaluate()
+    matches = a(CoursePlaylist)(courses=[logic, ai]).from_(domain=playlists).evaluate()
     assert plain_names_of(matches) == ["forward"]
 
 
@@ -512,7 +525,7 @@ def test_list_literal_respects_duplicates():
     A list literal does not match a list repeating one of its elements.
     """
     entries = [TaggedEntry("repeated", ["red", "red"]), TaggedEntry("single", ["red"])]
-    matches = a(TaggedEntry)(tags=["red"]).from_(entries).evaluate()
+    matches = a(TaggedEntry)(tags=["red"]).from_(domain=entries).evaluate()
     assert plain_names_of(matches) == ["single"]
 
 
@@ -524,7 +537,7 @@ def test_tuple_literal_respects_order():
         TaggedEntry("forward", labels=("x", "y")),
         TaggedEntry("backward", labels=("y", "x")),
     ]
-    matches = a(TaggedEntry)(labels=("x", "y")).from_(entries).evaluate()
+    matches = a(TaggedEntry)(labels=("x", "y")).from_(domain=entries).evaluate()
     assert plain_names_of(matches) == ["forward"]
 
 
@@ -544,7 +557,7 @@ def test_list_of_patterns_requires_the_same_length():
     pattern = a(CoursePlaylist)(
         courses=[a(CampusCourse)(name="Logic"), a(CampusCourse)(name="AI")]
     )
-    assert plain_names_of(pattern.from_(playlists).evaluate()) == ["exact"]
+    assert plain_names_of(pattern.from_(domain=playlists).evaluate()) == ["exact"]
 
 
 def test_set_literal_ignores_the_order_it_is_written_in():
@@ -553,7 +566,7 @@ def test_set_literal_ignores_the_order_it_is_written_in():
     """
     (logic, _, databases), students = build_university()
     pattern = a(CampusStudent)(takes_course=[databases, logic])
-    assert names_of(pattern.from_(students).evaluate()) == ["Carol"]
+    assert names_of(pattern.from_(domain=students).evaluate()) == ["Carol"]
 
 
 # %% Values that fit neither an element nor the whole collection
@@ -567,7 +580,7 @@ def test_tuple_element_of_a_list_of_tuples_means_membership():
         CoordinateRoute("through", [(0, 0), (1, 2)]),
         CoordinateRoute("around", [(0, 0), (3, 4)]),
     ]
-    matches = a(CoordinateRoute)(points=(1, 2)).from_(routes).evaluate()
+    matches = a(CoordinateRoute)(points=(1, 2)).from_(domain=routes).evaluate()
     assert plain_names_of(matches) == ["through"]
 
 
@@ -578,7 +591,7 @@ def test_value_of_neither_the_element_nor_the_collection_type_raises():
     """
     _, students = build_university()
     with pytest.raises(ValueFitsNeitherElementNorCollection):
-        list(a(CampusStudent)(takes_course=5).from_(students).evaluate())
+        list(a(CampusStudent)(takes_course=5).from_(domain=students).evaluate())
 
 
 def test_integer_for_a_list_of_floats_means_membership():
@@ -586,7 +599,7 @@ def test_integer_for_a_list_of_floats_means_membership():
     An integer stands for a number in a list of floats, as Python's numbers allow.
     """
     readings = [SensorReadings("hit", [1.0, 2.5]), SensorReadings("miss", [2.5])]
-    matches = a(SensorReadings)(values=1).from_(readings).evaluate()
+    matches = a(SensorReadings)(values=1).from_(domain=readings).evaluate()
     assert plain_names_of(matches) == ["hit"]
 
 
@@ -598,8 +611,8 @@ def test_nested_pattern_domain_restricts_the_element():
     A nested pattern ranging over a domain is satisfied only by an element in it.
     """
     (_, _, databases), students = build_university()
-    pattern = a(CampusStudent)(takes_course=a(CampusCourse)().from_([databases]))
-    assert names_of(pattern.from_(students).evaluate()) == ["Carol"]
+    pattern = a(CampusStudent)(takes_course=a(CampusCourse)().from_(domain=[databases]))
+    assert names_of(pattern.from_(domain=students).evaluate()) == ["Carol"]
 
 
 def test_nested_pattern_domain_and_condition_must_both_hold():
@@ -608,9 +621,9 @@ def test_nested_pattern_domain_and_condition_must_both_hold():
     """
     (_, _, databases), students = build_university()
     pattern = a(CampusStudent)(
-        takes_course=a(CampusCourse)(name="Logic").from_([databases])
+        takes_course=a(CampusCourse)(name="Logic").from_(domain=[databases])
     )
-    assert list(pattern.from_(students).evaluate()) == []
+    assert list(pattern.from_(domain=students).evaluate()) == []
 
 
 def test_nested_pattern_domain_yields_each_owner_once():
@@ -618,8 +631,12 @@ def test_nested_pattern_domain_yields_each_owner_once():
     An owner with two elements in the domain still appears once.
     """
     (logic, ai, _), students = build_university()
-    pattern = a(CampusStudent)(takes_course=a(CampusCourse)().from_([logic, ai]))
-    assert names_of(pattern.from_(students).evaluate()) == ["Alice", "Bob", "Carol"]
+    pattern = a(CampusStudent)(takes_course=a(CampusCourse)().from_(domain=[logic, ai]))
+    assert names_of(pattern.from_(domain=students).evaluate()) == [
+        "Alice",
+        "Bob",
+        "Carol",
+    ]
 
 
 def test_nested_pattern_domain_in_a_list_of_patterns_restricts_its_position():
@@ -633,9 +650,9 @@ def test_nested_pattern_domain_in_a_list_of_patterns_restricts_its_position():
         CoursePlaylist("backward", [ai, logic]),
     ]
     pattern = a(CoursePlaylist)(
-        courses=[a(CampusCourse)().from_([ai]), a(CampusCourse)()]
+        courses=[a(CampusCourse)().from_(domain=[ai]), a(CampusCourse)()]
     )
-    assert plain_names_of(pattern.from_(playlists).evaluate()) == ["backward"]
+    assert plain_names_of(pattern.from_(domain=playlists).evaluate()) == ["backward"]
 
 
 def test_nested_pattern_domain_restricts_a_single_valued_attribute():
@@ -649,8 +666,8 @@ def test_nested_pattern_domain_restricts_a_single_valued_attribute():
         AdvisedStudent("by lecturer", advisor=lecturer),
         AdvisedStudent("unadvised"),
     ]
-    pattern = a(AdvisedStudent)(advisor=a(CampusMember)().from_([dean]))
-    assert plain_names_of(pattern.from_(advisees).evaluate()) == ["by dean"]
+    pattern = a(AdvisedStudent)(advisor=a(CampusMember)().from_(domain=[dean]))
+    assert plain_names_of(pattern.from_(domain=advisees).evaluate()) == ["by dean"]
 
 
 # %% Match used inside a larger query
@@ -662,7 +679,7 @@ def test_match_as_variable_in_a_larger_query_keeps_one_row_per_owner():
     although Alice and Carol have two courses satisfying the pattern.
     """
     _, students = build_university()
-    student = a(CampusStudent)(takes_course=a(CampusCourse)()).from_(students)
+    student = a(CampusStudent)(takes_course=a(CampusCourse)()).from_(domain=students)
     assert names_of(an(entity(student)).evaluate()) == ["Alice", "Bob", "Carol"]
 
 

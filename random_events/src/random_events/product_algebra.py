@@ -1,3 +1,8 @@
+"""
+Events over several variables: a :class:`SimpleEvent` maps each variable to a set of its
+values, and an :class:`Event` is a union of simple events.
+"""
+
 from __future__ import annotations
 
 import copy
@@ -218,10 +223,10 @@ class SimpleEvent(AbstractSimpleSet, VariableMap):
         return {**super().to_json(), "assignments": self.assignments_to_json()}
 
     @classmethod
-    def _from_json(cls, data: dict[str, Any], **kwargs) -> Self:
+    def _from_json(cls, *, data: dict[str, Any], **kwargs) -> Self:
         variables = [from_json(variable) for variable in data["variables"]]
         assignments = [
-            AbstractCompositeSet.from_json(assignment)
+            AbstractCompositeSet.from_json(data=assignment)
             for assignment in data["assignments"]
         ]
         return cls.from_data(
@@ -236,7 +241,7 @@ class SimpleEvent(AbstractSimpleSet, VariableMap):
         cls, data: dict[str, Any], variables: list[Variable]
     ) -> Self:
         assignments = [
-            AbstractCompositeSet.from_json(assignment)
+            AbstractCompositeSet.from_json(data=assignment)
             for assignment in data["assignments"]
         ]
         return cls.from_data(
@@ -423,6 +428,7 @@ class Event(AbstractCompositeSet):
             {variable.cpp_object for variable in all_variables}
         )
         self._variables = SortedSet(all_variables)
+        self._simple_sets_cache = None
 
     def fill_missing_variables_pure(self, variables: Iterable[Variable] | None = None):
         """

@@ -1,3 +1,7 @@
+"""
+Deep copies of dataclasses built through their constructors.
+"""
+
 import copy
 
 import pytest
@@ -8,6 +12,8 @@ from krrood.patterns.mixin import Mixin
 
 from ..dataset.deep_copied_classes import (
     AnnotatedMeasurements,
+    Logbook,
+    LoggedReading,
     Measurements,
     PairOfMeasurements,
     SensorReading,
@@ -19,13 +25,13 @@ from ..dataset.deep_copied_classes import (
 
 @pytest.fixture
 def metre() -> UnitOfMeasurement:
-    return UnitOfMeasurement("m")
+    return UnitOfMeasurement(symbol="m")
 
 
 @pytest.fixture
 def measurements(metre: UnitOfMeasurement) -> AnnotatedMeasurements:
     return AnnotatedMeasurements(
-        [1.0, 2.0], metre, source="laser", notes=["calibrated"]
+        values=[1.0, 2.0], unit=metre, source="laser", notes=["calibrated"]
     )
 
 
@@ -73,17 +79,48 @@ def test_a_deep_copy_derives_fields_the_constructor_does_not_take(
 
 
 def test_a_deep_copy_copies_an_object_reached_twice_once(metre: UnitOfMeasurement):
-    shared = Measurements([1.0], metre)
-    copied = copy.deepcopy(PairOfMeasurements(shared, shared))
+    shared = Measurements(values=[1.0], unit=metre)
+    copied = copy.deepcopy(PairOfMeasurements(first=shared, second=shared))
     assert copied.first is copied.second
     assert copied.first is not shared
+
+
+# %% fields a deep copy keeps
+
+
+@pytest.fixture
+def logged_reading() -> LoggedReading:
+    """
+    A reading recorded in a logbook that refers back to it.
+    """
+    logbook = Logbook()
+    reading = LoggedReading(value=1.0, notes=["calibrated"], logbook=logbook)
+    logbook.readings.append(reading)
+    return reading
+
+
+def test_a_deep_copy_keeps_a_field_marked_shared(logged_reading: LoggedReading):
+    """
+    A field marked shared refers to the original's object in the copy, even when that
+    object refers back to the original.
+    """
+    assert copy.deepcopy(logged_reading).logbook is logged_reading.logbook
+
+
+def test_a_deep_copy_still_copies_the_fields_not_marked_shared(
+    logged_reading: LoggedReading,
+):
+    """
+    Marking one field shared leaves the other fields copied.
+    """
+    assert copy.deepcopy(logged_reading).notes is not logged_reading.notes
 
 
 # %% equality and hashing
 
 
 def test_the_mixin_keeps_identity_equality_hashable():
-    reading = SensorReading(1.0)
+    reading = SensorReading(value=1.0)
     assert {reading: "first"}[reading] == "first"
 
 

@@ -1,0 +1,176 @@
+import inspect
+from dataclasses import dataclass
+
+
+from krrood.exceptions import DataclassException
+
+
+@dataclass(kw_only=True)
+class ClassIsUnMappedInClassDiagram(DataclassException):
+    """
+    Raised when a class is not mapped in the class diagram.
+    """
+
+    class_: type
+    """
+    The class that is not mapped in the class diagram.
+    """
+
+    def error_message(self) -> str:
+        return f"Class {self.class_} is not mapped in the class diagram"
+
+    def suggest_correction(self) -> str:
+        return ""
+
+
+@dataclass(kw_only=True)
+class MissingContainedTypeOfContainer(DataclassException):
+    """
+    Raised when a container type is missing its contained type.
+
+    For example, List without a specified type.
+    """
+
+    class_: type
+    """
+    The class that is missing the contained type.
+    """
+
+    field_name: str
+    """
+    The name of the field that is missing the contained type.
+    """
+
+    container_type: type
+    """
+    The container type that is missing its contained type.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"Container type {self.container_type} is missing its contained type"
+            f" for field '{self.field_name}' of class {self.class_}, please specify it."
+        )
+
+    def suggest_correction(self) -> str:
+        return ""
+
+
+@dataclass(kw_only=True)
+class CouldNotResolveType(DataclassException):
+    """
+    Raised when a type cannot be resolved.
+    """
+
+    type_name: str
+    """
+    The name of the type that could not be resolved.
+    """
+
+    error: Exception | None = None
+    """
+    The exception that was raised when resolving the type.
+    """
+
+    extra_information: str = ""
+    """
+    Additional information about the error.
+    """
+
+    def error_message(self) -> str:
+        return f"Could not resolve type {self.type_name}.\n{self.extra_information}"
+
+    def suggest_correction(self) -> str:
+        return ""
+
+
+@dataclass(kw_only=True)
+class MockedClassInstantiationError(DataclassException):
+    """
+    Raised when an attempt is made to instantiate a MockedClass.
+    """
+
+    def error_message(self) -> str:
+        return "MockedClass cannot be instantiated directly"
+
+    def suggest_correction(self) -> str:
+        return ""
+
+
+@dataclass(kw_only=True)
+class FactoryMethodDecoratorError(DataclassException):
+    """
+    Raised when ``@factory_method`` does not wrap a ``classmethod``.
+
+    The decorator records the factory through Python's ``__set_name__`` descriptor hook,
+    which a ``classmethod`` does not forward to the object it wraps. The marker must
+    therefore be the outermost decorator, applied above ``@classmethod``; any other
+    placement would skip registration silently, so it is rejected here instead.
+    """
+
+    decorated_name: str
+    """
+    The name of the function the marker was applied to.
+    """
+
+    def error_message(self) -> str:
+        return f"@factory_method was applied to {self.decorated_name!r}, which is not a classmethod"
+
+    def suggest_correction(self) -> str:
+        return "Apply @factory_method as the outermost decorator, directly above @classmethod."
+
+
+@dataclass(kw_only=True)
+class ArgumentsPassableOnlyByPosition(DataclassException):
+    """
+    Raised when a call has to be written with keyword arguments alone, but some of its
+    arguments go to parameters that take them only by position.
+    """
+
+    parameters: inspect.Signature
+    """
+    The parameters of the callee.
+    """
+
+    parameter_names: tuple[str, ...]
+    """
+    The parameters that received arguments they take only by position.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The parameters {', '.join(self.parameter_names)} of {self.parameters} "
+            f"take their arguments only by position, so the call cannot be written "
+            f"with keyword arguments alone."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Let these parameters take their arguments by name: remove the '/' marker "
+            "or replace '*args' by named parameters."
+        )
+
+
+@dataclass(kw_only=True)
+class FieldIsUnMappedInClassDiagram(DataclassException):
+    """
+    Raised when a class in the class diagram has no field of a given name.
+    """
+
+    class_: type
+    """
+    The class that has no such field.
+    """
+
+    field_name: str
+    """
+    The name of the field it does not have.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"Class {self.class_} has no field {self.field_name!r} in the class diagram"
+        )
+
+    def suggest_correction(self) -> str:
+        return "Name a field the class declares, or add the class that declares it to the class diagram."

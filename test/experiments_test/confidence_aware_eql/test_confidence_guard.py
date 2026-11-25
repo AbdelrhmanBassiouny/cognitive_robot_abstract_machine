@@ -1,7 +1,12 @@
+"""
+Tests of the guard that stops a rule from concluding on an unfamiliar instance.
+"""
+
+from __future__ import annotations
+
 import numpy as np
 import pytest
 
-import semantic_digital_twin.orm.ormatic_interface  # type: ignore  # noqa: F401
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.factories import deduced_variable, variable
 from krrood.entity_query_language.predicate import HasType
@@ -21,7 +26,9 @@ from experiments.confidence_aware_eql.confidence_model import ConfidenceModel
 
 @pytest.fixture
 def confidence_model():
-    """A confidence model fitted on forty cups with a familiar mass around 0.25kg."""
+    """
+    A confidence model fitted on forty cups with a familiar mass around 0.25kg.
+    """
     np.random.seed(0)
     cups = [
         Cup(root=Body(inertial=Inertial(mass=float(mass))))
@@ -31,12 +38,14 @@ def confidence_model():
 
 
 def _concluding_rule_for(cup: Cup) -> SymbolicExpression:
-    """A trivial always-true rule whose conclusion binds ``cup`` to a result variable."""
+    """
+    A trivial always-true rule whose conclusion binds ``cup`` to a result variable.
+    """
     cup_variable = variable(Cup, domain=[cup])
-    condition = HasType(cup_variable, Cup)
+    condition = HasType(variable=cup_variable, types_=Cup)
     concluded = deduced_variable(Cup)
     with condition:
-        Add(concluded, cup_variable)
+        Add(left=concluded, right=cup_variable)
     return condition
 
 
@@ -44,7 +53,9 @@ def _concluding_rule_for(cup: Cup) -> SymbolicExpression:
 
 
 def test_familiar_object_lets_the_rule_proceed(confidence_model):
-    """A rule concluding on a familiar cup evaluates to its normal result."""
+    """
+    A rule concluding on a familiar cup evaluates to its normal result.
+    """
     familiar_cup = Cup(root=Body(inertial=Inertial(mass=0.25)))
     condition = _concluding_rule_for(familiar_cup)
 
@@ -54,7 +65,9 @@ def test_familiar_object_lets_the_rule_proceed(confidence_model):
 
 
 def test_unfamiliar_instance_raises_unfamiliar_instance_error(confidence_model):
-    """A rule concluding on a fifty kilogram cup raises before yielding a result."""
+    """
+    A rule concluding on a fifty kilogram cup raises before yielding a result.
+    """
     outlier_cup = Cup(root=Body(inertial=Inertial(mass=50.0)))
     condition = _concluding_rule_for(outlier_cup)
 
