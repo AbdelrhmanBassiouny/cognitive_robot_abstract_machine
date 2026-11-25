@@ -35,13 +35,26 @@ class CollectionKind(Enum):
     Collections of key-value pairs.
     """
 
-    @staticmethod
-    def declared_element_type(*, annotation: Any) -> Any:
+    @classmethod
+    def declared_element_type(cls, *, annotation: Any) -> Any:
         """
         :param annotation: The annotation of a value whose elements are read.
         :return: The type of the elements of a parameterized collection: the key type of
             a mapping, the lowest common base class of a tuple's positions, else the
             parameter. Any other annotation is returned unchanged.
+        """
+        element_types = cls.declared_element_types(annotation=annotation)
+        if len(element_types) == 1:
+            return element_types[0]
+        return common_base_class(list(element_types))
+
+    @staticmethod
+    def declared_element_types(*, annotation: Any) -> tuple[Any, ...]:
+        """
+        :param annotation: The annotation of a value whose elements are read.
+        :return: The distinct types the elements of a parameterized collection are
+            declared as: the key type of a mapping, each position of a tuple, else the
+            parameter. Any other annotation is returned alone.
         """
         collection_class = get_origin(annotation)
         element_types = get_args(annotation)
@@ -50,17 +63,14 @@ class CollectionKind(Enum):
             and issubclass(collection_class, collections.abc.Iterable)
             and element_types
         ):
-            return annotation
+            return (annotation,)
         if issubclass(collection_class, collections.abc.Mapping):
-            return element_types[0]
-        distinct_element_types = [
+            return element_types[:1]
+        return tuple(
             element_type
             for element_type in dict.fromkeys(element_types)
             if element_type is not Ellipsis
-        ]
-        if len(distinct_element_types) == 1:
-            return distinct_element_types[0]
-        return common_base_class(distinct_element_types)
+        )
 
     @classmethod
     def all_classes(cls) -> tuple[type, ...]:

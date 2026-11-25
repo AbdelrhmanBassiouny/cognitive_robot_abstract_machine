@@ -193,7 +193,7 @@ def test_two_level_match_over_test_local_classes_returns_the_right_rows():
     teachers: Logic and Databases.
     """
     pattern = a(ResolutionCourse)(
-        is_taught_by=a(Person)(is_dean_of=a(ResolutionOrganization)())
+        is_taught_by=a(Person)(is_dean_of=a(ResolutionOrganization))
     )
     assert names_of(pattern.from_(domain=build_courses()).evaluate()) == [
         "Databases",
@@ -205,7 +205,7 @@ def test_one_level_match_over_test_local_classes_returns_the_right_rows():
     """
     Matching courses taught by some person finds every taught course and not the orphan.
     """
-    pattern = a(ResolutionCourse)(is_taught_by=a(Person)())
+    pattern = a(ResolutionCourse)(is_taught_by=a(Person))
     assert names_of(pattern.from_(domain=build_courses()).evaluate()) == [
         "AI",
         "Databases",

@@ -188,7 +188,7 @@ def dean_pattern():
     """
     return a(CampusStudent)(
         takes_course=a(CampusCourse)(
-            is_taught_by=a(CampusMember)(is_dean_of=a(CampusOrganization)())
+            is_taught_by=a(CampusMember)(is_dean_of=a(CampusOrganization))
         )
     )
 
@@ -275,7 +275,7 @@ def test_unconstrained_pattern_matches_each_owner_with_an_element_once():
     although Alice and Carol have two, and excludes Dave, whose collection is empty.
     """
     _, students = build_university()
-    pattern = a(CampusStudent)(takes_course=a(CampusCourse)())
+    pattern = a(CampusStudent)(takes_course=a(CampusCourse))
     assert names_of(pattern.from_(domain=students).evaluate()) == [
         "Alice",
         "Bob",
@@ -348,7 +348,7 @@ def test_pattern_of_a_subtype_filters_the_elements_by_type():
             takes_course={CampusCourse("Lecture")},
         ),
     ]
-    pattern = a(CampusStudent)(takes_course=a(SeminarCourse)())
+    pattern = a(CampusStudent)(takes_course=a(SeminarCourse))
     assert names_of(pattern.from_(domain=students).evaluate()) == ["Seminarist"]
 
 
@@ -374,7 +374,7 @@ def test_two_level_nesting_yields_each_student_once():
     """
     students = build_deanery()
     pattern = a(CampusStudent)(
-        takes_course=a(CampusCourse)(is_taught_by=a(CampusMember)())
+        takes_course=a(CampusCourse)(is_taught_by=a(CampusMember))
     )
     assert names_of(pattern.from_(domain=students).evaluate()) == [
         "Alice",
@@ -429,6 +429,53 @@ def test_value_membership_combined_with_nested_role_taker_pattern():
         .evaluate()
     )
     assert names_of(matches) == ["Carol"]
+
+
+# %% Attributes of the role taker named on the role
+
+
+def test_value_membership_combined_with_the_role_taker_attribute_named_on_the_role():
+    """
+    A role takes over its taker's attributes, so the taker's name is stated on the role
+    itself, next to a collection the role holds.
+    """
+    (logic, _, _), students = build_university()
+    matches = (
+        a(CampusStudent)(takes_course=logic, name="Carol")
+        .from_(domain=students)
+        .evaluate()
+    )
+    assert names_of(matches) == ["Carol"]
+
+
+def test_nested_pattern_combined_with_the_role_taker_attribute_named_on_the_role():
+    """
+    A nested pattern on the role's collection and the taker's name stated on the role
+    both have to hold.
+    """
+    _, students = build_university()
+    matches = (
+        a(CampusStudent)(name="Alice", takes_course=a(CampusCourse)(name="AI"))
+        .from_(domain=students)
+        .evaluate()
+    )
+    assert names_of(matches) == ["Alice"]
+
+
+def test_collection_of_the_role_taker_named_on_the_role_matches_by_element():
+    """
+    A collection the taker holds, stated on the role, is matched by element like one the
+    role holds.
+    """
+    faculty = CampusOrganization("Faculty")
+    dean = CampusStudent(role_taker=CampusMember("Dean", is_dean_of={faculty}))
+    student = CampusStudent(role_taker=CampusMember("Student"))
+    by_value = a(CampusStudent)(is_dean_of=faculty).from_(domain=[dean, student])
+    by_pattern = a(CampusStudent)(
+        is_dean_of=a(CampusOrganization)(name="Faculty")
+    ).from_(domain=[dean, student])
+    assert names_of(by_value.evaluate()) == ["Dean"]
+    assert names_of(by_pattern.evaluate()) == ["Dean"]
 
 
 # %% Regression guards: unchanged semantics
@@ -611,7 +658,7 @@ def test_nested_pattern_domain_restricts_the_element():
     A nested pattern ranging over a domain is satisfied only by an element in it.
     """
     (_, _, databases), students = build_university()
-    pattern = a(CampusStudent)(takes_course=a(CampusCourse)().from_(domain=[databases]))
+    pattern = a(CampusStudent)(takes_course=a(CampusCourse).from_(domain=[databases]))
     assert names_of(pattern.from_(domain=students).evaluate()) == ["Carol"]
 
 
@@ -631,7 +678,7 @@ def test_nested_pattern_domain_yields_each_owner_once():
     An owner with two elements in the domain still appears once.
     """
     (logic, ai, _), students = build_university()
-    pattern = a(CampusStudent)(takes_course=a(CampusCourse)().from_(domain=[logic, ai]))
+    pattern = a(CampusStudent)(takes_course=a(CampusCourse).from_(domain=[logic, ai]))
     assert names_of(pattern.from_(domain=students).evaluate()) == [
         "Alice",
         "Bob",
@@ -650,7 +697,7 @@ def test_nested_pattern_domain_in_a_list_of_patterns_restricts_its_position():
         CoursePlaylist("backward", [ai, logic]),
     ]
     pattern = a(CoursePlaylist)(
-        courses=[a(CampusCourse)().from_(domain=[ai]), a(CampusCourse)()]
+        courses=[a(CampusCourse).from_(domain=[ai]), a(CampusCourse)]
     )
     assert plain_names_of(pattern.from_(domain=playlists).evaluate()) == ["backward"]
 
@@ -666,7 +713,7 @@ def test_nested_pattern_domain_restricts_a_single_valued_attribute():
         AdvisedStudent("by lecturer", advisor=lecturer),
         AdvisedStudent("unadvised"),
     ]
-    pattern = a(AdvisedStudent)(advisor=a(CampusMember)().from_(domain=[dean]))
+    pattern = a(AdvisedStudent)(advisor=a(CampusMember).from_(domain=[dean]))
     assert plain_names_of(pattern.from_(domain=advisees).evaluate()) == ["by dean"]
 
 
@@ -679,7 +726,7 @@ def test_match_as_variable_in_a_larger_query_keeps_one_row_per_owner():
     although Alice and Carol have two courses satisfying the pattern.
     """
     _, students = build_university()
-    student = a(CampusStudent)(takes_course=a(CampusCourse)()).from_(domain=students)
+    student = a(CampusStudent)(takes_course=a(CampusCourse)).from_(domain=students)
     assert names_of(an(entity(student)).evaluate()) == ["Alice", "Bob", "Carol"]
 
 

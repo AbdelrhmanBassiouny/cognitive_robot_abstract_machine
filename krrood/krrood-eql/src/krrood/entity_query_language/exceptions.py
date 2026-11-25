@@ -1242,8 +1242,8 @@ class UnboundPatternVariable(UsageError):
 class ValueFitsNeitherElementNorCollection(UsageError):
     """
     Raised when a pattern gives a collection-valued attribute a plain value that is
-    neither of the collection's element type nor a collection, so it describes neither
-    one element nor the whole collection.
+    neither of one of the collection's element classes nor a collection, so it describes
+    neither one element nor the whole collection.
     """
 
     attribute_match: AttributeMatch
@@ -1251,22 +1251,31 @@ class ValueFitsNeitherElementNorCollection(UsageError):
     The attribute match assigning the value.
     """
 
-    element_type: type
+    element_classes: tuple[type, ...]
     """
-    The declared type of the collection's elements.
+    The classes the collection's elements are declared as.
     """
+
+    @property
+    def element_class_names(self) -> str:
+        """
+        The names of :attr:`element_classes`, joined as alternatives.
+        """
+        return " or ".join(
+            element_class.__name__ for element_class in self.element_classes
+        )
 
     def error_message(self) -> str:
         return (
             f"'{self.attribute_match}' holds elements of type "
-            f"{self.element_type.__name__}, but was given "
+            f"{self.element_class_names}, but was given "
             f"{self.attribute_match.assigned_value!r}, which is neither such an "
             f"element nor a collection."
         )
 
     def suggest_correction(self) -> str:
         return (
-            f"Give one {self.element_type.__name__} to require it as an element, or a "
+            f"Give one {self.element_class_names} to require it as an element, or a "
             f"collection to compare the whole collection."
         )
 

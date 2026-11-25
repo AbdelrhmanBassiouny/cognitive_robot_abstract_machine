@@ -130,7 +130,7 @@ a(Student)(takes_course=logic).from_(students)
 a(Student)(takes_course=a(Course)(name="Databases")).from_(students)
 
 # Students taking some course taught by someone who is the dean of some organization
-a(Student)(takes_course=a(Course)(is_taught_by=a(Person)(is_dean_of=an(Organization)())))
+a(Student)(takes_course=a(Course)(is_taught_by=a(Person)(is_dean_of=an(Organization))))
 ```
 
 Nested patterns through several collection-valued attributes, as in the last query, mean "some element, whose
@@ -148,8 +148,8 @@ collection describes the whole collection. A plain value that is neither raises
 - To ask about one position, index the attribute: `playlist.courses[0] == logic`.
 
 A nested pattern ranging over a domain is satisfied only by an object in that domain, on any attribute:
-`takes_course=a(Course)().from_(core_courses)` matches the students taking some course in `core_courses`, and
-`advisor=a(Person)().from_(deans)` the students whose advisor is one of `deans`. A variable with a domain is different:
+`takes_course=a(Course).from_(core_courses)` matches the students taking some course in `core_courses`, and
+`advisor=a(Person).from_(deans)` the students whose advisor is one of `deans`. A variable with a domain is different:
 it stays free, so `takes_course=variable(Course, domain=core_courses)` gives one result for each student and each of
 their courses in `core_courses`, which `.distinct()` reduces to one per student.
 

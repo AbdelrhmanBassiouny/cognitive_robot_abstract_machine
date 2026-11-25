@@ -142,11 +142,11 @@ def test_unconstrained_pattern_excludes_the_owner_with_a_none_collection(
     bag_class, container_type
 ):
     """
-    ``items=a(ShelfItem)()`` matches every bag with at least one item, once each, and
+    ``items=a(ShelfItem)`` matches every bag with at least one item, once each, and
     excludes the bag whose collection is ``None`` instead of raising.
     """
     _, _, bags = build_bags(bag_class, container_type)
-    pattern = a(bag_class)(items=a(ShelfItem)())
+    pattern = a(bag_class)(items=a(ShelfItem))
     assert names_of(pattern.from_(domain=bags).evaluate()) == ["both", "light"]
 
 
@@ -162,6 +162,20 @@ def test_variable_of_the_element_type_means_membership_in_an_optional_collection
     element = variable(ShelfItem, domain=[light])
     matches = a(bag_class)(items=element).from_(domain=bags).evaluate()
     assert names_of(matches) == ["both", "light"]
+
+
+@pytest.mark.parametrize("bag_class, container_type", BAG_CLASSES_AND_CONTAINERS)
+def test_variable_over_collections_compares_the_whole_optional_collection(
+    bag_class, container_type
+):
+    """
+    A variable whose domain is a list of collections stands for a whole collection, so
+    it is compared with the optional collection rather than looked up in it.
+    """
+    light, _, bags = build_bags(bag_class, container_type)
+    collections = variable(container_type, domain=[container_type([light])])
+    matches = a(bag_class)(items=collections).from_(domain=bags).evaluate()
+    assert names_of(matches) == ["light"]
 
 
 # %% Regression guards: unchanged semantics

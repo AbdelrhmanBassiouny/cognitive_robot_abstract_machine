@@ -29,17 +29,12 @@ from typing_extensions import (
     Iterator,
     Iterable,
     Any,
-    get_args,
-    get_origin,
 )
 
 import rustworkx as rx
 
-from krrood.class_diagrams.utils import (
-    common_base_class,
-    get_type_hints_of_object,
-    is_union_annotation,
-)
+from krrood.class_diagrams.collection_kind import CollectionKind
+from krrood.class_diagrams.utils import get_type_hints_of_object
 from krrood.class_diagrams.wrapped_field import WrappedField
 from krrood.entity_query_language.core.base_expressions import (
     Bindings,
@@ -1032,53 +1027,42 @@ class AttributeMatch(AbstractMatchExpression[T]):
     def _states_an_element_of_the_attribute_(self) -> bool:
         """
         :return: Whether the attribute holds a collection and the assigned value stands
-            for one of its elements: a pattern, or a plain or symbolic value of the
-            element type, any number standing for a number. An indexed attribute names
+            for one of its elements: a pattern, or a plain or symbolic value of one of the
+            element classes, any number standing for a number. An indexed attribute names
             one element already.
-        :raises ValueFitsNeitherElementNorCollection: If a plain value is neither of the
-            element type nor a collection.
+        :raises ValueFitsNeitherElementNorCollection: If a plain value is neither of an
+            element class nor a collection.
         """
-        if self.index_access is not None or not self._attribute_holds_a_collection_:
+        if self.index_access is not None or self._collection_field_ is None:
             return False
         value = self.assigned_value
         if isinstance(value, AbstractMatchExpression):
             return True
-        element_type = self._collection_element_type_
-        if is_union_annotation(element_type):
-            # Elements of a union are instances of its members' nearest common base.
-            element_type = common_base_class(list(get_args(element_type)))
-        element_type = get_origin(element_type) or element_type
-        # An element type that is no class, or ``Any``, cannot be checked against.
-        element_type_is_known = isclass(element_type) and element_type is not Any
+        element_classes = self._collection_field_.element_classes
         if isinstance(value, SymbolicExpression):
             return (
                 isclass(value._type_)
-                and element_type_is_known
-                and issubclass(value._type_, element_type)
+                and bool(element_classes)
+                and issubclass(value._type_, element_classes)
             )
         if value is None or value is Ellipsis:
             return False
-        is_a_collection = isinstance(value, (list, tuple, set, frozenset))
-        if not element_type_is_known:
+        is_a_collection = isinstance(value, CollectionKind.all_classes())
+        if not element_classes:
             return not is_a_collection
-        if isinstance(value, element_type) or (
-            issubclass(element_type, numbers.Number)
-            and isinstance(value, numbers.Number)
+        if isinstance(value, element_classes) or (
+            isinstance(value, numbers.Number)
+            and any(
+                issubclass(element_class, numbers.Number)
+                for element_class in element_classes
+            )
         ):
             return True
         if is_a_collection:
             return False
         raise ValueFitsNeitherElementNorCollection(
-            attribute_match=self, element_type=element_type
+            attribute_match=self, element_classes=element_classes
         )
-
-    @property
-    def _attribute_holds_a_collection_(self) -> bool:
-        """
-        :return: Whether the attribute is declared as a collection, such as a list, set,
-            tuple or sequence of elements, or as an optional one.
-        """
-        return self._collection_field_ is not None
 
     @cached_property
     def _collection_field_(self) -> WrappedField | None:
@@ -1089,42 +1073,9 @@ class AttributeMatch(AbstractMatchExpression[T]):
         wrapped_field = get_wrapped_field(
             self.attribute._owner_class_, self.attribute_name
         )
-        if (
-            wrapped_field is None
-            or self._declared_collection_(wrapped_field=wrapped_field) is None
-        ):
+        if wrapped_field is None or wrapped_field.declared_collection is None:
             return None
         return wrapped_field
-
-    @cached_property
-    def _collection_element_type_(self) -> type | None:
-        """
-        :return: The type of the elements of the collection-valued attribute.
-        """
-        element_types = get_args(
-            self._declared_collection_(wrapped_field=self._collection_field_)
-        )
-        return element_types[0] if element_types else None
-
-    @staticmethod
-    def _declared_collection_(*, wrapped_field: WrappedField) -> Any | None:
-        """
-        :param wrapped_field: The field of an attribute.
-        :return: The collection type the field is declared as, unwrapped from optional,
-            such as ``set[Course]``, or None when it is not a collection.
-        """
-        declared_type = (
-            wrapped_field.contained_type
-            if wrapped_field.is_optional
-            else wrapped_field.resolved_type
-        )
-        container_type = get_origin(declared_type)
-        if (
-            container_type in wrapped_field.container_types
-            and container_type is not type
-        ):
-            return declared_type
-        return None
 
     @cached_property
     def assigned_variable(self) -> SymbolicExpression:
