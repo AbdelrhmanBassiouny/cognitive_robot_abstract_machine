@@ -48,8 +48,8 @@ items:
   session: https://claude.ai/code/session_01JxHGiPZGhUcg34K5Aagazz
   blockers:
     - >-
-      Waiting on the owner: 1 open thread on #617 (whether a fact may have free variables,
-      answered). Fork CI green at 793efe94.
+      Waiting on the owner's next review of #617; every thread is resolved and fork CI is green at
+      793efe94.
   depends_on: []
   status: in progress
   recommended_model: opus
