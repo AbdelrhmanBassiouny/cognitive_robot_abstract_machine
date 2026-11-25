@@ -1,9 +1,9 @@
 ## Plan
-- Wait for the owner on 5 open threads: `__init_subclass__` variables, composed query, `apply_effects` as a query, conditional/derived effects, keeping `Fact.ground_term`.
+- Wait for the owner on the last open thread (free variables in a fact, answered).
 
 ## Done
-- 793efe94 answers the 8deedde0 review: value-type generic, `an(inference)`, `extend`, `evaluate_condition(state=)`, `Fact.ground_term`, AGENTS.md access rule. Replies posted; 4 threads resolved.
+- 793efe94 answers the 8deedde0 review; fork CI green at 793efe94.
+- Owner decisions on Nov 25: keep `Fact.ground_term`; the one composed query is the new item `action-application-query`, before `planning-query-verbalization`; ramification noted on `declared-setter-implications`.
 
 ## Next
-- Read fork CI at 793efe94 (not checked yet).
-- Act on the owner's answers to the open threads.
+- Act on the owner's answer to the open thread, or on a new review.
