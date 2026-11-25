@@ -35,7 +35,11 @@ from typing_extensions import (
 
 import rustworkx as rx
 
-from krrood.class_diagrams.utils import get_type_hints_of_object
+from krrood.class_diagrams.utils import (
+    common_base_class,
+    get_type_hints_of_object,
+    is_union_annotation,
+)
 from krrood.class_diagrams.wrapped_field import WrappedField
 from krrood.entity_query_language.core.base_expressions import (
     Bindings,
@@ -417,13 +421,13 @@ class Match(
         parent = parent or self
         self._update_fields_(variable, parent)
         if variable is not None and self._domain_ is not None:
-            self._conditions_.append(
-                Comparator(
-                    _resolve_domain(self._type_, self._domain_),
-                    self._variable_,
-                    operator.contains,
-                )
+            # A variable over the domain reads a one-shot source once, and an expression
+            # domain per binding, where a membership test would re-read the raw domain.
+            domain_member = Variable(
+                _type_=self._type_,
+                _domain_=_resolve_domain(self._type_, self._domain_),
             )
+            self._conditions_.append(self._variable_ == domain_member)
         for attr_name, attr_assigned_value in self._kwargs_.items():
             if isinstance(attr_assigned_value, (list, tuple)) and any(
                 isinstance(element, AbstractMatchExpression)
@@ -474,6 +478,12 @@ class Match(
         :param value: The list or tuple containing elements to be resolved.
         :param parent: The parent match variable associated with the provided key.
         """
+        collection = getattr(self._variable_, key)
+        # An absent optional collection holds no elements to index or count, so its
+        # presence and length are required before any position is read.
+        self._conditions_.append(
+            AND(collection != None, length(collection) == len(value))
+        )
         # handle list like classes by wrapping the index access
         for index, element in enumerate(value):
             self._create_attribute_match_and_resolve(
@@ -482,7 +492,6 @@ class Match(
                 assigned_value=element,
                 index_access=index,
             )
-        self._conditions_.append(length(getattr(self._variable_, key)) == len(value))
 
     def _update_fields_(
         self,
@@ -992,9 +1001,11 @@ class AttributeMatch(AbstractMatchExpression[T]):
         value = self.assigned_value
         if isinstance(value, AbstractMatchExpression):
             return True
-        element_type = get_origin(self._collection_element_type_) or (
-            self._collection_element_type_
-        )
+        element_type = self._collection_element_type_
+        if is_union_annotation(element_type):
+            # Elements of a union are instances of its members' nearest common base.
+            element_type = common_base_class(list(get_args(element_type)))
+        element_type = get_origin(element_type) or element_type
         # An element type that is no class, or ``Any``, cannot be checked against.
         element_type_is_known = isclass(element_type) and element_type is not Any
         if isinstance(value, SymbolicExpression):
