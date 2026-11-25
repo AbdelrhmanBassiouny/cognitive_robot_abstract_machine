@@ -56,8 +56,9 @@ items:
   recommended_model: opus
   notes: >
     Draft PR #617: ActionSchema and Effect build queries (applicable_actions, to_symbolic,
-    get_change_to_state); State evaluates them (apply_effects, apply_action, satisfies). Insertions
-    are their own change; facts take expression values and are type-checked.
+    get_change_to_state); State evaluates them (apply_effects, apply_action);
+    evaluate_condition(state=) tests a condition. Insertions are their own change; facts take
+    expression values and are type-checked.
 
     Owner decisions: with_facts becomes add_facts; private Symbol._persist_instance_; failed
     conditions reported now, why goes to regression-and-explanation; composed query and
