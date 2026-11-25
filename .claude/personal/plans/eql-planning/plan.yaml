@@ -42,26 +42,27 @@ items:
     State that fluent-state-overlay introduces. Deferred at kickoff on 2026-10-20.'
 - id: action-schema-progression
   branch: claude/tender-volta-krc5p7
-  title: ActionSchema with an EQL precondition and assignment effects, applied to a State
+  title: AssertiveKnowledgeAction with an EQL precondition and effects, applied to a State
   track: planning-core
   pull_request_number: 617
-  session: https://claude.ai/code/session_01JxHGiPZGhUcg34K5Aagazz
+  session: https://claude.ai/code/session_01JxHGiLNqo4aoEPoJ6RSaWW
   blockers:
     - >-
-      Waiting on the owner's next review of #617; every thread is resolved and fork CI is green at
-      793efe94.
+      Owner's review of a2aa98e9 (fork CI not yet reported): 4 fork threads left open with a reply
+      (untyped ground terms, ConflictingAssignments guidance, conflict-check cost, method name).
+      Upstream #1060: tomsch420 requested changes; the owner answers there.
   depends_on: []
   status: in progress
   recommended_model: opus
   notes: >
-    Draft PR #617: ActionSchema and Effect build queries (applicable_actions, to_symbolic,
-    get_change_to_state); State evaluates them (apply_effects, apply_action);
-    evaluate_condition(state=) tests a condition. Insertions are their own change; facts take
-    expression values and are type-checked.
+    Draft PR #617 (upstream #1060): AssertiveKnowledgeAction (was ActionSchema) and Effect build
+    queries (applicable_actions, to_symbolic, get_change_to_state_query); State evaluates them
+    (apply_effects, apply_action). Insertions are their own change; facts are type-checked.
 
-    Owner decisions: with_facts becomes add_facts; private Symbol._persist_instance_; failed
-    conditions reported now, why goes to regression-and-explanation; composed query and
-    verbalization go to planning-query-verbalization. api-break for #522.
+    Owner decisions: add_facts, add_objects, remove_objects replace the with_ names; private
+    Symbol._persist_instance_; why a condition fails goes to regression-and-explanation; the
+    composed query to action-application-query; the shared diff to shared-attribute-diff.
+
 - id: declared-setter-implications
   branch: eql-planning/declared-setter-implications
   title: Assignments follow the implications a setter declares, such as ontomatic inverse
@@ -157,3 +158,19 @@ items:
     Also: inference evaluates expressions inside tuple/dict arguments, so ground terms are built in
     plain EQL (no symbolic function); Fact.ground_terms() then replaces Fact.ground_term as a query
     for every term kind.
+
+- id: shared-attribute-diff
+  branch: eql-planning/shared-attribute-diff
+  title: One diff of an attribute's added and removed elements, shared by StateChange and JSONAttributeDiff
+  track: planning-core
+  depends_on:
+  - action-schema-progression
+  status: not_started
+  recommended_model: opus
+  notes: >
+    Owner on Nov 25, from tomsch420's review of upstream #1060: StateChange and CollectionInsertion
+    duplicate @synchronized_attribute_modification (AttributeUpdateModification, JSONAttributeDiff).
+
+    JSONAttributeDiff holds JSON keyed by attribute name and mutates live objects; StateChange holds
+    objects keyed by ground term and never mutates. Build both on one diff of a collection's added
+    and removed elements. It changes the synchronization's serialized format: api-break.
