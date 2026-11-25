@@ -88,10 +88,11 @@ class Comparator(BinaryExpression, PerformsCartesianProduct):
             and is_iterable(left_value)
             and is_iterable(right_value)
         ):
-            # Two sequences compare by order, length and duplicates; any other pair of
-            # collections compares as sets.
+            # Two sequences compare by order, length and duplicates, copied only when their
+            # types differ; any other pair of collections compares as sets.
             if isinstance(left_value, Sequence) and isinstance(right_value, Sequence):
-                left_value, right_value = tuple(left_value), tuple(right_value)
+                if type(left_value) is not type(right_value):
+                    left_value, right_value = tuple(left_value), tuple(right_value)
             else:
                 left_value, right_value = make_set(left_value), make_set(right_value)
         comparison_result = self.operation(left_value, right_value)
