@@ -150,14 +150,14 @@ items:
   status: not_started
   recommended_model: opus
   notes: >
-    Owner on Nov 25 (#617): all of it, as its own item before verbalization. Each binding becomes a
-    StateChange inside the query; a new EQL aggregator folds an action's changes into one State; the
-    precondition and the effect queries join into one query, which State.apply_effects and
-    apply_action return instead of evaluating. API #522 builds on.
+    Owner, Nov 25 (#617): applying an action is one query. Each binding becomes a StateChange in it;
+    a new EQL aggregator folds the changes into one State; apply_effects and apply_action return the
+    joined precondition and effect query. API #522 builds on.
 
-    Also: inference evaluates expressions inside tuple/dict arguments, so ground terms are built in
-    plain EQL (no symbolic function); Fact.ground_terms() then replaces Fact.ground_term as a query
-    for every term kind.
+    Also: inference evaluates expressions in tuple/dict arguments, so Fact.ground_terms() replaces
+    Fact.ground_term as a plain query. An effect value may be an EQL aggregate (sum, max, count)
+    over variables its ground term lacks, grouped by the term's variables (raises
+    NonAggregatedSelectedVariablesError today).
 
 - id: shared-attribute-diff
   branch: eql-planning/shared-attribute-diff
