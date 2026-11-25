@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Advanced Methods of AI · Worksheet 3 · Introduction</title>
+<style>
+  @page { size: 254mm 142.875mm; margin: 0; }
+  :root { --ink: #1a1a1a; --muted: #555; --navy: #1f3a5f; --navy-tint: #eaf0f6; --line: #b9c4d1;
+          --ochre: #9c6b1f; --ochre-tint: #f8f2e6; }
+  html { font-family: "DejaVu Sans", sans-serif; color: var(--ink); background: #fff; }
+  body { margin: 0; }
+  code, pre { font-family: "DejaVu Sans Mono", monospace; }
+  .slide { width: 254mm; height: 142.875mm; box-sizing: border-box; padding: 12mm 17mm 12mm; position: relative;
+           break-after: page; overflow: hidden; display: flex; flex-direction: column;
+           border-top: 4mm solid var(--navy); }
+  .slide:last-child { break-after: auto; }
+  .kicker { font-size: 10pt; letter-spacing: 1.5pt; text-transform: uppercase; color: var(--ochre); font-weight: bold;
+            margin-bottom: 1.5mm; }
+  h1 { font-size: 24pt; color: var(--navy); margin: 0 0 6mm; }
+  .slide.title { background: var(--navy); color: #fff; border-top: 0; justify-content: center; }
+  .slide.title h1 { color: #fff; font-size: 32pt; margin-bottom: 4mm; }
+  .slide.title .kicker { color: #e0c48f; }
+  .slide.title .footer { color: #c9d3df; border-color: #4a6283; }
+  p, li { font-size: 15pt; line-height: 1.45; margin: 0 0 3mm; }
+  ul { margin: 0; padding-left: 7mm; }
+  li::marker { color: var(--navy); }
+  .small { font-size: 12pt; color: var(--muted); }
+  .footer { position: absolute; bottom: 5mm; left: 17mm; right: 17mm; font-size: 8.5pt; display: flex;
+            justify-content: space-between; color: var(--muted); border-top: 0.6pt solid var(--line); padding-top: 1.5mm; }
+  .formula { font-family: "Liberation Serif", serif; font-size: 21pt; text-align: center; margin: 2mm 0 7mm;
+             padding: 4mm; background: var(--navy-tint); border-radius: 2mm; }
+  .formula i { font-family: "Liberation Serif", serif; }
+  pre { font-size: 14pt; margin: 0 0 5mm; line-height: 1.55; background: var(--navy-tint); padding: 3mm 5mm;
+        border-radius: 2mm; }
+  table { border-collapse: collapse; font-size: 13pt; width: 100%; }
+  th, td { border: 0.6pt solid var(--line); padding: 1.8mm 3mm; text-align: left; vertical-align: top; }
+  th { background: var(--navy-tint); color: var(--navy); font-size: 11.5pt; }
+  td code { font-size: 12pt; }
+  .figure { text-align: center; }
+  .figure img { max-height: 70mm; max-width: 100%; }
+  .note { border-left: 2mm solid var(--ochre); background: var(--ochre-tint); padding: 4mm 5mm; margin-top: 8mm; color: var(--ink); }
+  .timeline { display: flex; margin-top: 2mm; gap: 1mm; }
+  .timeline div { background: var(--navy-tint); color: var(--navy); padding: 2mm 0.5mm; font-size: 9pt; text-align: center; border-radius: 1mm; }
+  .timeline div.now { background: var(--navy); color: #fff; }
+  .timeline b { display: block; font-size: 9.5pt; }
+</style>
+</head>
+<body>
+
+<!-- 1 -->
+<section class="slide title">
+  <div class="kicker">Advanced Methods of AI · Worksheet 3</div>
+  <h1>Asking, Defining, Constraining, Deriving, Generating</h1>
+  <p style="font-size:17pt">Worksheet 3 · querying a knowledge base with the Entity Query Language</p>
+  <p class="note"><b>Now:</b> in pairs, open <code>03-pizza_queries.ipynb</code> (link on Stud.IP) and
+  run its <b>setup cell</b>. It installs EQL while we talk.</p>
+  <div class="footer"><span>Advanced Methods of AI · WiSe 2026/2027</span><span>1</span></div>
+</section>
+
+<!-- 2 -->
+<section class="slide">
+  <div class="kicker">Where we are</div>
+  <h1>Last week: represent. Today: use.</h1>
+  <ul>
+    <li>Worksheet 2: the pizza world in first-order logic, in OWL, and as Python classes.</li>
+    <li>Today a service robot in a pizzeria <i>uses</i> that knowledge. Everything it does starts with one kind of
+        expression: a <b>description</b>.</li>
+  </ul>
+  <div class="figure" style="margin-top:3mm"><img src="figures/world.svg" style="max-height:66mm"></div>
+  <div class="footer"><span>Advanced Methods of AI · Worksheet 3</span><span>2</span></div>
+</section>
+
+<!-- 3 -->
+<section class="slide">
+  <div class="kicker">Logic</div>
+  <h1>A query is a formula with free variables</h1>
+  <p class="formula">Pizza(<i>x</i>) ∧ ∃<i>t</i> (hasTopping(<i>x</i>, <i>t</i>) ∧ CheeseTopping(<i>t</i>))</p>
+  <ul>
+    <li>The picture of the pizzeria is an <b>interpretation</b>: a domain of objects and the extension of every predicate.</li>
+    <li>The <b>answers</b> are the values of the free variable <i>x</i> that make the formula true in it.</li>
+    <li>That is <i>checking</i> one model, not proving that something holds in <i>every</i> model.
+        The difference will matter: does the robot know everything?</li>
+  </ul>
+  <div class="footer"><span>Advanced Methods of AI · Worksheet 3</span><span>3</span></div>
+</section>
+
+<!-- 4 -->
+<section class="slide">
+  <div class="kicker">EQL</div>
+  <h1>EQL: the same formula, over Python objects</h1>
+  <pre>cheesy = a(Pizza)(toppings=a(CheeseTopping)).from_(pizzas)</pre>
+  <table>
+    <tr><th style="width:40%">EQL</th><th>first-order logic</th></tr>
+    <tr><td><code>a(Pizza)</code></td><td>a variable <i>x</i> with Pizza(<i>x</i>)</td></tr>
+    <tr><td><code>toppings=a(CheeseTopping)</code></td><td>∃<i>t</i> (hasTopping(<i>x</i>, <i>t</i>) ∧ CheeseTopping(<i>t</i>)): <i>some</i> element of the list</td></tr>
+    <tr><td><code>.from_(pizzas)</code></td><td>the objects <i>x</i> ranges over; left out: the registry, every object the robot created</td></tr>
+    <tr><td><code>cheesy.tolist()</code></td><td>all values of <i>x</i> that satisfy the formula</td></tr>
+  </table>
+  <p class="small" style="margin-top:3mm">Read it aloud: <i>“a pizza with a cheese topping, from the pizzas”</i>. Writing a
+  query computes nothing; <code>.tolist()</code> evaluates it.</p>
+  <div class="footer"><span>Advanced Methods of AI · Worksheet 3</span><span>4</span></div>
+</section>
+
+<!-- 5 -->
+<section class="slide">
+  <div class="kicker">EQL</div>
+  <h1>Every and no, and naming variables</h1>
+  <pre style="font-size:12.5pt; margin-bottom:3mm">a(Pizza)(toppings=every_is(VegetableTopping)).from_(pizzas)
+pizza   = a(Pizza).from_(pizzas)
+topping = a(PizzaTopping).from_(pizza.toppings)
+pizza.where(for_all(topping, HasType(topping, VegetableTopping)))</pre>
+  <p class="formula" style="font-size:16pt; margin:0 0 4mm; padding:2.5mm">Pizza(<i>x</i>) ∧ ∀<i>t</i> (hasTopping(<i>x</i>, <i>t</i>) → VegetableTopping(<i>t</i>))</p>
+  <ul style="font-size:13.5pt">
+    <li style="font-size:13.5pt; margin-bottom:1.5mm">In a pattern, <code>a(…)</code> says <i>some</i>; <code>every_is(…)</code>, <code>none_is(…)</code> say <i>every</i>, <i>no</i>. Both queries are one formula.</li>
+    <li style="font-size:13.5pt; margin-bottom:1.5mm">Other conditions: name the topping, then quantify over it with <code>exists</code> or <code>for_all</code>.</li>
+    <li style="font-size:13.5pt; margin-bottom:1.5mm">A path, <code>pizza.toppings.spiciness == MILD</code>, filters on <i>a</i> topping.</li>
+    <li style="font-size:13.5pt">Every <code>a(…)</code> is a variable of its own; <code>set_of(x, y)</code> returns several at once.</li>
+  </ul>
+  <div class="footer"><span>Advanced Methods of AI · Worksheet 3</span><span>5</span></div>
+</section>
+
+<!-- 6 -->
+<section class="slide">
+  <div class="kicker">Logic</div>
+  <h1>A class declaration is already a set of axioms</h1>
+  <pre style="font-size:12.5pt; margin-bottom:3mm">class MozzarellaTopping(CheeseTopping): ...
+class Pizza:
+    toppings: list[PizzaTopping]
+class VegetarianPizza(Role[Pizza]): ...</pre>
+  <table style="font-size:12pt">
+    <tr><th style="width:44%">KRROOD reads</th><th>first-order logic</th></tr>
+    <tr><td>a subclass</td><td>∀<i>x</i> (MozzarellaTopping(<i>x</i>) → CheeseTopping(<i>x</i>))</td></tr>
+    <tr><td>a typed attribute</td><td>∀<i>x</i> ∀<i>t</i> (Pizza(<i>x</i>) ∧ hasTopping(<i>x</i>, <i>t</i>) → PizzaTopping(<i>t</i>))</td></tr>
+    <tr><td>a role of a pizza</td><td>∀<i>v</i> (VegetarianPizza(<i>v</i>) → Pizza(roleTaker(<i>v</i>)))</td></tr>
+  </table>
+  <p class="small" style="margin-top:3mm; font-size:11.5pt">All are <i>necessary</i> conditions: what follows from being a C. A
+  <b>definition</b> adds the <i>sufficient</i> one, C(<i>x</i>) ↔ φ(<i>x</i>), and only that lets the robot decide what is a C. (Act 2)</p>
+  <div class="footer"><span>Advanced Methods of AI · Worksheet 3</span><span>6</span></div>
+</section>
+
+<!-- 7 -->
+<section class="slide">
+  <div class="kicker">Today</div>
+  <h1>One description, five uses</h1>
+  <table style="font-size:12pt">
+    <tr><th style="width:18%">Act</th><th style="width:36%">Story</th><th style="width:22%">The description is …</th><th>Logic</th></tr>
+    <tr><td>1 Asking</td><td>“Which pizzas have cheese?” “<i>The</i> one with olives.”</td><td>a question</td><td>∃, ∀, ¬ in one interpretation</td></tr>
+    <tr><td>2 Defining</td><td>“Which pizzas may carry the green V?”</td><td>a definition</td><td>↔: check, classify, conclude</td></tr>
+    <tr><td>3 Constraining</td><td>“Ben must never get milk.”</td><td>a constraint</td><td>¬∀ ≡ ∃¬</td></tr>
+    <tr><td>4 Deriving</td><td>the kitchen writes allergen warnings</td><td>the body of a rule</td><td>∃ in the head: new objects</td></tr>
+    <tr><td>5 Generating</td><td>Dana orders a pizza that does not exist</td><td>a specification</td><td>constructing a model</td></tr>
+  </table>
+  <p class="small" style="margin-top:3mm; font-size:11pt">The expression stays the same. Asking and constraining <i>read</i> what the
+  robot knows; defining, deriving and generating <i>write</i> to it. A rule's new objects are forced, a generator's are chosen.</p>
+  <div class="footer"><span>Advanced Methods of AI · Worksheet 3</span><span>7</span></div>
+</section>
+
+<!-- 8 -->
+<section class="slide">
+  <div class="kicker">Today</div>
+  <h1>Two questions to keep in mind</h1>
+  <ul style="margin-top:4mm">
+    <li><b>Does the robot know everything?</b> The query treats what it knows as complete; last week's OWL reasoner
+        did not. Who is right about <code>unclosed_1</code>? (Act 1)</li>
+    <li style="margin-top:5mm"><b>What happens when the world changes?</b> A cook makes a mistake at 19:50.
+        Which of the robot's conclusions still hold? (Act 4)</li>
+  </ul>
+  <div class="footer"><span>Advanced Methods of AI · Worksheet 3</span><span>8</span></div>
+</section>
+
+<!-- 9 -->
+<section class="slide">
+  <div class="kicker">Today</div>
+  <h1>How we work today</h1>
+  <ul>
+    <li>In pairs, one laptop. The evening happens in the <b>notebook</b>; every cell runs as it is, and a
+        <code>TODO</code> you cannot solve does not stop you.</li>
+    <li><b>Guess, then run.</b> Type your guess before a prediction cell runs: the robot tells you what surprised
+        you, and why. A wrong guess is where you learn the most.</li>
+    <li><b>Three pen breaks.</b> Laptops aside, the logic by hand on the sheet; then the board and your questions.</li>
+  </ul>
+  <p class="small" style="margin-top:3mm">Slides 8′, then:</p>
+  <div class="timeline">
+    <div style="flex:20"><b>Ask</b>20′</div>
+    <div style="flex:10" class="now"><b>Pen</b>10′</div>
+    <div style="flex:12"><b>Define</b>12′</div>
+    <div style="flex:8"><b>Constrain</b>8′</div>
+    <div style="flex:10" class="now"><b>Pen</b>10′</div>
+    <div style="flex:7"><b>Derive</b>7′</div>
+    <div style="flex:5"><b>Generate</b>5′</div>
+    <div style="flex:10" class="now"><b>Pen</b>10′</div>
+  </div>
+  <div class="footer"><span>Advanced Methods of AI · Worksheet 3</span><span>9</span></div>
+</section>
+
+</body>
+</html>
