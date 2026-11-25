@@ -1,11 +1,14 @@
-## Plan
-- Resolve the owner's first review of #617 (21 threads at 38610d26), with the owner's Nov 24 decisions.
+## Plan (owner review at 8deedde0)
+- `an(inference(...))` without `entity` in `applicable_actions`.
+- Rename `CollectionInsertion.followed_by` to `extend`.
+- `GroundTermExpression` generic over its value type too; type `ElementInsertion.collection` with it.
+- `State.satisfies` -> EQL `evaluate_condition(condition, state=)`.
+- `Fact.ground_term` for a fact on literals; simplify the failed-condition tests.
+- AGENTS.md rule: no multi-step access paths; a direct accessor instead.
+- Reply: `apply_effects` as a query -> `planning-query-verbalization`; chained effects = derived fluents (ramification).
 
 ## Done
-- 484d201e: ActionSchema and Effect only build queries; State evaluates (apply_effects, apply_action, satisfies). Insertions are their own change; private Symbol._persist_instance_.
-- 8deedde0: ConditionEvaluation replaces evaluate_statements_of; apply_action evaluates the precondition once and reports the failed conditions from that evaluation.
-- Replied to all 21 threads, resolved 17; new plan item planning-query-verbalization.
+- Read at 8deedde0: CI green, merge probe clean, no upstream PR.
 
 ## Next
-- Owner answers 4 open threads: __init_subclass__ variables, the composed query, a value-type GroundTermExpression, conditional effects.
-- Check fork CI at 8deedde0.
+- Implement, test, push, reply on threads.
