@@ -1,13 +1,11 @@
 ## Plan
-- Answer the reviews on #527 and cram2#1019; owner posts the remaining cram2 drafts and shares the 2D-spaces doc with Simon.
+- Merge main 913a92c2 into the branch (108 conflicting files at c29194728e), resolving each by keeping main's change and the PR's renames/API; run the affected tests; push via maintenance push; carry it into #524.
 
 ## Done
-- 6f4216e1, 65dbd601, e575d846, 1d6570c2, 4b111fba answer ichumuh's second review (see PR description).
-- c29194728e: Connection keeps copies of its offsets (fixes the PR2 grasp CI failure); coraplex test_follow_tcp_path_multi offset given in the milk's frame (owner approved the test edit); vector docstring; README no longer names SemDT. #527 threads on these two resolved; inner-product and SymbolicSpatialVector-bases threads answered, left open for owner.
-- cram2 drafts in review-replies/cram2-1019-2026-11-23-second.md: still to post benchmark, both cross-product threads, embedded planes.
+- c29194728e: CI green except small_packages (krrood check). cram2 drafts still to post (review-replies/cram2-1019-2026-11-23-second.md): benchmark, both cross-product threads, embedded planes.
 
 ## Next
-- Read CI at c29194728e (PR2 and coraplex tests need ROS, not run locally).
-- small_packages `krrood check --since HEAD^1`: 864 findings (mostly missing docstrings) in 219 PR files; owner to decide.
-- Owner decides: keep EuclideanSpace.inner_product as reference; SymbolicSpatialVector bases; MetricPoint naming thread (open since 11-18).
-- Resolve #524 (conflicts in 20 files). Later PR: image space; general 2D Cartesian frame.
+- small_packages `krrood check --since HEAD^1`: 864 findings in 219 PR files; owner to decide.
+- Owner decides: EuclideanSpace.inner_product as reference; SymbolicSpatialVector bases; MetricPoint naming thread.
+- cram2#1019 review state not read on 2026-11-27 (fork Action got HTTP 404).
+- Resolve #524. Later PR: image space; general 2D Cartesian frame.
