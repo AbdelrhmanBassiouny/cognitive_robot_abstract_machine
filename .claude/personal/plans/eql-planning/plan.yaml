@@ -45,12 +45,12 @@ items:
   title: AssertiveKnowledgeAction with an EQL precondition and effects, applied to a State
   track: planning-core
   pull_request_number: 617
-  session: https://claude.ai/code/session_01JxHGiLNqo4aoEPoJ6RSaWW
+  session: https://claude.ai/code/session_018wfiv9JQHVDY1BbU5Ug46j
   blockers:
     - >-
-      Owner's review of a2aa98e9 (fork CI not yet reported): 4 fork threads left open with a reply
-      (untyped ground terms, ConflictingAssignments guidance, conflict-check cost, method name).
-      Upstream #1060: tomsch420 requested changes; the owner answers there.
+      Upstream #1060 at f18503b5: LucaKro requested changes; 4 threads await the owner's answer
+      there: apply_effects(*effects) vs effects=, docstring example notation, a krrood dataclass for
+      init fields, affordances. Fork threads and tomsch420's are resolved.
   depends_on: []
   status: in progress
   recommended_model: opus
