@@ -98,20 +98,22 @@ items:
   recommended_model: opus
   blockers:
     - >-
-      cram2#1019: ichumuh's second 2026-11-23 review answered at 1d6570c2; the owner posts the
-      drafted replies (review-replies/cram2-1019-2026-11-23-second.md, notes branch).
+      #618: merged with main (90b6955c), SemDT's generated ORM interface names AffineFrameDAO
+      without defining it (cram2#1042's ORMatic meets this PR's generic interfaces); ORM CI jobs
+      fail until fixed.
     - >-
-      CI on 1d6570c2 not read yet; the Giskard control-loop benchmark needs ROS and is left to CI.
-      #524 conflicts with this branch in 20 files and needs its own resolve.
+      cram2#1019 review state not read on 2026-11-27 (the fork Action got HTTP 404); the owner
+      posts the drafted replies (review-replies/cram2-1019-2026-11-23-second.md). #524 needs its
+      own resolve.
   depends_on: []
-  session: https://claude.ai/code/session_01JxHGiLRgwm8kRFq7Zyxhbg
+  session: https://claude.ai/code/session_018wfiv5QmRENZpB57hYrBFe
   notes: >
     #527: the casadi-free base and SemDT adopting it, the planar, imports, projection, action,
-    frame-check and world-as-space items folded in. Frame kinds name their axes and give a Gram
-    matrix; the inner product is EuclideanSpace's, cross only Vector3Dimensional's. A frame states
-    the embedded_plane it lies on in every state; SemDT derives it from connections, and planar
-    changes compare planes by identity. api-break; migration in the PR description. Promoted as
-    cram2#1019.
+    frame-check and world-as-space items folded in. Frame kinds name their axes; the inner product
+    is EuclideanSpace's, cross only Vector3Dimensional's. A frame states the embedded_plane it lies
+    on in every state; SemDT derives it from connections. RotationMatrix is an Orientation value;
+    HomogeneousTransformationMatrix3Dimensional is the only 3D change, and T.rotation its
+    rotation-only part. api-break; migration in the PR description. Promoted as cram2#1019.
 - id: image-coordinate-change
   title: krrood_image's ImageCoordinateChange (scale and shift per axis) for crops and resizes,
     with cv2 resampling
