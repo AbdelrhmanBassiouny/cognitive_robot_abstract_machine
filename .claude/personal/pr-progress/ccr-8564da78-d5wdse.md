@@ -4,11 +4,11 @@ Plan
 - Release 26.11.0 so the krrood-* distributions and krrood_synchronization reach PyPI.
 
 Done
-- sync_version bounds optional sibling deps (54b0768ed); release bump + CHANGELOG + docs (c33fca027).
-- requires-python >=3.12 for the 10 packages depending on ormatic/random_events, with test (41beb7aad).
+- Optional-dep bounds, release bump + CHANGELOG + docs, requires-python >=3.12 (54b0768ed..41beb7aad).
+- Publish job per distribution from environment pypi-<distribution> (e0a4b26d7): PyPI allows one pending publisher per repo/workflow/environment.
 
 Next
-- User: PyPI pending trusted publishers for the 12 krrood-* names and krrood-synchronization.
+- User: pending publishers per new krrood-* project (env pypi-<project>); add pypi-krrood publisher to krrood; krrood-synchronization pending (env pypi).
 - User: why random_events 26.10.0 never published.
-- User decides: is the <3.13 cap of the domain_models packages deliberate (propagate or drop).
+- User decides: is the <3.13 cap of the domain_models packages deliberate.
 - Upstream PR to cram2 only once the user accepts.
