@@ -4,11 +4,12 @@ Plan
 - Release 26.11.0 so the krrood-* distributions and krrood_synchronization reach PyPI.
 
 Done
-- Optional-dep bounds, release bump + CHANGELOG + docs, requires-python >=3.12 (54b0768ed..41beb7aad).
-- Publish job per distribution from environment pypi-<distribution> (e0a4b26d7): PyPI allows one pending publisher per repo/workflow/environment.
+- Optional-dep bounds, release + CHANGELOG + docs, requires-python >=3.12 (54b0768ed..41beb7aad).
+- Publish job per distribution, env pypi-<distribution> (e0a4b26d7); krrood meta publishes after all krrood-* (e715bd24d).
+- CI: same 5 test jobs fail on main 595eb237c; segmind cause is missing iai_objects ROS package (#986, old CI image).
 
 Next
-- User: pending publishers per new krrood-* project (env pypi-<project>); add pypi-krrood publisher to krrood; krrood-synchronization pending (env pypi).
-- User: why random_events 26.10.0 never published.
-- User decides: is the <3.13 cap of the domain_models packages deliberate.
+- User: publish in rounds of 3 pending publishers (PyPI limit), re-run failed jobs; order in PR body.
+- User: add pypi-krrood publisher to existing krrood project.
+- User: why random_events 26.10.0 never published; is the <3.13 cap deliberate.
 - Upstream PR to cram2 only once the user accepts.
