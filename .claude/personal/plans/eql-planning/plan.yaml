@@ -40,53 +40,29 @@ items:
   notes: 'Changes the per-argument cache (ontomatic-port eql-predicate-call-memo, commit 08f9178dd
     on aamas27-unification-revision): fold into whichever PR lands that cache. Keys on the
     State that fluent-state-overlay introduces. Deferred at kickoff on 2026-10-20.'
-- id: action-schema-progression
-  branch: claude/tender-volta-krc5p7
-  title: AssertiveKnowledgeAction with an EQL precondition and effects, applied to a State
-  track: planning-core
-  pull_request_number: 617
-  session: https://claude.ai/code/session_018wfiv9JQHVDY1BbU5Ug46j
-  blockers:
-    - >-
-      Upstream #1060 at f18503b5: LucaKro requested changes; 4 threads await the owner's answer
-      there: apply_effects(*effects) vs effects=, docstring example notation, a krrood dataclass for
-      init fields, affordances. Fork threads and tomsch420's are resolved.
-  depends_on: []
-  status: in progress
-  recommended_model: opus
-  notes: >
-    Draft PR #617 (upstream #1060): AssertiveKnowledgeAction (was ActionSchema) and Effect build
-    queries (applicable_actions, to_symbolic, get_change_to_state_query); State evaluates them
-    (apply_effects, apply_action). Insertions are their own change; facts are type-checked.
-
-    Owner decisions: add_facts, add_objects, remove_objects replace the with_ names; private
-    Symbol._persist_instance_; why a condition fails goes to regression-and-explanation; the
-    composed query to action-application-query; the shared diff to shared-attribute-diff.
-
 - id: declared-setter-implications
   branch: eql-planning/declared-setter-implications
   title: Assignments follow the implications a setter declares, such as ontomatic inverse
     properties
   track: planning-core
-  depends_on:
-  - action-schema-progression
+  depends_on: []
   status: not_started
   recommended_model: sonnet
-  notes: >
-    ontomatic PropertyDescriptor.__set__ applies inverse, super-property and transitive
+  notes: 'ontomatic PropertyDescriptor.__set__ applies inverse, super-property and transitive
     implications; a state assigning one side must assign the implied ones too, from the declared
-    structure. Lets a domain declare how its setter's effects are modelled, lifting
-    AssignmentBypassesSetter (#535) for it.
+    structure. Lets a domain declare how its setter''s effects are modelled, lifting AssignmentBypassesSetter
+    (#535) for it.
 
     Ramification (owner, #617): conditional, derived and setter-implied effects are one subject.
     Decide per implication: a derived fluent with an EQL body, never in an effect, or a declared
     implication the state assigns with the effect; each reads only its most direct cause.
+
+    '
 - id: planning-backend-search
   branch: eql-planning/planning-backend-search
   title: PlanningBackend answers a goal query with plans; breadth-first search on test domains
   track: planning-core
-  depends_on:
-  - action-schema-progression
+  depends_on: []
   status: not_started
   recommended_model: opus
   notes: Test domains write each derived fact that passes the three-part rule (changes during
@@ -95,8 +71,7 @@ items:
   branch: eql-planning/regression-and-explanation
   title: Successor state axioms generated from effects; regression explains each step
   track: planning-core
-  depends_on:
-  - action-schema-progression
+  depends_on: []
   status: not_started
   recommended_model: opus
 - id: compiled-search-ff
@@ -129,7 +104,6 @@ items:
   - planning-backend-search
   status: not_started
   recommended_model: sonnet
-
 - id: planning-query-verbalization
   branch: eql-planning/planning-query-verbalization
   title: Hierarchical, natural verbalization of the composed queries action application builds
@@ -138,55 +112,56 @@ items:
   - action-application-query
   status: not_started
   recommended_model: opus
-  notes: 'Split from #617 by the owner on Nov 24. Extends EQL verbalization so the composed query
-    action-application-query builds reads naturally, nested as the query is, with nothing hard-coded.'
-
+  notes: 'Split from #617 by the owner on Nov 24. Extends EQL verbalization so the composed
+    query action-application-query builds reads naturally, nested as the query is, with nothing
+    hard-coded.'
 - id: action-application-query
   branch: eql-planning/action-application-query
   title: Applying an action is one EQL query, from its precondition to the new State
   track: planning-core
-  depends_on:
-  - action-schema-progression
+  depends_on: []
   status: not_started
   recommended_model: opus
-  notes: >
-    Owner, Nov 25 (#617): applying an action is one query. Each binding becomes a StateChange in it;
-    a new EQL aggregator folds the changes into one State; apply_effects and apply_action return the
-    joined precondition and effect query. API #522 builds on.
+  notes: 'Owner, Nov 25 (#617): applying an action is one query. Each binding becomes a StateChange
+    in it; a new EQL aggregator folds the changes into one State; apply_effects and apply_action
+    return the joined precondition and effect query. API #522 builds on.
 
-    Also: inference evaluates expressions in tuple/dict arguments, so Fact.ground_terms() replaces
-    Fact.ground_term as a plain query. An effect value may be an EQL aggregate (sum, max, count)
-    over variables its ground term lacks, grouped by the term's variables (raises
+    Also: inference evaluates expressions in tuple/dict arguments, so Fact.ground_terms()
+    replaces Fact.ground_term as a plain query. An effect value may be an EQL aggregate (sum,
+    max, count) over variables its ground term lacks, grouped by the term''s variables (raises
     NonAggregatedSelectedVariablesError today).
 
+    '
 - id: shared-attribute-diff
   branch: eql-planning/shared-attribute-diff
-  title: One diff of an attribute's added and removed elements, shared by StateChange and JSONAttributeDiff
+  title: One diff of an attribute's added and removed elements, shared by StateChange and
+    JSONAttributeDiff
   track: planning-core
-  depends_on:
-  - action-schema-progression
+  depends_on: []
   status: not_started
   recommended_model: opus
-  notes: >
-    Owner on Nov 25, from tomsch420's review of upstream #1060: StateChange and CollectionInsertion
+  notes: 'Owner on Nov 25, from tomsch420''s review of upstream #1060: StateChange and CollectionInsertion
     duplicate @synchronized_attribute_modification (AttributeUpdateModification, JSONAttributeDiff).
 
-    JSONAttributeDiff holds JSON keyed by attribute name and mutates live objects; StateChange holds
-    objects keyed by ground term and never mutates. Build both on one diff of a collection's added
-    and removed elements. It changes the synchronization's serialized format: api-break.
+    JSONAttributeDiff holds JSON keyed by attribute name and mutates live objects; StateChange
+    holds objects keyed by ground term and never mutates. Build both on one diff of a collection''s
+    added and removed elements. It changes the synchronization''s serialized format: api-break.
 
+    '
 - id: typed-index-and-call-terms
   branch: eql-planning/typed-index-and-call-terms
   title: Type-check index and call ground terms from their declared types
   track: planning-core
-  depends_on:
-  - action-schema-progression
+  depends_on: []
   status: not_started
   recommended_model: sonnet
-  notes: >
-    Owner on Nov 25 (#617, ground_term.py): only AttributeTerm is type-checked today; IndexTerm and
-    CallTerm accept every value, since GroundTerm.accepts_value and accepts_element default to True.
+  notes: 'Owner on Nov 25 (#617, ground_term.py): only AttributeTerm is type-checked today;
+    IndexTerm and CallTerm accept every value, since GroundTerm.accepts_value and accepts_element
+    default to True.
 
-    Type IndexTerm from its container's declared element type and CallTerm from the method's return
-    annotation, so facts and effects on them raise AssignedValueHasWrongType and
-    InsertedElementHasWrongType as attributes do.
+    Type IndexTerm from its container''s declared element type and CallTerm from the method''s
+    return annotation, so facts and effects on them raise AssignedValueHasWrongType and InsertedElementHasWrongType
+    as attributes do.
+
+    '
+landed_item_count: 1

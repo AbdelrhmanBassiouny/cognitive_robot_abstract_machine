@@ -100,7 +100,6 @@ items:
   status: not_started
   recommended_model: sonnet
   depends_on:
-  - eql-planning/action-schema-progression
   - icra-upstream/coraplex-actions-on-cramph
   - concept-theory/contact-and-support
   - concept-theory/holds-estimator
