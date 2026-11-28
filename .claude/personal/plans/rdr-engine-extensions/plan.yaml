@@ -159,7 +159,9 @@ items:
   - rdr-oo-recognition
   status: deferred
   recommended_model: haiku
-  notes: 'Same disposition as #21: harvested by Wave 3, then closed.'
+  notes: 'Same disposition as #21: harvested by Wave 3, then closed. When revived, its target
+    is the QueryBackend / ChildChooser slot cramph statements and Achieve are grounded through,
+    with RDR Refinement as failure-handling rules learned from failed trials: https://claude.ai/artifact/Vv5dxWpA1gXJ2GFEGT8mMp'
 - id: rdr-architecture-brief
   title: Re-land RDR architecture brief and its bibliography as a docs-only page
   branch: rdr/architecture-brief

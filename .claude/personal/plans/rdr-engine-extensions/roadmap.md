@@ -6,3 +6,4 @@
 - `krrood` stays self-contained; world-like scenarios are mimicked in `test/krrood_test/dataset`.
 - Sessions may run in parallel only if their pull requests touch disjoint files *and* neither needs the other's branch as a base. Everything below `main` here is stacked, so "parallel" means parallel tracks, each internally sequential.
 - The programme's working method — run the probe rather than reasoning, compare sorted collected test ids rather than counts, stage by explicit path — is recorded in `rdr-core-engine`'s roadmap and applies here unchanged.
+- RDRs fill the same QueryBackend / ChildChooser slot as cramph statement grounding and planning (see rdr-backend-unification). Analysis: https://claude.ai/artifact/Vv5dxWpA1gXJ2GFEGT8mMp
