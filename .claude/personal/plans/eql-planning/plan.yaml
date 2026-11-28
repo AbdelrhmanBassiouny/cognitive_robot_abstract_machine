@@ -65,8 +65,10 @@ items:
   depends_on: []
   status: not_started
   recommended_model: opus
-  notes: Test domains write each derived fact that passes the three-part rule (changes during
-    a plan, used by a goal or precondition, relational) as an EQL body, not Python.
+  notes: 'Test domains write each derived fact that passes the three-part rule (changes during
+    a plan, used by a goal or precondition, relational) as an EQL body, not Python. PlanningBackend
+    implements EvaluatesUnderBindings (cram2#1074) and accepts state=, so a planner fills the
+    QueryBackend slot cramph statements are grounded through: https://claude.ai/artifact/Vv5dxWpA1gXJ2GFEGT8mMp'
 - id: regression-and-explanation
   branch: eql-planning/regression-and-explanation
   title: Successor state axioms generated from effects; regression explains each step
@@ -164,4 +166,17 @@ items:
     as attributes do.
 
     '
+
+- id: cheap-conditions-first
+  branch: eql-planning/cheap-conditions-first
+  title: A predicate declares its evaluation cost; EQL evaluates cheap where-conditions before
+    costly ones
+  track: evaluation
+  depends_on:
+  - planning-backend-search
+  status: not_started
+  recommended_model: opus
+  notes: 'After the planning core. Pays off once preconditions include geometric attachments
+    and once coraplex grounds with SucceedsItsTrial (cram2#1074), the costliest predicate.
+    Predicate migration in database terms. Design: https://claude.ai/artifact/Vv5dxWpA1gXJ2GFEGT8mMp'
 landed_item_count: 1
