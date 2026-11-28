@@ -51,6 +51,8 @@ eql-planning-robots/cramph-achieve-node	eql-planning-robots
 eql-planning-robots/robocasa-goals	eql-planning-robots
 eql-planning-robots/robocasa-slice	eql-planning-robots
 eql-planning-robots/iros-experiments	eql-planning-robots
+eql-planning-robots/symbolic-check-before-trial	eql-planning-robots
+eql-planning-robots/execution-monitoring	eql-planning-robots
 eql-symbolic-function-sdt	eql-verbalization
 claude/eql-verbalization-aggregate-repeat-gdz9g2	eql-verbalization
 claude/plan-item-kickoff-match-query-npzr78	eql-verbalization

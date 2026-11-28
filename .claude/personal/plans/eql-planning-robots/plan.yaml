@@ -92,7 +92,8 @@ items:
   notes: 'Owner decided (Oct 30): an attachment declares the terms it reads (coarse at first,
     e.g. the joint positions of these bodies). SemDT meets it by putting its world into the
     state inside the attachment, scoped, restored and without notifying observers. 27 geometric
-    bodies, inventory in the design.'
+    bodies, inventory in the design. coraplex''s SucceedsItsTrial (cram2#1074) is opaque code
+    too, so it declares the inputs it reads under the same contract.'
 - id: coraplex-action-effects
   branch: eql-planning-robots/coraplex-action-effects
   title: Effects for pick, place, open, close and navigate, separate from post_condition monitors
@@ -117,6 +118,9 @@ items:
   depends_on:
   - eql-planning/planning-backend-search
   - eql-planning/regression-and-explanation
+  notes: 'Build Achieve as a CompositeNodeChoosingItsChild whose ChildChooser asks a PlanningBackend,
+    the slot StatementNode is grounded through (cram2#1074); design it with eql-performatives/plannode-performable.
+    If #1074 has not landed, build on main''s StatementNode and say so in the PR. Design: https://claude.ai/artifact/Vv5dxWpA1gXJ2GFEGT8mMp'
 - id: robocasa-goals
   branch: eql-planning-robots/robocasa-goals
   title: RoboCasa task goals as EQL conditions, read from the tasks' success checks
@@ -145,3 +149,31 @@ items:
   - robocasa-slice
   status: not_started
   recommended_model: opus
+
+- id: symbolic-check-before-trial
+  branch: eql-planning-robots/symbolic-check-before-trial
+  title: Check a candidate's EQL precondition in the predicted State before SucceedsItsTrial
+    simulates it
+  track: cram-robocasa
+  depends_on:
+  - coraplex-action-effects
+  - eql-planning/action-application-query
+  status: not_started
+  recommended_model: sonnet
+  notes: 'After the planning core. A candidate whose precondition fails symbolically never
+    reaches the physics trial in the world copy (cram2#1074). Design: https://claude.ai/artifact/Vv5dxWpA1gXJ2GFEGT8mMp'
+
+- id: execution-monitoring
+  branch: eql-planning-robots/execution-monitoring
+  title: Check the regressed conditions of the remaining steps on change and trigger Achieve's
+    replanning
+  track: cram-robocasa
+  depends_on:
+  - cramph-achieve-node
+  - eql-planning/regression-and-explanation
+  status: not_started
+  recommended_model: opus
+  notes: 'Compare the live world with a predicted State built on a frozen base (a State reads
+    unassigned fluents live, so it drifts otherwise). Re-check only when a fluent a remaining
+    step reads changes; read through only, never put the world into a state during real
+    ticks. Design: https://claude.ai/artifact/Vv5dxWpA1gXJ2GFEGT8mMp'
