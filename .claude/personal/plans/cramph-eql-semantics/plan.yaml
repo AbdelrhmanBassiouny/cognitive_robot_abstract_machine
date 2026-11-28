@@ -1,0 +1,64 @@
+schema_version: 1
+id: cramph-eql-semantics
+title: 'cramph-EQL semantics: grounding by shared variables, EQL in ticks, agreement tests'
+description: 'Give cramph''s plan language a stated semantics over EQL: statements grounded
+  together when they share variables, EQL conditions inside statechart ticks (compiled,
+  or re-evaluated on change), and tests that cramph and EQL agree. Starts after eql-planning''s
+  planning core; builds on cram2#1074. Analysis: https://claude.ai/artifact/Vv5dxWpA1gXJ2GFEGT8mMp'
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 623
+waves:
+- id: after-planning-core
+  name: After eql-planning's core
+  description: Starts once the planning core of eql-planning has landed.
+tracks:
+- id: grounding-and-semantics
+  name: Grounding and semantics
+  wave: after-planning-core
+- id: ticks
+  name: EQL in statechart ticks
+  wave: after-planning-core
+items:
+- id: grounding-groups-from-shared-variables
+  branch: cramph-eql-semantics/grounding-groups-from-shared-variables
+  title: Statements are grounded together when they share variables, not when they start
+    with a parallel
+  track: grounding-and-semantics
+  depends_on:
+  - eql-planning/planning-backend-search
+  status: not_started
+  recommended_model: sonnet
+  notes: UnderspecifiedChildChooser.statements_grounded_with groups statements with EQL's
+    groups_sharing_variables. Waits for cram2#1074, which adds that grouping and joint grounding.
+- id: plan-language-semantics
+  branch: cramph-eql-semantics/plan-language-semantics
+  title: Semantics of cramph's composites over EQL, with property tests that the two agree
+  track: grounding-and-semantics
+  depends_on:
+  - eql-planning/planning-backend-search
+  status: not_started
+  recommended_model: opus
+  notes: Sequence, Parallel, TryInOrder, TryAll and RepeatUntil described in Concurrent Transaction
+    Logic terms. Property tests run cramph in a world with no physics and EQL on the same
+    formula, and compare.
+- id: compiled-eql-conditions
+  branch: cramph-eql-semantics/compiled-eql-conditions
+  title: EQL conditions over numeric or finite-domain fluents compiled into the statechart's
+    tick
+  track: ticks
+  depends_on:
+  - eql-planning/compiled-search-ff
+  status: not_started
+  recommended_model: opus
+  notes: Compiled into symbolic_math when the statechart compiles, reusing compiled-search-ff's
+    step from EQL to a compiled state; recompiled when cramph recompiles.
+- id: change-driven-eql-monitors
+  branch: cramph-eql-semantics/change-driven-eql-monitors
+  title: A monitor re-evaluates EQL only when a fluent it reads has changed
+  track: ticks
+  depends_on:
+  - eql-planning-robots/relational-predicates-in-eql
+  status: not_started
+  recommended_model: opus
+  notes: Uses the fluents a derived fact declares it reads (P2 of the hypothetical states
+    design). Shares its approach with rdr-engine-extensions/rdr-feature-registry.

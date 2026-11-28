@@ -12,6 +12,10 @@ concept-theory/law-monitors	concept-theory
 concept-theory/agreement-invariance-sensitivity	concept-theory
 concept-theory/robocasa-transfer	concept-theory
 concept-theory/paper	concept-theory
+cramph-eql-semantics/grounding-groups-from-shared-variables	cramph-eql-semantics
+cramph-eql-semantics/plan-language-semantics	cramph-eql-semantics
+cramph-eql-semantics/compiled-eql-conditions	cramph-eql-semantics
+cramph-eql-semantics/change-driven-eql-monitors	cramph-eql-semantics
 claude/symbolic-expression-stack-refactor-ridull	dag-facade-hardening
 claude/crollywood-refactor-shared-classes-e8jtm9	domain-models
 claude/krrood-image-depth-segmentation	domain-models
